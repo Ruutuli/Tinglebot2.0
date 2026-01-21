@@ -88,7 +88,9 @@ function createBlightRejectionEmbed(character, quest) {
  */
 async function validateQuestExpiration(quest) {
   const now = new Date();
-  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  // Get today's date in EST format (YYYY-MM-DD) - EST is UTC-5
+  const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
   
   if (quest.date !== today) {
     return { 
@@ -619,8 +621,9 @@ async function updateVillageShopsStock(itemName, amountUsed, retryAttempt = 0) {
  */
 async function updateUserTracking(user, quest, userId) {
   const now = new Date();
-  // Use EST timezone for midnight reset
-  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  // Get today's date in EST format (YYYY-MM-DD) - EST is UTC-5
+  const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
   
   user.helpWanted.lastCompletion = today;
   // Increment both total and current completions
@@ -1885,7 +1888,9 @@ module.exports = {
         
         if (!quest) {
           // Try to find any quests for today to help debug
-          const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+          const now = new Date();
+          const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+          const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
           const todaysQuests = await HelpWantedQuest.find({ date: today }).lean();
           console.log(`[helpWanted.js]: Available quests for today (${today}):`, todaysQuests.map(q => ({ questId: q.questId, village: q.village, type: q.type })));
           
@@ -2280,7 +2285,9 @@ module.exports = {
         const recentCompletions = user.helpWanted?.completions || [];
 
         // Calculate today's and this week's completions
-        const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+        const now = new Date();
+        const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+        const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
         const todayCompletions = recentCompletions.filter(c => c.date === today).length;
         
         // Calculate this week's completions (Sunday to Saturday)

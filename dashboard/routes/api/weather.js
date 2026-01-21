@@ -13,53 +13,27 @@ const { getWeatherWithoutGeneration } = require('@/shared/services/weatherServic
 // ------------------- Function: getWeatherDayBounds -------------------
 // Calculates the start and end of the current weather day (8am to 7:59am EST)
 // Returns UTC timestamps for database queries
-// Uses the same logic as getCurrentPeriodBounds in weatherService.js
+// Weather day is 8am EST to 8am EST = 13:00 UTC to 13:00 UTC
 function getWeatherDayBounds() {
-  const EST_TZ = 'America/New_York';
-  
-  // Helper to get eastern reference date and offset (same as weatherService.js)
-  const getEasternReference = (referenceDate = new Date()) => {
-    const baseDate = referenceDate instanceof Date ? new Date(referenceDate) : new Date(referenceDate);
-    const easternDate = new Date(baseDate.toLocaleString('en-US', { timeZone: EST_TZ }));
-    const offsetMs = baseDate.getTime() - easternDate.getTime();
-    return { easternDate, offsetMs };
-  };
-  
-  // Helper to get hour in EST/EDT
-  const getHourInEastern = (date = new Date()) => {
-    return parseInt(
-      new Intl.DateTimeFormat('en-CA', { timeZone: EST_TZ, hour: '2-digit', hour12: false }).format(date),
-      10
-    );
-  };
-  
   const now = new Date();
-  const { easternDate, offsetMs } = getEasternReference(now);
+  const currentHour = now.getUTCHours();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
+  const currentDay = now.getUTCDate();
   
-  // Calculate start of current weather period (8am EST)
-  const startEastern = new Date(easternDate);
-  startEastern.setHours(8, 0, 0, 0);
+  let weatherDayStart, weatherDayEnd;
   
-  // If it's before 8am EST, the period started yesterday at 8am EST
-  const currentHourEastern = getHourInEastern(now);
-  if (currentHourEastern < 8) {
-    startEastern.setDate(startEastern.getDate() - 1);
+  if (currentHour >= 13) {
+    // If it's 13:00 UTC or later (8am EST or later), period started at 13:00 UTC today
+    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
+    // End is 13:00 UTC tomorrow (8am EST tomorrow)
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 13, 0, 0, 0));
+  } else {
+    // If it's before 13:00 UTC (before 8am EST), period started at 13:00 UTC yesterday
+    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
+    // End is 13:00 UTC today (8am EST today)
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
   }
-  
-  // Recalculate offset for the startEastern date to handle DST correctly
-  const { offsetMs: startOffsetMs } = getEasternReference(startEastern);
-  
-  // Calculate end of current weather period (7:59:59.999am EST next day)
-  const endEastern = new Date(startEastern);
-  endEastern.setDate(endEastern.getDate() + 1);
-  endEastern.setHours(7, 59, 59, 999);
-  
-  // Recalculate offset for the endEastern date to handle DST correctly
-  const { offsetMs: endOffsetMs } = getEasternReference(endEastern);
-  
-  // Convert to UTC using the offset calculated for each specific date
-  const weatherDayStart = new Date(startEastern.getTime() + startOffsetMs);
-  const weatherDayEnd = new Date(endEastern.getTime() + endOffsetMs);
   
   return { weatherDayStart, weatherDayEnd };
 }

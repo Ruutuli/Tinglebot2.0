@@ -1041,9 +1041,9 @@ userSchema.methods.giveBirthdayRewards = async function(rewardType = 'random') {
     rewardDescription = `75% discount in village shops (active until end of your birthday)`;
     
     // Set discount to expire at end of birthday (11:59:59 PM EST)
-    // Get current time in EST to determine the birthday date
+    // Get current time in EST-equivalent (UTC-5) to determine the birthday date
     const now = new Date();
-    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
     
     // Get EST date components
     const year = estNow.getFullYear();

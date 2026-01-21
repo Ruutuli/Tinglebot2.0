@@ -3893,10 +3893,10 @@ async function handleDebuff(interaction) {
 
     if (action === 'apply') {
       // ------------------- Apply Debuff -------------------
-      // Calculate debuff end date: midnight EST on the specified day after application
+      // Calculate debuff end date: midnight EST on the specified day after application = 05:00 UTC
       const now = new Date();
-      const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-      // Set to midnight EST X days from now (date only, no time)
+      // EST is UTC-5, so midnight EST = 05:00 UTC
+      // Set to 05:00 UTC X days from now (midnight EST)
       // Convert to UTC to ensure proper storage and retrieval
       const debuffEndDate = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + days, 5, 0, 0, 0)); // 5 AM UTC = midnight EST
       

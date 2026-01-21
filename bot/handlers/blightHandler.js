@@ -76,86 +76,34 @@ const { sendUserDM } = require('@/shared/utils/messageUtils');
 
 // ============================================================================
 // ------------------- Timezone Helper Functions -------------------
-// Functions for consistent timezone handling
+// Functions for consistent timezone handling (using UTC with fixed offset)
 // ============================================================================
 
+// ------------------- Function: getHourInEST -------------------
+// Gets the hour in EST from a UTC date (EST is UTC-5)
+function getHourInEST(date = new Date()) {
+  const utcHour = date.getUTCHours();
+  // EST is UTC-5, so subtract 5 hours and handle wrap-around
+  const estHour = (utcHour - 5 + 24) % 24;
+  return estHour;
+}
+
 // ------------------- Function: get8PMESTInUTC -------------------
-// Converts 8:00 PM EST/EDT to UTC for consistent time comparisons
-// Uses America/New_York timezone to properly handle daylight saving time
+// Converts 8:00 PM EST to UTC for consistent time comparisons
+// Uses fixed UTC-5 offset (EST) for simplicity
 function get8PMESTInUTC(date = new Date()) {
-  // Get the date components in America/New_York timezone
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  });
+  // Get the date components in UTC
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
   
-  const parts = formatter.formatToParts(date);
-  const values = {};
-  parts.forEach(part => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
+  // EST is UTC-5, so 8 PM EST = 01:00 UTC next day (20 + 5 = 25 = 1 AM next day)
+  // Create date at 8 PM EST by adding 5 hours to get UTC time
+  const utcDate = new Date(Date.UTC(year, month, day, 20, 0, 0));
+  // Add 5 hours to get UTC equivalent of 8 PM EST
+  utcDate.setUTCHours(utcDate.getUTCHours() + 5);
   
-  // Get the date components for the given date in EST/EDT
-  const year = parseInt(values.year);
-  const month = parseInt(values.month);
-  const day = parseInt(values.day);
-  
-  // To find 8 PM EST/EDT in UTC, we need to determine the offset
-  // Create a test date at noon on this date to determine DST status
-  const testUTC = Date.UTC(year, month - 1, day, 12, 0, 0);
-  const testDate = new Date(testUTC);
-  
-  // Format as EST/EDT and UTC to find the offset
-  const estParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hour: 'numeric',
-    hour12: false
-  }).formatToParts(testDate);
-  const utcParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    hour: 'numeric',
-    hour12: false
-  }).formatToParts(testDate);
-  
-  const estHour = parseInt(estParts.find(p => p.type === 'hour').value);
-  const utcHour = parseInt(utcParts.find(p => p.type === 'hour').value);
-  const offsetHours = estHour - utcHour; // Negative: EST/EDT is behind UTC
-  
-  // 8 PM EST/EDT in UTC = 20:00 + |offsetHours|
-  // EST: offsetHours = -5, so 8 PM EST = 1 AM UTC next day (20 + 5 = 25 = 1 AM)
-  // EDT: offsetHours = -4, so 8 PM EDT = 12 AM UTC next day (20 + 4 = 24 = 0 AM)
-  const utcHour8PM = 20 + Math.abs(offsetHours);
-  
-  // Handle day rollover - create date at the correct UTC hour, which may be next day
-  let utcDay = day;
-  let utcMonth = month - 1;
-  let utcYear = year;
-  let finalHour = utcHour8PM;
-  
-  if (utcHour8PM >= 24) {
-    finalHour = utcHour8PM % 24;
-    utcDay += 1;
-    // Handle month/year rollover
-    const daysInMonth = new Date(year, month, 0).getDate();
-    if (utcDay > daysInMonth) {
-      utcDay = 1;
-      utcMonth += 1;
-      if (utcMonth >= 12) {
-        utcMonth = 0;
-        utcYear += 1;
-      }
-    }
-  }
-  
-  return new Date(Date.UTC(utcYear, utcMonth, utcDay, finalHour, 0, 0));
+  return utcDate;
 }
 
 // ============================================================================
@@ -2001,12 +1949,8 @@ async function rollForBlightProgression(interaction, characterName) {
     // ------------------- Enhanced Blight Call Timing Logic -------------------
     const now = new Date();
     
-    // Get current hour in EST/EDT properly
-    const estHour = parseInt(new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      hour: 'numeric',
-      hour12: false
-    }).formatToParts(now).find(p => p.type === 'hour').value);
+    // Get current hour in EST (UTC-5)
+    const estHour = getHourInEST(now);
     
     // Calculate 8:00 PM EST today in UTC
     const today8PMUTC = get8PMESTInUTC(now);
@@ -2271,14 +2215,10 @@ async function postBlightRollCall(client) {
 
 async function checkAndPostMissedBlightPing(client) {
   try {
-    // Skip this check at exactly 8pm EST - the main scheduled job handles it
+    // Skip this check at exactly 8pm EST (01:00 UTC) - the main scheduled job handles it
     // This prevents race condition where both jobs run simultaneously
     const now = new Date();
-    const estHour = parseInt(new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      hour: 'numeric',
-      hour12: false
-    }).formatToParts(now).find(p => p.type === 'hour').value);
+    const estHour = getHourInEST(now);
     
     if (estHour === 20) {
       logger.info('BLIGHT', 'Skipping missed blight ping check at 8pm EST - main scheduled job handles it');
@@ -3369,12 +3309,8 @@ async function checkMissedRolls(client) {
       // This uses the same logic as rollForBlightProgression to ensure consistency
       const now = new Date();
       
-      // Get current hour in EST/EDT properly
-      const estHour = parseInt(new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        hour: 'numeric',
-        hour12: false
-      }).formatToParts(now).find(p => p.type === 'hour').value);
+      // Get current hour in EST (UTC-5)
+      const estHour = getHourInEST(now);
       
       // Calculate today's 8 PM EST/EDT in UTC
       const today8PMUTC = get8PMESTInUTC(now);

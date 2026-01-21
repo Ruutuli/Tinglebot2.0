@@ -144,20 +144,26 @@ let isSchedulerInitialized = false;
 /**
  * Create a cron job using the Croner wrapper
  * Wraps the wrapper to maintain backward compatibility with existing code
- * @param {string} schedule - Cron pattern
+ * @param {string} schedule - Cron pattern (in UTC)
  * @param {string} jobName - Unique name for the job
  * @param {Function} jobFunction - Function to execute
- * @param {string|Object} timezone - Timezone string or options object
+ * @param {string|Object} timezone - Deprecated: Timezone string or options object (no longer used - kept for backward compatibility)
  * @returns {Object} The created Cron instance (from croner library)
  */
 function createCronJob(
  schedule,
  jobName,
  jobFunction,
- timezone = "America/New_York"
+ timezone = null // Deprecated - no longer used, kept for backward compatibility
 ) {
  // Adapt signature: wrapper expects (name, pattern, fn, options)
- const options = typeof timezone === 'string' ? { timezone } : timezone;
+ // No longer pass timezone to avoid memory leaks
+ const options = {};
+ if (timezone && typeof timezone === 'object' && !timezone.timezone) {
+   // If timezone is an object with other options, use those
+   Object.assign(options, timezone);
+ }
+ // Explicitly do NOT set timezone option
  
  const task = createCronJobWrapper(
   jobName,
@@ -219,9 +225,13 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 }
 
 // ------------------- getESTDate ------------------
-// Converts a date to EST timezone
+// Converts a UTC date to EST-equivalent date (UTC-5 offset)
+// Note: Uses fixed UTC-5 offset (EST) for simplicity, not DST-aware
 function getESTDate(date = new Date()) {
- return new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+ // EST is UTC-5, so subtract 5 hours from UTC time
+ const utcTime = date.getTime();
+ const estOffsetMs = 5 * 60 * 60 * 1000; // 5 hours in milliseconds
+ return new Date(utcTime - estOffsetMs);
 }
 
 // ============================================================================
@@ -1928,7 +1938,8 @@ async function resetPetLastRollDates(client) {
 // ============================================================================
 
 function setupBlightScheduler(client) {
- createCronJob("0 20 * * *", "Blight Roll Call", async () => {
+ // 8:00 PM EST = 01:00 UTC next day
+ createCronJob("0 1 * * *", "Blight Roll Call", async () => {
   try {
    await postBlightRollCall(client);
   } catch (error) {
@@ -1937,12 +1948,14 @@ function setupBlightScheduler(client) {
   }
  });
 
- createCronJob("0 20 * * *", "Check Missed Rolls", () =>
+ // 8:00 PM EST = 01:00 UTC next day
+ createCronJob("0 1 * * *", "Check Missed Rolls", () =>
   checkMissedRolls(client)
  );
 
+ // Midnight EST = 05:00 UTC
  createCronJob(
-  "0 0 * * *",
+  "0 5 * * *",
   "Cleanup Expired Blight Requests",
   async () => {
     try {
@@ -2007,7 +2020,8 @@ function setupBlightScheduler(client) {
 // ============================================================================
 
 async function setupBoostingScheduler(client) {
- createCronJob("0 0 * * *", "Boost Cleanup", async () => {
+ // Daily boost cleanup at midnight EST = 05:00 UTC
+ createCronJob("0 5 * * *", "Boost Cleanup", async () => {
   try {
    logger.info('CLEANUP', 'Starting boost cleanup');
    
@@ -2034,7 +2048,8 @@ async function setupBoostingScheduler(client) {
   }
  });
 
- createCronJob("0 2 * * 0", "Weekly Boost Archive", async () => {
+ // Weekly boost archive at 2 AM EST Sunday = 07:00 UTC Sunday
+ createCronJob("0 7 * * 0", "Weekly Boost Archive", async () => {
   try {
    logger.info('CLEANUP', 'Running weekly boost archive');
    const stats = archiveOldBoostingRequests(30);
@@ -2045,7 +2060,8 @@ async function setupBoostingScheduler(client) {
   }
  });
 
- createCronJob("0 0 * * *", "Daily Boost Statistics", async () => {
+ // Daily boost statistics at midnight EST = 05:00 UTC
+ createCronJob("0 5 * * *", "Daily Boost Statistics", async () => {
   try {
    const stats = getBoostingStatistics();
    logger.info('CLEANUP', 'Daily boost statistics', stats);
@@ -2067,22 +2083,19 @@ async function setupBoostingScheduler(client) {
 function setupWeatherScheduler(client) {
  const { createCronJob: createCronJobDirect } = require('./scheduler/croner');
  
- // Primary weather update at 8:00am EST
- createCronJobDirect("Daily Weather Update", "0 8 * * *", () =>
-  postWeatherUpdate(client),
-  { timezone: "America/New_York" }
+ // Primary weather update at 8:00am EST = 13:00 UTC
+ createCronJobDirect("Daily Weather Update", "0 13 * * *", () =>
+  postWeatherUpdate(client)
  );
  
- // Fallback check at 8:15am EST - ensures weather was posted, generates if missing
- createCronJobDirect("Weather Fallback Check", "15 8 * * *", () =>
-  checkAndPostWeatherIfNeeded(client),
-  { timezone: "America/New_York" }
+ // Fallback check at 8:15am EST = 13:15 UTC - ensures weather was posted, generates if missing
+ createCronJobDirect("Weather Fallback Check", "15 13 * * *", () =>
+  checkAndPostWeatherIfNeeded(client)
  );
  
- // Weather reminder at 8:00pm EST
- createCronJobDirect("Daily Weather Forecast Reminder", "0 20 * * *", () =>
-  postWeatherReminder(client),
-  { timezone: "America/New_York" }
+ // Weather reminder at 8:00pm EST = 01:00 UTC next day
+ createCronJobDirect("Daily Weather Forecast Reminder", "0 1 * * *", () =>
+  postWeatherReminder(client)
  );
 }
 
@@ -2129,10 +2142,11 @@ async function handleQuestExpirationAtMidnight(client = null) {
     const { updateQuestEmbed } = require('./modules/helpWantedModule');
     
     const now = new Date();
-    const nowEST = getESTDate(now);
-    const yesterday = new Date(nowEST);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayDate = yesterday.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    // Get yesterday's date in EST (subtract 5 hours from UTC, then subtract 1 day)
+    const yesterdayUTC = new Date(now.getTime() - 24 * 60 * 60 * 1000); // Subtract 1 day
+    const estOffsetMs = 5 * 60 * 60 * 1000; // 5 hours
+    const yesterdayEST = new Date(yesterdayUTC.getTime() - estOffsetMs);
+    const yesterdayDate = `${yesterdayEST.getUTCFullYear()}-${String(yesterdayEST.getUTCMonth() + 1).padStart(2, '0')}-${String(yesterdayEST.getUTCDate()).padStart(2, '0')}`;
     
     const expiredQuests = await HelpWantedQuest.find({
       date: yesterdayDate,
@@ -2361,14 +2375,16 @@ async function postQuestToChannel(client, quest, context = '') {
 async function checkAndPostMissedQuests(client) {
   try {
     const now = new Date();
-    const estTime = getESTDate(now);
-    const currentHour = estTime.getHours();
-    const currentMinute = estTime.getMinutes();
+    // Get EST hour (UTC-5)
+    const estHour = (now.getUTCHours() - 5 + 24) % 24;
+    const estMinute = now.getUTCMinutes();
     
     // Check if it's after 12pm EST - if so, don't post art/writing quests
-    const isAfterNoon = currentHour >= 12;
+    const isAfterNoon = estHour >= 12;
     
-    const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    // Get today's date in EST format (YYYY-MM-DD)
+    const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000); // Subtract 5 hours for EST
+    const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
       messageId: null
@@ -2457,10 +2473,12 @@ async function checkAndPostMissedQuests(client) {
 async function checkAndPostScheduledQuests(client, cronTime) {
   try {
     const now = new Date();
-    const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    // Get today's date in EST format (YYYY-MM-DD)
+    const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000); // Subtract 5 hours for EST
+    const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
     
     // Check if it's after 12pm EST - if so, don't post art/writing quests
-    const estHour = getESTDate(now).getHours();
+    const estHour = (now.getUTCHours() - 5 + 24) % 24;
     const isAfterNoon = estHour >= 12;
     
     const questsToPost = await HelpWantedQuest.find({
@@ -2534,12 +2552,13 @@ function setupHelpWantedFixedScheduler(client) {
   
   // Schedule all 24 time slots for full 24-hour coverage
   // The variable buffer (3-6 hours) is handled in the quest generation logic
+  // Note: FIXED_CRON_TIMES contains EST times, convert to UTC (add 5 hours)
   FIXED_CRON_TIMES.forEach(cronTime => {
+    const utcCronTime = convertEstCronToUtc(cronTime);
     createCronJob(
-      cronTime,
-      `Help Wanted Board Check - ${cronTime}`,
-      () => checkAndPostScheduledQuests(client, cronTime),
-      'America/New_York'
+      utcCronTime,
+      `Help Wanted Board Check - ${cronTime} (EST) -> ${utcCronTime} (UTC)`,
+      () => checkAndPostScheduledQuests(client, cronTime)
     );
   });
   
@@ -2864,15 +2883,15 @@ async function runStartupChecks(client) {
 // ------------------- Scheduler Setup Functions ------------------
 
 function setupDailyTasks(client) {
- // Daily tasks at midnight
+ // Daily tasks at midnight EST = 05:00 UTC
  // Note: jail release is now handled by Agenda (scheduled at exact release time)
- createCronJob("0 0 * * *", "reset pet last roll dates", () => resetPetLastRollDates(client));
- createCronJob("0 0 * * *", "birthday role assignment", () => handleBirthdayRoleAssignment(client));
- createCronJob("0 0 * * *", "birthday announcements", () => executeBirthdayAnnouncements(client));
- createCronJob("0 0 * * *", "midnight quest generation", () => generateDailyQuestsAtMidnight());
- createCronJob("0 0 * * *", "quest expiration check", () => handleQuestExpirationAtMidnight(client));
- createCronJob("0 0 * * *", "request expiration and cleanup", () => runDailyCleanupTasks(client));
- createCronJob("0 0 * * *", "update role count channels", async () => {
+ createCronJob("0 5 * * *", "reset pet last roll dates", () => resetPetLastRollDates(client));
+ createCronJob("0 5 * * *", "birthday role assignment", () => handleBirthdayRoleAssignment(client));
+ createCronJob("0 5 * * *", "birthday announcements", () => executeBirthdayAnnouncements(client));
+ createCronJob("0 5 * * *", "midnight quest generation", () => generateDailyQuestsAtMidnight());
+ createCronJob("0 5 * * *", "quest expiration check", () => handleQuestExpirationAtMidnight(client));
+ createCronJob("0 5 * * *", "request expiration and cleanup", () => runDailyCleanupTasks(client));
+ createCronJob("0 5 * * *", "update role count channels", async () => {
    try {
      const guild = client.guilds.cache.first();
      if (guild) {
@@ -2883,7 +2902,7 @@ function setupDailyTasks(client) {
      logger.error('ROLE_COUNT', 'Error updating role count channels', error.message);
    }
  });
- createCronJob("0 0 * * *", "reset village raid quotas", async () => {
+ createCronJob("0 5 * * *", "reset village raid quotas", async () => {
    try {
      logger.info('RAID_QUOTA', 'Starting daily village raid quota reset check...');
      const resetCount = await resetAllVillageRaidQuotas();
@@ -2898,16 +2917,16 @@ function setupDailyTasks(client) {
    }
  });
  
- // Daily tasks at 1 AM - remove birthday roles from previous day
- createCronJob("0 1 * * *", "birthday role cleanup", () => handleBirthdayRoleRemoval(client));
+ // Daily tasks at 1 AM EST = 06:00 UTC - remove birthday roles from previous day
+ createCronJob("0 6 * * *", "birthday role cleanup", () => handleBirthdayRoleRemoval(client));
 
- // Daily tasks at 8 AM
- createCronJob("0 8 * * *", "reset daily rolls", () => resetDailyRolls(client));
- createCronJob("0 8 * * *", "daily stamina recovery", () => recoverDailyStamina(client));
+ // Daily tasks at 8 AM EST = 13:00 UTC
+ createCronJob("0 13 * * *", "reset daily rolls", () => resetDailyRolls(client));
+ createCronJob("0 13 * * *", "daily stamina recovery", () => recoverDailyStamina(client));
 
- // Daily tasks at 5 AM
+ // Daily tasks at 5 AM EST = 10:00 UTC
  // Note: debuff/buff expiry are now handled by Agenda (scheduled at exact expiry time)
- createCronJob("0 5 * * *", "reset global steal protections", () => {
+ createCronJob("0 10 * * *", "reset global steal protections", () => {
   logger.info('CLEANUP', 'Starting global steal protection reset');
   try {
    const { resetAllStealProtections } = require('./commands/jobs/steal.js');
@@ -2916,14 +2935,14 @@ function setupDailyTasks(client) {
   } catch (error) {
    logger.error('CLEANUP', 'Error resetting global steal protections', error);
   }
- }, "America/New_York");
+ });
 
- // Weekly tasks
- createCronJob("0 0 * * 0", "weekly pet rolls reset", () => resetPetRollsForAllCharacters(client));
+ // Weekly tasks - Sunday midnight EST = Monday 05:00 UTC
+ createCronJob("0 5 * * 1", "weekly pet rolls reset", () => resetPetRollsForAllCharacters(client));
 
- // Monthly tasks
- createCronJob("0 0 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
- createCronJob("0 0 1 * *", "monthly nitro boost rewards", async () => {
+ // Monthly tasks - 1st of month midnight EST = 05:00 UTC
+ createCronJob("0 5 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
+ createCronJob("0 5 1 * *", "monthly nitro boost rewards", async () => {
   try {
    logger.info('BOOST', 'Starting monthly Nitro boost reward distribution (1st of month)...');
    const result = await distributeMonthlyBoostRewards(client);
@@ -2933,25 +2952,18 @@ function setupDailyTasks(client) {
    logger.error('BOOST', 'Monthly Nitro boost reward distribution failed', error.message);
   }
  });
- // Monthly quest reward distribution - runs at 11:59 PM EST on the last day of month
- createCronJob("59 23 * * *", "monthly quest reward distribution", async () => {
+ // Monthly quest reward distribution - runs at 11:59 PM EST = 04:59 UTC on the last day of month
+ createCronJob("59 4 * * *", "monthly quest reward distribution", async () => {
   try {
-   // Get current date/time
+   // Get current date/time in UTC
    const now = new Date();
    // Calculate tomorrow by adding 24 hours (86400000 milliseconds)
    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
    
-   // Format tomorrow's date in EST timezone to check the day
-   const estFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    day: 'numeric'
-   });
-   
-   const tomorrowDay = parseInt(estFormatter.formatToParts(tomorrow).find(p => p.type === 'day').value);
-   
-   // If tomorrow is the 1st in EST, then today is the last day of the month
-   if (tomorrowDay === 1) {
-    logger.info('QUEST', 'Starting monthly quest reward distribution (last day of month at 11:59 PM EST)...');
+   // Check if tomorrow is the 1st (using UTC, which is 5 hours ahead of EST)
+   // If tomorrow is the 1st in UTC, then today is the last day of the month
+   if (tomorrow.getUTCDate() === 1) {
+    logger.info('QUEST', 'Starting monthly quest reward distribution (last day of month at 11:59 PM EST / 04:59 UTC)...');
     const result = await processMonthlyQuestRewards();
     logger.success('SCHEDULER', `Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
    } else {
@@ -2961,7 +2973,7 @@ function setupDailyTasks(client) {
    handleError(error, 'scheduler.js');
    logger.error('QUEST', 'Monthly quest reward distribution failed', error.message);
   }
- }, "America/New_York");
+ });
 
  // Periodic raid expiration check (every 5 minutes) to ensure raids timeout even if bot restarts
  createCronJob("*/5 * * * *", "raid expiration check", async () => {
@@ -2988,7 +3000,8 @@ function setupDailyTasks(client) {
  });
  createCronJob("0 */6 * * *", "quest completion check", () => checkQuestCompletions(client));
  createCronJob("0 */2 * * *", "village tracking check", () => checkVillageTracking(client)); // Every 2 hours
- createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
+ // Blood moon tracking cleanup at 1 AM EST = 06:00 UTC
+ createCronJob("0 6 * * *", "blood moon tracking cleanup", () => {
   logger.info('CLEANUP', 'Starting Blood Moon tracking cleanup');
   cleanupOldTrackingData();
   logger.success('CLEANUP', 'Blood Moon tracking cleanup completed');
@@ -2996,8 +3009,8 @@ function setupDailyTasks(client) {
 }
 
 function setupQuestPosting(client) {
- // Quest posting check - runs on 1st of month at midnight
- createCronJob("0 0 1 * *", "quest posting check", async () => {
+ // Quest posting check - runs on 1st of month at midnight EST = 05:00 UTC
+ createCronJob("0 5 1 * *", "quest posting check", async () => {
   try {
    process.env.TEST_CHANNEL_ID = '706880599863853097';
    delete require.cache[require.resolve('./scripts/questAnnouncements')];
@@ -3007,12 +3020,14 @@ function setupQuestPosting(client) {
    handleError(error, 'scheduler.js');
    logger.error('QUEST', 'Quest posting check failed', error.message);
   }
- }, "America/New_York");
+ });
 }
 
 function setupBloodMoonScheduling(client) {
- createCronJob("0 20 * * *", "blood moon start announcement", () => handleBloodMoonStart(client), "America/New_York");
- createCronJob("0 8 * * *", "blood moon end announcement", () => handleBloodMoonEnd(client), "America/New_York");
+ // 8:00 PM EST = 01:00 UTC next day
+ createCronJob("0 1 * * *", "blood moon start announcement", () => handleBloodMoonStart(client));
+ // 8:00 AM EST = 13:00 UTC
+ createCronJob("0 13 * * *", "blood moon end announcement", () => handleBloodMoonEnd(client));
 }
 
  function setupGoogleSheetsRetry() {
@@ -3034,8 +3049,8 @@ function setupBloodMoonScheduling(client) {
     handleError(error, "scheduler.js");
     logger.error('SYNC', 'Google Sheets retry task failed', error.message);
    }
-  }, "America/New_York");
- }
+  });
+}
 
 // ------------------- Main Initialization Function ------------------
 

@@ -191,21 +191,24 @@ function normalizeSeason(season) {
   return s;
 }
 
-const EST_TZ = 'America/New_York';
+// EST is UTC-5 (fixed offset for simplicity, not DST-aware)
+const EST_OFFSET_HOURS = 5;
+const EST_OFFSET_MS = EST_OFFSET_HOURS * 60 * 60 * 1000;
 
 function getEasternReference(referenceDate = new Date()) {
   const baseDate = referenceDate instanceof Date ? new Date(referenceDate) : new Date(referenceDate);
-  const easternDate = new Date(baseDate.toLocaleString('en-US', { timeZone: EST_TZ }));
-  const offsetMs = baseDate.getTime() - easternDate.getTime();
+  // Convert UTC to EST-equivalent by subtracting 5 hours
+  const easternDate = new Date(baseDate.getTime() - EST_OFFSET_MS);
+  const offsetMs = EST_OFFSET_MS; // Fixed offset
   return { easternDate, offsetMs };
 }
 
-/** Hour (0–23) in EST/EDT. Codebase uses America/New_York for all weather periods. */
+/** Hour (0–23) in EST. Uses fixed UTC-5 offset. */
 function getHourInEastern(date = new Date()) {
-  return parseInt(
-    new Intl.DateTimeFormat('en-CA', { timeZone: EST_TZ, hour: '2-digit', hour12: false }).format(date),
-    10
-  );
+  // EST is UTC-5, so subtract 5 hours from UTC hour
+  const utcHour = date.getUTCHours();
+  const estHour = (utcHour - EST_OFFSET_HOURS + 24) % 24; // Handle negative wrap-around
+  return estHour;
 }
 
 function getCurrentPeriodBounds(referenceDate = new Date()) {
@@ -215,24 +218,25 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
     referenceDate = new Date(); // Fallback to now
   }
 
-  const { easternDate, offsetMs } = getEasternReference(referenceDate);
+  // Weather day is 8am EST to 8am EST = 13:00 UTC to 13:00 UTC
+  const currentHour = referenceDate.getUTCHours();
+  const currentYear = referenceDate.getUTCFullYear();
+  const currentMonth = referenceDate.getUTCMonth();
+  const currentDay = referenceDate.getUTCDate();
 
-  const startEastern = new Date(easternDate);
-  startEastern.setHours(8, 0, 0, 0);
+  let startUTC, endUTC;
 
-  if (getHourInEastern(referenceDate) < 8) {
-    startEastern.setDate(startEastern.getDate() - 1);
+  if (currentHour >= 13) {
+    // If it's 13:00 UTC or later (8am EST or later), period started at 13:00 UTC today
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
+    // End is 13:00 UTC tomorrow
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 13, 0, 0, 0));
+  } else {
+    // If it's before 13:00 UTC (before 8am EST), period started at 13:00 UTC yesterday
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
+    // End is 13:00 UTC today
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
   }
-
-  const endEastern = new Date(startEastern);
-  endEastern.setDate(endEastern.getDate() + 1);
-  endEastern.setHours(7, 59, 59, 999);
-
-  // Recalculate offset for end date to handle DST transitions correctly
-  const { offsetMs: endOffsetMs } = getEasternReference(endEastern);
-
-  const startUTC = new Date(startEastern.getTime() + offsetMs);
-  const endUTC = new Date(endEastern.getTime() + endOffsetMs);
 
   // Validate calculated bounds
   if (isNaN(startUTC.getTime()) || isNaN(endUTC.getTime())) {

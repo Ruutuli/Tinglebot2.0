@@ -1367,9 +1367,9 @@ questSchema.methods.checkTimeExpiration = function() {
         return false;
     }
     
-    // Convert current time to EST for consistent timezone handling
+    // Convert current time to EST-equivalent (UTC-5) for consistent timezone handling
     const now = new Date();
-    const nowEST = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const nowEST = new Date(now.getTime() - 5 * 60 * 60 * 1000);
     const startDateTime = new Date(startDate);
     const timeLimit = this.timeLimit.toLowerCase();
     

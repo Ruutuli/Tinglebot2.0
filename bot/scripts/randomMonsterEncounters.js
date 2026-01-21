@@ -82,55 +82,28 @@ const HOURS_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
 // ============================================================================
 // Period Calculation Functions
 // ------------------- Get Midnight EST in UTC -------------------
+// Uses fixed UTC-5 offset (EST) for simplicity
 function getMidnightESTInUTC(year, month, day) {
-  // Create a test date at noon on the target date to determine DST status
-  const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  
-  // Format this date in EST/EDT to determine if DST is active
-  const estFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    timeZoneName: 'short',
-    hour: 'numeric',
-    hour12: false
-  });
-  
-  // Get the formatted string to check for DST
-  const parts = estFormatter.formatToParts(testDate);
-  const timeZoneName = parts.find(p => p.type === 'timeZoneName')?.value || '';
-  const isDST = timeZoneName === 'EDT'; // EDT means DST is active (UTC-4), EST is UTC-5
-  
-  // Calculate offset: EST is UTC-5, EDT is UTC-4
-  const offsetHours = isDST ? 4 : 5;
-  
-  // Create UTC date for midnight EST/EDT (00:00)
-  // midnight EST/EDT = 0 + offsetHours in UTC (which wraps to previous day)
-  // EST: 00:00 EST = 05:00 UTC (same day)
-  // EDT: 00:00 EDT = 04:00 UTC (same day)
-  const utcDate = new Date(Date.UTC(year, month - 1, day, 0 + offsetHours, 0, 0));
-  
+  // EST is UTC-5, so midnight EST = 05:00 UTC
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 5, 0, 0));
   return utcDate;
 }
 
 // ------------------- Get Current Week Start -------------------
+// Uses UTC with fixed EST offset (UTC-5)
 function getCurrentWeekStart() {
   const now = new Date();
   
-  // Get current date in EST/EDT
-  const estFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    weekday: 'long'
-  });
+  // Get EST-equivalent date (UTC-5)
+  const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
   
-  const parts = estFormatter.formatToParts(now);
-  const values = {};
-  parts.forEach(part => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
+  // Get date components from UTC
+  const values = {
+    year: estNow.getUTCFullYear(),
+    month: estNow.getUTCMonth() + 1,
+    day: estNow.getUTCDate(),
+    weekday: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][estNow.getUTCDay()]
+  };
   
   const estYear = parseInt(values.year);
   const estMonth = parseInt(values.month);
@@ -151,20 +124,19 @@ function getCurrentWeekStart() {
   const sundayNoonUTC = new Date(todayNoonUTC);
   sundayNoonUTC.setUTCDate(sundayNoonUTC.getUTCDate() - dayOfWeek);
   
-  // Format Sunday's date in EST to get the correct date components
-  const sundayParts = estFormatter.formatToParts(sundayNoonUTC);
-  const sundayValues = {};
-  sundayParts.forEach(part => {
-    if (part.type !== 'literal') {
-      sundayValues[part.type] = part.value;
-    }
-  });
+  // Get Sunday's date components from UTC (EST is UTC-5, so subtract 5 hours)
+  const sundayEST = new Date(sundayNoonUTC.getTime() - 5 * 60 * 60 * 1000);
+  const sundayValues = {
+    year: sundayEST.getUTCFullYear(),
+    month: sundayEST.getUTCMonth() + 1,
+    day: sundayEST.getUTCDate()
+  };
   
   // Get midnight EST for that Sunday in UTC
   const sundayMidnightEST = getMidnightESTInUTC(
-    parseInt(sundayValues.year),
-    parseInt(sundayValues.month),
-    parseInt(sundayValues.day)
+    sundayValues.year,
+    sundayValues.month,
+    sundayValues.day
   );
   
   return sundayMidnightEST;

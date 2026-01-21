@@ -1098,8 +1098,9 @@ async function handleCollectPoints(interaction) {
     // ------------------- Window Restriction Check -------------------
     // Credit collection and restock are only available from 1st to 5th of each month
     const now = new Date();
-    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const estDate = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+    // Get EST date (UTC-5) for date comparison
+    const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const estDate = new Date(estTime.getUTCFullYear(), estTime.getUTCMonth(), estTime.getUTCDate());
     const currentDay = estDate.getDate();
     const currentMonth = estDate.getMonth() + 1;
     const currentYear = estDate.getFullYear();

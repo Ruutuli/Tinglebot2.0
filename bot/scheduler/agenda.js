@@ -171,8 +171,9 @@ function defineAgendaJobs({ client }) {
       }
 
       const now = new Date();
-      const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-      const midnightEST = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 5, 0, 0, 0));
+      // EST is UTC-5, so midnight EST = 05:00 UTC
+      // Get current UTC date and set to 05:00 UTC (midnight EST)
+      const midnightEST = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 5, 0, 0, 0));
 
       // Only expire if we're past midnight EST
       if (character.debuff.endDate && character.debuff.endDate > midnightEST) {
@@ -225,8 +226,9 @@ function defineAgendaJobs({ client }) {
       }
 
       const now = new Date();
-      const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-      const midnightEST = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 5, 0, 0, 0));
+      // EST is UTC-5, so midnight EST = 05:00 UTC
+      // Get current UTC date and set to 05:00 UTC (midnight EST)
+      const midnightEST = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 5, 0, 0, 0));
 
       // Only expire if we're past midnight EST
       if (character.buff.endDate && character.buff.endDate > midnightEST) {

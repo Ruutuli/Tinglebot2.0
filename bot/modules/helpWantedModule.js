@@ -88,6 +88,30 @@ const QUEST_PARAMS = {
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
+// ------------------- Helper: getESTDateString -------------------
+// Gets date string in EST format (YYYY-MM-DD) from UTC date
+// EST is UTC-5, so subtract 5 hours to get EST date
+function getESTDateString(date = new Date()) {
+  const utcTime = date.getTime();
+  const estOffsetMs = 5 * 60 * 60 * 1000; // 5 hours in milliseconds
+  const estDate = new Date(utcTime - estOffsetMs);
+  // Format as YYYY-MM-DD (en-CA format)
+  const year = estDate.getUTCFullYear();
+  const month = String(estDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(estDate.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// ------------------- Helper: getHourInEST -------------------
+// Gets hour (0-23) in EST from UTC date
+// EST is UTC-5
+function getHourInEST(date = new Date()) {
+  const utcHour = date.getUTCHours();
+  // EST is UTC-5, so subtract 5 hours and handle wrap-around
+  const estHour = (utcHour - 5 + 24) % 24;
+  return estHour;
+}
+
 // Utility function to convert cron time to hour
 const cronToHour = (cronTime) => {
   const parts = cronTime.split(' ');
@@ -1587,8 +1611,8 @@ async function generateDailyQuests() {
   
   try {
     const now = new Date();
-    // Fix: Use toLocaleDateString to get the correct EST date
-    const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    // Get EST date string (YYYY-MM-DD format)
+    const date = getESTDateString(now);
     
     // Validate EST date format
     if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -1597,10 +1621,8 @@ async function generateDailyQuests() {
     }
     
     // Check if it's after 12pm EST - if so, don't generate art/writing quests
-    const estHour = parseInt(now.toLocaleString('en-US', {timeZone: 'America/New_York', hour: 'numeric', hour12: false}));
-    // Normalize 24 to 0 for midnight edge case (some JS implementations return 24 instead of 0)
-    const normalizedEstHour = estHour === 24 ? 0 : estHour;
-    const isAfterNoon = normalizedEstHour >= 12;
+    const estHour = getHourInEST(now);
+    const isAfterNoon = estHour >= 12;
     
     // Validate EST hour is a number
     if (isNaN(normalizedEstHour) || normalizedEstHour < 0 || normalizedEstHour > 23) {
@@ -2129,7 +2151,7 @@ function selectTimesWithBuffer(availableTimes, count) {
 // Checks if a quest is expired (not from today)
 function isQuestExpired(quest) {
   const now = new Date();
-  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  const today = getESTDateString(now);
   return quest.date !== today;
 }
 
@@ -2138,8 +2160,8 @@ function isQuestExpired(quest) {
 async function getTodaysQuests() {
   try {
     const now = new Date();
-    // Fix: Use toLocaleDateString to get the correct EST date
-    const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    // Get EST date string (YYYY-MM-DD format)
+    const date = getESTDateString(now);
     const quests = await HelpWantedQuest.find({ date });
     
     // Ensure all quests have an npcName field
@@ -2162,8 +2184,8 @@ async function getTodaysQuests() {
 async function getQuestsForScheduledTime(cronTime) {
   try {
     const now = new Date();
-    // Fix: Use toLocaleDateString to get the correct EST date
-    const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    // Get EST date string (YYYY-MM-DD format)
+    const date = getESTDateString(now);
     return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
   } catch (error) {
     logger.error('QUEST', 'Error fetching quests for scheduled time', error);
@@ -2462,9 +2484,9 @@ async function hasUserCompletedQuestToday(userId) {
       return false;
     }
     
-    // Use EST timezone for midnight reset
+    // Use EST date for midnight reset
     const now = new Date();
-    const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    const today = getESTDateString(now);
     const lastCompletion = user.helpWanted?.lastCompletion || 'null';
     
     return lastCompletion === today;
@@ -2481,10 +2503,11 @@ async function hasUserReachedWeeklyQuestLimit(userId) {
     const user = await require('@/shared/models/UserModel').findOne({ discordId: userId });
     if (!user || !user.helpWanted.completions) return false;
     
-    // Use EST timezone for weekly reset
+    // Use EST-equivalent for weekly reset (UTC-5)
     const now = new Date();
-    const estNow = new Date(now.toLocaleString('en-US', {timeZone: 'America/New_York'}));
-    const startOfWeek = new Date(estNow);
+    // EST is UTC-5, subtract 5 hours
+    const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const startOfWeek = new Date(estNow.getUTCFullYear(), estNow.getUTCMonth(), estNow.getUTCDate());
     startOfWeek.setDate(estNow.getDate() - estNow.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     
@@ -2773,7 +2796,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
 // Updates user tracking for quest completion (copied from helpWanted.js)
 async function updateUserTracking(user, quest, userId) {
   const now = new Date();
-  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  const today = getESTDateString(now);
   
   user.helpWanted.lastCompletion = today;
   // Increment both total and current completions

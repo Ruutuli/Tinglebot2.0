@@ -620,7 +620,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       character.currentStamina = 0;
       // Calculate debuff end date: midnight EST on the 7th day after KO
       const now = new Date();
-      const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      // Get EST date (UTC-5) for date comparison
+      const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
       // Set to midnight EST 7 days from now (date only, no time)
       // Convert to UTC to ensure proper storage and retrieval
       const debuffEndDate = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 5, 0, 0, 0)); // 5 AM UTC = midnight EST
@@ -862,7 +863,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           // Only update debuff and village if needed (if not already handled)
           // Calculate debuff end date: midnight EST on the 7th day after KO
           const now = new Date();
-          const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          // Get EST date (UTC-5) for date comparison
+      const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
           // Set to midnight EST 7 days from now (date only, no time)
           // Convert to UTC to ensure proper storage and retrieval
           const debuffEndDate = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 5, 0, 0, 0)); // 5 AM UTC = midnight EST

@@ -95,22 +95,29 @@ let isCheckInProgress = false;
 let expirationClient = null;
 
 // Function to calculate time until next 8 AM EST (for setTimeout fallback)
+// 8 AM EST = 13:00 UTC
 function getTimeUntilNext8AM() {
   const now = new Date();
-  // Get current time in EST
-  const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
-  const estNow = new Date(estString);
-  const next8AM = new Date(estNow);
-  next8AM.setHours(8, 0, 0, 0);
+  // Get current UTC time
+  const currentHour = now.getUTCHours();
+  const currentMinute = now.getUTCMinutes();
+  const currentSecond = now.getUTCSeconds();
+  const currentMs = now.getUTCMilliseconds();
   
-  // If it's already past 8 AM EST, schedule for next day
-  if (estNow > next8AM) {
-    next8AM.setDate(next8AM.getDate() + 1);
+  // Calculate next 13:00 UTC (8 AM EST)
+  const next8AM = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    13, 0, 0, 0
+  ));
+  
+  // If it's already past 13:00 UTC (8 AM EST), schedule for next day
+  if (currentHour > 13 || (currentHour === 13 && (currentMinute > 0 || currentSecond > 0 || currentMs > 0))) {
+    next8AM.setUTCDate(next8AM.getUTCDate() + 1);
   }
   
-  // Convert back to UTC for time calculation
-  const next8AMUTC = new Date(next8AM.toLocaleString("en-US", { timeZone: "UTC" }));
-  return next8AMUTC.getTime() - now.getTime();
+  return next8AM.getTime() - now.getTime();
 }
 
 // Function to stop expiration checks (for cleanup)
@@ -199,7 +206,7 @@ function startExpirationChecks(client) {
     try {
       expirationCronJob = createCronJob(
         'expiration-check',
-        '0 8 * * *', // Daily at 8 AM
+        '0 13 * * *', // Daily at 8 AM EST = 13:00 UTC
         async () => {
           // Prevent overlap if the work takes longer than expected
           if (isCheckInProgress) {
@@ -218,10 +225,9 @@ function startExpirationChecks(client) {
             // Clear the flag
             isCheckInProgress = false;
           }
-        },
-        { timezone: 'America/New_York' }
+        }
       );
-      console.log('[expirationHandler.js]: Scheduled expiration checks using croner (daily at 8 AM EST)');
+      console.log('[expirationHandler.js]: Scheduled expiration checks using croner (daily at 8 AM EST = 13:00 UTC)');
     } catch (error) {
       console.error('[expirationHandler.js]: Failed to create cron job, falling back to setTimeout:', error);
       createCronJob = null;

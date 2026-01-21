@@ -15,14 +15,21 @@ function createCronJob(name, pattern, fn, options = {}) {
   // Destroy any existing job with same name (prevents duplicates on reload)
   destroyCronJob(name);
 
+  // Build cron options - only set timezone if explicitly provided
+  const cronOptions = {
+    maxRuns: options.maxRuns,
+    protect: true, // prevent overlapping runs by default
+    catch: true, // Automatically catch errors
+  };
+  
+  // Only set timezone if explicitly provided (to avoid memory leaks)
+  if (options.timezone && typeof options.timezone === 'string') {
+    cronOptions.timezone = options.timezone;
+  }
+
   const job = new Cron(
     pattern,
-    {
-      timezone: options.timezone || options, // Support both {timezone: "..."} and direct timezone string
-      maxRuns: options.maxRuns,
-      protect: true, // prevent overlapping runs by default
-      catch: true, // Automatically catch errors
-    },
+    cronOptions,
     async () => {
       try {
         await fn();
@@ -36,7 +43,7 @@ function createCronJob(name, pattern, fn, options = {}) {
   
   // Only log in verbose mode or for important jobs
   if (process.env.VERBOSE_LOGGING === 'true' || name.includes('critical') || name.includes('health')) {
-    console.log(`[Croner] Scheduled "${name}" -> ${pattern} tz=${options.timezone || options || "system"}`);
+    console.log(`[Croner] Scheduled "${name}" -> ${pattern} tz=${cronOptions.timezone || "UTC"}`);
   }
 
   return job;

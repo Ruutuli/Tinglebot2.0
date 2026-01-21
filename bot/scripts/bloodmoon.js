@@ -112,9 +112,10 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     }
 
     // Determine the correct date for the Blood Moon announcement
-    // Use EST timezone to match the scheduler
+    // Use EST-equivalent date (UTC-5) to match the scheduler
     const now = new Date();
-    const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    // EST is UTC-5, subtract 5 hours
+    const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
     const today = normalizeDate(estTime);
     
     logger.info('BLOODMOON', `Checking announcement for channel ${channelId} - EST date: ${today.toDateString()} (${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')})`);
@@ -330,11 +331,12 @@ function isBloodMoonDay() {
     return false;
   }
 
-  // Get current time in EST
+  // Get current time in EST-equivalent (UTC-5)
   const now = new Date();
-  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const estDate = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
-  const estHour = estTime.getHours();
+  // EST is UTC-5, subtract 5 hours
+  const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const estDate = new Date(estTime.getUTCFullYear(), estTime.getUTCMonth(), estTime.getUTCDate());
+  const estHour = estTime.getUTCHours();
   
   // Find the Blood Moon period we're in
   let bloodMoonDate = null;

@@ -397,13 +397,13 @@ const recoverDailyStamina = async () => {
   try {
     const characters = await Character.find({});
     const now = new Date();
-    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    const today = estNow.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+    // EST is UTC-5, subtract 5 hours
+    const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const today = `${estNow.getUTCFullYear()}-${String(estNow.getUTCMonth() + 1).padStart(2, '0')}-${String(estNow.getUTCDate()).padStart(2, '0')}`;
     
     // Get yesterday's date in EST
-    const yesterday = new Date(estNow);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterday = new Date(estNow.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth() + 1).padStart(2, '0')}-${String(yesterday.getUTCDate()).padStart(2, '0')}`;
 
     info('SYNC', `Starting daily stamina recovery for ${today}`);
 
@@ -423,9 +423,9 @@ const recoverDailyStamina = async () => {
           continue;
         }
 
-        // Convert lastStaminaUsage to EST for comparison
-        const lastUsage = new Date(character.lastStaminaUsage.toLocaleString("en-US", { timeZone: "America/New_York" }));
-        const lastUsageDate = lastUsage.toISOString().split('T')[0];
+        // Convert lastStaminaUsage to EST-equivalent for comparison (UTC-5)
+        const lastUsage = new Date(character.lastStaminaUsage.getTime() - 5 * 60 * 60 * 1000);
+        const lastUsageDate = `${lastUsage.getUTCFullYear()}-${String(lastUsage.getUTCMonth() + 1).padStart(2, '0')}-${String(lastUsage.getUTCDate()).padStart(2, '0')}`;
 
         // Only recover if:
         // 1. Last usage was NOT yesterday (must be before yesterday)

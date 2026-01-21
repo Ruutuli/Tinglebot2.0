@@ -306,8 +306,9 @@ async function sendToJail(character) {
         }
 
         const now = new Date();
-        const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-        const releaseDateEST = new Date(estNow.getFullYear(), estNow.getMonth(), estNow.getDate() + jailDays, 0, 0, 0, 0);
+        // Get EST date (UTC-5) for date calculation
+        const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+        const releaseDateEST = new Date(estNow.getUTCFullYear(), estNow.getUTCMonth(), estNow.getUTCDate() + jailDays, 0, 0, 0, 0);
         const jailDurationMs = jailDays * 24 * 60 * 60 * 1000;
         const jailStartEST = new Date(releaseDateEST.getTime() - jailDurationMs);
 

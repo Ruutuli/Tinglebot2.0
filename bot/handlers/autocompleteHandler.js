@@ -3631,7 +3631,9 @@ async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
       // Fetch only available Help Wanted quests (not completed, not expired)
       const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
       const now = new Date();
-      const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+      // Get today's date in EST format (YYYY-MM-DD) - EST is UTC-5
+      const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+      const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
       
       const quests = await HelpWantedQuest.find({ 
         completed: false,

@@ -779,12 +779,11 @@ async function checkAndHandleKO(character, channel, startingVillage) {
 
     character.currentVillage = recoveryVillage;
     character.currentStamina = 0;
-    // Calculate debuff end date: midnight EST on the 7th day after KO
+    // Calculate debuff end date: midnight EST on the 7th day after KO = 05:00 UTC
     const now = new Date();
-    const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    // Set to midnight EST 7 days from now (date only, no time)
-    // Convert to UTC to ensure proper storage and retrieval
-    const debuffEndDate = new Date(Date.UTC(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 5, 0, 0, 0)); // 5 AM UTC = midnight EST
+    // EST is UTC-5, so midnight EST = 05:00 UTC
+    // Get current UTC date, add 7 days, set to 05:00 UTC (midnight EST)
+    const debuffEndDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7, 5, 0, 0, 0));
     
     character.debuff = {
       active: true,

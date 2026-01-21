@@ -4217,13 +4217,12 @@ const getNextSundayMidnight = (fromDate) => {
 };
 
 // ------------------- Function: setupWeeklyCharacterRotationScheduler -------------------
-// Sets up the weekly character rotation scheduler using croner (Sunday midnight EST)
+// Sets up the weekly character rotation scheduler using croner (Sunday midnight EST = Monday 05:00 UTC)
 const setupWeeklyCharacterRotationScheduler = () => {
-  logger.schedule('Setting up weekly character rotation scheduler (Sunday midnight EST)');
+  logger.schedule('Setting up weekly character rotation scheduler (Sunday midnight EST = Monday 05:00 UTC)');
   new Cron(
-    '0 0 * * 0',
+    '0 5 * * 1',
     {
-      timezone: 'America/New_York',
       catch: true,
     },
     async () => {
@@ -4432,13 +4431,12 @@ const getNext8amEST = (fromDate) => {
 };
 
 // ------------------- Function: setupDailyResetReminders -------------------
-// Sets up the daily reset reminder scheduler using croner
+// Sets up the daily reset reminder scheduler using croner (8am EST = 13:00 UTC)
 const setupDailyResetReminders = () => {
-  logger.schedule('Setting up daily reset reminder scheduler (8am EST)');
+  logger.schedule('Setting up daily reset reminder scheduler (8am EST = 13:00 UTC)');
   new Cron(
-    '0 8 * * *',
+    '0 13 * * *',
     {
-      timezone: 'America/New_York',
       catch: true,
     },
     async () => {
@@ -4481,8 +4479,9 @@ const checkIfTodayIsBeforeBloodMoon = () => {
   const { bloodmoonDates } = require('../bot/modules/calendarModule');
   
   const now = new Date();
-  const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const today = new Date(estTime.getFullYear(), estTime.getMonth(), estTime.getDate());
+  // Get EST date (UTC-5) for date comparison
+  const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const today = new Date(estTime.getUTCFullYear(), estTime.getUTCMonth(), estTime.getUTCDate());
   
   if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
     return false;
@@ -4503,13 +4502,12 @@ const checkIfTodayIsBeforeBloodMoon = () => {
 };
 
 // ------------------- Function: setupBloodMoonAlerts -------------------
-// Sets up the blood moon alert scheduler using croner
+// Sets up the blood moon alert scheduler using croner (midnight EST = 05:00 UTC)
 const setupBloodMoonAlerts = () => {
-  logger.schedule('Setting up blood moon alert scheduler (midnight EST)');
+  logger.schedule('Setting up blood moon alert scheduler (midnight EST = 05:00 UTC)');
   new Cron(
-    '0 0 * * *',
+    '0 5 * * *',
     {
-      timezone: 'America/New_York',
       catch: true,
     },
     async () => {
@@ -4582,11 +4580,10 @@ const getNext745pmEST = (fromDate) => {
 // ------------------- Function: setupBlightCallNotifications -------------------
 // Sets up the blight call notification scheduler using croner
 const setupBlightCallNotifications = () => {
-  logger.schedule('Setting up blight call notification scheduler (7:45pm EST)');
+  logger.schedule('Setting up blight call notification scheduler (7:45pm EST = 00:45 UTC next day)');
   new Cron(
-    '45 19 * * *',
+    '45 0 * * *',
     {
-      timezone: 'America/New_York',
       catch: true,
     },
     async () => {
@@ -8495,104 +8492,50 @@ app.get('/api/items', async (req, res) => {
 // ------------------- Section: Weather API Routes -------------------
 
 // ------------------- Function: getESTTime -------------------
-// Gets the current time in EST/EDT timezone
+// Gets the current time as EST-equivalent (UTC-5 offset)
+// Note: Uses fixed UTC-5 offset (EST) for simplicity, not DST-aware
 function getESTTime() {
   const now = new Date();
-  
-  // Use Intl.DateTimeFormat to get the time in EST/EDT
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hour12: false
-  });
-  
-  // Parse the formatted date string back into a Date object
-  const parts = formatter.formatToParts(now);
-  const values = {};
-  parts.forEach(part => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
-  
-  // Create a new date with EST/EDT components
-  const estTime = new Date(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second
-  );
-  
-  return estTime;
+  // EST is UTC-5, so subtract 5 hours from UTC time
+  const utcTime = now.getTime();
+  const estOffsetMs = 5 * 60 * 60 * 1000; // 5 hours in milliseconds
+  return new Date(utcTime - estOffsetMs);
 }
 
 // ------------------- Function: get8AMESTInUTC -------------------
-// Converts 8:00 AM EST/EDT on a given date to UTC
-// Uses a test date to determine DST offset correctly
+// Converts 8:00 AM EST on a given date to UTC
+// Uses fixed UTC-5 offset (EST) for simplicity
 function get8AMESTInUTC(year, month, day) {
-  // Create a test date at 8am on the target date
-  // We'll create it as if it were UTC and then determine the actual offset
-  const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  
-  // Format this date in EST/EDT to determine if DST is active
-  const estFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    timeZoneName: 'short',
-    hour: 'numeric',
-    hour12: false
-  });
-  
-  // Get the formatted string to check for DST
-  const parts = estFormatter.formatToParts(testDate);
-  const timeZoneName = parts.find(p => p.type === 'timeZoneName')?.value || '';
-  const isDST = timeZoneName === 'EDT'; // EDT means DST is active (UTC-4), EST is UTC-5
-  
-  // Calculate offset: EST is UTC-5, EDT is UTC-4
-  const offsetHours = isDST ? 4 : 5;
-  
-  // Create UTC date for 8am EST/EDT
-  // 8am EST/EDT = 8 + offsetHours in UTC
-  const utcDate = new Date(Date.UTC(year, month - 1, day, 8 + offsetHours, 0, 0));
-  
+  // EST is UTC-5, so 8 AM EST = 13:00 UTC
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
   return utcDate;
 }
 
 // ------------------- Function: getWeatherDayBounds -------------------
-// Calculates the start and end of the current weather day (8am to 8am EST/EDT)
+// Calculates the start and end of the current weather day (8am to 8am EST = 13:00 to 13:00 UTC)
 function getWeatherDayBounds() {
-  // Get current time in EST/EDT
-  const nowEST = getESTTime();
-  const currentHour = nowEST.getHours();
-  const currentYear = nowEST.getFullYear();
-  const currentMonth = nowEST.getMonth() + 1;
-  const currentDay = nowEST.getDate();
+  // Get current time in UTC
+  const now = new Date();
+  const currentHour = now.getUTCHours();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth() + 1;
+  const currentDay = now.getUTCDate();
   
   let weatherDayStart, weatherDayEnd;
   
-  if (currentHour >= 8) {
-    // If it's 8am or later EST/EDT, the weather day started at 8am today EST/EDT
+  if (currentHour >= 13) {
+    // If it's 13:00 UTC or later (8am EST or later), the weather day started at 13:00 UTC today
     weatherDayStart = get8AMESTInUTC(currentYear, currentMonth, currentDay);
     
-    // End is 8am tomorrow EST/EDT
-    // Calculate tomorrow's date by adding 1 day to the current EST date
-    const tomorrowDate = new Date(nowEST);
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    weatherDayEnd = get8AMESTInUTC(tomorrowDate.getFullYear(), tomorrowDate.getMonth() + 1, tomorrowDate.getDate());
+    // End is 13:00 UTC tomorrow (8am EST tomorrow)
+    const tomorrow = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay + 1, 13, 0, 0));
+    weatherDayEnd = tomorrow;
   } else {
-    // If it's before 8am EST/EDT, the weather day started at 8am yesterday EST/EDT
-    // Calculate yesterday's date by subtracting 1 day from the current EST date
-    const yesterdayDate = new Date(nowEST);
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    weatherDayStart = get8AMESTInUTC(yesterdayDate.getFullYear(), yesterdayDate.getMonth() + 1, yesterdayDate.getDate());
+    // If it's before 13:00 UTC (before 8am EST), the weather day started at 13:00 UTC yesterday
+    const yesterday = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay - 1, 13, 0, 0));
+    weatherDayStart = yesterday;
     
-    // End is 8am today EST/EDT
+    // End is 13:00 UTC today (8am EST today)
     weatherDayEnd = get8AMESTInUTC(currentYear, currentMonth, currentDay);
   }
   
@@ -10347,11 +10290,10 @@ app.get('/api/admin/security-comprehensive', async (req, res) => {
   }
 });
 
-// Automated security audit (runs daily at midnight EST)
+// Automated security audit (runs daily at midnight EST = 05:00 UTC)
 new Cron(
-  '0 0 * * *',
+  '0 5 * * *',
   {
-    timezone: 'America/New_York',
     catch: true,
   },
   async () => {
