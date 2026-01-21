@@ -7,21 +7,21 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Local Module Imports -------------------
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
 const { 
     fetchCharacterByName, 
     getCharacterInventoryCollection, 
     fetchItemRarityByName, 
     connectToInventoriesForItems,
     fetchModCharacterByNameAndUserId 
-} = require('@app/shared/database/db');
-const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
+} = require('@/shared/database/db');
+const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('@/shared/utils/inventoryUtils');
 const { getNPCItems, NPCs, getStealFlavorText, getStealFailText } = require('../../modules/NPCsModule');
-const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@app/shared/utils/googleSheetsUtils');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('@app/shared/utils/validation');
-const ItemModel = require('@app/shared/models/ItemModel');
-const Character = require('@app/shared/models/CharacterModel');
-const User = require('@app/shared/models/UserModel');
+const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
+const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('@/shared/utils/validation');
+const ItemModel = require('@/shared/models/ItemModel');
+const Character = require('@/shared/models/CharacterModel');
+const User = require('@/shared/models/UserModel');
 const { hasPerk, getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
@@ -29,15 +29,15 @@ const { applyStealingBoost, applyStealingJailBoost, applyStealingLootBoost } = r
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { getBoostInfo, addBoostFlavorText, buildFooterText } = require('../../embeds/embeds');
 const { getActiveBuffEffects } = require('../../modules/elixirModule');
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, clearBoostAfterUse } = require('../jobs/boosting');
-const { checkJailStatus, sendToJail, formatJailTimeLeftDaysHours, DEFAULT_JAIL_DURATION_MS } = require('@app/shared/utils/jailCheck');
+const { checkJailStatus, sendToJail, formatJailTimeLeftDaysHours, DEFAULT_JAIL_DURATION_MS } = require('@/shared/utils/jailCheck');
 
 // Add StealStats model
-const StealStats = require('@app/shared/models/StealStatsModel');
+const StealStats = require('@/shared/models/StealStatsModel');
 
 // Add NPC model for global steal protection tracking
-const NPC = require('@app/shared/models/NPCModel');
+const NPC = require('@/shared/models/NPCModel');
 
 // ============================================================================
 // ---- Constants ----
@@ -1574,7 +1574,7 @@ async function getFailedAttemptsInfo(character) {
     
     // Check if character is boosted by a Teacher (increases max attempts to 4)
     if (character.boostedBy) {
-        const { fetchCharacterByName } = require('@app/shared/database/db');
+        const { fetchCharacterByName } = require('@/shared/database/db');
         const boosterChar = await fetchCharacterByName(character.boostedBy);
         if (boosterChar && boosterChar.job === 'Teacher') {
             maxAttempts = 4;
@@ -1601,7 +1601,7 @@ async function handleFailedAttempts(thiefCharacter, embed) {
     let boosterChar = null;
     
     if (thiefCharacter.boostedBy) {
-        const { fetchCharacterByName } = require('@app/shared/database/db');
+        const { fetchCharacterByName } = require('@/shared/database/db');
         boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
         if (boosterChar && boosterChar.job === 'Teacher') {
             teacherFreeFailApplied = true;
@@ -1765,7 +1765,7 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
     // ------------------- Apply Job-Specific Stealing Boosts -------------------
     // ============================================================================
     if (thiefCharacter.boostedBy) {
-        const { fetchCharacterByName } = require('@app/shared/database/db');
+        const { fetchCharacterByName } = require('@/shared/database/db');
         const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
         
         if (boosterChar) {
@@ -2015,7 +2015,7 @@ async function generateStealRoll(character = null) {
     // ------------------- Apply Fortune Teller Boost (Predicted Opportunity) -------------------
     // ============================================================================
     if (character && character.boostedBy) {
-        const { fetchCharacterByName } = require('@app/shared/database/db');
+        const { fetchCharacterByName } = require('@/shared/database/db');
         const boosterChar = await fetchCharacterByName(character.boostedBy);
         
         if (boosterChar && boosterChar.job === 'Fortune Teller') {
@@ -3576,7 +3576,7 @@ async function executeStealAttempt(thiefCharacter, targetName, targetType, rarit
         let modifiedItems = items;
         let boostInfo = null;
         if (thiefCharacter.boostedBy) {
-            const { fetchCharacterByName } = require('@app/shared/database/db');
+            const { fetchCharacterByName } = require('@/shared/database/db');
             const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
             
         if (boosterChar && boosterChar.job === 'Entertainer') {

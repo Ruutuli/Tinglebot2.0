@@ -16,8 +16,8 @@ const fs = require('fs');
 // ============================================================================
 // ---- Database Configuration ----
 // ============================================================================
-const dbConfig = require('@app/shared/config/database');
-const ItemModel = require('@app/shared/models/ItemModel');
+const dbConfig = require('./shared/config/database');
+const ItemModel = require('./shared/models/ItemModel');
 
 // ============================================================================
 // ---- Helper Functions ----

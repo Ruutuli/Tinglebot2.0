@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const NodeCache = require('node-cache');
-const Item = require('@app/shared/models/ItemModel');
+const Item = require('@/shared/models/ItemModel');
 
 // ------------------- Cache and constants -------------------
 // Configure NodeCache with checkperiod disabled to avoid creating persistent timers

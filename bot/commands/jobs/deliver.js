@@ -1,6 +1,6 @@
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
 
 // ------------------- Database Services -------------------
 const {
@@ -11,20 +11,20 @@ const {
  getOrCreateToken,
  updateTokenBalance,
  getCurrentVendingStockList,
-} = require('@app/shared/database/db');
+} = require('@/shared/database/db');
 
 // ------------------- Utility Functions -------------------
 const { capitalizeWords } = require("../../modules/formattingModule");
 const {
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
-} = require('@app/shared/utils/inventoryUtils');
-const { generateUniqueId } = require('@app/shared/utils/uniqueIdUtils');
+} = require('@/shared/utils/inventoryUtils');
+const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
 const {
  deleteSubmissionFromStorage,
  retrieveSubmissionFromStorage,
  saveSubmissionToStorage,
-} = require('@app/shared/utils/storage');
+} = require('@/shared/utils/storage');
 const {
  validateJobVoucher,
  activateJobVoucher,
@@ -33,15 +33,15 @@ const {
  getJobVoucherErrorMessage,
 } = require("../../modules/jobVoucherModule");
 const { getJobPerk } = require("../../modules/jobsModule");
-const { checkInventorySync } = require('@app/shared/utils/characterUtils');
+const { checkInventorySync } = require('@/shared/utils/characterUtils');
 
 // ------------------- Boost Integration -------------------
 const { applyTravelBoost } = require("../../modules/boostIntegration");
 const { clearBoostAfterUse } = require("./boosting");
 
 // ------------------- Database Models -------------------
-const ItemModel = require('@app/shared/models/ItemModel');
-const TempData = require('@app/shared/models/TempDataModel');
+const ItemModel = require('@/shared/models/ItemModel');
+const TempData = require('@/shared/models/TempDataModel');
 
 // ------------------- Google Sheets API -------------------
 const {
@@ -50,7 +50,7 @@ const {
  extractSpreadsheetId,
  isValidGoogleSheetsUrl,
  safeAppendDataToSheet,
-} = require('@app/shared/utils/googleSheetsUtils');
+} = require('@/shared/utils/googleSheetsUtils');
 
 // ------------------- Temporary In-Memory Storage -------------------
 const deliveryTasks = {};

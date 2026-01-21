@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require("discord.js");
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
-const logger = require('@app/shared/utils/logger');
-const Quest = require('@app/shared/models/QuestModel');
-const Character = require('@app/shared/models/CharacterModel');
-const User = require('@app/shared/models/UserModel');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
+const logger = require('@/shared/utils/logger');
+const Quest = require('@/shared/models/QuestModel');
+const Character = require('@/shared/models/CharacterModel');
+const User = require('@/shared/models/UserModel');
 const { 
     BORDER_IMAGE, 
     QUEST_CHANNEL_ID, 
@@ -507,7 +507,7 @@ async handleQuestTurnIn(interaction) {
   } else {
    // getCharacterInventoryCollection required here to avoid loading db when reward is character_slot
    try {
-    const { getCharacterInventoryCollection } = require('@app/shared/database/db');
+    const { getCharacterInventoryCollection } = require('@/shared/database/db');
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
     const existingOrb = await inventoryCollection.findOne({
      characterId: character._id,
@@ -1572,7 +1572,7 @@ formatQuestCount(count = 0) {
  // ------------------- Check Quest Voucher -------------------
  async checkQuestVoucher(interaction, userID) {
   try {
-   const Character = require('@app/shared/models/CharacterModel');
+   const Character = require('@/shared/models/CharacterModel');
    const character = await Character.findOne({ userId: userID });
    
    if (!character) return false;
@@ -1588,7 +1588,7 @@ formatQuestCount(count = 0) {
  // ------------------- Handle Quest Voucher Usage -------------------
  async handleQuestVoucherUsage(interaction, quest, userID) {
   try {
-   const Character = require('@app/shared/models/CharacterModel');
+   const Character = require('@/shared/models/CharacterModel');
    const character = await Character.findOne({ userId: userID });
    
    if (!character || !character.questVoucher) return false;

@@ -6,7 +6,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const { Client, GatewayIntentBits } = require('discord.js');
-const Quest = require('@app/shared/models/QuestModel');
+const Quest = require('./shared/models/QuestModel');
 
 // Import formatQuestEmbed from questAnnouncements
 const { formatQuestEmbed } = require('./questAnnouncements');

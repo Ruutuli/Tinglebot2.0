@@ -1,7 +1,7 @@
 // flavorTextModule.js
 
-const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
-const { debug } = require('@app/shared/utils/logger');
+const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
+const { debug } = require('@/shared/utils/logger');
 
 // ============================================================================
 // ------------------- Utility Functions -------------------

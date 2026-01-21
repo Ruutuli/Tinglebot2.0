@@ -5,16 +5,16 @@
 
 const express = require('express');
 const router = express.Router();
-const Character = require('@app/shared/models/CharacterModel');
-const ModCharacter = require('@app/shared/models/ModCharacterModel');
-const User = require('@app/shared/models/UserModel');
-const Pet = require('@app/shared/models/PetModel');
-const Mount = require('@app/shared/models/MountModel');
-const VillageShops = require('@app/shared/models/VillageShopsModel');
-const Quest = require('@app/shared/models/QuestModel');
+const Character = require('@/shared/models/CharacterModel');
+const ModCharacter = require('@/shared/models/ModCharacterModel');
+const User = require('@/shared/models/UserModel');
+const Pet = require('@/shared/models/PetModel');
+const Mount = require('@/shared/models/MountModel');
+const VillageShops = require('@/shared/models/VillageShopsModel');
+const Quest = require('@/shared/models/QuestModel');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const logger = require('@app/shared/utils/logger');
-const { getCharacterInventoryCollection } = require('@app/shared/database/db');
+const logger = require('@/shared/utils/logger');
+const { getCharacterInventoryCollection } = require('@/shared/database/db');
 
 // ------------------- Function: getTinglebotStats -------------------
 // Returns statistics for Tinglebot system data

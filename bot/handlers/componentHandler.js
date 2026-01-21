@@ -10,8 +10,8 @@
 // =============================================================================
 
 // ------------------- Standard Libraries -------------------
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const logger = require('@app/shared/utils/logger');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const logger = require('@/shared/utils/logger');
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -28,13 +28,13 @@ const {
   fetchModCharacterById,
   getUserById,
   fetchCharacterByName
-} = require('@app/shared/database/db');
+} = require('@/shared/database/db');
 
 // ------------------- Database Models -------------------
-const ItemModel = require('@app/shared/models/ItemModel');
-const RuuGame = require('@app/shared/models/RuuGameModel');
-const Character = require('@app/shared/models/CharacterModel');
-const { Village } = require('@app/shared/models/VillageModel');
+const ItemModel = require('@/shared/models/ItemModel');
+const RuuGame = require('@/shared/models/RuuGameModel');
+const Character = require('@/shared/models/CharacterModel');
+const { Village } = require('@/shared/models/VillageModel');
 
 // ------------------- Embed and Command Imports -------------------
 const {
@@ -70,14 +70,14 @@ const {
   retrieveSubmissionFromStorage, 
   deleteSubmissionFromStorage,
   findLatestSubmissionIdForUser 
-} = require('@app/shared/utils/storage');
+} = require('@/shared/utils/storage');
 
 const {
   calculateTokens,
   generateTokenBreakdown
-} = require('@app/shared/utils/tokenUtils');
+} = require('@/shared/utils/tokenUtils');
 
-const { canChangeJob } = require('@app/shared/utils/validation');
+const { canChangeJob } = require('@/shared/utils/validation');
 
 // ============================================================================
 // ------------------- RuuGame Configuration -------------------
@@ -1550,7 +1550,7 @@ async function awardRuuGamePrize(session, userId, interaction) {
       const itemEmoji = itemDetails?.emoji || '🎁'; // Fallback emoji if not found
 
       // Add item to random character's inventory using inventory utilities
-      const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
+      const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
       await addItemInventoryDatabase(
         randomCharacter._id,
         prize.itemName,
@@ -1590,7 +1590,7 @@ async function awardRuuGamePityPrize(session, userId, interaction) {
       const itemEmoji = itemDetails?.emoji || '🧚‍♀️'; // Fallback emoji if not found
 
       // Add Mock Fairy to random character's inventory using inventory utilities
-      const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
+      const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
       await addItemInventoryDatabase(
         randomCharacter._id,
         'Mock Fairy',
@@ -1625,7 +1625,7 @@ async function handleMinigameJoin(interaction) {
     console.log(`[MINIGAME COMPONENT JOIN] ${username} (${userId}) attempting to join session ${sessionId} via button`);
     
     // Find the minigame session
-    const Minigame = require('@app/shared/models/MinigameModel');
+    const Minigame = require('@/shared/models/MinigameModel');
     const session = await Minigame.findOne({ sessionId: sessionId });
     
     if (!session) {
@@ -1753,7 +1753,7 @@ async function handleMinigameStatus(interaction) {
     const sessionId = interaction.customId.replace('minigame_status_', '');
     
     // Find the minigame session
-    const Minigame = require('@app/shared/models/MinigameModel');
+    const Minigame = require('@/shared/models/MinigameModel');
     const session = await Minigame.findOne({ sessionId: sessionId });
     
     if (!session) {
@@ -2148,7 +2148,7 @@ async function handleCraftingMaterialSelection(interaction) {
 
     const [, selectionId] = interaction.customId.split('|');
     console.log(`[componentHandler.js] [CRFT] handleCraftingMaterialSelection called - selectionId: ${selectionId}, User: ${interaction.user.tag}`);
-    const TempData = require('@app/shared/models/TempDataModel');
+    const TempData = require('@/shared/models/TempDataModel');
     const craftingState = await TempData.findByTypeAndKey('craftingMaterialSelection', selectionId);
 
     if (!craftingState || !craftingState.data) {
@@ -2221,7 +2221,7 @@ async function handleCraftingMaterialSelection(interaction) {
     });
 
     // Get fresh inventory to update available items
-    const { fetchCharacterById, getCharacterInventoryCollection } = require('@app/shared/database/db');
+    const { fetchCharacterById, getCharacterInventoryCollection } = require('@/shared/database/db');
     const character = await fetchCharacterById(state.characterId);
     
     if (!character) {
@@ -2243,7 +2243,7 @@ async function handleCraftingMaterialSelection(interaction) {
 
     // Rebuild availableItems from fresh inventory instead of decrementing from cached state
     // This ensures the display accurately reflects what's in the database
-    const generalCategories = require('@app/shared/models/GeneralItemCategories');
+    const generalCategories = require('@/shared/models/GeneralItemCategories');
     const isGeneralCategory = generalCategories[state.materialName];
     
     let filteredInventoryItems = [];
@@ -2314,7 +2314,7 @@ async function handleCraftingMaterialSelection(interaction) {
       );
 
       // Create next selection menu
-      const { createMaterialSelectionMenu } = require('@app/shared/utils/inventoryUtils');
+      const { createMaterialSelectionMenu } = require('@/shared/utils/inventoryUtils');
       const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
       
       const selectMenu = createMaterialSelectionMenu(
@@ -2382,7 +2382,7 @@ async function handleCraftingMaterialSelection(interaction) {
     console.log(`[componentHandler.js] [CRFT] ✅ FIRST CHECK PASSED - stateCheckId: ${stateCheckId}, ExpiresAt: ${craftingContinueState.expiresAt}, CurrentTime: ${new Date()}`);
 
     // Process all selected items
-    const { continueProcessMaterials, addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
+    const { continueProcessMaterials, addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
     
     // Update state with fresh inventory - ensure quantities are numbers
     state.inventory = inventory.map(item => ({
@@ -2483,7 +2483,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
   try {
     const { 
       addItemInventoryDatabase 
-    } = require('@app/shared/utils/inventoryUtils');
+    } = require('@/shared/utils/inventoryUtils');
     const { 
       checkAndUseStamina 
     } = require('../modules/characterStatsModule');
@@ -2498,12 +2498,12 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
     } = require('../embeds/embeds');
     const { 
       fetchCharacterByName 
-    } = require('@app/shared/database/db');
+    } = require('@/shared/database/db');
     const { 
       activateJobVoucher, 
       deactivateJobVoucher
     } = require('../modules/jobVoucherModule');
-    const { info, success, error } = require('@app/shared/utils/logger');
+    const { info, success, error } = require('@/shared/utils/logger');
     const { MessageFlags } = require('discord.js');
 
     const freshCharacter = await fetchCharacterById(continueData.characterId);
@@ -2677,7 +2677,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
 async function handleCraftingCancel(interaction) {
   try {
     const [, selectionId] = interaction.customId.split('|');
-    const TempData = require('@app/shared/models/TempDataModel');
+    const TempData = require('@/shared/models/TempDataModel');
     
     await TempData.findOneAndDelete({ type: 'craftingMaterialSelection', key: selectionId });
 
@@ -2714,9 +2714,9 @@ async function handleChestClaim(interaction) {
     const username = interaction.user.username;
     const chestId = interaction.customId.replace('chest_claim_', '');
     
-    const TempData = require('@app/shared/models/TempDataModel');
-    const User = require('@app/shared/models/UserModel');
-    const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
+    const TempData = require('@/shared/models/TempDataModel');
+    const User = require('@/shared/models/UserModel');
+    const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
 
     // Find chest data FIRST (before deferring)
     const chestDataDoc = await TempData.findByTypeAndKey('temp', `chest_${chestId}`);

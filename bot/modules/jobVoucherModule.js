@@ -1,15 +1,15 @@
 // ------------------- Job Voucher Module -------------------
 
 // Import necessary modules
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const logger = require('@app/shared/utils/logger');
-const { removeItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@app/shared/utils/googleSheetsUtils');
-const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@app/shared/utils/googleSheetsUtils');
-const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('@app/shared/database/db'); 
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const logger = require('@/shared/utils/logger');
+const { removeItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@/shared/utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
+const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('@/shared/database/db'); 
 const { v4: uuidv4 } = require('uuid');
 const { getJobPerk } = require('./jobsModule');
-const Character = require('@app/shared/models/CharacterModel');
+const Character = require('@/shared/models/CharacterModel');
 const { capitalizeWords } = require('./formattingModule');
 const { EmbedBuilder } = require('discord.js');
 
@@ -253,7 +253,7 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
         // Then activate the new voucher
         // Use appropriate update function based on character type
         if (character.isModCharacter) {
-            const { updateModCharacterById } = require('@app/shared/database/db.js');
+            const { updateModCharacterById } = require('@/shared/database/db.js');
             await updateModCharacterById(character._id, { 
                 jobVoucher: true, 
                 jobVoucherJob: jobName 
@@ -299,7 +299,7 @@ async function deactivateJobVoucher(characterId) {
         let character = await Character.findById(characterId);
         if (!character) {
             // Try mod character if regular character not found
-            const ModCharacter = require('@app/shared/models/ModCharacterModel.js');
+            const ModCharacter = require('@/shared/models/ModCharacterModel.js');
             character = await ModCharacter.findById(characterId);
             if (!character) {
                 throw new Error(`Character not found with ID: ${characterId}`);
@@ -318,7 +318,7 @@ async function deactivateJobVoucher(characterId) {
         // Always set jobVoucher to false and clear the job
         // Use appropriate update function based on character type
         if (character.isModCharacter) {
-            const { updateModCharacterById } = require('@app/shared/database/db.js');
+            const { updateModCharacterById } = require('@/shared/database/db.js');
             await updateModCharacterById(characterId, { 
                 jobVoucher: false, 
                 jobVoucherJob: null 

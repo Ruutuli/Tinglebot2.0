@@ -91,10 +91,28 @@ WeatherSchema.statics.saveWeather = async function(weatherData) {
       hasSpecial: !!weatherData.special
     });
     
-    const weather = new this(weatherData);
-    console.log(`[WeatherModel.js]: ✅ Weather document created`);
+    // Normalize date to prevent duplicates (remove milliseconds)
+    const normalizedDate = weatherData.date instanceof Date 
+      ? new Date(weatherData.date)
+      : new Date(weatherData.date);
+    normalizedDate.setMilliseconds(0);
+    weatherData.date = normalizedDate;
     
-    const savedWeather = await weather.save();
+    // Use findOneAndUpdate with upsert to prevent duplicates
+    // This atomically checks if weather exists and creates/updates it
+    const savedWeather = await this.findOneAndUpdate(
+      {
+        village: weatherData.village,
+        date: normalizedDate
+      },
+      weatherData,
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true
+      }
+    );
+    
     console.log(`[WeatherModel.js]: ✅ Weather saved via static method, ID: ${savedWeather._id}`);
     
     return savedWeather;

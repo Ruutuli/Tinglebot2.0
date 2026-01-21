@@ -1,7 +1,7 @@
 // ------------------- Importing necessary modules -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const MersenneTwister = require('mersenne-twister');
-const { evaluate } = require('@app/shared/utils/mathParser');
+const { evaluate } = require('@/shared/utils/mathParser');
 
 // ------------------- Initialize Mersenne Twister for random number generation -------------------
 const mt = new MersenneTwister();

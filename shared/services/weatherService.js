@@ -107,8 +107,6 @@ const OVERLAY_MAPPING = {
 const bannerCache = new Map();
 const CACHE_DURATION = 60000; // 1 minute - reduced to prevent memory buildup
 const MAX_CACHE_SIZE = 10; // Maximum number of cached banners - reduced to prevent memory leaks
-const LEGACY_PERIOD_FALLBACK_MS = 8 * 60 * 60 * 1000; // 8 hours
-const PERIOD_VALIDATION_TOLERANCE_MS = 5 * 1000; // 5 seconds - tolerance for timing differences in period calculation
 
 // Cleanup banner cache periodically to prevent memory leaks
 function cleanupBannerCache() {
@@ -304,205 +302,58 @@ function getNextPeriodBounds(referenceDate = new Date()) {
 }
 
 async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
-  const { legacyFallback = true, fallbackWindowMs = LEGACY_PERIOD_FALLBACK_MS, exclusiveEnd = false, onlyPosted = false } = options;
+  const { exclusiveEnd = false, onlyPosted = false } = options;
   const normalizedVillage = normalizeVillageName(village);
 
   const dateRange = exclusiveEnd
     ? { $gte: startUTC, $lt: endUTC }
     : { $gte: startUTC, $lte: endUTC };
 
-  const baseQuery = { village: normalizedVillage, date: dateRange };
+  // Build query - start with base conditions
+  let baseQuery = {
+    village: normalizedVillage,
+    date: dateRange
+  };
+  
+  // If onlyPosted is true, add condition to only get posted weather
+  // Use $or to match either postedToDiscord: true OR the field doesn't exist (legacy records)
   if (onlyPosted) {
-    // Exclude future/scheduled weather (e.g. Song of Storms) that hasn't been posted yet.
-    // Include: postedToDiscord true, or legacy docs without the field.
-    // This will automatically exclude postedToDiscord: false documents.
-    baseQuery.$or = [
-      { postedToDiscord: true },
-      { postedToDiscord: { $exists: false } }
-    ];
-  }
-
-  let weather = await Weather.findOne(baseQuery).sort({ date: 1 });
-
-  // Period validation: ensure retrieved weather is actually within the requested bounds
-  if (weather && onlyPosted) {
-    const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-    const isValidDate = exclusiveEnd
-      ? (weatherDate >= startUTC && weatherDate < endUTC)
-      : (weatherDate >= startUTC && weatherDate <= endUTC);
-    
-    if (!isValidDate) {
-      console.warn(`[weatherService.js]: ⚠️ Retrieved weather outside period bounds for ${normalizedVillage}`, {
-        weatherDate: weatherDate.toISOString(),
-        startUTC: startUTC.toISOString(),
-        endUTC: endUTC.toISOString(),
-        exclusiveEnd,
-        postedToDiscord: weather.postedToDiscord,
-        hasSpecial: !!weather.special,
-        specialLabel: weather.special?.label || 'none'
-      });
-      weather = null; // Reject weather outside bounds
-    } else {
-      console.log(`[weatherService.js]: ✅ Valid weather retrieved for ${normalizedVillage}`, {
-        weatherDate: weatherDate.toISOString(),
-        postedToDiscord: weather.postedToDiscord,
-        hasSpecial: !!weather.special,
-        specialLabel: weather.special?.label || 'none',
-        onlyPosted
-      });
-    }
-  }
-
-  if (!weather && legacyFallback) {
-    const legacyQuery = {
-      village: normalizedVillage,
-      date: {
-        $gte: new Date(startUTC.getTime() - fallbackWindowMs),
-        $lte: new Date(endUTC.getTime() - fallbackWindowMs)
-      }
+    // Exclude future/scheduled weather (e.g. Song of Storms) that hasn't been posted yet
+    // Use $and to properly combine the base query with the $or condition
+    baseQuery = {
+      $and: [
+        { village: normalizedVillage },
+        { date: dateRange },
+        {
+          $or: [
+            { postedToDiscord: true },
+            { postedToDiscord: { $exists: false } }
+          ]
+        }
+      ]
     };
-    if (onlyPosted) {
-      legacyQuery.$or = [
-        { postedToDiscord: true },
-        { postedToDiscord: { $exists: false } }
-      ];
-    }
-    const legacyWeather = await Weather.findOne(legacyQuery);
+  }
 
-    if (legacyWeather) {
-      // Validate legacy weather is actually within current period bounds before using it
-      const legacyDate = legacyWeather.date instanceof Date ? legacyWeather.date : new Date(legacyWeather.date);
-      
-      // Check if the legacy weather's date is already close to the target period
-      // If it's within 1 hour of the start, it was likely already realigned
-      const timeDiff = Math.abs(legacyDate.getTime() - startUTC.getTime());
-      const oneHourMs = 60 * 60 * 1000;
-      const toleranceMs = PERIOD_VALIDATION_TOLERANCE_MS;
-      
-      // Use tolerance for date comparison to handle small timing differences
-      const periodStartWithTolerance = new Date(startUTC.getTime() - toleranceMs);
-      const legacyIsInBounds = exclusiveEnd
-        ? (legacyDate >= periodStartWithTolerance && legacyDate < endUTC)
-        : (legacyDate >= periodStartWithTolerance && legacyDate <= endUTC);
-
-      if (!legacyIsInBounds && legacyDate >= endUTC) {
-        // Legacy weather is from future period - reject it to prevent next period leaks
-        console.warn(`[weatherService.js]: ⚠️ Legacy weather rejected: outside current period bounds for ${normalizedVillage}`, {
-          legacyDate: legacyDate.toISOString(),
-          startUTC: startUTC.toISOString(),
-          endUTC: endUTC.toISOString()
-        });
-        return null;
-      }
-      
-      // Only realign if the date is significantly different AND the legacy date is before the period start
-      // Don't realign if legacy date is in the future (next period) - that should have been caught above
-      if (timeDiff > oneHourMs && legacyDate < startUTC) {
-        // Realign to period start only if legacy is from past period
-        // Use a timestamp to ensure exact match
-        const targetDate = new Date(startUTC.getTime());
-        legacyWeather.date = targetDate;
-
-        if (legacyWeather.prediction) {
-          legacyWeather.prediction.periodStart = targetDate;
-          legacyWeather.prediction.periodEnd = endUTC;
-          legacyWeather.markModified('prediction');
-        }
-
-        // Save the realigned weather
-        try {
-          weather = await legacyWeather.save();
-          
-          // Verify the saved date is within bounds (with tolerance for timing differences)
-          const savedDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-          const savedIsValid = exclusiveEnd
-            ? (savedDate >= periodStartWithTolerance && savedDate < endUTC)
-            : (savedDate >= periodStartWithTolerance && savedDate <= endUTC);
-          
-          if (!savedIsValid) {
-            console.warn(`[weatherService.js]: ⚠️ Realigned date is outside bounds after save for ${normalizedVillage}`, {
-              savedDate: savedDate.toISOString(),
-              startUTC: startUTC.toISOString(),
-              endUTC: endUTC.toISOString(),
-              exclusiveEnd
-            });
-            weather = null;
-          } else {
-            console.log(`[weatherService.js]: ℹ️ Realigned legacy weather record for ${normalizedVillage} to new UTC window.`);
-          }
-        } catch (saveError) {
-          console.error(`[weatherService.js]: ❌ Error saving realigned weather for ${normalizedVillage}:`, saveError);
-          weather = null;
-        }
-      } else if (legacyIsInBounds) {
-        // Date is already within bounds (with tolerance) - use it without realignment
-        weather = legacyWeather;
-      } else {
-        // Legacy date is outside bounds and shouldn't be realigned - reject it
-        console.warn(`[weatherService.js]: ⚠️ Legacy weather date cannot be realigned for ${normalizedVillage}`, {
-          legacyDate: legacyDate.toISOString(),
-          startUTC: startUTC.toISOString(),
-          endUTC: endUTC.toISOString(),
-          timeDiffHours: (timeDiff / oneHourMs).toFixed(2)
-        });
-        weather = null;
-      }
-
-      // Final validation after legacy handling
-      if (weather && onlyPosted) {
-        const finalDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-        
-        // Validate date is valid
-        if (isNaN(finalDate.getTime())) {
-          console.error(`[weatherService.js]: ❌ Invalid date in legacy weather for ${normalizedVillage}`, {
-            date: weather.date,
-            type: typeof weather.date
-          });
-          weather = null;
-        } else {
-          // Use tolerance for timing differences in period calculation
-          const toleranceMs = PERIOD_VALIDATION_TOLERANCE_MS;
-          const periodStartWithTolerance = new Date(startUTC.getTime() - toleranceMs);
-          const finalIsValid = exclusiveEnd
-            ? (finalDate >= periodStartWithTolerance && finalDate < endUTC)
-            : (finalDate >= periodStartWithTolerance && finalDate <= endUTC);
-          
-          if (!finalIsValid) {
-            console.warn(`[weatherService.js]: ⚠️ Legacy weather rejected after realignment: outside period bounds for ${normalizedVillage}`, {
-              finalDate: finalDate.toISOString(),
-              startUTC: startUTC.toISOString(),
-              periodStartWithTolerance: periodStartWithTolerance.toISOString(),
-              endUTC: endUTC.toISOString(),
-              exclusiveEnd
-            });
-            weather = null;
-          }
-        }
-      }
+  const weather = await Weather.findOne(baseQuery).sort({ date: 1 });
+  
+  // Add debug logging to help troubleshoot
+  if (!weather && onlyPosted) {
+    console.log(`[weatherService.js]: No posted weather found for ${normalizedVillage} in period ${startUTC.toISOString()} to ${endUTC.toISOString()}`);
+    // Try to find any weather in the period to see if it's a postedToDiscord issue
+    const anyWeather = await Weather.findOne({
+      village: normalizedVillage,
+      date: dateRange
+    }).sort({ date: 1 });
+    if (anyWeather) {
+      console.log(`[weatherService.js]: Found weather but postedToDiscord=${anyWeather.postedToDiscord}, ID=${anyWeather._id}`);
+    } else {
+      console.log(`[weatherService.js]: No weather found at all for ${normalizedVillage} in this period`);
     }
   }
 
-  // Final database consistency check: validate weather structure before returning
-  if (weather) {
-    // Check for required fields
-    if (!weather.village || !weather.date) {
-      console.error(`[weatherService.js]: ❌ Weather document missing required fields for ${normalizedVillage}`, {
-        hasVillage: !!weather.village,
-        hasDate: !!weather.date,
-        weatherKeys: Object.keys(weather)
-      });
-      return null;
-    }
-
-    // Validate date is a valid Date object or can be converted to one
-    const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-    if (isNaN(weatherDate.getTime())) {
-      console.error(`[weatherService.js]: ❌ Weather document has invalid date for ${normalizedVillage}`, {
-        date: weather.date,
-        type: typeof weather.date
-      });
-      return null;
-    }
+  // Basic validation
+  if (weather && (!weather.village || !weather.date)) {
+    return null;
   }
 
   return weather;
@@ -795,9 +646,7 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
 // ------------------- Unified Weather Generator -------------------
 async function simulateWeightedWeather(village, season, options = {}) {
   const {
-    useDatabaseHistory = true,
-    maxRetries = 10,
-    validateResult = true
+    useDatabaseHistory = true
   } = options;
   
   // Convert 'fall' to 'autumn' for data lookup since seasonsData uses 'Autumn'
@@ -939,14 +788,6 @@ async function simulateWeightedWeather(village, season, options = {}) {
       emoji: special.emoji,
       probability: `${specialProbability.toFixed(1)}%`
     };
-    console.log(`[weatherService.js]: ✨ Special weather generated for ${village}: ${special.label}`);
-  }
-  
-  // Validate weather combination if requested
-  if (validateResult && !validateWeatherCombination(result)) {
-    console.warn(`[weatherService.js]: Invalid weather combination generated for ${village}`);
-    // Note: We keep special weather even if validation fails to ensure it's saved to database
-    // The special weather was generated according to the rules and should be preserved
   }
   
   return result;
@@ -962,101 +803,29 @@ async function getWeatherWithoutGeneration(village, options = {}) {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
 
-    console.log(`[weatherService.js]: 🔍 Getting weather for ${normalizedVillage}`, {
-      onlyPosted: options.onlyPosted,
-      timestamp: now.toISOString()
-    });
-
     const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
     const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
 
-    console.log(`[weatherService.js]: 📅 Period bounds calculated for ${normalizedVillage}`, {
-      periodStart: startOfPeriodUTC.toISOString(),
-      nextPeriodStart: startOfNextPeriodUTC.toISOString(),
-      onlyPosted: options.onlyPosted
-    });
+    // Add debug logging
+    if (options.onlyPosted) {
+      console.log(`[weatherService.js]: Looking for posted weather for ${normalizedVillage} in period ${startOfPeriodUTC.toISOString()} to ${startOfNextPeriodUTC.toISOString()}`);
+    }
 
-    // Use exclusive upper bound (next period's start) so we never pick up the next period's
-    // weather (e.g. tomorrow's Song of Storms Rock Slide when today is Muggy).
-    // onlyPosted: when true, exclude future/scheduled weather (e.g. Song of Storms) that
-    // hasn't been posted yet — use for gathering/specialweather so players only get
-    // the in-effect (posted) weather for the current period.
+    // Use exclusive upper bound to avoid picking up next period's weather
     const weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
       exclusiveEnd: true,
       onlyPosted: options.onlyPosted
     });
 
-    // Validate that returned weather is for the current period (not future)
     if (weather) {
-      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
-      
-      // Ensure weather is within current period bounds
-      // Use tolerance on lower bound to account for timing differences when period bounds are recalculated
-      const periodStartWithTolerance = new Date(startOfPeriodUTC.getTime() - PERIOD_VALIDATION_TOLERANCE_MS);
-      if (weatherDate < periodStartWithTolerance || weatherDate >= startOfNextPeriodUTC) {
-        console.error('[weatherService.js]: ❌ Retrieved weather outside current period bounds', {
-          village: normalizedVillage,
-          weatherDate: weatherDate.toISOString(),
-          periodStart: startOfPeriodUTC.toISOString(),
-          periodStartWithTolerance: periodStartWithTolerance.toISOString(),
-          nextPeriodStart: startOfNextPeriodUTC.toISOString(),
-          onlyPosted: options.onlyPosted,
-          postedToDiscord: weather.postedToDiscord,
-          hasSpecial: !!weather.special,
-          specialLabel: weather.special?.label || 'none'
-        });
-        return null; // Reject weather from future periods
-      }
-
-      // Additional validation: ensure weather date is not in the future (within reasonable margin for clock skew)
-      // However, if the weather date is within the current period bounds, it's valid even if it's ahead of current time
-      // This can happen when the period starts at 8 AM EST (13:00 UTC) and current time is earlier
-      const nowPlusMargin = new Date(now.getTime() + (5 * 60 * 1000)); // 5 minute margin for clock skew
-      const maxFutureAllowed = new Date(startOfPeriodUTC.getTime() + (24 * 60 * 60 * 1000)); // Allow up to 24h into period
-      
-      if (weatherDate > nowPlusMargin && weatherDate > maxFutureAllowed) {
-        console.warn('[weatherService.js]: ⚠️ Retrieved weather is significantly in the future', {
-          village: normalizedVillage,
-          weatherDate: weatherDate.toISOString(),
-          currentTime: now.toISOString(),
-          periodStart: startOfPeriodUTC.toISOString(),
-          timeDiffMs: weatherDate.getTime() - now.getTime(),
-          timeDiffHours: ((weatherDate.getTime() - now.getTime()) / (60 * 60 * 1000)).toFixed(2)
-        });
-        // Still allow it if within period bounds, but log warning
-      } else if (weatherDate > nowPlusMargin) {
-        // Weather is in the future but within the period - this is expected for period start times
-        console.log('[weatherService.js]: ℹ️ Weather date is in future but within period bounds (expected for period start)', {
-          village: normalizedVillage,
-          weatherDate: weatherDate.toISOString(),
-          currentTime: now.toISOString(),
-          periodStart: startOfPeriodUTC.toISOString()
-        });
-      }
-
-      console.log(`[weatherService.js]: ✅ Successfully retrieved weather for ${normalizedVillage}`, {
-        weatherDate: weatherDate.toISOString(),
-        postedToDiscord: weather.postedToDiscord,
-        hasSpecial: !!weather.special,
-        specialLabel: weather.special?.label || 'none',
-        onlyPosted: options.onlyPosted
-      });
-    } else {
-      console.log(`[weatherService.js]: ℹ️ No weather found for ${normalizedVillage}`, {
-        onlyPosted: options.onlyPosted,
-        periodStart: startOfPeriodUTC.toISOString(),
-        nextPeriodStart: startOfNextPeriodUTC.toISOString()
-      });
+      console.log(`[weatherService.js]: ✅ Found weather for ${normalizedVillage}: ID=${weather._id}, date=${weather.date?.toISOString()}, postedToDiscord=${weather.postedToDiscord}`);
+    } else if (options.onlyPosted) {
+      console.log(`[weatherService.js]: ⚠️ No posted weather found for ${normalizedVillage}`);
     }
 
     return weather;
   } catch (error) {
     console.error('[weatherService.js]: ❌ Error getting weather:', error);
-    console.error('[weatherService.js]: Error details:', {
-      village,
-      onlyPosted: options.onlyPosted,
-      stack: error.stack
-    });
     throw error;
   }
 }
@@ -1070,59 +839,114 @@ async function getCurrentWeather(village) {
     const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
     const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
 
-    // Use exclusive upper bound so we never pick up the next period's weather.
-    let weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
-      exclusiveEnd: true
+    // Normalize date to exact start of period (same as how we save it)
+    // This ensures we find weather that was saved with normalized dates
+    const normalizedDate = new Date(startOfPeriodUTC);
+    normalizedDate.setMilliseconds(0);
+
+    // FIRST: Check for existing weather using exact normalized date (most reliable)
+    // This matches how weather is saved and prevents duplicates
+    let weather = await Weather.findOne({
+      village: normalizedVillage,
+      date: normalizedDate
     });
-    
-    // Only generate new weather if none exists for the current period
+
+    // SECOND: If not found by exact date, check using date range (for legacy records or edge cases)
     if (!weather) {
-      const season = getCurrentSeason();
+      weather = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
+        exclusiveEnd: true,
+        onlyPosted: false // Get current period weather even if not posted yet
+      });
+    }
+    
+    // Validate weather is actually for current period (not future)
+    if (weather) {
+      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+      // If weather is for future period (more than 1 hour in future), it's Song of Storms - don't return it
+      const oneHourFromNow = now.getTime() + (60 * 60 * 1000);
+      if (weatherDate.getTime() > oneHourFromNow && weatherDate >= startOfNextPeriodUTC) {
+        // This is future period weather (Song of Storms), don't return it
+        weather = null;
+      }
+    }
+    
+    // Generate new weather if none exists or if we filtered out future weather
+    if (!weather) {
+      // Final check: Try exact date match one more time (race condition protection)
+      const finalCheck = await Weather.findOne({
+        village: normalizedVillage,
+        date: normalizedDate
+      });
       
-      // Try to generate valid weather with retry limit
-      let newWeather = null;
-      let attempts = 0;
-      const maxAttempts = 10;
-      
-      while (attempts < maxAttempts) {
-        attempts++;
-        newWeather = await simulateWeightedWeather(normalizedVillage, season, { useDatabaseHistory: true });
+      if (finalCheck) {
+        // Weather exists, use it instead of generating new
+        console.log(`[weatherService.js]: ✅ Found existing weather for ${normalizedVillage} period (ID: ${finalCheck._id}), using it instead of generating new`);
+        weather = finalCheck;
+      } else {
+        console.log(`[weatherService.js]: 🔄 No existing weather found for ${normalizedVillage} period, generating new weather for date: ${startOfPeriodUTC.toISOString()}`);
+        // No weather exists, generate new
+        const season = getCurrentSeason();
+        const newWeather = await simulateWeightedWeather(normalizedVillage, season, { useDatabaseHistory: true });
         
         if (!newWeather) {
-          if (attempts === maxAttempts) {
-            throw new Error(`Failed to generate weather for ${village} after ${maxAttempts} attempts`);
-          }
-          continue;
+          throw new Error(`Failed to generate weather for ${village}`);
         }
         
-        // Add date and season to weather data
-        newWeather.date = startOfPeriodUTC;
+        // Use the already-normalized date (no need to normalize again)
+        newWeather.date = normalizedDate;
         newWeather.season = season;
+        newWeather.postedToDiscord = false; // Ensure it's marked as not posted
 
-        // Validate weather combination
-        if (validateWeatherCombination(newWeather)) {
-          break;
-        } else {
-          if (attempts === maxAttempts) {
-            // Note: We keep special weather even if validation fails to ensure it's saved to database
-            // The special weather was generated according to the rules and should be preserved
-            console.warn(`[weatherService.js]: Max attempts reached, keeping special weather despite validation failure`);
+        // Save to database using findOneAndUpdate with upsert to prevent duplicates
+        // Use exact date match (not range) to work with unique index on {village: 1, date: 1}
+        // This atomically checks if weather exists and creates it if it doesn't
+        try {
+          const savedWeather = await Weather.findOneAndUpdate(
+            {
+              village: normalizedVillage,
+              date: normalizedDate
+            },
+            newWeather,
+            {
+              upsert: true,
+              new: true,
+              setDefaultsOnInsert: true
+            }
+          );
+          
+          weather = savedWeather;
+          console.log(`[weatherService.js]: ✅ Generated and saved new weather for ${normalizedVillage} period (ID: ${savedWeather._id}, Date: ${savedWeather.date.toISOString()})`);
+        } catch (saveError) {
+          // If save failed (e.g., duplicate key error), try to find the existing weather using exact date
+          if (saveError.code === 11000 || saveError.name === 'MongoServerError') {
+            console.warn(`[weatherService.js]: Duplicate weather detected for ${village}, fetching existing record`);
+            // Try exact date match first (most reliable)
+            const existingWeather = await Weather.findOne({
+              village: normalizedVillage,
+              date: normalizedDate
+            });
+            if (existingWeather) {
+              weather = existingWeather;
+              console.log(`[weatherService.js]: ✅ Found existing weather by exact date match (ID: ${existingWeather._id})`);
+            } else {
+              // Fallback to range query for edge cases
+              const existingWeatherByRange = await findWeatherForPeriod(normalizedVillage, startOfPeriodUTC, startOfNextPeriodUTC, {
+                exclusiveEnd: true,
+                onlyPosted: false
+              });
+              if (existingWeatherByRange) {
+                weather = existingWeatherByRange;
+                console.log(`[weatherService.js]: ✅ Found existing weather by range query (ID: ${existingWeatherByRange._id})`);
+              } else {
+                console.error(`[weatherService.js]: ❌ Failed to save weather and could not find existing:`, saveError);
+                throw saveError;
+              }
+            }
+          } else {
+            console.error(`[weatherService.js]: ❌ Failed to save weather to database:`, saveError);
+            throw saveError;
           }
         }
-      }
-      
-      if (newWeather) {
-        // Save to database
-        try {
-          const weatherDoc = new Weather(newWeather);
-          weather = await weatherDoc.save();
-        } catch (saveError) {
-          console.error(`[weatherService.js]: ❌ Failed to save weather to database:`, saveError);
-          // Return the generated weather even if save fails
-          weather = newWeather;
-        }
-      } else {
-        throw new Error(`Failed to generate weather for ${village} after ${maxAttempts} attempts`);
       }
     }
     
@@ -1330,110 +1154,108 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
       throw new Error(`Unknown special weather label "${specialLabel}".`);
     }
 
-    // Song of Storms: special weather is always for the NEXT period, never the current one.
-    // All weather periods are EST/EDT (America/New_York): 8:00 AM to 7:59:59 AM the next day.
+    // Get next period bounds
     const now = new Date();
-    const raw = getNextPeriodBounds(now);
-    const startOfNextPeriodUTC = raw.startUTC;
-    const endOfNextPeriodUTC = raw.endUTC;
-    const startOfNextPeriod = raw.startEastern;
+    const { startUTC: startOfNextPeriodUTC, endUTC: endOfNextPeriodUTC, startEastern: startOfNextPeriod } = getNextPeriodBounds(now);
 
-    // Validate that the next period is in the future (never schedule for the current period)
-    if (startOfNextPeriodUTC <= now) {
-      console.error('[weatherService.js]: ❌ Date calculation error in scheduleSpecialWeather', {
-        currentTime: now.toISOString(),
-        nextPeriodStart: startOfNextPeriodUTC.toISOString(),
-        village: normalizedVillage
-      });
-      throw new Error('Calculated next period is not in the future. This indicates a date calculation error.');
-    }
-
-    // Additional validation: ensure the scheduled date is clearly in the future period
-    const timeUntilNextPeriod = startOfNextPeriodUTC.getTime() - now.getTime();
-    const oneHourMs = 60 * 60 * 1000;
-    if (timeUntilNextPeriod < oneHourMs) {
-      console.warn('[weatherService.js]: ⚠️ Warning: Scheduled weather is very close to current time', {
-        timeUntilNextPeriodMs: timeUntilNextPeriod,
-        timeUntilNextPeriodHours: (timeUntilNextPeriod / oneHourMs).toFixed(2),
-        village: normalizedVillage
-      });
-    }
-
-    console.log('[weatherService.js]: 🎵 Song of Storms: scheduling special for next period', {
-      currentTimeUTC: now.toISOString(),
-      nextPeriodStartUTC: startOfNextPeriodUTC.toISOString(),
-      nextPeriodEndUTC: endOfNextPeriodUTC.toISOString(),
-      village: normalizedVillage,
-      specialLabel: normalizedLabel,
-      timeUntilNextPeriodMs: startOfNextPeriodUTC.getTime() - now.getTime(),
-      timeUntilNextPeriodHours: ((startOfNextPeriodUTC.getTime() - now.getTime()) / (60 * 60 * 1000)).toFixed(2)
-    });
-
+    // Find or create weather document for next period
     let weatherDoc = await findWeatherForPeriod(
       normalizedVillage,
       startOfNextPeriodUTC,
-      endOfNextPeriodUTC
+      endOfNextPeriodUTC,
+      { exclusiveEnd: true, onlyPosted: false }
     );
 
-    let generatedWeather = null;
     const seasonForPeriod = getCurrentSeason(startOfNextPeriod);
 
     if (!weatherDoc) {
-      generatedWeather = await simulateWeightedWeather(normalizedVillage, seasonForPeriod, {
-        useDatabaseHistory: true
-      });
-
-      if (!generatedWeather) {
-        throw new Error(`Failed to generate baseline weather for ${normalizedVillage}.`);
-      }
-
-      weatherDoc = new Weather({
+      // Double-check for existing weather to prevent race conditions
+      const existingCheck = await Weather.findOne({
         village: normalizedVillage,
-        date: startOfNextPeriodUTC,
-        season: seasonForPeriod,
-        temperature: generatedWeather.temperature,
-        wind: generatedWeather.wind,
-        precipitation: generatedWeather.precipitation,
-        postedToDiscord: false  // Explicitly mark future weather as not posted
+        date: {
+          $gte: startOfNextPeriodUTC,
+          $lt: endOfNextPeriodUTC
+        }
       });
-    } else {
-      // Existing weather doc for next period - ensure it's marked as not posted
-      // This prevents future weather from being accessible via onlyPosted: true filter
-      if (!weatherDoc.postedToDiscord) {
-        weatherDoc.postedToDiscord = false;
+      
+      if (existingCheck) {
+        weatherDoc = existingCheck;
+      } else {
+        const generatedWeather = await simulateWeightedWeather(normalizedVillage, seasonForPeriod, {
+          useDatabaseHistory: true
+        });
+
+        if (!generatedWeather) {
+          throw new Error(`Failed to generate baseline weather for ${normalizedVillage}.`);
+        }
+
+        // Use findOneAndUpdate with upsert to atomically create weather and prevent duplicates
+        const weatherData = {
+          village: normalizedVillage,
+          date: startOfNextPeriodUTC,
+          season: seasonForPeriod,
+          temperature: generatedWeather.temperature,
+          wind: generatedWeather.wind,
+          precipitation: generatedWeather.precipitation,
+          postedToDiscord: false
+        };
+        
+        try {
+          weatherDoc = await Weather.findOneAndUpdate(
+            {
+              village: normalizedVillage,
+              date: {
+                $gte: startOfNextPeriodUTC,
+                $lt: endOfNextPeriodUTC
+              }
+            },
+            weatherData,
+            {
+              upsert: true,
+              new: true,
+              setDefaultsOnInsert: true
+            }
+          );
+        } catch (saveError) {
+          // If save failed due to duplicate, fetch the existing record
+          if (saveError.code === 11000 || saveError.name === 'MongoServerError') {
+            console.warn(`[weatherService.js]: Duplicate weather detected for ${normalizedVillage} next period, fetching existing`);
+            weatherDoc = await Weather.findOne({
+              village: normalizedVillage,
+              date: {
+                $gte: startOfNextPeriodUTC,
+                $lt: endOfNextPeriodUTC
+              }
+            });
+            if (!weatherDoc) {
+              throw new Error(`Failed to save weather and could not find existing record for ${normalizedVillage}`);
+            }
+          } else {
+            throw saveError;
+          }
+        }
       }
+    } else {
+      weatherDoc.postedToDiscord = false;
       if (!weatherDoc.season) {
         weatherDoc.season = seasonForPeriod;
       }
     }
 
-    const existingSpecialLabel = weatherDoc?.special?.label;
+    // Check if guaranteed special already exists
     const existingSpecialProbability = weatherDoc?.special?.probability;
-    // Song of Storms overwrites a naturally rolled special for the next period;
-    // only blocks when a guaranteed special is already set.
     const hasGuaranteedSpecial =
-      existingSpecialLabel &&
+      existingSpecialProbability &&
       typeof existingSpecialProbability === 'string' &&
       existingSpecialProbability.toLowerCase().includes('guaranteed');
 
     if (hasGuaranteedSpecial) {
-      const error = new Error(
+      throw new Error(
         `${normalizedVillage} already has guaranteed special weather scheduled for the next period.`
       );
-      error.code = 'SPECIAL_WEATHER_ALREADY_SET';
-      error.village = normalizedVillage;
-      error.existingSpecial = existingSpecialLabel;
-      console.warn(
-        '[weatherService.js]: ⚠️ Attempt to reschedule Song of Storms special rejected',
-        {
-          village: normalizedVillage,
-          existingSpecial: existingSpecialLabel,
-          probability: existingSpecialProbability
-        }
-      );
-      throw error;
     }
 
+    // Set special weather
     weatherDoc.special = {
       label: specialEntry.label,
       emoji: specialEntry.emoji,
@@ -1442,24 +1264,19 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 
     const savedWeather = await weatherDoc.save();
 
-    const logContext = {
-      village: normalizedVillage,
-      special: specialEntry.label,
-      startOfPeriod: startOfNextPeriodUTC.toISOString(),
-      triggeredBy: options.triggeredBy || 'Unknown',
-      recipient: options.recipient || null,
-      source: options.source || 'Song of Storms'
-    };
-
-    console.log('[weatherService.js]: 🎵 Scheduled special weather', logContext);
-    console.log('[weatherService.js]: ✅ Song of Storms weather document created', {
-      village: normalizedVillage,
-      special: specialEntry.label,
-      date: savedWeather.date?.toISOString() || startOfNextPeriodUTC.toISOString(),
-      postedToDiscord: savedWeather.postedToDiscord,
-      hasSpecial: !!savedWeather.special,
-      specialLabel: savedWeather.special?.label
-    });
+    // Schedule Agenda job to post weather at period start
+    try {
+      const { getAgenda } = require('../../bot/scheduler/agenda');
+      const agenda = getAgenda();
+      if (agenda) {
+        await agenda.schedule(startOfNextPeriodUTC, 'postScheduledSpecialWeather', {
+          village: normalizedVillage
+        });
+      }
+    } catch (agendaError) {
+      // Agenda scheduling is optional - weather will still be posted by cron job
+      console.warn('[weatherService.js]: Could not schedule Agenda job for special weather posting:', agendaError.message);
+    }
 
     const serializedWeather =
       typeof savedWeather.toObject === 'function' ? savedWeather.toObject() : savedWeather;
@@ -1586,9 +1403,6 @@ module.exports = {
   parseFahrenheit,
   parseWind,
   scheduleSpecialWeather,
-  
-  // Constants
-  PERIOD_VALIDATION_TOLERANCE_MS,
   
   // Cache management
   bannerCache

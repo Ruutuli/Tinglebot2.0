@@ -10,8 +10,8 @@ const { MongoClient } = require("mongodb");
 const {
  connectToInventories,
  connectToTinglebot
-} = require('@app/shared/database/db');
-const dbConfig = require('@app/shared/config/database');
+} = require('@/shared/database/db');
+const dbConfig = require('@/shared/config/database');
 
 // ------------------- Database Services -------------------
 const {
@@ -27,15 +27,15 @@ const {
  getCharacterInventoryCollection,
  getCurrentVendingStockList,
  getVendingModel
-} = require('@app/shared/database/db');
+} = require('@/shared/database/db');
 
 // ------------------- Utilities -------------------
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
 
 // Memory monitor (optional - won't break if not initialized)
 let memoryMonitor = null;
 try {
-  const { getMemoryMonitor } = require('@app/shared/utils/memoryMonitor');
+  const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
   memoryMonitor = getMemoryMonitor();
 } catch (err) {
   // Memory monitor not available, continue without it
@@ -111,63 +111,57 @@ const { getAllRaces } = require("../modules/raceModule");
 const { NPCs } = require("../modules/NPCsModule");
 
 // ------------------- Utility Functions -------------------
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
 
 // ------------------- Database Models -------------------
-const Character = require('@app/shared/models/CharacterModel');
-const Item = require('@app/shared/models/ItemModel');
-const Mount = require('@app/shared/models/MountModel');
-const Party = require('@app/shared/models/PartyModel');
-const Pet = require('@app/shared/models/PetModel');
-const Quest = require('@app/shared/models/QuestModel');
-const ShopStock = require('@app/shared/models/VillageShopsModel');
-const TableRoll = require('@app/shared/models/TableRollModel');
-const TempData = require('@app/shared/models/TempDataModel');
-const { VendingRequest } = require('@app/shared/models/VendingModel');
-const { Village } = require('@app/shared/models/VillageModel');
-const generalCategories = require('@app/shared/models/GeneralItemCategories');
+const Character = require('@/shared/models/CharacterModel');
+const Item = require('@/shared/models/ItemModel');
+const Mount = require('@/shared/models/MountModel');
+const Party = require('@/shared/models/PartyModel');
+const Pet = require('@/shared/models/PetModel');
+const Quest = require('@/shared/models/QuestModel');
+const ShopStock = require('@/shared/models/VillageShopsModel');
+const TableRoll = require('@/shared/models/TableRollModel');
+const TempData = require('@/shared/models/TempDataModel');
+const { VendingRequest } = require('@/shared/models/VendingModel');
+const { Village } = require('@/shared/models/VillageModel');
+const generalCategories = require('@/shared/models/GeneralItemCategories');
 
 
-// Add safe response utility
-async function safeAutocompleteResponse(interaction, choices) {
-  try {
-    // Check if interaction is still valid
-    if (!interaction.isAutocomplete()) {
-      logger.warn('INTERACTION', 'Not an autocomplete interaction');
-      return;
-    }
+// ============================================================================
+// ------------------- OPTIMIZED UTILITY FUNCTIONS -------------------
+// Consolidated and optimized common patterns
+// ============================================================================
 
-    // Check if already responded
-    if (interaction.responded) {
-      logger.warn('INTERACTION', 'Already responded');
-      return;
-    }
+// Constants for interaction validation
+const INTERACTION_MAX_AGE_MS = 2500; // 2.5 second safety margin
+const RESPONSE_TIMEOUT_MS = 2500; // Discord's limit is 3 seconds
+const MAX_CHOICE_NAME_LENGTH = 100;
 
-    // Set a timeout for autocomplete responses (Discord's limit is 3 seconds)
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Response timeout')), 2500)
-    );
-
-    // Try to respond with the choices
-    await Promise.race([
-      interaction.respond(choices),
-      timeoutPromise
-    ]);
-  } catch (error) {
-    // Log the error
-    logger.error('INTERACTION', 'Autocomplete response error');
-    
-    // Handle specific error cases
-    if (error.code === 10062 || error.message === 'Response timeout') {
-      logger.info('INTERACTION', 'Autocomplete expired/timeout');
-      return;
+// ------------------- Interaction Validation Helper -------------------
+// Centralized validation to check if interaction is still valid
+function isValidInteraction(interaction, checkAge = true) {
+  if (!interaction?.isAutocomplete()) {
+    return false;
+  }
+  
+  if (interaction.responded) {
+    return false;
+  }
+  
+  if (checkAge) {
+    const interactionAge = Date.now() - interaction.createdTimestamp;
+    if (interactionAge > INTERACTION_MAX_AGE_MS) {
+      return false;
     }
   }
+  
+  return true;
 }
 
 // ------------------- Choice Name Validation Helper -------------------
 // Ensures autocomplete choice names meet Discord's requirements (1-100 characters)
-function validateChoiceName(choice, maxLength = 100) {
+function validateChoiceName(choice, maxLength = MAX_CHOICE_NAME_LENGTH) {
   if (!choice.name || choice.name.length === 0) {
     return { ...choice, name: "Unknown Character" };
   }
@@ -180,60 +174,95 @@ function validateChoiceName(choice, maxLength = 100) {
   return choice;
 }
 
-// ------------------- Safe Autocomplete Response with Validation -------------------
-// Wraps interaction.respond with validation and error handling
-async function safeRespondWithValidation(interaction, choices) {
+// ------------------- Validate and Filter Choices -------------------
+// Validates choices and filters them based on focused value
+function prepareChoices(choices, focusedValue = '', maxResults = 25) {
+  const validatedChoices = choices.map(choice => validateChoiceName(choice));
+  
+  if (!focusedValue) {
+    return validatedChoices.slice(0, maxResults);
+  }
+  
+  const lowerFocused = focusedValue.toLowerCase();
+  return validatedChoices
+    .filter(choice => choice.name.toLowerCase().includes(lowerFocused))
+    .slice(0, maxResults);
+}
+
+// ------------------- Unified Safe Response Function -------------------
+// Handles all autocomplete responses with timeout, validation, and error handling
+async function safeAutocompleteResponse(interaction, choices, options = {}) {
+  const {
+    validate = true,
+    filter = true,
+    focusedValue = '',
+    maxResults = 25,
+    fallbackToEmpty = true
+  } = options;
+  
   try {
-    // Validate all choices to ensure they meet Discord's requirements
-    const validatedChoices = choices.map(choice => validateChoiceName(choice));
-    
-    // Check if interaction is still valid
-    if (!interaction.isAutocomplete()) {
-      logger.warn('INTERACTION', 'Not an autocomplete interaction');
-      return;
+    // Early validation check
+    if (!isValidInteraction(interaction)) {
+      return false;
     }
 
-    // Check if already responded
-    if (interaction.responded) {
-      logger.warn('INTERACTION', 'Already responded');
-      return;
+    // Prepare choices (validate and/or filter)
+    let preparedChoices = choices || [];
+    if (validate) {
+      preparedChoices = preparedChoices.map(choice => validateChoiceName(choice));
+    }
+    if (filter && focusedValue) {
+      const lowerFocused = focusedValue.toLowerCase();
+      preparedChoices = preparedChoices
+        .filter(choice => choice.name.toLowerCase().includes(lowerFocused))
+        .slice(0, maxResults);
+    } else if (preparedChoices.length > maxResults) {
+      preparedChoices = preparedChoices.slice(0, maxResults);
     }
 
-    // Set a timeout for autocomplete responses (Discord's limit is 3 seconds)
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Response timeout')), 2500)
-    );
+    // Set up timeout for response
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Response timeout')), RESPONSE_TIMEOUT_MS);
+    });
 
-    // Try to respond with the validated choices
-    await Promise.race([
-      interaction.respond(validatedChoices),
-      timeoutPromise
-    ]);
-  } catch (error) {
-    // Log the error with context
-    logger.error('INTERACTION', 'Validation error in autocomplete');
-    
-    // Log the choices that were being processed for debugging
-    if (choices && choices.length > 0) {
-      logger.info('INTERACTION', `Problematic choices: ${choices.length} items`);
-    }
-    
-    // Handle specific error cases
-    if (error.code === 10062 || error.message === 'Response timeout') {
-      logger.info('INTERACTION', 'Autocomplete expired/timeout');
-      return;
-    }
-    
-    // Try to send an empty response as fallback
+    // Attempt to respond with race condition protection
     try {
-      if (!interaction.responded && interaction.isAutocomplete()) {
-        await interaction.respond([]).catch(() => {});
-      }
-    } catch (e) {
-      logger.error('INTERACTION', 'Fallback response failed');
+      await Promise.race([
+        interaction.respond(preparedChoices),
+        timeoutPromise
+      ]);
+      clearTimeout(timeoutId);
+      return true;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
+  } catch (error) {
+    // Handle specific error cases silently
+    if (error.code === 10062 || error.message === 'Response timeout') {
+      return false; // Interaction expired, no need to log
+    }
+    
+    // Log unexpected errors
+    logger.error('INTERACTION', `Autocomplete response error: ${error.message}`);
+    
+    // Try fallback empty response if enabled
+    if (fallbackToEmpty && isValidInteraction(interaction, false)) {
+      try {
+        await interaction.respond([]).catch(() => {});
+      } catch (e) {
+        // Ignore fallback errors
+      }
+    }
+    
+    return false;
   }
 }
+
+// ------------------- Legacy Functions (for backwards compatibility) -------------------
+// Keep old function names that may be used elsewhere
+const safeRespondWithValidation = safeAutocompleteResponse;
 
 // ============================================================================
 // MAIN FUNCTION TO HANDLE AUTOCOMPLETE INTERACTIONS
@@ -335,14 +364,8 @@ async function handleAutocomplete(interaction) {
 // Internal autocomplete handler function
 async function handleAutocompleteInternal(interaction, commandName, focusedOption) {
     try {
-        // Check if interaction is still valid (3 second timeout)
-        const interactionAge = Date.now() - interaction.createdTimestamp;
-        if (interactionAge > 2500) { // 2.5 second safety margin
-            try {
-                logger.warn('AUTOCOMPLETE', `Interaction too old (${interactionAge}ms) for ${commandName}/${focusedOption?.name || 'unknown'}, skipping response`);
-            } catch (logError) {
-                // Ignore logging errors
-            }
+        // Use optimized validation
+        if (!isValidInteraction(interaction)) {
             return;
         }
         switch (commandName) {
@@ -930,77 +953,17 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
 // ============================================================================
 
 // ------------------- Helper Function to Filter and Respond with Choices -------------------
+// ------------------- Respond With Filtered Choices (Optimized) -------------------
+// Legacy wrapper function - now uses optimized safeAutocompleteResponse
 async function respondWithFilteredChoices(interaction, focusedOption, choices) {
-  try {
-    // Check if interaction is already responded to
-    if (interaction.responded) {
-      return;
-    }
-
-    // Check if interaction is still valid
-    if (!interaction.isAutocomplete()) {
-      return;
-    }
-
-    const focusedValue = focusedOption?.value?.toLowerCase() || '';
-
-    // Validate and sanitize choices to ensure they meet Discord's requirements
-    const validatedChoices = choices.map(choice => {
-      // Ensure name is between 1-100 characters as required by Discord
-      if (!choice.name || choice.name.length === 0) {
-        return { ...choice, name: "Unknown Character" };
-      }
-      
-      if (choice.name.length > 100) {
-        // Truncate to 97 characters and add "..." to indicate truncation
-        return { ...choice, name: choice.name.substring(0, 97) + "..." };
-      }
-      
-      return choice;
-    });
-
-    const filteredChoices = validatedChoices
-      .filter(choice => choice.name.toLowerCase().includes(focusedValue))
-      .slice(0, 25);
-
-    // Set a timeout for autocomplete responses (Discord's limit is 3 seconds)
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Response timeout')), 2500)
-    );
-
-    // Try to respond with the filtered choices
-    await Promise.race([
-      interaction.respond(filteredChoices),
-      timeoutPromise
-    ]);
-  } catch (error) {
-    // Handle specific error cases silently
-    if (error.code === 10062 || error.message === 'Response timeout') {
-      console.log('[autocompleteHandler.js]: ⚠️ Response timeout or expired interaction in respondWithFilteredChoices');
-      return;
-    }
-
-    // Log other errors with more context
-    console.error('[autocompleteHandler.js]: ❌ Error in respondWithFilteredChoices:', error);
-    
-    // Log the choices that were being processed for debugging
-    if (choices && choices.length > 0) {
-      console.error('[autocompleteHandler.js]: ❌ Problematic choices:', choices.map(c => ({
-        name: c.name,
-        nameLength: c.name?.length || 0,
-        value: c.value
-      })));
-    }
-    
-    // Try to send an empty response as fallback
-    try {
-      if (!interaction.responded && interaction.isAutocomplete()) {
-        await interaction.respond([]).catch(() => {});
-      }
-    } catch (e) {
-      console.error('[autocompleteHandler.js]: ❌ Error sending fallback response in respondWithFilteredChoices:', e);
-    }
-  }
+  const focusedValue = focusedOption?.value?.toString() || '';
+  await safeAutocompleteResponse(interaction, choices, {
+    validate: true,
+    filter: true,
+    focusedValue,
+    maxResults: 25,
+    fallbackToEmpty: false
+  });
 }
 
 
@@ -1018,19 +981,8 @@ async function handleCharacterBasedCommandsAutocomplete(
  commandName
 ) {
  try {
-    // Check if interaction is still valid (3 second timeout)
-    const interactionAge = Date.now() - interaction.createdTimestamp;
-    if (interactionAge > 2500) { // 2.5 second safety margin
-      return;
-    }
-
-    // Check if already responded
-    if (interaction.responded) {
-      return;
-    }
-
-    // Check if interaction is still valid
-    if (!interaction.isAutocomplete()) {
+    // Use optimized validation
+    if (!isValidInteraction(interaction)) {
       return;
     }
 
@@ -1093,9 +1045,10 @@ async function handleCharacterBasedCommandsAutocomplete(
     const requiredFields = ['name', 'currentVillage', 'job'];
     const timeoutMs = 2500; // 2.5 seconds timeout
     
-    const queryTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database query timeout')), timeoutMs)
-    );
+    let timeoutId;
+    const queryTimeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Database query timeout')), timeoutMs);
+    });
 
     try {
       const [characters, modCharacters] = await Promise.race([
@@ -1105,6 +1058,7 @@ async function handleCharacterBasedCommandsAutocomplete(
         ]),
         queryTimeout
       ]);
+      clearTimeout(timeoutId); // Clear timeout if query succeeds
       
       // Combine regular characters and mod characters
       const allCharacters = [...(characters || []), ...(modCharacters || [])];
@@ -1134,6 +1088,7 @@ async function handleCharacterBasedCommandsAutocomplete(
       
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     } catch (queryError) {
+      clearTimeout(timeoutId); // Clear timeout if query fails
       // Reject the lock promise and clean up
       rejectLock(queryError);
       cleanupLock();
@@ -3674,7 +3629,7 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
 async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
   try {
       // Fetch only available Help Wanted quests (not completed, not expired)
-      const HelpWantedQuest = require('@app/shared/models/HelpWantedQuestModel');
+      const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
       const now = new Date();
       const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
       
@@ -4341,7 +4296,7 @@ async function handleModMinigameCharacterAutocomplete(interaction, focusedOption
     const cleanSessionId = sessionIdMatch ? sessionIdMatch[0] : sessionIdOption;
 
     // Find the minigame session
-    const Minigame = require('@app/shared/models/MinigameModel');
+    const Minigame = require('@/shared/models/MinigameModel');
     const session = await Minigame.findOne({
       sessionId: cleanSessionId,
       gameType: 'theycame',
@@ -4373,7 +4328,7 @@ async function handleModMinigameCharacterAutocomplete(interaction, focusedOption
 // Provides autocomplete suggestions for active minigame session IDs
 async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
   try {
-    const Minigame = require('@app/shared/models/MinigameModel');
+    const Minigame = require('@/shared/models/MinigameModel');
     const searchQuery = focusedOption.value?.toLowerCase() || '';
     
     // Find active minigame sessions
@@ -4411,7 +4366,7 @@ async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for active alien targets in a minigame session
 async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
   try {
-    const Minigame = require('@app/shared/models/MinigameModel');
+    const Minigame = require('@/shared/models/MinigameModel');
     let sessionId = interaction.options.getString('session_id');
     const searchQuery = focusedOption.value?.toLowerCase() || '';
     
@@ -4533,7 +4488,7 @@ async function handleMountNameAutocomplete(interaction, focusedOption) {
 
 function formatCharacterChoice(character) {
   return {
-    name: `${character.name} | ${character.currentVillage || 'Unknown'} | ${character.job || 'Unknown'}`,
+    name: `${character.name} | ${capitalize(character.currentVillage || 'Unknown')} | ${capitalize(character.job || 'Unknown')}`,
     value: character.name
   };
 }
@@ -4762,9 +4717,10 @@ async function handlePetCharacterAutocomplete(interaction, focusedOption) {
     const userId = interaction.user.id;
 
     // Add timeout protection for database queries (2 seconds max)
-    const queryTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database query timeout')), 2000)
-    );
+    let timeoutId;
+    const queryTimeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Database query timeout')), 2000);
+    });
 
     let characters = [];
     try {
@@ -4772,8 +4728,10 @@ async function handlePetCharacterAutocomplete(interaction, focusedOption) {
         fetchCharactersByUserId(userId),
         queryTimeout
       ]);
+      clearTimeout(timeoutId); // Clear timeout if query succeeds
       characters = characters || [];
     } catch (queryError) {
+      clearTimeout(timeoutId); // Clear timeout if query fails
       if (queryError.message === 'Database query timeout') {
         console.error(`[handlePetCharacterAutocomplete]: Database query timeout, userId: ${userId}`);
       } else {
@@ -5328,7 +5286,7 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
       return await interaction.respond([]);
     }
     
-    const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(characterName);
     const items = await VendingInventory.find({}).lean();
 
@@ -5565,7 +5523,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         return;
       }
       
-      const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+      const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(targetCharacter);
       const vendingItems = await VendingInventory.find({}).lean();
 
@@ -5913,7 +5871,7 @@ async function handleModCharacterJobAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for monster names
 async function handleMonsterAutocomplete(interaction, focusedOption) {
   try {
-    const Monster = require('@app/shared/models/MonsterModel');
+    const Monster = require('@/shared/models/MonsterModel');
     const searchQuery = focusedOption.value.toLowerCase();
     
     // Fetch monsters from database
@@ -6015,7 +5973,7 @@ async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for tier 5+ monster names
 async function handleTier5PlusMonsterAutocomplete(interaction, focusedOption) {
   try {
-    const Monster = require('@app/shared/models/MonsterModel');
+    const Monster = require('@/shared/models/MonsterModel');
     const searchQuery = focusedOption.value.toLowerCase();
     
     // Fetch tier 5+ monsters from database
@@ -6284,7 +6242,7 @@ handleBlightOverrideTargetAutocomplete,
 async function handleVillageResourcesMaterialAutocomplete(interaction, focusedOption) {
   try {
     // Import VILLAGE_CONFIG from VillageModel
-    const { VILLAGE_CONFIG } = require('@app/shared/models/VillageModel');
+    const { VILLAGE_CONFIG } = require('@/shared/models/VillageModel');
     
     // Get the selected village name from interaction options
     const villageName = interaction.options.getString('village');
@@ -6324,7 +6282,7 @@ async function handleVillageResourcesMaterialAutocomplete(interaction, focusedOp
 async function handleTableRollNameAutocomplete(interaction, focusedOption) {
   try {
     // Import the TableRoll model
-    const TableRoll = require('@app/shared/models/TableRollModel');
+    const TableRoll = require('@/shared/models/TableRollModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -6364,7 +6322,7 @@ async function handleTableRollNameAutocomplete(interaction, focusedOption) {
 async function handleRaidIdAutocomplete(interaction, focusedOption) {
   try {
     // Import the Raid model
-    const Raid = require('@app/shared/models/RaidModel');
+    const Raid = require('@/shared/models/RaidModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -6411,7 +6369,7 @@ async function handleRaidIdAutocomplete(interaction, focusedOption) {
 async function handleWaveIdAutocomplete(interaction, focusedOption) {
   try {
     // Import the Wave model
-    const Wave = require('@app/shared/models/WaveModel');
+    const Wave = require('@/shared/models/WaveModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";

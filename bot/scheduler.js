@@ -5,20 +5,20 @@
 // Core dependencies
 const dotenv = require("dotenv");
 const path = require("path");
-const { createCronJob: createCronJobWrapper, shutdownCroner } = require("./scheduler/croner");
+const { createCronJob: createCronJobWrapper, shutdownCroner, listCronJobs } = require("./scheduler/croner");
 const { v4: uuidv4 } = require("uuid");
 
 // Discord.js
 const { EmbedBuilder } = require("discord.js");
 
 // Database models
-const Character = require("@app/shared/models/CharacterModel");
-const Pet = require("@app/shared/models/PetModel");
-const Raid = require("@app/shared/models/RaidModel");
-const RuuGame = require("@app/shared/models/RuuGameModel");
-const HelpWantedQuest = require('@app/shared/models/HelpWantedQuestModel');
-const ItemModel = require('@app/shared/models/ItemModel');
-const Weather = require('@app/shared/models/WeatherModel');
+const Character = require('@/shared/models/CharacterModel');
+const Pet = require('@/shared/models/PetModel');
+const Raid = require('@/shared/models/RaidModel');
+const RuuGame = require('@/shared/models/RuuGameModel');
+const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
+const ItemModel = require('@/shared/models/ItemModel');
+const Weather = require('@/shared/models/WeatherModel');
 
 // Database functions
 const {
@@ -27,7 +27,7 @@ const {
  connectToInventories,
  getCharacterInventoryCollection,
  fetchItemByName,
-} = require("@app/shared/database/db");
+} = require('@/shared/database/db');
 
 // Handlers
 const {
@@ -56,38 +56,40 @@ const { bloodmoonDates, convertToHyruleanDate } = require('./modules/calendarMod
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('./modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 const { updateAllRoleCountChannels } = require('./modules/roleCountChannelsModule');
-const { setupSecretSantaScheduler } = require('./modules/secretSantaModule');
+// Secret Santa - Disabled outside December
+// const { setupSecretSantaScheduler } = require('./modules/secretSantaModule');
 const { addBoostFlavorText, buildFooterText } = require('./embeds/embeds');
 const { generateBoostFlavorText } = require('./modules/flavorTextModule');
 
 // Utilities
-const { safeAppendDataToSheet, extractSpreadsheetId } = require('@app/shared/utils/googleSheetsUtils');
-const { logItemAcquisitionToDatabase } = require('@app/shared/utils/inventoryUtils');
+const { safeAppendDataToSheet, extractSpreadsheetId } = require('@/shared/utils/googleSheetsUtils');
+const { logItemAcquisitionToDatabase } = require('@/shared/utils/inventoryUtils');
 
 // Services
-const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("@app/shared/services/weatherService");
+const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration, getCurrentPeriodBounds } = require('@/shared/services/weatherService');
 
 // Village modules
 const { damageVillage, Village } = require('./modules/villageModule');
 
 // Utils
-const { handleError } = require("@app/shared/utils/globalErrorHandler");
-const { sendUserDM } = require("@app/shared/utils/messageUtils");
-const { checkExpiredRequests } = require("@app/shared/utils/expirationHandler");
-const { isValidImageUrl } = require("@app/shared/utils/validation");
-const notificationService = require("@app/shared/utils/notificationService");
-const logger = require("@app/shared/utils/logger");
-const { releaseFromJail, DEFAULT_JAIL_DURATION_MS } = require("@app/shared/utils/jailCheck");
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { sendUserDM } = require('@/shared/utils/messageUtils');
+// Expiration handler removed - see docs/FUTURE_PLANS.md
+// const { checkExpiredRequests } = require('@/shared/utils/expirationHandler");
+const { isValidImageUrl } = require('@/shared/utils/validation');
+const notificationService = require('@/shared/utils/notificationService');
+const logger = require('@/shared/utils/logger');
+const { releaseFromJail, DEFAULT_JAIL_DURATION_MS } = require('@/shared/utils/jailCheck');
 const {
  cleanupExpiredHealingRequests,
  cleanupExpiredBoostingRequests,
  getBoostingStatistics,
  archiveOldBoostingRequests,
-} = require("@app/shared/utils/storage");
+} = require('@/shared/utils/storage');
 const {
  retryPendingSheetOperations,
  getPendingSheetOperationsCount,
-} = require("@app/shared/utils/googleSheetsUtils");
+} = require('@/shared/utils/googleSheetsUtils');
 
 // Constants
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
@@ -357,27 +359,6 @@ async function applyWeatherDamage(villageName, weather) {
   }
 }
 
-// ------------------- isWithinWeatherPostingWindow ------------------
-// Checks if current time is within a valid weather posting window
-// Valid windows: 8:00-8:15 AM EST or 8:00-8:15 PM EST
-function isWithinWeatherPostingWindow() {
-  const now = new Date();
-  const estTime = getESTDate(now);
-  const currentHour = estTime.getHours();
-  const currentMinute = estTime.getMinutes();
-  
-  // Morning window: 8:00-8:15 AM
-  if (currentHour === 8 && currentMinute <= 15) {
-    return { valid: true, window: 'morning' };
-  }
-  
-  // Evening window: 8:00-8:15 PM (20:00-20:15)
-  if (currentHour === 20 && currentMinute <= 15) {
-    return { valid: true, window: 'evening' };
-  }
-  
-  return { valid: false, window: null };
-}
 
 // ============================================================================
 // ------------------- Weather Functions -------------------
@@ -387,13 +368,40 @@ function isWithinWeatherPostingWindow() {
 
 async function postWeatherForVillage(client, village, checkExisting = false, isReminder = false) {
  try {
-  if (checkExisting) {
-   const existingWeather = await getWeatherWithoutGeneration(village);
-   if (existingWeather && existingWeather.postedToDiscord) {
-    logger.info('WEATHER', `Weather already exists and posted for ${village}, skipping post`);
+  // Weather periods: 8:00 AM EST to 7:59:59 AM EST next day
+  // postedToDiscord flag prevents duplicate posts
+  
+  // Get current period bounds to verify weather is for the correct period
+  const { startUTC: currentPeriodStart } = getCurrentPeriodBounds(new Date());
+  
+  // STRICT CHECK: Always check if weather was already posted to prevent duplicates
+  // Check for weather that has BOTH postedToDiscord: true AND postedAt exists
+  // This is stricter than just checking postedToDiscord to prevent false positives
+  const existingPostedWeather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
+  if (existingPostedWeather) {
+   // Verify it's actually posted (both flags must be true)
+   const isPosted = existingPostedWeather.postedToDiscord === true;
+   const hasPostedAt = existingPostedWeather.postedAt && existingPostedWeather.postedAt instanceof Date;
+   
+   // Verify weather is for current period (not a different period)
+   const weatherDate = existingPostedWeather.date instanceof Date 
+    ? existingPostedWeather.date 
+    : new Date(existingPostedWeather.date);
+   const isCurrentPeriod = weatherDate.getTime() >= currentPeriodStart.getTime();
+   
+   if (isPosted && hasPostedAt && isCurrentPeriod) {
+    logger.info('WEATHER', `Weather already exists and posted for ${village} (ID: ${existingPostedWeather._id}, postedAt: ${existingPostedWeather.postedAt}), skipping duplicate post`);
     return true; // Weather already exists and was posted - this is a success state
+   } else if (isPosted && !hasPostedAt) {
+    logger.warn('WEATHER', `Weather for ${village} has postedToDiscord=true but missing postedAt - this may indicate a data inconsistency`);
+   } else if (isPosted && !isCurrentPeriod) {
+    logger.info('WEATHER', `Weather for ${village} is posted but for a different period (date: ${weatherDate.toISOString()}, current period: ${currentPeriodStart.toISOString()})`);
    }
-   if (existingWeather && !existingWeather.postedToDiscord) {
+  }
+  
+  if (checkExisting) {
+   // Additional checkExisting logic for when we want more detailed logging
+   if (existingPostedWeather && !existingPostedWeather.postedToDiscord) {
     logger.info('WEATHER', `Weather exists for ${village} but not posted, will post now`);
    }
   }
@@ -401,18 +409,72 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
   logger.info('WEATHER', `Getting weather for ${village}...`);
   let weather;
   if (isReminder) {
-   // Reminder: only use posted weather for the current period so we don't show
-   // next period's Song-of-Storms-scheduled weather (e.g. Rock Slide tomorrow
-   // when today is Muggy). Fall back to getCurrentWeather if none posted.
+   // Reminder at 8pm: Always post the same weather that was posted at 8am
+   // First try to get the weather that was already posted for current period
    weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
+   
+   // If no posted weather found, get current period weather (should be same as 8am weather)
+   // This handles edge cases where 8am post failed but weather exists
    if (!weather) {
+    logger.info('WEATHER', `No posted weather found for ${village} reminder, getting current period weather`);
     weather = await getCurrentWeather(village);
    }
+   
+   // Reminder should always post - it's just a reminder of the same weather from 8am
+   if (!weather) {
+    logger.error('WEATHER', `[scheduler.js]❌ Failed to get weather for ${village} reminder`);
+    return false;
+   }
   } else {
+   // For regular posts, always use getCurrentWeather to ensure we get the correct weather for current period
+   // This ensures we're posting the right weather even if there are multiple records
    weather = await getCurrentWeather(village);
+   
+   if (!weather) {
+    logger.error('WEATHER', `[scheduler.js]❌ Failed to get weather for ${village} - getCurrentWeather returned null/undefined`);
+    return false;
+   }
+   
+   // Refresh weather from database to ensure we have the latest postedToDiscord status
+   // This prevents race conditions where weather was just posted but the object is stale
+   if (weather._id) {
+    const freshWeather = await Weather.findById(weather._id);
+    if (freshWeather) {
+     // Convert mongoose document to plain object to ensure consistent data structure
+     weather = freshWeather.toObject ? freshWeather.toObject() : freshWeather;
+    }
+   }
+   
+   // STRICT FINAL CHECK: Verify weather is for current period and hasn't been posted
+   // Check both postedToDiscord AND postedAt to be absolutely sure
+   const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+   const isCurrentPeriod = weatherDate.getTime() >= currentPeriodStart.getTime();
+   const isPosted = weather.postedToDiscord === true;
+   const hasPostedAt = weather.postedAt && weather.postedAt instanceof Date;
+   
+   if (isPosted && hasPostedAt && isCurrentPeriod) {
+    logger.info('WEATHER', `Weather for ${village} already posted (postedToDiscord=true, postedAt=${weather.postedAt.toISOString()}), skipping duplicate post`);
+    return true;
+   } else if (isPosted && isCurrentPeriod && !hasPostedAt) {
+    logger.warn('WEATHER', `Weather for ${village} has postedToDiscord=true but missing postedAt - will skip to prevent duplicate`);
+    return true;
+   } else if (!isCurrentPeriod) {
+    logger.warn('WEATHER', `Weather for ${village} is not for current period (date: ${weatherDate.toISOString()}, current: ${currentPeriodStart.toISOString()}) - skipping`);
+    return false;
+   }
   }
-  if (!weather) {
-   logger.error('WEATHER', `[scheduler.js]❌ Failed to get weather for ${village} - getCurrentWeather returned null/undefined`);
+
+  // Ensure weather object has all required fields before posting
+  if (!weather.temperature || !weather.temperature.label) {
+   logger.error('WEATHER', `[scheduler.js]❌ Invalid weather object for ${village}: missing temperature.label`);
+   return false;
+  }
+  if (!weather.wind || !weather.wind.label) {
+   logger.error('WEATHER', `[scheduler.js]❌ Invalid weather object for ${village}: missing wind.label`);
+   return false;
+  }
+  if (!weather.precipitation || !weather.precipitation.label) {
+   logger.error('WEATHER', `[scheduler.js]❌ Invalid weather object for ${village}: missing precipitation.label`);
    return false;
   }
 
@@ -440,6 +502,17 @@ async function postWeatherForVillage(client, village, checkExisting = false, isR
    }
   }
 
+  // Log weather details before posting to help debug issues
+  logger.info('WEATHER', `Posting weather for ${village}:`, {
+    weatherId: weather._id?.toString(),
+    date: weather.date,
+    temperature: weather.temperature?.label,
+    wind: weather.wind?.label,
+    precipitation: weather.precipitation?.label,
+    special: weather.special?.label,
+    postedToDiscord: weather.postedToDiscord
+  });
+  
   logger.info('WEATHER', `Generating embed for ${village}...`);
   const title = isReminder ? `${village}'s Daily Weather Forecast Reminder` : undefined;
   const { embed, files } = await generateWeatherEmbed(village, weather, { title });
@@ -563,20 +636,9 @@ async function postWeatherReminder(client) {
  return await processWeatherForAllVillages(client, false, 'reminder');
 }
 
+// Simplified backup check - croner handles timing, just check if weather needs posting
 async function checkAndPostWeatherIfNeeded(client) {
  try {
-  const windowCheck = isWithinWeatherPostingWindow();
-  
-  if (!windowCheck.valid) {
-   const now = new Date();
-   const estTime = getESTDate(now);
-   const currentHour = estTime.getHours();
-   const currentMinute = estTime.getMinutes();
-   logger.info('WEATHER', `Backup check skipped - outside valid posting window (${currentHour}:${String(currentMinute).padStart(2, '0')} EST). Valid windows: 8:00-8:15 AM or 8:00-8:15 PM EST`);
-   return 0;
-  }
-  
-  logger.info('WEATHER', `Backup check within valid ${windowCheck.window} posting window, proceeding...`);
   return await processWeatherForAllVillages(client, true, 'backup check');
  } catch (error) {
   logger.error('WEATHER', '[scheduler.js]❌ Backup check failed');
@@ -587,18 +649,14 @@ async function checkAndPostWeatherIfNeeded(client) {
  }
 }
 
+// Simplified restart check - ensures weather exists and is posted
+// If weather doesn't exist, generates it. If it exists but isn't posted, posts it.
 async function checkAndPostWeatherOnRestart(client) {
  try {
-  const windowCheck = isWithinWeatherPostingWindow();
-  
-  if (!windowCheck.valid) {
-   return 0;
-  }
-  
-  // Restart check with checkExisting=true will:
+  // Use checkExisting=true so it will:
   // - Skip if weather exists and is already posted
   // - Post if weather exists but wasn't posted (catches missed posts)
-  // - Generate and post if weather doesn't exist
+  // - Generate and post if weather doesn't exist (getCurrentWeather handles generation)
   return await processWeatherForAllVillages(client, true, 'restart check');
  } catch (error) {
   logger.error('WEATHER', '[scheduler.js]❌ Restart check failed');
@@ -753,7 +811,7 @@ async function cleanupFinishedMinigameSessions() {
  try {
   logger.info('CLEANUP', 'Minigame cleanup');
   
-  const Minigame = require('@app/shared/models/MinigameModel');
+  const Minigame = require('@/shared/models/MinigameModel');
   const result = await Minigame.cleanupOldSessions();
   
   if (result.deletedCount === 0) {
@@ -781,9 +839,10 @@ async function runDailyCleanupTasks(client) {
   logger.info('CLEANUP', 'Running daily cleanup tasks...');
   
   // Note: cleanupExpiredEntries() removed - TTL index handles TempData expiresAt automatically
+  // Expiration handler removed - see docs/FUTURE_PLANS.md
   const results = await Promise.all([
    cleanupExpiredHealingRequests(),
-   checkExpiredRequests(client),
+   // checkExpiredRequests(client),
    cleanupExpiredBlightRequests(client),
    cleanupExpiredRaids(client),
    cleanupOldRuuGameSessions(),
@@ -830,7 +889,7 @@ async function distributeMonthlyBoostRewards(client) {
     
     logger.info('BOOST', `Found ${boosters.size} active booster(s)`);
     
-    const User = require('@app/shared/models/UserModel');
+    const User = require('@/shared/models/UserModel');
     const now = new Date();
     const nowEST = getESTDate(now);
     const currentMonth = `${nowEST.getFullYear()}-${String(nowEST.getMonth() + 1).padStart(2, '0')}`;
@@ -1019,7 +1078,7 @@ async function handleBirthdayRoleAssignment(client) {
     logger.info('SCHEDULER', `Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
     
     // Get all users with birthdays today
-    const User = require('@app/shared/models/UserModel');
+    const User = require('@/shared/models/UserModel');
     const usersWithBirthdays = await User.find({
       'birthday.month': month,
       'birthday.day': day
@@ -1195,7 +1254,7 @@ async function handleBirthdayRoleRemoval(client) {
     logger.info('CLEANUP', `Removing birthday roles from users whose birthday was yesterday (${yesterdayDateStr})`);
     
     // Get all users whose birthday was yesterday
-    const User = require('@app/shared/models/UserModel');
+    const User = require('@/shared/models/UserModel');
     const usersWithBirthdaysYesterday = await User.find({
       'birthday.month': yesterdayMonth,
       'birthday.day': yesterdayDay
@@ -1313,7 +1372,7 @@ async function executeBirthdayAnnouncements(client) {
   logger.info('SCHEDULER', `Found ${characters.length} characters with birthday on ${today}`);
   
   // Also check for mod characters with birthdays
-  const ModCharacter = require('@app/shared/models/ModCharacterModel');
+  const ModCharacter = require('@/shared/models/ModCharacterModel');
   const modCharacters = await ModCharacter.find({ birthday: today });
   logger.info('SCHEDULER', `Found ${modCharacters.length} mod characters with birthday on ${today}`);
   
@@ -1951,7 +2010,7 @@ async function setupBoostingScheduler(client) {
    // TTL automatically deletes documents with expired expiresAt, so we only need to handle:
    // - status: 'expired' (regardless of expiresAt)
    // - status: 'fulfilled' with expired boostExpiresAt
-   const TempData = require('@app/shared/models/TempDataModel');
+   const TempData = require('@/shared/models/TempDataModel');
    const tempDataResult = await TempData.deleteMany({
      type: 'boosting',
      $or: [
@@ -1998,28 +2057,24 @@ async function setupBoostingScheduler(client) {
 // ============================================================================
 
 function setupWeatherScheduler(client) {
- // Primary weather update at 8:00am EST (1:00pm UTC during EST, 12:00pm UTC during EDT)
- createCronJob("0 8 * * *", "Daily Weather Update", () =>
+ const { createCronJob: createCronJobDirect } = require('./scheduler/croner');
+ 
+ // Primary weather update at 8:00am EST
+ createCronJobDirect("Daily Weather Update", "0 8 * * *", () =>
   postWeatherUpdate(client),
-  "America/New_York"
+  { timezone: "America/New_York" }
  );
  
- // Backup weather check at 8:15am EST to ensure weather was posted
- createCronJob("15 8 * * *", "Backup Weather Check", () =>
+ // Fallback check at 8:15am EST - ensures weather was posted, generates if missing
+ createCronJobDirect("Weather Fallback Check", "15 8 * * *", () =>
   checkAndPostWeatherIfNeeded(client),
-  "America/New_York"
+  { timezone: "America/New_York" }
  );
  
- // Weather reminder at 8:00pm EST (1:00am UTC during EST, 12:00am UTC during EDT)
- createCronJob("0 20 * * *", "Daily Weather Forecast Reminder", () =>
+ // Weather reminder at 8:00pm EST
+ createCronJobDirect("Daily Weather Forecast Reminder", "0 20 * * *", () =>
   postWeatherReminder(client),
-  "America/New_York"
- );
- 
- // Backup weather reminder check at 8:15pm EST to ensure reminder was posted
- createCronJob("15 20 * * *", "Backup Weather Reminder Check", () =>
-  checkAndPostWeatherIfNeeded(client),
-  "America/New_York"
+  { timezone: "America/New_York" }
  );
 }
 
@@ -2113,7 +2168,7 @@ async function checkQuestCompletions(client) {
   try {
     logger.info('QUEST', 'Checking quest completions...');
     
-    const Quest = require('@app/shared/models/QuestModel');
+    const Quest = require('@/shared/models/QuestModel');
     const questRewardModule = require('./modules/questRewardModule');
     
     const activeQuests = await Quest.find({ status: 'active' });
@@ -2175,7 +2230,7 @@ async function checkVillageTracking(client) {
   try {
     logger.info('SCHEDULER', 'Starting village tracking check...');
     
-    const Quest = require('@app/shared/models/QuestModel');
+    const Quest = require('@/shared/models/QuestModel');
     
     // Find all active RP quests
     const activeRPQuests = await Quest.find({ 
@@ -2658,7 +2713,7 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     }
     
     // Check if any users have already received rewards this month
-    const User = require('@app/shared/models/UserModel');
+    const User = require('@/shared/models/UserModel');
     const sampleUsers = await User.find({ 
       'boostRewards.lastRewardMonth': currentMonth 
     }).limit(1);
@@ -3003,23 +3058,21 @@ function initializeScheduler(client) {
  setupBoostingScheduler(client);
  setupWeatherScheduler(client);
  setupHelpWantedFixedScheduler(client);
- setupSecretSantaScheduler(client);
+ // Secret Santa - Disabled outside December
+ // setupSecretSantaScheduler(client);
  
  isSchedulerInitialized = true;
- logger.success('SCHEDULER', `All scheduled tasks initialized (${activeCronJobs.size} active cron jobs)`);
+ const totalCronJobs = listCronJobs().length;
+ logger.success('SCHEDULER', `All scheduled tasks initialized (${totalCronJobs} active cron jobs)`);
  
- // Check and post weather on restart if needed
- (async () => {
-   try {
-     await checkAndPostWeatherOnRestart(client);
-   } catch (error) {
-     logger.error('WEATHER', 'Restart weather check failed', error.message);
-     handleError(error, "scheduler.js", {
-       commandName: 'initializeScheduler',
-       operation: 'restartWeatherCheck'
-     });
-   }
- })();
+ // Check and post weather on restart if needed (non-blocking)
+ checkAndPostWeatherOnRestart(client).catch(error => {
+   logger.error('WEATHER', 'Restart weather check failed', error.message);
+   handleError(error, "scheduler.js", {
+     commandName: 'initializeScheduler',
+     operation: 'restartWeatherCheck'
+   });
+ });
 }
 
 module.exports = {

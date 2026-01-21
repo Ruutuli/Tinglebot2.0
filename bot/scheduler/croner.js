@@ -33,7 +33,11 @@ function createCronJob(name, pattern, fn, options = {}) {
   );
 
   activeCrons.set(name, job);
-  console.log(`[Croner] Scheduled "${name}" -> ${pattern} tz=${options.timezone || options || "system"}`);
+  
+  // Only log in verbose mode or for important jobs
+  if (process.env.VERBOSE_LOGGING === 'true' || name.includes('critical') || name.includes('health')) {
+    console.log(`[Croner] Scheduled "${name}" -> ${pattern} tz=${options.timezone || options || "system"}`);
+  }
 
   return job;
 }

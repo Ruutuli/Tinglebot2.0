@@ -3,33 +3,33 @@
 // ============================================================================
 
 const { v4: uuidv4 } = require('uuid');
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const {
  fetchCharacterByNameAndUserId,
  fetchCharacterByName,
  fetchModCharacterByNameAndUserId,
  fetchModCharacterByName,
-} = require('@app/shared/database/db');
+} = require('@/shared/database/db');
 const { getBoostEffect, normalizeJobName } = require('../../modules/boostingModule');
 const { getJobPerk } = require('../../modules/jobsModule');
 const { useStamina } = require('../../modules/characterStatsModule');
-const { generateUniqueId } = require('@app/shared/utils/uniqueIdUtils');
-const TempData = require('@app/shared/models/TempDataModel');
-const { retrieveBoostingRequestFromStorageByCharacter } = require('@app/shared/utils/storage');
+const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
+const TempData = require('@/shared/models/TempDataModel');
+const { retrieveBoostingRequestFromStorageByCharacter } = require('@/shared/utils/storage');
 const {
   createBoostRequestEmbed,
   updateBoostRequestEmbed,
   createBoostAppliedEmbed,
 } = require('../../embeds/embeds.js');
-const Weather = require('@app/shared/models/WeatherModel');
+const Weather = require('@/shared/models/WeatherModel');
 const {
   simulateWeightedWeather,
   getCurrentSeason,
   scheduleSpecialWeather,
   getNextPeriodBounds,
   findWeatherForPeriod,
-} = require('@app/shared/services/weatherService');
+} = require('@/shared/services/weatherService');
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
 // ============================================================================
@@ -1891,9 +1891,14 @@ let weatherDocId = weatherDoc?._id ? weatherDoc._id.toString() : null;
    throw new Error(`Failed to generate weather for ${selectedVillage}.`);
   }
 
+  // Normalize date to exact start of period to ensure uniqueness
+  // This prevents duplicates when dates differ by milliseconds
+  const normalizedDate = new Date(startOfNextPeriodUTC);
+  normalizedDate.setMilliseconds(0);
+  
   const weatherPayload = {
    village: selectedVillage,
-   date: startOfNextPeriodUTC,
+   date: normalizedDate,
    season: generatedWeather.season || seasonForPeriod,
    temperature: generatedWeather.temperature,
    wind: generatedWeather.wind,

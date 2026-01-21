@@ -78,8 +78,7 @@ const vendingRequestSchema = new Schema({
     default: function() {
       // Default expiration: 7 days from creation
       return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    },
-    index: true
+    }
   },
   processedAt: { type: Date },
   version: { type: Number, default: 0 }, // For optimistic locking

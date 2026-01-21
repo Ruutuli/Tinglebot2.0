@@ -2,10 +2,10 @@
 // ------------------- Imports and Dependencies -------------------
 // ============================================================================
  
-const { fetchCharacterByName } = require('@app/shared/database/db');
-const Item = require('@app/shared/models/ItemModel');
-const generalCategories = require('@app/shared/models/GeneralItemCategories');
-const logger = require('@app/shared/utils/logger');
+const { fetchCharacterByName } = require('@/shared/database/db');
+const Item = require('@/shared/models/ItemModel');
+const generalCategories = require('@/shared/models/GeneralItemCategories');
+const logger = require('@/shared/utils/logger');
 
 // ============================================================================
 // ------------------- Boost Effects Configuration -------------------
@@ -914,7 +914,7 @@ function applyScholarCraftingBoost(materialCosts, craftQuantity = 1) {
   return materialCosts;
  }
  
- const { info, success } = require('@app/shared/utils/logger');
+ const { info, success } = require('@/shared/utils/logger');
  
  // Only apply reduction if total material needed (per-item quantity * craft quantity) is more than 1
  const result = materialCosts.map((material) => {

@@ -1,7 +1,7 @@
 // ============================================================================
 // ------------------- Shared Package Barrel Exports -------------------
 // Re-exports commonly used modules for convenience
-// You can still use direct imports: @app/shared/models/CharacterModel
+// You can still use direct imports: ./models/CharacterModel
 // ============================================================================
 
 // ------------------- Models -------------------

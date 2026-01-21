@@ -19,8 +19,8 @@ if (require('fs').existsSync(envSpecificPath)) {
   dotenv.config({ path: rootEnvPath });
 }
 
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const logger = require('@app/shared/utils/logger');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const logger = require('@/shared/utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -30,7 +30,7 @@ const { EmbedBuilder } = require('discord.js');
 // Local Modules
 // ------------------- Importing custom modules -------------------
 const { convertToHyruleanDate, bloodmoonDates, isBloodmoon } = require('../modules/calendarModule');
-const BloodMoonTracking = require('@app/shared/models/BloodMoonTrackingModel');
+const BloodMoonTracking = require('@/shared/models/BloodMoonTrackingModel');
 
 // ============================================================================
 // Blood Moon Tracking State

@@ -1,6 +1,10 @@
 const TempData = require('../models/TempDataModel');
 const { handleError } = require('./globalErrorHandler');
 
+// Import croner for scheduled expiration checks
+let createCronJob = null;
+let destroyCronJob = null;
+
 // Function to check for expired requests and notify users
 async function checkExpiredRequests(client) {
   try {
@@ -84,12 +88,13 @@ async function checkExpiredRequests(client) {
 }
 
 // Track expiration check state to prevent duplicate initialization
-let expirationCheckTimer = null;
+let expirationCronJob = null;
+let expirationCheckTimer = null; // Fallback timer if croner is not available
 let isExpirationChecksRunning = false;
 let isCheckInProgress = false;
 let expirationClient = null;
 
-// Function to calculate time until next 8 AM EST
+// Function to calculate time until next 8 AM EST (for setTimeout fallback)
 function getTimeUntilNext8AM() {
   const now = new Date();
   // Get current time in EST
@@ -108,76 +113,6 @@ function getTimeUntilNext8AM() {
   return next8AMUTC.getTime() - now.getTime();
 }
 
-// Function to schedule next check (module-level singleton)
-function scheduleNextCheck(delayMs) {
-  // CRITICAL: Don't schedule duplicates - if timer already exists or is being scheduled, don't create another
-  // This check must happen FIRST to prevent race conditions
-  if (expirationCheckTimer !== null) {
-    console.log('[expirationHandler.js]: Timer already scheduled - skipping duplicate schedule');
-    return;
-  }
-  
-  // CRITICAL: Also don't schedule if a check is in progress (it will reschedule when done)
-  if (isCheckInProgress) {
-    console.log('[expirationHandler.js]: Check in progress - skipping schedule, will reschedule when check completes');
-    return;
-  }
-
-  // Don't schedule if checks are not running
-  if (!isExpirationChecksRunning || !expirationClient) {
-    console.log('[expirationHandler.js]: Expiration checks not active - skipping schedule');
-    return;
-  }
-
-  // Use provided delay or calculate from 8 AM EST
-  const timeUntilNext = delayMs !== undefined ? delayMs : getTimeUntilNext8AM();
-  
-  // CRITICAL: Set a sentinel value FIRST to prevent other calls from passing the null check
-  // This prevents race conditions where multiple calls see expirationCheckTimer === null simultaneously
-  expirationCheckTimer = { _scheduling: true };
-  
-  // Now create the actual timer
-  const timerId = setTimeout(async () => {
-    // CRITICAL: Clear timer reference IMMEDIATELY to allow rescheduling
-    // But only if this is still the active timer (defense in depth)
-    if (expirationCheckTimer === timerId) {
-      expirationCheckTimer = null;
-    } else {
-      // Another timer has already been scheduled, ignore this callback
-      console.log('[expirationHandler.js]: Timer callback skipped - newer timer already scheduled');
-      return;
-    }
-    
-    // Prevent overlap if the work takes longer than delay
-    if (isCheckInProgress) {
-      console.log('[expirationHandler.js]: Check already in progress - skipping this run, will reschedule when check completes');
-      // DO NOT schedule another timer here - the check that's in progress will schedule one when it finishes
-      // This prevents exponential growth
-      return;
-    }
-
-    // Set flag to prevent concurrent execution
-    isCheckInProgress = true;
-
-    try {
-      await checkExpiredRequests(expirationClient);
-    } catch (error) {
-      console.error('[expirationHandler.js]: Error in expiration check:', error);
-    } finally {
-      // Clear the flag
-      isCheckInProgress = false;
-      
-      // Schedule next check (only if still running and no timer already scheduled)
-      if (isExpirationChecksRunning && expirationCheckTimer === null) {
-        scheduleNextCheck();
-      }
-    }
-  }, timeUntilNext);
-  
-  // CRITICAL: Replace sentinel with actual timer ID atomically
-  expirationCheckTimer = timerId;
-}
-
 // Function to stop expiration checks (for cleanup)
 function stopExpirationChecks() {
   console.log('[expirationHandler.js]: Stopping expiration checks...');
@@ -185,10 +120,24 @@ function stopExpirationChecks() {
   // Clear the running flag first to prevent new schedules
   isExpirationChecksRunning = false;
   
-  // Clear any existing timer
-  if (expirationCheckTimer) {
-    clearTimeout(expirationCheckTimer);
-    expirationCheckTimer = null;
+  // Clear any existing cron job
+  if (expirationCronJob !== null && destroyCronJob) {
+    try {
+      destroyCronJob('expiration-check');
+      expirationCronJob = null;
+    } catch (error) {
+      console.log('[expirationHandler.js]: Error destroying cron job during stop:', error);
+    }
+  }
+  
+  // Clear any existing timer (fallback)
+  if (expirationCheckTimer !== null) {
+    try {
+      clearTimeout(expirationCheckTimer);
+      expirationCheckTimer = null;
+    } catch (error) {
+      console.log('[expirationHandler.js]: Error clearing timer during stop:', error);
+    }
   }
   
   // Clear client reference
@@ -205,10 +154,39 @@ function startExpirationChecks(client) {
     return;
   }
 
-  // Clear any existing timer (safety check for edge cases)
-  if (expirationCheckTimer) {
+  // Try to import croner functions (they may not be available in all contexts)
+  try {
+    if (!createCronJob || !destroyCronJob) {
+      const cronerModule = require('../../bot/scheduler/croner');
+      createCronJob = cronerModule.createCronJob;
+      destroyCronJob = cronerModule.destroyCronJob;
+    }
+  } catch (error) {
+    console.error('[expirationHandler.js]: Failed to import croner, falling back to setTimeout:', error);
+    // Fallback to setTimeout if croner is not available
+    createCronJob = null;
+    destroyCronJob = null;
+  }
+
+  // Clear any existing cron job (safety check for edge cases)
+  if (expirationCronJob !== null && destroyCronJob) {
+    console.log('[expirationHandler.js]: Found existing cron job during initialization - destroying it');
+    try {
+      destroyCronJob('expiration-check');
+    } catch (error) {
+      console.log('[expirationHandler.js]: Error destroying existing cron job during initialization:', error);
+    }
+    expirationCronJob = null;
+  }
+  
+  // Clear any existing timer (fallback)
+  if (expirationCheckTimer !== null) {
     console.log('[expirationHandler.js]: Found existing timer during initialization - clearing it');
-    clearTimeout(expirationCheckTimer);
+    try {
+      clearTimeout(expirationCheckTimer);
+    } catch (error) {
+      console.log('[expirationHandler.js]: Error clearing existing timer during initialization:', error);
+    }
     expirationCheckTimer = null;
   }
 
@@ -216,9 +194,78 @@ function startExpirationChecks(client) {
   isExpirationChecksRunning = true;
   expirationClient = client;
 
+  // Use croner if available (runs daily at 8 AM EST)
+  if (createCronJob) {
+    try {
+      expirationCronJob = createCronJob(
+        'expiration-check',
+        '0 8 * * *', // Daily at 8 AM
+        async () => {
+          // Prevent overlap if the work takes longer than expected
+          if (isCheckInProgress) {
+            console.log('[expirationHandler.js]: Check already in progress - skipping this run');
+            return;
+          }
 
-  // Start the scheduling loop
-  scheduleNextCheck();
+          // Set flag to prevent concurrent execution
+          isCheckInProgress = true;
+
+          try {
+            await checkExpiredRequests(expirationClient);
+          } catch (error) {
+            console.error('[expirationHandler.js]: Error in expiration check:', error);
+          } finally {
+            // Clear the flag
+            isCheckInProgress = false;
+          }
+        },
+        { timezone: 'America/New_York' }
+      );
+      console.log('[expirationHandler.js]: Scheduled expiration checks using croner (daily at 8 AM EST)');
+    } catch (error) {
+      console.error('[expirationHandler.js]: Failed to create cron job, falling back to setTimeout:', error);
+      createCronJob = null;
+    }
+  }
+  
+  // Fallback to setTimeout if croner is not available
+  if (!createCronJob && expirationCheckTimer === null) {
+    console.log('[expirationHandler.js]: Using setTimeout fallback for expiration checks');
+    const scheduleNextCheck = () => {
+      if (!isExpirationChecksRunning || !expirationClient) {
+        return;
+      }
+      
+      if (isCheckInProgress) {
+        // Reschedule when check completes
+        return;
+      }
+      
+      const timeUntilNext = getTimeUntilNext8AM();
+      expirationCheckTimer = setTimeout(async () => {
+        expirationCheckTimer = null;
+        
+        if (isCheckInProgress) {
+          scheduleNextCheck();
+          return;
+        }
+        
+        isCheckInProgress = true;
+        try {
+          await checkExpiredRequests(expirationClient);
+        } catch (error) {
+          console.error('[expirationHandler.js]: Error in expiration check:', error);
+        } finally {
+          isCheckInProgress = false;
+          if (isExpirationChecksRunning && expirationCheckTimer === null) {
+            scheduleNextCheck();
+          }
+        }
+      }, timeUntilNext);
+    };
+    
+    scheduleNextCheck();
+  }
   
   // Run initial check (async, non-blocking)
   (async () => {

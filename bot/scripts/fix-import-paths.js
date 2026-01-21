@@ -11,17 +11,17 @@ const path = require('path');
 const COMMANDS_DIR = path.join(__dirname, '..', 'commands');
 const REPLACEMENTS = [
   // Utils imports
-  { from: "require('@app/shared/utils/", to: "require('@app/shared/utils/" },
-  { from: 'require('@app/shared/utils/', to: 'require('@app/shared/utils/' },
+  { from: "require('./shared/utils/", to: "require('./shared/utils/" },
+  { from: 'require('./shared/utils/', to: 'require('./shared/utils/' },
   // Database imports
-  { from: "require('@app/shared/database/", to: "require('@app/shared/database/" },
-  { from: 'require('@app/shared/database/', to: 'require('@app/shared/database/' },
+  { from: "require('./shared/database/", to: "require('./shared/database/" },
+  { from: 'require('./shared/database/', to: 'require('./shared/database/' },
   // Models imports
-  { from: "require('@app/shared/models/", to: "require('@app/shared/models/" },
-  { from: 'require('@app/shared/models/', to: 'require('@app/shared/models/' },
+  { from: "require('./shared/models/", to: "require('./shared/models/" },
+  { from: 'require('./shared/models/', to: 'require('./shared/models/' },
   // Services imports
-  { from: "require('@app/shared/services/", to: "require('@app/shared/services/" },
-  { from: 'require('@app/shared/services/', to: 'require('@app/shared/services/' },
+  { from: "require('./shared/services/", to: "require('./shared/services/" },
+  { from: 'require('./shared/services/', to: 'require('./shared/services/' },
 ];
 
 // ------------------- Helper Functions -------------------

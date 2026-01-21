@@ -9,6 +9,11 @@ const dotenv = require('dotenv');
 const path = require('path');
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
+// ------------------- Setup Path Aliases -------------------
+require('module-alias/register');
+const moduleAlias = require('module-alias');
+moduleAlias.addAlias('@/shared', path.resolve(__dirname, '..', 'shared'));
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -16,8 +21,8 @@ const fetch = require('node-fetch');
 const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
-const { getDiscordGateway } = require('@app/shared/utils/discordGateway');
-const MessageTracking = require('@app/shared/models/MessageTrackingModel');
+const { getDiscordGateway } = require('@/shared/utils/discordGateway');
+const MessageTracking = require('@/shared/models/MessageTrackingModel');
 const compression = require('compression');
 const multer = require('multer');
 const fs = require('fs').promises;
@@ -47,28 +52,28 @@ const {
 } = require('./database/db');
 
 // Import models
-const Character = require('@app/shared/models/CharacterModel');
-const ModCharacter = require('@app/shared/models/ModCharacterModel');
-const Quest = require('@app/shared/models/QuestModel');
-const Item = require('@app/shared/models/ItemModel');
-const Monster = require('@app/shared/models/MonsterModel');
-const User = require('@app/shared/models/UserModel');
-const Pet = require('@app/shared/models/PetModel');
-const Mount = require('@app/shared/models/MountModel');
-const VillageShops = require('@app/shared/models/VillageShopsModel');
-const Weather = require('@app/shared/models/WeatherModel');
-const { VendingRequest } = require('@app/shared/models/VendingModel');
-const { initializeVendingStockModel, getVendingStockModel } = require('@app/shared/models/VendingStockModel');
-const Square = require('@app/shared/models/mapModel');
-const { Village } = require('@app/shared/models/VillageModel');
-const Party = require('@app/shared/models/PartyModel');
-const Relic = require('@app/shared/models/RelicModel');
-const CharacterOfWeek = require('@app/shared/models/CharacterOfWeekModel');
-const Relationship = require('@app/shared/models/RelationshipModel');
-const Raid = require('@app/shared/models/RaidModel');
-const StealStats = require('@app/shared/models/StealStatsModel');
-const BlightRollHistory = require('@app/shared/models/BlightRollHistoryModel');
-const InventoryLog = require('@app/shared/models/InventoryLogModel');
+const Character = require('@/shared/models/CharacterModel');
+const ModCharacter = require('@/shared/models/ModCharacterModel');
+const Quest = require('@/shared/models/QuestModel');
+const Item = require('@/shared/models/ItemModel');
+const Monster = require('@/shared/models/MonsterModel');
+const User = require('@/shared/models/UserModel');
+const Pet = require('@/shared/models/PetModel');
+const Mount = require('@/shared/models/MountModel');
+const VillageShops = require('@/shared/models/VillageShopsModel');
+const Weather = require('@/shared/models/WeatherModel');
+const { VendingRequest } = require('@/shared/models/VendingModel');
+const { initializeVendingStockModel, getVendingStockModel } = require('@/shared/models/VendingStockModel');
+const Square = require('@/shared/models/mapModel');
+const { Village } = require('@/shared/models/VillageModel');
+const Party = require('@/shared/models/PartyModel');
+const Relic = require('@/shared/models/RelicModel');
+const CharacterOfWeek = require('@/shared/models/CharacterOfWeekModel');
+const Relationship = require('@/shared/models/RelationshipModel');
+const Raid = require('@/shared/models/RaidModel');
+const StealStats = require('@/shared/models/StealStatsModel');
+const BlightRollHistory = require('@/shared/models/BlightRollHistoryModel');
+const InventoryLog = require('@/shared/models/InventoryLogModel');
 const { getGearType, getWeaponStyle } = require('./gearModule');
 
 // Import character stats module for updating attack and defense
@@ -78,11 +83,14 @@ const { updateCharacterDefense, updateCharacterAttack } = require('../bot/module
 const calendarModule = require('../bot/modules/calendarModule');
 
 // Import pretty logger utility
-const logger = require('@app/shared/utils/logger');
-const { getMemoryMonitor } = require('@app/shared/utils/memoryMonitor');
+const logger = require('@/shared/utils/logger');
+const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
+
+// Import croner for scheduling
+const { Cron } = require('croner');
 
 // Import Google Sheets utilities
-const googleSheets = require('@app/shared/utils/googleSheetsUtils');
+const googleSheets = require('@/shared/utils/googleSheetsUtils');
 const { google } = require('googleapis');
 
 // Import route modules
@@ -137,7 +145,7 @@ const {
   characterListCache,
   characterDataCache,
   spiritOrbCache
-} = require('@app/shared/utils/cache');
+} = require('@/shared/utils/cache');
 
 // Cache duration constants (in milliseconds)
 const SPIRIT_ORB_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
@@ -154,7 +162,7 @@ async function runMigrations() {
     logger.info('Running database migrations...', 'server.js');
     
     // Migration: Update homes pins color to lime green
-    const Pin = require('@app/shared/models/PinModel');
+    const Pin = require('@/shared/models/PinModel');
     
     // Update from old gold color
     const result1 = await Pin.updateMany(
@@ -444,7 +452,7 @@ async function uploadPinImageToGCS(file, pinId) {
   try {
     if (!file) return null;
     
-    const bucket = require('@app/shared/config/gcsService');
+    const bucket = require('@/shared/config/gcsService');
     const fileName = `tinglebot/mapUserImages/${pinId}_${Date.now()}_${Math.round(Math.random() * 1E9)}`;
     
     const fileUpload = bucket.file(fileName);
@@ -1594,7 +1602,7 @@ app.get('/api/steal/cooldowns/:characterId', async (req, res) => {
     };
 
     // Get all NPCs
-    const NPC = require('@app/shared/models/NPCModel');
+    const NPC = require('@/shared/models/NPCModel');
     const allNPCs = await NPC.find({});
     
     for (const npc of allNPCs) {
@@ -2418,8 +2426,6 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
 
     // For quest + latestMonthOnly: find the latest month that has quests and show only that month
     if (modelType === 'quest' && req.query.latestMonthOnly === 'true' && !allItems) {
-      console.log(`[server.js]: 🔍 [latestMonthOnly] Starting quest filter for latestMonthOnly=true`);
-      
       // Find the latest month that has quests by checking both postedAt and createdAt
       // Get the most recent date from either field across all quests
       let latestDate = null;
@@ -2458,13 +2464,6 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
         dateField = 'createdAt';
       }
       
-      console.log(`[server.js]: 🔍 [latestMonthOnly] Latest quest dates found:`, {
-        latestPostedQuest: latestPostedQuest ? { postedAt: latestPostedQuest.postedAt, createdAt: latestPostedQuest.createdAt } : null,
-        latestCreatedQuest: latestCreatedQuest ? { postedAt: latestCreatedQuest.postedAt, createdAt: latestCreatedQuest.createdAt } : null,
-        usingField: dateField,
-        latestDate: latestDate
-      });
-      
       if (latestDate) {
         const y = latestDate.getFullYear();
         const m = latestDate.getMonth(); // 0-indexed
@@ -2488,14 +2487,6 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
             { createdAt: { $gte: startOfMonth, $lte: endOfMonth } }
           ];
         }
-        
-        console.log(`[server.js]: 🔍 [latestMonthOnly] Filtering to month ${y}-${m + 1}:`, {
-          startOfMonth: startOfMonth.toISOString(),
-          endOfMonth: endOfMonth.toISOString(),
-          query: query.$or
-        });
-      } else {
-        console.log(`[server.js]: ⚠️ [latestMonthOnly] No quests with valid dates found, not applying date filter`);
       }
     }
 
@@ -2693,16 +2684,6 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
     const total = await Model.countDocuments(query);
     const pages = Math.ceil(total / limit);
 
-    if (modelType === 'quest' && req.query.latestMonthOnly === 'true') {
-      console.log(`[server.js]: 🔍 [latestMonthOnly] Query count result:`, {
-        total,
-        query: JSON.stringify(query, null, 2),
-        limit,
-        skip,
-        pages
-      });
-    }
-
     // Fetch paginated data with custom sorting
     const sortOptions = {};
     if (modelType === 'item') {
@@ -2717,22 +2698,11 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       .limit(limit)
       .lean();
     
-    if (modelType === 'quest' && req.query.latestMonthOnly === 'true') {
-      console.log(`[server.js]: 🔍 [latestMonthOnly] Query returned ${data.length} quests:`, data.map(q => ({
-        questID: q.questID,
-        title: q.title,
-        date: q.date,
-        postedAt: q.postedAt,
-        createdAt: q.createdAt,
-        status: q.status
-      })));
-    }
-    
     // Quest expiration filtering removed - show all quests regardless of expiration
 
     // Transform village data to include VILLAGE_CONFIG and convert Maps to objects
     if (modelType === 'village') {
-      const { VILLAGE_CONFIG } = require('@app/shared/models/VillageModel');
+      const { VILLAGE_CONFIG } = require('@/shared/models/VillageModel');
       
       data = data.map(village => {
         const villageObj = { ...village };
@@ -4206,8 +4176,8 @@ const setupWeeklyCharacterRotation = async () => {
     await rotateCharacterOfWeek();
   }
   
-  // Setup weekly scheduler for Sunday midnight EST
-  scheduleNextSundayMidnightRotation();
+  // Setup weekly scheduler for Sunday midnight EST (using croner)
+  setupWeeklyCharacterRotationScheduler();
 };
 
 // ------------------- Function: checkIfShouldRotate -------------------
@@ -4246,28 +4216,25 @@ const getNextSundayMidnight = (fromDate) => {
   return nextSunday;
 };
 
-// ------------------- Function: scheduleNextSundayMidnightRotation -------------------
-// Schedules the next rotation for Sunday midnight EST
-const scheduleNextSundayMidnightRotation = () => {
-  const now = new Date();
-  const nextSundayMidnight = getNextSundayMidnight(now);
-  
-  const timeUntilNextRotation = nextSundayMidnight.getTime() - now.getTime();
-  
-  setTimeout(async () => {
-    try {
-      logger.event('Executing scheduled character rotation');
-      await rotateCharacterOfWeek();
-      
-      // Schedule the next rotation
-      scheduleNextSundayMidnightRotation();
-      
-    } catch (error) {
-      logger.error('Error in scheduled weekly character rotation', error);
-      // Schedule next rotation even if this one failed
-      scheduleNextSundayMidnightRotation();
+// ------------------- Function: setupWeeklyCharacterRotationScheduler -------------------
+// Sets up the weekly character rotation scheduler using croner (Sunday midnight EST)
+const setupWeeklyCharacterRotationScheduler = () => {
+  logger.schedule('Setting up weekly character rotation scheduler (Sunday midnight EST)');
+  new Cron(
+    '0 0 * * 0',
+    {
+      timezone: 'America/New_York',
+      catch: true,
+    },
+    async () => {
+      try {
+        logger.event('Executing scheduled character rotation');
+        await rotateCharacterOfWeek();
+      } catch (error) {
+        logger.error('Error in scheduled weekly character rotation', error);
+      }
     }
-  }, timeUntilNextRotation);
+  );
 };
 
 // ============================================================================
@@ -4464,39 +4431,25 @@ const getNext8amEST = (fromDate) => {
   return next8am;
 };
 
-// ------------------- Function: scheduleNext8amReminder -------------------
-// Schedules the next daily reset reminder for 8am EST
-const scheduleNext8amReminder = () => {
-  const now = new Date();
-  const next8am = getNext8amEST(now);
-  
-  const timeUntilNext8am = next8am.getTime() - now.getTime();
-  
-  const hours = Math.floor(timeUntilNext8am / (1000 * 60 * 60));
-  const minutes = Math.floor((timeUntilNext8am % (1000 * 60 * 60)) / (1000 * 60));
-  logger.schedule(`Next daily reset reminder: ${next8am.toLocaleString('en-US', { timeZone: 'America/New_York' })} (${hours}h ${minutes}m)`);
-  
-  setTimeout(async () => {
-    try {
-      logger.event('Executing scheduled daily reset reminder');
-      await notificationService.sendDailyResetReminders();
-      
-      // Schedule the next reminder
-      scheduleNext8amReminder();
-      
-    } catch (error) {
-      logger.error('Error in scheduled daily reset reminder', error);
-      // Schedule next reminder even if this one failed
-      scheduleNext8amReminder();
-    }
-  }, timeUntilNext8am);
-};
-
 // ------------------- Function: setupDailyResetReminders -------------------
-// Sets up the daily reset reminder scheduler
+// Sets up the daily reset reminder scheduler using croner
 const setupDailyResetReminders = () => {
   logger.schedule('Setting up daily reset reminder scheduler (8am EST)');
-  scheduleNext8amReminder();
+  new Cron(
+    '0 8 * * *',
+    {
+      timezone: 'America/New_York',
+      catch: true,
+    },
+    async () => {
+      try {
+        logger.event('Executing scheduled daily reset reminder');
+        await notificationService.sendDailyResetReminders();
+      } catch (error) {
+        logger.error('Error in scheduled daily reset reminder', error);
+      }
+    }
+  );
 };
 
 // ============================================================================
@@ -4549,71 +4502,57 @@ const checkIfTodayIsBeforeBloodMoon = () => {
   return false;
 };
 
-// ------------------- Function: scheduleNextMidnightBloodMoonCheck -------------------
-// Schedules the next blood moon check at midnight EST
-const scheduleNextMidnightBloodMoonCheck = () => {
-  const now = new Date();
-  const nextMidnight = getNextMidnightEST(now);
-  
-  const timeUntilMidnight = nextMidnight.getTime() - now.getTime();
-  
-  const hours = Math.floor(timeUntilMidnight / (1000 * 60 * 60));
-  const minutes = Math.floor((timeUntilMidnight % (1000 * 60 * 60)) / (1000 * 60));
-  logger.schedule(`Next blood moon check: ${nextMidnight.toLocaleString('en-US', { timeZone: 'America/New_York' })} (${hours}h ${minutes}m)`);
-  
-  setTimeout(async () => {
-    try {
-      logger.event('Executing blood moon check at midnight');
-      
-      // Check if today is the day before blood moon
-      if (checkIfTodayIsBeforeBloodMoon()) {
-        logger.custom('🌑', 'Today is the day before Blood Moon! Sending alerts...', '\x1b[35m');
-        
-        const bloodMoonData = {
-          description: '⚠️ **Beware!** Tonight the Blood Moon starts at **8 PM EST**!',
-          fields: [
-            {
-              name: '🌙 Blood Moon Event',
-              value: 'The ominous red glow will appear in the sky starting at 8 PM EST tonight. Prepare yourself!',
-              inline: false
-            },
-            {
-              name: '⏰ Start Time',
-              value: '8:00 PM EST',
-              inline: true
-            },
-            {
-              name: '📅 Duration',
-              value: 'Until 8:00 AM EST',
-              inline: true
-            },
-            {
-              name: '💀 Warning',
-              value: 'Monsters will be more dangerous during this period. Stay safe!',
-              inline: false
-            }
-          ]
-        };
-        
-        await notificationService.sendBloodMoonAlerts(bloodMoonData);
-      }
-      
-      // Schedule the next check
-      scheduleNextMidnightBloodMoonCheck();
-      
-    } catch (error) {
-      logger.error('Error in scheduled blood moon check', error);
-      // Schedule next check even if this one failed
-      scheduleNextMidnightBloodMoonCheck();
-    }
-  }, timeUntilMidnight);
-};
-
 // ------------------- Function: setupBloodMoonAlerts -------------------
-// Sets up the blood moon alert scheduler
+// Sets up the blood moon alert scheduler using croner
 const setupBloodMoonAlerts = () => {
   logger.schedule('Setting up blood moon alert scheduler (midnight EST)');
-  scheduleNextMidnightBloodMoonCheck();
+  new Cron(
+    '0 0 * * *',
+    {
+      timezone: 'America/New_York',
+      catch: true,
+    },
+    async () => {
+      try {
+        logger.event('Executing blood moon check at midnight');
+        
+        // Check if today is the day before blood moon
+        if (checkIfTodayIsBeforeBloodMoon()) {
+          logger.custom('🌑', 'Today is the day before Blood Moon! Sending alerts...', '\x1b[35m');
+          
+          const bloodMoonData = {
+            description: '⚠️ **Beware!** Tonight the Blood Moon starts at **8 PM EST**!',
+            fields: [
+              {
+                name: '🌙 Blood Moon Event',
+                value: 'The ominous red glow will appear in the sky starting at 8 PM EST tonight. Prepare yourself!',
+                inline: false
+              },
+              {
+                name: '⏰ Start Time',
+                value: '8:00 PM EST',
+                inline: true
+              },
+              {
+                name: '📅 Duration',
+                value: 'Until 8:00 AM EST',
+                inline: true
+              },
+              {
+                name: '💀 Warning',
+                value: 'Monsters will be more dangerous during this period. Stay safe!',
+                inline: false
+              }
+            ]
+          };
+          
+          await notificationService.sendBloodMoonAlerts(bloodMoonData);
+        }
+      } catch (error) {
+        logger.error('Error in scheduled blood moon check', error);
+      }
+    }
+  );
 };
 
 // ============================================================================
@@ -4640,39 +4579,25 @@ const getNext745pmEST = (fromDate) => {
   return next745pm;
 };
 
-// ------------------- Function: scheduleNextBlightCallNotification -------------------
-// Schedules the next blight call notification for 7:45pm EST (15 minutes before 8pm)
-const scheduleNextBlightCallNotification = () => {
-  const now = new Date();
-  const next745pm = getNext745pmEST(now);
-  
-  const timeUntilNext745pm = next745pm.getTime() - now.getTime();
-  
-  const hours = Math.floor(timeUntilNext745pm / (1000 * 60 * 60));
-  const minutes = Math.floor((timeUntilNext745pm % (1000 * 60 * 60)) / (1000 * 60));
-  logger.schedule(`Next blight call notification: ${next745pm.toLocaleString('en-US', { timeZone: 'America/New_York' })} (${hours}h ${minutes}m)`);
-  
-  setTimeout(async () => {
-    try {
-      logger.event('Executing scheduled blight call notification');
-      await notificationService.sendBlightCallNotifications();
-      
-      // Schedule the next notification
-      scheduleNextBlightCallNotification();
-      
-    } catch (error) {
-      logger.error('Error in scheduled blight call notification', error);
-      // Schedule next notification even if this one failed
-      scheduleNextBlightCallNotification();
-    }
-  }, timeUntilNext745pm);
-};
-
 // ------------------- Function: setupBlightCallNotifications -------------------
-// Sets up the blight call notification scheduler
+// Sets up the blight call notification scheduler using croner
 const setupBlightCallNotifications = () => {
   logger.schedule('Setting up blight call notification scheduler (7:45pm EST)');
-  scheduleNextBlightCallNotification();
+  new Cron(
+    '45 19 * * *',
+    {
+      timezone: 'America/New_York',
+      catch: true,
+    },
+    async () => {
+      try {
+        logger.event('Executing scheduled blight call notification');
+        await notificationService.sendBlightCallNotifications();
+      } catch (error) {
+        logger.error('Error in scheduled blight call notification', error);
+      }
+    }
+  );
 };
 
 // ------------------- Function: rotateCharacterOfWeek -------------------
@@ -7210,7 +7135,7 @@ app.get('/api/characters/:characterId/vending', async (req, res) => {
     // Get items from vending database using VendingInventory model
     let items = [];
     try {
-      const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+      const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(character.name);
       const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
       items = vendingItems;
@@ -7333,7 +7258,7 @@ app.post('/api/characters/:characterId/vending/setup', async (req, res) => {
     const vendorType = job === 'shopkeeper' ? 'shopkeeper' : 'merchant';
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // First, validate all items before saving any
@@ -7622,7 +7547,7 @@ app.post('/api/characters/:characterId/vending/items', async (req, res) => {
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Calculate slots used
@@ -7791,7 +7716,7 @@ app.post('/api/characters/:characterId/vending/restock', async (req, res) => {
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the existing item
@@ -8301,7 +8226,7 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', async (req, res)
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the item - handle both ObjectId and string formats
@@ -8430,7 +8355,7 @@ app.delete('/api/characters/:characterId/vending/items/:itemId', async (req, res
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find and delete the item
@@ -9268,7 +9193,7 @@ app.post('/api/member-lore', async (req, res) => {
     console.log('✅ Security validation passed - no malicious content detected');
 
     // Save to database
-    const MemberLore = require('@app/shared/models/MemberLoreModel');
+    const MemberLore = require('@/shared/models/MemberLoreModel');
     const loreSubmission = new MemberLore({
       memberName: memberName.trim(),
       topic: topic.trim(),
@@ -10190,7 +10115,7 @@ async function performAccessAudit() {
 
   try {
     // Get all users with admin roles
-    const User = require('@app/shared/models/UserModel');
+    const User = require('@/shared/models/UserModel');
     const users = await User.find({}).lean();
     
     for (const user of users) {
@@ -10422,63 +10347,70 @@ app.get('/api/admin/security-comprehensive', async (req, res) => {
   }
 });
 
-// Automated security audit (runs daily)
-setInterval(async () => {
-  try {
-    logger.schedule('Running automated security audit...', 'server.js');
-    const [databaseAudit, codebaseAudit, fileIntegrity, logAnalysis, accessAudit] = await Promise.all([
-      performSecurityAudit(),
-      performCodebaseSecurityScan(),
-      performFileIntegrityCheck(),
-      performLogAnalysis(),
-      performAccessAudit()
-    ]);
-    
-    // Log critical issues immediately
-    const totalCritical = databaseAudit.criticalIssues.length + codebaseAudit.criticalIssues.length;
-    const totalSuspicious = fileIntegrity.suspiciousFiles.length + logAnalysis.suspiciousActivities.length;
-    
-    if (totalCritical > 0 || totalSuspicious > 0) {
-      const criticalDetails = {
-        databaseIssues: databaseAudit.criticalIssues.length,
-        codebaseIssues: codebaseAudit.criticalIssues.length,
-        suspiciousFiles: fileIntegrity.suspiciousFiles.length,
-        suspiciousActivities: logAnalysis.suspiciousActivities.length,
-        totalCritical,
-        totalSuspicious
-      };
-      logger.error(`🚨 CRITICAL SECURITY ISSUES DETECTED:\n${JSON.stringify(criticalDetails, null, 2)}`, null, 'server.js');
-    }
-    
-    // Log summary
-    const auditSummary = {
-      database: databaseAudit.summary,
-      codebase: {
-        filesScanned: codebaseAudit.filesScanned,
-        suspiciousFiles: codebaseAudit.suspiciousFiles.length,
-        criticalIssues: codebaseAudit.criticalIssues.length,
-        warnings: codebaseAudit.warnings.length
-      },
-      fileIntegrity: {
-        filesChecked: fileIntegrity.filesChecked,
-        suspiciousFiles: fileIntegrity.suspiciousFiles.length,
-        unexpectedFiles: fileIntegrity.unexpectedFiles.length,
-        modifiedFiles: fileIntegrity.modifiedFiles.length
-      },
-      logAnalysis: {
-        suspiciousActivities: logAnalysis.suspiciousActivities.length
-      },
-      accessAudit: {
-        recentLogins: accessAudit.recentLogins.length,
-        suspiciousAccess: accessAudit.suspiciousAccess.length
+// Automated security audit (runs daily at midnight EST)
+new Cron(
+  '0 0 * * *',
+  {
+    timezone: 'America/New_York',
+    catch: true,
+  },
+  async () => {
+    try {
+      logger.schedule('Running automated security audit...', 'server.js');
+      const [databaseAudit, codebaseAudit, fileIntegrity, logAnalysis, accessAudit] = await Promise.all([
+        performSecurityAudit(),
+        performCodebaseSecurityScan(),
+        performFileIntegrityCheck(),
+        performLogAnalysis(),
+        performAccessAudit()
+      ]);
+      
+      // Log critical issues immediately
+      const totalCritical = databaseAudit.criticalIssues.length + codebaseAudit.criticalIssues.length;
+      const totalSuspicious = fileIntegrity.suspiciousFiles.length + logAnalysis.suspiciousActivities.length;
+      
+      if (totalCritical > 0 || totalSuspicious > 0) {
+        const criticalDetails = {
+          databaseIssues: databaseAudit.criticalIssues.length,
+          codebaseIssues: codebaseAudit.criticalIssues.length,
+          suspiciousFiles: fileIntegrity.suspiciousFiles.length,
+          suspiciousActivities: logAnalysis.suspiciousActivities.length,
+          totalCritical,
+          totalSuspicious
+        };
+        logger.error(`🚨 CRITICAL SECURITY ISSUES DETECTED:\n${JSON.stringify(criticalDetails, null, 2)}`, null, 'server.js');
       }
-    };
-    logger.info(`📊 Daily security audit summary:\n${JSON.stringify(auditSummary, null, 2)}`, 'server.js');
-    
-  } catch (error) {
-    logger.error('❌ Automated security audit failed', error, 'server.js');
+      
+      // Log summary
+      const auditSummary = {
+        database: databaseAudit.summary,
+        codebase: {
+          filesScanned: codebaseAudit.filesScanned,
+          suspiciousFiles: codebaseAudit.suspiciousFiles.length,
+          criticalIssues: codebaseAudit.criticalIssues.length,
+          warnings: codebaseAudit.warnings.length
+        },
+        fileIntegrity: {
+          filesChecked: fileIntegrity.filesChecked,
+          suspiciousFiles: fileIntegrity.suspiciousFiles.length,
+          unexpectedFiles: fileIntegrity.unexpectedFiles.length,
+          modifiedFiles: fileIntegrity.modifiedFiles.length
+        },
+        logAnalysis: {
+          suspiciousActivities: logAnalysis.suspiciousActivities.length
+        },
+        accessAudit: {
+          recentLogins: accessAudit.recentLogins.length,
+          suspiciousAccess: accessAudit.suspiciousAccess.length
+        }
+      };
+      logger.info(`📊 Daily security audit summary:\n${JSON.stringify(auditSummary, null, 2)}`, 'server.js');
+      
+    } catch (error) {
+      logger.error('❌ Automated security audit failed', error, 'server.js');
+    }
   }
-}, 24 * 60 * 60 * 1000); // Run every 24 hours
+);
 
 // ------------------- Section: Authentication Routes -------------------
 // Discord OAuth Login
@@ -10648,7 +10580,6 @@ async function checkAdminAccess(req) {
     // Check if user is authenticated
     const user = req.session?.user || req.user;
     if (!user || !user.discordId) {
-      logger.info('[checkAdminAccess] No user or discordId in request', 'server.js');
       return false;
     }
 
@@ -10671,7 +10602,6 @@ async function checkAdminAccess(req) {
       
       // If cache is still valid, return cached value
       if (now - cacheTime < CACHE_DURATION) {
-        logger.info(`[checkAdminAccess] Using cached admin status for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
         return req.session[cacheKey];
       }
     }
@@ -10696,7 +10626,6 @@ async function checkAdminAccess(req) {
         req.session[cacheKey] = hasAdminRole;
         req.session[cacheTimestampKey] = Date.now();
         
-        logger.info(`[checkAdminAccess] User ${user.discordId} admin check: ${hasAdminRole} (roles: ${roles.length}, looking for: ${adminRoleIdStr})`, 'server.js');
         return hasAdminRole;
       } else if (response.status === 429) {
         // Rate limited - use cached value if available, otherwise return false
@@ -10707,7 +10636,6 @@ async function checkAdminAccess(req) {
         
         // If we have a cached value, use it even if expired
         if (req.session[cacheKey] !== undefined) {
-          logger.info(`[checkAdminAccess] Using expired cache due to rate limit for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
           return req.session[cacheKey];
         }
         
@@ -10719,7 +10647,6 @@ async function checkAdminAccess(req) {
         
         // On other errors, use cached value if available
         if (req.session[cacheKey] !== undefined) {
-          logger.info(`[checkAdminAccess] Using cached value due to API error for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
           return req.session[cacheKey];
         }
         
@@ -10730,7 +10657,6 @@ async function checkAdminAccess(req) {
       
       // On network errors, use cached value if available
       if (req.session[cacheKey] !== undefined) {
-        logger.info(`[checkAdminAccess] Using cached value due to network error for user ${user.discordId}: ${req.session[cacheKey]}`, 'server.js');
         return req.session[cacheKey];
       }
       
@@ -10746,10 +10672,7 @@ async function checkAdminAccess(req) {
 
 // Get current user
 app.get('/api/user', async (req, res) => {
-  logger.info(`[API /api/user] Session ID: ${req.sessionID}, Has user: ${!!req.session.user}`, 'server.js');
   if (req.session.user) {
-    logger.info(`[API /api/user] Returning authenticated user: ${req.session.user.discordId}`, 'server.js');
-    
     try {
       // Fetch full user data from database
       const dbUser = await User.findOne({ discordId: req.session.user.discordId })
@@ -10781,7 +10704,6 @@ app.get('/api/user', async (req, res) => {
       });
     }
   } else {
-    logger.info('[API /api/user] No user in session, returning unauthenticated', 'server.js');
     res.json({
       isAuthenticated: false,
       user: null,
@@ -11246,7 +11168,7 @@ app.get('/api/blupee/status', async (req, res) => {
 
 // ------------------- Section: Notification API Routes -------------------
 
-const notificationService = require('@app/shared/utils/notificationService');
+const notificationService = require('@/shared/utils/notificationService');
 
 // Send Blood Moon alerts
 app.post('/api/notifications/blood-moon', async (req, res) => {
@@ -12596,22 +12518,22 @@ app.delete('/api/admin/village-shops/:id', async (req, res) => {
 // ------------------- Section: Admin Database Editor -------------------
 
 // ------------------- Import AuditLog model for audit logging -------------------
-const AuditLog = require('@app/shared/models/AuditLogModel');
+const AuditLog = require('@/shared/models/AuditLogModel');
 
 // ------------------- Import all remaining models for database management -------------------
-const ApprovedSubmission = require('@app/shared/models/ApprovedSubmissionModel');
-const BloodMoonTracking = require('@app/shared/models/BloodMoonTrackingModel');
-const GeneralItem = require('@app/shared/models/GeneralItemModel');
-const HelpWantedQuest = require('@app/shared/models/HelpWantedQuestModel');
-const Inventory = require('@app/shared/models/InventoryModel');
-const MemberLore = require('@app/shared/models/MemberLoreModel');
-const Minigame = require('@app/shared/models/MinigameModel');
-const NPC = require('@app/shared/models/NPCModel');
-const RuuGame = require('@app/shared/models/RuuGameModel');
-const TableModel = require('@app/shared/models/TableModel');
-const TableRoll = require('@app/shared/models/TableRollModel');
-const TempData = require('@app/shared/models/TempDataModel');
-const TokenTransaction = require('@app/shared/models/TokenTransactionModel');
+const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
+const BloodMoonTracking = require('@/shared/models/BloodMoonTrackingModel');
+const GeneralItem = require('@/shared/models/GeneralItemModel');
+const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
+const Inventory = require('@/shared/models/InventoryModel');
+const MemberLore = require('@/shared/models/MemberLoreModel');
+const Minigame = require('@/shared/models/MinigameModel');
+const NPC = require('@/shared/models/NPCModel');
+const RuuGame = require('@/shared/models/RuuGameModel');
+const TableModel = require('@/shared/models/TableModel');
+const TableRoll = require('@/shared/models/TableRollModel');
+const TempData = require('@/shared/models/TempDataModel');
+const TokenTransaction = require('@/shared/models/TokenTransactionModel');
 // Note: Raid, StealStats, and BlightRollHistory are imported at the top of the file
 
 // ------------------- Model Registry -------------------
@@ -13872,7 +13794,7 @@ app.use(errorHandler); // Handle errors and send responses
 // ============================================================================
 
 // Import Pin model
-const Pin = require('@app/shared/models/PinModel');
+const Pin = require('@/shared/models/PinModel');
 
 // ------------------- Function: checkUserAccess -------------------
 // Helper function to check if user has access to pin operations

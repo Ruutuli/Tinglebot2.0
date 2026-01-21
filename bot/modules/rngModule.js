@@ -8,10 +8,10 @@
 // ============================================================================
 // Database Models
 // ------------------- Importing database models -------------------
-const Monster = require('@app/shared/models/MonsterModel');
+const Monster = require('@/shared/models/MonsterModel');
 
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const logger = require('@app/shared/utils/logger');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const logger = require('@/shared/utils/logger');
 // ============================================================================
 // Modules
 // ------------------- Importing custom modules -------------------

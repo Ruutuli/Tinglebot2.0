@@ -5,9 +5,9 @@
 
 const express = require('express');
 const router = express.Router();
-const { fetchAllItems, fetchItemByName } = require('@app/shared/database/db');
+const { fetchAllItems, fetchItemByName } = require('@/shared/database/db');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
 
 // ------------------- Function: getAllItems -------------------
 // Returns all items from the database

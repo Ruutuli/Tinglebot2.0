@@ -18,7 +18,7 @@ const { google } = require("googleapis");
 const mongoose = require("mongoose");
 const { MongoClient } = require("mongodb");
 
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
 const {
  getOrCreateToken,
  updateTokenBalance,
@@ -31,8 +31,8 @@ const {
  deleteCharacterInventoryCollection,
  createCharacterInventory,
  getCharacterInventoryCollection,
-} = require('@app/shared/database/db');
-const dbConfig = require('@app/shared/config/database');
+} = require('@/shared/database/db');
+const dbConfig = require('@/shared/config/database');
 const {
  getVillageColorByName,
  getVillageEmojiByName,
@@ -54,13 +54,13 @@ const {
  isValidGoogleSheetsUrl,
  extractSpreadsheetId,
  convertCmToFeetInches,
-} = require('@app/shared/utils/validation');
+} = require('@/shared/utils/validation');
 const {
  appendSheetData,
  authorizeSheets,
  deleteInventorySheetData,
  safeAppendDataToSheet,
-} = require('@app/shared/utils/googleSheetsUtils');
+} = require('@/shared/utils/googleSheetsUtils');
 const {
  createCharacterAutocomplete,
  createCharacterInteraction,
@@ -97,19 +97,19 @@ const {
  getMountEmoji,
  getMountThumbnail,
 } = require("../../modules/mountModule");
-const bucket = require('@app/shared/config/gcsService');
+const bucket = require('@/shared/config/gcsService');
 
-const Character = require('@app/shared/models/CharacterModel');
-const User = require('@app/shared/models/UserModel');
-const ItemModel = require('@app/shared/models/ItemModel');
-const Mount = require('@app/shared/models/MountModel');
-const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
-const TempData = require('@app/shared/models/TempDataModel');
+const Character = require('@/shared/models/CharacterModel');
+const User = require('@/shared/models/UserModel');
+const ItemModel = require('@/shared/models/ItemModel');
+const Mount = require('@/shared/models/MountModel');
+const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
+const TempData = require('@/shared/models/TempDataModel');
 const {
   savePendingEditToStorage,
   retrievePendingEditFromStorage,
   deletePendingEditFromStorage
-} = require('@app/shared/utils/storage');
+} = require('@/shared/utils/storage');
 
 // ============================================================================
 // ------------------- Constants and Configuration -------------------

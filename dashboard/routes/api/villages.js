@@ -5,9 +5,9 @@
 
 const express = require('express');
 const router = express.Router();
-const { Village } = require('@app/shared/models/VillageModel');
+const { Village } = require('@/shared/models/VillageModel');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
 
 // ------------------- Function: getVillageStatus -------------------
 // Returns current status for all villages
@@ -58,16 +58,6 @@ router.get('/status', asyncHandler(async (req, res) => {
       required: requiredTokens,
       percentage: tokenProgressPercentage
     };
-    
-    // Debug logging for token data
-    const rawCurrentTokens = village.currentTokens;
-    console.log(`[villages.js] /api/villages/status: Village "${village.name}"`);
-    console.log(`[villages.js]   - Level: ${village.level}`);
-    console.log(`[villages.js]   - raw currentTokens (from DB):`, rawCurrentTokens);
-    console.log(`[villages.js]   - typeof rawCurrentTokens:`, typeof rawCurrentTokens);
-    console.log(`[villages.js]   - processed currentTokens:`, currentTokens);
-    console.log(`[villages.js]   - requiredTokens for level ${village.level < 3 ? village.level + 1 : 'max'}:`, requiredTokens);
-    console.log(`[villages.js]   - tokenProgress object:`, JSON.stringify(tokenProgress));
     
     // Get vending tier display text
     let vendingTierText = 'Basic stock only';

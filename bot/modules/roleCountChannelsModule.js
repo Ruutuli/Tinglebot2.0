@@ -3,7 +3,7 @@
 // ============================================================================
 
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
 
 // ============================================================================
 // ------------------- Configuration -------------------

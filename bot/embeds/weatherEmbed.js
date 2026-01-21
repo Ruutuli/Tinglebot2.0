@@ -5,7 +5,7 @@
 
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { convertToHyruleanDate } = require('../modules/calendarModule');
-const WeatherService = require('@app/shared/services/weatherService');
+const WeatherService = require('@/shared/services/weatherService');
 
 // ============================================================================
 // ------------------- Constants -------------------

@@ -1,8 +1,15 @@
 {
-  "name": "@app/shared",
+  "name": "@tinglebot/shared",
   "version": "1.0.0",
-  "description": "Shared code for Tinglebot bot and dashboard services",
-  "private": true,
+  "description": "Shared utilities, models, and services for Tinglebot 2.0",
   "main": "index.js",
-  "scripts": {}
+  "private": true,
+  "exports": {
+    ".": "./index.js",
+    "./models/*": "./models/*.js",
+    "./utils/*": "./utils/*.js",
+    "./database/*": "./database/*.js",
+    "./services/*": "./services/*.js",
+    "./config/*": "./config/*.js"
+  }
 }

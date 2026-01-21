@@ -12,17 +12,17 @@
 // ------------------- Importing Discord.js components -------------------
 const { ChannelType } = require('discord.js');
 
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const logger = require('@app/shared/utils/logger');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const logger = require('@/shared/utils/logger');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
-const { getMonstersAboveTierByRegion, fetchMonsterByName } = require('@app/shared/database/db');
+const { getMonstersAboveTierByRegion, fetchMonsterByName } = require('@/shared/database/db');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer, storeRaidProgress, getRaidProgressById } = require('../modules/raidModule');
-const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
-const TempData = require('@app/shared/models/TempDataModel');
-const { Village } = require('@app/shared/models/VillageModel');
+const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
+const TempData = require('@/shared/models/TempDataModel');
+const { Village } = require('@/shared/models/VillageModel');
 
 // ============================================================================
 // Environment Configuration
@@ -498,7 +498,7 @@ async function rollbackQuotaReservation(villageDisplayName) {
 
 // ------------------- Select Monster For Raid -------------------
 async function selectMonsterForRaid(villageRegion, villageDisplayName, channel) {
-  const Monster = require('@app/shared/models/MonsterModel');
+  const Monster = require('@/shared/models/MonsterModel');
   const monsters = await Monster.find({
     tier: { $gte: 5 },
     [villageRegion.toLowerCase()]: true,
@@ -1084,7 +1084,6 @@ async function triggerQuotaBasedRaid(channel, selectedVillage, villageDisplayNam
 // ------------------- Track active timers -------------------
 let encounterCheckInterval = null;
 let cleanupInterval = null;
-let startupTimeout = null;
 
 // ============================================================================
 // Initialization Function
@@ -1098,10 +1097,6 @@ async function initializeRandomEncounterBot(client) {
   if (cleanupInterval !== null) {
     clearInterval(cleanupInterval);
     logger.info('SYSTEM', '[randomMonsterEncounters.js] Cleared existing cleanup interval');
-  }
-  if (startupTimeout !== null) {
-    clearTimeout(startupTimeout);
-    logger.info('SYSTEM', '[randomMonsterEncounters.js] Cleared existing startup timeout');
   }
 
   // Log role restriction status
@@ -1175,13 +1170,11 @@ async function initializeRandomEncounterBot(client) {
   
   // Also run immediately on startup to reset any outdated periods
   // (The scheduler.js handles daily resets at midnight)
-  startupTimeout = setTimeout(() => {
-    resetAllVillageRaidQuotas().catch(error => {
-      console.error('[randomMonsterEncounters.js]: ❌ Initial raid quota reset failed:', error);
-      handleError(error, 'randomMonsterEncounters.js');
-    });
-    startupTimeout = null; // Clear reference after execution
-  }, 30000); // Check after 30 seconds
+  // Call directly without timeout - async function won't block initialization
+  resetAllVillageRaidQuotas().catch(error => {
+    console.error('[randomMonsterEncounters.js]: ❌ Initial raid quota reset failed:', error);
+    handleError(error, 'randomMonsterEncounters.js');
+  });
 
 }
 
@@ -1200,12 +1193,6 @@ function cleanupTimers() {
   if (cleanupInterval !== null) {
     clearInterval(cleanupInterval);
     cleanupInterval = null;
-    cleanedCount++;
-  }
-  
-  if (startupTimeout !== null) {
-    clearTimeout(startupTimeout);
-    startupTimeout = null;
     cleanedCount++;
   }
   

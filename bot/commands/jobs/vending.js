@@ -299,7 +299,7 @@ async function execute(interaction) {
   characterName
  ) {
   try {
-   const { fetchCharacterByNameAndUserId } = require('@app/shared/database/db');
+   const { fetchCharacterByNameAndUserId } = require('@/shared/database/db');
    let character = await fetchCharacterByNameAndUserId(
     characterName,
     interaction.user.id
@@ -307,7 +307,7 @@ async function execute(interaction) {
 
    // If not found as regular character, try as mod character
    if (!character) {
-    const { fetchModCharacterByNameAndUserId } = require('@app/shared/database/db');
+    const { fetchModCharacterByNameAndUserId } = require('@/shared/database/db');
     character = await fetchModCharacterByNameAndUserId(
      characterName,
      interaction.user.id

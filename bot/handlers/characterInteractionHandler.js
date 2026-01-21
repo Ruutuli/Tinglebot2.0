@@ -8,17 +8,17 @@
 // ============================================================================
 // Third-party libraries
 const axios = require('axios');
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const { MessageFlags } = require('discord.js');
 
 // Local modules
-const Character = require('@app/shared/models/CharacterModel');
-const { createCharacterInventory, getOrCreateUser } = require('@app/shared/database/db');
-const { isUniqueCharacterName, isValidGoogleSheetsUrl } = require('@app/shared/utils/validation');
+const Character = require('@/shared/models/CharacterModel');
+const { createCharacterInventory, getOrCreateUser } = require('@/shared/database/db');
+const { isUniqueCharacterName, isValidGoogleSheetsUrl } = require('@/shared/utils/validation');
 const { createCharacterEmbed, createSetupInstructionsEmbed } = require('../embeds/embeds.js');
-const bucket = require('@app/shared/config/gcsService');
+const bucket = require('@/shared/config/gcsService');
 
 // ============================================================================
 // ------------------- Constants and Helpers -------------------

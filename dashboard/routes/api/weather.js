@@ -5,9 +5,10 @@
 
 const express = require('express');
 const router = express.Router();
-const Weather = require('@app/shared/models/WeatherModel');
+const Weather = require('@/shared/models/WeatherModel');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
+const { getWeatherWithoutGeneration } = require('@/shared/services/weatherService');
 
 // ------------------- Function: getWeatherDayBounds -------------------
 // Calculates the start and end of the current weather day (8am to 7:59am EST)
@@ -35,8 +36,6 @@ function getWeatherDayBounds() {
   const now = new Date();
   const { easternDate, offsetMs } = getEasternReference(now);
   
-  logger.info('WEATHER_BOUNDS', `Current time: ${now.toISOString()}, Eastern date: ${easternDate.toISOString()}, Offset: ${offsetMs}ms (${Math.round(offsetMs / (60 * 60 * 1000))} hours)`);
-  
   // Calculate start of current weather period (8am EST)
   const startEastern = new Date(easternDate);
   startEastern.setHours(8, 0, 0, 0);
@@ -47,8 +46,6 @@ function getWeatherDayBounds() {
     startEastern.setDate(startEastern.getDate() - 1);
   }
   
-  logger.info('WEATHER_BOUNDS', `Current hour in EST: ${currentHourEastern}, Start Eastern: ${startEastern.toISOString()}`);
-  
   // Recalculate offset for the startEastern date to handle DST correctly
   const { offsetMs: startOffsetMs } = getEasternReference(startEastern);
   
@@ -57,8 +54,6 @@ function getWeatherDayBounds() {
   endEastern.setDate(endEastern.getDate() + 1);
   endEastern.setHours(7, 59, 59, 999);
   
-  logger.info('WEATHER_BOUNDS', `End Eastern: ${endEastern.toISOString()}`);
-  
   // Recalculate offset for the endEastern date to handle DST correctly
   const { offsetMs: endOffsetMs } = getEasternReference(endEastern);
   
@@ -66,118 +61,170 @@ function getWeatherDayBounds() {
   const weatherDayStart = new Date(startEastern.getTime() + startOffsetMs);
   const weatherDayEnd = new Date(endEastern.getTime() + endOffsetMs);
   
-  logger.info('WEATHER_BOUNDS', `Calculated UTC bounds - Start: ${weatherDayStart.toISOString()}, End: ${weatherDayEnd.toISOString()}`);
-  logger.info('WEATHER_BOUNDS', `Offsets used - Start: ${startOffsetMs}ms, End: ${endOffsetMs}ms`);
-  
   return { weatherDayStart, weatherDayEnd };
 }
 
 // ------------------- Function: getTodayWeather -------------------
 // Returns today's weather for all villages (using 8am-7:59am EST weather day)
+// Uses the same weather service function as the bot to ensure consistency
 router.get('/today', asyncHandler(async (req, res) => {
+  console.log('[weather.js API]: 🌤️ Weather API /today endpoint called');
   const { weatherDayStart, weatherDayEnd } = getWeatherDayBounds();
-  
-  logger.info('WEATHER_API', `Fetching weather for period: ${weatherDayStart.toISOString()} to ${weatherDayEnd.toISOString()}`);
-  
-  // Get weather for all villages for the current weather day
-  // Include only posted weather (exclude future/scheduled weather that hasn't been posted yet)
-  // Add a small buffer (1 second) to account for any timing precision issues
-  const bufferMs = 1000; // 1 second buffer
-  const queryStart = new Date(weatherDayStart.getTime() - bufferMs);
-  const queryEnd = new Date(weatherDayEnd.getTime() + bufferMs);
-  
-  const weatherQuery = {
-    date: {
-      $gte: queryStart,
-      $lt: queryEnd
-    },
-    $or: [
-      { postedToDiscord: true },
-      { postedToDiscord: { $exists: false } } // Include legacy docs without the field
-    ]
-  };
-  
-  logger.info('WEATHER_API', `Query date range: ${queryStart.toISOString()} to ${queryEnd.toISOString()}`);
-  
-  const weatherData = await Weather.find(weatherQuery).lean();
-  
-  logger.info('WEATHER_API', `Found ${weatherData.length} weather records in period`);
-  
-  // Log all villages found for debugging
-  weatherData.forEach(w => {
-    logger.info('WEATHER_API', `Weather record: village="${w.village}", date=${w.date?.toISOString()}`);
+  console.log('[weather.js API]: 📅 Searching for weather in period:', {
+    start: weatherDayStart.toISOString(),
+    end: weatherDayEnd.toISOString()
   });
   
-  // Helper to normalize village name (same as weatherService.js)
-  const normalizeVillageName = (name) => {
-    if (!name) return '';
-    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-  };
-  
-  // Organize by village - use case-insensitive matching
+  // Use the same weather service function as the bot to ensure we get the correct weather
+  // This ensures consistency between what's posted and what's displayed on the dashboard
   const weatherByVillage = {};
   const villages = ['Rudania', 'Inariko', 'Vhintl'];
   
+  // Normalize date to exact start of period (same as how weather is saved)
+  const normalizedDate = new Date(weatherDayStart);
+  normalizedDate.setMilliseconds(0);
+  
+  // Create a range for the same second (to catch weather saved with milliseconds)
+  const dateRangeStart = new Date(normalizedDate);
+  const dateRangeEnd = new Date(normalizedDate);
+  dateRangeEnd.setMilliseconds(999);
+  
   for (const village of villages) {
-    // Normalize the search village name
-    const normalizedVillage = normalizeVillageName(village);
-    
-    // First, try to find weather record in the current period with case-insensitive village name match
-    let villageWeather = weatherData.find(w => {
-      const normalizedDbVillage = normalizeVillageName(w.village);
-      return normalizedDbVillage === normalizedVillage;
-    });
-    
-    // If no weather found in the exact period, look for the most recent posted weather for this village
-    if (!villageWeather) {
-      logger.warn('WEATHER_API', `No weather found for ${village} in current period, searching for most recent posted weather...`);
+    console.log(`[weather.js API]: 🔍 Fetching weather for ${village}...`);
+    try {
+      // FIRST: Try exact date match (most reliable - matches how weather is saved)
+      let weather = await Weather.findOne({
+        village: village,
+        date: normalizedDate,
+        postedToDiscord: true
+      });
       
-      // Try exact village name first (since enum guarantees exact match)
-      let fallbackWeather = await Weather.findOne({
-        village: village, // Exact match (enum guarantees this format)
-        $or: [
-          { postedToDiscord: true },
-          { postedToDiscord: { $exists: false } }
-        ]
-      })
-        .sort({ date: -1 }) // Get most recent
-        .lean();
-      
-      // If still not found, try case-insensitive match (for legacy data or edge cases)
-      if (!fallbackWeather) {
-        fallbackWeather = await Weather.findOne({
-          village: { $regex: new RegExp(`^${normalizedVillage}$`, 'i') },
-          $or: [
-            { postedToDiscord: true },
-            { postedToDiscord: { $exists: false } }
-          ]
-        })
-          .sort({ date: -1 })
-          .lean();
-      }
-      
-      if (fallbackWeather) {
-        logger.info('WEATHER_API', `Found fallback weather for ${village}: ${fallbackWeather.date?.toISOString()}, postedToDiscord: ${fallbackWeather.postedToDiscord}`);
-        villageWeather = fallbackWeather;
+      if (weather) {
+        console.log(`[weather.js API]: ${village} - Found by exact date match (ID: ${weather._id})`);
       } else {
-        logger.warn('WEATHER_API', `No posted weather found for ${village} at all. Checking if any weather exists (posted or not)...`);
+        // SECOND: Try date within same second (catches weather saved with milliseconds)
+        weather = await Weather.findOne({
+          village: village,
+          date: { $gte: dateRangeStart, $lte: dateRangeEnd },
+          postedToDiscord: true
+        });
         
-        // Last resort: check if any weather exists at all for debugging
-        const anyWeather = await Weather.findOne({ village: village })
-          .sort({ date: -1 })
-          .lean();
-        if (anyWeather) {
-          logger.warn('WEATHER_API', `Found unposted weather for ${village}: date=${anyWeather.date?.toISOString()}, postedToDiscord=${anyWeather.postedToDiscord}`);
+        if (weather) {
+          console.log(`[weather.js API]: ${village} - Found by same-second range (ID: ${weather._id}, date: ${weather.date?.toISOString()})`);
         } else {
-          logger.warn('WEATHER_API', `No weather records exist in database for ${village}`);
+          // THIRD: Try exact date without postedToDiscord requirement
+          weather = await Weather.findOne({
+            village: village,
+            date: normalizedDate
+          });
+          
+          if (weather) {
+            console.log(`[weather.js API]: ${village} - Found by exact date (unposted, ID: ${weather._id})`);
+          } else {
+            // FIFTH: Try same-second range without postedToDiscord requirement
+            weather = await Weather.findOne({
+              village: village,
+              date: { $gte: dateRangeStart, $lte: dateRangeEnd }
+            });
+            
+            if (weather) {
+              console.log(`[weather.js API]: ${village} - Found by same-second range (unposted, ID: ${weather._id})`);
+            } else {
+              // SIXTH: Use weather service function (range query as fallback)
+              weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
+              console.log(`[weather.js API]: ${village} - Range query (onlyPosted=true):`, weather ? `Found (ID: ${weather._id})` : 'Not found');
+              
+              // SEVENTH: Try without onlyPosted filter
+              if (!weather) {
+                console.log(`[weather.js API]: ⚠️ No posted weather found for ${village}, trying without onlyPosted filter`);
+                logger.warn('weather.js', `No posted weather found for ${village}, trying without onlyPosted filter`);
+                weather = await getWeatherWithoutGeneration(village, { onlyPosted: false });
+                console.log(`[weather.js API]: ${village} - Range query (onlyPosted=false):`, weather ? `Found (ID: ${weather._id}, postedToDiscord=${weather.postedToDiscord})` : 'Not found');
+                if (weather) {
+                  logger.warn('weather.js', `Found unposted weather for ${village} - postedToDiscord=${weather.postedToDiscord}, postedAt=${weather.postedAt}`);
+                }
+              }
+            }
+          }
         }
       }
-    } else {
-      logger.info('WEATHER_API', `Found weather for ${village} in current period: ${villageWeather.date?.toISOString()}`);
+      
+      if (weather) {
+        try {
+          // Convert mongoose document to plain object if needed
+          const weatherObj = weather.toObject ? weather.toObject() : weather;
+          
+          // Ensure date is properly serialized - handle various date formats
+          if (weatherObj.date) {
+            if (weatherObj.date instanceof Date) {
+              weatherObj.date = weatherObj.date.toISOString();
+            } else if (typeof weatherObj.date === 'string') {
+              // Already a string, keep it
+            } else if (weatherObj.date.$date) {
+              // MongoDB extended JSON format
+              weatherObj.date = new Date(weatherObj.date.$date).toISOString();
+            }
+          }
+          
+          // Serialize nested date fields if they exist
+          if (weatherObj.postedAt) {
+            if (weatherObj.postedAt instanceof Date) {
+              weatherObj.postedAt = weatherObj.postedAt.toISOString();
+            } else if (weatherObj.postedAt.$date) {
+              weatherObj.postedAt = new Date(weatherObj.postedAt.$date).toISOString();
+            }
+          }
+          
+          weatherByVillage[village] = weatherObj;
+          
+          // Safe date formatting for logging
+          let weatherDateStr = 'unknown';
+          try {
+            if (weather.date) {
+              if (weather.date instanceof Date) {
+                weatherDateStr = weather.date.toISOString();
+              } else if (typeof weather.date === 'string') {
+                weatherDateStr = weather.date;
+              } else if (weather.date.$date) {
+                weatherDateStr = new Date(weather.date.$date).toISOString();
+              }
+            }
+          } catch (dateError) {
+            console.warn(`[weather.js API]: Error formatting date for ${village}:`, dateError.message);
+            weatherDateStr = String(weather.date || 'unknown');
+          }
+          
+          console.log(`[weather.js API]: ✅ Found weather for ${village} - ID: ${weather._id?.toString()}, date: ${weatherDateStr}, postedToDiscord: ${weather.postedToDiscord}`);
+          // Only log if message is defined to avoid logger errors
+          if (weatherDateStr) {
+            logger.info('weather.js', `Found weather for ${village} - ID: ${weather._id?.toString()}, date: ${weatherDateStr}, postedToDiscord: ${weather.postedToDiscord}`);
+          }
+        } catch (processError) {
+          console.error(`[weather.js API]: ❌ Error processing weather data for ${village}:`, processError);
+          logger.error(`Error processing weather data for ${village}: ${processError.message || processError}`);
+          // Still try to add the raw weather object
+          weatherByVillage[village] = weather.toObject ? weather.toObject() : weather;
+        }
+      } else {
+        // Log when weather is not found to help debug - include the date range being searched
+        console.log(`[weather.js API]: ❌ No weather found for ${village} in current period`);
+        console.log(`[weather.js API]:    Period range: ${weatherDayStart.toISOString()} to ${weatherDayEnd.toISOString()}`);
+        console.log(`[weather.js API]:    Normalized date searched: ${normalizedDate.toISOString()}`);
+        logger.warn('weather.js', `No weather found for ${village} in current period (${weatherDayStart.toISOString()} to ${weatherDayEnd.toISOString()})`);
+        weatherByVillage[village] = null;
+      }
+    } catch (error) {
+      console.error(`[weather.js API]: ❌ Error fetching weather for ${village}:`, error.message || error);
+      logger.error('weather.js', `Error fetching weather for ${village}: ${error.message || error}`);
+      weatherByVillage[village] = null;
     }
-    
-    weatherByVillage[village] = villageWeather || null;
   }
+  
+  console.log('[weather.js API]: 📤 Returning weather data:', {
+    date: weatherDayStart.toISOString(),
+    villagesFound: Object.keys(weatherByVillage).filter(v => weatherByVillage[v] !== null).length,
+    totalVillages: villages.length
+  });
   
   res.json({
     date: weatherDayStart,

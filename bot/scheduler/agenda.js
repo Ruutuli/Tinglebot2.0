@@ -1,9 +1,9 @@
 // scheduler/agenda.js
 const Agenda = require("agenda");
-const dbConfig = require("../../shared/config/database");
-const Character = require("../../shared/models/CharacterModel");
-const { handleError } = require("../../shared/utils/globalErrorHandler");
-const { sendUserDM } = require("../../shared/utils/messageUtils");
+const dbConfig = require("@/shared/config/database");
+const Character = require("@/shared/models/CharacterModel");
+const { handleError } = require("@/shared/utils/globalErrorHandler");
+const { sendUserDM } = require("@/shared/utils/messageUtils");
 
 let agenda;
 
@@ -42,6 +42,9 @@ async function initAgenda() {
   return agenda;
 }
 
+// Store client reference for Agenda jobs
+let clientRef = null;
+
 /**
  * Define all Agenda job types
  * @param {Object} params - Parameters object
@@ -51,6 +54,9 @@ function defineAgendaJobs({ client }) {
   if (!agenda) {
     throw new Error("Agenda not initialized - call initAgenda() first");
   }
+
+  // Store client reference for use in jobs
+  clientRef = client;
 
   // Job: Release character from jail
   agenda.define("releaseFromJail", { concurrency: 5 }, async (job) => {
@@ -88,7 +94,7 @@ function defineAgendaJobs({ client }) {
       const servedDays = jailDurationMs ? Math.max(1, Math.round(jailDurationMs / (24 * 60 * 60 * 1000))) : 3;
 
       // Release the character using shared function
-      const { releaseFromJail } = require("../../shared/utils/jailCheck");
+      const { releaseFromJail } = require("@/shared/utils/jailCheck");
       await releaseFromJail(character);
 
       // Post announcement in character's current village town hall channel
@@ -252,6 +258,33 @@ function defineAgendaJobs({ client }) {
         characterId: characterId,
       });
       throw error;
+    }
+  });
+
+  // Job: Post scheduled special weather
+  agenda.define("postScheduledSpecialWeather", { concurrency: 3 }, async (job) => {
+    const { village } = job.attrs.data;
+    
+    try {
+      // Get client from stored reference
+      if (!clientRef) {
+        // If no client available, weather will be posted by regular cron job
+        console.log(`[Agenda:postScheduledSpecialWeather] No client available, weather will be posted by cron job`);
+        return;
+      }
+
+      const { postWeatherForVillage } = require("../scheduler");
+      
+      // Post the weather (checkExisting=false ensures it posts even if already exists)
+      await postWeatherForVillage(clientRef, village, false, false);
+      console.log(`[Agenda:postScheduledSpecialWeather] Successfully posted special weather for ${village}`);
+    } catch (error) {
+      console.error(`[Agenda:postScheduledSpecialWeather] Error posting special weather for ${village}:`, error);
+      handleError(error, "agenda.js", {
+        jobName: "postScheduledSpecialWeather",
+        village: village,
+      });
+      // Don't throw - let cron job handle it as fallback
     }
   });
 }

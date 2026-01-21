@@ -6,8 +6,8 @@
 
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
-const Character = require('@app/shared/models/CharacterModel');
-const { connectToTinglebot } = require('@app/shared/database/db');
+const Character = require('./shared/models/CharacterModel');
+const { connectToTinglebot } = require('./shared/database/db');
 
 // ============================================================================
 // ------------------- Main Fix Function -------------------

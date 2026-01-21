@@ -142,10 +142,13 @@ async function fetchTodayWeather() {
   try {
     const response = await fetch('/api/weather/today');
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[weather.js]: API error response:', errorText);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const data = await response.json();
+    console.log('[weather.js]: Weather API response:', data);
     
     // Update weather day information
     if (data.weatherDayStart && data.weatherDayEnd) {
@@ -160,6 +163,7 @@ async function fetchTodayWeather() {
     
     return data;
   } catch (error) {
+    console.error('[weather.js]: Error fetching weather:', error);
     throw error;
   }
 }
@@ -449,12 +453,15 @@ async function renderWeatherSection() {
 
     // Fetch weather data
     const weatherData = await getTodayWeather();
+    console.log('[weather.js]: Weather data received:', weatherData);
     
     // Create weather cards
     const villages = ['Rudania', 'Inariko', 'Vhintl'];
-    const weatherCards = villages.map(village => 
-      createWeatherCard(village, weatherData.villages[village])
-    ).join('');
+    const weatherCards = villages.map(village => {
+      const villageWeather = weatherData.villages[village];
+      console.log(`[weather.js]: Weather for ${village}:`, villageWeather);
+      return createWeatherCard(village, villageWeather);
+    }).join('');
 
     // Create weather day display text
     const weatherDayText = currentWeatherDay.displayText || 'Loading...';

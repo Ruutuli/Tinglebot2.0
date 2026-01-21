@@ -5,12 +5,12 @@
 
 const express = require('express');
 const router = express.Router();
-const Character = require('@app/shared/models/CharacterModel');
-const ModCharacter = require('@app/shared/models/ModCharacterModel');
+const Character = require('@/shared/models/CharacterModel');
+const ModCharacter = require('@/shared/models/ModCharacterModel');
 const { asyncHandler, NotFoundError } = require('../../middleware/errorHandler');
 const { validateObjectId } = require('../../middleware/validation');
-const logger = require('@app/shared/utils/logger');
-const { connectToInventoriesNative } = require('@app/shared/database/db');
+const logger = require('@/shared/utils/logger');
+const { connectToInventoriesNative } = require('@/shared/database/db');
 
 // Helper function to count spirit orbs (needs to be imported or defined)
 // This is a placeholder - actual implementation should be imported from appropriate module

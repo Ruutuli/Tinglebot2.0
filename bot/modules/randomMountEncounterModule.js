@@ -1,8 +1,8 @@
 // const { v4: uuidv4 } = require('uuid');
 // const { getRandomMount, getRandomEnvironment, getMountRarity, getMountStamina } = require('./mountModule');
 // const { storeEncounter } = require('./mountModule');
-// const { handleError } = require('@app/shared/utils/globalErrorHandler');
-// const TempData = require('@app/shared/models/TempDataModel');
+// const { handleError } = require('@/shared/utils/globalErrorHandler');
+// const TempData = require('@/shared/models/TempDataModel');
 
 // // Message activity tracking
 // const messageActivityMap = new Map(); // Map to store message activity per channel

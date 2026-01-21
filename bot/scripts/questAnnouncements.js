@@ -13,12 +13,12 @@ const path = require('path');
 const { google } = require('googleapis');
 
 // Utils
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const { authorizeSheets, writeSheetData } = require('@app/shared/utils/googleSheetsUtils'); 
-const { generateUniqueId } = require('@app/shared/utils/uniqueIdUtils');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { authorizeSheets, writeSheetData } = require('@/shared/utils/googleSheetsUtils'); 
+const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
 
 // Models
-const Quest = require('@app/shared/models/QuestModel');
+const Quest = require('@/shared/models/QuestModel');
 
 // Modules
 const { BORDER_IMAGE, QUEST_TYPES, QUEST_CHANNEL_ID, extractVillageFromLocation } = require('../modules/questRewardModule');
@@ -427,7 +427,7 @@ async function sendModNotification(guild, questTitle, questID, errorType, errorD
 // ------------------- validateTableRollExists -
 async function validateTableRollExists(tableName) {
     try {
-        const TableRoll = require('@app/shared/models/TableRollModel');
+        const TableRoll = require('@/shared/models/TableRollModel');
         const table = await TableRoll.findOne({ name: tableName, isActive: true });
         
         return {

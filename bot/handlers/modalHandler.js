@@ -4,29 +4,29 @@ const { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = req
 
 // Custom modules for formatting and extended functionality.
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
 
 
 // ------------------- Utility Functions -------------------
 // Generic helper utilities for menu creation and storage.
-const { getAddOnsMenu, getBaseSelectMenu, getSpecialWorksMenu, getTypeMultiplierMenu } = require('@app/shared/utils/menuUtils');
+const { getAddOnsMenu, getBaseSelectMenu, getSpecialWorksMenu, getTypeMultiplierMenu } = require('@/shared/utils/menuUtils');
 const { 
   getOrCreateSubmission, 
   updateSubmissionData, 
   retrieveSubmissionFromStorage, 
   findLatestSubmissionIdForUser 
-} = require('@app/shared/utils/storage');
+} = require('@/shared/utils/storage');
 const { getCancelButtonRow } = require('./buttonHelperHandler');
-const { calculateTokens, generateTokenBreakdown } = require('@app/shared/utils/tokenUtils');
+const { calculateTokens, generateTokenBreakdown } = require('@/shared/utils/tokenUtils');
 
 
 // ------------------- Handlers -------------------
 // Custom handler functions for modal-related component interactions.
 const { handleMountNameSubmission } = require('./mountComponentHandler');
 
-// Secret Santa handler
-const { handleSecretSantaModal } = require('./secretSantaHandler');
-const logger = require('@app/shared/utils/logger');
+// Secret Santa handler - Disabled outside December
+// const { handleSecretSantaModal } = require('./secretSantaHandler');
+const logger = require('@/shared/utils/logger');
 
 
 // ------------------- Helper Functions -------------------
@@ -44,9 +44,13 @@ async function handleModalSubmission(interaction) {
   const customId = interaction.customId;
 
   try {
+    // Secret Santa - Disabled outside December
     // Check if this is a Secret Santa modal
     if (customId.startsWith('secretsanta_')) {
-      return await handleSecretSantaModal(interaction);
+      // Secret Santa disabled outside December - just return without handling
+      logger.info('MODAL', 'Secret Santa modal interaction ignored (disabled outside December)');
+      return;
+      // return await handleSecretSantaModal(interaction);
     }
 
     // Get or create submission data using the new helper

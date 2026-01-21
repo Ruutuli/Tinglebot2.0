@@ -361,23 +361,31 @@ class MemoryMonitor {
       // Adjust threshold for croner timers which are expected during startup
       const now = Date.now();
       const count = self.activeTimers.size;
-      const cronerTimerCount = Array.from(self.activeTimers.values()).filter(t => t.isCroner).length;
-      const nonCronerCount = count - cronerTimerCount;
       
-      // Use higher threshold if most timers are from croner (expected behavior)
-      // Croner doesn't leak, so we can include it in normal monitoring
-      const effectiveCount = count;
-      const threshold = 100;
+      // Calculate expected timer counts from ACTIVE timers (not total created)
+      const activeTimerList = Array.from(self.activeTimers.values());
+      const cronerTimerCount = activeTimerList.filter(t => t.isCroner).length;
+      const undiciTimerCount = activeTimerList.filter(t => t.isUndici).length;
+      const expectedCount = cronerTimerCount + undiciTimerCount;
+      const unexpectedCount = count - expectedCount;
       
-      if (self.enabled && effectiveCount > threshold) {
+      // Only warn about unexpected timers - croner and undici timers are expected
+      // Use higher threshold if most timers are from expected sources
+      const effectiveCount = unexpectedCount; // Only count unexpected timers
+      const threshold = 50; // Lower threshold for unexpected timers
+      
+      // Suppress warnings if most timers are from expected sources (croner/undici)
+      // Only warn if there are many unexpected timers OR if total count is extremely high
+      const shouldCheck = self.enabled && (effectiveCount > threshold || count > 500);
+      
+      if (shouldCheck) {
         // Only warn when crossing major thresholds or every 10 seconds
-        // Use effectiveCount for threshold checks
-        const majorThresholds = [100, 200, 500, 1000, 2000, 5000, 10000];
+        const majorThresholds = [50, 100, 200, 500, 1000];
         const crossedThreshold = majorThresholds.some(th => 
           effectiveCount >= th && (self.lastTimerWarningCount < th || self.lastTimerWarningCount === 0)
         );
         const shouldWarn = crossedThreshold || 
-          (now - self.lastTimerWarning > self.warningThrottleMs && effectiveCount > self.lastTimerWarningCount + 100);
+          (now - self.lastTimerWarning > self.warningThrottleMs && effectiveCount > self.lastTimerWarningCount + 50);
         
         if (shouldWarn) {
           // Get top timer sources
@@ -387,16 +395,6 @@ class MemoryMonitor {
             .map(([source, count]) => `${source}: ${count}`)
             .join(', ');
           
-          // Get expected timer counts (croner and undici)
-          const cronerCount = Array.from(self.timerSources.entries())
-            .filter(([source]) => source.startsWith('croner:'))
-            .reduce((sum, [, count]) => sum + count, 0);
-          const undiciCount = Array.from(self.timerSources.entries())
-            .filter(([source]) => source.startsWith('undici:'))
-            .reduce((sum, [, count]) => sum + count, 0);
-          const expectedCount = cronerCount + undiciCount;
-          const unexpectedCount = count - expectedCount;
-          
           // Get oldest active timer for diagnosis (exclude expected timers like croner/undici)
           const allTimers = Array.from(self.activeTimers.values())
             .sort((a, b) => a.createdAt - b.createdAt);
@@ -405,16 +403,23 @@ class MemoryMonitor {
           const oldestTimer = oldestUnexpectedTimer;
           
           const expectedInfo = expectedCount > 0 
-            ? ` (${cronerCount} croner, ${undiciCount} undici - expected, ${unexpectedCount} other)` 
+            ? ` (${cronerTimerCount} croner, ${undiciTimerCount} undici - expected, ${unexpectedCount} other)` 
             : '';
-          logger.warn('MEM', `High timeout count detected: ${count} active timers${expectedInfo} (${self.timerCount} total created)`);
+          
+          // Only warn if there are unexpected timers above threshold
+          if (effectiveCount > threshold) {
+            logger.warn('MEM', `High unexpected timeout count detected: ${unexpectedCount} unexpected timers (${count} total active: ${cronerTimerCount} croner, ${undiciTimerCount} undici, ${unexpectedCount} other) (${self.timerCount} total created)`);
+          } else if (count > 500) {
+            // Even if most are expected, warn if total is extremely high
+            logger.warn('MEM', `Very high total timeout count: ${count} active timers${expectedInfo} (${self.timerCount} total created)`);
+          }
           
           if (topSources) {
             logger.warn('MEM', `Top timer sources: ${topSources}`);
           }
           
-          if (expectedCount > 0 && expectedCount > count * 0.5) {
-            logger.info('MEM', `Note: Most timers are from expected sources (${cronerCount} croner, ${undiciCount} undici) - this is safe`);
+          if (expectedCount > 0 && expectedCount > count * 0.5 && effectiveCount <= threshold) {
+            logger.info('MEM', `Note: Most timers are from expected sources (${cronerTimerCount} croner, ${undiciTimerCount} undici) - this is safe`);
           }
           
           if (oldestTimer) {
@@ -434,7 +439,7 @@ class MemoryMonitor {
           }
           
           self.lastTimerWarning = now;
-          self.lastTimerWarningCount = effectiveCount; // Track effective count for threshold detection
+          self.lastTimerWarningCount = effectiveCount; // Track unexpected count for threshold detection
         }
       }
       

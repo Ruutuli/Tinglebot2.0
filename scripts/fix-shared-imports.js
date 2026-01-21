@@ -1,6 +1,6 @@
 // ============================================================================
 // Fix Shared Imports Script
-// Replaces all relative imports to shared/ with @app/shared package imports
+// Replaces all relative imports to shared/ with ./shared package imports
 // ============================================================================
 
 const fs = require('fs');
@@ -14,37 +14,37 @@ const replacements = [
   // Double quotes
   {
     pattern: /require\("\.\.\/shared\//g,
-    replacement: 'require("@app/shared/'
+    replacement: 'require("./shared/'
   },
   {
     pattern: /require\("\.\.\/\.\.\/shared\//g,
-    replacement: 'require("@app/shared/'
+    replacement: 'require("./shared/'
   },
   {
     pattern: /require\("\.\.\/\.\.\/\.\.\/shared\//g,
-    replacement: 'require("@app/shared/'
+    replacement: 'require("./shared/'
   },
   // Single quotes
   {
     pattern: /require\('\.\.\/shared\//g,
-    replacement: "require('@app/shared/"
+    replacement: "require('./shared/"
   },
   {
     pattern: /require\('\.\.\/\.\.\/shared\//g,
-    replacement: "require('@app/shared/"
+    replacement: "require('./shared/"
   },
   {
     pattern: /require\('\.\.\/\.\.\/\.\.\/shared\//g,
-    replacement: "require('@app/shared/"
+    replacement: "require('./shared/"
   },
   // path.resolve patterns
   {
     pattern: /require\(path\.resolve\(__dirname,\s*['"]\.\.\/shared\//g,
-    replacement: "require('@app/shared/"
+    replacement: "require('./shared/"
   },
   {
     pattern: /require\(path\.resolve\(__dirname,\s*['"]\.\.\/\.\.\/shared\//g,
-    replacement: "require('@app/shared/"
+    replacement: "require('./shared/"
   }
 ];
 

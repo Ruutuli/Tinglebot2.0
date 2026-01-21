@@ -7,8 +7,8 @@
 const { v4: uuidv4 } = require('uuid');
 const { MongoClient } = require("mongodb");
 const mongoose = require('mongoose');
-const dbConfig = require('@app/shared/config/database.js');
-const { generateUniqueId } = require('@app/shared/utils/uniqueIdUtils.js');
+const dbConfig = require('@/shared/config/database.js');
+const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils.js');
 
 
 
@@ -21,10 +21,10 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Models -------------------
-const { VendingRequest, initializeVendingInventoryModel } = require('@app/shared/models/VendingModel.js');
-const Character = require('@app/shared/models/CharacterModel.js');
-const ItemModel = require('@app/shared/models/ItemModel.js');
-const User = require('@app/shared/models/UserModel.js');
+const { VendingRequest, initializeVendingInventoryModel } = require('@/shared/models/VendingModel.js');
+const Character = require('@/shared/models/CharacterModel.js');
+const ItemModel = require('@/shared/models/ItemModel.js');
+const User = require('@/shared/models/UserModel.js');
 
 // ------------------- Database Connections -------------------
 const {
@@ -42,7 +42,7 @@ const {
   updateTokenBalance, 
   fetchItemByName,
   addItemToInventory
-} = require('@app/shared/database/db.js');
+} = require('@/shared/database/db.js');
 
 // ------------------- Utility Functions -------------------
 const {
@@ -57,23 +57,23 @@ const {
   fetchSheetData,
   validateVendingSheet,
   parseSheetData
-} = require('@app/shared/utils/googleSheetsUtils.js');
+} = require('@/shared/utils/googleSheetsUtils.js');
 
 const {
   addItemToVendingInventory,
   escapeRegExp,
   logItemAcquisitionToDatabase,
   logItemRemovalToDatabase
-} = require('@app/shared/utils/inventoryUtils.js');
+} = require('@/shared/utils/inventoryUtils.js');
 
 const {
   retrieveVendingRequestFromStorage,
   deleteVendingRequestFromStorage,
   saveVendingRequestToStorage,
   retrieveAllVendingRequests
-} = require('@app/shared/utils/storage.js');
-const { handleError } = require('@app/shared/utils/globalErrorHandler.js');
-const { uploadSubmissionImage } = require('@app/shared/utils/uploadUtils.js');
+} = require('@/shared/utils/storage.js');
+const { handleError } = require('@/shared/utils/globalErrorHandler.js');
+const { uploadSubmissionImage } = require('@/shared/utils/uploadUtils.js');
 
 const {
   capitalizeFirstLetter
@@ -86,7 +86,7 @@ const {
   validateVendingItem,
   validateVendingPrices,
   validateVendingLocation
-} = require('@app/shared/utils/validation.js');
+} = require('@/shared/utils/validation.js');
 
 // ------------------- Vending Model Helper -------------------
 async function getVendingModel(characterName) {
@@ -840,7 +840,7 @@ async function validateFulfillmentRequest(request, buyer, vendor, VendingInvento
   }
   
   // Re-validate location restrictions
-  const { validateVendingLocation } = require('@app/shared/utils/validation.js');
+  const { validateVendingLocation } = require('@/shared/utils/validation.js');
   const locationValidation = validateVendingLocation(vendor, buyer);
   if (!locationValidation.valid) {
     console.log('[vendingHandler.js] [validateFulfillmentRequest] ❌ Location validation failed', {
@@ -902,7 +902,7 @@ async function validateFulfillmentRequest(request, buyer, vendor, VendingInvento
   // Check for price changes
   if (request.paymentMethod === 'tokens' && stockItem) {
     if (request.isVendorSelfPurchase) {
-      const ItemModel = require('@app/shared/models/ItemModel.js');
+      const ItemModel = require('@/shared/models/ItemModel.js');
       const itemDetails = await ItemModel.findOne({ itemName: request.itemName });
       const currentSellPrice = itemDetails?.sellPrice || 0;
       if (request.originalSellPrice && currentSellPrice !== request.originalSellPrice) {

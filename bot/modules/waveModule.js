@@ -1,16 +1,16 @@
 // ============================================================================
 // ---- Standard Libraries ----
 // ============================================================================
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const logger = require('@app/shared/utils/logger');
-const { generateUniqueId } = require('@app/shared/utils/uniqueIdUtils');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const logger = require('@/shared/utils/logger');
+const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
 const { calculateRaidFinalValue } = require('./rngModule');
 const { processRaidBattle } = require('./raidModule');
 const { getVillageRegionByName } = require('./locationsModule');
-const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
-const { monsterMapping } = require('@app/shared/models/MonsterModel');
-const Wave = require('@app/shared/models/WaveModel');
-const Monster = require('@app/shared/models/MonsterModel');
+const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
+const { monsterMapping } = require('@/shared/models/MonsterModel');
+const Wave = require('@/shared/models/WaveModel');
+const Monster = require('@/shared/models/MonsterModel');
 const { getMonstersByRegion } = require('./rngModule');
 
 // ============================================================================
@@ -221,7 +221,7 @@ const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes
 // Creates a Discord thread for wave communication
 async function createWaveThread(message, wave) {
   try {
-    const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
+    const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
     const villageName = capitalizeVillageName(wave.village);
     const threadName = `${villageName} - ${wave.waveId}`;
 
@@ -997,7 +997,7 @@ async function checkAllParticipantsKO(wave) {
     }
 
     // Get current character states from database to check KO status
-    const Character = require('@app/shared/models/CharacterModel');
+    const Character = require('@/shared/models/CharacterModel');
     
     // Check all participants
     for (const participant of wave.participants) {
@@ -1062,7 +1062,7 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
     }
 
     // Check if there are any valid (non-KO'd) participants before processing turn
-    const Character = require('@app/shared/models/CharacterModel');
+    const Character = require('@/shared/models/CharacterModel');
     let hasValidParticipant = false;
     for (const p of participants) {
       try {
@@ -1098,7 +1098,7 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
     }
 
     // Validate character still exists in database
-    const { fetchCharacterById } = require('@app/shared/database/db');
+    const { fetchCharacterById } = require('@/shared/database/db');
     const characterExists = await fetchCharacterById(character._id, character.isModCharacter);
     if (!characterExists) {
       // Character was deleted, remove from wave and fail gracefully
@@ -1212,7 +1212,7 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
       }
     } else {
       // Reload character from database to get the latest state
-      const { fetchCharacterById } = require('@app/shared/database/db');
+      const { fetchCharacterById } = require('@/shared/database/db');
       const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
       if (updatedCharacter) {
         Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);

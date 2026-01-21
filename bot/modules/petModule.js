@@ -6,7 +6,7 @@
 // ------------------- Error Handling -------------------
 let handleError;
 try {
-  const errorHandler = require('@app/shared/utils/globalErrorHandler');
+  const errorHandler = require('@/shared/utils/globalErrorHandler');
   handleError = errorHandler.handleError;
 } catch (e) {
   console.error("[petModule.js]: ❌ Failed to load global error handler:", e.message);
@@ -17,8 +17,8 @@ try {
 }
 
 // ------------------- Required Imports -------------------
-const { uploadPetImage } = require('@app/shared/utils/uploadUtils');
-const Pet = require('@app/shared/models/PetModel');
+const { uploadPetImage } = require('@/shared/utils/uploadUtils');
+const Pet = require('@/shared/models/PetModel');
 
 // ------------------- Pet Perk Field Mapping -------------------
 const perkFieldMap = {

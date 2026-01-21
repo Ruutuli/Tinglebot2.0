@@ -2,27 +2,27 @@
 // ---- Standard Libraries ----
 // ============================================================================
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
-const { fetchAnyCharacterByNameAndUserId } = require('@app/shared/database/db');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
+const { fetchAnyCharacterByNameAndUserId } = require('@/shared/database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed } = require('../../embeds/embeds.js');
-const Raid = require('@app/shared/models/RaidModel');
+const Raid = require('@/shared/models/RaidModel');
 
 // ============================================================================
 // ---- Import Loot Functions ----
 // ============================================================================
-const { fetchItemsByMonster } = require('@app/shared/database/db');
+const { fetchItemsByMonster } = require('@/shared/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
-const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('@app/shared/utils/validation');
-const { authorizeSheets, safeAppendDataToSheet } = require('@app/shared/utils/googleSheetsUtils');
+const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('@/shared/utils/validation');
+const { authorizeSheets, safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
 const { v4: uuidv4 } = require('uuid');
 
 // ============================================================================
 // ---- Import Inventory Sync Check ----
 // ============================================================================
-const { checkInventorySync } = require('@app/shared/utils/characterUtils');
-const { enforceJail } = require('@app/shared/utils/jailCheck');
+const { checkInventorySync } = require('@/shared/utils/characterUtils');
+const { enforceJail } = require('@/shared/utils/jailCheck');
 
 // ============================================================================
 // ---- Raid Loot System ----
@@ -351,7 +351,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   const { monster } = raidData;
 
   // Get monster image from monsterMapping
-  const { monsterMapping } = require('@app/shared/models/MonsterModel');
+  const { monsterMapping } = require('@/shared/models/MonsterModel');
   const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping]
     ? monsterMapping[monster.nameMapping]
     : { image: monster.image };
@@ -371,7 +371,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   const koCharacters = [];
   
   // Get current character states from database
-  const Character = require('@app/shared/models/CharacterModel');
+  const Character = require('@/shared/models/CharacterModel');
   
   // Get the effective current turn participant (skipping KO'd participants)
   const effectiveCurrentTurnParticipant = await raidData.getEffectiveCurrentTurnParticipant();
@@ -510,8 +510,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
     const lootResults = [];
     const failedCharacters = [];
     const blightedCharacters = [];
-    const Character = require('@app/shared/models/CharacterModel');
-    const User = require('@app/shared/models/UserModel');
+    const Character = require('@/shared/models/CharacterModel');
+    const User = require('@/shared/models/UserModel');
     
     for (const participant of participants) {
       try {
@@ -519,7 +519,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
         let character = await Character.findById(participant.characterId);
         if (!character) {
           // Try to find as mod character
-          const ModCharacter = require('@app/shared/models/ModCharacterModel');
+          const ModCharacter = require('@/shared/models/ModCharacterModel');
           character = await ModCharacter.findById(participant.characterId);
         }
         
@@ -676,7 +676,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
     const participantList = participants.map(p => `• **${p.name}** (${p.damage} hearts)`).join('\n');
     
     // Get monster image from monsterMapping
-    const { monsterMapping } = require('@app/shared/models/MonsterModel');
+    const { monsterMapping } = require('@/shared/models/MonsterModel');
     const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
       ? monsterMapping[monster.nameMapping] 
       : { image: monster.image };
@@ -857,7 +857,7 @@ async function generateLootedItem(monster, weightedItems, damageDealt = 0) {
     
     // Fetch the correct emoji from the database for the jelly type
     try {
-      const ItemModel = require('@app/shared/models/ItemModel');
+      const ItemModel = require('@/shared/models/ItemModel');
       const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
       if (jellyItem && jellyItem.emoji) {
         lootedItem.emoji = jellyItem.emoji;

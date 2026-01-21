@@ -2,9 +2,9 @@
 // Script to analyze and balance village materials
 // ============================================================================
 const mongoose = require('mongoose');
-const { VILLAGE_CONFIG } = require('@app/shared/models/VillageModel');
-const Item = require('@app/shared/models/ItemModel');
-const { connectToTinglebot } = require('@app/shared/database/db');
+const { VILLAGE_CONFIG } = require('./shared/models/VillageModel');
+const Item = require('./shared/models/ItemModel');
+const { connectToTinglebot } = require('./shared/database/db');
 
 // ============================================================================
 // Analysis Functions

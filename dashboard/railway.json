@@ -1,6 +1,6 @@
 {
     "$schema": "https://railway.com/railway.schema.json",
-    "_comment": "Railway configuration for Dashboard Service - Web dashboard application",
+    "_comment": "Railway configuration for Dashboard Service - Web dashboard application. IMPORTANT: In Railway UI, set Watch Paths to: /dashboard/**, /shared/**. Root directory should be project root (not dashboard/).",
     "build": {
         "builder": "NIXPACKS"
     },

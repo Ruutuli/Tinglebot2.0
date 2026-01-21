@@ -4,12 +4,12 @@
 // ============================================================================
 
 const { EmbedBuilder } = require('discord.js');
-const Quest = require('@app/shared/models/QuestModel');
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const Quest = require('@/shared/models/QuestModel');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
 const { QUEST_TYPES, BORDER_IMAGE, DEFAULT_POST_REQUIREMENT } = require('./questRewardModule');
 const questModule = require('../commands/world/quest');
 const questRewardModule = require('./questRewardModule');
-const logger = require('@app/shared/utils/logger');
+const logger = require('@/shared/utils/logger');
 
 // Helper function to get Discord client
 function getDiscordClient() {

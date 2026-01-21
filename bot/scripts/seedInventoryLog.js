@@ -12,10 +12,10 @@ dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const mongoose = require('mongoose');
 
-const { connectToTinglebot } = require('@app/shared/database/db');
-const Character = require('@app/shared/models/CharacterModel');
-const InventoryLog = require('@app/shared/models/InventoryLogModel');
-const ItemModel = require('@app/shared/models/ItemModel');
+const { connectToTinglebot } = require('./shared/database/db');
+const Character = require('./shared/models/CharacterModel');
+const InventoryLog = require('./shared/models/InventoryLogModel');
+const ItemModel = require('./shared/models/ItemModel');
 
 const {
   authorizeSheets,
@@ -23,7 +23,7 @@ const {
   getSheetIdByTitle,
   readSheetData,
   isValidGoogleSheetsUrl
-} = require('@app/shared/utils/googleSheetsUtils');
+} = require('./shared/utils/googleSheetsUtils');
 
 // ============================================================================
 // ------------------- Configuration -------------------

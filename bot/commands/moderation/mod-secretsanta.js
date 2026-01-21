@@ -9,7 +9,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Connections -------------------
-const { connectToTinglebot } = require('@app/shared/database/db');
+const { connectToTinglebot } = require('@/shared/database/db');
 
 // ------------------- Secret Santa Admin Handlers -------------------
 const {
@@ -22,7 +22,7 @@ const {
 } = require('../utility/secretsanta');
 
 // ------------------- Utility Functions -------------------
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
 
 // ============================================================================
 // ------------------- Command Definition -------------------

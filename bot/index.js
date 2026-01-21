@@ -7,6 +7,11 @@ const path = require('path');
 const envPath = path.resolve(__dirname, '..', '.env');
 dotenv.config({ path: envPath });
 
+// ------------------- Setup Path Aliases -------------------
+require('module-alias/register');
+const moduleAlias = require('module-alias');
+moduleAlias.addAlias('@/shared', path.resolve(__dirname, '..', 'shared'));
+
 const port = process.env.PORT || 5001;
 
 // ------------------- Standard Libraries -------------------
@@ -16,8 +21,8 @@ const figlet = require("figlet");
 const { Client, GatewayIntentBits, Partials, REST, Routes } = require("discord.js");
 
 // ------------------- Database Connections -------------------
-const { connectToTinglebot, connectToInventories } = require("@app/shared/database/db");
-const TempData = require("@app/shared/models/TempDataModel");
+const { connectToTinglebot, connectToInventories } = require('@/shared/database/db');
+const TempData = require('@/shared/models/TempDataModel');
 
 // ------------------- Handlers -------------------
 
@@ -27,16 +32,17 @@ const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { handleInteraction, initializeReactionHandler } = require('./handlers/interactionHandler');
 const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHandler');
 // const { handleMessage } = require('./handlers/messageHandler');
-const { startExpirationChecks } = require('@app/shared/utils/expirationHandler');
-const logger = require('@app/shared/utils/logger');
-const { getMemoryMonitor } = require('@app/shared/utils/memoryMonitor');
+// Expiration handler removed - see docs/FUTURE_PLANS.md
+// const { startExpirationChecks } = require('@/shared/utils/expirationHandler');
+const logger = require('@/shared/utils/logger');
+const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
 
 // ------------------- Scripts -------------------
 const {
   handleError,
   initializeErrorHandler,
   initializeErrorTracking,
-} = require("@app/shared/utils/globalErrorHandler");
+} = require('@/shared/utils/globalErrorHandler');
 const {
   createTrelloCard,
   logWishlistToTrello,
@@ -109,7 +115,7 @@ async function initializeDatabases() {
     
     // Fix questBonus type issues (convert numeric questBonus to string)
     try {
-      const ApprovedSubmission = require('@app/shared/models/ApprovedSubmissionModel');
+      const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
       
       // Fix ApprovedSubmission records with numeric questBonus
       const approvedSubmissionsWithNumericBonus = await ApprovedSubmission.find({
@@ -178,14 +184,15 @@ process.on('SIGTERM', async () => {
 // Shared graceful shutdown function
 async function performGracefulShutdown() {
   try {
+    // Expiration handler removed - see docs/FUTURE_PLANS.md
     // 1. Stop expiration checks (prevents recursive timer creation)
-    try {
-      const { stopExpirationChecks } = require('@app/shared/utils/expirationHandler');
-      stopExpirationChecks();
-      logger.info('SYSTEM', 'Expiration checks stopped');
-    } catch (error) {
-      logger.warn('SYSTEM', `Error stopping expiration checks: ${error.message}`);
-    }
+    // try {
+    //   const { stopExpirationChecks } = require('@/shared/utils/expirationHandler');
+    //   stopExpirationChecks();
+    //   logger.info('SYSTEM', 'Expiration checks stopped');
+    // } catch (error) {
+    //   logger.warn('SYSTEM', `Error stopping expiration checks: ${error.message}`);
+    // }
     
     // 2. Stop Agenda worker (one-time scheduled jobs)
     try {
@@ -222,7 +229,7 @@ async function performGracefulShutdown() {
     
     // Close additional database connections
     try {
-      const DatabaseConnectionManager = require('@app/shared/database/connectionManager');
+      const DatabaseConnectionManager = require('@/shared/database/connectionManager');
       await DatabaseConnectionManager.closeAllConnections();
     } catch (error) {
       logger.warn('SYSTEM', `Error closing additional database connections: ${error.message}`);
@@ -230,7 +237,7 @@ async function performGracefulShutdown() {
     
     // 5. Clear all caches
     try {
-      const { inventoryCache, characterListCache, characterDataCache, spiritOrbCache } = require('@app/shared/utils/cache');
+      const { inventoryCache, characterListCache, characterDataCache, spiritOrbCache } = require('@/shared/utils/cache');
       [inventoryCache, characterListCache, characterDataCache, spiritOrbCache].forEach(cache => {
         if (cache && typeof cache.clear === 'function') {
           cache.clear();
@@ -246,7 +253,7 @@ async function performGracefulShutdown() {
     
     // 6. Stop memory monitor
     try {
-      const { getMemoryMonitor } = require('@app/shared/utils/memoryMonitor');
+      const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
       const memoryMonitor = getMemoryMonitor();
       if (memoryMonitor) {
         memoryMonitor.stop();
@@ -277,7 +284,7 @@ async function initializeClient() {
   try {
     // Apply Railway-specific optimizations
     try {
-      const { configureRailwayOptimizations, setupRailwayMemoryMonitoring } = require('@app/shared/utils/railwayOptimizations');
+      const { configureRailwayOptimizations, setupRailwayMemoryMonitoring } = require('@/shared/utils/railwayOptimizations');
       configureRailwayOptimizations();
       setupRailwayMemoryMonitoring();
     } catch (error) {
@@ -406,8 +413,6 @@ async function initializeClient() {
     });
 
     client.once("ready", async () => {
-      console.clear();
-
       // Display compact banner
       console.log('\n');
       logger.banner('TINGLEBOT 2.0', 'Discord Bot Service');
@@ -439,7 +444,8 @@ async function initializeClient() {
         await startAgenda();
         logger.success('SCHEDULER', 'Agenda initialized and started');
         
-        startExpirationChecks(client);
+        // Expiration handler removed - see docs/FUTURE_PLANS.md
+        // startExpirationChecks(client);
         
         logger.success('SYSTEM', 'Bot is online and ready');
       } catch (error) {
@@ -719,7 +725,7 @@ async function initializeClient() {
         await handleXP(message);
         
         // Handle existing message tracking
-        const { trackLastMessage } = require('@app/shared/utils/messageUtils');
+        const { trackLastMessage } = require('@/shared/utils/messageUtils');
         await trackLastMessage(message);
       } catch (error) {
         console.error("[index.js]: Error handling XP tracking:", error);
@@ -964,7 +970,7 @@ async function initializeClient() {
         }
         
         // Track intro post in database
-        const User = require('@app/shared/models/UserModel');
+        const User = require('@/shared/models/UserModel');
         const userDoc = await User.getOrCreateUser(message.author.id);
         userDoc.introPostedAt = new Date();
         await userDoc.save();
@@ -1030,22 +1036,22 @@ async function initializeClient() {
         logger.info('CLEANUP', `User ${username} (${discordId}) left the server. Starting data cleanup...`);
         
         // Import necessary models
-        const User = require('@app/shared/models/UserModel');
-        const Character = require('@app/shared/models/CharacterModel');
-        const ModCharacter = require('@app/shared/models/ModCharacterModel');
-        const Pet = require('@app/shared/models/PetModel');
-        const Mount = require('@app/shared/models/MountModel');
-        const Quest = require('@app/shared/models/QuestModel');
-        const Party = require('@app/shared/models/PartyModel');
-        const MinigameModel = require('@app/shared/models/MinigameModel');
-        const RuuGame = require('@app/shared/models/RuuGameModel');
-        const StealStats = require('@app/shared/models/StealStatsModel');
-        const BlightRollHistory = require('@app/shared/models/BlightRollHistoryModel');
-        const ApprovedSubmission = require('@app/shared/models/ApprovedSubmissionModel');
-        const Raid = require('@app/shared/models/RaidModel');
+        const User = require('@/shared/models/UserModel');
+        const Character = require('@/shared/models/CharacterModel');
+        const ModCharacter = require('@/shared/models/ModCharacterModel');
+        const Pet = require('@/shared/models/PetModel');
+        const Mount = require('@/shared/models/MountModel');
+        const Quest = require('@/shared/models/QuestModel');
+        const Party = require('@/shared/models/PartyModel');
+        const MinigameModel = require('@/shared/models/MinigameModel');
+        const RuuGame = require('@/shared/models/RuuGameModel');
+        const StealStats = require('@/shared/models/StealStatsModel');
+        const BlightRollHistory = require('@/shared/models/BlightRollHistoryModel');
+        const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
+        const Raid = require('@/shared/models/RaidModel');
         
         // For vending cleanup, we'll use the vending connection directly
-        const { connectToVending } = require('@app/shared/database/db');
+        const { connectToVending } = require('@/shared/database/db');
         const vendingConnection = await connectToVending();
         
         // Get all characters for this user (needed for cascading deletes)
@@ -1079,7 +1085,7 @@ async function initializeClient() {
         
         // 4. Delete inventories (for all characters)
         // Import deleteCharacterInventoryCollection function
-        const { deleteCharacterInventoryCollection } = require('@app/shared/database/db');
+        const { deleteCharacterInventoryCollection } = require('@/shared/database/db');
         let inventoryCollectionsDeleted = 0;
         if (allCharacterNames.length > 0) {
           for (const characterName of allCharacterNames) {

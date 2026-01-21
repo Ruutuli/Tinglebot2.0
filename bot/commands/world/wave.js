@@ -2,10 +2,10 @@
 // ---- Standard Libraries ----
 // ============================================================================
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
-const { fetchAnyCharacterByNameAndUserId } = require('@app/shared/database/db');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
+const { fetchAnyCharacterByNameAndUserId } = require('@/shared/database/db');
 const { joinWave, processWaveTurn } = require('../../modules/waveModule');
-const Wave = require('@app/shared/models/WaveModel');
+const Wave = require('@/shared/models/WaveModel');
 
 // ============================================================================
 // ---- Command Definition ----
@@ -243,7 +243,7 @@ module.exports = {
       if (monsterDefeatedThisTurn) {
         console.log(`[wave.js]: 🎯 Monster defeated this turn, creating defeat embed for wave ${waveId}`);
         const { EmbedBuilder } = require('discord.js');
-        const { monsterMapping } = require('@app/shared/models/MonsterModel');
+        const { monsterMapping } = require('@/shared/models/MonsterModel');
         
         // Get the defeated monster - after advanceToNextMonster, currentMonsterIndex points to the next monster
         // So the defeated monster is at currentMonsterIndex - 1
@@ -270,7 +270,7 @@ module.exports = {
             // Build turn order list
             const participants = turnResult.waveData.participants || [];
             const turnOrderLines = [];
-            const Character = require('@app/shared/models/CharacterModel');
+            const Character = require('@/shared/models/CharacterModel');
             
             for (let idx = 0; idx < participants.length; idx++) {
               const p = participants[idx];
@@ -355,10 +355,10 @@ module.exports = {
 // ============================================================================
 // ---- Import Loot Functions ----
 // ============================================================================
-const { fetchItemsByMonster } = require('@app/shared/database/db');
+const { fetchItemsByMonster } = require('@/shared/database/db');
 const { createWeightedItemList } = require('../../modules/rngModule');
-const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
-const { isValidGoogleSheetsUrl } = require('@app/shared/utils/validation');
+const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+const { isValidGoogleSheetsUrl } = require('@/shared/utils/validation');
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -396,7 +396,7 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
   }
 
   // Get monster image from monsterMapping
-  const { monsterMapping } = require('@app/shared/models/MonsterModel');
+  const { monsterMapping } = require('@/shared/models/MonsterModel');
   // Normalize nameMapping by removing spaces to match monsterMapping keys
   const normalizedNameMapping = (monsterToDisplay.nameMapping || monsterToDisplay.name).replace(/\s+/g, "");
   console.log(`[wave.js]: 🔍 Turn embed - Normalized nameMapping: "${normalizedNameMapping}" (original: "${monsterToDisplay.nameMapping || monsterToDisplay.name}")`);
@@ -418,7 +418,7 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
   const koCharacters = [];
   
   // Get current character states from database
-  const Character = require('@app/shared/models/CharacterModel');
+  const Character = require('@/shared/models/CharacterModel');
   
   // Get the effective current turn participant (skipping KO'd participants)
   const effectiveCurrentTurnParticipant = await waveData.getEffectiveCurrentTurnParticipant();
@@ -574,8 +574,8 @@ async function handleWaveVictory(interaction, waveData) {
     const defeatedMonsters = waveData.defeatedMonsters || [];
     const lootResults = [];
     const failedCharacters = [];
-    const Character = require('@app/shared/models/CharacterModel');
-    const User = require('@app/shared/models/UserModel');
+    const Character = require('@/shared/models/CharacterModel');
+    const User = require('@/shared/models/UserModel');
     
     // Track which participants got loot (for summary)
     const participantsWhoGotLoot = new Set();
@@ -617,7 +617,7 @@ async function handleWaveVictory(interaction, waveData) {
         if (!character) {
           // Try to find as mod character
           console.log(`[wave.js]: 🔍 [${i + 1}/${defeatedMonsters.length}] Not found in Character collection, trying ModCharacter...`);
-          const ModCharacter = require('@app/shared/models/ModCharacterModel');
+          const ModCharacter = require('@/shared/models/ModCharacterModel');
           character = await ModCharacter.findById(defeated.defeatedBy.characterId);
         }
         

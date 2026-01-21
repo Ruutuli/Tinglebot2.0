@@ -7,8 +7,8 @@ const { EmbedBuilder } = require('discord.js');
 // ============================================================================
 // ---- Utility Functions ----
 // ============================================================================
-const { handleError } = require('@app/shared/utils/globalErrorHandler');
-const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
+const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
 
 // ============================================================================
 // ---- Imports ----
@@ -16,8 +16,8 @@ const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
 const { 
     Village,
     VILLAGE_CONFIG
-} = require('@app/shared/models/VillageModel');
-const ItemModel = require('@app/shared/models/ItemModel');
+} = require('@/shared/models/VillageModel');
+const ItemModel = require('@/shared/models/ItemModel');
 
 // ============================================================================
 // ---- Constants ----

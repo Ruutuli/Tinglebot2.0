@@ -23,25 +23,25 @@ const {
  fetchCharacterByNameAndUserId,
  fetchItemsByMonster,
  fetchAllItems,
-} = require('@app/shared/database/db.js');
-const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler.js');
+} = require('@/shared/database/db.js');
+const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
 
 // Utilities
 const {
  authorizeSheets,
  appendSheetData,
  safeAppendDataToSheet,
-} = require('@app/shared/utils/googleSheetsUtils.js');
+} = require('@/shared/utils/googleSheetsUtils.js');
 const {
  extractSpreadsheetId,
  isValidGoogleSheetsUrl,
-} = require('@app/shared/utils/validation.js');
-const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils.js');
-const logger = require('@app/shared/utils/logger.js');
+} = require('@/shared/utils/validation.js');
+const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils.js');
+const logger = require('@/shared/utils/logger.js');
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
-const { checkInventorySync } = require('@app/shared/utils/characterUtils');
-const { enforceJail } = require('@app/shared/utils/jailCheck');
-const { getWeatherWithoutGeneration } = require('@app/shared/services/weatherService');
+const { checkInventorySync } = require('@/shared/utils/characterUtils');
+const { enforceJail } = require('@/shared/utils/jailCheck');
+const { getWeatherWithoutGeneration } = require('@/shared/services/weatherService');
 
 // Modules - Job, Location, Damage, and Formatting Logic
 const { getJobPerk, isValidJob } = require("../../modules/jobsModule.js");
@@ -71,7 +71,7 @@ const {
 
 // Event Handlers
 const { triggerRaid } = require('../../modules/raidModule.js');
-const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
+const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
 
 // Flavor Text and Messages
 const {
@@ -92,9 +92,9 @@ const {
 } = require("../../embeds/embeds.js");
 
 // Models
-const Character = require('@app/shared/models/CharacterModel.js');
-const User = require('@app/shared/models/UserModel.js');
-const { Village } = require('@app/shared/models/VillageModel.js');
+const Character = require('@/shared/models/CharacterModel.js');
+const User = require('@/shared/models/UserModel.js');
+const { Village } = require('@/shared/models/VillageModel.js');
 
 // Character Stats
 const { handleKO } = require("../../modules/characterStatsModule.js");
@@ -112,7 +112,7 @@ const villageChannels = {
 };
 
 // Modules - Weather Logic
-const { getCurrentWeather } = require('@app/shared/services/weatherService');
+const { getCurrentWeather } = require('@/shared/services/weatherService');
 
 // ------------------- Helper Functions -------------------
 
@@ -157,7 +157,7 @@ async function validateCharacterForLoot(interaction, characterName, userId) {
   
   // If not found as regular character, try as mod character
   if (!character) {
-    const { fetchModCharacterByNameAndUserId } = require('@app/shared/database/db');
+    const { fetchModCharacterByNameAndUserId } = require('@/shared/database/db');
     character = await fetchModCharacterByNameAndUserId(characterName, userId);
     
     if (character && character.isModCharacter) {
@@ -426,7 +426,7 @@ module.exports = {
        if (shouldConsumeElixir(character, 'loot', { blightRain: true })) {
          consumeElixirBuff(character);
          // Update character in database
-         const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
+         const { updateCharacterById, updateModCharacterById } = require('@/shared/database/db.js');
          const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
          await updateFunction(character._id, { buff: character.buff });
        } else if (character.buff?.active) {
@@ -476,7 +476,7 @@ module.exports = {
            if (shouldConsumeElixir(character, 'loot', { blightRain: true })) {
              consumeElixirBuff(character);
              // Update character in database
-             const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
+             const { updateCharacterById, updateModCharacterById } = require('@/shared/database/db.js');
              const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
              await updateFunction(character._id, { buff: character.buff });
              safeMsg += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
@@ -1088,7 +1088,7 @@ async function processLootingLogic(
       // Snapshot hearts before reroll (get fresh from DB to capture prior deductions)
       let heartsBeforeReroll = null;
       try {
-        const CharacterModel = character.isModCharacter ? require('@app/shared/models/ModCharacterModel.js') : require('@app/shared/models/CharacterModel.js');
+        const CharacterModel = character.isModCharacter ? require('@/shared/models/ModCharacterModel.js') : require('@/shared/models/CharacterModel.js');
         const freshCharBefore = await CharacterModel.findById(character._id).select('currentHearts');
         heartsBeforeReroll = freshCharBefore?.currentHearts ?? null;
       } catch {}
@@ -1128,7 +1128,7 @@ async function processLootingLogic(
       let rerollAppliedHearts = 0;
       try {
         if (heartsBeforeReroll !== null) {
-          const CharacterModel = character.isModCharacter ? require('@app/shared/models/ModCharacterModel.js') : require('@app/shared/models/CharacterModel.js');
+          const CharacterModel = character.isModCharacter ? require('@/shared/models/ModCharacterModel.js') : require('@/shared/models/CharacterModel.js');
           const freshCharAfter = await CharacterModel.findById(character._id).select('currentHearts');
           if (freshCharAfter && typeof freshCharAfter.currentHearts === 'number') {
             rerollAppliedHearts = Math.max(0, heartsBeforeReroll - freshCharAfter.currentHearts);
@@ -1420,7 +1420,7 @@ async function processLootingLogic(
   
   // Check if Entertainer boost is active
   if (character.boostedBy) {
-    const { fetchCharacterByName, updateCharacterById } = require('@app/shared/database/db');
+    const { fetchCharacterByName, updateCharacterById } = require('@/shared/database/db');
     const { recoverHearts } = require('../../modules/characterStatsModule');
     const boosterChar = await fetchCharacterByName(character.boostedBy);
     
@@ -1552,7 +1552,7 @@ async function processLootingLogic(
   // Step 2: Handle KO Logic
   let updatedCharacter;
   if (character.isModCharacter) {
-    const ModCharacter = require('@app/shared/models/ModCharacterModel.js');
+    const ModCharacter = require('@/shared/models/ModCharacterModel.js');
     updatedCharacter = await ModCharacter.findById(character._id);
   } else {
     updatedCharacter = await Character.findById(character._id);
@@ -1868,7 +1868,7 @@ async function generateLootedItem(encounteredMonster, weightedItems, character, 
   
   // Fetch the correct emoji from the database for the jelly type
   try {
-    const ItemModel = require('@app/shared/models/ItemModel');
+    const ItemModel = require('@/shared/models/ItemModel');
     const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
     if (jellyItem && jellyItem.emoji) {
       lootedItem.emoji = jellyItem.emoji;

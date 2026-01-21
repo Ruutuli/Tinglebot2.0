@@ -148,10 +148,13 @@ async function connectToTinglebot() {
        VendingRequest.syncIndexes()
      ]);
      
-     logger.info('DATABASE', 'TTL indexes synced for TempData, RuuGame, and VendingRequest');
+     logger.info('DATABASE', 'TTL indexes synced successfully');
    } catch (indexError) {
-     // Log but don't fail - indexes will be created on first use if needed
-     logger.warn('DATABASE', `Warning: Could not sync TTL indexes: ${indexError.message}`);
+     // Only log if it's not a duplicate index error (which is expected if indexes already exist)
+     if (!indexError.message.includes('equivalent index already exists')) {
+       logger.warn('DATABASE', `Could not sync TTL indexes: ${indexError.message}`);
+     }
+     // Indexes will be created on first use if needed, so this is not critical
    }
    
    // Track connection pool size
@@ -217,11 +220,22 @@ const connectToInventoriesNative = async () => {
     // Test the connection to make sure it's still alive with a timeout
     try {
       // Use a shorter timeout for ping to fail fast if connection is dead
-      await Promise.race([
-        inventoriesDbNativeConnection.admin().ping(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000))
-      ]);
-      return inventoriesDbNativeConnection;
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Ping timeout')), 2000);
+      });
+      
+      try {
+        await Promise.race([
+          inventoriesDbNativeConnection.admin().ping(),
+          timeoutPromise
+        ]);
+        clearTimeout(timeoutId); // Clear timeout if ping succeeds
+        return inventoriesDbNativeConnection;
+      } catch (error) {
+        clearTimeout(timeoutId); // Clear timeout if ping fails
+        throw error;
+      }
     } catch (pingError) {
       logger.warn('Native inventories connection lost, reconnecting...', 'db.js');
       // Connection is dead, reset and reconnect

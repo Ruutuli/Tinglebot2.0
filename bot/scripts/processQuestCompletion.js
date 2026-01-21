@@ -10,8 +10,8 @@ dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const mongoose = require('mongoose');
 const { Client, GatewayIntentBits } = require('discord.js');
-const { connectToTinglebot } = require('@app/shared/database/db');
-const Quest = require('@app/shared/models/QuestModel');
+const { connectToTinglebot } = require('./shared/database/db');
+const Quest = require('./shared/models/QuestModel');
 const questRewardModule = require('../modules/questRewardModule');
 
 // Initialize Discord client for sending messages
