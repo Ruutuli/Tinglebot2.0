@@ -1186,10 +1186,42 @@ async function initializeRandomEncounterBot(client) {
 }
 
 // ============================================================================
+// Cleanup Function
+// ------------------- Cleanup All Timers -------------------
+function cleanupTimers() {
+  let cleanedCount = 0;
+  
+  if (encounterCheckInterval !== null) {
+    clearInterval(encounterCheckInterval);
+    encounterCheckInterval = null;
+    cleanedCount++;
+  }
+  
+  if (cleanupInterval !== null) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+    cleanedCount++;
+  }
+  
+  if (startupTimeout !== null) {
+    clearTimeout(startupTimeout);
+    startupTimeout = null;
+    cleanedCount++;
+  }
+  
+  if (cleanedCount > 0) {
+    logger.info('SYSTEM', `[randomMonsterEncounters.js] Cleaned up ${cleanedCount} timer(s)`);
+  }
+  
+  return cleanedCount;
+}
+
+// ============================================================================
 // Exports
 // ------------------- Export Functions -------------------
 module.exports = {
   initializeRandomEncounterBot,
+  cleanupTimers,
   trackMessageActivity,
   checkForRandomEncounters,
   triggerRandomEncounter,
