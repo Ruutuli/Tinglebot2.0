@@ -11,8 +11,8 @@ dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const mongoose = require('mongoose');
 
-const { connectToTinglebot } = require('../../shared/database/db');
-const User = require('../../shared/models/UserModel');
+const { connectToTinglebot } = require('@app/shared/database/db');
+const User = require('@app/shared/models/UserModel');
 
 const ARG_DRY_RUN = process.argv.includes('--dry-run');
 const ARG_USER = (() => {

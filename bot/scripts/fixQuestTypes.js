@@ -6,7 +6,7 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Quest = require('../../shared/models/QuestModel');
+const Quest = require('@app/shared/models/QuestModel');
 
 // ============================================================================
 // ------------------- Database Connection -------------------

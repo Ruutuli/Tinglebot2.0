@@ -199,21 +199,38 @@ class MemoryMonitor {
       
       // Extract source location from stack for tracking
       let sourcePattern = 'unknown';
-      let isNodeCronTimer = false;
+      let isCronerTimer = false;
+      let isUndiciTimer = false;
       if (stack) {
         const stackLines = stack.split('\n');
-        // Check if this is a node-cron internal timer (check full stack trace)
-        const hasNodeCron = stack.includes('node-cron') || 
-          stack.includes('node_modules/cron') ||
-          stack.includes('node_modules\\cron') ||
+        // Check if this is a croner timer (scheduler library)
+        const hasCroner = stack.includes('croner') || 
+          stack.includes('node_modules/croner') ||
+          stack.includes('node_modules\\croner') ||
           stackLines.some(line => 
-            line.includes('node-cron') || 
-            line.includes('node_modules/cron') ||
-            line.includes('node_modules\\cron')
+            line.includes('croner') || 
+            line.includes('node_modules/croner') ||
+            line.includes('node_modules\\croner')
           );
         
-        if (hasNodeCron) {
-          isNodeCronTimer = true;
+        if (hasCroner) {
+          isCronerTimer = true;
+        }
+        
+        // Check if this is an undici timer (HTTP client library - expected)
+        const hasUndici = stack.includes('undici') || 
+          stack.includes('node_modules/undici') ||
+          stack.includes('node_modules\\undici') ||
+          stackLines.some(line => 
+            line.includes('undici') || 
+            line.includes('node_modules/undici') ||
+            line.includes('node_modules\\undici') ||
+            line.includes('client-h1.js') ||
+            line.includes('timers.js')
+          );
+        
+        if (hasUndici) {
+          isUndiciTimer = true;
         }
         
         // Skip Error line (0) and our wrapper (1), find the actual caller (2+)
@@ -221,25 +238,24 @@ class MemoryMonitor {
           const line = stackLines[i]?.trim();
           if (!line || line.includes('memoryMonitor.js')) continue; // Skip our wrapper
           
-          // Skip node-cron internal files - they're expected
-          // Also check for common node-cron file patterns
-          if (line.includes('node-cron') || 
-              line.includes('node_modules/cron') || 
-              line.includes('node_modules\\cron') ||
-              line.includes('lib/node-cron') ||
-              line.includes('lib\\node-cron') ||
-              line.match(/[\/\\]cron[\/\\]/)) {
-            isNodeCronTimer = true;
+          // Skip croner internal files - they're expected and don't leak
+          if (line.includes('croner') || 
+              line.includes('node_modules/croner') || 
+              line.includes('node_modules\\croner')) {
+            isCronerTimer = true;
             // Try to find the actual caller that created the cron job by continuing to search
             continue;
           }
           
-          // If the source pattern is scheduler.js and we haven't found node-cron yet,
-          // but this looks like it might be from cron scheduling, mark it
-          if (sourcePattern.includes('scheduler.js') && 
-              (line.includes('schedule') || line.includes('createCronJob'))) {
-            // This is likely a cron job being created, but the timer is from node-cron internals
-            // We'll mark it when we see the actual node-cron code in the stack
+          // Skip undici internal files - they're expected (HTTP client connection management)
+          if (line.includes('undici') || 
+              line.includes('node_modules/undici') || 
+              line.includes('node_modules\\undici') ||
+              line.includes('client-h1.js') ||
+              line.includes('timers.js')) {
+            isUndiciTimer = true;
+            // Try to find the actual caller by continuing to search
+            continue;
           }
           
           // Try multiple stack trace formats
@@ -297,19 +313,26 @@ class MemoryMonitor {
           }
         }
         
-        // If we detected node-cron but couldn't find the actual caller, mark it as node-cron
-        if (isNodeCronTimer && sourcePattern === 'unknown') {
-          sourcePattern = 'node-cron:internal';
-        } else if (isNodeCronTimer) {
-          sourcePattern = `node-cron:${sourcePattern}`;
-        } else if (sourcePattern.includes('scheduler.js:line36') && stack && 
-                   (stack.includes('schedule') || stack.includes('createCronJob') || 
-                    stack.includes('cron.schedule'))) {
-          // If the source is scheduler.js:line36 (import line) but the stack shows cron activity,
-          // this is likely a node-cron timer that we couldn't detect properly
-          // Mark it as node-cron but keep the source for reference
-          isNodeCronTimer = true;
-          sourcePattern = `node-cron:scheduler.js:line36`;
+        // If we detected croner but couldn't find the actual caller, mark it as croner
+        if (isCronerTimer && sourcePattern === 'unknown') {
+          sourcePattern = 'croner:internal';
+        } else if (isCronerTimer) {
+          sourcePattern = `croner:${sourcePattern}`;
+        } else if (sourcePattern.includes('scheduler.js') && stack && 
+                   (stack.includes('Cron') || stack.includes('createCronJob'))) {
+          // If the source is scheduler.js and the stack shows Cron (croner) activity,
+          // mark it as croner
+          if (stack.includes('croner') || stack.includes('Cron')) {
+            isCronerTimer = true;
+            sourcePattern = `croner:scheduler.js:createCronJob`;
+          }
+        }
+        
+        // If we detected undici but couldn't find the actual caller, mark it as undici
+        if (isUndiciTimer && sourcePattern === 'unknown') {
+          sourcePattern = 'undici:internal';
+        } else if (isUndiciTimer && !isCronerTimer) {
+          sourcePattern = `undici:${sourcePattern}`;
         }
         
         // If still unknown and we have stack, log first few lines for debugging (only first few times)
@@ -329,23 +352,26 @@ class MemoryMonitor {
         createdAt: Date.now(),
         stack: stack,
         source: sourcePattern,
-        isNodeCron: isNodeCronTimer
+        isCroner: isCronerTimer,
+        isUndici: isUndiciTimer,
+        isExpected: isCronerTimer || isUndiciTimer // Mark as expected if from known safe sources
       });
       
       // Only log if there's a potential leak (high count) and throttle warnings
-      // Adjust threshold for node-cron timers which are expected during startup
+      // Adjust threshold for croner timers which are expected during startup
       const now = Date.now();
       const count = self.activeTimers.size;
-      const nodeCronTimerCount = Array.from(self.activeTimers.values()).filter(t => t.isNodeCron).length;
-      const nonNodeCronCount = count - nodeCronTimerCount;
+      const cronerTimerCount = Array.from(self.activeTimers.values()).filter(t => t.isCroner).length;
+      const nonCronerCount = count - cronerTimerCount;
       
-      // Use higher threshold if most timers are from node-cron (expected behavior)
-      const effectiveCount = nodeCronTimerCount > count * 0.7 ? nonNodeCronCount : count;
-      const threshold = nodeCronTimerCount > count * 0.7 ? 200 : 100; // Higher threshold if mostly node-cron
+      // Use higher threshold if most timers are from croner (expected behavior)
+      // Croner doesn't leak, so we can include it in normal monitoring
+      const effectiveCount = count;
+      const threshold = 100;
       
       if (self.enabled && effectiveCount > threshold) {
         // Only warn when crossing major thresholds or every 10 seconds
-        // Use effectiveCount for threshold checks to account for node-cron timers
+        // Use effectiveCount for threshold checks
         const majorThresholds = [100, 200, 500, 1000, 2000, 5000, 10000];
         const crossedThreshold = majorThresholds.some(th => 
           effectiveCount >= th && (self.lastTimerWarningCount < th || self.lastTimerWarningCount === 0)
@@ -354,43 +380,56 @@ class MemoryMonitor {
           (now - self.lastTimerWarning > self.warningThrottleMs && effectiveCount > self.lastTimerWarningCount + 100);
         
         if (shouldWarn) {
-          // Get top timer sources (excluding node-cron for cleaner output)
+          // Get top timer sources
           const topSources = Array.from(self.timerSources.entries())
-            .filter(([source]) => !source.startsWith('node-cron:'))
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
             .map(([source, count]) => `${source}: ${count}`)
             .join(', ');
           
-          // Get node-cron timer count
-          const nodeCronCount = Array.from(self.timerSources.entries())
-            .filter(([source]) => source.startsWith('node-cron:'))
+          // Get expected timer counts (croner and undici)
+          const cronerCount = Array.from(self.timerSources.entries())
+            .filter(([source]) => source.startsWith('croner:'))
             .reduce((sum, [, count]) => sum + count, 0);
+          const undiciCount = Array.from(self.timerSources.entries())
+            .filter(([source]) => source.startsWith('undici:'))
+            .reduce((sum, [, count]) => sum + count, 0);
+          const expectedCount = cronerCount + undiciCount;
+          const unexpectedCount = count - expectedCount;
           
-          // Get oldest active timer for diagnosis (prefer non-node-cron timers)
+          // Get oldest active timer for diagnosis (exclude expected timers like croner/undici)
           const allTimers = Array.from(self.activeTimers.values())
             .sort((a, b) => a.createdAt - b.createdAt);
-          const oldestTimer = allTimers.find(t => !t.isNodeCron) || allTimers[0];
+          // Find oldest timer that's NOT from expected sources (croner/undici)
+          const oldestUnexpectedTimer = allTimers.find(t => !t.isExpected) || allTimers[0];
+          const oldestTimer = oldestUnexpectedTimer;
           
-          const nodeCronInfo = nodeCronCount > 0 ? ` (${nodeCronCount} from node-cron - expected)` : '';
-          logger.warn('MEM', `High timeout count detected: ${count} active timers${nodeCronInfo} (${self.timerCount} total created)`);
+          const expectedInfo = expectedCount > 0 
+            ? ` (${cronerCount} croner, ${undiciCount} undici - expected, ${unexpectedCount} other)` 
+            : '';
+          logger.warn('MEM', `High timeout count detected: ${count} active timers${expectedInfo} (${self.timerCount} total created)`);
           
           if (topSources) {
             logger.warn('MEM', `Top timer sources: ${topSources}`);
           }
           
-          if (nodeCronCount > 0 && nodeCronCount > count * 0.5) {
-            logger.info('MEM', `Note: Most timers are from node-cron scheduler (${nodeCronCount}/${count}) - this is expected behavior`);
+          if (expectedCount > 0 && expectedCount > count * 0.5) {
+            logger.info('MEM', `Note: Most timers are from expected sources (${cronerCount} croner, ${undiciCount} undici) - this is safe`);
           }
           
           if (oldestTimer) {
             const age = Math.round((now - oldestTimer.createdAt) / 1000);
-            logger.warn('MEM', `Oldest timer: ${age}s old, source: ${oldestTimer.source}`);
+            const timerType = oldestTimer.isExpected ? 'expected' : 'unexpected';
+            if (!oldestTimer.isExpected) {
+              logger.warn('MEM', `Oldest unexpected timer: ${age}s old, source: ${oldestTimer.source}`);
+            } else {
+              logger.info('MEM', `Oldest timer: ${age}s old, source: ${oldestTimer.source} (${timerType} - safe)`);
+            }
             
-            // Log stack trace of oldest timer if it's very old (potential leak)
-            if (age > 60 && oldestTimer.stack && !oldestTimer.isNodeCron) {
+            // Log stack trace of oldest timer if it's very old and unexpected (potential leak)
+            if (age > 60 && oldestTimer.stack && !oldestTimer.isExpected) {
               const stackPreview = oldestTimer.stack.split('\n').slice(0, 6).join('\n');
-              logger.debug('MEM', `Oldest timer stack trace:\n${stackPreview}`);
+              logger.debug('MEM', `Oldest unexpected timer stack trace:\n${stackPreview}`);
             }
           }
           
@@ -498,16 +537,19 @@ class MemoryMonitor {
     };
     
     // Log memory stats
-    const nodeCronTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isNodeCron).length;
-    const nonNodeCronTimerCount = stats.activeTimers - nodeCronTimerCount;
-    const nodeCronInfo = nodeCronTimerCount > 0 ? ` (${nodeCronTimerCount} node-cron, ${nonNodeCronTimerCount} other)` : '';
+    const cronerTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isCroner).length;
+    const undiciTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isUndici).length;
+    const expectedTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isExpected).length;
+    const unexpectedTimerCount = stats.activeTimers - expectedTimerCount;
+    const timerInfo = expectedTimerCount > 0 
+      ? ` (${cronerTimerCount} croner, ${undiciTimerCount} undici, ${unexpectedTimerCount} other)` 
+      : '';
     logger.info('MEM', `Memory Stats - RSS: ${formatBytes(stats.rss)}, Heap Used: ${formatBytes(stats.heapUsed)}, Heap Total: ${formatBytes(stats.heapTotal)}`);
-    logger.info('MEM', `Active Resources - Intervals: ${stats.activeIntervals}, Timers: ${stats.activeTimers}${nodeCronInfo}, Total Created: ${stats.totalIntervalsCreated} intervals, ${stats.totalTimersCreated} timers`);
+    logger.info('MEM', `Active Resources - Intervals: ${stats.activeIntervals}, Timers: ${stats.activeTimers}${timerInfo}, Total Created: ${stats.totalIntervalsCreated} intervals, ${stats.totalTimersCreated} timers`);
     
-    // Log top timer sources if there are many active timers (excluding node-cron for cleaner output)
+    // Log top timer sources if there are many active timers
     if (stats.activeTimers > 50) {
       const topTimerSources = Array.from(this.timerSources.entries())
-        .filter(([source]) => !source.startsWith('node-cron:'))
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
         .map(([source, count]) => `${source}: ${count}`)
@@ -515,16 +557,16 @@ class MemoryMonitor {
       if (topTimerSources) {
         logger.info('MEM', `Top timer sources: ${topTimerSources}`);
       }
-      // Also show node-cron count if significant
-      if (nodeCronTimerCount > 0) {
-        const nodeCronSources = Array.from(this.timerSources.entries())
-          .filter(([source]) => source.startsWith('node-cron:'))
+      // Also show croner count if significant
+      if (cronerTimerCount > 0) {
+        const cronerSources = Array.from(this.timerSources.entries())
+          .filter(([source]) => source.startsWith('croner:'))
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3)
           .map(([source, count]) => `${source}: ${count}`)
           .join(', ');
-        if (nodeCronSources) {
-          logger.info('MEM', `Node-cron timer sources: ${nodeCronSources} (expected behavior with timezone support)`);
+        if (cronerSources) {
+          logger.info('MEM', `Croner timer sources: ${cronerSources} (expected behavior)`);
         }
       }
     }
@@ -589,17 +631,14 @@ class MemoryMonitor {
       logger.warn('MEM', `Memory growth detected: ${formatBytes(growth.growth)} over ${Math.round(growth.duration / 1000)}s (${formatBytes(growth.ratePerMinute)}/min)`);
     }
     
-    // Warn about timer leaks (excluding node-cron timers)
+    // Warn about timer leaks
     if (timerLeak.hasLeak) {
-      const nodeCronCount = Array.from(this.activeTimers.values()).filter(t => t.isNodeCron).length;
-      const nodeCronInfo = nodeCronCount > 0 ? ` (${nodeCronCount} from node-cron - expected, ${timerLeak.nonNodeCronCount || timerLeak.activeCount} non-node-cron)` : '';
-      logger.warn('MEM', `Potential timer leak detected: ${timerLeak.activeCount} active ${timerLeak.type}${nodeCronInfo} (${timerLeak.createdCount} total created)`);
+      logger.warn('MEM', `Potential timer leak detected: ${timerLeak.activeCount} active ${timerLeak.type} (${timerLeak.createdCount} total created)`);
       
       // Log detailed analysis when leak is detected
-      if (timerLeak.type === 'timers' && (timerLeak.nonNodeCronCount || timerLeak.activeCount) > 200) {
-        // Get top sources (excluding node-cron)
+      if (timerLeak.type === 'timers' && timerLeak.activeCount > 200) {
+        // Get top sources
         const topSources = Array.from(this.timerSources.entries())
-          .filter(([source]) => !source.startsWith('node-cron:'))
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
           .map(([source, count]) => `${source}: ${count}`)
@@ -663,11 +702,10 @@ class MemoryMonitor {
       .map(i => ({ ...i, age: now - i.createdAt }))
       .sort((a, b) => b.age - a.age);
     
-    // Filter out node-cron timers - they're expected behavior, not leaks
-    // node-cron with timezone support creates many internal timers for scheduling
-    const nonNodeCronTimers = Array.from(this.activeTimers.values())
-      .filter(t => !t.isNodeCron);
-    const timerAge = nonNodeCronTimers
+    // Get all timers, but exclude expected ones (croner/undici) for leak detection
+    const allTimers = Array.from(this.activeTimers.values());
+    const unexpectedTimers = allTimers.filter(t => !t.isExpected);
+    const timerAge = unexpectedTimers
       .map(t => ({ ...t, age: now - t.createdAt }))
       .sort((a, b) => b.age - a.age);
     
@@ -685,17 +723,17 @@ class MemoryMonitor {
       }
     }
     
-    // Check timers (excluding node-cron timers which are expected)
-    // node-cron with timezone creates many timers per job, so we only check non-node-cron timers
-    if (nonNodeCronTimers.length > 50) {
+    // Check timers (exclude expected timers like croner/undici)
+    // Only check unexpected timers for leaks
+    if (unexpectedTimers.length > 50) {
       const oldTimers = timerAge.filter(t => t.age > 1 * 60 * 1000); // Older than 1 minute
       if (oldTimers.length > 20) {
         return {
           hasLeak: true,
           type: 'timers',
           activeCount: this.activeTimers.size,
+          unexpectedCount: unexpectedTimers.length,
           createdCount: this.timerCount,
-          nonNodeCronCount: nonNodeCronTimers.length,
           oldest: timerAge[0]
         };
       }

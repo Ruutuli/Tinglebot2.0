@@ -5,20 +5,20 @@
 // Core dependencies
 const dotenv = require("dotenv");
 const path = require("path");
-const { Cron } = require("croner");
+const { createCronJob: createCronJobWrapper, shutdownCroner } = require("./scheduler/croner");
 const { v4: uuidv4 } = require("uuid");
 
 // Discord.js
 const { EmbedBuilder } = require("discord.js");
 
 // Database models
-const Character = require("../shared/models/CharacterModel");
-const Pet = require("../shared/models/PetModel");
-const Raid = require("../shared/models/RaidModel");
-const RuuGame = require("../shared/models/RuuGameModel");
-const HelpWantedQuest = require('../shared/models/HelpWantedQuestModel');
-const ItemModel = require('../shared/models/ItemModel');
-const Weather = require('../shared/models/WeatherModel');
+const Character = require("@app/shared/models/CharacterModel");
+const Pet = require("@app/shared/models/PetModel");
+const Raid = require("@app/shared/models/RaidModel");
+const RuuGame = require("@app/shared/models/RuuGameModel");
+const HelpWantedQuest = require('@app/shared/models/HelpWantedQuestModel');
+const ItemModel = require('@app/shared/models/ItemModel');
+const Weather = require('@app/shared/models/WeatherModel');
 
 // Database functions
 const {
@@ -27,7 +27,7 @@ const {
  connectToInventories,
  getCharacterInventoryCollection,
  fetchItemByName,
-} = require("../shared/database/db");
+} = require("@app/shared/database/db");
 
 // Handlers
 const {
@@ -61,34 +61,33 @@ const { addBoostFlavorText, buildFooterText } = require('./embeds/embeds');
 const { generateBoostFlavorText } = require('./modules/flavorTextModule');
 
 // Utilities
-const { safeAppendDataToSheet, extractSpreadsheetId } = require('../shared/utils/googleSheetsUtils');
-const { logItemAcquisitionToDatabase } = require('../shared/utils/inventoryUtils');
+const { safeAppendDataToSheet, extractSpreadsheetId } = require('@app/shared/utils/googleSheetsUtils');
+const { logItemAcquisitionToDatabase } = require('@app/shared/utils/inventoryUtils');
 
 // Services
-const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("../shared/services/weatherService");
+const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("@app/shared/services/weatherService");
 
 // Village modules
 const { damageVillage, Village } = require('./modules/villageModule');
 
 // Utils
-const { handleError } = require("../shared/utils/globalErrorHandler");
-const { sendUserDM } = require("../shared/utils/messageUtils");
-const { checkExpiredRequests } = require("../shared/utils/expirationHandler");
-const { isValidImageUrl } = require("../shared/utils/validation");
-const notificationService = require("../shared/utils/notificationService");
-const logger = require("../shared/utils/logger");
-const { releaseFromJail, DEFAULT_JAIL_DURATION_MS } = require("../shared/utils/jailCheck");
+const { handleError } = require("@app/shared/utils/globalErrorHandler");
+const { sendUserDM } = require("@app/shared/utils/messageUtils");
+const { checkExpiredRequests } = require("@app/shared/utils/expirationHandler");
+const { isValidImageUrl } = require("@app/shared/utils/validation");
+const notificationService = require("@app/shared/utils/notificationService");
+const logger = require("@app/shared/utils/logger");
+const { releaseFromJail, DEFAULT_JAIL_DURATION_MS } = require("@app/shared/utils/jailCheck");
 const {
- cleanupExpiredEntries,
  cleanupExpiredHealingRequests,
  cleanupExpiredBoostingRequests,
  getBoostingStatistics,
  archiveOldBoostingRequests,
-} = require("../shared/utils/storage");
+} = require("@app/shared/utils/storage");
 const {
  retryPendingSheetOperations,
  getPendingSheetOperationsCount,
-} = require("../shared/utils/googleSheetsUtils");
+} = require("@app/shared/utils/googleSheetsUtils");
 
 // Constants
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
@@ -109,6 +108,9 @@ const BLOOD_MOON_CHANNELS = [
 
 // Monthly quest posting (uses existing postQuests function)
 const { postQuests } = require('./scripts/questAnnouncements');
+
+// Agenda for one-time scheduled jobs
+const { getAgenda } = require('./scheduler/agenda');
 
 // ============================================================================
 // ------------------- Environment Setup -------------------
@@ -133,22 +135,31 @@ try {
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
-// Track all cron jobs to prevent leaks
+// Track all cron jobs to prevent leaks (for backward compatibility)
 const activeCronJobs = new Set();
 let isSchedulerInitialized = false;
 
+/**
+ * Create a cron job using the Croner wrapper
+ * Wraps the wrapper to maintain backward compatibility with existing code
+ * @param {string} schedule - Cron pattern
+ * @param {string} jobName - Unique name for the job
+ * @param {Function} jobFunction - Function to execute
+ * @param {string|Object} timezone - Timezone string or options object
+ * @returns {Object} The created Cron instance (from croner library)
+ */
 function createCronJob(
  schedule,
  jobName,
  jobFunction,
  timezone = "America/New_York"
 ) {
- const task = new Cron(
+ // Adapt signature: wrapper expects (name, pattern, fn, options)
+ const options = typeof timezone === 'string' ? { timezone } : timezone;
+ 
+ const task = createCronJobWrapper(
+  jobName,
   schedule,
-  {
-    timezone: timezone,
-    catch: true, // Automatically catch errors
-  },
   async () => {
    try {
     await jobFunction();
@@ -156,10 +167,11 @@ function createCronJob(
     handleError(error, "scheduler.js");
     logger.error('SCHEDULER', `[scheduler.js]❌ ${jobName} failed:`, error.message);
    }
-  }
+  },
+  options
  );
  
- // Track the cron job instance
+ // Track the cron job instance (for backward compatibility)
  activeCronJobs.add(task);
  
  return task;
@@ -580,15 +592,8 @@ async function checkAndPostWeatherOnRestart(client) {
   const windowCheck = isWithinWeatherPostingWindow();
   
   if (!windowCheck.valid) {
-   const now = new Date();
-   const estTime = getESTDate(now);
-   const currentHour = estTime.getHours();
-   const currentMinute = estTime.getMinutes();
-   logger.info('WEATHER', `Restart check skipped - outside valid posting window (${currentHour}:${String(currentMinute).padStart(2, '0')} EST). Valid windows: 8:00-8:15 AM or 8:00-8:15 PM EST`);
    return 0;
   }
-  
-  logger.info('WEATHER', `Restart check within valid ${windowCheck.window} posting window, proceeding...`);
   
   // Restart check with checkExisting=true will:
   // - Skip if weather exists and is already posted
@@ -748,7 +753,7 @@ async function cleanupFinishedMinigameSessions() {
  try {
   logger.info('CLEANUP', 'Minigame cleanup');
   
-  const Minigame = require('../shared/models/MinigameModel');
+  const Minigame = require('@app/shared/models/MinigameModel');
   const result = await Minigame.cleanupOldSessions();
   
   if (result.deletedCount === 0) {
@@ -775,8 +780,8 @@ async function runDailyCleanupTasks(client) {
  try {
   logger.info('CLEANUP', 'Running daily cleanup tasks...');
   
+  // Note: cleanupExpiredEntries() removed - TTL index handles TempData expiresAt automatically
   const results = await Promise.all([
-   cleanupExpiredEntries(),
    cleanupExpiredHealingRequests(),
    checkExpiredRequests(client),
    cleanupExpiredBlightRequests(client),
@@ -825,7 +830,7 @@ async function distributeMonthlyBoostRewards(client) {
     
     logger.info('BOOST', `Found ${boosters.size} active booster(s)`);
     
-    const User = require('../shared/models/UserModel');
+    const User = require('@app/shared/models/UserModel');
     const now = new Date();
     const nowEST = getESTDate(now);
     const currentMonth = `${nowEST.getFullYear()}-${String(nowEST.getMonth() + 1).padStart(2, '0')}`;
@@ -1014,7 +1019,7 @@ async function handleBirthdayRoleAssignment(client) {
     logger.info('SCHEDULER', `Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
     
     // Get all users with birthdays today
-    const User = require('../shared/models/UserModel');
+    const User = require('@app/shared/models/UserModel');
     const usersWithBirthdays = await User.find({
       'birthday.month': month,
       'birthday.day': day
@@ -1190,7 +1195,7 @@ async function handleBirthdayRoleRemoval(client) {
     logger.info('CLEANUP', `Removing birthday roles from users whose birthday was yesterday (${yesterdayDateStr})`);
     
     // Get all users whose birthday was yesterday
-    const User = require('../shared/models/UserModel');
+    const User = require('@app/shared/models/UserModel');
     const usersWithBirthdaysYesterday = await User.find({
       'birthday.month': yesterdayMonth,
       'birthday.day': yesterdayDay
@@ -1308,7 +1313,7 @@ async function executeBirthdayAnnouncements(client) {
   logger.info('SCHEDULER', `Found ${characters.length} characters with birthday on ${today}`);
   
   // Also check for mod characters with birthdays
-  const ModCharacter = require('../shared/models/ModCharacterModel');
+  const ModCharacter = require('@app/shared/models/ModCharacterModel');
   const modCharacters = await ModCharacter.find({ birthday: today });
   logger.info('SCHEDULER', `Found ${modCharacters.length} mod characters with birthday on ${today}`);
   
@@ -1692,6 +1697,127 @@ async function handleBuffExpiry(client) {
   }
 }
 
+// ============================================================================
+// ------------------- Agenda Helper Functions -------------------
+// ============================================================================
+
+/**
+ * Schedule a jail release job in Agenda
+ * @param {Object} character - Character object with _id, userId, jailReleaseTime
+ * @returns {Promise<void>}
+ */
+async function scheduleJailRelease(character) {
+  if (!character.jailReleaseTime || !character.inJail) {
+    return; // Nothing to schedule
+  }
+
+  const agenda = getAgenda();
+  if (!agenda) {
+    logger.warn('SCHEDULER', 'Agenda not initialized, cannot schedule jail release');
+    return;
+  }
+
+  try {
+    // Cancel any existing job for this character
+    await agenda.cancel({ 
+      name: 'releaseFromJail',
+      'data.characterId': character._id.toString()
+    });
+
+    // Schedule new job
+    await agenda.schedule(character.jailReleaseTime, 'releaseFromJail', {
+      characterId: character._id.toString(),
+      userId: character.userId,
+    });
+
+    logger.info('SCHEDULER', `Scheduled jail release for ${character.name} at ${character.jailReleaseTime}`);
+  } catch (error) {
+    logger.error('SCHEDULER', `Error scheduling jail release for ${character.name}:`, error.message);
+    handleError(error, 'scheduler.js', {
+      functionName: 'scheduleJailRelease',
+      characterId: character._id?.toString(),
+    });
+  }
+}
+
+/**
+ * Schedule a debuff expiry job in Agenda
+ * @param {Object} character - Character object with _id, userId, debuff.endDate
+ * @returns {Promise<void>}
+ */
+async function scheduleDebuffExpiry(character) {
+  if (!character.debuff || !character.debuff.active || !character.debuff.endDate) {
+    return; // Nothing to schedule
+  }
+
+  const agenda = getAgenda();
+  if (!agenda) {
+    logger.warn('SCHEDULER', 'Agenda not initialized, cannot schedule debuff expiry');
+    return;
+  }
+
+  try {
+    // Cancel any existing job for this character
+    await agenda.cancel({ 
+      name: 'expireDebuff',
+      'data.characterId': character._id.toString()
+    });
+
+    // Schedule new job
+    await agenda.schedule(character.debuff.endDate, 'expireDebuff', {
+      characterId: character._id.toString(),
+      userId: character.userId,
+    });
+
+    logger.info('SCHEDULER', `Scheduled debuff expiry for ${character.name} at ${character.debuff.endDate}`);
+  } catch (error) {
+    logger.error('SCHEDULER', `Error scheduling debuff expiry for ${character.name}:`, error.message);
+    handleError(error, 'scheduler.js', {
+      functionName: 'scheduleDebuffExpiry',
+      characterId: character._id?.toString(),
+    });
+  }
+}
+
+/**
+ * Schedule a buff expiry job in Agenda
+ * @param {Object} character - Character object with _id, userId, buff.endDate
+ * @returns {Promise<void>}
+ */
+async function scheduleBuffExpiry(character) {
+  if (!character.buff || !character.buff.active || !character.buff.endDate) {
+    return; // Nothing to schedule
+  }
+
+  const agenda = getAgenda();
+  if (!agenda) {
+    logger.warn('SCHEDULER', 'Agenda not initialized, cannot schedule buff expiry');
+    return;
+  }
+
+  try {
+    // Cancel any existing job for this character
+    await agenda.cancel({ 
+      name: 'expireBuff',
+      'data.characterId': character._id.toString()
+    });
+
+    // Schedule new job
+    await agenda.schedule(character.buff.endDate, 'expireBuff', {
+      characterId: character._id.toString(),
+      userId: character.userId,
+    });
+
+    logger.info('SCHEDULER', `Scheduled buff expiry for ${character.name} at ${character.buff.endDate}`);
+  } catch (error) {
+    logger.error('SCHEDULER', `Error scheduling buff expiry for ${character.name}:`, error.message);
+    handleError(error, 'scheduler.js', {
+      functionName: 'scheduleBuffExpiry',
+      characterId: character._id?.toString(),
+    });
+  }
+}
+
 async function resetDailyRolls(client) {
  try {
   const characters = await Character.find({});
@@ -1821,11 +1947,20 @@ async function setupBoostingScheduler(client) {
    // Clean up old file-based boosting requests
    const stats = cleanupExpiredBoostingRequests();
    
-   // Clean up TempData boosting requests
-   const TempData = require('../shared/models/TempDataModel');
-   const tempDataResult = await TempData.cleanupByType('boosting');
+   // Clean up TempData boosting requests (only special status cases - TTL handles expiresAt)
+   // TTL automatically deletes documents with expired expiresAt, so we only need to handle:
+   // - status: 'expired' (regardless of expiresAt)
+   // - status: 'fulfilled' with expired boostExpiresAt
+   const TempData = require('@app/shared/models/TempDataModel');
+   const tempDataResult = await TempData.deleteMany({
+     type: 'boosting',
+     $or: [
+       { 'data.status': 'expired' },
+       { 'data.status': 'fulfilled', 'data.boostExpiresAt': { $lt: Date.now() } }
+     ]
+   });
    
-   logger.success('CLEANUP', `Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}, TempData boosting deleted: ${tempDataResult.deletedCount || 0}`);
+   logger.success('CLEANUP', `Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}, TempData special cases deleted: ${tempDataResult.deletedCount || 0} (TTL handles expiresAt automatically)`);
   } catch (error) {
    handleError(error, "scheduler.js");
    logger.error('CLEANUP', 'Error during boost cleanup', error);
@@ -1853,35 +1988,9 @@ async function setupBoostingScheduler(client) {
   }
  });
 
- // Additional cleanup every 6 hours for TempData boosting requests
- createCronJob("0 */6 * * *", "TempData Boost Cleanup", async () => {
-  try {
-   logger.info('CLEANUP', 'Starting TempData boost cleanup');
-   const TempData = require('../shared/models/TempDataModel');
-   const result = await TempData.cleanupByType('boosting');
-   if (result.deletedCount > 0) {
-     logger.success('CLEANUP', `TempData boost cleanup complete - Deleted: ${result.deletedCount}`);
-   }
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   logger.error('CLEANUP', 'Error during TempData boost cleanup', error);
-  }
- });
-
- // Hourly cleanup for boosting data to ensure expired boosts are removed quickly
- createCronJob("0 * * * *", "Hourly Boost Cleanup", async () => {
-  try {
-   logger.info('CLEANUP', 'Starting hourly boost cleanup');
-   const TempData = require('../shared/models/TempDataModel');
-   const result = await TempData.cleanupByType('boosting');
-   if (result.deletedCount > 0) {
-     logger.success('CLEANUP', `Hourly boost cleanup complete - Deleted: ${result.deletedCount}`);
-   }
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   logger.error('CLEANUP', 'Error during hourly boost cleanup', error);
-  }
- });
+ // Note: Removed hourly and 6-hour TempData cleanup crons
+ // TTL index now automatically deletes expired TempData documents (including boosting)
+ // Daily cleanup above handles special boosting status cases that TTL can't handle
 }
 
 // ============================================================================
@@ -2004,7 +2113,7 @@ async function checkQuestCompletions(client) {
   try {
     logger.info('QUEST', 'Checking quest completions...');
     
-    const Quest = require('../shared/models/QuestModel');
+    const Quest = require('@app/shared/models/QuestModel');
     const questRewardModule = require('./modules/questRewardModule');
     
     const activeQuests = await Quest.find({ status: 'active' });
@@ -2066,7 +2175,7 @@ async function checkVillageTracking(client) {
   try {
     logger.info('SCHEDULER', 'Starting village tracking check...');
     
-    const Quest = require('../shared/models/QuestModel');
+    const Quest = require('@app/shared/models/QuestModel');
     
     // Find all active RP quests
     const activeRPQuests = await Quest.find({ 
@@ -2549,7 +2658,7 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     }
     
     // Check if any users have already received rewards this month
-    const User = require('../shared/models/UserModel');
+    const User = require('@app/shared/models/UserModel');
     const sampleUsers = await User.find({ 
       'boostRewards.lastRewardMonth': currentMonth 
     }).limit(1);
@@ -2579,9 +2688,7 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
 
 async function runStartupChecks(client) {
  try {
-  logger.separator('═', 60);
-  logger.section('🗓️ SCHEDULER STARTUP');
-  logger.separator('═', 60);
+  logger.info('SCHEDULER', 'Running startup checks...');
   
   // Raid expiration check (critical - do this first in case bot restarted during a raid)
   await cleanupExpiredRaids(client);
@@ -2590,22 +2697,92 @@ async function runStartupChecks(client) {
   // Only manage channel names - the scheduled 8 PM job handles announcements
   const isBloodMoonActive = isBloodMoonDay();
   if (isBloodMoonActive) {
-    // Blood Moon is currently active, just rename channels if needed
-    logger.info('BLOODMOON', 'Startup: Blood Moon is active - renaming channels only');
     await renameChannels(client);
   } else {
-    // No active Blood Moon, revert channel names
-    logger.info('BLOODMOON', 'Startup: No active Blood Moon - reverting channel names');
     await revertChannelNames(client);
   }
 
   // Check and distribute monthly boost rewards if not done yet this month
   await checkAndDistributeMonthlyBoostRewards(client);
 
-  // Character and quest startup tasks
+  // Backfill Agenda jobs for existing future events (jail releases, debuff/buff expiry)
+  try {
+    logger.info('SCHEDULER', 'Backfilling Agenda jobs for existing future events...');
+    const now = new Date();
+    
+    // Find characters with future jail release times
+    const charactersInJail = await Character.find({
+      inJail: true,
+      jailReleaseTime: { $gt: now }
+    });
+    
+    let scheduledCount = 0;
+    for (const character of charactersInJail) {
+      try {
+        await scheduleJailRelease(character);
+        scheduledCount++;
+      } catch (error) {
+        logger.warn('SCHEDULER', `Failed to backfill jail release for ${character.name}: ${error.message}`);
+      }
+    }
+    
+    if (scheduledCount > 0) {
+      logger.success('SCHEDULER', `Backfilled ${scheduledCount} jail release job(s)`);
+    }
+    
+    // Find characters with active debuffs and future end dates
+    const charactersWithDebuffs = await Character.find({
+      'debuff.active': true,
+      'debuff.endDate': { $gt: now }
+    });
+    
+    scheduledCount = 0;
+    for (const character of charactersWithDebuffs) {
+      try {
+        await scheduleDebuffExpiry(character);
+        scheduledCount++;
+      } catch (error) {
+        logger.warn('SCHEDULER', `Failed to backfill debuff expiry for ${character.name}: ${error.message}`);
+      }
+    }
+    
+    if (scheduledCount > 0) {
+      logger.success('SCHEDULER', `Backfilled ${scheduledCount} debuff expiry job(s)`);
+    }
+    
+    // Find characters with active buffs and future end dates
+    const charactersWithBuffs = await Character.find({
+      'buff.active': true,
+      'buff.endDate': { $gt: now }
+    });
+    
+    scheduledCount = 0;
+    for (const character of charactersWithBuffs) {
+      try {
+        await scheduleBuffExpiry(character);
+        scheduledCount++;
+      } catch (error) {
+        logger.warn('SCHEDULER', `Failed to backfill buff expiry for ${character.name}: ${error.message}`);
+      }
+    }
+    
+    if (scheduledCount > 0) {
+      logger.success('SCHEDULER', `Backfilled ${scheduledCount} buff expiry job(s)`);
+    }
+    
+    logger.success('SCHEDULER', 'Agenda backfill completed');
+  } catch (backfillError) {
+    logger.error('SCHEDULER', 'Error during Agenda backfill', backfillError.message);
+    handleError(backfillError, 'scheduler.js', {
+      functionName: 'runStartupChecks',
+      operation: 'agendaBackfill'
+    });
+  }
+
+  // Character and quest startup tasks (these handle expired items as fallback)
   await Promise.all([
-   handleDebuffExpiry(client),
-   handleBuffExpiry(client),
+   handleDebuffExpiry(client), // Fallback: process any that expired while bot was down
+   handleBuffExpiry(client),   // Fallback: process any that expired while bot was down
    checkAndGenerateDailyQuests(),
    checkAndPostMissedQuests(client),
    handleQuestExpirationAtMidnight(client)
@@ -2614,9 +2791,7 @@ async function runStartupChecks(client) {
   // Check if blight ping was missed (fallback mechanism)
   await checkAndPostMissedBlightPing(client);
 
-  logger.separator('═', 60);
-  logger.success('SCHEDULER', '✨ Startup checks complete');
-  logger.separator('═', 60);
+  logger.success('SCHEDULER', 'Startup checks complete');
  } catch (error) {
   handleError(error, "scheduler.js");
   logger.error('SCHEDULER', 'Startup checks failed', error.message);
@@ -2627,7 +2802,7 @@ async function runStartupChecks(client) {
 
 function setupDailyTasks(client) {
  // Daily tasks at midnight
- createCronJob("0 0 * * *", "jail release check", () => handleJailRelease(client));
+ // Note: jail release is now handled by Agenda (scheduled at exact release time)
  createCronJob("0 0 * * *", "reset pet last roll dates", () => resetPetLastRollDates(client));
  createCronJob("0 0 * * *", "birthday role assignment", () => handleBirthdayRoleAssignment(client));
  createCronJob("0 0 * * *", "birthday announcements", () => executeBirthdayAnnouncements(client));
@@ -2668,8 +2843,7 @@ function setupDailyTasks(client) {
  createCronJob("0 8 * * *", "daily stamina recovery", () => recoverDailyStamina(client));
 
  // Daily tasks at 5 AM
- createCronJob("0 5 * * *", "debuff expiry check", () => handleDebuffExpiry(client));
- createCronJob("0 5 * * *", "buff expiry check", () => handleBuffExpiry(client));
+ // Note: debuff/buff expiry are now handled by Agenda (scheduled at exact expiry time)
  createCronJob("0 5 * * *", "reset global steal protections", () => {
   logger.info('CLEANUP', 'Starting global steal protection reset');
   try {
@@ -2870,7 +3044,13 @@ module.exports = {
  generateDailyQuestsAtMidnight,
  checkAndPostMissedQuests,
  cleanupOldRuuGameSessions,
- cleanupExpiredRaids,
- distributeMonthlyBoostRewards,
- checkAndDistributeMonthlyBoostRewards,
+  cleanupExpiredRaids,
+  distributeMonthlyBoostRewards,
+  checkAndDistributeMonthlyBoostRewards,
+  // Agenda helper functions
+  scheduleJailRelease,
+  scheduleDebuffExpiry,
+  scheduleBuffExpiry,
+  // Utility functions
+  getVillageChannelId,
 };

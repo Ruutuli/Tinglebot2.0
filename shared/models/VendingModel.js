@@ -92,6 +92,9 @@ const vendingRequestSchema = new Schema({
   artLink: { type: String } // Discord message link for art payments
 });
 
+// TTL index: automatically delete expired vending requests
+vendingRequestSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 // ------------------- Create and export the VendingRequest model -------------------
 const VendingRequest = mongoose.model('VendingRequest', vendingRequestSchema);
 

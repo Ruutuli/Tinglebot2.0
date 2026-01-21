@@ -8,17 +8,17 @@
 // // Core Discord.js objects for building commands and message embeds.
 // const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 
-// const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
-// const { enforceJail } = require('../../../shared/utils/jailCheck');
+// const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
+// const { enforceJail } = require('@app/shared/utils/jailCheck');
 // // ------------------- Database Services -------------------
 // // Services for retrieving character data.
-// const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../../../shared/database/db');
+// const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('@app/shared/database/db');
 
 // // ------------------- Modules -------------------
 // // Combat module functions (alphabetized within this group).
 // const { getBattleProgressById, startPvPBattle, takePvPTurn, getTotalDefense  } = require('../../modules/pvpCombatModule');
 // const { getGearModLevel } = require('../../modules/gearModule');
-// const { checkInventorySync } = require('../../../shared/utils/characterUtils');
+// const { checkInventorySync } = require('@app/shared/utils/characterUtils');
 
 // // ============================================================================
 // // /combat Command Definition and Execution

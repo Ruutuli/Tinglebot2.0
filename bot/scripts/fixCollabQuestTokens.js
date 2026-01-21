@@ -5,19 +5,19 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const ApprovedSubmission = require('../../shared/models/ApprovedSubmissionModel');
-const Quest = require('../../shared/models/QuestModel');
-const User = require('../../shared/models/UserModel');
+const ApprovedSubmission = require('@app/shared/models/ApprovedSubmissionModel');
+const Quest = require('@app/shared/models/QuestModel');
+const User = require('@app/shared/models/UserModel');
 const { 
   getQuestBonus, 
   getCollabBonus, 
   calculateWritingTokensWithCollab,
   calculateTokens 
-} = require('../../shared/utils/tokenUtils');
+} = require('@app/shared/utils/tokenUtils');
 const { 
   appendEarnedTokens, 
   updateTokenBalance 
-} = require('../../shared/database/db');
+} = require('@app/shared/database/db');
 
 // ============================================================================
 // ------------------- Database Connection -------------------

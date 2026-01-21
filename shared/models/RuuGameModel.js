@@ -56,6 +56,10 @@ ruuGameSchema.index({ channelId: 1 });
 ruuGameSchema.index({ status: 1 });
 ruuGameSchema.index({ expiresAt: 1 });
 
+// TTL index: automatically delete expired game sessions (MongoDB handles this)
+// Note: Finished games are still cleaned up by cleanupOldSessions() method
+ruuGameSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 // ------------------- Static methods for cleanup -------------------
 ruuGameSchema.statics.cleanupOldSessions = async function() {
   const now = new Date();

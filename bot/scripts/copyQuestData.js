@@ -5,8 +5,8 @@ dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 const mongoose = require('mongoose');
 
 // Import database connection
-const { connectToTinglebot } = require('../../shared/database/db');
-const User = require('../../shared/models/UserModel');
+const { connectToTinglebot } = require('@app/shared/database/db');
+const User = require('@app/shared/models/UserModel');
 
 // Source user (where quest data is copied FROM)
 const SOURCE_DISCORD_ID = '253315643351236608';

@@ -4,10 +4,10 @@
 // ============================================================================
 
 const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, InteractionType } = require('discord.js');
-const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../../../shared/database/db');
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
-const { syncToInventoryDatabase } = require('../../../shared/utils/inventoryUtils');
-const { checkInventorySync } = require('../../../shared/utils/characterUtils');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection } = require('@app/shared/database/db');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
+const { syncToInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
+const { checkInventorySync } = require('@app/shared/utils/characterUtils');
 
 // ============================================================================
 // ------------------- Command Definition -------------------

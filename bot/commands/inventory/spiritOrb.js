@@ -1,21 +1,21 @@
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
 // ------------------- Models -------------------
-const Character = require('../../../shared/models/CharacterModel');
+const Character = require('@app/shared/models/CharacterModel');
 
 // ------------------- Services -------------------
-const { getCharacterInventoryCollection } = require('../../../shared/database/db');
+const { getCharacterInventoryCollection } = require('@app/shared/database/db');
 
 // ------------------- Modules -------------------
 const { exchangeSpiritOrbs } = require('../../modules/characterStatsModule');
 
 // ------------------- Add Google Sheets Logging -------------------
-const { authorizeSheets, appendSheetData, extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet  } = require('../../../shared/utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet  } = require('@app/shared/utils/googleSheetsUtils');
 const { v4: uuidv4 } = require('uuid');
 
-const { checkInventorySync } = require('../../../shared/utils/characterUtils');
+const { checkInventorySync } = require('@app/shared/utils/characterUtils');
 
 // ------------------- Slash Command Definition -------------------
 const data = new SlashCommandBuilder()

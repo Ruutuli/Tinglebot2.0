@@ -7,8 +7,8 @@ const dotenv = require('dotenv');
 const envPath = path.resolve(__dirname, '..', '..', '.env');
 dotenv.config({ path: envPath });
 
-const { connectToTinglebot } = require('../../shared/database/db');
-const User = require('../../shared/models/UserModel');
+const { connectToTinglebot } = require('@app/shared/database/db');
+const User = require('@app/shared/models/UserModel');
 const mongoose = require('mongoose');
 
 // ------------------- Function: calculateExpirationDateEST -------------------

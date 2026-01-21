@@ -4,15 +4,15 @@
 // ============================================================================
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
-const { escapeRegExp, logItemAcquisitionToDatabase } = require('../../../shared/utils/inventoryUtils');
-const User = require('../../../shared/models/UserModel');
-const Character = require('../../../shared/models/CharacterModel');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
+const { escapeRegExp, logItemAcquisitionToDatabase } = require('@app/shared/utils/inventoryUtils');
+const User = require('@app/shared/models/UserModel');
+const Character = require('@app/shared/models/CharacterModel');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
-const HelpWantedQuest = require('../../../shared/models/HelpWantedQuestModel');
-const { getWeatherWithoutGeneration } = require('../../../shared/services/weatherService');
-const VillageShopItem = require('../../../shared/models/VillageShopsModel');
-const TempData = require('../../../shared/models/TempDataModel');
+const HelpWantedQuest = require('@app/shared/models/HelpWantedQuestModel');
+const { getWeatherWithoutGeneration } = require('@app/shared/services/weatherService');
+const VillageShopItem = require('@app/shared/models/VillageShopsModel');
+const TempData = require('@app/shared/models/TempDataModel');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -261,7 +261,7 @@ async function validateQuestRequirements(character, quest) {
  * @returns {Promise<{requirementsMet: boolean, message: string}>}
  */
 async function validateItemQuestRequirements(character, quest) {
-  const { connectToInventories } = require('../../../shared/database/db');
+  const { connectToInventories } = require('@app/shared/database/db');
   
   try {
     const inventoriesConnection = await connectToInventories();
@@ -332,7 +332,7 @@ function validateEscortQuestRequirements(character, quest) {
  * @returns {Promise<{requirementsMet: boolean, message: string}>}
  */
 async function validateCraftingQuestRequirements(character, quest) {
-  const { connectToInventories } = require('../../../shared/database/db');
+  const { connectToInventories } = require('@app/shared/database/db');
   
   try {
     console.log(`[helpWanted.js]: 🔍 CRAFTING QUEST VALIDATION DEBUG`);
@@ -436,8 +436,8 @@ async function removeQuestItems(character, quest, interaction) {
   }
   
   try {
-    const { connectToInventories } = require('../../../shared/database/db');
-    const { removeItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils');
+    const { connectToInventories } = require('@app/shared/database/db');
+    const { removeItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
     
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
@@ -981,7 +981,7 @@ async function generateLootedItem(encounteredMonster, weightedItems) {
     
     // Fetch the correct emoji from the database for the jelly type
     try {
-      const ItemModel = require('../../../shared/models/ItemModel');
+      const ItemModel = require('@app/shared/models/ItemModel');
       const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
       if (jellyItem && jellyItem.emoji) {
         lootedItem.emoji = jellyItem.emoji;
@@ -1005,7 +1005,7 @@ async function generateLootedItem(encounteredMonster, weightedItems) {
  * @returns {Promise<Object>} Encounter outcome
  */
 async function processMonsterEncounter(character, monsterName, heartsRemaining) {
-  const { fetchMonsterByName, fetchItemsByMonster } = require('../../../shared/database/db.js');
+  const { fetchMonsterByName, fetchItemsByMonster } = require('@app/shared/database/db.js');
   const { calculateFinalValue, createWeightedItemList } = require('../../modules/rngModule.js');
   const { getEncounterOutcome } = require('../../modules/encounterModule.js');
   const { updateCurrentHearts } = require('../../modules/characterStatsModule.js');
@@ -1033,7 +1033,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     const hasFortuneTellerLootBoost = boostStatusForReroll && boostStatusForReroll.boosterJob === 'Fortune Teller' && boostStatusForReroll.category === 'Looting';
     
     if (hasFortuneTellerLootBoost && outcome.hearts && outcome.hearts > 0) {
-      const logger = require('../../../shared/utils/logger');
+      const logger = require('@app/shared/utils/logger');
       logger.info('BOOST', `🔮 Fortune Teller Fated Reroll triggered for ${character.name} in HWQ (damage=${outcome.hearts})`);
       fortuneRerollTriggered = true;
 
@@ -1133,7 +1133,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
       }
     }
   } catch (e) {
-    const logger = require('../../../shared/utils/logger');
+    const logger = require('@app/shared/utils/logger');
     logger.error('BOOST', `Failed during Fortune Teller Fated Reroll for ${character.name}: ${e.message}`);
   }
   
@@ -1150,7 +1150,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     entertainerDamageReduction = originalHeartDamage - reducedDamage;
     
     if (entertainerDamageReduction > 0) {
-      const logger = require('../../../shared/utils/logger');
+      const logger = require('@app/shared/utils/logger');
       logger.info('BOOST', `🎭 Boost applied (Tier ${monsterTier}) reduces HWQ damage from ${originalHeartDamage} to ${reducedDamage} (-${entertainerDamageReduction})`);
       
       // Hearts were already removed by getEncounterOutcome - restore them and reapply correct amount
@@ -1177,14 +1177,14 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     }
   } else if (character.boostedBy && (!outcome.hearts || outcome.hearts === 0)) {
     entertainerBoostUnused = true;
-    const logger = require('../../../shared/utils/logger');
+    const logger = require('@app/shared/utils/logger');
     logger.info('BOOST', `🎭 Entertainer boost was active but not needed (no damage taken)`);
   }
   
   // ------------------- Monster Encounter Village Damage (Tier 1-4 only) -------------------
   // Check if character lost to a Tier 1-4 monster (not KO'd, not a win, took damage)
   // Track village damage but DON'T apply it yet - it will be applied at the end of the hunt
-  const logger = require('../../../shared/utils/logger');
+  const logger = require('@app/shared/utils/logger');
   logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] Evaluating village damage chance for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
   logger.info('HELPWANTED', `[VILLAGE_DAMAGE_CHECK] Conditions - Tier check: ${monster.tier >= 1 && monster.tier <= 4}, Result: "${outcome.result}", Hearts: ${outcome.hearts}, Village: ${character.currentVillage}`);
   
@@ -1276,7 +1276,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
     
     consumeElixirBuff(character);
     // Update character in database
-    const { updateCharacterById, updateModCharacterById } = require('../../../shared/database/db.js');
+    const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
     const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
     await updateFunction(character._id, { buff: character.buff });
     
@@ -1421,7 +1421,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
         consumeElixirBuff(character);
         // Update character in database
-        const { updateCharacterById, updateModCharacterById } = require('../../../shared/database/db.js');
+        const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
         const updateFunction = character.isModCharacter ? updateCharacterById : updateModCharacterById;
         await updateFunction(character._id, { buff: character.buff });
       } else if (character.buff?.active) {
@@ -1469,7 +1469,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
           if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
             consumeElixirBuff(character);
             // Update character in database
-            const { updateCharacterById, updateModCharacterById } = require('../../../shared/database/db.js');
+            const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
             const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
             await updateFunction(character._id, { buff: character.buff });
             blightRainMessage += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
@@ -1530,8 +1530,8 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   // Process monster encounters
   const { handleKO } = require('../../modules/characterStatsModule.js');
   const { createMonsterEncounterEmbed } = require('../../embeds/embeds.js');
-  const { addItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils.js');
-  const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId, authorizeSheets } = require('../../../shared/utils/googleSheetsUtils.js');
+  const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils.js');
+  const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId, authorizeSheets } = require('@app/shared/utils/googleSheetsUtils.js');
   const { v4: uuidv4 } = require('uuid');
   
   let summary = [];
@@ -1663,12 +1663,12 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   if (totalVillageDamage > 0 && character.currentVillage) {
     try {
       const { damageVillage } = require('../../modules/villageModule');
-      const logger = require('../../../shared/utils/logger');
+      const logger = require('@app/shared/utils/logger');
       logger.info('HELPWANTED', `[VILLAGE_DAMAGE_FINAL] Applying total village damage of ${totalVillageDamage} HP to ${character.currentVillage} at end of hunt`);
       await damageVillage(character.currentVillage, totalVillageDamage);
       logger.info('HELPWANTED', `[VILLAGE_DAMAGE_FINAL] ✅ Applied ${totalVillageDamage} HP damage to ${character.currentVillage}`);
     } catch (damageError) {
-      const logger = require('../../../shared/utils/logger');
+      const logger = require('@app/shared/utils/logger');
       logger.error('HELPWANTED', `❌ Error applying final village damage: ${damageError.message}`, damageError.stack);
       // Don't fail the hunt if village damage fails
     }
@@ -1721,7 +1721,7 @@ async function sendMonsterHuntSummary(interaction, character, questId, monsterLi
   // Create loot summary
   let lootSummary = '';
   if (totalLoot.length > 0) {
-    const ItemModel = require('../../../shared/models/ItemModel');
+    const ItemModel = require('@app/shared/models/ItemModel');
     const { formatItemDetails } = require('../../embeds/embeds.js');
     
     const formattedLoot = await Promise.all(
@@ -2001,7 +2001,7 @@ module.exports = {
             if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
               consumeElixirBuff(character);
               // Update character in database
-              const { updateCharacterById, updateModCharacterById } = require('../../../shared/database/db.js');
+              const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
               const updateFunction = character.isModCharacter ? updateCharacterById : updateModCharacterById;
               await updateFunction(character._id, { buff: character.buff });
             } else if (character.buff?.active) {
@@ -2049,7 +2049,7 @@ module.exports = {
                 if (shouldConsumeElixir(character, 'helpWanted', { blightRain: true })) {
                   consumeElixirBuff(character);
                   // Update character in database
-                  const { updateCharacterById, updateModCharacterById } = require('../../../shared/database/db.js');
+                  const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
                   const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
                   await updateFunction(character._id, { buff: character.buff });
                   blightRainMessage += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
@@ -2143,7 +2143,7 @@ module.exports = {
         // ------------------- Process the Exchange -------------------
         if (reward === 'spirit_orb') {
           // Add Spirit Orb to character's inventory
-          const { getCharacterInventoryCollection } = require('../../../shared/database/db');
+          const { getCharacterInventoryCollection } = require('@app/shared/database/db');
           const inventoryCollection = await getCharacterInventoryCollection(character.name);
           
           const existingOrb = await inventoryCollection.findOne({
@@ -2171,7 +2171,7 @@ module.exports = {
 
           // Log to InventoryLog database collection
           try {
-            const ItemModel = require('../../../shared/models/ItemModel');
+            const ItemModel = require('@app/shared/models/ItemModel');
             const spiritOrbItem = await ItemModel.findOne({ itemName: { $regex: /^spirit orb$/i } });
             const interactionUrl = interaction 
               ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`

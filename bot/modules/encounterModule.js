@@ -13,7 +13,7 @@
 // ============================================================================
 // Local Modules & Database Models
 // ============================================================================
-const logger = require('../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 const { handleKO, useHearts } = require('./characterStatsModule');
 
 // ------------------- Helper Function for Context -------------------
@@ -24,10 +24,10 @@ const createEncounterContext = (character, operation) => ({
     userId: character.userId,
     operation: operation
 });
-const Monster = require('../../shared/models/MonsterModel');
+const Monster = require('@app/shared/models/MonsterModel');
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs, getDamageResistance } = require('./buffModule');
-const { handleError } = require('../../shared/utils/globalErrorHandler');
-const { retrieveFromStorage, saveToStorage } = require('../../shared/utils/storage');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const { retrieveFromStorage, saveToStorage } = require('@app/shared/utils/storage');
 
 // ============================================================================
 // Utility Functions

@@ -4,8 +4,8 @@ const axios = require('axios');
 
 // ============================================================================
 // ------------------- Utilities -------------------
-const { handleError } = require('../../shared/utils/globalErrorHandler');
-const logger = require('../../shared/utils/logger');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const logger = require('@app/shared/utils/logger');
 
 // ============================================================================
 // ------------------- Environment Variables -------------------

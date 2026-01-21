@@ -26,18 +26,18 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Services -------------------
-const logger = require('../../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 const {
   fetchCharacterByNameAndUserId,
   fetchCharactersByUserId,
   updateCharacterById,
   updateModCharacterById
-} = require('../../../shared/database/db.js');
+} = require('@app/shared/database/db.js');
 
 // ------------------- Database Models -------------------
-// const Mount = require('../../../shared/models/MountModel');
-const User = require('../../../shared/models/UserModel.js');
-const Character = require('../../../shared/models/CharacterModel.js');
+// const Mount = require('@app/shared/models/MountModel');
+const User = require('@app/shared/models/UserModel.js');
+const Character = require('@app/shared/models/CharacterModel.js');
 
 // ------------------- Embeds -------------------
 const {
@@ -61,11 +61,11 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../../modules/format
 const { getMonstersByPath, getRandomTravelEncounter } = require('../../modules/rngModule.js');
 const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage, getAllVillages } = require('../../modules/locationsModule.js');
-const { checkInventorySync } = require('../../../shared/utils/characterUtils');
-const { enforceJail } = require('../../../shared/utils/jailCheck');
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
-const { retrieveAllByType } = require('../../../shared/utils/storage.js');
-const { getWeatherWithoutGeneration } = require('../../../shared/services/weatherService');
+const { checkInventorySync } = require('@app/shared/utils/characterUtils');
+const { enforceJail } = require('@app/shared/utils/jailCheck');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler.js');
+const { retrieveAllByType } = require('@app/shared/utils/storage.js');
+const { getWeatherWithoutGeneration } = require('@app/shared/services/weatherService');
 const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
 const { applyTravelWeatherBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
@@ -267,7 +267,7 @@ module.exports = {
         // Update the character in the database
         try {
           if (character.isModCharacter) {
-            const ModCharacter = require('../../../shared/models/ModCharacterModel.js');
+            const ModCharacter = require('@app/shared/models/ModCharacterModel.js');
             await ModCharacter.findByIdAndUpdate(character._id, { job: 'Villager' });
           } else {
             await Character.findByIdAndUpdate(character._id, { job: 'Villager' });
@@ -616,7 +616,7 @@ module.exports = {
             
             // Update character in database to persist the consumed elixir
             if (character.isModCharacter) {
-              const ModCharacter = require('../../../shared/models/ModCharacterModel.js');
+              const ModCharacter = require('@app/shared/models/ModCharacterModel.js');
               await ModCharacter.findByIdAndUpdate(character._id, { buff: character.buff });
             } else {
               await Character.findByIdAndUpdate(character._id, { buff: character.buff });

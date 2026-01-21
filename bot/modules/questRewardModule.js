@@ -3,12 +3,12 @@
 // Handles automatic quest reward distribution and completion processing
 // ============================================================================
 
-const Quest = require('../../shared/models/QuestModel');
-const Character = require('../../shared/models/CharacterModel');
-const User = require('../../shared/models/UserModel');
-const ApprovedSubmission = require('../../shared/models/ApprovedSubmissionModel');
-const { handleError } = require('../../shared/utils/globalErrorHandler');
-const logger = require('../../shared/utils/logger');
+const Quest = require('@app/shared/models/QuestModel');
+const Character = require('@app/shared/models/CharacterModel');
+const User = require('@app/shared/models/UserModel');
+const ApprovedSubmission = require('@app/shared/models/ApprovedSubmissionModel');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const logger = require('@app/shared/utils/logger');
 const { EmbedBuilder } = require('discord.js');
 
 // ============================================================================
@@ -1066,10 +1066,10 @@ async function distributeItems(quest, participant) {
         const character = await findCharacterSafely(participant.characterName, participant.userId);
         
         // Import inventory utilities and database functions
-        const { connectToInventories } = require('../../shared/database/db');
-        const Item = require('../../shared/models/ItemModel');
-        const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('../../shared/utils/googleSheetsUtils');
-        const { logItemAcquisitionToDatabase } = require('../../shared/utils/inventoryUtils');
+        const { connectToInventories } = require('@app/shared/database/db');
+        const Item = require('@app/shared/models/ItemModel');
+        const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('@app/shared/utils/googleSheetsUtils');
+        const { logItemAcquisitionToDatabase } = require('@app/shared/utils/inventoryUtils');
         const { v4: uuidv4 } = require('uuid');
         
         // Determine which items to distribute

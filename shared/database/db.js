@@ -136,6 +136,24 @@ async function connectToTinglebot() {
    
    logger.success('DATABASE', 'Tinglebot database connected');
    
+   // Sync indexes for models with TTL (ensures TTL indexes are created)
+   try {
+     const TempData = require('../models/TempDataModel');
+     const RuuGame = require('../models/RuuGameModel');
+     const { VendingRequest } = require('../models/VendingModel');
+     
+     await Promise.all([
+       TempData.syncIndexes(),
+       RuuGame.syncIndexes(),
+       VendingRequest.syncIndexes()
+     ]);
+     
+     logger.info('DATABASE', 'TTL indexes synced for TempData, RuuGame, and VendingRequest');
+   } catch (indexError) {
+     // Log but don't fail - indexes will be created on first use if needed
+     logger.warn('DATABASE', `Warning: Could not sync TTL indexes: ${indexError.message}`);
+   }
+   
    // Track connection pool size
    if (memoryMonitor) {
      try {

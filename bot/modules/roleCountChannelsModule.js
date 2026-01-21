@@ -3,7 +3,7 @@
 // ============================================================================
 
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
-const logger = require('../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 
 // ============================================================================
 // ------------------- Configuration -------------------
@@ -223,7 +223,6 @@ async function updateAllRoleCountChannels(guild) {
   };
   
   try {
-    logger.info('SYSTEM', `Updating role count channels for guild ${guild.name}`);
 
     let membersCache = guild.members.cache;
     const cachedCount = membersCache.size;
@@ -277,7 +276,11 @@ async function updateAllRoleCountChannels(guild) {
       }
     }
     
-    logger.success('SYSTEM', `Role count update complete: ${results.updated} updated, ${results.created} created, ${results.errors} errors`);
+    if (results.errors === 0) {
+      logger.info('SYSTEM', `Role counts updated: ${results.updated} updated, ${results.created} created`);
+    } else {
+      logger.warn('SYSTEM', `Role count update: ${results.updated} updated, ${results.created} created, ${results.errors} errors`);
+    }
     
   } catch (error) {
     logger.error('SYSTEM', 'Error updating role count channels');
@@ -292,7 +295,6 @@ async function updateAllRoleCountChannels(guild) {
  * @param {Client} client - The Discord client
  */
 function initializeRoleCountChannels(client) {
-  logger.info('SYSTEM', 'Initializing role count channels system');
   
   // Update channels immediately if bot is already ready, or when it becomes ready
   if (client.isReady()) {

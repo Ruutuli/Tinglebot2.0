@@ -1,15 +1,16 @@
 // ------------------- Import necessary modules -------------------
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const NodeCache = require('node-cache');
-const Item = require('../../shared/models/ItemModel');
+const Item = require('@app/shared/models/ItemModel');
 
 // ------------------- Cache and constants -------------------
-// Configure NodeCache with reasonable checkperiod to avoid excessive timer usage
+// Configure NodeCache with checkperiod disabled to avoid creating persistent timers
 // stdTTL: default TTL for items (items are set with 3600s TTL anyway, but this is a fallback)
-// checkperiod: how often to check for expired items (2 minutes is reasonable for hourly cache)
+// checkperiod: 0 disables automatic expiration checking (expiration checked on access instead)
+// This eliminates the persistent timer that was being flagged by the memory monitor
 const cache = new NodeCache({
   stdTTL: 3600, // 1 hour default (matches the TTL used when setting items)
-  checkperiod: 120 // Check for expired items every 2 minutes (instead of default ~600ms)
+  checkperiod: 0 // Disable automatic checking - expiration checked lazily on access
 });
 const ITEMS_PER_PAGE = 25;
 

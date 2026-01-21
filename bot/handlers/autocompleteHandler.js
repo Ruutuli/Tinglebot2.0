@@ -10,8 +10,8 @@ const { MongoClient } = require("mongodb");
 const {
  connectToInventories,
  connectToTinglebot
-} = require('../../shared/database/db');
-const dbConfig = require('../../shared/config/database');
+} = require('@app/shared/database/db');
+const dbConfig = require('@app/shared/config/database');
 
 // ------------------- Database Services -------------------
 const {
@@ -27,15 +27,15 @@ const {
  getCharacterInventoryCollection,
  getCurrentVendingStockList,
  getVendingModel
-} = require('../../shared/database/db');
+} = require('@app/shared/database/db');
 
 // ------------------- Utilities -------------------
-const logger = require('../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 
 // Memory monitor (optional - won't break if not initialized)
 let memoryMonitor = null;
 try {
-  const { getMemoryMonitor } = require('../../shared/utils/memoryMonitor');
+  const { getMemoryMonitor } = require('@app/shared/utils/memoryMonitor');
   memoryMonitor = getMemoryMonitor();
 } catch (err) {
   // Memory monitor not available, continue without it
@@ -111,21 +111,21 @@ const { getAllRaces } = require("../modules/raceModule");
 const { NPCs } = require("../modules/NPCsModule");
 
 // ------------------- Utility Functions -------------------
-const { handleError } = require('../../shared/utils/globalErrorHandler');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
 
 // ------------------- Database Models -------------------
-const Character = require('../../shared/models/CharacterModel');
-const Item = require('../../shared/models/ItemModel');
-const Mount = require('../../shared/models/MountModel');
-const Party = require('../../shared/models/PartyModel');
-const Pet = require('../../shared/models/PetModel');
-const Quest = require('../../shared/models/QuestModel');
-const ShopStock = require('../../shared/models/VillageShopsModel');
-const TableRoll = require('../../shared/models/TableRollModel');
-const TempData = require('../../shared/models/TempDataModel');
-const { VendingRequest } = require('../../shared/models/VendingModel');
-const { Village } = require('../../shared/models/VillageModel');
-const generalCategories = require('../../shared/models/GeneralItemCategories');
+const Character = require('@app/shared/models/CharacterModel');
+const Item = require('@app/shared/models/ItemModel');
+const Mount = require('@app/shared/models/MountModel');
+const Party = require('@app/shared/models/PartyModel');
+const Pet = require('@app/shared/models/PetModel');
+const Quest = require('@app/shared/models/QuestModel');
+const ShopStock = require('@app/shared/models/VillageShopsModel');
+const TableRoll = require('@app/shared/models/TableRollModel');
+const TempData = require('@app/shared/models/TempDataModel');
+const { VendingRequest } = require('@app/shared/models/VendingModel');
+const { Village } = require('@app/shared/models/VillageModel');
+const generalCategories = require('@app/shared/models/GeneralItemCategories');
 
 
 // Add safe response utility
@@ -3674,7 +3674,7 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
 async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
   try {
       // Fetch only available Help Wanted quests (not completed, not expired)
-      const HelpWantedQuest = require('../../shared/models/HelpWantedQuestModel');
+      const HelpWantedQuest = require('@app/shared/models/HelpWantedQuestModel');
       const now = new Date();
       const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
       
@@ -4341,7 +4341,7 @@ async function handleModMinigameCharacterAutocomplete(interaction, focusedOption
     const cleanSessionId = sessionIdMatch ? sessionIdMatch[0] : sessionIdOption;
 
     // Find the minigame session
-    const Minigame = require('../../shared/models/MinigameModel');
+    const Minigame = require('@app/shared/models/MinigameModel');
     const session = await Minigame.findOne({
       sessionId: cleanSessionId,
       gameType: 'theycame',
@@ -4373,7 +4373,7 @@ async function handleModMinigameCharacterAutocomplete(interaction, focusedOption
 // Provides autocomplete suggestions for active minigame session IDs
 async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
   try {
-    const Minigame = require('../../shared/models/MinigameModel');
+    const Minigame = require('@app/shared/models/MinigameModel');
     const searchQuery = focusedOption.value?.toLowerCase() || '';
     
     // Find active minigame sessions
@@ -4411,7 +4411,7 @@ async function handleMinigameSessionIdAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for active alien targets in a minigame session
 async function handleMinigameTargetAutocomplete(interaction, focusedOption) {
   try {
-    const Minigame = require('../../shared/models/MinigameModel');
+    const Minigame = require('@app/shared/models/MinigameModel');
     let sessionId = interaction.options.getString('session_id');
     const searchQuery = focusedOption.value?.toLowerCase() || '';
     
@@ -5328,7 +5328,7 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
       return await interaction.respond([]);
     }
     
-    const { initializeVendingInventoryModel } = require('../../shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(characterName);
     const items = await VendingInventory.find({}).lean();
 
@@ -5565,7 +5565,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         return;
       }
       
-      const { initializeVendingInventoryModel } = require('../../shared/models/VendingModel');
+      const { initializeVendingInventoryModel } = require('@app/shared/models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(targetCharacter);
       const vendingItems = await VendingInventory.find({}).lean();
 
@@ -5913,7 +5913,7 @@ async function handleModCharacterJobAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for monster names
 async function handleMonsterAutocomplete(interaction, focusedOption) {
   try {
-    const Monster = require('../../shared/models/MonsterModel');
+    const Monster = require('@app/shared/models/MonsterModel');
     const searchQuery = focusedOption.value.toLowerCase();
     
     // Fetch monsters from database
@@ -6015,7 +6015,7 @@ async function handleTaggedCharactersAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for tier 5+ monster names
 async function handleTier5PlusMonsterAutocomplete(interaction, focusedOption) {
   try {
-    const Monster = require('../../shared/models/MonsterModel');
+    const Monster = require('@app/shared/models/MonsterModel');
     const searchQuery = focusedOption.value.toLowerCase();
     
     // Fetch tier 5+ monsters from database
@@ -6284,7 +6284,7 @@ handleBlightOverrideTargetAutocomplete,
 async function handleVillageResourcesMaterialAutocomplete(interaction, focusedOption) {
   try {
     // Import VILLAGE_CONFIG from VillageModel
-    const { VILLAGE_CONFIG } = require('../../shared/models/VillageModel');
+    const { VILLAGE_CONFIG } = require('@app/shared/models/VillageModel');
     
     // Get the selected village name from interaction options
     const villageName = interaction.options.getString('village');
@@ -6324,7 +6324,7 @@ async function handleVillageResourcesMaterialAutocomplete(interaction, focusedOp
 async function handleTableRollNameAutocomplete(interaction, focusedOption) {
   try {
     // Import the TableRoll model
-    const TableRoll = require('../../shared/models/TableRollModel');
+    const TableRoll = require('@app/shared/models/TableRollModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -6364,7 +6364,7 @@ async function handleTableRollNameAutocomplete(interaction, focusedOption) {
 async function handleRaidIdAutocomplete(interaction, focusedOption) {
   try {
     // Import the Raid model
-    const Raid = require('../../shared/models/RaidModel');
+    const Raid = require('@app/shared/models/RaidModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -6411,7 +6411,7 @@ async function handleRaidIdAutocomplete(interaction, focusedOption) {
 async function handleWaveIdAutocomplete(interaction, focusedOption) {
   try {
     // Import the Wave model
-    const Wave = require('../../shared/models/WaveModel');
+    const Wave = require('@app/shared/models/WaveModel');
     
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";

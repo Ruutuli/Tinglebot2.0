@@ -1069,7 +1069,7 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
   // VALIDATE CRAFTING STATE BEFORE REMOVING ANY MATERIALS
   // This prevents materials from being consumed if the crafting state has expired
   if (stateCheckId) {
-    const TempData = require('../../shared/models/TempDataModel');
+    const TempData = require('../models/TempDataModel');
     console.log(`[inventoryUtils.js] [CRFT] Checking craftingContinue state for stateCheckId: ${stateCheckId}`);
     const craftingContinueState = await TempData.findByTypeAndKey('craftingContinue', stateCheckId);
     if (!craftingContinueState || !craftingContinueState.data) {

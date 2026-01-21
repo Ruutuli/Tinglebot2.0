@@ -295,7 +295,33 @@ ADMIN_ROLE_ID=your_admin_role_id
 - Bot service needs `DISCORD_TOKEN` and `GUILD_ID`
 - Dashboard service needs `DISCORD_CLIENT_SECRET`, `DISCORD_CALLBACK_URL`, `SESSION_SECRET`, and `DOMAIN`
 
-#### 5. Deploy and Verify
+#### 5. Agenda Job Scheduler (Bot Service)
+
+The bot uses **Agenda** for one-time scheduled jobs (jail releases, debuff/buff expiry). Agenda automatically:
+- Connects to the same MongoDB database as the bot
+- Creates an `agendaJobs` collection automatically on first run
+- Handles job scheduling and execution
+
+**No additional Railway configuration is required** for Agenda. It uses the existing `MONGODB_URI` or `MONGODB_TINGLEBOT_URI_PROD` environment variable.
+
+**What Agenda handles:**
+- `releaseFromJail` - Releases characters from jail at their scheduled release time
+- `expireDebuff` - Removes debuffs from characters at their expiry date
+- `expireBuff` - Removes buffs from characters at their expiry date
+
+**On startup, the bot will:**
+1. Initialize Agenda and connect to MongoDB
+2. Define the three job types listed above
+3. Backfill any existing future events (characters in jail, active debuffs/buffs)
+4. Start the Agenda worker to process scheduled jobs
+
+**Verification:**
+After deployment, check the bot logs for:
+- `[Agenda] started` - Confirms Agenda is running
+- `Backfilled X jail release job(s)` - Shows existing jobs were scheduled
+- `Agenda initialized and started` - Confirms successful initialization
+
+#### 6. Deploy and Verify
 
 1. After configuring both services, Railway will automatically deploy them
 2. Check the deployment logs for each service to ensure they start successfully
@@ -309,6 +335,32 @@ ADMIN_ROLE_ID=your_admin_role_id
 - Root `package.json` - Shared dependencies for both services
 
 **Important**: Both services use the root `package.json` for dependencies. The `bot/package.json` and `dashboard/package.json` files are kept for reference but are not used during Railway builds. This ensures the `shared/` directory is accessible to both services.
+
+### Agenda Job Scheduler Details
+
+The bot uses **Agenda** (v5.0.0) for managing one-time scheduled jobs. This replaces the previous cron-based approach for jail releases and debuff/buff expiry, providing more precise scheduling and better resource management.
+
+**Key Features:**
+- Jobs are stored in MongoDB (`agendaJobs` collection)
+- Automatic backfilling of existing future events on bot startup
+- Graceful shutdown handling (jobs are properly stopped on bot restart)
+- Fallback to daily cron checks for any missed jobs
+
+**No Railway Settings Required:**
+- Agenda uses the existing MongoDB connection
+- The `agendaJobs` collection is created automatically
+- No additional environment variables needed
+- No special Railway configuration required
+
+**Job Types:**
+1. **releaseFromJail** - Scheduled when a character is jailed, executes at `character.jailReleaseTime`
+2. **expireDebuff** - Scheduled when a debuff is applied, executes at `character.debuff.endDate`
+3. **expireBuff** - Scheduled when a buff is applied, executes at `character.buff.endDate`
+
+**Monitoring:**
+- Check bot logs for `[Agenda]` messages to verify job execution
+- Monitor the `agendaJobs` collection in MongoDB to see scheduled jobs
+- Failed jobs will be logged with error details
 
 ### Troubleshooting Railway Deployment
 

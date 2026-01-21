@@ -7,7 +7,7 @@
 // // ------------------- Standard Libraries -------------------
 // // Third-party libraries for HTTP requests and image processing.
 // const axios = require('axios');
-// const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+// const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
 // const sharp = require('sharp');
 
 
@@ -24,7 +24,7 @@
 
 // // ------------------- Database Models -------------------
 // // Database model representing a map square.
-// const Square = require('../../../shared/models/mapModel');
+// const Square = require('@app/shared/models/mapModel');
 
 
 // // ------------------- Initialize Map Module -------------------

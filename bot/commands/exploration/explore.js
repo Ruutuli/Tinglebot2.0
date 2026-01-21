@@ -1,7 +1,7 @@
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler.js');
 const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder } = require("discord.js");
-const { fetchAllItems, fetchItemsByMonster } = require('../../../shared/database/db.js');
+const { fetchAllItems, fetchItemsByMonster } = require('@app/shared/database/db.js');
 const {
  calculateFinalValue,
  getMonstersByRegion,
@@ -13,13 +13,13 @@ const {
 } = require("../../modules/raidModule.js");
 const { handleKO } = require("../../modules/characterStatsModule.js");
 const { triggerRaid } = require("../../modules/raidModule.js");
-const { addItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils.js');
-const { checkInventorySync } = require('../../../shared/utils/characterUtils.js');
-const { enforceJail } = require('../../../shared/utils/jailCheck');
-const Party = require('../../../shared/models/PartyModel.js');
-const Character = require('../../../shared/models/CharacterModel.js');
-const ItemModel = require('../../../shared/models/ItemModel.js');
-const Square = require('../../../shared/models/mapModel.js');
+const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils.js');
+const { checkInventorySync } = require('@app/shared/utils/characterUtils.js');
+const { enforceJail } = require('@app/shared/utils/jailCheck');
+const Party = require('@app/shared/models/PartyModel.js');
+const Character = require('@app/shared/models/CharacterModel.js');
+const ItemModel = require('@app/shared/models/ItemModel.js');
+const Square = require('@app/shared/models/mapModel.js');
 const {
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,

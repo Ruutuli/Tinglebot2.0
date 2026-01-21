@@ -1,5 +1,5 @@
 // const { checkAndCreateEncounter } = require('../modules/randomMountEncounterModule');
-// const { handleError } = require('../../shared/utils/globalErrorHandler');
+// const { handleError } = require('@app/shared/utils/globalErrorHandler');
 // const { createMountEncounterEmbed } = require('../embeds/embeds');
 
 // // Define allowed channels for monthly encounters

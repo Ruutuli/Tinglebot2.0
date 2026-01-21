@@ -4,7 +4,7 @@
 // ============================================================================
 
 const { ObjectId } = require('mongodb');
-const logger = require('../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 
 // ------------------- Function: validateObjectId -------------------
 // Validates that a parameter is a valid MongoDB ObjectId

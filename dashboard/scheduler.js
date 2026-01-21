@@ -12,12 +12,12 @@ const { v4: uuidv4 } = require("uuid");
 const { EmbedBuilder } = require("discord.js");
 
 // Database models
-const Character = require("../shared/models/CharacterModel");
-const Pet = require("../shared/models/PetModel");
-const Raid = require("../shared/models/RaidModel");
-const RuuGame = require("../shared/models/RuuGameModel");
-const HelpWantedQuest = require('../shared/models/HelpWantedQuestModel');
-const ItemModel = require('../shared/models/ItemModel');
+const Character = require("@app/shared/models/CharacterModel");
+const Pet = require("@app/shared/models/PetModel");
+const Raid = require("@app/shared/models/RaidModel");
+const RuuGame = require("@app/shared/models/RuuGameModel");
+const HelpWantedQuest = require('@app/shared/models/HelpWantedQuestModel');
+const ItemModel = require('@app/shared/models/ItemModel');
 
 // Database functions
 const {
@@ -54,27 +54,27 @@ const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBloc
 const { processMonthlyQuestRewards } = require('./modules/questRewardModule');
 
 // Utilities
-const { safeAppendDataToSheet, extractSpreadsheetId } = require('../shared/utils/googleSheetsUtils');
+const { safeAppendDataToSheet, extractSpreadsheetId } = require('@app/shared/utils/googleSheetsUtils');
 
 // Services
 const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration } = require("../services/weatherService");
 
 // Utils
-const { handleError } = require("../shared/utils/globalErrorHandler");
-const { sendUserDM } = require("../shared/utils/messageUtils");
-const { checkExpiredRequests } = require("../shared/utils/expirationHandler");
-const { isValidImageUrl } = require("../shared/utils/validation");
+const { handleError } = require("@app/shared/utils/globalErrorHandler");
+const { sendUserDM } = require("@app/shared/utils/messageUtils");
+const { checkExpiredRequests } = require("@app/shared/utils/expirationHandler");
+const { isValidImageUrl } = require("@app/shared/utils/validation");
 const {
  cleanupExpiredEntries,
  cleanupExpiredHealingRequests,
  cleanupExpiredBoostingRequests,
  getBoostingStatistics,
  archiveOldBoostingRequests,
-} = require("../shared/utils/storage");
+} = require("@app/shared/utils/storage");
 const {
  retryPendingSheetOperations,
  getPendingSheetOperationsCount,
-} = require("../shared/utils/googleSheetsUtils");
+} = require("@app/shared/utils/googleSheetsUtils");
 
 // Constants
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
@@ -421,7 +421,7 @@ async function cleanupFinishedMinigameSessions() {
  try {
   console.log(`[scheduler.js]: 🎮 Starting Minigame session cleanup`);
   
-  const Minigame = require('../shared/models/MinigameModel');
+  const Minigame = require('@app/shared/models/MinigameModel');
   const result = await Minigame.cleanupOldSessions();
   
   if (result.deletedCount === 0) {
@@ -499,7 +499,7 @@ async function distributeMonthlyBoostRewards(client) {
     
     console.log(`[scheduler.js]: 💎 Found ${boosters.size} active booster(s)`);
     
-    const User = require('../shared/models/UserModel');
+    const User = require('@app/shared/models/UserModel');
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     
@@ -673,7 +673,7 @@ async function handleBirthdayRoleAssignment(client) {
     console.log(`[scheduler.js]: 📅 Checking for birthdays on ${today} (EST: ${estNow.toLocaleString()})`);
     
     // Get all users with birthdays today
-    const User = require('../shared/models/UserModel');
+    const User = require('@app/shared/models/UserModel');
     const usersWithBirthdays = await User.find({
       'birthday.month': month,
       'birthday.day': day
@@ -950,7 +950,7 @@ async function executeBirthdayAnnouncements(client) {
   console.log(`[scheduler.js]: 👥 Found ${characters.length} characters with birthday on ${today}`);
   
   // Also check for mod characters with birthdays
-  const ModCharacter = require('../shared/models/ModCharacterModel');
+  const ModCharacter = require('@app/shared/models/ModCharacterModel');
   const modCharacters = await ModCharacter.find({ birthday: today });
   console.log(`[scheduler.js]: 👑 Found ${modCharacters.length} mod characters with birthday on ${today}`);
   
@@ -1413,7 +1413,7 @@ async function setupBoostingScheduler(client) {
    const stats = cleanupExpiredBoostingRequests();
    
    // Clean up TempData boosting requests
-   const TempData = require('../shared/models/TempDataModel');
+   const TempData = require('@app/shared/models/TempDataModel');
    const tempDataResult = await TempData.cleanupByType('boosting');
    
    console.log(
@@ -1452,7 +1452,7 @@ async function setupBoostingScheduler(client) {
  createCronJob("0 */6 * * *", "TempData Boost Cleanup", async () => {
   try {
    console.log("[scheduler.js]: 🧹 Starting TempData boost cleanup");
-   const TempData = require('../shared/models/TempDataModel');
+   const TempData = require('@app/shared/models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    console.log(`[scheduler.js]: ✅ TempData boost cleanup complete - Deleted: ${result.deletedCount || 0}`);
   } catch (error) {
@@ -1465,7 +1465,7 @@ async function setupBoostingScheduler(client) {
  createCronJob("0 * * * *", "Hourly Boost Cleanup", async () => {
   try {
    console.log("[scheduler.js]: 🧹 Starting hourly boost cleanup");
-   const TempData = require('../shared/models/TempDataModel');
+   const TempData = require('@app/shared/models/TempDataModel');
    const result = await TempData.cleanupByType('boosting');
    if (result.deletedCount > 0) {
      console.log(`[scheduler.js]: ✅ Hourly boost cleanup complete - Deleted: ${result.deletedCount}`);
@@ -1584,7 +1584,7 @@ async function checkQuestCompletions(client) {
   try {
     console.log('[scheduler.js]: 🔍 Checking quest completions...');
     
-    const Quest = require('../shared/models/QuestModel');
+    const Quest = require('@app/shared/models/QuestModel');
     const questRewardModule = require('./modules/questRewardModule');
     
     const activeQuests = await Quest.find({ status: 'active' });
@@ -1642,7 +1642,7 @@ async function checkVillageTracking(client) {
   try {
     console.log('[scheduler.js]: 🏘️ Starting village tracking check...');
     
-    const Quest = require('../shared/models/QuestModel');
+    const Quest = require('@app/shared/models/QuestModel');
     
     // Find all active RP quests
     const activeRPQuests = await Quest.find({ 
@@ -2099,7 +2099,7 @@ async function checkAndDistributeMonthlyBoostRewards(client) {
     }
     
     // Check if any users have already received rewards this month
-    const User = require('../shared/models/UserModel');
+    const User = require('@app/shared/models/UserModel');
     const sampleUsers = await User.find({ 
       'boostRewards.lastRewardMonth': currentMonth 
     }).limit(1);

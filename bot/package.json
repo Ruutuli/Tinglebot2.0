@@ -8,6 +8,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "@app/shared": "*",
     "@google-cloud/storage": "^7.16.0",
     "axios": "^1.7.9",
     "bottleneck": "^2.19.5",
@@ -32,6 +33,7 @@
     "multer": "^1.4.5-lts.1",
     "node-cache": "^5.1.2",
     "croner": "^9.0.0",
+    "agenda": "^5.0.0",
     "node-fetch": "^2.7.0",
     "sharp": "^0.34.1",
     "uuid": "^9.0.1"

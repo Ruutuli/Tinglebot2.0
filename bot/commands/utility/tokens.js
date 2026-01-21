@@ -1,19 +1,19 @@
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
-const { handleTokenError } = require('../../../shared/utils/tokenUtils.js');
-const logger = require('../../../shared/utils/logger.js');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler.js');
+const { handleTokenError } = require('@app/shared/utils/tokenUtils.js');
+const logger = require('@app/shared/utils/logger.js');
 
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder } = require('@discordjs/builders');
 const { ButtonStyle, MessageFlags } = require('discord.js');
-const User = require('../../../shared/models/UserModel.js');
-const { getOrCreateToken, syncTokenTracker } = require('../../../shared/database/db.js');
+const User = require('@app/shared/models/UserModel.js');
+const { getOrCreateToken, syncTokenTracker } = require('@app/shared/database/db.js');
 const {
   authorizeSheets,
   getSheetIdByTitle,
   getActualSheetName,
   readSheetData,
-} = require('../../../shared/utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../../shared/utils/googleSheetsUtils.js');
+} = require('@app/shared/utils/googleSheetsUtils.js');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@app/shared/utils/googleSheetsUtils.js');
 const { createTokenTrackerSetupEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Command data definition for managing tokens -------------------

@@ -8,6 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@app/shared": "*",
     "@google-cloud/storage": "^7.16.0",
     "axios": "^1.7.9",
     "bottleneck": "^2.19.5",

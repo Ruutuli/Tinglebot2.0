@@ -1,9 +1,9 @@
 // ============================================================================
 // ---- Standard Libraries ----
 // ============================================================================
-const { handleError } = require('../../shared/utils/globalErrorHandler');
-const logger = require('../../shared/utils/logger');
-const { generateUniqueId } = require('../../shared/utils/uniqueIdUtils');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const logger = require('@app/shared/utils/logger');
+const { generateUniqueId } = require('@app/shared/utils/uniqueIdUtils');
 const { calculateFinalValue, calculateRaidFinalValue } = require('./rngModule');
 const { EmbedBuilder } = require('discord.js');
 const { 
@@ -16,9 +16,9 @@ const {
   getTier10EncounterOutcome
 } = require('./encounterModule');
 const { getVillageEmojiByName } = require('./locationsModule');
-const { capitalizeVillageName } = require('../../shared/utils/stringUtils');
-const { monsterMapping } = require('../../shared/models/MonsterModel');
-const Raid = require('../../shared/models/RaidModel');
+const { capitalizeVillageName } = require('@app/shared/utils/stringUtils');
+const { monsterMapping } = require('@app/shared/models/MonsterModel');
+const Raid = require('@app/shared/models/RaidModel');
 
 // ============================================================================
 // ---- Constants ----
@@ -117,7 +117,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
         
         // getEncounterOutcome already saved character damage via useHearts
         // Reload character to get updated hearts
-        const { fetchCharacterById } = require('../../shared/database/db');
+        const { fetchCharacterById } = require('@app/shared/database/db');
         const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
         if (updatedCharacter) {
           Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
@@ -335,7 +335,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       await useHearts(character._id, finalDamage, createEncounterContext(character, 'raid_damage'));
       
       // Reload character from database to get the latest state (useHearts may have updated KO status)
-      const { fetchCharacterById } = require('../../shared/database/db');
+      const { fetchCharacterById } = require('@app/shared/database/db');
       const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
       if (updatedCharacter) {
         // Update the character object reference with fresh data
@@ -576,7 +576,7 @@ async function joinRaid(character, raidId) {
 
     // ------------------- Blight Rain Check -------------------
     // Check for blight rain in the village and apply infection chance
-    const { getCurrentWeather } = require('../../shared/services/weatherService');
+    const { getCurrentWeather } = require('@app/shared/services/weatherService');
     const weatherData = await getCurrentWeather(raid.village);
     let blightRainMessage = null;
     
@@ -620,7 +620,7 @@ async function joinRaid(character, raidId) {
         if (shouldConsumeElixir(character, 'raid', { blightRain: true })) {
           consumeElixirBuff(character);
           // Update character in database
-          const { updateCharacterById, updateModCharacterById } = require('../../shared/database/db.js');
+          const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
           const updateFunction = character.isModCharacter ? updateCharacterById : updateCharacterById;
           await updateFunction(character._id, { buff: character.buff });
         }
@@ -826,7 +826,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           await raid.completeRaid('defeated');
         } else {
           // Reload character from database to get the latest state (hearts were saved in processRaidBattle)
-          const { fetchCharacterById } = require('../../shared/database/db');
+          const { fetchCharacterById } = require('@app/shared/database/db');
           const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
           if (updatedCharacter) {
             // Update the character object reference with fresh data

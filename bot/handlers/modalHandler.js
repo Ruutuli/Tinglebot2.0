@@ -4,20 +4,20 @@ const { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = req
 
 // Custom modules for formatting and extended functionality.
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
-const { handleError } = require('../../shared/utils/globalErrorHandler');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
 
 
 // ------------------- Utility Functions -------------------
 // Generic helper utilities for menu creation and storage.
-const { getAddOnsMenu, getBaseSelectMenu, getSpecialWorksMenu, getTypeMultiplierMenu } = require('../../shared/utils/menuUtils');
+const { getAddOnsMenu, getBaseSelectMenu, getSpecialWorksMenu, getTypeMultiplierMenu } = require('@app/shared/utils/menuUtils');
 const { 
   getOrCreateSubmission, 
   updateSubmissionData, 
   retrieveSubmissionFromStorage, 
   findLatestSubmissionIdForUser 
-} = require('../../shared/utils/storage');
+} = require('@app/shared/utils/storage');
 const { getCancelButtonRow } = require('./buttonHelperHandler');
-const { calculateTokens, generateTokenBreakdown } = require('../../shared/utils/tokenUtils');
+const { calculateTokens, generateTokenBreakdown } = require('@app/shared/utils/tokenUtils');
 
 
 // ------------------- Handlers -------------------
@@ -26,7 +26,7 @@ const { handleMountNameSubmission } = require('./mountComponentHandler');
 
 // Secret Santa handler
 const { handleSecretSantaModal } = require('./secretSantaHandler');
-const logger = require('../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 
 
 // ------------------- Helper Functions -------------------

@@ -16,8 +16,8 @@ const { v4: uuidv4 } = require('uuid');
 // ============================================================================
 // ------------------- Database Services -------------------
 // ============================================================================
-const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchItemByName } = require('../../../shared/database/db.js');
-const { Village } = require('../../../shared/models/VillageModel');
+const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchItemByName } = require('@app/shared/database/db.js');
+const { Village } = require('@app/shared/models/VillageModel');
 
 // ============================================================================
 // ------------------- Modules -------------------
@@ -29,7 +29,7 @@ const { getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobs
 const { getVillageRegionByName } = require('../../modules/locationsModule.js');
 const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
 const { capitalizeWords } = require('../../modules/formattingModule.js');
-const logger = require('../../../shared/utils/logger.js');
+const logger = require('@app/shared/utils/logger.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { applyGatheringBoost } = require('../../modules/boostIntegration');
 const { clearBoostAfterUse } = require('./boosting');
@@ -37,17 +37,17 @@ const { clearBoostAfterUse } = require('./boosting');
 // ============================================================================
 // ------------------- Utilities -------------------
 // ============================================================================
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler.js');
-const { checkInventorySync } = require('../../../shared/utils/characterUtils');
-const { enforceJail } = require('../../../shared/utils/jailCheck');
-const { addItemInventoryDatabase } = require('../../../shared/utils/inventoryUtils.js');
-const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../../shared/utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../../shared/utils/googleSheetsUtils.js');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler.js');
+const { checkInventorySync } = require('@app/shared/utils/characterUtils');
+const { enforceJail } = require('@app/shared/utils/jailCheck');
+const { addItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils.js');
+const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@app/shared/utils/googleSheetsUtils.js');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@app/shared/utils/googleSheetsUtils.js');
 
 // ============================================================================
 // ------------------- Services -------------------
 // ============================================================================
-const { getWeatherWithoutGeneration } = require('../../../shared/services/weatherService');
+const { getWeatherWithoutGeneration } = require('@app/shared/services/weatherService');
 
 // ============================================================================
 // ------------------- Embeds -------------------
@@ -57,7 +57,7 @@ const { createGatherEmbed, createMonsterEncounterEmbed, createKOEmbed } = requir
 // ============================================================================
 // ------------------- Models -------------------
 // ============================================================================
-const User = require('../../../shared/models/UserModel.js');
+const User = require('@app/shared/models/UserModel.js');
 
 // ============================================================================
 // ------------------- Scripts -------------------
@@ -213,7 +213,7 @@ module.exports = {
       
       // If not found as regular character, try as mod character
       if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
+        const { fetchModCharacterByNameAndUserId } = require('@app/shared/database/db');
         character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
       }
       
@@ -428,7 +428,7 @@ module.exports = {
           if (shouldConsumeElixir(character, 'gather', { blightRain: true })) {
             consumeElixirBuff(character);
             // Update character in database
-            const { updateCharacterById, updateModCharacterById } = require('../../../shared/database/db.js');
+            const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
             const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
             await updateFunction(character._id, { buff: character.buff });
           }
@@ -475,7 +475,7 @@ module.exports = {
               if (shouldConsumeElixir(character, 'gather', { blightRain: true })) {
                 consumeElixirBuff(character);
                 // Update character in database
-                const { updateCharacterById, updateModCharacterById } = require('../../../shared/database/db.js');
+                const { updateCharacterById, updateModCharacterById } = require('@app/shared/database/db.js');
                 const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
                 await updateFunction(character._id, { buff: character.buff });
                 blightRainMessage += "\n\n🧪 **Elixir consumed!** The protective effects have been used up.";
@@ -667,7 +667,7 @@ module.exports = {
           
           // Fetch the correct emoji from the database for the jelly type
           try {
-            const ItemModel = require('../../../shared/models/ItemModel');
+            const ItemModel = require('@app/shared/models/ItemModel');
             const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
             if (jellyItem && jellyItem.emoji) {
               lootedItem.emoji = jellyItem.emoji;
@@ -737,7 +737,7 @@ module.exports = {
           // If boosted by an Entertainer, still grant the gathering bonus item even on encounter
           try {
             if (character.boostedBy) {
-              const { fetchCharacterByName } = require('../../../shared/database/db');
+              const { fetchCharacterByName } = require('@app/shared/database/db');
               const boosterCharacter = await fetchCharacterByName(character.boostedBy);
               const isEntertainerBoost = boosterCharacter &&
                 (boosterCharacter.job === 'Entertainer' || boosterCharacter.job?.toLowerCase() === 'entertainer');
@@ -903,7 +903,7 @@ module.exports = {
         let scholarTargetVillage = null;
         
         if (character.boostedBy) {
-          const { fetchCharacterByName } = require('../../../shared/database/db');
+          const { fetchCharacterByName } = require('@app/shared/database/db');
           boosterCharacter = await fetchCharacterByName(character.boostedBy);
           
                      // Handle Scholar boost (cross-region gathering) before filtering items

@@ -12,8 +12,8 @@ dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 // ============================================================================
 // Local Modules
 // ------------------- Importing database functions -------------------
-const { generateVendingStockList } = require('../../shared/database/db');
-const logger = require('../../shared/utils/logger');
+const { generateVendingStockList } = require('@app/shared/database/db');
+const logger = require('@app/shared/utils/logger');
 
 // ============================================================================
 // Main Function

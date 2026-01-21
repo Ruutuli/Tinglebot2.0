@@ -168,6 +168,9 @@ const tempDataSchema = new mongoose.Schema({
 // Compound index for efficient queries
 tempDataSchema.index({ type: 1, key: 1 });
 
+// TTL index: automatically delete documents when expiresAt <= now
+tempDataSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 // Pre-save middleware to set expiration based on type
 tempDataSchema.pre('save', function(next) {
   // Debug info removed to reduce log bloat

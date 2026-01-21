@@ -16,13 +16,13 @@ const { google } = require('googleapis');
 // Database Connections
 // ============================================================================
 
-const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('../../shared/database/db');
+const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('@app/shared/database/db');
 
 // ============================================================================
 // Database Models
 // ============================================================================
 
-const ItemModel = require('../../shared/models/ItemModel');
+const ItemModel = require('@app/shared/models/ItemModel');
 
 // ============================================================================
 // Utility Functions
@@ -33,11 +33,11 @@ function escapeRegExp(string) {
     return string.replace(/[.*?^${}()|[\]\\]/g, '\\$&');
 }
 
-const { handleError } = require('../../shared/utils/globalErrorHandler');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds.js');
-const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../../shared/utils/inventoryUtils');
-const { authorizeSheets, getSheetIdByTitle, getActualInventorySheetName, readSheetData, writeBatchData, validateInventorySheet } = require('../../shared/utils/googleSheetsUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../shared/utils/googleSheetsUtils');
+const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
+const { authorizeSheets, getSheetIdByTitle, getActualInventorySheetName, readSheetData, writeBatchData, validateInventorySheet } = require('@app/shared/utils/googleSheetsUtils');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@app/shared/utils/googleSheetsUtils');
 
 // ============================================================================
 // Constants

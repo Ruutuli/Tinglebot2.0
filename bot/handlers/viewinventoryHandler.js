@@ -9,11 +9,11 @@
 // Sorted alphabetically for quick lookup.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder } = require('discord.js');
 
-const { handleError } = require('../../shared/utils/globalErrorHandler');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
 // ============================================================================
 // Database Services
 // ------------------- Importing database service functions -------------------
-const { fetchCharacterByNameAndUserId } = require('../../shared/database/db');
+const { fetchCharacterByNameAndUserId } = require('@app/shared/database/db');
 
 // ============================================================================
 // Modules
@@ -23,7 +23,7 @@ const { syncInventory } = require('./syncHandler');
 // ============================================================================
 // Utility Functions
 // ------------------- Importing utility functions -------------------
-const { getCharacterInventoryCollection } = require('../../shared/utils/inventoryUtils');
+const { getCharacterInventoryCollection } = require('@app/shared/utils/inventoryUtils');
 
 
 // ------------------- Constants -------------------

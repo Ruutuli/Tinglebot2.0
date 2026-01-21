@@ -3,8 +3,8 @@
 // const { v4: uuidv4 } = require('uuid');
 
 
-// const { handleError } = require('../../shared/utils/globalErrorHandler');
-// const { checkInventorySync } = require('../../shared/utils/characterUtils');
+// const { handleError } = require('@app/shared/utils/globalErrorHandler');
+// const { checkInventorySync } = require('@app/shared/utils/characterUtils');
 // // ------------------- Discord.js Components -------------------
 // // Components from discord.js used for building UI elements.
 // const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -13,7 +13,7 @@
 // // ------------------- Database Services -------------------
 // // Service modules for database interactions.
 // // Character Services
-// const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, getOrCreateToken } = require('../../shared/database/db');
+// const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, getOrCreateToken } = require('@app/shared/database/db');
 
 
 // // ------------------- Modules -------------------
@@ -61,19 +61,19 @@
 
 // // ------------------- Utility Functions -------------------
 // // Generic helper utilities not directly tied to Google Sheets.
-// const { removeItemInventoryDatabase } = require('../../shared/utils/inventoryUtils');
+// const { removeItemInventoryDatabase } = require('@app/shared/utils/inventoryUtils');
 
 
 // // ------------------- Google Sheets API -------------------
 // // Specific setup for Google Sheets API integration.
-// const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet, } = require('../../shared/utils/googleSheetsUtils');
+// const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet, } = require('@app/shared/utils/googleSheetsUtils');
 
 
 // // ------------------- Database Models -------------------
 // // Schemas/models for database collections.
-// const Character = require('../../shared/models/CharacterModel');
-// const Mount = require('../../shared/models/MountModel');
-// const User = require('../../shared/models/UserModel');
+// const Character = require('@app/shared/models/CharacterModel');
+// const Mount = require('@app/shared/models/MountModel');
+// const User = require('@app/shared/models/UserModel');
 
 
 // // ------------------- Village Emojis -------------------

@@ -6,7 +6,7 @@
 // Note: express-rate-limit will be added as a dependency
 // For now, using a simple in-memory rate limiter
 
-const logger = require('../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 
 // Check if we're in production
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';

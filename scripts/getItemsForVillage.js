@@ -8,8 +8,8 @@ const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 
-const dbConfig = require('../shared/config/database');
-const ItemModel = require('../shared/models/ItemModel');
+const dbConfig = require('@app/shared/config/database');
+const ItemModel = require('@app/shared/models/ItemModel');
 
 async function main() {
     try {

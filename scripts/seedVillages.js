@@ -10,8 +10,8 @@ const mongoose = require('mongoose');
 const envPath = path.resolve(__dirname, '..', '.env');
 dotenv.config({ path: envPath });
 
-const dbConfig = require('../shared/config/database');
-const { Village, VILLAGE_CONFIG, DEFAULT_HEALTH, DEFAULT_TOKEN_REQUIREMENTS } = require('../shared/models/VillageModel');
+const dbConfig = require('@app/shared/config/database');
+const { Village, VILLAGE_CONFIG, DEFAULT_HEALTH, DEFAULT_TOKEN_REQUIREMENTS } = require('@app/shared/models/VillageModel');
 
 // ============================================================================
 // ---- Helper Functions ----

@@ -5,9 +5,9 @@
 
 const express = require('express');
 const router = express.Router();
-const { Village } = require('../../../shared/models/VillageModel');
+const { Village } = require('@app/shared/models/VillageModel');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const logger = require('../../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 
 // ------------------- Function: getVillageStatus -------------------
 // Returns current status for all villages

@@ -15,12 +15,12 @@ const {
 // ------------------- Import database models and utilities -------------------
 // Models for game sessions and character management
 // ============================================================================
-const logger = require('../../../shared/utils/logger');
-const Minigame = require('../../../shared/models/MinigameModel');
-const Character = require('../../../shared/models/CharacterModel');
-const User = require('../../../shared/models/UserModel');
-const { generateUniqueId } = require('../../../shared/utils/uniqueIdUtils');
-const { handleInteractionError } = require('../../../shared/utils/globalErrorHandler');
+const logger = require('@app/shared/utils/logger');
+const Minigame = require('@app/shared/models/MinigameModel');
+const Character = require('@app/shared/models/CharacterModel');
+const User = require('@app/shared/models/UserModel');
+const { generateUniqueId } = require('@app/shared/utils/uniqueIdUtils');
+const { handleInteractionError } = require('@app/shared/utils/globalErrorHandler');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
 
 // ============================================================================
@@ -219,7 +219,7 @@ module.exports = {
     } else if (questId === 'RINGER') {
       console.log(`[MINIGAME JOIN] ${username} using RINGER - joining as backup player`);
     } else {
-      const Quest = require('../../../shared/models/QuestModel');
+      const Quest = require('@app/shared/models/QuestModel');
       const quest = await Quest.findOne({ questID: questId });
       
       if (!quest) {
@@ -300,7 +300,7 @@ module.exports = {
     
     // Fetch character
     console.log(`[MINIGAME JOIN] ${username} fetching character "${resolvedCharacterName}" from database`);
-    const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
+    const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('@app/shared/database/db');
     let character = await fetchCharacterByNameAndUserId(resolvedCharacterName, userId);
     
     // If not found as regular character, try as mod character
@@ -561,7 +561,7 @@ module.exports = {
     const resolvedCharacterName = playerCharacter.characterName;
     
     // Fetch character
-    const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('../../../shared/database/db');
+    const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('@app/shared/database/db');
     let character = await fetchCharacterByNameAndUserId(resolvedCharacterName, userId);
     
     // If not found as regular character, try as mod character

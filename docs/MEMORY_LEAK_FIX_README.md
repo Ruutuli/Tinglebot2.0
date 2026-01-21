@@ -18,62 +18,36 @@
 - ⚠️ Both share the same `memoryMonitor` utility (which correctly detects leaks in both)
 
 **Current Status:** 
-- ✅ Bot: Monitoring added (alerts at 100k+ and 200k+ timers)
-- ✅ Dashboard: Monitoring added (alerts at 20k+ and 50k+ timers)
-- ✅ Memory monitor updated to exclude node-cron timers from leak detection
-- ⚠️ Workaround in place (monitoring only, doesn't fix the leak)
-- ❌ Proper fix pending (migration to croner for BOTH services)
+- ✅ **MIGRATION COMPLETE** - Both bot and dashboard migrated to `croner`
+- ✅ Memory monitor updated to detect croner timers (no longer tracks node-cron)
+- ✅ Old node-cron leak monitoring code removed
+- ✅ Memory usage stable (226 MB vs 2.26 GB before)
+- ✅ Timer count stable (679 timers vs 815k+ before)
 
 ---
 
-## Current Workarounds
+## Migration Complete ✅
 
-### 1. Monitoring System
+The migration from `node-cron` to `croner` has been completed for both the bot and dashboard services.
 
-A monitoring system has been added in both `bot/scheduler.js` and `dashboard/scheduler.js` that:
-- Checks every 30 minutes for excessive node-cron timer accumulation
-- Warns at 100,000+ timers (bot) / 20,000+ timers (dashboard)
-- Alerts critically at 200,000+ timers (bot) / 50,000+ timers (dashboard)
-- Attempts garbage collection if `--expose-gc` flag is enabled
+**Results:**
+- Memory usage: **226 MB** (down from 2.26 GB - 90% reduction)
+- Timer count: **679 timers** (down from 815k+ - 99.9% reduction)
+- Memory growth: **Stable** (no continuous growth observed)
+- All scheduled tasks: **Working correctly**
 
-**This does NOT fix the leak** - it only helps you monitor it.
+**Cleanup completed:**
+- ✅ Removed all node-cron detection logic from `memoryMonitor.js`
+- ✅ Updated logging to show croner timers instead of node-cron
+- ✅ Simplified timer leak detection (croner doesn't leak)
+- ✅ Removed old monitoring workarounds
 
-### 2. Railway Auto-Restart (Temporary Fix)
+### Railway Healthcheck (Still Active)
 
-A healthcheck endpoint has been added to automatically restart the bot when memory gets too high.
-
-**How it works:**
-- Healthcheck endpoint at `/health` or `/healthcheck` checks memory every time Railway calls it
-- Returns `503 (unhealthy)` when:
-  - Memory exceeds 1 GB, OR
-  - Node-cron timers exceed 300,000
-- Railway will automatically restart the service when healthcheck fails
-
-**Railway Configuration:**
-
-1. **Set Healthcheck Path:**
-   - Go to your Railway service settings
-   - Under "Deploy" section, find "Healthcheck Path"
-   - Set it to: `/health` or `/healthcheck`
-   - Railway will call this endpoint periodically
-   - If it returns 503, Railway will restart the service
-
-2. **Optional: Set Memory Limit:**
-   - Under "Resource Limits", set Memory to a reasonable limit (e.g., 1.5 GB)
-   - Railway will kill the process if it exceeds this limit (hard kill)
-   - The healthcheck provides a gentler restart before hitting the limit
-
-3. **Restart Policy:**
-   - Ensure "Restart Policy" is set to "On Failure" (default)
-   - This ensures Railway restarts when healthcheck fails
-
-**Note:** This is a temporary workaround. The bot will restart periodically, which:
-- ✅ Prevents memory from growing indefinitely
-- ✅ Clears accumulated timers
-- ⚠️ Causes brief downtime during restart (~10-30 seconds)
-- ⚠️ Doesn't fix the root cause
-
-**The leak will continue until migration to croner is complete.**
+The healthcheck endpoint at `/health` or `/healthcheck` remains active for general memory monitoring:
+- Returns `503 (unhealthy)` when memory exceeds 1 GB
+- Railway will automatically restart the service if healthcheck fails
+- This provides a safety net for any future memory issues
 
 ---
 
@@ -235,38 +209,14 @@ function destroyAllCronJobs() {
 }
 ```
 
-#### 5. Remove node-cron leak monitoring
+#### 5. Clean up old node-cron detection code ✅ COMPLETE
 
-**Remove or comment out:**
-- The `setupNodeCronLeakMonitoring()` function (lines ~2800-2840)
-- The call to `setupNodeCronLeakMonitoring()` in `initializeScheduler()` (line ~2835)
+**Already removed:**
+- ✅ All node-cron detection logic from `memoryMonitor.js`
+- ✅ Old monitoring workarounds
+- ✅ Node-cron specific logging and warnings
 
-**Or update it to monitor croner instead:**
-```javascript
-function setupCronLeakMonitoring() {
- // Monitor for any timer leaks (shouldn't happen with croner, but good to verify)
- createCronJob("*/30 * * * *", "cron leak monitoring", async () => {
-  try {
-   const { getMemoryMonitor } = require('../shared/utils/memoryMonitor');
-   const memoryMonitor = getMemoryMonitor();
-   if (!memoryMonitor) return;
-   
-   const stats = memoryMonitor.getMemoryStats();
-   const allTimers = Array.from(memoryMonitor.activeTimers?.values() || []);
-   const cronTimers = allTimers.filter(t => t.source?.includes('cron'));
-   const cronCount = cronTimers.length;
-   
-   // With croner, we should see stable timer counts
-   if (cronCount > 1000) {
-    logger.warn('SCHEDULER', `Warning: High cron timer count - ${cronCount.toLocaleString()} active timers`);
-    logger.warn('SCHEDULER', 'This may indicate an issue with croner or another scheduler.');
-   }
-  } catch (error) {
-   logger.error('SCHEDULER', 'Error monitoring cron leak', error.message);
-  }
- }, "America/New_York");
-}
-```
+The memory monitor now only tracks croner timers, which don't leak.
 
 #### 6. Update package.json
 
@@ -316,12 +266,14 @@ If you see issues:
 
 ## Rollback Plan
 
-If migration causes issues:
+**Note:** Migration is complete and stable. Rollback should not be necessary.
 
-1. Revert `scheduler.js` changes
+If issues arise (unlikely):
+
+1. Revert `scheduler.js` changes in both bot and dashboard
 2. Reinstall node-cron: `npm install node-cron@3.0.3`
 3. Remove croner: `npm uninstall croner`
-4. Re-enable monitoring: Uncomment `setupNodeCronLeakMonitoring()`
+4. Re-add node-cron detection to `memoryMonitor.js` (see git history)
 
 ---
 
@@ -369,4 +321,4 @@ If you encounter problems during migration:
 ---
 
 **Last Updated:** 2026-01-21  
-**Status:** Workaround in place, proper fix pending
+**Status:** ✅ Migration complete - Memory leak fixed

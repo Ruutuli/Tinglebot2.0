@@ -6,7 +6,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 const { google } = require("googleapis");
 
 // ------------------- Project Utilities -------------------
-const { handleError } = require("../../shared/utils/globalErrorHandler");
+const { handleError } = require("@app/shared/utils/globalErrorHandler");
 const {
  authorizeSheets,
  appendSheetData,
@@ -14,21 +14,21 @@ const {
  isValidGoogleSheetsUrl,
  readSheetData,
  safeAppendDataToSheet,
-} = require("../../shared/utils/googleSheetsUtils");
-const dbConfig = require('../../shared/config/database');
+} = require("@app/shared/utils/googleSheetsUtils");
+const dbConfig = require('@app/shared/config/database');
 
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
-const inventoryUtils = require("../../shared/utils/inventoryUtils");
+const inventoryUtils = require("@app/shared/utils/inventoryUtils");
 
 // ------------------- Models -------------------
-const Character = require("../../shared/models/CharacterModel");
-const ModCharacter = require("../../shared/models/ModCharacterModel");
-const Monster = require("../../shared/models/MonsterModel");
-const Quest = require("../../shared/models/QuestModel");
-const RelicModel = require("../../shared/models/RelicModel");
-const User = require("../../shared/models/UserModel");
-const Pet = require("../../shared/models/PetModel");
-const generalCategories = require("../../shared/models/GeneralItemCategories");
+const Character = require("@app/shared/models/CharacterModel");
+const ModCharacter = require("@app/shared/models/ModCharacterModel");
+const Monster = require("@app/shared/models/MonsterModel");
+const Quest = require("@app/shared/models/QuestModel");
+const RelicModel = require("@app/shared/models/RelicModel");
+const User = require("@app/shared/models/UserModel");
+const Pet = require("@app/shared/models/PetModel");
+const generalCategories = require("@app/shared/models/GeneralItemCategories");
 
 // ============================================================================
 // ------------------- Database Connection Functions -------------------
@@ -2174,7 +2174,7 @@ inventoryUtils.initializeInventoryUtils({
 const recordBlightRoll = async (characterId, characterName, userId, rollValue, previousStage, newStage, notes = '') => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('../../shared/models/BlightRollHistoryModel');
+    const BlightRollHistory = require('@app/shared/models/BlightRollHistoryModel');
     
     const rollRecord = new BlightRollHistory({
       characterId,
@@ -2199,7 +2199,7 @@ const recordBlightRoll = async (characterId, characterName, userId, rollValue, p
 const getCharacterBlightHistory = async (characterId, limit = 10) => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('../../shared/models/BlightRollHistoryModel');
+    const BlightRollHistory = require('@app/shared/models/BlightRollHistoryModel');
     
     return await BlightRollHistory.find({ characterId })
       .sort({ timestamp: -1 })
@@ -2217,7 +2217,7 @@ const getCharacterBlightHistory = async (characterId, limit = 10) => {
 const getUserBlightHistory = async (userId, limit = 20) => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('../../shared/models/BlightRollHistoryModel');
+    const BlightRollHistory = require('@app/shared/models/BlightRollHistoryModel');
     
     return await BlightRollHistory.find({ userId })
       .sort({ timestamp: -1 })

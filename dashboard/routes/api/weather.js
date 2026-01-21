@@ -5,9 +5,9 @@
 
 const express = require('express');
 const router = express.Router();
-const Weather = require('../../../shared/models/WeatherModel');
+const Weather = require('@app/shared/models/WeatherModel');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const logger = require('../../../shared/utils/logger');
+const logger = require('@app/shared/utils/logger');
 
 // ------------------- Function: getWeatherDayBounds -------------------
 // Calculates the start and end of the current weather day (8am to 7:59am EST)

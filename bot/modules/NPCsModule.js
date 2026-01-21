@@ -1,7 +1,7 @@
-const generalCategories = require('../../shared/models/GeneralItemCategories');
-const ItemModel = require('../../shared/models/ItemModel');
-const { connectToTinglebot } = require('../../shared/database/db');
-const logger = require('../../shared/utils/logger');
+const generalCategories = require('@app/shared/models/GeneralItemCategories');
+const ItemModel = require('@app/shared/models/ItemModel');
+const { connectToTinglebot } = require('@app/shared/database/db');
+const logger = require('@app/shared/utils/logger');
 
 // ============================================================================
 // ---- State Management ----

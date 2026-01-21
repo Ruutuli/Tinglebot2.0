@@ -19,8 +19,8 @@ if (require('fs').existsSync(envSpecificPath)) {
   dotenv.config({ path: rootEnvPath });
 }
 
-const { handleError } = require('../../shared/utils/globalErrorHandler');
-const logger = require('../../shared/utils/logger');
+const { handleError } = require('@app/shared/utils/globalErrorHandler');
+const logger = require('@app/shared/utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -30,7 +30,7 @@ const { EmbedBuilder } = require('discord.js');
 // Local Modules
 // ------------------- Importing custom modules -------------------
 const { convertToHyruleanDate, bloodmoonDates, isBloodmoon } = require('../modules/calendarModule');
-const BloodMoonTracking = require('../../shared/models/BloodMoonTrackingModel');
+const BloodMoonTracking = require('@app/shared/models/BloodMoonTrackingModel');
 
 // ============================================================================
 // Blood Moon Tracking State
@@ -356,7 +356,6 @@ function isBloodMoonDay() {
   
   // If we're not in a Blood Moon period, return false
   if (!bloodMoonDate) {
-    logger.info('BLOODMOON', 'Not in Blood Moon period');
     return false;
   }
   
@@ -366,25 +365,18 @@ function isBloodMoonDay() {
   const dayAfter = new Date(bloodMoonDate);
   dayAfter.setDate(bloodMoonDate.getDate() + 1);
   
-  logger.info('BLOODMOON', `Current EST: ${estDate.toDateString()} ${estHour}:00, Start: ${dayBefore.toDateString()}, End: ${dayAfter.toDateString()}`);
-  
   // Check if we're in the Blood Moon period and at the right time
   let isActive = false;
   
   if (estDate.getTime() === dayBefore.getTime()) {
     // We're on the day before the Blood Moon date - check if it's 8 PM or later
     isActive = estHour >= 20;
-    logger.info('BLOODMOON', `Day before Blood Moon - Hour: ${estHour}, Active: ${isActive}`);
   } else if (estDate.getTime() === bloodMoonDate.getTime()) {
     // We're on the actual Blood Moon date - always active
     isActive = true;
-    logger.info('BLOODMOON', `Blood Moon day - Always active: ${isActive}`);
   } else if (estDate.getTime() === dayAfter.getTime()) {
     // We're on the day after the Blood Moon date - check if it's before 8 AM
     isActive = estHour < 8;
-    logger.info('BLOODMOON', `Day after Blood Moon - Hour: ${estHour}, Active: ${isActive}`);
-  } else {
-    logger.info('BLOODMOON', 'Not in Blood Moon period');
   }
   
   return isActive;
@@ -504,7 +496,6 @@ async function renameChannels(client) {
 // ------------------- revertChannelNames -------------------
 // Reverts channel names to their default state and sends end-of-event announcements.
 async function revertChannelNames(client) {
-  logger.info('BLOODMOON', 'Starting channel name reversion');
   
   // First check if Blood Moon is currently active
   const isBloodMoonActive = isBloodMoonDay();
@@ -565,7 +556,9 @@ async function revertChannelNames(client) {
     }
   }
   
-  logger.success('BLOODMOON', 'Channel reversion completed');
+  if (successfulChannels.size > 0) {
+    logger.info('BLOODMOON', `Reverted ${successfulChannels.size} channel names`);
+  }
 }
 
 // ============================================================================

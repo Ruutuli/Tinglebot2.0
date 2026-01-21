@@ -216,7 +216,6 @@ function startExpirationChecks(client) {
   isExpirationChecksRunning = true;
   expirationClient = client;
 
-  console.log('[expirationHandler.js]: Starting expiration checks...');
 
   // Start the scheduling loop
   scheduleNextCheck();
