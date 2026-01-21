@@ -372,20 +372,7 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
     if (legacyWeather) {
       // Validate legacy weather is actually within current period bounds before using it
       const legacyDate = legacyWeather.date instanceof Date ? legacyWeather.date : new Date(legacyWeather.date);
-      const legacyIsInBounds = exclusiveEnd
-        ? (legacyDate >= startUTC && legacyDate < endUTC)
-        : (legacyDate >= startUTC && legacyDate <= endUTC);
-
-      if (!legacyIsInBounds && legacyDate >= endUTC) {
-        // Legacy weather is from future period - reject it to prevent next period leaks
-        console.warn(`[weatherService.js]: ⚠️ Legacy weather rejected: outside current period bounds for ${normalizedVillage}`, {
-          legacyDate: legacyDate.toISOString(),
-          startUTC: startUTC.toISOString(),
-          endUTC: endUTC.toISOString()
-        });
-        return null;
-      }
-
+      
       // Check if the legacy weather's date is already close to the target period
       // If it's within 1 hour of the start, it was likely already realigned
       const timeDiff = Math.abs(legacyDate.getTime() - startUTC.getTime());
@@ -397,6 +384,16 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
       const legacyIsInBounds = exclusiveEnd
         ? (legacyDate >= periodStartWithTolerance && legacyDate < endUTC)
         : (legacyDate >= periodStartWithTolerance && legacyDate <= endUTC);
+
+      if (!legacyIsInBounds && legacyDate >= endUTC) {
+        // Legacy weather is from future period - reject it to prevent next period leaks
+        console.warn(`[weatherService.js]: ⚠️ Legacy weather rejected: outside current period bounds for ${normalizedVillage}`, {
+          legacyDate: legacyDate.toISOString(),
+          startUTC: startUTC.toISOString(),
+          endUTC: endUTC.toISOString()
+        });
+        return null;
+      }
       
       // Only realign if the date is significantly different AND the legacy date is before the period start
       // Don't realign if legacy date is in the future (next period) - that should have been caught above
