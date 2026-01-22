@@ -12,12 +12,12 @@ const path = require('path');
 require('dotenv').config();
 
 // Import all models
-const Character = require('@/shared/models/CharacterModel');
-const ModCharacter = require('@/shared/models/ModCharacterModel');
-const Item = require('@/shared/models/ItemModel');
-const Monster = require('@/shared/models/MonsterModel');
-const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
-const GeneralItem = require('@/shared/models/GeneralItemModel');
+const Character = require('../models/CharacterModel.js');
+const ModCharacter = require('../models/ModCharacterModel.js');
+const Item = require('../models/ItemModel.js');
+const Monster = require('../models/MonsterModel.js');
+const HelpWantedQuest = require('../models/HelpWantedQuestModel.js');
+const GeneralItem = require('../models/GeneralItemModel.js');
 
 // ------------------- Connect to Database -------------------
 async function connectDatabase() {

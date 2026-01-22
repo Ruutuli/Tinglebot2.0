@@ -5,10 +5,10 @@
 
 const express = require('express');
 const router = express.Router();
-const Weather = require('@/shared/models/WeatherModel');
+const Weather = require('../../models/WeatherModel.js');
 const { asyncHandler } = require('../../middleware/errorHandler');
-const logger = require('@/shared/utils/logger');
-const { getWeatherWithoutGeneration } = require('@/shared/services/weatherService');
+const logger = require('../../utils/logger.js');
+const { getWeatherWithoutGeneration } = require('../../services/weatherService.js');
 
 // ------------------- Function: getWeatherDayBounds -------------------
 // Calculates the start and end of the current weather day (8am to 7:59am EST)
@@ -42,12 +42,7 @@ function getWeatherDayBounds() {
 // Returns today's weather for all villages (using 8am-7:59am EST weather day)
 // Uses the same weather service function as the bot to ensure consistency
 router.get('/today', asyncHandler(async (req, res) => {
-  console.log('[weather.js API]: 🌤️ Weather API /today endpoint called');
   const { weatherDayStart, weatherDayEnd } = getWeatherDayBounds();
-  console.log('[weather.js API]: 📅 Searching for weather in period:', {
-    start: weatherDayStart.toISOString(),
-    end: weatherDayEnd.toISOString()
-  });
   
   // Use the same weather service function as the bot to ensure we get the correct weather
   // This ensures consistency between what's posted and what's displayed on the dashboard
@@ -64,7 +59,6 @@ router.get('/today', asyncHandler(async (req, res) => {
   dateRangeEnd.setMilliseconds(999);
   
   for (const village of villages) {
-    console.log(`[weather.js API]: 🔍 Fetching weather for ${village}...`);
     try {
       // FIRST: Try exact date match (most reliable - matches how weather is saved)
       let weather = await Weather.findOne({
@@ -73,53 +67,42 @@ router.get('/today', asyncHandler(async (req, res) => {
         postedToDiscord: true
       });
       
-      if (weather) {
-        console.log(`[weather.js API]: ${village} - Found by exact date match (ID: ${weather._id})`);
-      } else {
+      if (!weather) {
         // SECOND: Try date within same second (catches weather saved with milliseconds)
         weather = await Weather.findOne({
           village: village,
           date: { $gte: dateRangeStart, $lte: dateRangeEnd },
           postedToDiscord: true
         });
-        
+      }
+      
+      if (!weather) {
+        // THIRD: Try exact date without postedToDiscord requirement
+        weather = await Weather.findOne({
+          village: village,
+          date: normalizedDate
+        });
+      }
+      
+      if (!weather) {
+        // FOURTH: Try same-second range without postedToDiscord requirement
+        weather = await Weather.findOne({
+          village: village,
+          date: { $gte: dateRangeStart, $lte: dateRangeEnd }
+        });
+      }
+      
+      if (!weather) {
+        // FIFTH: Use weather service function (range query as fallback)
+        weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
+      }
+      
+      if (!weather) {
+        // SIXTH: Try without onlyPosted filter
+        logger.warn('WEATHER', `No posted weather found for ${village}, trying without onlyPosted filter`);
+        weather = await getWeatherWithoutGeneration(village, { onlyPosted: false });
         if (weather) {
-          console.log(`[weather.js API]: ${village} - Found by same-second range (ID: ${weather._id}, date: ${weather.date?.toISOString()})`);
-        } else {
-          // THIRD: Try exact date without postedToDiscord requirement
-          weather = await Weather.findOne({
-            village: village,
-            date: normalizedDate
-          });
-          
-          if (weather) {
-            console.log(`[weather.js API]: ${village} - Found by exact date (unposted, ID: ${weather._id})`);
-          } else {
-            // FIFTH: Try same-second range without postedToDiscord requirement
-            weather = await Weather.findOne({
-              village: village,
-              date: { $gte: dateRangeStart, $lte: dateRangeEnd }
-            });
-            
-            if (weather) {
-              console.log(`[weather.js API]: ${village} - Found by same-second range (unposted, ID: ${weather._id})`);
-            } else {
-              // SIXTH: Use weather service function (range query as fallback)
-              weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
-              console.log(`[weather.js API]: ${village} - Range query (onlyPosted=true):`, weather ? `Found (ID: ${weather._id})` : 'Not found');
-              
-              // SEVENTH: Try without onlyPosted filter
-              if (!weather) {
-                console.log(`[weather.js API]: ⚠️ No posted weather found for ${village}, trying without onlyPosted filter`);
-                logger.warn('weather.js', `No posted weather found for ${village}, trying without onlyPosted filter`);
-                weather = await getWeatherWithoutGeneration(village, { onlyPosted: false });
-                console.log(`[weather.js API]: ${village} - Range query (onlyPosted=false):`, weather ? `Found (ID: ${weather._id}, postedToDiscord=${weather.postedToDiscord})` : 'Not found');
-                if (weather) {
-                  logger.warn('weather.js', `Found unposted weather for ${village} - postedToDiscord=${weather.postedToDiscord}, postedAt=${weather.postedAt}`);
-                }
-              }
-            }
-          }
+          logger.warn('WEATHER', `Found unposted weather for ${village} - postedToDiscord=${weather.postedToDiscord}`);
         }
       }
       
@@ -164,18 +147,12 @@ router.get('/today', asyncHandler(async (req, res) => {
               }
             }
           } catch (dateError) {
-            console.warn(`[weather.js API]: Error formatting date for ${village}:`, dateError.message);
             weatherDateStr = String(weather.date || 'unknown');
           }
           
-          console.log(`[weather.js API]: ✅ Found weather for ${village} - ID: ${weather._id?.toString()}, date: ${weatherDateStr}, postedToDiscord: ${weather.postedToDiscord}`);
-          // Only log if message is defined to avoid logger errors
-          if (weatherDateStr) {
-            logger.info('weather.js', `Found weather for ${village} - ID: ${weather._id?.toString()}, date: ${weatherDateStr}, postedToDiscord: ${weather.postedToDiscord}`);
-          }
+          logger.debug('WEATHER', `Found weather for ${village} - ID: ${weather._id?.toString()}, date: ${weatherDateStr}`);
         } catch (processError) {
-          console.error(`[weather.js API]: ❌ Error processing weather data for ${village}:`, processError);
-          logger.error(`Error processing weather data for ${village}: ${processError.message || processError}`);
+          logger.error('WEATHER', `Error processing weather data for ${village}: ${processError.message || processError}`);
           // Still try to add the raw weather object
           weatherByVillage[village] = weather.toObject ? weather.toObject() : weather;
         }
@@ -194,11 +171,8 @@ router.get('/today', asyncHandler(async (req, res) => {
     }
   }
   
-  console.log('[weather.js API]: 📤 Returning weather data:', {
-    date: weatherDayStart.toISOString(),
-    villagesFound: Object.keys(weatherByVillage).filter(v => weatherByVillage[v] !== null).length,
-    totalVillages: villages.length
-  });
+  const villagesFound = Object.keys(weatherByVillage).filter(v => weatherByVillage[v] !== null).length;
+  logger.debug('WEATHER', `Returning weather data: ${villagesFound}/${villages.length} villages found`);
   
   res.json({
     date: weatherDayStart,

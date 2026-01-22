@@ -5,14 +5,14 @@
 
 const express = require('express');
 const router = express.Router();
-const { fetchAllCharacters, getCharacterInventoryCollection, fetchAllItems } = require('@/shared/database/db');
+const { fetchAllCharacters, getCharacterInventoryCollection, fetchAllItems } = require('../../database/db.js');
 const { asyncHandler } = require('../../middleware/errorHandler');
 const { validateRequiredFields } = require('../../middleware/validation');
-const logger = require('@/shared/utils/logger');
+const logger = require('../../utils/logger.js');
 const mongoose = require('mongoose');
-const Character = require('@/shared/models/CharacterModel');
-const Item = require('@/shared/models/ItemModel');
-const InventoryLog = require('@/shared/models/InventoryLogModel');
+const Character = require('../../models/CharacterModel.js');
+const Item = require('../../models/ItemModel.js');
+const InventoryLog = require('../../models/InventoryLogModel.js');
 
 // Helper function to escape regex special characters
 function escapeRegExp(string) {

@@ -201,9 +201,10 @@ const logger = {
 
   // ------------------- database ------------------
   // Logs database-related message
-  database: (message, context = 'DB') => {
+  database: (context, message) => {
+    const ctx = context || 'DB';
     console.log(
-      `💾 ${formatContext(context)} ` +
+      `💾 ${formatContext(ctx)} ` +
       `${colors.dim}${getTimestamp()}${colors.reset} ` +
       `${colors.cyan}${message}${colors.reset}`
     );
@@ -211,10 +212,11 @@ const logger = {
 
   // ------------------- api ------------------
   // Logs API-related message
-  api: (message, context = 'server.js') => {
+  api: (context, message) => {
+    const ctx = context || 'API';
     console.log(
       `${colors.dim}${getTimestamp()}${colors.reset} ` +
-      `${formatContext(context)} ` +
+      `${formatContext(ctx)} ` +
       `${colors.blue}🌐${colors.reset} ` +
       `${colors.blue}${message}${colors.reset}`
     );
@@ -222,9 +224,10 @@ const logger = {
 
   // ------------------- schedule ------------------
   // Logs scheduler/timer message
-  schedule: (message, context = 'SCHD') => {
+  schedule: (context, message) => {
+    const ctx = context || 'SCHD';
     console.log(
-      `⏰ ${formatContext(context)} ` +
+      `⏰ ${formatContext(ctx)} ` +
       `${colors.dim}${getTimestamp()}${colors.reset} ` +
       `${colors.blue}${message}${colors.reset}`
     );
@@ -232,10 +235,11 @@ const logger = {
 
   // ------------------- character ------------------
   // Logs character/user-related message
-  character: (message, context = 'server.js') => {
+  character: (context, message) => {
+    const ctx = context || 'SERVER';
     console.log(
       `${colors.dim}${getTimestamp()}${colors.reset} ` +
-      `${formatContext(context)} ` +
+      `${formatContext(ctx)} ` +
       `${colors.magenta}👤${colors.reset} ` +
       `${colors.magenta}${message}${colors.reset}`
     );
@@ -243,10 +247,11 @@ const logger = {
 
   // ------------------- event ------------------
   // Logs event message
-  event: (message, context = 'server.js') => {
+  event: (context, message) => {
+    const ctx = context || 'SERVER';
     console.log(
       `${colors.dim}${getTimestamp()}${colors.reset} ` +
-      `${formatContext(context)} ` +
+      `${formatContext(ctx)} ` +
       `${colors.green}🎯${colors.reset} ` +
       `${colors.green}${message}${colors.reset}`
     );
@@ -254,9 +259,10 @@ const logger = {
 
   // ------------------- debug ------------------
   // Logs debug message
-  debug: (message, data = null, context = 'server.js') => {
+  debug: (context, message, data = null) => {
+    const ctx = context || 'SERVER';
     console.log(
-      `🔍 ${formatContext(context)} ` +
+      `🔍 ${formatContext(ctx)} ` +
       `${colors.dim}${getTimestamp()}${colors.reset} ` +
       `${colors.dim}${message}${colors.reset}`
     );
@@ -325,10 +331,11 @@ const logger = {
 
   // ------------------- custom ------------------
   // Logs custom emoji message
-  custom: (emoji, message, color = colors.white, context = 'server.js') => {
+  custom: (context, emoji, message, color = colors.white) => {
+    const ctx = context || 'SERVER';
     console.log(
       `${colors.dim}${getTimestamp()}${colors.reset} ` +
-      `${formatContext(context)} ` +
+      `${formatContext(ctx)} ` +
       `${emoji} ` +
       `${color}${message}${colors.reset}`
     );

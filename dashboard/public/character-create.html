@@ -18,16 +18,16 @@
   <!-- External Scripts -->
   <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
 </head>
-<body>
+<body class="character-create-page">
   <!-- Skip Links for Accessibility -->
   <a href="#main-content" class="skip-link">Skip to main content</a>
   
   <!-- Header -->
   <header class="topbar" role="banner">
     <div class="topbar-left">
-      <a href="/" class="back-button" aria-label="Back to Dashboard">
+      <a href="/" class="topbar-back-button" aria-label="Back to Dashboard">
         <i class="fas fa-arrow-left" aria-hidden="true"></i>
-        <span>Back to Dashboard</span>
+        <span>Back</span>
       </a>
       <div class="breadcrumb">Create Character</div>
     </div>
@@ -132,35 +132,37 @@
             
             <div class="form-grid">
               <div class="form-field-group">
-                <label for="character-hearts">
+                <label>
                   <span>Hearts</span>
-                  <span class="required">*</span>
                 </label>
+                <div class="stats-display">
+                  <i class="fas fa-heart"></i>
+                  <span>3 Hearts (Default)</span>
+                </div>
                 <input 
-                  type="number" 
+                  type="hidden" 
                   id="character-hearts" 
                   name="hearts" 
-                  required 
-                  min="1"
-                  placeholder="Enter hearts"
+                  value="3"
                 />
-                <small class="field-description">Starting hearts (minimum 1)</small>
+                <small class="field-description">All new characters start with 3 hearts</small>
               </div>
 
               <div class="form-field-group">
-                <label for="character-stamina">
+                <label>
                   <span>Stamina</span>
-                  <span class="required">*</span>
                 </label>
+                <div class="stats-display">
+                  <i class="fas fa-bolt"></i>
+                  <span>5 Stamina (Default)</span>
+                </div>
                 <input 
-                  type="number" 
+                  type="hidden" 
                   id="character-stamina" 
                   name="stamina" 
-                  required 
-                  min="1"
-                  placeholder="Enter stamina"
+                  value="3"
                 />
-                <small class="field-description">Starting stamina (minimum 1)</small>
+                <small class="field-description">All new characters start with 3 stamina</small>
               </div>
             </div>
           </div>
@@ -219,6 +221,56 @@
                   placeholder="https://..."
                 />
                 <small class="field-description">Link to character application</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Starting Gear Section -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-shield-alt"></i> Starting Gear</h2>
+            <p style="color: var(--text-secondary, rgba(255, 255, 255, 0.6)); margin-bottom: 1.5rem; font-size: 0.95rem;">
+              Select starting gear for your character. All selections are optional - you can equip gear later.
+            </p>
+            
+            <div class="form-grid">
+              <div class="form-field-group">
+                <label for="starter-weapon">
+                  <span>Weapon</span>
+                </label>
+                <select id="starter-weapon" name="starterWeapon">
+                  <option value="">None (select later)</option>
+                </select>
+                <small class="field-description">Starting weapon (optional)</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="starter-shield">
+                  <span>Shield</span>
+                </label>
+                <select id="starter-shield" name="starterShield">
+                  <option value="">None (select later)</option>
+                </select>
+                <small class="field-description">Starting shield (optional)</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="starter-armor-chest">
+                  <span>Chest Armor</span>
+                </label>
+                <select id="starter-armor-chest" name="starterArmorChest">
+                  <option value="">None (select later)</option>
+                </select>
+                <small class="field-description">Starting chest armor (optional)</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="starter-armor-legs">
+                  <span>Leg Armor</span>
+                </label>
+                <select id="starter-armor-legs" name="starterArmorLegs">
+                  <option value="">None (select later)</option>
+                </select>
+                <small class="field-description">Starting leg armor (optional)</small>
               </div>
             </div>
           </div>

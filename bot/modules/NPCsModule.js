@@ -1,7 +1,7 @@
-const generalCategories = require('@/shared/models/GeneralItemCategories');
-const ItemModel = require('@/shared/models/ItemModel');
-const { connectToTinglebot } = require('@/shared/database/db');
-const logger = require('@/shared/utils/logger');
+const generalCategories = require('../models/GeneralItemCategories');
+const ItemModel = require('../models/ItemModel');
+const { connectToTinglebot } = require('../database/db');
+const logger = require('../utils/logger');
 
 // ============================================================================
 // ------------------- NPC Data Structure -------------------

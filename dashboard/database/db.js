@@ -201,7 +201,13 @@ const fetchAllCharacters = async () => {
  try {
   await connectToTinglebot();
   trackDbOperation('queries');
-  return await Character.find().lean().exec();
+  // Only return accepted characters (exclude pending and denied)
+  return await Character.find({ 
+    $or: [
+      { status: 'accepted' },
+      { status: { $exists: false } } // Include characters created before status field was added
+    ]
+  }).lean().exec();
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -354,7 +360,14 @@ const fetchAnyCharacterByNameAndUserId = async (characterName, userId) => {
 const fetchAllCharactersExceptUser = async (userId) => {
  try {
   await connectToTinglebot();
-  return await Character.find({ userId: { $ne: userId } }).exec();
+  // Only return accepted characters (exclude pending and denied)
+  return await Character.find({ 
+    userId: { $ne: userId },
+    $or: [
+      { status: 'accepted' },
+      { status: { $exists: false } } // Include characters created before status field was added
+    ]
+  }).exec();
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -655,7 +668,13 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
 const fetchAllModCharacters = async () => {
  try {
   await connectToTinglebot();
-  const modCharacters = await ModCharacter.find({});
+  // Only return accepted mod characters (exclude pending and denied)
+  const modCharacters = await ModCharacter.find({
+    $or: [
+      { status: 'accepted' },
+      { status: { $exists: false } } // Include mod characters created before status field was added
+    ]
+  });
   return modCharacters;
  } catch (error) {
   handleError(error, "db.js", {

@@ -3,7 +3,7 @@
 // Centralized error handling with error type classification
 // ============================================================================
 
-const logger = require('@/shared/utils/logger');
+const logger = require('../utils/logger.js');
 
 // ------------------- Custom Error Classes -------------------
 class ValidationError extends Error {

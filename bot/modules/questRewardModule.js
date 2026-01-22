@@ -3,12 +3,12 @@
 // Handles automatic quest reward distribution and completion processing
 // ============================================================================
 
-const Quest = require('@/shared/models/QuestModel');
-const Character = require('@/shared/models/CharacterModel');
-const User = require('@/shared/models/UserModel');
-const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
-const { handleError } = require('@/shared/utils/globalErrorHandler');
-const logger = require('@/shared/utils/logger');
+const Quest = require('../models/QuestModel');
+const Character = require('../models/CharacterModel');
+const User = require('../models/UserModel');
+const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
+const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 const { EmbedBuilder } = require('discord.js');
 
 // ============================================================================
@@ -1066,10 +1066,10 @@ async function distributeItems(quest, participant) {
         const character = await findCharacterSafely(participant.characterName, participant.userId);
         
         // Import inventory utilities and database functions
-        const { connectToInventories } = require('@/shared/database/db');
-        const Item = require('@/shared/models/ItemModel');
+        const { connectToInventories } = require('../database/db');
+        const Item = require('../models/ItemModel');
         // Google Sheets functionality removed
-        const { logItemAcquisitionToDatabase } = require('@/shared/utils/inventoryUtils');
+        const { logItemAcquisitionToDatabase } = require('../utils/inventoryUtils');
         const { v4: uuidv4 } = require('uuid');
         
         // Determine which items to distribute

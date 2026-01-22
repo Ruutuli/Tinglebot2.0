@@ -3,7 +3,7 @@
 // Structured request logging for monitoring and debugging
 // ============================================================================
 
-const logger = require('@/shared/utils/logger');
+const logger = require('../utils/logger.js');
 
 // Check if we're in production
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'true';
@@ -36,7 +36,7 @@ function requestLogger(req, res, next) {
       if (req.user) {
         requestInfo.push(`User: ${req.user.username}`);
       }
-      logger.api(requestInfo.join(' | '), 'requestLogger.js');
+      logger.api('API', requestInfo.join(' | '));
     }
   }
   
@@ -49,14 +49,14 @@ function requestLogger(req, res, next) {
     // Log response
     if (statusCode >= 500) {
       // Always log server errors
-      logger.error(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, null, 'requestLogger.js');
+      logger.error('API', `Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`);
     } else if (statusCode >= 400) {
       // Always log client errors
       logger.warn(`Response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
     } else if (isProduction) {
       // In production, only log slow requests (>1000ms) for successful responses
       if (duration > 1000) {
-        logger.warn(`Slow response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`, 'requestLogger.js');
+        logger.warn('API', `Slow response: ${statusCode} - ${req.method} ${req.path} (${duration}ms)`);
       }
     } else {
       // In development, log all successful responses
@@ -87,7 +87,7 @@ function requestLogger(req, res, next) {
 function errorLogger(err, req, res, next) {
   const requestId = req.requestId || 'unknown';
   
-  logger.error(`Error in ${req.method} ${req.path} [${requestId}]`, err, 'requestLogger.js');
+  logger.error('API', `Error in ${req.method} ${req.path} [${requestId}]`, err);
   
   // Add request ID to error response if available
   if (res.headersSent === false) {

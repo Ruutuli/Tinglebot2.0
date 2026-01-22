@@ -56,7 +56,7 @@ const characterSchema = new Schema({
   defense: { type: Number, default: 0 },
 
   // ------------------- Inventory and links -------------------
-  inventory: { type: String, required: true },
+  inventory: { type: String, default: '' },
   appLink: { type: String, required: true },
 
   // ------------------- Vendor and shop details -------------------
@@ -191,17 +191,34 @@ const characterSchema = new Schema({
 
   // ------------------- Boosting System -------------------
   // Tracks which character is currently boosting this character
-  boostedBy: { type: String, default: null }
+  boostedBy: { type: String, default: null },
+
+  // ------------------- Character Status -------------------
+  // Status: 'pending', 'accepted', 'denied'
+  status: { 
+    type: String, 
+    enum: ['pending', 'accepted', 'denied'], 
+    default: 'pending' 
+  },
+  // Denial reason (only set when status is 'denied')
+  denialReason: { type: String, default: null }
 
 }, { collection: 'characters' });
 
 // ============================================================================
 // ------------------- Pre-save hook -------------------
 // Ensures jobVoucher is always false on save
+// Sets status to 'accepted' for existing characters that don't have a status
 // ============================================================================
 characterSchema.pre('save', function (next) {
   if (this.isNew || this.isModified('jobVoucher')) {
     this.jobVoucher = false;
+  }
+  
+  // If this is an existing character (not new) and doesn't have a status, set it to 'accepted'
+  // This handles backward compatibility for characters created before the moderation system
+  if (!this.isNew && !this.status) {
+    this.status = 'accepted';
   }
   
   next();

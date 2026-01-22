@@ -9,6 +9,15 @@
 let races = [];
 let allJobs = [];
 let villageJobsMap = {};
+let starterGear = {
+  weapons: [],
+  shields: [],
+  armor: {
+    head: [],
+    chest: [],
+    legs: []
+  }
+};
 
 // ============================================================================
 // ------------------- Initialization -------------------
@@ -23,12 +32,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================================================
 async function initializeForm() {
   try {
-    // Load races and jobs
+    // Load races, jobs, and starter gear
     await loadRaces();
     await loadJobs();
+    await loadStarterGear();
     
     // Populate race dropdown
     populateRaceDropdown();
+    
+    // Populate starter gear dropdowns
+    populateStarterGearDropdowns();
     
     // Setup village change handler to filter jobs
     const villageSelect = document.getElementById('character-village');
@@ -95,6 +108,28 @@ async function loadJobs() {
   }
 }
 
+async function loadStarterGear() {
+  try {
+    const response = await fetch('/api/characters/starter-gear');
+    if (!response.ok) {
+      throw new Error('Failed to load starter gear');
+    }
+    const data = await response.json();
+    starterGear = data.categorized || {
+      weapons: [],
+      shields: [],
+      armor: { head: [], chest: [], legs: [] }
+    };
+  } catch (error) {
+    console.error('Error loading starter gear:', error);
+    starterGear = {
+      weapons: [],
+      shields: [],
+      armor: { head: [], chest: [], legs: [] }
+    };
+  }
+}
+
 // ============================================================================
 // ------------------- Dropdown Population -------------------
 // ============================================================================
@@ -128,6 +163,52 @@ function populateJobDropdown(village) {
   });
   
   jobSelect.disabled = false;
+}
+
+function populateStarterGearDropdowns() {
+  // Populate weapon dropdown
+  const weaponSelect = document.getElementById('starter-weapon');
+  if (weaponSelect && starterGear.weapons) {
+    starterGear.weapons.sort((a, b) => (a.itemName || '').localeCompare(b.itemName || '')).forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.itemName;
+      option.textContent = item.itemName;
+      weaponSelect.appendChild(option);
+    });
+  }
+  
+  // Populate shield dropdown
+  const shieldSelect = document.getElementById('starter-shield');
+  if (shieldSelect && starterGear.shields) {
+    starterGear.shields.sort((a, b) => (a.itemName || '').localeCompare(b.itemName || '')).forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.itemName;
+      option.textContent = item.itemName;
+      shieldSelect.appendChild(option);
+    });
+  }
+  
+  // Populate chest armor dropdown
+  const chestSelect = document.getElementById('starter-armor-chest');
+  if (chestSelect && starterGear.armor && starterGear.armor.chest) {
+    starterGear.armor.chest.sort((a, b) => (a.itemName || '').localeCompare(b.itemName || '')).forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.itemName;
+      option.textContent = item.itemName;
+      chestSelect.appendChild(option);
+    });
+  }
+  
+  // Populate leg armor dropdown
+  const legsSelect = document.getElementById('starter-armor-legs');
+  if (legsSelect && starterGear.armor && starterGear.armor.legs) {
+    starterGear.armor.legs.sort((a, b) => (a.itemName || '').localeCompare(b.itemName || '')).forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.itemName;
+      option.textContent = item.itemName;
+      legsSelect.appendChild(option);
+    });
+  }
 }
 
 // ============================================================================
@@ -262,8 +343,9 @@ function validateForm() {
   const name = document.getElementById('character-name').value.trim();
   const age = parseInt(document.getElementById('character-age').value);
   const height = parseFloat(document.getElementById('character-height').value);
-  const hearts = parseInt(document.getElementById('character-hearts').value);
-  const stamina = parseInt(document.getElementById('character-stamina').value);
+  // Hearts and stamina are locked at 3, no need to validate
+  const hearts = 3;
+  const stamina = 5;
   const pronouns = document.getElementById('character-pronouns').value.trim();
   const race = document.getElementById('character-race').value;
   const village = document.getElementById('character-village').value;
@@ -286,18 +368,6 @@ function validateForm() {
   // Validate height
   if (isNaN(height) || height <= 0) {
     showMessage('Height must be a positive number', 'error');
-    return false;
-  }
-  
-  // Validate hearts
-  if (isNaN(hearts) || hearts < 1) {
-    showMessage('Hearts must be a positive number (minimum 1)', 'error');
-    return false;
-  }
-  
-  // Validate stamina
-  if (isNaN(stamina) || stamina < 1) {
-    showMessage('Stamina must be a positive number (minimum 1)', 'error');
     return false;
   }
   
@@ -379,8 +449,15 @@ function hideMessage() {
 // ============================================================================
 async function checkAuthentication() {
   try {
-    const response = await fetch('/api/user/profile');
-    if (!response.ok) {
+    const response = await fetch('/api/user', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok || response.status === 401) {
       // Not authenticated, redirect to login
       window.location.href = '/auth/discord';
       return;
@@ -394,10 +471,22 @@ async function checkAuthentication() {
         usernameEl.textContent = data.user.username;
       }
       
-      // Update avatar
+      // Update avatar - handle both full URLs and Discord CDN hashes
       const avatarEl = document.getElementById('user-avatar');
-      if (avatarEl && data.user.avatar) {
-        avatarEl.src = data.user.avatar;
+      if (avatarEl) {
+        if (data.user.avatar) {
+          // If it's already a full URL, use it; otherwise construct Discord CDN URL
+          if (data.user.avatar.startsWith('http')) {
+            avatarEl.src = data.user.avatar;
+          } else if (data.user.avatar && data.user.discordId) {
+            // Construct Discord CDN URL
+            const extension = data.user.avatar.startsWith('a_') ? 'gif' : 'png';
+            avatarEl.src = `https://cdn.discordapp.com/avatars/${data.user.discordId}/${data.user.avatar}.${extension}`;
+          }
+        } else {
+          // Fallback to default avatar
+          avatarEl.src = '/images/ankleicon.png';
+        }
       }
     }
   } catch (error) {

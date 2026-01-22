@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Character Moderation - Tinglebot Dashboard</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/character.css">
+  <link rel="stylesheet" href="/css/buttons.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    :root {
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #252525;
+      --bg-tertiary: #2d2d2d;
+      --text-primary: #e0e0e0;
+      --text-secondary: #b0b0b0;
+      --text-muted: #808080;
+      --border-color: #3a3a3a;
+      --accent-orange: #ff8c42;
+      --accent-green: #4ade80;
+      --accent-red: #f87171;
+      --accent-blue: #60a5fa;
+    }
+
+    body.moderation-page {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .moderation-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .moderation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid var(--border-color);
+    }
+    
+    .moderation-header h1 {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 32px;
+      font-weight: 700;
+    }
+    
+    .character-card {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      border: 2px solid var(--border-color);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .character-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--border-color);
+      transition: all 0.3s ease;
+    }
+    
+    .character-card:hover {
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      transform: translateY(-2px);
+      border-color: var(--border-color);
+    }
+    
+    .character-card.pending::before {
+      background: var(--accent-orange);
+    }
+    
+    .character-card.accepted::before {
+      background: var(--accent-green);
+    }
+    
+    .character-card.denied::before {
+      background: var(--accent-red);
+    }
+    
+    .character-card.pending {
+      border-color: rgba(255, 140, 66, 0.3);
+    }
+    
+    .character-card.accepted {
+      border-color: rgba(74, 222, 128, 0.3);
+    }
+    
+    .character-card.denied {
+      border-color: rgba(248, 113, 113, 0.3);
+    }
+    
+    .character-header {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .character-icon {
+      width: 120px;
+      height: 120px;
+      border-radius: 12px;
+      object-fit: cover;
+      border: 3px solid var(--border-color);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    
+    .character-info {
+      flex: 1;
+    }
+    
+    .character-name {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .character-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+    
+    .detail-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    
+    .detail-value {
+      font-size: 16px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    
+    .detail-value a {
+      color: var(--accent-blue);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    
+    .detail-value a:hover {
+      color: #93c5fd;
+      text-decoration: underline;
+    }
+    
+    .vote-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    .vote-counts {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .vote-count {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      font-weight: 600;
+    }
+    
+    .vote-count.approves {
+      color: var(--accent-green);
+      border-color: rgba(74, 222, 128, 0.3);
+      background: rgba(74, 222, 128, 0.1);
+    }
+    
+    .vote-count.denies {
+      color: var(--accent-red);
+      border-color: rgba(248, 113, 113, 0.3);
+      background: rgba(248, 113, 113, 0.1);
+    }
+    
+    .vote-actions {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .btn-vote {
+      padding: 14px 28px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
+    .btn-vote.approve {
+      background: var(--accent-green);
+      color: white;
+    }
+    
+    .btn-vote.approve:hover {
+      background: #22c55e;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(74, 222, 128, 0.4);
+    }
+    
+    .btn-vote.deny {
+      background: var(--accent-red);
+      color: white;
+    }
+    
+    .btn-vote.deny:hover {
+      background: #ef4444;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(248, 113, 113, 0.4);
+    }
+    
+    .btn-vote:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    
+    .deny-reason-input {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid var(--border-color);
+      border-radius: 10px;
+      font-size: 14px;
+      margin-top: 12px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 100px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      transition: all 0.3s ease;
+    }
+    
+    .deny-reason-input::placeholder {
+      color: var(--text-muted);
+    }
+    
+    .deny-reason-input:focus {
+      outline: none;
+      border-color: var(--accent-red);
+      box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.1);
+    }
+    
+    .vote-history {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    .vote-history h4 {
+      margin: 0 0 16px 0;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    
+    .vote-item {
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      border-radius: 10px;
+      background: var(--bg-tertiary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+    
+    .vote-item:hover {
+      background: var(--bg-secondary);
+      border-color: var(--border-color);
+    }
+    
+    .vote-item.approve {
+      border-left: 4px solid var(--accent-green);
+    }
+    
+    .vote-item.deny {
+      border-left: 4px solid var(--accent-red);
+    }
+    
+    .vote-item-user {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    
+    .vote-item-reason {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .status-badge.pending {
+      background: rgba(255, 140, 66, 0.2);
+      color: var(--accent-orange);
+      border: 1px solid rgba(255, 140, 66, 0.3);
+    }
+    
+    .status-badge.accepted {
+      background: rgba(74, 222, 128, 0.2);
+      color: var(--accent-green);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+    }
+    
+    .status-badge.denied {
+      background: rgba(248, 113, 113, 0.2);
+      color: var(--accent-red);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--text-secondary);
+    }
+    
+    .empty-state i {
+      font-size: 72px;
+      margin-bottom: 20px;
+      opacity: 0.4;
+      color: var(--text-muted);
+    }
+    
+    .empty-state h2 {
+      color: var(--text-primary);
+      margin: 16px 0 8px 0;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--text-secondary);
+    }
+    
+    .loading i {
+      font-size: 32px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Modal Styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease;
+    }
+    
+    .modal-overlay.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border-color);
+      animation: slideUp 0.3s ease;
+      position: relative;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .modal-icon {
+      font-size: 32px;
+    }
+    
+    .modal-icon.success {
+      color: var(--accent-green);
+    }
+    
+    .modal-icon.error {
+      color: var(--accent-red);
+    }
+    
+    .modal-icon.info {
+      color: var(--accent-blue);
+    }
+    
+    .modal-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0;
+    }
+    
+    .modal-body {
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    
+    .modal-body strong {
+      color: var(--text-primary);
+    }
+    
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+    
+    .modal-btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .modal-btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+    
+    .modal-btn-primary:hover {
+      background: #3b82f6;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+    }
+    
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 24px;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+    
+    .modal-close:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    
+    .denial-reasons {
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      border-left: 4px solid var(--accent-red);
+    }
+    
+    .denial-reasons-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    
+    .denial-reason-item {
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      padding-left: 12px;
+    }
+    
+    .denial-reason-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    /* Topbar dark mode styling */
+    .topbar {
+      background: var(--bg-secondary) !important;
+      border-bottom: 1px solid var(--border-color) !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+      backdrop-filter: blur(10px) !important;
+      padding: 0 24px !important;
+      height: 70px !important;
+    }
+    
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-primary) !important;
+    }
+    
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-primary) !important;
+    }
+    
+    .topbar-back-button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      color: var(--text-primary) !important;
+      text-decoration: none;
+      border-radius: 10px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    
+    .topbar-back-button i {
+      font-size: 16px;
+      transition: transform 0.3s ease;
+    }
+    
+    .topbar-back-button:hover {
+      background: var(--accent-blue) !important;
+      color: white !important;
+      border-color: var(--accent-blue) !important;
+      transform: translateX(-2px);
+      box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+    }
+    
+    .topbar-back-button:hover i {
+      transform: translateX(-3px);
+    }
+    
+    .breadcrumb {
+      color: var(--text-primary) !important;
+      font-size: 18px;
+      font-weight: 600;
+      padding: 8px 16px;
+      background: var(--bg-tertiary);
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .breadcrumb::before {
+      content: '⚖️';
+      font-size: 20px;
+    }
+    
+    .user-menu {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .user-menu:hover {
+      background: var(--bg-secondary);
+      border-color: var(--accent-blue);
+      box-shadow: 0 2px 8px rgba(96, 165, 250, 0.2);
+    }
+    
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid var(--border-color);
+      object-fit: cover;
+      transition: all 0.3s ease;
+    }
+    
+    .user-menu:hover .user-avatar {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+    
+    .username {
+      color: var(--text-primary) !important;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .btn {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 600;
+    }
+    
+    .btn:hover {
+      background: var(--bg-secondary);
+      border-color: var(--accent-blue);
+    }
+    
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+      border-color: var(--accent-blue);
+    }
+    
+</head>
+<body class="character-moderation-page">
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <a href="/" class="topbar-back-button" aria-label="Back to Dashboard">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i>
+        <span>Back to Dashboard</span>
+      </a>
+      <div class="breadcrumb">Character Moderation</div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-menu" id="user-menu">
+        <img src="" alt="Profile picture" class="user-avatar" id="user-avatar">
+        <span class="username" id="username">Loading...</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="moderation-container">
+    <div class="moderation-header">
+      <h1><i class="fas fa-gavel"></i> Character Moderation</h1>
+      <button class="button button--glass" onclick="loadPendingCharacters()">
+        <i class="fas fa-sync-alt"></i> Refresh
+      </button>
+    </div>
+
+    <div id="characters-list">
+      <div class="loading">
+        <i class="fas fa-spinner fa-spin"></i> Loading pending characters...
+      </div>
+    </div>
+  </div>
+
+  <!-- Denial Reason Modal -->
+  <div class="modal-overlay" id="denyReasonModal">
+    <div class="modal" style="max-width: 600px;">
+      <button class="modal-close" onclick="closeDenyReasonModal()">&times;</button>
+      <div class="modal-header">
+        <i class="fas fa-times-circle modal-icon error"></i>
+        <h2 class="modal-title">Deny Character</h2>
+      </div>
+      <div class="modal-body">
+        <p>Please provide a reason for denying this character. This reason will be sent to the user.</p>
+        <textarea 
+          id="denyReasonTextarea" 
+          class="deny-reason-input" 
+          placeholder="Enter the reason for denial (required)..."
+          rows="6"
+          style="width: 100%; margin-top: 16px;"
+        ></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="button button--glass" onclick="closeDenyReasonModal()">Cancel</button>
+        <button class="button button--danger" id="confirmDenyBtn">
+          <i class="fas fa-times"></i> Confirm Denial
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vote Result Modal -->
+  <div class="modal-overlay" id="voteModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeVoteModal()">&times;</button>
+      <div class="modal-header">
+        <i class="fas modal-icon" id="modalIcon"></i>
+        <h2 class="modal-title" id="modalTitle">Vote Recorded</h2>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Content will be inserted here -->
+      </div>
+      <div class="modal-actions">
+        <button class="button button--glass" onclick="closeVoteModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { checkUserAuthStatus } from '/js/auth.js';
+    
+    // Check authentication on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+      const authStatus = await checkUserAuthStatus();
+      if (!authStatus.isAuthenticated) {
+        window.location.href = '/';
+        return;
+      }
+      
+      // Update user menu
+      const userMenu = document.getElementById('user-menu');
+      const username = document.getElementById('username');
+      const userAvatar = document.getElementById('user-avatar');
+      
+      if (authStatus.currentUser) {
+        username.textContent = authStatus.currentUser.username || authStatus.currentUser.discordId;
+        if (authStatus.currentUser.avatar) {
+          const avatarUrl = `https://cdn.discordapp.com/avatars/${authStatus.currentUser.discordId}/${authStatus.currentUser.avatar}.png`;
+          userAvatar.src = avatarUrl;
+        }
+      }
+      
+      // Load pending characters
+      loadPendingCharacters();
+    });
+    
+    window.loadPendingCharacters = async function() {
+      const listContainer = document.getElementById('characters-list');
+      listContainer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading pending characters...</div>';
+      
+      try {
+        const response = await fetch('/api/characters/moderation/pending', {
+          credentials: 'include'
+        });
+        
+        if (response.status === 403) {
+          listContainer.innerHTML = '<div class="empty-state"><i class="fas fa-lock"></i><h2>Access Denied</h2><p>You must be a moderator to access this page.</p></div>';
+          return;
+        }
+        
+        if (!response.ok) {
+          throw new Error('Failed to load pending characters');
+        }
+        
+        const data = await response.json();
+        const characters = data.characters || [];
+        
+        if (characters.length === 0) {
+          listContainer.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h2>No Pending Characters</h2><p>All characters have been reviewed!</p></div>';
+          return;
+        }
+        
+        listContainer.innerHTML = characters.map(char => createCharacterCard(char)).join('');
+        
+        // Attach event listeners
+        document.querySelectorAll('.btn-vote').forEach(btn => {
+          btn.addEventListener('click', handleVote);
+        });
+        
+      } catch (error) {
+        console.error('Error loading pending characters:', error);
+        listContainer.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h2>Error</h2><p>Failed to load pending characters. Please try again.</p></div>';
+      }
+    };
+    
+    function createCharacterCard(character) {
+      const hasVoted = character.votes.approves.some(v => v.modId === window.currentUserId) || 
+                      character.votes.denies.some(v => v.modId === window.currentUserId);
+      
+      return `
+        <div class="character-card pending" data-character-id="${String(character._id)}" data-is-mod="${character.isModCharacter || false}">
+          <div class="character-header">
+            <img src="${character.icon || '/assets/default-character.png'}" alt="${character.name}" class="character-icon">
+            <div class="character-info">
+              <div class="character-name">
+                ${character.name}
+                ${character.isModCharacter ? '<span class="status-badge" style="margin-left: 8px; background: #e3f2fd; color: #1976d2;">Mod Character</span>' : ''}
+              </div>
+              <div class="character-details">
+                <div class="detail-item">
+                  <span class="detail-label">Age</span>
+                  <span class="detail-value">${character.age || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Height</span>
+                  <span class="detail-value">${character.height || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Pronouns</span>
+                  <span class="detail-value">${character.pronouns || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Race</span>
+                  <span class="detail-value">${character.race || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Village</span>
+                  <span class="detail-value">${character.homeVillage || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Job</span>
+                  <span class="detail-value">${character.job || 'N/A'}</span>
+                </div>
+                ${character.appLink ? `
+                <div class="detail-item">
+                  <span class="detail-label">App Link</span>
+                  <span class="detail-value"><a href="${character.appLink}" target="_blank">View</a></span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+          
+          <div class="vote-section">
+            <div class="vote-counts">
+              <div class="vote-count approves">
+                <i class="fas fa-check-circle"></i>
+                <span><strong>${character.approveCount || 0}</strong> Approves</span>
+              </div>
+              <div class="vote-count denies">
+                <i class="fas fa-times-circle"></i>
+                <span><strong>${character.denyCount || 0}</strong> Denies</span>
+              </div>
+            </div>
+            
+            ${hasVoted ? `
+              <div style="padding: 14px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 10px; color: var(--accent-blue); display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-info-circle"></i> <span>You have already voted on this character.</span>
+              </div>
+            ` : `
+              <div class="vote-actions">
+                <button class="btn-vote approve" data-action="approve">
+                  <i class="fas fa-check"></i> Approve
+                </button>
+                <button class="btn-vote deny button--danger" data-action="deny">
+                  <i class="fas fa-times"></i> Deny
+                </button>
+              </div>
+            `}
+            
+            ${(character.votes.approves.length > 0 || character.votes.denies.length > 0) ? `
+              <div class="vote-history">
+                <h4>Vote History</h4>
+                ${character.votes.approves.map(vote => `
+                  <div class="vote-item approve">
+                    <div>
+                      <div class="vote-item-user"><i class="fas fa-check-circle"></i> ${vote.modUsername}</div>
+                      <div class="vote-item-reason">Approved on ${new Date(vote.createdAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                `).join('')}
+                ${character.votes.denies.map(vote => `
+                  <div class="vote-item deny">
+                    <div>
+                      <div class="vote-item-user"><i class="fas fa-times-circle"></i> ${vote.modUsername}</div>
+                      <div class="vote-item-reason">${vote.reason || 'No reason provided'}</div>
+                      <div class="vote-item-reason" style="font-size: 12px; margin-top: 2px;">${new Date(vote.createdAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+    
+    // Store current vote context
+    let currentVoteContext = {
+      characterId: null,
+      isModCharacter: false,
+      card: null
+    };
+
+    window.handleVote = async function(event) {
+      const button = event.currentTarget;
+      const action = button.dataset.action;
+      const card = button.closest('.character-card');
+      const characterId = card?.dataset?.characterId;
+      const isModCharacter = card?.dataset?.isMod === 'true';
+      
+      if (!characterId) {
+        console.error('Character ID not found in card dataset');
+        showVoteModal('error', 'Error', 'Character ID not found. Please refresh the page and try again.');
+        return;
+      }
+      
+      if (action === 'deny') {
+        // Store context and show denial reason modal
+        currentVoteContext = {
+          characterId: String(characterId), // Ensure it's a string
+          isModCharacter: isModCharacter === true || isModCharacter === 'true',
+          card: card
+        };
+        window.showDenyReasonModal();
+        return;
+      }
+      
+      // For approve, submit directly
+      await submitVote(String(characterId), 'approve', null, isModCharacter === true || isModCharacter === 'true', card);
+    };
+    
+    window.showDenyReasonModal = function() {
+      const modal = document.getElementById('denyReasonModal');
+      const textarea = document.getElementById('denyReasonTextarea');
+      const confirmBtn = document.getElementById('confirmDenyBtn');
+      
+      textarea.value = '';
+      modal.classList.add('show');
+      textarea.focus();
+      
+      // Remove old listener and add new one to ensure it works
+      const newConfirmBtn = confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+      newConfirmBtn.addEventListener('click', window.confirmDeny);
+    };
+    
+    function closeDenyReasonModal() {
+      const modal = document.getElementById('denyReasonModal');
+      modal.classList.remove('show');
+      currentVoteContext = {
+        characterId: null,
+        isModCharacter: false,
+        card: null
+      };
+    }
+    
+    window.confirmDeny = async function() {
+      const textarea = document.getElementById('denyReasonTextarea');
+      const reason = textarea.value.trim();
+      
+      if (!reason) {
+        textarea.style.borderColor = 'var(--accent-red)';
+        textarea.focus();
+        setTimeout(() => {
+          textarea.style.borderColor = '';
+        }, 2000);
+        return;
+      }
+      
+      // Store context before closing modal (which clears it)
+      const context = { ...currentVoteContext };
+      
+      closeDenyReasonModal();
+      
+      // Validate context
+      if (!context.characterId) {
+        showVoteModal('error', 'Error', 'Character ID is missing. Please try again.');
+        return;
+      }
+      
+      await submitVote(
+        context.characterId,
+        'deny',
+        reason,
+        context.isModCharacter,
+        context.card
+      );
+    };
+    
+    // Attach event listener to confirm button
+    document.addEventListener('DOMContentLoaded', () => {
+      const confirmBtn = document.getElementById('confirmDenyBtn');
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', window.confirmDeny);
+      }
+    });
+    
+    async function submitVote(characterId, vote, reason, isModCharacter, card) {
+      // Validate required parameters
+      if (!characterId || !vote) {
+        console.error('Missing required parameters:', { characterId, vote });
+        showVoteModal('error', 'Error', 'Missing required information. Please try again.');
+        return;
+      }
+      
+      // Disable buttons
+      if (card) {
+        card.querySelectorAll('.btn-vote').forEach(btn => btn.disabled = true);
+      }
+      
+      try {
+        const requestBody = {
+          characterId: characterId,
+          vote: vote,
+          isModCharacter: isModCharacter || false
+        };
+        
+        // Only include reason if it's a deny vote
+        if (vote === 'deny' && reason) {
+          requestBody.reason = reason;
+        }
+        
+        const response = await fetch('/api/characters/moderation/vote', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to submit vote');
+        }
+        
+        // Reload the list
+        loadPendingCharacters();
+        
+        // Show success message in modal
+        if (data.message === 'Character accepted') {
+          showVoteModal('success', 'Character Accepted', 
+            `The character has been accepted and is now active!`);
+        } else if (data.message === 'Character denied') {
+          let denialHtml = `<strong>Character Denied</strong><br><br>The character has been denied.`;
+          if (data.denialReason) {
+            const reasons = data.denialReason.split('\n');
+            denialHtml += '<div class="denial-reasons"><div class="denial-reasons-title">Denial Reasons:</div>';
+            reasons.forEach(reason => {
+              if (reason.trim()) {
+                denialHtml += `<div class="denial-reason-item">${reason}</div>`;
+              }
+            });
+            denialHtml += '</div>';
+          }
+          showVoteModal('error', 'Character Denied', denialHtml);
+        } else {
+          const approvesNeeded = data.remaining.approvesNeeded;
+          const deniesNeeded = data.remaining.deniesNeeded;
+          showVoteModal('info', 'Vote Recorded', 
+            `Your vote has been recorded!<br><br>` +
+            `<strong>${approvesNeeded}</strong> more approve${approvesNeeded !== 1 ? 's' : ''} or ` +
+            `<strong>${deniesNeeded}</strong> more deny${deniesNeeded !== 1 ? 's' : ''} needed.`);
+        }
+        
+      } catch (error) {
+        console.error('Error submitting vote:', error);
+        showVoteModal('error', 'Error', `Failed to submit vote: ${error.message}`);
+        if (card) {
+          card.querySelectorAll('.btn-vote').forEach(btn => btn.disabled = false);
+        }
+      }
+    }
+    
+    // Get current user ID for checking if they've voted
+    (async () => {
+      const authStatus = await checkUserAuthStatus();
+      if (authStatus.currentUser) {
+        window.currentUserId = authStatus.currentUser.discordId;
+      }
+    })();
+    
+    // Modal functions
+    function showVoteModal(type, title, body) {
+      const modal = document.getElementById('voteModal');
+      const modalIcon = document.getElementById('modalIcon');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      
+      // Set icon based on type
+      modalIcon.className = 'fas modal-icon';
+      if (type === 'success') {
+        modalIcon.classList.add('fa-check-circle', 'success');
+      } else if (type === 'error') {
+        modalIcon.classList.add('fa-times-circle', 'error');
+      } else {
+        modalIcon.classList.add('fa-info-circle', 'info');
+      }
+      
+      modalTitle.textContent = title;
+      modalBody.innerHTML = body;
+      
+      modal.classList.add('show');
+    }
+    
+    function closeVoteModal() {
+      const modal = document.getElementById('voteModal');
+      modal.classList.remove('show');
+    }
+    
+    // Close modals on overlay click
+    document.getElementById('voteModal').addEventListener('click', (e) => {
+      if (e.target.id === 'voteModal') {
+        closeVoteModal();
+      }
+    });
+    
+    document.getElementById('denyReasonModal').addEventListener('click', (e) => {
+      if (e.target.id === 'denyReasonModal') {
+        closeDenyReasonModal();
+      }
+    });
+    
+    // Close modals on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeVoteModal();
+        closeDenyReasonModal();
+      }
+    });
+    
+    // Allow Enter+Ctrl/Cmd to submit denial reason
+    document.getElementById('denyReasonTextarea')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        window.confirmDeny();
+      }
+    });
+    
+    // Attach event listener to confirm button when modal is shown
+    function showDenyReasonModal() {
+      const modal = document.getElementById('denyReasonModal');
+      const textarea = document.getElementById('denyReasonTextarea');
+      const confirmBtn = document.getElementById('confirmDenyBtn');
+      
+      textarea.value = '';
+      modal.classList.add('show');
+      textarea.focus();
+      
+      // Remove old listener and add new one
+      const newConfirmBtn = confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+      newConfirmBtn.addEventListener('click', window.confirmDeny);
+    }
+  </script>
+</body>
+</html>

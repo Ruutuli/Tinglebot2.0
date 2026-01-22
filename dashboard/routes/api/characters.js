@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const Character = require('../../models/CharacterModel');
 const ModCharacter = require('../../models/ModCharacterModel');
+const CharacterModeration = require('../../models/CharacterModerationModel');
 const User = require('../../models/UserModel');
 const { asyncHandler, NotFoundError } = require('../../middleware/errorHandler');
 const { validateObjectId } = require('../../middleware/validation');
@@ -19,13 +20,34 @@ const {
   connectToTinglebot,
   createCharacter,
   createCharacterInventory,
-  getOrCreateUser
+  getOrCreateUser,
+  getCharacterInventoryCollection,
+  fetchItemByName
 } = require('../../database/db');
 const { 
   isUniqueCharacterName,
   isValidRace
 } = require('../../utils/validation');
-const { isValidJob, isVillageExclusiveJob, villageJobs, generalJobs } = require('../../../bot/modules/jobsModule');
+// Import job data and create validation functions
+const { jobPerks, villageJobs, allJobs } = require('../../data/jobData');
+
+// Simple validation functions using dashboard's jobData
+function isValidJob(job) {
+  if (!job || typeof job !== 'string') return false;
+  const normalizedJob = job.toLowerCase().trim();
+  return allJobs.some(j => j.toLowerCase() === normalizedJob);
+}
+
+function isVillageExclusiveJob(job) {
+  if (!job || typeof job !== 'string') return null;
+  const normalizedJob = job.toLowerCase();
+  for (const [village, jobs] of Object.entries(villageJobs)) {
+    if (jobs.map(j => j.toLowerCase()).includes(normalizedJob)) {
+      return village;
+    }
+  }
+  return null;
+}
 const { isValidVillage } = require('../../../bot/modules/locationsModule');
 const bucket = require('../../config/gcsService');
 
@@ -51,6 +73,343 @@ const characterIconUpload = multer({
   }
 });
 
+// Helper function to post character creation to Discord
+async function postCharacterCreationToDiscord(character, user, reqUser, req = null) {
+  try {
+    const CHARACTER_CREATION_CHANNEL_ID = '964342870796537909';
+    const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+    
+    if (!DISCORD_TOKEN) {
+      logger.warn('SERVER', 'DISCORD_TOKEN not configured, skipping Discord post');
+      return;
+    }
+
+    // Helper functions for formatting
+    const capitalize = (str) => {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    };
+
+    const capitalizeFirstLetter = (str) => {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    };
+
+    const convertCmToFeetInches = (heightInCm) => {
+      const totalInches = heightInCm / 2.54;
+      const feet = Math.floor(totalInches / 12);
+      const inches = Math.round(totalInches % 12);
+      return `${feet}' ${inches}"`;
+    };
+
+    // Get village emoji (simple mapping)
+    const getVillageEmoji = (village) => {
+      const emojiMap = {
+        'inariko': '🌊',
+        'rudania': '🔥',
+        'vhintl': '🌿'
+      };
+      return emojiMap[village?.toLowerCase()] || '';
+    };
+
+    const heightInFeetInches = character.height ? convertCmToFeetInches(character.height) : 'N/A';
+    const homeVillageEmoji = getVillageEmoji(character.homeVillage);
+    const currentVillageEmoji = getVillageEmoji(character.currentVillage);
+
+    // Build gear info
+    const gearInfo = [];
+    if (character.gearWeapon?.name) {
+      gearInfo.push(`🗡️ **Weapon:** ${character.gearWeapon.name}`);
+    }
+    if (character.gearShield?.name) {
+      gearInfo.push(`🛡️ **Shield:** ${character.gearShield.name}`);
+    }
+    if (character.gearArmor?.chest?.name) {
+      gearInfo.push(`👕 **Chest:** ${character.gearArmor.chest.name}`);
+    }
+    if (character.gearArmor?.legs?.name) {
+      gearInfo.push(`👖 **Legs:** ${character.gearArmor.legs.name}`);
+    }
+    const gearText = gearInfo.length > 0 ? gearInfo.join('\n') : 'None selected';
+
+    // Get base URL for moderation link - use tinglebot.xyz
+    const moderationUrl = 'https://tinglebot.xyz/character-moderation';
+
+    // Get user's Discord avatar URL
+    const userDiscordId = reqUser?.discordId || user?.discordId || character.userId;
+    const userAvatar = reqUser?.avatar || user?.avatar;
+    const userAvatarUrl = userAvatar 
+      ? `https://cdn.discordapp.com/avatars/${userDiscordId}/${userAvatar}.png?size=256`
+      : `https://cdn.discordapp.com/embed/avatars/${(parseInt(userDiscordId) || 0) % 5}.png`;
+
+    // Create embed with improved styling - cleaner layout
+    const embed = {
+      title: `✨ New Character Created: ${character.name}`,
+      description: `A new character has been submitted and is awaiting moderation review.`,
+      color: 0xFFA500, // Orange for pending status
+      thumbnail: {
+        url: userAvatarUrl
+      },
+      image: {
+        url: character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      fields: [
+        {
+          name: '👤 Character Information',
+          value: `**Name:** ${character.name}\n**Pronouns:** ${character.pronouns}\n**Age:** ${character.age}\n**Height:** ${character.height} cm (${heightInFeetInches})`,
+          inline: false
+        },
+        {
+          name: '🏘️ Location & Job',
+          value: `**Race:** ${capitalize(character.race)}\n**Home Village:** ${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}\n**Job:** ${capitalizeFirstLetter(character.job)}`,
+          inline: false
+        },
+        {
+          name: '❤️ Stats',
+          value: `**Hearts:** ${character.currentHearts}/${character.maxHearts}\n**Stamina:** ${character.currentStamina}/${character.maxStamina}\n**Attack:** ${character.attack || 0}\n**Defense:** ${character.defense || 0}`,
+          inline: false
+        },
+        {
+          name: '⚔️ Starting Gear',
+          value: gearText || 'None selected',
+          inline: false
+        },
+        {
+          name: '🔗 Links',
+          value: `[📋 View Application](${character.appLink})\n[⚖️ Review in Moderation Panel](${moderationUrl})`,
+          inline: false
+        }
+      ],
+      footer: {
+        text: `Created by ${reqUser?.username || user?.username || 'Unknown'} • Status: Pending Review`
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    // Post to Discord
+    const discordResponse = await fetch(`https://discord.com/api/v10/channels/${CHARACTER_CREATION_CHANNEL_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        embeds: [embed]
+      })
+    });
+
+    if (!discordResponse.ok) {
+      const errorText = await discordResponse.text();
+      logger.error('SERVER', `Failed to post character creation to Discord: ${discordResponse.status} - ${errorText}`);
+      return;
+    }
+
+    logger.success('SERVER', `Character creation posted to Discord: ${character.name}`);
+  } catch (error) {
+    logger.error('SERVER', 'Error posting character creation to Discord', error);
+    // Don't throw - Discord posting failure shouldn't break character creation
+  }
+}
+
+// Post character status update (accepted/denied) to Discord
+async function postCharacterStatusToDiscord(character, status, denialReason, isModCharacter = false) {
+  try {
+    const CHARACTER_CREATION_CHANNEL_ID = process.env.CHARACTER_CREATION_CHANNEL_ID || '964342870796537909';
+    const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+    
+    if (!DISCORD_TOKEN) {
+      logger.warn('CHARACTERS', 'DISCORD_TOKEN not configured, skipping Discord post');
+      return;
+    }
+    
+    // Get user info
+    const user = await User.findOne({ discordId: character.userId }).lean();
+    const userName = user?.username || user?.discordId || 'Unknown';
+    
+    const color = status === 'accepted' ? 0x4caf50 : 0xf44336;
+    const title = status === 'accepted' 
+      ? `✅ Character Accepted: ${character.name}`
+      : `❌ Character Denied: ${character.name}`;
+    
+    const embed = {
+      title: title,
+      color: color,
+      description: status === 'accepted' 
+        ? `Your character **${character.name}** has been accepted and is now active!`
+        : `Your character **${character.name}** has been denied. Please review the feedback below.`,
+      fields: [
+        {
+          name: '👤 Character Details',
+          value: `**Name:** ${character.name}\n**Race:** ${character.race}\n**Village:** ${character.homeVillage}\n**Job:** ${character.job}`,
+          inline: false
+        }
+      ],
+      footer: {
+        text: `User: ${userName} • Character ID: ${character._id}`
+      },
+      timestamp: new Date().toISOString()
+    };
+    
+    if (status === 'denied' && denialReason) {
+      // Format denial reasons
+      const reasonsText = denialReason.length > 1500 ? denialReason.substring(0, 1500) + '...' : denialReason;
+      
+      embed.fields.push({
+        name: '📝 Denial Reasons',
+        value: reasonsText,
+        inline: false
+      });
+      
+      // Get admin account mention (from env or use a default)
+      const adminAccountId = process.env.ADMIN_DISCORD_ID || '211219306137124865'; // Default to ruutuli's ID
+      const adminMention = `<@${adminAccountId}>`;
+      
+      embed.fields.push({
+        name: '💬 Need Help?',
+        value: `If you have any questions about this decision, please DM ${adminMention} directly.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
+        inline: false
+      });
+    }
+    
+    // Post to Discord
+    const discordResponse = await fetch(`https://discord.com/api/v10/channels/${CHARACTER_CREATION_CHANNEL_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        content: status === 'denied' ? `<@${character.userId}>` : undefined, // Ping user on denial
+        embeds: [embed]
+      })
+    });
+    
+    if (!discordResponse.ok) {
+      const errorText = await discordResponse.text();
+      logger.error('CHARACTERS', `Failed to post character status to Discord: ${discordResponse.status} - ${errorText}`);
+      return;
+    }
+    
+    logger.success('CHARACTERS', `Character ${status} notification posted to Discord: ${character.name}`);
+  } catch (error) {
+    logger.error('CHARACTERS', 'Error posting character status to Discord', error);
+    // Don't throw - Discord posting failure shouldn't break the moderation flow
+  }
+}
+
+// Helper function to send DM to user when character is denied
+async function sendDenialDM(character, denialReason) {
+  try {
+    const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+    
+    if (!DISCORD_TOKEN) {
+      logger.warn('CHARACTERS', 'DISCORD_TOKEN not configured, skipping DM');
+      return;
+    }
+    
+    // Get admin account mention
+    const adminAccountId = process.env.ADMIN_DISCORD_ID || '211219306137124865';
+    const adminMention = `<@${adminAccountId}>`;
+    
+    // Create DM embed
+    const embed = {
+      title: `❌ Character Denied: ${character.name}`,
+      description: `Your character **${character.name}** has been denied. Please review the feedback below.`,
+      color: 0xf44336,
+      fields: [
+        {
+          name: '📝 Denial Reasons',
+          value: denialReason.length > 1500 ? denialReason.substring(0, 1500) + '...' : denialReason,
+          inline: false
+        },
+        {
+          name: '💬 Need Help?',
+          value: `If you have any questions about this decision, please DM ${adminMention} directly.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
+          inline: false
+        }
+      ],
+      timestamp: new Date().toISOString()
+    };
+    
+    // Try to create DM channel and send message
+    // First, create the DM channel
+    const createDMResponse = await fetch(`https://discord.com/api/v10/users/@me/channels`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        recipient_id: character.userId
+      })
+    });
+    
+    if (!createDMResponse.ok) {
+      const errorText = await createDMResponse.text();
+      // If DM fails (user has DMs disabled, blocked bot, etc.), create notification instead
+      logger.warn('CHARACTERS', `Cannot create DM channel for user ${character.userId}: ${createDMResponse.status} - ${errorText}`);
+      await createDenialNotification(character, denialReason);
+      return;
+    }
+    
+    const dmChannel = await createDMResponse.json();
+    
+    // Send message to DM channel
+    const sendMessageResponse = await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        embeds: [embed]
+      })
+    });
+    
+    if (!sendMessageResponse.ok) {
+      const errorText = await sendMessageResponse.text();
+      logger.warn('CHARACTERS', `Cannot send DM to user ${character.userId}: ${sendMessageResponse.status} - ${errorText}`);
+      // Fallback to notification
+      await createDenialNotification(character, denialReason);
+      return;
+    }
+    
+    logger.success('CHARACTERS', `Denial DM sent to user ${character.userId} for character ${character.name}`);
+  } catch (error) {
+    logger.error('CHARACTERS', 'Error sending denial DM', error);
+    // Fallback to notification
+    await createDenialNotification(character, denialReason).catch(err => {
+      logger.error('CHARACTERS', 'Failed to create denial notification', err);
+    });
+  }
+}
+
+// Helper function to create a notification in the database for the user
+async function createDenialNotification(character, denialReason) {
+  try {
+    await connectToTinglebot();
+    
+    const Notification = require('../../models/NotificationModel');
+    
+    // Create notification
+    const notification = new Notification({
+      userId: character.userId,
+      type: 'character_denied',
+      title: `Character Denied: ${character.name}`,
+      message: denialReason,
+      characterId: character._id.toString(),
+      characterName: character.name,
+      read: false
+    });
+    
+    await notification.save();
+    logger.success('CHARACTERS', `Created denial notification for user ${character.userId}`);
+  } catch (error) {
+    logger.error('CHARACTERS', 'Error creating denial notification', error);
+    throw error;
+  }
+}
+
 // Helper function to upload character icon to Google Cloud Storage
 async function uploadCharacterIconToGCS(file) {
   try {
@@ -71,7 +430,7 @@ async function uploadCharacterIconToGCS(file) {
     
     return new Promise((resolve, reject) => {
       stream.on('error', (error) => {
-        logger.error('Error uploading character icon to GCS', error, 'characters.js');
+        logger.error('CHARACTERS', 'Error uploading character icon to GCS', error);
         reject(error);
       });
       
@@ -83,7 +442,7 @@ async function uploadCharacterIconToGCS(file) {
       stream.end(file.buffer);
     });
   } catch (error) {
-    logger.error('Error in uploadCharacterIconToGCS', error, 'characters.js');
+    logger.error('CHARACTERS', 'Error in uploadCharacterIconToGCS', error);
     throw error;
   }
 }
@@ -106,7 +465,7 @@ router.get('/races', asyncHandler(async (req, res) => {
 // ------------------- Function: getJobs -------------------
 // Returns list of all jobs, optionally filtered by village
 router.get('/jobs', asyncHandler(async (req, res) => {
-  const { villageJobs, generalJobs, getAllJobs } = require('../../../bot/modules/jobsModule');
+  const { villageJobs, generalJobs, allJobs } = require('../../data/jobData');
   const village = req.query.village?.toLowerCase();
   
   if (village && villageJobs[village]) {
@@ -115,9 +474,102 @@ router.get('/jobs', asyncHandler(async (req, res) => {
     res.json({ data: jobs });
   } else {
     // Return all jobs
-    const allJobs = getAllJobs();
     res.json({ data: allJobs });
   }
+}));
+
+// ------------------- Function: getStarterGear -------------------
+// Returns list of starter gear items
+router.get('/starter-gear', asyncHandler(async (req, res) => {
+  const { fetchAllItems } = require('../../database/db');
+  const Item = require('../../models/ItemModel');
+  
+  // List of allowed starter gear item names (from starterGear.js)
+  const STARTER_GEAR_NAMES = [
+    'Soup Ladle',
+    'Pot Lid',
+    'Wooden Shield',
+    'Wooden Bow',
+    'Boomerang',
+    'Emblazoned Shield',
+    "Fisherman's Shield",
+    "Hunter's Shield",
+    "Traveler's Shield",
+    'Rusty Broadsword',
+    "Traveler's Sword",
+    "Woodcutter's Axe",
+    "Traveler's Bow",
+    'Wooden Mop',
+    'Rusty Claymore',
+    "Traveler's Claymore",
+    'Tree Branch',
+    'Rusty Shield',
+    'Korok Leaf',
+    'Farming Hoe',
+    "Farmer's Pitchfork",
+    'Rusty Halberd',
+    "Traveler's Spear",
+    'Old Shirt',
+    'Well-Worn Trousers'
+  ];
+  
+  function normalizeName(name) {
+    return name
+      .toLowerCase()
+      .replace(/['']/g, "'")
+      .replace(/[^a-z0-9' ]/gi, '')
+      .trim();
+  }
+  
+  const normalizedSet = new Set(STARTER_GEAR_NAMES.map(normalizeName));
+  
+  // Fetch all items and filter to starter gear
+  const allItems = await fetchAllItems();
+  const starterGear = allItems.filter(item => {
+    const normalizedName = normalizeName(item.itemName || '');
+    return normalizedSet.has(normalizedName);
+  });
+  
+  // Categorize by type
+  const categorized = {
+    weapons: [],
+    shields: [],
+    armor: {
+      head: [],
+      chest: [],
+      legs: []
+    }
+  };
+  
+  starterGear.forEach(item => {
+    const categories = Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []);
+    const types = Array.isArray(item.type) ? item.type : (item.type ? [item.type] : []);
+    const subtypes = Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []);
+    
+    // Check if it's a weapon
+    if (categories.includes('Weapon') || types.includes('1H') || types.includes('2H')) {
+      categorized.weapons.push(item);
+    }
+    // Check if it's a shield
+    else if (subtypes.includes('Shield') || item.itemName?.toLowerCase().includes('shield')) {
+      categorized.shields.push(item);
+    }
+    // Check if it's armor
+    else if (categories.includes('Armor') || types.includes('Chest') || types.includes('Legs')) {
+      if (types.includes('Chest') || item.itemName?.toLowerCase().includes('shirt')) {
+        categorized.armor.chest.push(item);
+      } else if (types.includes('Legs') || item.itemName?.toLowerCase().includes('trousers')) {
+        categorized.armor.legs.push(item);
+      } else {
+        categorized.armor.head.push(item);
+      }
+    }
+  });
+  
+  res.json({ 
+    data: starterGear,
+    categorized: categorized
+  });
 }));
 
 // ------------------- Function: getCharacterCount -------------------
@@ -248,7 +700,11 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
     race,
     village,
     job,
-    appLink
+    appLink,
+    starterWeapon,
+    starterShield,
+    starterArmorChest,
+    starterArmorLegs
   } = req.body;
 
   // Validate required fields
@@ -331,6 +787,7 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
     return res.status(400).json({ error: 'You do not have enough character slots available to create a new character' });
   }
 
+  let character = null;
   try {
     // Upload icon to GCS
     const iconUrl = await uploadCharacterIconToGCS(req.file);
@@ -338,8 +795,59 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
       return res.status(500).json({ error: 'Failed to upload character icon' });
     }
 
+    // Handle starting gear if selected (before creating character)
+    let gearWeapon = null;
+    let gearShield = null;
+    let gearArmor = {
+      head: null,
+      chest: null,
+      legs: null
+    };
+    
+    if (starterWeapon) {
+      const weaponItem = await fetchItemByName(starterWeapon);
+      if (weaponItem) {
+        gearWeapon = {
+          name: weaponItem.itemName,
+          stats: { modifierHearts: weaponItem.modifierHearts || 0 },
+          type: Array.isArray(weaponItem.type) ? weaponItem.type[0] : weaponItem.type || null
+        };
+      }
+    }
+    
+    if (starterShield) {
+      const shieldItem = await fetchItemByName(starterShield);
+      if (shieldItem) {
+        gearShield = {
+          name: shieldItem.itemName,
+          stats: { modifierHearts: shieldItem.modifierHearts || 0 },
+          subtype: Array.isArray(shieldItem.subtype) ? shieldItem.subtype[0] : shieldItem.subtype || null
+        };
+      }
+    }
+    
+    if (starterArmorChest) {
+      const chestItem = await fetchItemByName(starterArmorChest);
+      if (chestItem) {
+        gearArmor.chest = {
+          name: chestItem.itemName,
+          stats: { modifierHearts: chestItem.modifierHearts || 0 }
+        };
+      }
+    }
+    
+    if (starterArmorLegs) {
+      const legsItem = await fetchItemByName(starterArmorLegs);
+      if (legsItem) {
+        gearArmor.legs = {
+          name: legsItem.itemName,
+          stats: { modifierHearts: legsItem.modifierHearts || 0 }
+        };
+      }
+    }
+
     // Create character
-    const character = new Character({
+    character = new Character({
       userId: userId,
       name: name.trim(),
       age: ageNum,
@@ -359,19 +867,83 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
       blighted: false,
       spiritOrbs: 0,
       birthday: '',
-      inventorySynced: false
+      inventorySynced: false,
+      gearWeapon: gearWeapon,
+      gearShield: gearShield,
+      gearArmor: gearArmor,
+      status: 'pending' // New characters start as pending
     });
 
     await character.save();
 
+    // Update character stats if gear was equipped
+    if (gearWeapon || gearShield || gearArmor.chest || gearArmor.legs) {
+      // Helper function to get modifierHearts from stats (handles both Map and plain object)
+      const getModifierHearts = (stats) => {
+        if (!stats) return 0;
+        // Handle Map
+        if (stats instanceof Map) {
+          return stats.get('modifierHearts') || 0;
+        }
+        // Handle plain object
+        if (typeof stats === 'object') {
+          return stats.modifierHearts || 0;
+        }
+        return 0;
+      };
+
+      // Calculate defense from armor and shield
+      let totalDefense = 0;
+      if (character.gearArmor) {
+        totalDefense += getModifierHearts(character.gearArmor.head?.stats);
+        totalDefense += getModifierHearts(character.gearArmor.chest?.stats);
+        totalDefense += getModifierHearts(character.gearArmor.legs?.stats);
+      }
+      if (character.gearShield?.stats) {
+        totalDefense += getModifierHearts(character.gearShield.stats);
+      }
+
+      // Calculate attack from weapon
+      const totalAttack = getModifierHearts(character.gearWeapon?.stats);
+
+      // Update character stats directly
+      character.defense = totalDefense;
+      character.attack = totalAttack;
+      await character.save();
+    }
+
     // Create inventory collection
     await createCharacterInventory(character.name, character._id, character.job);
+    
+    // Add selected gear items to inventory if they were selected
+    if (starterWeapon || starterShield || starterArmorChest || starterArmorLegs) {
+      const inventoryCollection = await getCharacterInventoryCollection(character.name);
+      
+      const gearItems = [starterWeapon, starterShield, starterArmorChest, starterArmorLegs].filter(Boolean);
+      for (const itemName of gearItems) {
+        const item = await fetchItemByName(itemName);
+        if (item) {
+          await inventoryCollection.insertOne({
+            itemName: item.itemName,
+            quantity: 1,
+            obtained: `Starting gear - ${new Date().toLocaleDateString()}`,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+      }
+    }
 
     // Decrement character slot
     user.characterSlot -= 1;
     await user.save();
 
-    logger.info(`Character created: ${character.name} by user ${userId}`, 'characters.js');
+    logger.info('CHARACTERS', `Character created: ${character.name} by user ${userId}`);
+
+    // Post to Discord (non-blocking)
+    postCharacterCreationToDiscord(character, user, req.user, req).catch(err => {
+      logger.error('SERVER', 'Failed to post character creation to Discord', err);
+    });
 
     // Return created character
     res.status(201).json({ 
@@ -381,14 +953,19 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
     });
 
   } catch (error) {
-    logger.error('Error creating character', error, 'characters.js');
+    logger.error('CHARACTERS', 'Error creating character', error);
     
     // If character was created but something else failed, try to clean up
     if (character && character._id) {
       try {
         await Character.findByIdAndDelete(character._id);
+        // Restore character slot if character creation failed
+        if (user) {
+          user.characterSlot += 1;
+          await user.save();
+        }
       } catch (cleanupError) {
-        logger.error('Error cleaning up character after creation failure', cleanupError, 'characters.js');
+        logger.error('CHARACTERS', 'Error cleaning up character after creation failure', cleanupError);
       }
     }
 
@@ -408,6 +985,256 @@ router.get('/:id', validateObjectId('id'), asyncHandler(async (req, res) => {
     throw new NotFoundError('Character not found');
   }
   res.json({ ...char.toObject(), icon: char.icon });
+}));
+
+// ------------------- Section: Character Moderation Routes -------------------
+
+// Middleware to check if user is a mod/admin
+async function checkModAccess(req) {
+  // Check if user is authenticated
+  const user = req.session?.user || req.user;
+  if (!user || !user.discordId) {
+    return false;
+  }
+  
+  // Use the same checkAdminAccess function from server.js
+  // For now, we'll check the ADMIN_ROLE_ID
+  const guildId = process.env.PROD_GUILD_ID;
+  const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
+  
+  if (!guildId || !ADMIN_ROLE_ID) {
+    return false;
+  }
+  
+  try {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${user.discordId}`, {
+      headers: {
+        'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const memberData = await response.json();
+      const roles = memberData.roles || [];
+      const adminRoleIdStr = String(ADMIN_ROLE_ID);
+      return roles.some(roleId => String(roleId) === adminRoleIdStr);
+    }
+    return false;
+  } catch (error) {
+    logger.error('CHARACTERS', `Error checking mod access: ${error.message}`);
+    return false;
+  }
+}
+
+// Get all pending characters for moderation review
+router.get('/moderation/pending', asyncHandler(async (req, res) => {
+  const isMod = await checkModAccess(req);
+  if (!isMod) {
+    return res.status(403).json({ error: 'Moderator access required' });
+  }
+  
+  await connectToTinglebot();
+  
+  // Get all pending characters (both regular and mod)
+  const pendingCharacters = await Character.find({ status: 'pending' })
+    .select('name userId age height pronouns race homeVillage job icon appLink createdAt')
+    .lean();
+  
+  const pendingModCharacters = await ModCharacter.find({ status: 'pending' })
+    .select('name userId age height pronouns race homeVillage job icon appLink createdAt modTitle modType')
+    .lean();
+  
+  // Get moderation votes for each character
+  const allCharacterIds = [
+    ...pendingCharacters.map(c => c._id),
+    ...pendingModCharacters.map(c => c._id)
+  ];
+  
+  const moderationVotes = await CharacterModeration.find({
+    characterId: { $in: allCharacterIds }
+  }).lean();
+  
+  // Group votes by character ID
+  const votesByCharacter = {};
+  moderationVotes.forEach(vote => {
+    const charId = vote.characterId.toString();
+    if (!votesByCharacter[charId]) {
+      votesByCharacter[charId] = { approves: [], denies: [] };
+    }
+    if (vote.vote === 'approve') {
+      votesByCharacter[charId].approves.push({
+        modId: vote.modId,
+        modUsername: vote.modUsername,
+        createdAt: vote.createdAt
+      });
+    } else {
+      votesByCharacter[charId].denies.push({
+        modId: vote.modId,
+        modUsername: vote.modUsername,
+        reason: vote.reason,
+        createdAt: vote.createdAt
+      });
+    }
+  });
+  
+  // Add vote counts to characters
+  const charactersWithVotes = [
+    ...pendingCharacters.map(char => ({
+      ...char,
+      isModCharacter: false,
+      votes: votesByCharacter[char._id.toString()] || { approves: [], denies: [] },
+      approveCount: (votesByCharacter[char._id.toString()]?.approves || []).length,
+      denyCount: (votesByCharacter[char._id.toString()]?.denies || []).length
+    })),
+    ...pendingModCharacters.map(char => ({
+      ...char,
+      isModCharacter: true,
+      votes: votesByCharacter[char._id.toString()] || { approves: [], denies: [] },
+      approveCount: (votesByCharacter[char._id.toString()]?.approves || []).length,
+      denyCount: (votesByCharacter[char._id.toString()]?.denies || []).length
+    }))
+  ];
+  
+  res.json({ characters: charactersWithVotes });
+}));
+
+// Approve or deny a character
+router.post('/moderation/vote', asyncHandler(async (req, res) => {
+  const isMod = await checkModAccess(req);
+  if (!isMod) {
+    return res.status(403).json({ error: 'Moderator access required' });
+  }
+  
+  const { characterId, vote, reason, isModCharacter } = req.body;
+  
+  if (!characterId || !vote || !['approve', 'deny'].includes(vote)) {
+    return res.status(400).json({ error: 'Invalid request. characterId and vote (approve/deny) are required.' });
+  }
+  
+  if (vote === 'deny' && !reason) {
+    return res.status(400).json({ error: 'Reason is required for denial votes.' });
+  }
+  
+  await connectToTinglebot();
+  
+  // Get the character
+  const CharacterModel = isModCharacter ? ModCharacter : Character;
+  const character = await CharacterModel.findById(characterId);
+  
+  if (!character) {
+    return res.status(404).json({ error: 'Character not found' });
+  }
+  
+  if (character.status !== 'pending') {
+    return res.status(400).json({ error: 'Character is not pending moderation' });
+  }
+  
+  // Check if mod has already voted
+  const existingVote = await CharacterModeration.findOne({
+    characterId: characterId,
+    modId: req.user.discordId
+  });
+  
+  if (existingVote) {
+    return res.status(400).json({ error: 'You have already voted on this character' });
+  }
+  
+  // Get mod user info
+  const modUser = req.session?.user || req.user;
+  
+  // Create moderation vote
+  const moderationVote = new CharacterModeration({
+    characterId: characterId,
+    characterName: character.name,
+    userId: character.userId,
+    isModCharacter: isModCharacter || false,
+    modId: modUser.discordId,
+    modUsername: modUser.username || modUser.discordId,
+    vote: vote,
+    reason: vote === 'deny' ? reason : null
+  });
+  
+  await moderationVote.save();
+  
+  // Get current vote counts
+  const approveCount = await CharacterModeration.countDocuments({
+    characterId: characterId,
+    vote: 'approve'
+  });
+  
+  const denyCount = await CharacterModeration.countDocuments({
+    characterId: characterId,
+    vote: 'deny'
+  });
+  
+  // Check if we have 1 approve or 1 deny (reduced for testing)
+  const VOTE_THRESHOLD = 1;
+  
+  if (approveCount >= VOTE_THRESHOLD) {
+    // Character is accepted
+    character.status = 'accepted';
+    await character.save();
+    
+    logger.info('CHARACTERS', `Character "${character.name}" accepted by ${VOTE_THRESHOLD} mod(s)`);
+    
+    // Send notification to user via Discord
+    postCharacterStatusToDiscord(character, 'accepted', null, isModCharacter).catch(err => {
+      logger.error('CHARACTERS', 'Failed to post character acceptance to Discord', err);
+    });
+    
+    return res.json({
+      success: true,
+      message: 'Character accepted',
+      character: character,
+      voteCounts: { approves: approveCount, denies: denyCount }
+    });
+  } else if (denyCount >= VOTE_THRESHOLD) {
+    // Character is denied - combine all denial reasons
+    const denialReasons = await CharacterModeration.find({
+      characterId: characterId,
+      vote: 'deny'
+    }).select('modUsername reason').lean();
+    
+    const combinedReason = denialReasons
+      .map(v => `${v.modUsername}: ${v.reason}`)
+      .join('\n');
+    
+    character.status = 'denied';
+    character.denialReason = combinedReason;
+    await character.save();
+    
+    logger.info('CHARACTERS', `Character "${character.name}" denied by ${VOTE_THRESHOLD} mod(s)`);
+    
+    // Send notification to user with denial reason via Discord
+    postCharacterStatusToDiscord(character, 'denied', combinedReason, isModCharacter).catch(err => {
+      logger.error('CHARACTERS', 'Failed to post character denial to Discord', err);
+    });
+    
+    // Try to send DM to user
+    await sendDenialDM(character, combinedReason).catch(err => {
+      logger.error('CHARACTERS', 'Failed to send denial DM to user', err);
+    });
+    
+    return res.json({
+      success: true,
+      message: 'Character denied',
+      character: character,
+      voteCounts: { approves: approveCount, denies: denyCount },
+      denialReason: combinedReason
+    });
+  }
+  
+  // Not enough votes yet
+  res.json({
+    success: true,
+    message: 'Vote recorded',
+    voteCounts: { approves: approveCount, denies: denyCount },
+    remaining: {
+      approvesNeeded: VOTE_THRESHOLD - approveCount,
+      deniesNeeded: VOTE_THRESHOLD - denyCount
+    }
+  });
 }));
 
 module.exports = router;

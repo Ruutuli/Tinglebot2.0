@@ -501,31 +501,84 @@ const healKoCharacter = async (characterId, healerId = null) => {
 
 // ============================================================================
 // Stat Update Functions
+// ------------------- Helper: Get modifierHearts from stats (handles both Map and plain object) -------------------
+const getModifierHearts = (stats) => {
+  if (!stats) return 0;
+  // Handle Map
+  if (stats instanceof Map) {
+    return stats.get('modifierHearts') || 0;
+  }
+  // Handle plain object
+  if (typeof stats === 'object') {
+    return stats.modifierHearts || 0;
+  }
+  return 0;
+};
+
 // ------------------- Update Character Defense -------------------
 // Updates the character's defense based on equipped gear.
 const updateCharacterDefense = async (characterId) => {
+  let totalDefense = 0;
   try {
-    // Check if this is a mod character first
-    const modCharacter = await ModCharacter.findById(characterId);
-    if (modCharacter) {
-      console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - defense update skipped (mod characters have unlimited stats)`);
+    // Check if Character model connection is ready, if not wait briefly
+    if (Character.db && Character.db.readyState !== 1) {
+      // Connection not ready, wait a bit and check again
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (Character.db.readyState !== 1) {
+        throw new Error('Character model database connection not ready');
+      }
+    }
+    
+    // Try to find character first with timeout
+    const character = await Promise.race([
+      Character.findById(characterId),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Character query timeout')), 5000))
+    ]);
+    
+    // If character found, check if it's a mod character by property
+    if (character && character.isModCharacter) {
+      console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} - defense update skipped (mod characters have unlimited stats)`);
       return; // Mod characters don't need stat updates
     }
     
-    const character = await Character.findById(characterId);
+    // If not found in Character, try ModCharacter (gracefully handle connection issues)
+    if (!character) {
+      try {
+        // Only try ModCharacter if the model's connection is ready
+        if (ModCharacter.db && ModCharacter.db.readyState === 1) {
+          const modCharacter = await Promise.race([
+            ModCharacter.findById(characterId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('ModCharacter query timeout')), 2000))
+          ]);
+          if (modCharacter) {
+            console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - defense update skipped (mod characters have unlimited stats)`);
+            return; // Mod characters don't need stat updates
+          }
+        }
+      } catch (modError) {
+        // If ModCharacter query fails (e.g., not connected or timeout), assume it's a regular character
+        // This handles cases where the function is called from dashboard context
+        // Silently continue - if character wasn't found in Character, we'll throw an error below
+      }
+    }
+    
     if (!character) throw new Error('Character not found');
 
-    let totalDefense = 0;
+    totalDefense = 0;
     if (character.gearArmor) {
-      totalDefense += character.gearArmor.head?.stats?.get('modifierHearts') || 0;
-      totalDefense += character.gearArmor.chest?.stats?.get('modifierHearts') || 0;
-      totalDefense += character.gearArmor.legs?.stats?.get('modifierHearts') || 0;
+      totalDefense += getModifierHearts(character.gearArmor.head?.stats);
+      totalDefense += getModifierHearts(character.gearArmor.chest?.stats);
+      totalDefense += getModifierHearts(character.gearArmor.legs?.stats);
     }
     if (character.gearShield?.stats) {
-      totalDefense += character.gearShield.stats.get('modifierHearts') || 0;
+      totalDefense += getModifierHearts(character.gearShield.stats);
     }
 
-    await Character.updateOne({ _id: characterId }, { $set: { defense: totalDefense } });
+    // Update with timeout
+    await Promise.race([
+      Character.updateOne({ _id: characterId }, { $set: { defense: totalDefense } }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Character update timeout')), 5000))
+    ]);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
       operation: 'update_character_defense',
@@ -540,19 +593,58 @@ const updateCharacterDefense = async (characterId) => {
 // ------------------- Update Character Attack -------------------
 // Updates the character's attack based on equipped weapon stats.
 const updateCharacterAttack = async (characterId) => {
+  let totalAttack = 0;
   try {
-    // Check if this is a mod character first
-    const modCharacter = await ModCharacter.findById(characterId);
-    if (modCharacter) {
-      console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - attack update skipped (mod characters have unlimited stats)`);
+    // Check if Character model connection is ready, if not wait briefly
+    if (Character.db && Character.db.readyState !== 1) {
+      // Connection not ready, wait a bit and check again
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (Character.db.readyState !== 1) {
+        throw new Error('Character model database connection not ready');
+      }
+    }
+    
+    // Try to find character first with timeout
+    const character = await Promise.race([
+      Character.findById(characterId),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Character query timeout')), 5000))
+    ]);
+    
+    // If character found, check if it's a mod character by property
+    if (character && character.isModCharacter) {
+      console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} - attack update skipped (mod characters have unlimited stats)`);
       return; // Mod characters don't need stat updates
     }
     
-    const character = await Character.findById(characterId);
+    // If not found in Character, try ModCharacter (gracefully handle connection issues)
+    if (!character) {
+      try {
+        // Only try ModCharacter if the model's connection is ready
+        if (ModCharacter.db && ModCharacter.db.readyState === 1) {
+          const modCharacter = await Promise.race([
+            ModCharacter.findById(characterId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('ModCharacter query timeout')), 2000))
+          ]);
+          if (modCharacter) {
+            console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - attack update skipped (mod characters have unlimited stats)`);
+            return; // Mod characters don't need stat updates
+          }
+        }
+      } catch (modError) {
+        // If ModCharacter query fails (e.g., not connected or timeout), assume it's a regular character
+        // This handles cases where the function is called from dashboard context
+        // Silently continue - if character wasn't found in Character, we'll throw an error below
+      }
+    }
+    
     if (!character) throw new Error('Character not found');
 
-    const totalAttack = character.gearWeapon?.stats?.get('modifierHearts') || 0;
-    await Character.updateOne({ _id: characterId }, { $set: { attack: totalAttack } });
+    totalAttack = getModifierHearts(character.gearWeapon?.stats);
+    // Update with timeout
+    await Promise.race([
+      Character.updateOne({ _id: characterId }, { $set: { attack: totalAttack } }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Character update timeout')), 5000))
+    ]);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
       operation: 'update_character_attack',

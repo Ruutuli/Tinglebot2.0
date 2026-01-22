@@ -7,12 +7,20 @@
 // ------------------- Section: Imports & Configuration -------------------
 const dotenv = require('dotenv');
 const path = require('path');
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+// Load .env from dashboard directory (or parent as fallback)
+const dashboardEnvPath = path.resolve(__dirname, '.env');
+const rootEnvPath = path.resolve(__dirname, '..', '.env');
+if (require('fs').existsSync(dashboardEnvPath)) {
+  dotenv.config({ path: dashboardEnvPath });
+} else if (require('fs').existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+}
 
 // ------------------- Setup Path Aliases -------------------
 require('module-alias/register');
 const moduleAlias = require('module-alias');
-// moduleAlias.addAlias('@/shared', path.resolve(__dirname, '..', 'shared')); // Shared directory removed
+// Configure @/shared alias to point to dashboard directory (all shared files are in dashboard)
+moduleAlias.addAlias('@/shared', path.resolve(__dirname));
 
 const express = require('express');
 const cors = require('cors');
@@ -159,7 +167,7 @@ const SPIRIT_ORB_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 // Runs database migrations to update existing data
 async function runMigrations() {
   try {
-    logger.info('Running database migrations...', 'server.js');
+    logger.info('SERVER', 'Running database migrations...');
     
     // Migration: Update homes pins color to lime green
     const Pin = require('./models/PinModel');
@@ -185,13 +193,13 @@ async function runMigrations() {
     const totalUpdated = result1.modifiedCount + result2.modifiedCount + result3.modifiedCount;
     
     if (totalUpdated > 0) {
-      logger.success(`Updated ${totalUpdated} homes pins to use lime green color #C5FF00`, 'server.js');
+      logger.success('SERVER', `Updated ${totalUpdated} homes pins to use lime green color #C5FF00`);
     } else {
-      logger.info('No homes pins needed color update', 'server.js');
+      logger.info('SERVER', 'No homes pins needed color update');
     }
     
   } catch (error) {
-    logger.error('Migration failed:', error);
+    logger.error('SERVER', 'Migration failed', error);
     // Don't throw error - migrations shouldn't break server startup
   }
 }
@@ -204,7 +212,7 @@ async function initializeDatabases() {
     
     // Initialize all database connections using DatabaseConnectionManager
     await DatabaseConnectionManager.initialize();
-    logger.database('All database connections initialized via DatabaseConnectionManager', 'server.js');
+    logger.database('DB', 'All database connections initialized via DatabaseConnectionManager');
     
     // Get connection references for backward compatibility
     inventoriesConnection = DatabaseConnectionManager.getInventoriesConnection();
@@ -213,12 +221,12 @@ async function initializeDatabases() {
     // Initialize VendingStock model (uses tinglebot database)
     try {
       await initializeVendingStockModel();
-      logger.database('Initialized VendingStock model', 'server.js');
+      logger.database('DB', 'Initialized VendingStock model');
     } catch (vendingStockError) {
-      logger.warn(`Failed to initialize VendingStock model: ${vendingStockError.message}`, 'server.js');
+      logger.warn('SERVER', `Failed to initialize VendingStock model: ${vendingStockError.message}`);
     }
     
-    logger.success('All databases connected successfully!', 'server.js');
+    logger.success('SERVER', 'All databases connected successfully!');
     
     // Run database migrations
     await runMigrations();
@@ -226,7 +234,7 @@ async function initializeDatabases() {
     logger.divider();
     
   } catch (error) {   
-    logger.error('Database initialization failed', error);
+    logger.error('SERVER', 'Database initialization failed', error);
     throw error;
   }
 }
@@ -321,7 +329,7 @@ app.use(cors({
       callback(null, true);
     } else {
       // Log the blocked origin for debugging
-      logger.warn(`CORS blocked origin: ${origin}`, 'server.js');
+      logger.warn('SERVER', `CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -457,7 +465,7 @@ async function uploadPinImageToGCS(file, pinId) {
     
     return new Promise((resolve, reject) => {
       stream.on('error', (error) => {
-        logger.error('Error uploading pin image to GCS', error, 'server.js');
+        logger.error('SERVER', 'Error uploading pin image to GCS', error);
         reject(error);
       });
       
@@ -469,7 +477,7 @@ async function uploadPinImageToGCS(file, pinId) {
       stream.end(file.buffer);
     });
   } catch (error) {
-    logger.error('Error in uploadPinImageToGCS', error, 'server.js');
+    logger.error('SERVER', 'Error in uploadPinImageToGCS', error);
     throw error;
   }
 }
@@ -513,6 +521,24 @@ app.get('/inventories.html', (req, res) => {
 
 app.get('/character-inventory.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'character-inventory.html'));
+});
+
+// ------------------- Function: serveCharacterCreatePage -------------------
+// Serves the character creation page
+app.get('/character-create', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'character-create.html'));
+});
+
+app.get('/character-create.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'character-create.html'));
+});
+
+app.get('/character-moderation', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'character-moderation.html'));
+});
+
+app.get('/character-moderation.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'character-moderation.html'));
 });
 
 // ------------------- Section: Request Logging -------------------
@@ -971,7 +997,7 @@ app.get('/api/users/search', async (req, res) => {
 
     res.json({ users: usersWithCharacters });
   } catch (error) {
-    logger.error('Error searching users', error, 'server.js');
+    logger.error('SERVER', 'Error searching users', error);
     res.status(500).json({ error: 'Failed to search users' });
   }
 });
@@ -1070,7 +1096,7 @@ app.get('/api/users', async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Error fetching users', error, 'server.js');
+    logger.error('SERVER', 'Error fetching users', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
@@ -1090,6 +1116,8 @@ app.get('/api/users/:discordId', async (req, res) => {
     }
 
     // Get user's characters
+    // For user's own characters, show all statuses so they can see pending/denied
+    // But for general queries, we filter by status elsewhere
     const characters = await Character.find({ 
       userId: discordId,
       name: { $nin: ['Tingle', 'Tingle test', 'John'] }
@@ -1105,7 +1133,7 @@ app.get('/api/users/:discordId', async (req, res) => {
       characters
     });
   } catch (error) {
-    logger.error('Error fetching user details', error, 'server.js');
+    logger.error('SERVER', 'Error fetching user details', error);
     res.status(500).json({ error: 'Failed to fetch user details' });
   }
 });
@@ -1166,9 +1194,16 @@ app.get('/api/tinglebot/stats', async (req, res) => {
 app.get('/api/stats/characters', async (req, res) => {
   try {
     // Get both regular and mod characters for total count
+    // Only get accepted characters (exclude pending and denied)
+    const statusFilter = {
+      $or: [
+        { status: 'accepted' },
+        { status: { $exists: false } } // Include characters created before status field was added
+      ]
+    };
     const [regularCharacters, modCharacters] = await Promise.all([
-      Character.find({ name: { $nin: ['Tingle', 'Tingle test', 'John'] } }).lean(),
-      ModCharacter.find({}).lean()
+      Character.find({ name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter }).lean(),
+      ModCharacter.find({ ...statusFilter }).lean()
     ]);
     
     const totalCharacters = regularCharacters.length + modCharacters.length;
@@ -1303,9 +1338,11 @@ app.get('/api/stats/characters', async (req, res) => {
     // Get upcoming birthdays (including mod characters)
     const today = new Date();
     const thisYr = today.getFullYear();
+    // Only get accepted characters for birthdays
     const allBday = await Character.find({ 
       birthday: { $exists: true, $ne: '' },
-      name: { $nin: ['Tingle', 'Tingle test', 'John'] }
+      name: { $nin: ['Tingle', 'Tingle test', 'John'] },
+      ...statusFilter
     }, { name: 1, birthday: 1 }).lean();
     
     // Add mod character birthdays
@@ -1368,11 +1405,13 @@ app.get('/api/stats/characters', async (req, res) => {
     });
 
     // Get detailed visiting characters
+    // Only get accepted characters for visiting stats
     const visitingCharacters = await Character.find(
       { 
         currentVillage: { $in: villages }, 
         homeVillage: { $in: villages, $ne: null }, 
         $expr: { $ne: ['$currentVillage', '$homeVillage'] },
+        ...statusFilter,
         name: { $nin: ['Tingle', 'Tingle test', 'John'] }
       },
       { name: 1, currentVillage: 1, homeVillage: 1 }
@@ -1408,9 +1447,17 @@ app.get('/api/stats/characters', async (req, res) => {
 
     // Get top characters by various stats
     const getTop = async (field) => {
+      // Only get accepted characters for top stats
+      const statusFilter = {
+        $or: [
+          { status: 'accepted' },
+          { status: { $exists: false } } // Include characters created before status field was added
+        ]
+      };
       const top = await Character.find({ 
         [field]: { $gt: 0 },
-        name: { $nin: ['Tingle', 'Tingle test', 'John'] }
+        name: { $nin: ['Tingle', 'Tingle test', 'John'] },
+        ...statusFilter
       })
         .sort({ [field]: -1 })
         .limit(5)
@@ -1462,32 +1509,33 @@ app.get('/api/stats/characters', async (req, res) => {
     }
 
     // Get special character counts (mod characters are immune to negative effects)
+    // Only count accepted characters (exclude pending and denied)
     const [kodCount, blightedCount, debuffedCount, jailedCount] = await Promise.all([
-      Character.countDocuments({ ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Character.countDocuments({ blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Character.countDocuments({ 'debuff.active': true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } }),
-      Character.countDocuments({ inJail: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } })
+      Character.countDocuments({ ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter }),
+      Character.countDocuments({ blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter }),
+      Character.countDocuments({ 'debuff.active': true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter }),
+      Character.countDocuments({ inJail: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter })
     ]);
 
-    // Get debuffed characters details
+    // Get debuffed characters details (only accepted characters)
     const debuffedCharacters = await Character.find(
-      { 'debuff.active': true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
+      { 'debuff.active': true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter },
       { name: 1, 'debuff.endDate': 1 }
     ).lean();
 
-    // Get KO'd and blighted characters details
+    // Get KO'd and blighted characters details (only accepted characters)
     const kodCharacters = await Character.find(
-      { ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
+      { ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter },
       { name: 1, lastRollDate: 1, ko: 1 }
     ).lean();
     const blightedCharacters = await Character.find(
-      { blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
+      { blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter },
       { name: 1, blightedAt: 1, blighted: 1 }
     ).lean();
 
-    // Get jailed characters details
+    // Get jailed characters details (only accepted characters)
     const jailedCharacters = await Character.find(
-      { inJail: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] } },
+      { inJail: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter },
       { name: 1, jailReleaseTime: 1, currentVillage: 1, homeVillage: 1 }
     ).lean();
 
@@ -1532,7 +1580,7 @@ app.get('/api/stats/characters', async (req, res) => {
       timestamp: Date.now() // Add timestamp for cache busting
     });
   } catch (error) {
-    logger.error('Error fetching character stats', error, 'server.js');
+    logger.error('SERVER', 'Error fetching character stats', error);
     console.error('[server.js]: Full error details:', {
       message: error.message,
       stack: error.stack,
@@ -1661,7 +1709,7 @@ app.get('/api/steal/cooldowns/:characterId', async (req, res) => {
 
     res.json(cooldowns);
   } catch (error) {
-    logger.error('Error fetching steal cooldowns', error, 'server.js');
+    logger.error('SERVER', 'Error fetching steal cooldowns', error);
     res.status(500).json({ 
       error: 'Failed to fetch steal cooldowns',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -1894,7 +1942,7 @@ app.get('/api/stats/hwqs', async (req, res) => {
       timestamp: Date.now()
     });
   } catch (error) {
-    logger.error('Error fetching HWQ stats', error, 'server.js');
+    logger.error('SERVER', 'Error fetching HWQ stats', error);
     res.status(500).json({ error: 'Failed to fetch HWQ stats' });
   }
 });
@@ -2535,10 +2583,20 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
       let filteredData;
       
       if (modelType === 'character') {
-        // For characters, fetch both regular and mod characters
+        // For characters, fetch both regular and mod characters (only accepted ones)
         const [regularCharacters, modCharacters] = await Promise.all([
-          Character.find({}).lean(),
-          ModCharacter.find({}).lean()
+          Character.find({
+            $or: [
+              { status: 'accepted' },
+              { status: { $exists: false } } // Include characters created before status field was added
+            ]
+          }).lean(),
+          ModCharacter.find({
+            $or: [
+              { status: 'accepted' },
+              { status: { $exists: false } } // Include mod characters created before status field was added
+            ]
+          }).lean()
         ]);
         
         // Combine both character types
@@ -2894,7 +2952,7 @@ app.get('/api/character/:id', async (req, res) => {
     if (!char) return res.status(404).json({ error: 'Character not found' });
     res.json({ ...char.toObject(), icon: char.icon });
   } catch (error) {
-    logger.error('Error fetching character', error, 'server.js');
+    logger.error('SERVER', 'Error fetching character', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2933,7 +2991,7 @@ app.get('/api/user/characters', async (req, res) => {
     
     res.json({ data: characters });
   } catch (error) {
-    logger.error('Error fetching user characters', error, 'server.js');
+    logger.error('SERVER', 'Error fetching user characters', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -3097,7 +3155,7 @@ app.get('/api/user/quests', async (req, res) => {
       activeParticipations: activeParticipations // Add filtered list for frontend
     });
   } catch (error) {
-    logger.error('Error fetching user quests', error, 'server.js');
+    logger.error('SERVER', 'Error fetching user quests', error);
     res.status(500).json({ error: 'Failed to load quest data' });
   }
 });
@@ -3139,9 +3197,9 @@ app.get('/api/characters/:id/export', async (req, res) => {
       const inventoryCollection = inventoriesDb.collection(collectionName);
       const inventoryItems = await inventoryCollection.find().toArray();
       exportData.inventory = inventoryItems;
-      logger.success(`Found ${inventoryItems.length} inventory items`, 'server.js');
+      logger.success('SERVER', `Found ${inventoryItems.length} inventory items`);
     } catch (error) {
-      logger.warn(`Error fetching inventory: ${error.message}`, 'server.js');
+      logger.warn('SERVER', `Error fetching inventory: ${error.message}`);
       exportData.inventory = [];
     }
     
@@ -3154,9 +3212,9 @@ app.get('/api/characters/:id/export', async (req, res) => {
         ]
       }).lean();
       exportData.pets = pets;
-      logger.success(`Found ${pets.length} pets`, 'server.js');
+      logger.success('SERVER', `Found ${pets.length} pets`);
     } catch (error) {
-      logger.warn(`Error fetching pets: ${error.message}`, 'server.js');
+      logger.warn('SERVER', `Error fetching pets: ${error.message}`);
       exportData.pets = [];
     }
     
@@ -3169,9 +3227,9 @@ app.get('/api/characters/:id/export', async (req, res) => {
         ]
       }).lean();
       exportData.mounts = mounts;
-      logger.success(`Found ${mounts.length} mounts`, 'server.js');
+      logger.success('SERVER', `Found ${mounts.length} mounts`);
     } catch (error) {
-      logger.warn(`Error fetching mounts: ${error.message}`, 'server.js');
+      logger.warn('SERVER', `Error fetching mounts: ${error.message}`);
       exportData.mounts = [];
     }
     
@@ -3184,9 +3242,9 @@ app.get('/api/characters/:id/export', async (req, res) => {
         ]
       }).lean();
       exportData.relationships = relationships;
-      logger.success(`Found ${relationships.length} relationships`, 'server.js');
+      logger.success('SERVER', `Found ${relationships.length} relationships`);
     } catch (error) {
-      logger.warn(`Error fetching relationships: ${error.message}`, 'server.js');
+      logger.warn('SERVER', `Error fetching relationships: ${error.message}`);
       exportData.relationships = [];
     }
     
@@ -3196,9 +3254,9 @@ app.get('/api/characters/:id/export', async (req, res) => {
         [`participants.${userId}`]: { $exists: true }
       }).lean();
       exportData.quests = quests;
-      logger.success(`Found ${quests.length} quests`, 'server.js');
+      logger.success('SERVER', `Found ${quests.length} quests`);
     } catch (error) {
-      logger.warn(`Error fetching quests: ${error.message}`, 'server.js');
+      logger.warn('SERVER', `Error fetching quests: ${error.message}`);
       exportData.quests = [];
     }
     
@@ -4134,7 +4192,7 @@ app.get('/api/characters', async (req, res) => {
     
     res.json({ characters });
   } catch (error) {
-    logger.error('Error fetching characters for relationships', error, 'server.js');
+    logger.error('SERVER', 'Error fetching characters for relationships', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -4142,13 +4200,13 @@ app.get('/api/characters', async (req, res) => {
 // ------------------- Function: setupWeeklyCharacterRotation -------------------
 // Initializes character of the week on server start (manual rotation only)
 const setupWeeklyCharacterRotation = async () => {
-  logger.info('Setting up weekly character rotation');
+  logger.info('SERVER', 'Setting up weekly character rotation');
   
   // Check if there's already an active character of the week
   const existingCharacter = await CharacterOfWeek.findOne({ isActive: true });
   
   if (existingCharacter) {
-    logger.character(`Current character of the week: ${existingCharacter.characterName}`);
+    logger.character('SERVER', `Current character of the week: ${existingCharacter.characterName}`);
     
     // Check if the existing character should be rotated based on Sunday midnight schedule
     const shouldRotate = checkIfShouldRotate(existingCharacter.startDate);
@@ -4158,7 +4216,7 @@ const setupWeeklyCharacterRotation = async () => {
       await rotateCharacterOfWeek();
     }
   } else {
-    logger.info('No active character found, creating first character of the week');
+    logger.info('SERVER', 'No active character found, creating first character of the week');
     await rotateCharacterOfWeek();
   }
   
@@ -6876,7 +6934,7 @@ app.get('/api/inventory/characters', async (req, res) => {
     
     res.json({ data: inventoryData });
   } catch (error) {
-    logger.error('Error fetching character inventory data', error, 'server.js');
+    logger.error('SERVER', 'Error fetching character inventory data', error);
     res.status(500).json({ error: 'Failed to fetch character inventory data', details: error.message });
   }
 });
@@ -6913,13 +6971,13 @@ app.get('/api/characters/:characterId/vending', async (req, res) => {
       const VendingInventory = await initializeVendingInventoryModel(character.name);
       const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
       items = vendingItems;
-      logger.success(`Found ${items.length} vending items for ${character.name}`, 'server.js');
+      logger.success('SERVER', `Found ${items.length} vending items for ${character.name}`);
       if (items.length > 0) {
-        logger.debug(`Sample item for ${character.name}`, items[0], 'server.js');
+        logger.debug('SERVER', `Sample item for ${character.name}`, items[0]);
       }
     } catch (vendingDbError) {
-      logger.warn(`Could not read from vending database: ${vendingDbError.message}`, 'server.js');
-      logger.error('Vending DB error stack', vendingDbError.stack, 'server.js');
+      logger.warn('SERVER', `Could not read from vending database: ${vendingDbError.message}`);
+      logger.error('SERVER', 'Vending DB error stack', vendingDbError.stack);
     }
 
     // Calculate slot usage - count items, not cumulative slotsUsed
@@ -7637,11 +7695,11 @@ app.post('/api/characters/:characterId/vending/restock', async (req, res) => {
             item.itemName.toLowerCase().trim() === itemName.toLowerCase().trim()
           );
           if (itemWithWrongType) {
-            logger.debug(`Item "${itemName}" found but with wrong vendingType:`, {
+            logger.debug('SERVER', `Item "${itemName}" found but with wrong vendingType:`, {
               foundType: itemWithWrongType.vendingType,
               requiredType: characterJob,
               item: itemWithWrongType
-            }, 'server.js');
+            });
           }
         }
         
@@ -7668,11 +7726,11 @@ app.post('/api/characters/:characterId/vending/restock', async (req, res) => {
               return true;
             });
             if (foundInOtherVillage) {
-              logger.debug(`Item "${itemName}" found in different village:`, {
+              logger.debug('SERVER', `Item "${itemName}" found in different village:`, {
                 foundIn: otherVillage,
                 currentVillage: normalizedVillage,
                 item: foundInOtherVillage
-              }, 'server.js');
+              });
               // Don't set itemDoc - merchant needs to be in that village to restock
               break;
             }
@@ -8257,7 +8315,7 @@ app.get('/api/items', async (req, res) => {
     
     res.json(items);
   } catch (error) {
-    logger.error('Error fetching items data', error, 'server.js');
+    logger.error('SERVER', 'Error fetching items data', error);
     res.status(500).json({ error: 'Failed to fetch items data', details: error.message });
   }
 });
@@ -8391,7 +8449,7 @@ app.get('/api/weather/history/:village', async (req, res) => {
 app.get('/api/weather/stats', async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
-    logger.api(`Fetching weather stats for ${days} days`, 'server.js');
+    logger.api('WEATHER', `Fetching weather stats for ${days} days`);
     
     const villages = ['Rudania', 'Inariko', 'Vhintl'];
     const statsData = {};
@@ -8399,11 +8457,11 @@ app.get('/api/weather/stats', async (req, res) => {
     for (const village of villages) {
       const history = await Weather.getRecentWeather(village, days);
       statsData[village] = history;
-      logger.api(`Fetched ${history.length} weather records for ${village}`, 'server.js');
+      logger.api('WEATHER', `Fetched ${history.length} weather records for ${village}`);
     }
     
     const totalRecords = Object.values(statsData).reduce((sum, data) => sum + data.length, 0);
-    logger.api(`Returning weather stats: ${totalRecords} total records across ${villages.length} villages`, 'server.js');
+    logger.api('WEATHER', `Returning weather stats: ${totalRecords} total records across ${villages.length} villages`);
     
     res.json({
       days,
@@ -8411,7 +8469,7 @@ app.get('/api/weather/stats', async (req, res) => {
       totalRecords
     });
   } catch (error) {
-    logger.error(`Error fetching weather statistics: ${error.message}`, error, 'server.js');
+    logger.error('WEATHER', `Error fetching weather statistics: ${error.message}`, error);
     res.status(500).json({ error: 'Failed to fetch weather statistics', details: error.message });
   }
 });
@@ -9176,7 +9234,7 @@ const SCANNABLE_FIELDS = {
 
 // Security audit function
 async function performSecurityAudit() {
-  logger.debug('Starting comprehensive security audit...');
+  logger.debug('SERVER', 'Starting comprehensive security audit...');
   const auditResults = {
     timestamp: new Date().toISOString(),
     totalRecordsScanned: 0,
@@ -9191,7 +9249,7 @@ async function performSecurityAudit() {
     for (const [modelName, fields] of Object.entries(SCANNABLE_FIELDS)) {
       try {
         const ModelModule = require(`./models/${modelName}Model.js`);
-        logger.debug('Scanning ' + modelName + ' model...');
+        logger.debug('SERVER', 'Scanning ' + modelName + ' model...');
         
         // Handle models that export initialization functions vs direct models
         let Model;
@@ -9250,9 +9308,9 @@ async function performSecurityAudit() {
           }
         }
         
-        logger.success('Scanned ' + records.length + ' ' + modelName + ' records');
+        logger.success('SERVER', 'Scanned ' + records.length + ' ' + modelName + ' records');
       } catch (error) {
-        logger.error('server.js', 'Error scanning ' + modelName + ': ' + error.message, error);
+        logger.error('SERVER', 'Error scanning ' + modelName + ': ' + error.message, error);
         auditResults.warnings.push({
           model: modelName,
           error: error.message,
@@ -10059,7 +10117,7 @@ app.get('/api/admin/security-comprehensive', async (req, res) => {
     });
     
   } catch (error) {
-    logger.error('❌ Comprehensive security check error', error, 'server.js');
+    logger.error('SERVER', 'Comprehensive security check error', error);
     res.status(500).json({ 
       error: 'Comprehensive security check failed',
       details: error.message 
@@ -10073,7 +10131,7 @@ app.get('/api/admin/security-comprehensive', async (req, res) => {
 app.get('/auth/discord', (req, res) => {
   const clientId = process.env.DISCORD_CLIENT_ID;
   if (!clientId) {
-    logger.error('DISCORD_CLIENT_ID not configured', 'server.js');
+    logger.error('SERVER', 'DISCORD_CLIENT_ID not configured');
     return res.status(500).json({ error: 'OAuth not configured' });
   }
 
@@ -10082,7 +10140,7 @@ app.get('/auth/discord', (req, res) => {
   
   // Ensure session exists before setting state
   if (!req.session) {
-    logger.error('[OAuth Init] No session object available', 'server.js');
+    logger.error('SERVER', '[OAuth Init] No session object available');
     return res.status(500).json({ error: 'Session not available' });
   }
   
@@ -10103,7 +10161,7 @@ app.get('/auth/discord', (req, res) => {
   // Save session before redirecting
   req.session.save((err) => {
     if (err) {
-      logger.error('[OAuth Init] Failed to save session before redirect', err, 'server.js');
+      logger.error('SERVER', '[OAuth Init] Failed to save session before redirect', err);
       return res.status(500).json({ error: 'Failed to initialize session' });
     }
     logger.info(`[OAuth Init] Session saved successfully. Session ID: ${req.sessionID}`, 'server.js');
@@ -10118,11 +10176,11 @@ app.get('/auth/discord/callback', async (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
 
-    logger.info(`[OAuth Callback] Received callback with code: ${code ? 'present' : 'missing'}, state: ${state || 'missing'}`, 'server.js');
-    logger.info(`[OAuth Callback] Session ID: ${req.sessionID}`, 'server.js');
-    logger.info(`[OAuth Callback] Cookies received: ${req.headers.cookie || 'none'}`, 'server.js');
-    logger.info(`[OAuth Callback] Session exists: ${!!req.session}`, 'server.js');
-    logger.info(`[OAuth Callback] Stored OAuth state: ${req.session?.oauthState || 'missing'}`, 'server.js');
+    logger.debug('SERVER', `[OAuth Callback] Received callback with code: ${code ? 'present' : 'missing'}, state: ${state || 'missing'}`);
+    logger.debug('SERVER', `[OAuth Callback] Session ID: ${req.sessionID}`);
+    logger.debug('SERVER', `[OAuth Callback] Cookies received: ${req.headers.cookie || 'none'}`);
+    logger.debug('SERVER', `[OAuth Callback] Session exists: ${!!req.session}`);
+    logger.debug('SERVER', `[OAuth Callback] Stored OAuth state: ${req.session?.oauthState || 'missing'}`);
 
     if (!code) {
       logger.warn('[OAuth Callback] No authorization code received', 'server.js');
@@ -10131,8 +10189,8 @@ app.get('/auth/discord/callback', async (req, res) => {
 
     // Verify state to prevent CSRF attacks
     if (!state || state !== req.session.oauthState) {
-      logger.warn(`[OAuth Callback] Invalid OAuth state parameter. Expected: ${req.session.oauthState || 'none'}, Received: ${state || 'none'}`, 'server.js');
-      logger.warn(`[OAuth Callback] Session exists: ${!!req.session}, Session keys: ${req.session ? Object.keys(req.session).join(', ') : 'none'}`, 'server.js');
+      logger.warn('SERVER', `[OAuth Callback] Invalid OAuth state parameter. Expected: ${req.session.oauthState || 'none'}, Received: ${state || 'none'}`);
+      logger.debug('SERVER', `[OAuth Callback] Session exists: ${!!req.session}, Session keys: ${req.session ? Object.keys(req.session).join(', ') : 'none'}`);
       return res.redirect('/?error=invalid_state');
     }
 
@@ -10142,7 +10200,7 @@ app.get('/auth/discord/callback', async (req, res) => {
     delete req.session.oauthState;
 
     if (!clientId || !clientSecret) {
-      logger.error('Discord OAuth credentials not configured', 'server.js');
+      logger.error('SERVER', 'Discord OAuth credentials not configured');
       return res.redirect('/?error=oauth_not_configured');
     }
 
@@ -10165,13 +10223,13 @@ app.get('/auth/discord/callback', async (req, res) => {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      logger.error(`Discord token exchange failed: ${errorText}`, 'server.js');
+      logger.error('SERVER', `Discord token exchange failed: ${errorText}`);
       return res.redirect('/?error=token_exchange_failed');
     }
 
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
-    logger.info('[OAuth Callback] Successfully exchanged code for access token', 'server.js');
+    logger.debug('SERVER', '[OAuth Callback] Successfully exchanged code for access token');
 
     // Fetch user info from Discord
     const userResponse = await fetch('https://discord.com/api/users/@me', {
@@ -10187,7 +10245,7 @@ app.get('/auth/discord/callback', async (req, res) => {
     }
 
     const userData = await userResponse.json();
-    logger.info(`[OAuth Callback] Successfully fetched user data for Discord ID: ${userData.id}, Username: ${userData.username}`, 'server.js');
+    logger.debug('SERVER', `[OAuth Callback] Successfully fetched user data for Discord ID: ${userData.id}, Username: ${userData.username}`);
 
     // Store user data in session
     req.session.user = {
@@ -10198,19 +10256,19 @@ app.get('/auth/discord/callback', async (req, res) => {
       email: userData.email,
       globalName: userData.global_name
     };
-    logger.info(`[OAuth Callback] Stored user data in session. Session ID: ${req.sessionID}`, 'server.js');
+    logger.debug('SERVER', `[OAuth Callback] Stored user data in session. Session ID: ${req.sessionID}`);
 
     // Save session before redirect
     req.session.save((err) => {
       if (err) {
-        logger.error('[OAuth Callback] Failed to save session', err, 'server.js');
+        logger.error('SERVER', '[OAuth Callback] Failed to save session', err);
         return res.redirect('/?error=session_save_failed');
       }
-      logger.info('[OAuth Callback] Session saved successfully, redirecting to home', 'server.js');
+      logger.debug('SERVER', '[OAuth Callback] Session saved successfully, redirecting to home');
       res.redirect('/');
     });
   } catch (error) {
-    logger.error('OAuth callback error', error, 'server.js');
+    logger.error('SERVER', 'OAuth callback error', error);
     res.redirect('/?error=oauth_error');
   }
 });
@@ -10219,7 +10277,7 @@ app.get('/auth/discord/callback', async (req, res) => {
 app.get('/auth/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
-      logger.error('Failed to destroy session', err, 'server.js');
+      logger.error('SERVER', 'Failed to destroy session', err);
       return res.redirect('/?error=logout_failed');
     }
     res.redirect('/');
@@ -10288,7 +10346,7 @@ async function checkAdminAccess(req) {
         const errorData = await response.json().catch(() => ({}));
         const retryAfter = errorData.retry_after || 1;
         
-        logger.warn(`[checkAdminAccess] Discord API rate limited (429). Retry after: ${retryAfter}s. Using cached value if available.`, 'server.js');
+        logger.warn('SERVER', `[checkAdminAccess] Discord API rate limited (429). Retry after: ${retryAfter}s. Using cached value if available.`);
         
         // If we have a cached value, use it even if expired
         if (req.session[cacheKey] !== undefined) {
@@ -10299,7 +10357,7 @@ async function checkAdminAccess(req) {
         return false;
       } else {
         const errorText = await response.text();
-        logger.warn(`[checkAdminAccess] Discord API error: ${response.status} ${response.statusText} - ${errorText}`, 'server.js');
+        logger.warn('SERVER', `[checkAdminAccess] Discord API error: ${response.status} ${response.statusText} - ${errorText}`);
         
         // On other errors, use cached value if available
         if (req.session[cacheKey] !== undefined) {
@@ -10319,7 +10377,7 @@ async function checkAdminAccess(req) {
       return false;
     }
   } catch (error) {
-    logger.error(`[checkAdminAccess] Error in checkAdminAccess: ${error.message}`, 'server.js');
+    logger.error('SERVER', `[checkAdminAccess] Error in checkAdminAccess: ${error.message}`);
     return false;
   }
 }
@@ -10350,7 +10408,7 @@ app.get('/api/user', async (req, res) => {
         isAdmin: isAdmin
       });
     } catch (error) {
-      logger.error('[API /api/user] Error fetching user data from database', error, 'server.js');
+      logger.error('API', 'Error fetching user data from database', error);
       // Fallback to session user data if database query fails
       const isAdmin = await checkAdminAccess(req);
       res.json({
@@ -10469,7 +10527,7 @@ app.put('/api/user/settings', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    logger.success(`Updated settings for user ${user.username || user.discordId}`, 'server.js');
+    logger.success('SERVER', `Updated settings for user ${user.username || user.discordId}`);
     
     res.json({ 
       success: true,
@@ -10629,7 +10687,7 @@ app.post('/api/blupee/claim', async (req, res) => {
     // Save user with blupee hunt data
     try {
       await user.save();
-      logger.debug(`[server.js]: Successfully saved blupee hunt data for user ${user.username || user.discordId}: totalClaimed=${user.blupeeHunt.totalClaimed}`);
+      logger.debug('SERVER', `Successfully saved blupee hunt data for user ${user.username || user.discordId}: totalClaimed=${user.blupeeHunt.totalClaimed}`);
     } catch (saveError) {
       console.error('[server.js]: Error saving blupee hunt data:', saveError);
       logger.error('server.js', `Failed to save blupee hunt data for user ${user.username || user.discordId}: ${saveError.message}`);
@@ -10637,7 +10695,7 @@ app.post('/api/blupee/claim', async (req, res) => {
     }
     
     logger.success(`User ${user.username || user.discordId} claimed a blupee! (+${tokensAwarded} tokens, Daily: ${user.blupeeHunt.dailyCount}/${DAILY_LIMIT}, Total: ${user.blupeeHunt.totalClaimed})`);
-    logger.debug('Daily count after claim: ' + user.blupeeHunt.dailyCount + ', reset date: ' + user.blupeeHunt.dailyResetDate);
+    logger.debug('SERVER', 'Daily count after claim: ' + user.blupeeHunt.dailyCount + ', reset date: ' + user.blupeeHunt.dailyResetDate);
     
     // Log to Google Sheets if user has a token tracker
     if (user.tokenTracker && googleSheets.isValidGoogleSheetsUrl(user.tokenTracker)) {
@@ -11215,7 +11273,7 @@ app.get('/api/tokens/transactions', async (req, res) => {
       dbTotal = await TokenTransaction.countDocuments(query);
       logger.success(`Database transactions found: ${dbTransactions.length} (total: ${dbTotal})`, 'server.js');
     } catch (error) {
-      logger.error('Error getting transactions from database', error, 'server.js');
+      logger.error('SERVER', 'Error getting transactions from database', error);
     }
     
     // Also read from Google Sheets if available and we need more data
@@ -11394,9 +11452,9 @@ app.get('/api/vending/transactions', async (req, res) => {
         .skip(skip)
         .lean();
       total = await VendingRequest.countDocuments(query);
-      logger.success(`Database transactions found: ${transactions.length} (total: ${total})`, 'server.js');
+      logger.success('SERVER', `Database transactions found: ${transactions.length} (total: ${total})`);
     } catch (error) {
-      logger.error('Error getting transactions from database', error, 'server.js');
+      logger.error('SERVER', 'Error getting transactions from database', error);
       return res.status(500).json({ error: 'Failed to fetch transactions from database', details: error.message });
     }
     
@@ -11538,7 +11596,7 @@ app.get('/api/levels/blupee-leaderboard', async (req, res) => {
       }
     ]);
     
-    logger.debug(`[server.js]: Fetched ${topBlupeeHunters.length} blupee hunters for leaderboard`);
+    logger.debug('SERVER', `Fetched ${topBlupeeHunters.length} blupee hunters for leaderboard`);
     
     // Format the response
     const leaderboard = topBlupeeHunters.map((user, index) => {
@@ -13711,13 +13769,13 @@ const startServer = async () => {
     warningThreshold: 500 * 1024 * 1024, // 500MB
     criticalThreshold: 1000 * 1024 * 1024 // 1GB
   });
-  logger.info('server.js', 'Memory monitoring initialized');
+  logger.info('MEM', 'Memory monitoring initialized');
   
   // Initialize cache cleanup (safe operation)
   try {
     initializeCacheCleanup();
   } catch (err) {
-    logger.warn('server.js', 'Cache cleanup initialization failed');
+    logger.warn('SERVER', 'Cache cleanup initialization failed');
   }
   
   // Start server FIRST so health checks pass immediately
@@ -13727,21 +13785,21 @@ const startServer = async () => {
     app.listen(PORT, '0.0.0.0', () => {
       const env = process.env.NODE_ENV || 'development';
       logger.ready(PORT, env);
-      logger.info('server.js', `Server is listening on 0.0.0.0:${PORT}`);
+      logger.info('SERVER', `Server is listening on 0.0.0.0:${PORT}`);
       
       // Show nodemon watching message
       if (process.env.NODE_ENV !== 'production') {
-        logger.info('server.js', '👀 Watching for file changes... (type "rs" to restart)');
+        logger.info('SERVER', 'Watching for file changes... (type "rs" to restart)');
       }
     });
   } catch (error) {
-    logger.error('server.js', 'CRITICAL: Failed to start HTTP server', error);
+    logger.error('SERVER', 'CRITICAL: Failed to start HTTP server', error);
     process.exit(1);
   }
   
   // Initialize databases in background (non-blocking, failures are non-fatal)
   initializeDatabases().catch(err => {
-    logger.error('server.js', 'Database initialization failed - some features will be limited', err);
+    logger.error('SERVER', 'Database initialization failed - some features will be limited', err);
   });
   
   // Initialize background tasks (non-blocking, failures are non-fatal)
@@ -13750,7 +13808,7 @@ const startServer = async () => {
   ]).then(() => {
     logger.divider('BACKGROUND TASKS INITIALIZED');
   }).catch(err => {
-    logger.error('server.js', 'Error initializing background tasks', err);
+    logger.error('SERVER', 'Error initializing background tasks', err);
   });
   
   // Discord Gateway removed - dashboard doesn't need real-time Discord data

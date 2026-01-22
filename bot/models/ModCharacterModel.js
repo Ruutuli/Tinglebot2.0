@@ -138,13 +138,24 @@ const modCharacterSchema = new Schema({
     type: Schema.Types.ObjectId, 
     ref: 'Mount', 
     default: null 
-  }
+  },
+
+  // ------------------- Character Status -------------------
+  // Status: 'pending', 'accepted', 'denied'
+  status: { 
+    type: String, 
+    enum: ['pending', 'accepted', 'denied'], 
+    default: 'pending' 
+  },
+  // Denial reason (only set when status is 'denied')
+  denialReason: { type: String, default: null }
 
 }, { collection: 'modcharacters' });
 
 // ============================================================================
 // ------------------- Pre-save hook -------------------
 // Ensures mod character properties are always set correctly
+// Sets status to 'accepted' for existing mod characters that don't have a status
 // ============================================================================
 modCharacterSchema.pre('save', function (next) {
   // Ensure mod character flags are set
@@ -186,6 +197,12 @@ modCharacterSchema.pre('save', function (next) {
   
   // Ensure mod characters are always considered synced
   this.inventorySynced = true;
+  
+  // If this is an existing mod character (not new) and doesn't have a status, set it to 'accepted'
+  // This handles backward compatibility for mod characters created before the moderation system
+  if (!this.isNew && !this.status) {
+    this.status = 'accepted';
+  }
   
   next();
 });
