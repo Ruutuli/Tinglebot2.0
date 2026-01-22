@@ -29,7 +29,6 @@ const {
  fetchCharacterById,
  deleteCharacterById,
  deleteCharacterInventoryCollection,
- createCharacterInventory,
  getCharacterInventoryCollection,
 } = require('@/shared/database/db');
 const dbConfig = require('@/shared/config/database');
@@ -44,7 +43,6 @@ const {
  handleAutocomplete,
  handleChangeJobNewJobAutocomplete,
  handleChangeVillageNewVillageAutocomplete,
- handleCreateCharacterRaceAutocomplete,
  handleEditCharacterAutocomplete,
 } = require("../../handlers/autocompleteHandler");
 const {
@@ -55,13 +53,6 @@ const {
 } = require('@/shared/utils/validation');
 // Google Sheets functionality removed
 const {
- createCharacterAutocomplete,
- createCharacterInteraction,
-} = require("../../handlers/characterInteractionHandler");
-const {
- createJobOptions,
- generalJobs,
- villageJobs,
  getJobPerk,
  getGeneralJobsPage,
  getJobsByCategory,
@@ -139,344 +130,76 @@ module.exports = {
   .setName("character")
   .setDescription("Manage your characters")
 
-  // ------------------- Create Character Subcommands -------------------
-  .addSubcommandGroup((group) =>
-   group
+  // ------------------- Create Character Subcommand -------------------
+  .addSubcommand((subcommand) =>
+   subcommand
     .setName("create")
     .setDescription("Create a new character")
-    .addSubcommand((subcommand) =>
-     subcommand
-      .setName("rudania")
-      .setDescription("Create a character with a Rudania exclusive job")
-      .addStringOption((option) =>
-       option
-        .setName("name")
-        .setDescription("The name of the character")
-        .setRequired(true)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("age")
-        .setDescription("Age of the character (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addNumberOption((option) =>
-       option
-        .setName("height")
-        .setDescription(
-         "Height of the character in cm (must be a positive number)"
-        )
-        .setRequired(true)
-        .setMinValue(0.1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("hearts")
-        .setDescription("Number of hearts (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("stamina")
-        .setDescription("Number of stamina (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("pronouns")
-        .setDescription("Pronouns of the character")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("race")
-        .setDescription("Race of the character")
-        .setRequired(true)
-        .setAutocomplete(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("job")
-        .setDescription("The job of the character")
-        .setRequired(true)
-        .addChoices(...createJobOptions(villageJobs.rudania))
-      )
-      .addStringOption((option) =>
-       option
-        .setName("inventory")
-        .setDescription("Google Sheets link for the inventory")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("applink")
-        .setDescription("Application link for the character")
-        .setRequired(true)
-      )
-      .addAttachmentOption((option) =>
-       option
-        .setName("icon")
-        .setDescription("Upload an icon image of the character")
-        .setRequired(true)
-      )
-    )
-    .addSubcommand((subcommand) =>
-     subcommand
-      .setName("inariko")
-      .setDescription("Create a character with an Inariko exclusive job")
-      .addStringOption((option) =>
-       option
-        .setName("name")
-        .setDescription("The name of the character")
-        .setRequired(true)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("age")
-        .setDescription("Age of the character (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addNumberOption((option) =>
-       option
-        .setName("height")
-        .setDescription(
-         "Height of the character in cm (must be a positive number)"
-        )
-        .setRequired(true)
-        .setMinValue(0.1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("hearts")
-        .setDescription("Number of hearts (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("stamina")
-        .setDescription("Number of stamina (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("pronouns")
-        .setDescription("Pronouns of the character")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("race")
-        .setDescription("Race of the character")
-        .setRequired(true)
-        .setAutocomplete(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("job")
-        .setDescription("The job of the character")
-        .setRequired(true)
-        .addChoices(...createJobOptions(villageJobs.inariko))
-      )
-      .addStringOption((option) =>
-       option
-        .setName("inventory")
-        .setDescription("Google Sheets link for the inventory")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("applink")
-        .setDescription("Application link for the character")
-        .setRequired(true)
-      )
-      .addAttachmentOption((option) =>
-       option
-        .setName("icon")
-        .setDescription("Upload an icon image of the character")
-        .setRequired(true)
-      )
-    )
-    .addSubcommand((subcommand) =>
-     subcommand
-      .setName("vhintl")
-      .setDescription("Create a character with a Vhintl exclusive job")
-      .addStringOption((option) =>
-       option
-        .setName("name")
-        .setDescription("The name of the character")
-        .setRequired(true)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("age")
-        .setDescription("Age of the character (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addNumberOption((option) =>
-       option
-        .setName("height")
-        .setDescription(
-         "Height of the character in cm (must be a positive number)"
-        )
-        .setRequired(true)
-        .setMinValue(0.1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("hearts")
-        .setDescription("Number of hearts (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("stamina")
-        .setDescription("Number of stamina (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("pronouns")
-        .setDescription("Pronouns of the character")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("race")
-        .setDescription("Race of the character")
-        .setRequired(true)
-        .setAutocomplete(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("job")
-        .setDescription("The job of the character")
-        .setRequired(true)
-        .addChoices(...createJobOptions(villageJobs.vhintl))
-      )
-      .addStringOption((option) =>
-       option
-        .setName("inventory")
-        .setDescription("Google Sheets link for the inventory")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("applink")
-        .setDescription("Application link for the character")
-        .setRequired(true)
-      )
-      .addAttachmentOption((option) =>
-       option
-        .setName("icon")
-        .setDescription("Upload an icon image of the character")
-        .setRequired(true)
-      )
-    )
-    .addSubcommand((subcommand) =>
-     subcommand
-      .setName("general")
-      .setDescription("Create a character with a general job")
-      .addStringOption((option) =>
-       option
-        .setName("name")
-        .setDescription("The name of the character")
-        .setRequired(true)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("age")
-        .setDescription("Age of the character (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addNumberOption((option) =>
-       option
-        .setName("height")
-        .setDescription(
-         "Height of the character in cm (must be a positive number)"
-        )
-        .setRequired(true)
-        .setMinValue(0.1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("hearts")
-        .setDescription("Number of hearts (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addIntegerOption((option) =>
-       option
-        .setName("stamina")
-        .setDescription("Number of stamina (must be a positive number)")
-        .setRequired(true)
-        .setMinValue(1)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("pronouns")
-        .setDescription("Pronouns of the character")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("race")
-        .setDescription("Race of the character")
-        .setRequired(true)
-        .setAutocomplete(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("village")
-        .setDescription("The home village of the character")
-        .setRequired(true)
-        .addChoices(
-         { name: "Inariko", value: "inariko" },
-         { name: "Rudania", value: "rudania" },
-         { name: "Vhintl", value: "vhintl" }
-        )
-      )
-      .addStringOption((option) =>
-       option
-        .setName("job")
-        .setDescription("The job of the character")
-        .setRequired(true)
-        .addChoices(...createJobOptions(generalJobs))
-      )
-      .addStringOption((option) =>
-       option
-        .setName("inventory")
-        .setDescription("Google Sheets link for the inventory")
-        .setRequired(true)
-      )
-      .addStringOption((option) =>
-       option
-        .setName("applink")
-        .setDescription("Application link for the character")
-        .setRequired(true)
-      )
-      .addAttachmentOption((option) =>
-       option
-        .setName("icon")
-        .setDescription("Upload an icon image of the character")
-        .setRequired(true)
-      )
-    )
   )
 
   // ------------------- Edit Character Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("edit")
+    .setDescription("Edit an existing character")
+    .addStringOption((option) =>
+     option
+      .setName("charactername")
+      .setDescription("The name of the character")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("category")
+      .setDescription("Category to edit")
+      .setRequired(true)
+      .addChoices(
+       { name: "Name", value: "name" },
+       { name: "Age", value: "age" },
+       { name: "Height", value: "height" },
+       { name: "Hearts", value: "hearts" },
+       { name: "Stamina", value: "stamina" },
+       { name: "Pronouns", value: "pronouns" },
+       { name: "Race", value: "race" },
+       { name: "Job", value: "job" },
+       { name: "Village", value: "homeVillage" },
+       { name: "Icon", value: "icon" },
+       { name: "App Link", value: "app_link" },
+       { name: "Inventory", value: "inventory" }
+      )
+    )
+    .addStringOption((option) =>
+     option
+      .setName("updatedinfo")
+      .setDescription("Updated information for the selected category")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addAttachmentOption((option) =>
+     option
+      .setName("newicon")
+      .setDescription("New icon for the character (only if updating icon)")
+      .setRequired(false)
+    )
+  )
+  // ------------------- View Character Subcommand -------------------
+  .addSubcommand((subcommand) =>
+   subcommand
+    .setName("view")
+    .setDescription("View details of a character")
+    .addStringOption((option) =>
+     option
+      .setName("charactername")
+      .setDescription("The name of the character")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+  )
+  // ------------------- View List of Characters Subcommand -------------------
+  .addSubcommand((subcommand) =>
+   subcommand
+    .setName("viewlist")
     .setDescription("Edit an existing character")
     .addStringOption((option) =>
      option

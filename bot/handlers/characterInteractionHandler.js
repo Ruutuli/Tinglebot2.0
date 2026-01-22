@@ -97,7 +97,6 @@ async function createCharacterInteraction(
 
   const userId = interaction.user.id;
   const characterName = interaction.options.getString('name');
-  const googleSheetsUrl = interaction.options.getString('inventory');
   const timezone = interaction.options.getString('timezone');
   const subcommand = interaction.options.getSubcommand();
   const homeVillage =
@@ -145,7 +144,7 @@ async function createCharacterInteraction(
   }
 
   // Continue with the rest of the function...
-  const user = await getOrCreateUser(userId, googleSheetsUrl, timezone);
+  const user = await getOrCreateUser(userId, '', timezone);
 
   // Handle character icon attachment
   const iconAttachment = interaction.options.getAttachment('icon');
@@ -188,7 +187,7 @@ async function createCharacterInteraction(
       homeVillage: homeVillage,
       currentVillage: homeVillage,
       job: interaction.options.getString('job'),
-      inventory: googleSheetsUrl,
+      inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(characterName)}`,
       appLink: interaction.options.getString('applink'),
       icon: publicIconUrl,
       blighted: false,
@@ -217,25 +216,8 @@ async function createCharacterInteraction(
       ephemeral: true
     });
 
-    // Validate Google Sheets URL and send setup instructions if invalid
-    if (!isValidGoogleSheetsUrl(googleSheetsUrl)) {
-      const setupInstructionsEmbed = await createSetupInstructionsEmbed(
-        characterName,
-        googleSheetsUrl,
-        'Invalid Google Sheets URL.'
-      );
-      await interaction.followUp({
-        content: 'Invalid Google Sheets URL provided. ⚠️',
-        embeds: [setupInstructionsEmbed],
-        ephemeral: true
-      });
-    } else {
-      const setupInstructionsEmbed = await createSetupInstructionsEmbed(
-        characterName,
-        googleSheetsUrl
-      );
-      await interaction.followUp({ embeds: [setupInstructionsEmbed], ephemeral: true });
-    }
+    // Inventory link is now automatically set to the dashboard page
+    // No need for Google Sheets validation or setup instructions
   } catch (error) {
     handleError(error, 'characterInteractionHandler.js');
     await editEphemeralReply(

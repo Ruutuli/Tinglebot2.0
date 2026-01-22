@@ -2273,6 +2273,13 @@ async function handleApproveEdit(interaction) {
               currentHearts: updateValue.currentHearts
             }
           });
+        } else if (pendingEdit.category === 'name') {
+          await Character.findByIdAndUpdate(pendingEdit.characterId, {
+            $set: {
+              name: updateValue,
+              inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(updateValue)}`
+            }
+          });
         } else {
           await Character.findByIdAndUpdate(pendingEdit.characterId, {
             $set: { [pendingEdit.category]: updateValue }

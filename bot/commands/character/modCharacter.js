@@ -676,7 +676,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
       currentVillage: characterData.village,
       job: characterData.job,
       icon: iconUrl,
-      inventory: `https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing`,
+      inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(characterData.name)}`,
       appLink: characterData.appLink,
       modTitle: characterData.modTitle,
       modType: characterData.modType,

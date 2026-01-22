@@ -334,7 +334,7 @@ const createCharacterEmbed = (character) => {
    { name: "🔹 __Blighted__", value: `> ${character.blighted ? `Yes (Stage ${character.blightStage})` : "No"}`, inline: true },
    { name: "🔹 __Spirit Orbs__", value: `> ${character.spiritOrbs}`, inline: true },
    { name: "💥 __KO Status__", value: `> ${character.ko ? "True" : "False"}`, inline: true },
-   { name: "📦 __Inventory__", value: `> [Google Sheets](${character.inventory})`, inline: false },
+   { name: "📦 __Inventory__", value: `> [Inventory Link](${character.inventory})`, inline: false },
    { name: "🔗 __Application Link__", value: `> [Link](${character.appLink})`, inline: false }
   )
   .setDescription("📋 Character profile created successfully.")
@@ -560,7 +560,7 @@ const createExplorationMonsterEmbed = (
 };
 
 // ------------------- Function: createSetupInstructionsEmbed -------------------
-// Creates setup instructions embed for Google Sheets inventory configuration
+// Creates setup instructions embed for inventory link configuration
 const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
   const validationResult = await validateInventorySheet(googleSheetsUrl, characterName); // <-- Pass characterName here too
 
@@ -582,7 +582,7 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
       value: `> ✏️ Ensure headers from **A1 to M1** match exactly:\n> \`\`\`text\n> Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync\n> \`\`\`\n\n> ---`,
     },
     {
-      name: "4️⃣ Share the Sheet",
+      name: "4️⃣ Share Your Inventory",
       value: `> 📧 Share with **Editor Access** to:\n> \`\`\`text\n> tinglebot@rotw-tinglebot.iam.gserviceaccount.com\n> \`\`\`\n\n> ---`,
     },
     {
@@ -602,7 +602,7 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
   if (validationResult.success) {
     fields.push({
       name: "✅ Validation Success",
-      value: "🎉 Your inventory sheet is set up correctly and ready for syncing!",
+      value: "🎉 Your inventory is set up correctly and ready for syncing!",
     });
   } else {
     const [problem, fix] = validationResult.message.split('||');
@@ -621,7 +621,7 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
 
   return new EmbedBuilder()
     .setTitle(`📋 Setup Instructions for ${characterName}`)
-    .setDescription(`📋 Please follow these steps carefully to set up your Google Sheets inventory.`)
+    .setDescription(`📋 Please follow these steps carefully to set up your inventory.`)
     .addFields(fields)
     .setColor(validationResult.success ? getRandomColor() : 'Red')
     .setTimestamp()
@@ -651,7 +651,7 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
       value: `> **1. Check the Spreadsheet URL:**\n> Make sure [this link](${googleSheetsUrl}) is the correct spreadsheet you're editing!\n> \n> **2. Check for Duplicate Tabs:**\n> ⚠️ **You can ONLY have ONE tab named \`loggedInventory\`!**\n> If you have multiple tabs with this name, delete all but one.\n> Keep only the tab that contains your character's starter gear.\n> \n> **3. Verify the Correct Tab:**\n> Make sure you're using the tab that has your starter gear in it.\n> The bot will read from whichever tab is named \`loggedInventory\`.\n\n> ---`,
     },
     {
-      name: "📄 Step 1: Open Your Inventory Sheet",
+      name: "📄 Step 1: Open Your Inventory Link",
       value: `Open your personal Google Sheet:\n[📄 Inventory Link](${googleSheetsUrl})\n\n**Double-check:** Is this the correct spreadsheet?\nMake sure your tab is named exactly \`loggedInventory\` (case-sensitive).`,
     },
     {

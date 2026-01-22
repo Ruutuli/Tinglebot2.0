@@ -1427,7 +1427,9 @@ async function handleShopBuy(interaction) {
     }
 
     // ------------------- Log Transaction -------------------
-    const inventoryLink = character.inventory || "https://example.com/inventory/default";
+    const inventoryLink = character.inventory || (character.name
+      ? `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(character.name)}`
+      : "https://tinglebot.xyz/inventories");
     const tokenTrackerLink = user.tokenTracker || "https://example.com/tokens/default";
     const formattedDateTime = new Date().toLocaleString("en-US", {
       timeZone: "America/New_York",

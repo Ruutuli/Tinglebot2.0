@@ -883,7 +883,7 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
       homeVillage: village.toLowerCase(),
       currentVillage: village.toLowerCase(),
       job: job,
-      inventory: '', // No longer using Google Sheets
+      inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(name)}`,
       appLink: appLink.trim(),
       icon: iconUrl,
       blighted: false,
@@ -1372,6 +1372,7 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   character.currentVillage = village.toLowerCase();
   character.job = job;
   character.appLink = appLink.trim();
+  character.inventory = `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(character.name)}`;
   character.gearWeapon = gearWeapon;
   character.gearShield = gearShield;
   character.gearArmor = gearArmor;

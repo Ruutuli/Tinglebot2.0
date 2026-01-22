@@ -191,9 +191,11 @@ modCharacterSchema.pre('save', function (next) {
   // Allow job vouchers for mod characters (don't force to false)
   // Job vouchers are a special feature for mod characters
   
-  // Ensure all mod characters use the shared inventory
-  const MOD_SHARED_INVENTORY_LINK = 'https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing';
-  this.inventory = MOD_SHARED_INVENTORY_LINK;
+  // Ensure all mod characters use the dashboard inventory page
+  // Note: This will be set dynamically when the character is saved, but we set a default here
+  if (!this.inventory || this.inventory.includes('docs.google.com')) {
+    this.inventory = `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(this.name)}`;
+  }
   
   // Ensure mod characters are always considered synced
   this.inventorySynced = true;
