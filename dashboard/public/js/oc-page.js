@@ -801,68 +801,118 @@ async function displayAdditionalStats(character) {
     });
   }
   
-  // Current active pet - fetch pet name
+  // Current active pet - fetch pet name if it's an ID
   if (character.currentActivePet) {
-    try {
-      // Try to fetch pet name from API
-      const petId = character.currentActivePet;
-      const petResponse = await fetch(`/api/models/pet/${petId}`, { credentials: 'include' });
-      if (petResponse.ok) {
-        const pet = await petResponse.json();
-        additionalStats.push({
-          label: 'Active Pet',
-          value: pet.name || petId,
-          icon: 'fa-paw',
-          category: 'other'
-        });
-      } else {
+    const petValue = character.currentActivePet;
+    // Check if it looks like an ObjectId (24 hex characters)
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(petValue);
+    
+    if (isObjectId) {
+      try {
+        // Fetch all pets and find the one with matching ID
+        const petsResponse = await fetch(`/api/models/pet?all=true`, { credentials: 'include' });
+        if (petsResponse.ok) {
+          const petsData = await petsResponse.json();
+          const pets = petsData.data || petsData;
+          const pet = Array.isArray(pets) ? pets.find(p => p._id === petValue || String(p._id) === petValue) : null;
+          if (pet && pet.name) {
+            additionalStats.push({
+              label: 'Active Pet',
+              value: pet.name,
+              icon: 'fa-paw',
+              category: 'other'
+            });
+          } else {
+            // Fallback to ID if pet not found
+            additionalStats.push({
+              label: 'Active Pet',
+              value: petValue,
+              icon: 'fa-paw',
+              category: 'other'
+            });
+          }
+        } else {
+          // Fallback to ID if fetch fails
+          additionalStats.push({
+            label: 'Active Pet',
+            value: petValue,
+            icon: 'fa-paw',
+            category: 'other'
+          });
+        }
+      } catch (error) {
         // Fallback to ID if fetch fails
         additionalStats.push({
           label: 'Active Pet',
-          value: petId,
+          value: petValue,
           icon: 'fa-paw',
           category: 'other'
         });
       }
-    } catch (error) {
-      // Fallback to ID if fetch fails
+    } else {
+      // Already a name, use it directly
       additionalStats.push({
         label: 'Active Pet',
-        value: character.currentActivePet,
+        value: petValue,
         icon: 'fa-paw',
         category: 'other'
       });
     }
   }
   
-  // Current active mount - fetch mount name
+  // Current active mount - fetch mount name if it's an ID
   if (character.currentActiveMount) {
-    try {
-      // Try to fetch mount name from API
-      const mountId = character.currentActiveMount;
-      const mountResponse = await fetch(`/api/models/mount/${mountId}`, { credentials: 'include' });
-      if (mountResponse.ok) {
-        const mount = await mountResponse.json();
-        additionalStats.push({
-          label: 'Active Mount',
-          value: mount.name || mountId,
-          icon: 'fa-horse',
-          category: 'other'
-        });
-      } else {
+    const mountValue = character.currentActiveMount;
+    // Check if it looks like an ObjectId (24 hex characters)
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(mountValue);
+    
+    if (isObjectId) {
+      try {
+        // Fetch all mounts and find the one with matching ID
+        const mountsResponse = await fetch(`/api/models/mount?all=true`, { credentials: 'include' });
+        if (mountsResponse.ok) {
+          const mountsData = await mountsResponse.json();
+          const mounts = mountsData.data || mountsData;
+          const mount = Array.isArray(mounts) ? mounts.find(m => m._id === mountValue || String(m._id) === mountValue) : null;
+          if (mount && mount.name) {
+            additionalStats.push({
+              label: 'Active Mount',
+              value: mount.name,
+              icon: 'fa-horse',
+              category: 'other'
+            });
+          } else {
+            // Fallback to ID if mount not found
+            additionalStats.push({
+              label: 'Active Mount',
+              value: mountValue,
+              icon: 'fa-horse',
+              category: 'other'
+            });
+          }
+        } else {
+          // Fallback to ID if fetch fails
+          additionalStats.push({
+            label: 'Active Mount',
+            value: mountValue,
+            icon: 'fa-horse',
+            category: 'other'
+          });
+        }
+      } catch (error) {
         // Fallback to ID if fetch fails
         additionalStats.push({
           label: 'Active Mount',
-          value: mountId,
+          value: mountValue,
           icon: 'fa-horse',
           category: 'other'
         });
       }
-    } catch (error) {
-      // Fallback to ID if fetch fails
+    } else {
+      // Already a name, use it directly
       additionalStats.push({
         label: 'Active Mount',
-        value: character.currentActiveMount,
+        value: mountValue,
         icon: 'fa-horse',
         category: 'other'
       });
@@ -950,6 +1000,46 @@ function displayTravelLog(character) {
   
   list.innerHTML = '';
   
+  // Helper function to capitalize village name
+  function capitalizeVillage(village) {
+    if (!village) return 'Unknown';
+    return village.charAt(0).toUpperCase() + village.slice(1);
+  }
+  
+  // Helper function to format date
+  function formatDate(dateString) {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      // Show relative time for recent entries
+      if (diffDays === 0) {
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        if (diffHours === 0) {
+          const diffMins = Math.floor(diffMs / (1000 * 60));
+          return diffMins <= 1 ? 'Just now' : `${diffMins} minutes ago`;
+        }
+        return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+      } else if (diffDays === 1) {
+        return 'Yesterday';
+      } else if (diffDays < 7) {
+        return `${diffDays} days ago`;
+      } else {
+        // For older entries, show formatted date
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
+        });
+      }
+    } catch (e) {
+      return '';
+    }
+  }
+  
   // Show most recent travels first
   const sortedLog = [...character.travelLog].reverse().slice(0, 10); // Show last 10
   
@@ -958,17 +1048,39 @@ function displayTravelLog(character) {
     logItem.className = 'travel-log-item';
     
     let content = '';
-    if (typeof entry === 'string') {
+    let icon = 'fa-map-pin';
+    let success = true;
+    
+    // Handle new format with from/to/date/success
+    if (entry.from && entry.to) {
+      const fromVillage = capitalizeVillage(entry.from);
+      const toVillage = capitalizeVillage(entry.to);
+      const dateStr = formatDate(entry.date);
+      success = entry.success !== false; // Default to true if not specified
+      
+      icon = success ? 'fa-check-circle' : 'fa-times-circle';
+      if (!success) {
+        logItem.classList.add('travel-failed');
+      }
+      
+      content = `<strong>${fromVillage}</strong> <i class="fas fa-arrow-right" style="margin: 0 0.5rem; opacity: 0.6;"></i> <strong>${toVillage}</strong>${dateStr ? ` <span style="opacity: 0.7; margin-left: 0.5rem;">• ${dateStr}</span>` : ''}`;
+    } 
+    // Handle old format with location
+    else if (entry.location) {
+      const date = entry.date ? formatDate(entry.date) : '';
+      content = `${capitalizeVillage(entry.location)}${date ? ` <span style="opacity: 0.7; margin-left: 0.5rem;">• ${date}</span>` : ''}`;
+    }
+    // Handle string format
+    else if (typeof entry === 'string') {
       content = entry;
-    } else if (entry.location) {
-      const date = entry.date ? new Date(entry.date).toLocaleString() : '';
-      content = `${entry.location}${date ? ` - ${date}` : ''}`;
-    } else {
+    }
+    // Fallback to JSON stringify
+    else {
       content = JSON.stringify(entry);
     }
     
     logItem.innerHTML = `
-      <i class="fas fa-map-pin"></i>
+      <i class="fas ${icon}" style="color: ${success ? 'var(--primary-color, #00A3DA)' : '#ff6b6b'};"></i>
       <span>${content}</span>
     `;
     list.appendChild(logItem);

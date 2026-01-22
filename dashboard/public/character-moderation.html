@@ -313,12 +313,11 @@
       const modal = document.getElementById('denyReasonModal');
       if (modal) {
         modal.classList.remove('show');
+        modal.removeAttribute('style');
+        const inner = modal.querySelector('.deny-reason-modal');
+        if (inner) inner.removeAttribute('style');
       }
-      currentVoteContext = {
-        characterId: null,
-        isModCharacter: false,
-        card: null
-      };
+      currentVoteContext = { characterId: null, isModCharacter: false, card: null };
     };
     
     window.confirmDeny = async function() {
