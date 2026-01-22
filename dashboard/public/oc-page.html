@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>OC Page - Tinglebot 2.0 Dashboard</title>
+  
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="View and edit your OC character" />
+  <link rel="icon" type="image/png" href="/images/tingleicon.png" />
+  <meta name="theme-color" content="#00A3DA" />
+  
+  <!-- Critical CSS - Load immediately -->
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/buttons.css" />
+  <link rel="stylesheet" href="css/character.css" />
+  <link rel="stylesheet" href="css/oc-page.css" />
+  
+  <!-- External Scripts -->
+  <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
+</head>
+<body class="oc-page">
+  <!-- Skip Links for Accessibility -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  
+  <!-- Header -->
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <a href="/" class="topbar-back-button" aria-label="Back to Dashboard">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i>
+        <span>Back</span>
+      </a>
+      <div class="breadcrumb" id="breadcrumb">Loading...</div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-menu" id="user-menu">
+        <img src="/images/ankleicon.png" alt="Profile picture" class="user-avatar" id="user-avatar" />
+        <span class="username" id="username">Loading...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main id="main-content" class="main-content">
+    <div class="oc-page-container">
+      <!-- Loading State -->
+      <div id="loading-state" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading character...</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="error-state" style="display: none;">
+        <div class="error-content">
+          <i class="fas fa-exclamation-triangle"></i>
+          <h2>Character Not Found</h2>
+          <p id="error-message">The character you're looking for doesn't exist or you don't have permission to view it.</p>
+          <a href="/" class="btn btn-primary">
+            <i class="fas fa-home"></i>
+            <span>Return to Dashboard</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Character Display -->
+      <div id="character-display" class="character-display" style="display: none;">
+        <!-- Character Header -->
+        <div class="character-header">
+          <div class="character-icon-container">
+            <img id="character-icon" src="" alt="Character icon" class="character-icon" />
+            <div class="status-badge" id="status-badge">
+              <span id="status-text">Pending</span>
+            </div>
+          </div>
+          <div class="character-info">
+            <h1 id="character-name">Character Name</h1>
+            <div class="character-meta">
+              <span id="character-pronouns">they/them</span>
+              <span class="separator">•</span>
+              <span id="character-age">Age</span>
+              <span class="separator">•</span>
+              <span id="character-height">Height</span>
+            </div>
+            <div class="character-details">
+              <div class="detail-item">
+                <i class="fas fa-dragon"></i>
+                <span id="character-race">Race</span>
+              </div>
+              <div class="detail-item">
+                <i class="fas fa-home"></i>
+                <span id="character-village">Village</span>
+              </div>
+              <div class="detail-item">
+                <i class="fas fa-briefcase"></i>
+                <span id="character-job">Job</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Denial Reason (if denied) -->
+        <div id="denial-reason-container" class="denial-reason-container" style="display: none;">
+          <div class="denial-reason-content">
+            <h3><i class="fas fa-exclamation-circle"></i> Denial Reason</h3>
+            <p id="denial-reason-text"></p>
+          </div>
+        </div>
+
+        <!-- Character Stats -->
+        <div class="character-stats">
+          <div class="stat-card">
+            <i class="fas fa-heart"></i>
+            <div class="stat-info">
+              <span class="stat-label">Hearts</span>
+              <span class="stat-value" id="stat-hearts">3/3</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-bolt"></i>
+            <div class="stat-info">
+              <span class="stat-label">Stamina</span>
+              <span class="stat-value" id="stat-stamina">3/3</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-sword"></i>
+            <div class="stat-info">
+              <span class="stat-label">Attack</span>
+              <span class="stat-value" id="stat-attack">0</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-shield"></i>
+            <div class="stat-info">
+              <span class="stat-label">Defense</span>
+              <span class="stat-value" id="stat-defense">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit Button (if allowed) -->
+        <div class="action-buttons" id="action-buttons" style="display: none;">
+          <button type="button" id="edit-toggle-btn" class="btn btn-primary">
+            <i class="fas fa-edit"></i>
+            <span>Edit Character</span>
+          </button>
+        </div>
+
+        <!-- Edit Form -->
+        <div id="edit-form-container" class="edit-form-container" style="display: none;">
+          <div class="edit-form-card">
+            <h2><i class="fas fa-edit"></i> Edit Character</h2>
+            
+            <!-- Error/Success Messages -->
+            <div id="message-container" class="message-container" style="display: none;">
+              <div id="message-content" class="message-content"></div>
+            </div>
+
+            <form id="character-edit-form" class="character-edit-form" enctype="multipart/form-data">
+              <!-- Basic Information Section -->
+              <div class="form-section">
+                <h3 class="section-title"><i class="fas fa-info-circle"></i> Basic Information</h3>
+                
+                <div class="form-grid">
+                  <div class="form-field-group" id="name-field-group">
+                    <label for="edit-character-name">
+                      <span>Character Name</span>
+                      <span class="required">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      id="edit-character-name" 
+                      name="name" 
+                      required 
+                      placeholder="Enter character name"
+                      autocomplete="off"
+                    />
+                    <small class="field-description">Choose a unique name for your character</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-character-age">
+                      <span>Age</span>
+                      <span class="required">*</span>
+                    </label>
+                    <input 
+                      type="number" 
+                      id="edit-character-age" 
+                      name="age" 
+                      required 
+                      min="1"
+                      placeholder="Enter age"
+                    />
+                    <small class="field-description">Character's age (must be 1 or greater)</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-character-height">
+                      <span>Height (cm)</span>
+                      <span class="required">*</span>
+                    </label>
+                    <input 
+                      type="number" 
+                      id="edit-character-height" 
+                      name="height" 
+                      required 
+                      min="0.1"
+                      step="0.1"
+                      placeholder="Enter height in centimeters"
+                    />
+                    <small class="field-description">Character's height in centimeters</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-character-pronouns">
+                      <span>Pronouns</span>
+                      <span class="required">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      id="edit-character-pronouns" 
+                      name="pronouns" 
+                      required 
+                      placeholder="e.g., they/them, he/him, she/her"
+                    />
+                    <small class="field-description">Character's pronouns</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stats Section (only for denied characters) -->
+              <div class="form-section" id="stats-section" style="display: none;">
+                <h3 class="section-title"><i class="fas fa-heart"></i> Stats</h3>
+                
+                <div class="form-grid">
+                  <div class="form-field-group">
+                    <label for="edit-character-hearts">
+                      <span>Hearts</span>
+                      <span class="required">*</span>
+                    </label>
+                    <input 
+                      type="number" 
+                      id="edit-character-hearts" 
+                      name="hearts" 
+                      required 
+                      min="1"
+                      placeholder="Enter hearts"
+                    />
+                    <small class="field-description">Character's starting hearts</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-character-stamina">
+                      <span>Stamina</span>
+                      <span class="required">*</span>
+                    </label>
+                    <input 
+                      type="number" 
+                      id="edit-character-stamina" 
+                      name="stamina" 
+                      required 
+                      min="1"
+                      placeholder="Enter stamina"
+                    />
+                    <small class="field-description">Character's starting stamina</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Character Details Section (only for denied characters) -->
+              <div class="form-section" id="details-section" style="display: none;">
+                <h3 class="section-title"><i class="fas fa-user-tag"></i> Character Details</h3>
+                
+                <div class="form-grid">
+                  <div class="form-field-group">
+                    <label for="edit-character-race">
+                      <span>Race</span>
+                      <span class="required">*</span>
+                    </label>
+                    <select id="edit-character-race" name="race" required>
+                      <option value="">Select a race...</option>
+                    </select>
+                    <small class="field-description">Character's race</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-character-village">
+                      <span>Home Village</span>
+                      <span class="required">*</span>
+                    </label>
+                    <select id="edit-character-village" name="village" required>
+                      <option value="">Select a village...</option>
+                      <option value="inariko">Inariko</option>
+                      <option value="rudania">Rudania</option>
+                      <option value="vhintl">Vhintl</option>
+                    </select>
+                    <small class="field-description">Character's home village</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-character-job">
+                      <span>Job</span>
+                      <span class="required">*</span>
+                    </label>
+                    <select id="edit-character-job" name="job" required disabled>
+                      <option value="">Select a village first...</option>
+                    </select>
+                    <small class="field-description">Character's job (filtered by village)</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-character-app-link">
+                      <span>Application Link</span>
+                      <span class="required">*</span>
+                    </label>
+                    <input 
+                      type="url" 
+                      id="edit-character-app-link" 
+                      name="appLink" 
+                      required 
+                      placeholder="https://..."
+                    />
+                    <small class="field-description">Link to character application</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Starting Gear Section (only for denied characters) -->
+              <div class="form-section" id="gear-section" style="display: none;">
+                <h3 class="section-title"><i class="fas fa-shield-alt"></i> Starting Gear</h3>
+                <p style="color: var(--text-secondary, rgba(255, 255, 255, 0.6)); margin-bottom: 1.5rem; font-size: 0.95rem;">
+                  Select starting gear for your character. All selections are optional - you can equip gear later.
+                </p>
+                
+                <div class="form-grid">
+                  <div class="form-field-group">
+                    <label for="edit-starter-weapon">
+                      <span>Weapon</span>
+                    </label>
+                    <select id="edit-starter-weapon" name="starterWeapon">
+                      <option value="">None (select later)</option>
+                    </select>
+                    <small class="field-description">Starting weapon (optional)</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-starter-shield">
+                      <span>Shield</span>
+                    </label>
+                    <select id="edit-starter-shield" name="starterShield">
+                      <option value="">None (select later)</option>
+                    </select>
+                    <small class="field-description">Starting shield (optional)</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-starter-armor-chest">
+                      <span>Chest Armor</span>
+                    </label>
+                    <select id="edit-starter-armor-chest" name="starterArmorChest">
+                      <option value="">None (select later)</option>
+                    </select>
+                    <small class="field-description">Starting chest armor (optional)</small>
+                  </div>
+
+                  <div class="form-field-group">
+                    <label for="edit-starter-armor-legs">
+                      <span>Leg Armor</span>
+                    </label>
+                    <select id="edit-starter-armor-legs" name="starterArmorLegs">
+                      <option value="">None (select later)</option>
+                    </select>
+                    <small class="field-description">Starting leg armor (optional)</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Icon Upload Section -->
+              <div class="form-section">
+                <h3 class="section-title"><i class="fas fa-image"></i> Character Icon</h3>
+                
+                <div class="form-field-group full-width">
+                  <label for="edit-character-icon">
+                    <span>Icon Image</span>
+                    <span class="required" id="icon-required" style="display: none;">*</span>
+                  </label>
+                  <input 
+                    type="file" 
+                    id="edit-character-icon" 
+                    name="icon" 
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  />
+                  <small class="field-description">Upload a new character icon (JPEG, PNG, GIF, or WebP, max 5MB). Leave empty to keep current icon.</small>
+                  
+                  <!-- Image Preview -->
+                  <div id="edit-icon-preview-container" class="icon-preview-container" style="display: none;">
+                    <img id="edit-icon-preview" src="" alt="Icon preview" class="icon-preview" />
+                    <button type="button" id="remove-edit-icon-preview" class="remove-icon-btn" aria-label="Remove icon">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Form Actions -->
+              <div class="form-actions">
+                <button type="submit" id="save-btn" class="btn btn-primary">
+                  <i class="fas fa-save"></i>
+                  <span id="save-btn-text">Save Changes</span>
+                </button>
+                <button type="button" id="cancel-edit-btn" class="btn btn-secondary">
+                  <i class="fas fa-times"></i>
+                  <span>Cancel</span>
+                </button>
+                <button type="button" id="resubmit-btn" class="btn btn-success" style="display: none;">
+                  <i class="fas fa-redo"></i>
+                  <span>Resubmit for Review</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script type="module" src="js/oc-page.js"></script>
+</body>
+</html>

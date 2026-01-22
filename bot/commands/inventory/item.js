@@ -365,13 +365,6 @@ module.exports = {
               ''
             ]];
             // Google Sheets sync removed
-                  characterName,
-                  itemName,
-                  quantity,
-                  jobName: interaction.options.getString('jobname')
-                }
-              }
-            });
           }
 
           // Build and send voucher embed for mod character

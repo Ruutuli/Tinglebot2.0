@@ -8,22 +8,497 @@
   <link rel="stylesheet" href="/css/character.css">
   <link rel="stylesheet" href="/css/buttons.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    :root {
-      --bg-primary: #1a1a1a;
-      --bg-secondary: #252525;
-      --bg-tertiary: #2d2d2d;
-      --text-primary: #e0e0e0;
-      --text-secondary: #b0b0b0;
-      --text-muted: #808080;
-      --border-color: #3a3a3a;
-      --accent-orange: #ff8c42;
-      --accent-green: #4ade80;
-      --accent-red: #f87171;
-      --accent-blue: #60a5fa;
-    }
+</head>
+<body class="character-moderation-page">
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <a href="/" class="topbar-back-button" aria-label="Back to Dashboard">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i>
+        <span>Back to Dashboard</span>
+      </a>
+      <div class="breadcrumb">Character Moderation</div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-menu" id="user-menu">
+        <img src="" alt="Profile picture" class="user-avatar" id="user-avatar">
+        <span class="username" id="username">Loading...</span>
+      </div>
+    </div>
+  </header>
 
-    body.moderation-page {
-      background: var(--bg-primary);
+  <div class="moderation-container">
+    <div class="moderation-header">
+      <h1><i class="fas fa-gavel"></i> Character Moderation</h1>
+      <button class="button button--glass" onclick="loadPendingCharacters()">
+        <i class="fas fa-sync-alt"></i> Refresh
+      </button>
+    </div>
+
+    <div id="characters-list">
+      <div class="loading">
+        <i class="fas fa-spinner fa-spin"></i> Loading pending characters...
+      </div>
+    </div>
+  </div>
+
+  <!-- Denial Reason Modal -->
+  <div class="modal-overlay" id="denyReasonModal">
+    <div class="modal modal-large">
+      <button class="modal-close" onclick="closeDenyReasonModal()">&times;</button>
+      <div class="modal-header">
+        <i class="fas fa-times-circle modal-icon error"></i>
+        <h2 class="modal-title">Deny Character</h2>
+      </div>
+      <div class="modal-body">
+        <p>Please provide a reason for denying this character. This reason will be sent to the user.</p>
+        <textarea 
+          id="denyReasonTextarea" 
+          class="deny-reason-input" 
+          placeholder="Enter the reason for denial (required)..."
+          rows="6"
+        ></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="button button--glass" onclick="closeDenyReasonModal()">Cancel</button>
+        <button class="button button--danger" id="confirmDenyBtn">
+          <i class="fas fa-times"></i> Confirm Denial
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vote Result Modal -->
+  <div class="modal-overlay" id="voteModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeVoteModal()">&times;</button>
+      <div class="modal-header">
+        <i class="fas modal-icon" id="modalIcon"></i>
+        <h2 class="modal-title" id="modalTitle">Vote Recorded</h2>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Content will be inserted here -->
+      </div>
+      <div class="modal-actions">
+        <button class="button button--glass" onclick="closeVoteModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { checkUserAuthStatus } from '/js/auth.js';
+    
+    // Check authentication on page load
+    window.addEventListener('DOMContentLoaded', async () => {
+      const authStatus = await checkUserAuthStatus();
+      if (!authStatus.isAuthenticated) {
+        window.location.href = '/';
+        return;
+      }
+      
+      // Update user menu
+      const userMenu = document.getElementById('user-menu');
+      const username = document.getElementById('username');
+      const userAvatar = document.getElementById('user-avatar');
+      
+      if (authStatus.currentUser) {
+        username.textContent = authStatus.currentUser.username || authStatus.currentUser.discordId;
+        if (authStatus.currentUser.avatar) {
+          const avatarUrl = `https://cdn.discordapp.com/avatars/${authStatus.currentUser.discordId}/${authStatus.currentUser.avatar}.png`;
+          userAvatar.src = avatarUrl;
+        }
+      }
+      
+      // Load pending characters
+      loadPendingCharacters();
+    });
+    
+    window.loadPendingCharacters = async function() {
+      const listContainer = document.getElementById('characters-list');
+      listContainer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading pending characters...</div>';
+      
+      try {
+        const response = await fetch('/api/characters/moderation/pending', {
+          credentials: 'include'
+        });
+        
+        if (response.status === 403) {
+          listContainer.innerHTML = '<div class="empty-state"><i class="fas fa-lock"></i><h2>Access Denied</h2><p>You must be a moderator to access this page.</p></div>';
+          return;
+        }
+        
+        if (!response.ok) {
+          throw new Error('Failed to load pending characters');
+        }
+        
+        const data = await response.json();
+        const characters = data.characters || [];
+        
+        if (characters.length === 0) {
+          listContainer.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><h2>No Pending Characters</h2><p>All characters have been reviewed!</p></div>';
+          return;
+        }
+        
+        listContainer.innerHTML = characters.map(char => createCharacterCard(char)).join('');
+        
+        // Attach event listeners
+        document.querySelectorAll('.btn-vote').forEach(btn => {
+          btn.addEventListener('click', handleVote);
+        });
+        
+      } catch (error) {
+        console.error('Error loading pending characters:', error);
+        listContainer.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h2>Error</h2><p>Failed to load pending characters. Please try again.</p></div>';
+      }
+    };
+    
+    function createCharacterCard(character) {
+      const hasVoted = character.votes.approves.some(v => v.modId === window.currentUserId) || 
+                      character.votes.denies.some(v => v.modId === window.currentUserId);
+      
+      return `
+        <div class="character-card pending" data-character-id="${String(character._id)}" data-is-mod="${character.isModCharacter || false}">
+          <div class="character-header">
+            <img src="${character.icon || '/assets/default-character.png'}" alt="${character.name}" class="character-icon">
+            <div class="character-info">
+              <div class="character-name">
+                ${character.name}
+                ${character.isModCharacter ? '<span class="status-badge" style="margin-left: 8px; background: rgba(0, 163, 218, 0.2); color: var(--accent); border: 1px solid rgba(0, 163, 218, 0.3);">Mod Character</span>' : ''}
+              </div>
+              <div class="character-details">
+                <div class="detail-item">
+                  <span class="detail-label">Age</span>
+                  <span class="detail-value">${character.age || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Height</span>
+                  <span class="detail-value">${character.height || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Pronouns</span>
+                  <span class="detail-value">${character.pronouns || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Race</span>
+                  <span class="detail-value">${character.race || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Village</span>
+                  <span class="detail-value">${character.homeVillage || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Job</span>
+                  <span class="detail-value">${character.job || 'N/A'}</span>
+                </div>
+                ${character.appLink ? `
+                <div class="detail-item">
+                  <span class="detail-label">App Link</span>
+                  <span class="detail-value"><a href="${character.appLink}" target="_blank">View</a></span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+          
+          <div class="vote-section">
+            <div class="vote-counts">
+              <div class="vote-count approves">
+                <i class="fas fa-check-circle"></i>
+                <span><strong>${character.approveCount || 0}</strong> Approves</span>
+              </div>
+              <div class="vote-count denies">
+                <i class="fas fa-times-circle"></i>
+                <span><strong>${character.denyCount || 0}</strong> Denies</span>
+              </div>
+            </div>
+            
+            ${hasVoted ? `
+              <div class="vote-info-message">
+                <i class="fas fa-info-circle"></i> <span>You have already voted on this character.</span>
+              </div>
+            ` : `
+              <div class="vote-actions">
+                <button class="btn-vote approve" data-action="approve">
+                  <i class="fas fa-check"></i> Approve
+                </button>
+                <button class="btn-vote deny button--danger" data-action="deny">
+                  <i class="fas fa-times"></i> Deny
+                </button>
+              </div>
+            `}
+            
+            ${(character.votes.approves.length > 0 || character.votes.denies.length > 0) ? `
+              <div class="vote-history">
+                <h4>Vote History</h4>
+                ${character.votes.approves.map(vote => `
+                  <div class="vote-item approve">
+                    <div>
+                      <div class="vote-item-user"><i class="fas fa-check-circle"></i> ${vote.modUsername}</div>
+                      <div class="vote-item-reason">Approved on ${new Date(vote.createdAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                `).join('')}
+                ${character.votes.denies.map(vote => `
+                  <div class="vote-item deny">
+                    <div>
+                      <div class="vote-item-user"><i class="fas fa-times-circle"></i> ${vote.modUsername}</div>
+                      <div class="vote-item-reason">${vote.reason || 'No reason provided'}</div>
+                      <div class="vote-item-reason vote-item-time">${new Date(vote.createdAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+    
+    // Store current vote context
+    let currentVoteContext = {
+      characterId: null,
+      isModCharacter: false,
+      card: null
+    };
+
+    window.handleVote = async function(event) {
+      const button = event.currentTarget;
+      const action = button.dataset.action;
+      const card = button.closest('.character-card');
+      const characterId = card?.dataset?.characterId;
+      const isModCharacter = card?.dataset?.isMod === 'true';
+      
+      if (!characterId) {
+        console.error('Character ID not found in card dataset');
+        showVoteModal('error', 'Error', 'Character ID not found. Please refresh the page and try again.');
+        return;
+      }
+      
+      if (action === 'deny') {
+        // Store context and show denial reason modal
+        currentVoteContext = {
+          characterId: String(characterId), // Ensure it's a string
+          isModCharacter: isModCharacter === true || isModCharacter === 'true',
+          card: card
+        };
+        window.showDenyReasonModal();
+        return;
+      }
+      
+      // For approve, submit directly
+      await submitVote(String(characterId), 'approve', null, isModCharacter === true || isModCharacter === 'true', card);
+    };
+    
+    window.showDenyReasonModal = function() {
+      const modal = document.getElementById('denyReasonModal');
+      const textarea = document.getElementById('denyReasonTextarea');
+      const confirmBtn = document.getElementById('confirmDenyBtn');
+      
+      textarea.value = '';
+      modal.classList.add('show');
+      textarea.focus();
+      
+      // Remove old listener and add new one to ensure it works
+      const newConfirmBtn = confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+      newConfirmBtn.addEventListener('click', window.confirmDeny);
+    };
+    
+    function closeDenyReasonModal() {
+      const modal = document.getElementById('denyReasonModal');
+      modal.classList.remove('show');
+      currentVoteContext = {
+        characterId: null,
+        isModCharacter: false,
+        card: null
+      };
+    }
+    
+    window.confirmDeny = async function() {
+      const textarea = document.getElementById('denyReasonTextarea');
+      const reason = textarea.value.trim();
+      
+      if (!reason) {
+        textarea.style.borderColor = 'var(--error-color)';
+        textarea.focus();
+        setTimeout(() => {
+          textarea.style.borderColor = '';
+        }, 2000);
+        return;
+      }
+      
+      // Store context before closing modal (which clears it)
+      const context = { ...currentVoteContext };
+      
+      closeDenyReasonModal();
+      
+      // Validate context
+      if (!context.characterId) {
+        showVoteModal('error', 'Error', 'Character ID is missing. Please try again.');
+        return;
+      }
+      
+      await submitVote(
+        context.characterId,
+        'deny',
+        reason,
+        context.isModCharacter,
+        context.card
+      );
+    };
+    
+    // Attach event listener to confirm button
+    document.addEventListener('DOMContentLoaded', () => {
+      const confirmBtn = document.getElementById('confirmDenyBtn');
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', window.confirmDeny);
+      }
+    });
+    
+    async function submitVote(characterId, vote, reason, isModCharacter, card) {
+      // Validate required parameters
+      if (!characterId || !vote) {
+        console.error('Missing required parameters:', { characterId, vote });
+        showVoteModal('error', 'Error', 'Missing required information. Please try again.');
+        return;
+      }
+      
+      // Disable buttons
+      if (card) {
+        card.querySelectorAll('.btn-vote').forEach(btn => btn.disabled = true);
+      }
+      
+      try {
+        const requestBody = {
+          characterId: characterId,
+          vote: vote,
+          isModCharacter: isModCharacter || false
+        };
+        
+        // Only include reason if it's a deny vote
+        if (vote === 'deny' && reason) {
+          requestBody.reason = reason;
+        }
+        
+        const response = await fetch('/api/characters/moderation/vote', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to submit vote');
+        }
+        
+        // Reload the list
+        loadPendingCharacters();
+        
+        // Show success message in modal
+        if (data.message === 'Character accepted') {
+          showVoteModal('success', 'Character Accepted', 
+            `The character has been accepted and is now active!`);
+        } else if (data.message === 'Character denied') {
+          let denialHtml = `<strong>Character Denied</strong><br><br>The character has been denied.`;
+          if (data.denialReason) {
+            const reasons = data.denialReason.split('\n');
+            denialHtml += '<div class="denial-reasons"><div class="denial-reasons-title">Denial Reasons:</div>';
+            reasons.forEach(reason => {
+              if (reason.trim()) {
+                denialHtml += `<div class="denial-reason-item">${reason}</div>`;
+              }
+            });
+            denialHtml += '</div>';
+          }
+          showVoteModal('error', 'Character Denied', denialHtml);
+        } else {
+          const approvesNeeded = data.remaining.approvesNeeded;
+          const deniesNeeded = data.remaining.deniesNeeded;
+          showVoteModal('info', 'Vote Recorded', 
+            `Your vote has been recorded!<br><br>` +
+            `<strong>${approvesNeeded}</strong> more approve${approvesNeeded !== 1 ? 's' : ''} or ` +
+            `<strong>${deniesNeeded}</strong> more deny${deniesNeeded !== 1 ? 's' : ''} needed.`);
+        }
+        
+      } catch (error) {
+        console.error('Error submitting vote:', error);
+        showVoteModal('error', 'Error', `Failed to submit vote: ${error.message}`);
+        if (card) {
+          card.querySelectorAll('.btn-vote').forEach(btn => btn.disabled = false);
+        }
+      }
+    }
+    
+    // Get current user ID for checking if they've voted
+    (async () => {
+      const authStatus = await checkUserAuthStatus();
+      if (authStatus.currentUser) {
+        window.currentUserId = authStatus.currentUser.discordId;
+      }
+    })();
+    
+    // Modal functions
+    function showVoteModal(type, title, body) {
+      const modal = document.getElementById('voteModal');
+      const modalIcon = document.getElementById('modalIcon');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      
+      // Set icon based on type
+      modalIcon.className = 'fas modal-icon';
+      if (type === 'success') {
+        modalIcon.classList.add('fa-check-circle', 'success');
+      } else if (type === 'error') {
+        modalIcon.classList.add('fa-times-circle', 'error');
+      } else {
+        modalIcon.classList.add('fa-info-circle', 'info');
+      }
+      
+      modalTitle.textContent = title;
+      modalBody.innerHTML = body;
+      
+      modal.classList.add('show');
+    }
+    
+    function closeVoteModal() {
+      const modal = document.getElementById('voteModal');
+      modal.classList.remove('show');
+    }
+    
+    // Close modals on overlay click
+    document.getElementById('voteModal').addEventListener('click', (e) => {
+      if (e.target.id === 'voteModal') {
+        closeVoteModal();
+      }
+    });
+    
+    document.getElementById('denyReasonModal').addEventListener('click', (e) => {
+      if (e.target.id === 'denyReasonModal') {
+        closeDenyReasonModal();
+      }
+    });
+    
+    // Close modals on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeVoteModal();
+        closeDenyReasonModal();
+      }
+    });
+    
+    // Allow Enter+Ctrl/Cmd to submit denial reason
+    document.getElementById('denyReasonTextarea')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        window.confirmDeny();
+      }
+    });
+  </script>
+</body>
+</html>
       color: var(--text-primary);
       min-height: 100vh;
     }
@@ -687,11 +1162,6 @@
     .btn-primary {
       background: var(--accent-blue);
       color: white;
-      border-color: var(--accent-blue);
-    }
-    
-</head>
-<body class="character-moderation-page">
   <header class="topbar" role="banner">
     <div class="topbar-left">
       <a href="/" class="topbar-back-button" aria-label="Back to Dashboard">

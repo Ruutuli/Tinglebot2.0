@@ -44,10 +44,6 @@ const ItemModel = require('@/shared/models/ItemModel');
 const TempData = require('@/shared/models/TempDataModel');
 
 // ------------------- Google Sheets API -------------------
-const {
- appendSheetData,
- authorizeSheets,
- extractSpreadsheetId,
 // Google Sheets functionality removed
 
 // ------------------- Temporary In-Memory Storage -------------------

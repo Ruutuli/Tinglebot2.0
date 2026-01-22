@@ -2291,7 +2291,6 @@ module.exports = {
         const todayCompletions = recentCompletions.filter(c => c.date === today).length;
         
         // Calculate this week's completions (Sunday to Saturday)
-        const now = new Date();
         const startOfWeek = new Date(now);
         startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
         startOfWeek.setHours(0, 0, 0, 0);

@@ -27,8 +27,6 @@ const {
 const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
 
 // Utilities
-const {
- authorizeSheets,
 // Google Sheets functionality removed
 const {
  isValidGoogleSheetsUrl,

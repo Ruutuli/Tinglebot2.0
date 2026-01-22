@@ -39,10 +39,6 @@ const {
 // ------------------- Utility Functions -------------------
 // Helper utilities for inventory management, Google Sheets API interaction, and image uploads.
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const {
- authorizeSheets,
- appendSheetData,
- extractSpreadsheetId,
 // Google Sheets functionality removed
 const { uploadPetImage } = require('@/shared/utils/uploadUtils');
 const { checkInventorySync } = require('@/shared/utils/characterUtils');

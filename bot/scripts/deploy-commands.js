@@ -6,6 +6,12 @@ const dotenv = require('dotenv');
 // Load environment variables from root
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
+// Setup module aliases for @/shared to point to bot folder
+require('module-alias/register');
+const moduleAlias = require('module-alias');
+const botDir = path.resolve(__dirname, '..');
+moduleAlias.addAlias('@/shared', botDir);
+
 async function getCommandFiles() {
     const commandFiles = [];
     const commandDirs = ['commands', 'embeds'];

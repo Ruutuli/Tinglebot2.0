@@ -32,9 +32,6 @@ const {
  logItemAcquisitionToDatabase,
  logItemRemovalToDatabase,
 } = require('@/shared/utils/inventoryUtils.js');
-const {
- authorizeSheets,
- appendSheetData,
 // Google Sheets functionality removed
 const { checkInventorySync } = require('@/shared/utils/characterUtils.js');
 const ItemModel = require('@/shared/models/ItemModel.js');

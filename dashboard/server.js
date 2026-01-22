@@ -541,6 +541,12 @@ app.get('/character-moderation.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'character-moderation.html'));
 });
 
+// ------------------- Function: serveOCPage -------------------
+// Serves the OC page for viewing/editing a character
+app.get('/ocs/:name', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'oc-page.html'));
+});
+
 // ------------------- Section: Request Logging -------------------
 // Add request logging middleware
 app.use(requestLogger);

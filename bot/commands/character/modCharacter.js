@@ -59,10 +59,7 @@ const {
   extractSpreadsheetId,
   convertCmToFeetInches,
 } = require('@/shared/utils/validation');
-const {
-  appendSheetData,
-  authorizeSheets,
-  // Google Sheets functionality removed
+// Google Sheets functionality removed
 const {
   createCharacterInteraction,
 } = require("../../handlers/characterInteractionHandler");

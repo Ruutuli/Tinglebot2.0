@@ -945,11 +945,16 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
       logger.error('SERVER', 'Failed to post character creation to Discord', err);
     });
 
+    // Generate OC page URL slug from character name
+    const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const ocPageUrl = `/ocs/${ocPageSlug}`;
+
     // Return created character
     res.status(201).json({ 
       success: true,
       message: 'Character created successfully',
-      character: character.toObject()
+      character: character.toObject(),
+      ocPageUrl: ocPageUrl
     });
 
   } catch (error) {
@@ -974,6 +979,317 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
+}));
+
+// ------------------- Function: getCharacterByName -------------------
+// Returns character data by character name (for OC page URL lookup)
+// Verifies ownership - only the character owner can access
+router.get('/by-name/:name', asyncHandler(async (req, res) => {
+  const name = decodeURIComponent(req.params.name);
+  
+  // Check authentication
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const userId = req.user.discordId;
+  
+  // Find character by name (case-insensitive, handle URL slug conversion)
+  // Convert URL slug back to name: "john-doe" -> "John Doe"
+  const nameFromSlug = name
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+  
+  // Try exact match first, then case-insensitive
+  let character = await Character.findOne({ 
+    name: { $regex: new RegExp(`^${nameFromSlug}$`, 'i') },
+    userId: userId
+  }).lean();
+  
+  if (!character) {
+    // Try with original name format
+    character = await Character.findOne({ 
+      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      userId: userId
+    }).lean();
+  }
+  
+  if (!character) {
+    throw new NotFoundError('Character not found or access denied');
+  }
+  
+  res.json({ 
+    ...character, 
+    icon: character.icon 
+  });
+}));
+
+// ------------------- Function: editCharacter -------------------
+// Updates a character (for denied/accepted characters)
+// Allows resubmission if status is 'denied'
+router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id'), asyncHandler(async (req, res) => {
+  // Check authentication
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const userId = req.user.discordId;
+  const characterId = req.params.id;
+  const { resubmit } = req.body; // Flag to resubmit denied character
+
+  // Find character and verify ownership
+  const character = await Character.findOne({ _id: characterId, userId: userId });
+  if (!character) {
+    return res.status(404).json({ error: 'Character not found or access denied' });
+  }
+
+  // Check if character can be edited
+  if (character.status === 'pending') {
+    return res.status(400).json({ error: 'Character is pending moderation and cannot be edited. Please wait for moderation to complete.' });
+  }
+
+  // If resubmitting, change status from 'denied' to 'pending'
+  if (resubmit === 'true' && character.status === 'denied') {
+    character.status = 'pending';
+    character.denialReason = null; // Clear denial reason on resubmission
+  }
+
+  // Extract form data
+  const {
+    name,
+    age,
+    height,
+    hearts,
+    stamina,
+    pronouns,
+    race,
+    village,
+    job,
+    appLink,
+    starterWeapon,
+    starterShield,
+    starterArmorChest,
+    starterArmorLegs
+  } = req.body;
+
+  // If status is 'accepted', only allow editing profile fields (similar to existing PATCH endpoint)
+  if (character.status === 'accepted') {
+    // Only update allowed profile fields
+    if (age !== undefined && age !== '') {
+      character.age = parseInt(age, 10) || null;
+    }
+    if (height !== undefined && height !== '') {
+      character.height = parseFloat(height) || null;
+    }
+    if (pronouns !== undefined) {
+      character.pronouns = pronouns.trim();
+    }
+    if (req.file) {
+      const iconUrl = await uploadCharacterIconToGCS(req.file);
+      if (iconUrl) {
+        character.icon = iconUrl;
+      }
+    }
+    
+    await character.save();
+    return res.json({
+      success: true,
+      message: 'Character profile updated successfully',
+      character: character.toObject()
+    });
+  }
+
+  // For denied characters (or when resubmitting), allow full editing
+  // Validate required fields
+  if (!name || !age || !height || !hearts || !stamina || !pronouns || !race || !village || !job || !appLink) {
+    return res.status(400).json({ 
+      error: 'Missing required fields',
+      required: ['name', 'age', 'height', 'hearts', 'stamina', 'pronouns', 'race', 'village', 'job', 'appLink']
+    });
+  }
+
+  // Validate numeric fields
+  const ageNum = parseInt(age, 10);
+  const heightNum = parseFloat(height);
+  const heartsNum = parseInt(hearts, 10);
+  const staminaNum = parseInt(stamina, 10);
+
+  if (isNaN(ageNum) || ageNum < 1) {
+    return res.status(400).json({ error: 'Age must be a positive number (minimum 1)' });
+  }
+
+  if (isNaN(heightNum) || heightNum <= 0) {
+    return res.status(400).json({ error: 'Height must be a positive number' });
+  }
+
+  if (isNaN(heartsNum) || heartsNum < 1) {
+    return res.status(400).json({ error: 'Hearts must be a positive number (minimum 1)' });
+  }
+
+  if (isNaN(staminaNum) || staminaNum < 1) {
+    return res.status(400).json({ error: 'Stamina must be a positive number (minimum 1)' });
+  }
+
+  // Validate race
+  if (!isValidRace(race)) {
+    return res.status(400).json({ error: `"${race}" is not a valid race` });
+  }
+
+  // Validate village
+  if (!isValidVillage(village)) {
+    return res.status(400).json({ error: `"${village}" is not a valid village` });
+  }
+
+  // Validate job
+  if (!isValidJob(job)) {
+    return res.status(400).json({ error: `"${job}" is not a valid job` });
+  }
+
+  // Check job/village compatibility
+  const jobVillage = isVillageExclusiveJob(job);
+  if (jobVillage && jobVillage.toLowerCase() !== village.toLowerCase()) {
+    return res.status(400).json({ 
+      error: `Job "${job}" is exclusive to ${jobVillage} village, but character is in ${village} village` 
+    });
+  }
+
+  // Check character name uniqueness (only if name changed)
+  if (name.trim() !== character.name) {
+    await connectToTinglebot();
+    const isUnique = await isUniqueCharacterName(userId, name);
+    if (!isUnique) {
+      return res.status(400).json({ error: `A character with the name "${name}" already exists` });
+    }
+  }
+
+  // Handle icon upload
+  if (req.file) {
+    const iconUrl = await uploadCharacterIconToGCS(req.file);
+    if (iconUrl) {
+      character.icon = iconUrl;
+    }
+  }
+
+  // Handle starting gear updates
+  let gearWeapon = null;
+  let gearShield = null;
+  let gearArmor = {
+    head: null,
+    chest: null,
+    legs: null
+  };
+  
+  if (starterWeapon) {
+    const weaponItem = await fetchItemByName(starterWeapon);
+    if (weaponItem) {
+      gearWeapon = {
+        name: weaponItem.itemName,
+        stats: { modifierHearts: weaponItem.modifierHearts || 0 },
+        type: Array.isArray(weaponItem.type) ? weaponItem.type[0] : weaponItem.type || null
+      };
+    }
+  }
+  
+  if (starterShield) {
+    const shieldItem = await fetchItemByName(starterShield);
+    if (shieldItem) {
+      gearShield = {
+        name: shieldItem.itemName,
+        stats: { modifierHearts: shieldItem.modifierHearts || 0 },
+        subtype: Array.isArray(shieldItem.subtype) ? shieldItem.subtype[0] : shieldItem.subtype || null
+      };
+    }
+  }
+  
+  if (starterArmorChest) {
+    const chestItem = await fetchItemByName(starterArmorChest);
+    if (chestItem) {
+      gearArmor.chest = {
+        name: chestItem.itemName,
+        stats: { modifierHearts: chestItem.modifierHearts || 0 }
+      };
+    }
+  }
+  
+  if (starterArmorLegs) {
+    const legsItem = await fetchItemByName(starterArmorLegs);
+    if (legsItem) {
+      gearArmor.legs = {
+        name: legsItem.itemName,
+        stats: { modifierHearts: legsItem.modifierHearts || 0 }
+      };
+    }
+  }
+
+  // Update character fields
+  character.name = name.trim();
+  character.age = ageNum;
+  character.height = heightNum;
+  character.maxHearts = heartsNum;
+  character.currentHearts = heartsNum;
+  character.maxStamina = staminaNum;
+  character.currentStamina = staminaNum;
+  character.pronouns = pronouns.trim();
+  character.race = race.toLowerCase();
+  character.homeVillage = village.toLowerCase();
+  character.currentVillage = village.toLowerCase();
+  character.job = job;
+  character.appLink = appLink.trim();
+  character.gearWeapon = gearWeapon;
+  character.gearShield = gearShield;
+  character.gearArmor = gearArmor;
+
+  // Update character stats if gear was equipped
+  if (gearWeapon || gearShield || gearArmor.chest || gearArmor.legs) {
+    const getModifierHearts = (stats) => {
+      if (!stats) return 0;
+      if (stats instanceof Map) {
+        return stats.get('modifierHearts') || 0;
+      }
+      if (typeof stats === 'object') {
+        return stats.modifierHearts || 0;
+      }
+      return 0;
+    };
+
+    let totalDefense = 0;
+    if (character.gearArmor) {
+      totalDefense += getModifierHearts(character.gearArmor.head?.stats);
+      totalDefense += getModifierHearts(character.gearArmor.chest?.stats);
+      totalDefense += getModifierHearts(character.gearArmor.legs?.stats);
+    }
+    if (character.gearShield?.stats) {
+      totalDefense += getModifierHearts(character.gearShield.stats);
+    }
+
+    const totalAttack = getModifierHearts(character.gearWeapon?.stats);
+
+    character.defense = totalDefense;
+    character.attack = totalAttack;
+  }
+
+  await character.save();
+
+  logger.info('CHARACTERS', `Character updated: ${character.name} by user ${userId}${resubmit === 'true' ? ' (resubmitted)' : ''}`);
+
+  // If resubmitted, post to Discord
+  if (resubmit === 'true') {
+    postCharacterCreationToDiscord(character, await User.findOne({ discordId: userId }), req.user, req).catch(err => {
+      logger.error('SERVER', 'Failed to post character resubmission to Discord', err);
+    });
+  }
+
+  // Generate OC page URL slug
+  const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const ocPageUrl = `/ocs/${ocPageSlug}`;
+
+  res.json({
+    success: true,
+    message: resubmit === 'true' ? 'Character updated and resubmitted successfully' : 'Character updated successfully',
+    character: character.toObject(),
+    ocPageUrl: ocPageUrl
+  });
 }));
 
 // ------------------- Function: getCharacterById -------------------

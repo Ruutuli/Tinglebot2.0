@@ -54,9 +54,7 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattin
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('@/shared/utils/inventoryUtils');
-const {
-  appendSheetData,
-  // Google Sheets functionality removed
+// Google Sheets functionality removed
 const {
   extractSpreadsheetId,
   isValidGoogleSheetsUrl
