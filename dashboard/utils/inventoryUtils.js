@@ -126,7 +126,7 @@ function shouldLogError(error) {
 // ============================================================================
 
 // ---- Function: syncToInventoryDatabase ----
-// Syncs item changes to both database and Google Sheets
+// Syncs item changes to the database
 async function syncToInventoryDatabase(character, item, interaction) {
   try {
     if (!dbFunctions.connectToInventories) {
@@ -193,7 +193,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
 
     // Google Sheets Sync removed - inventory is managed in database only
   } catch (error) {
-    if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
+    if (shouldLogError(error)) {
       handleError(error, "inventoryUtils.js");
       logger.error('INVENTORY', `Sync failed for ${character?.name || 'Unknown'} | ${item?.itemName || 'Unknown'}`, error);
     }
@@ -653,8 +653,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
     }));
     // Google Sheets logging removed
   } catch (error) {
-    handleError(error, 'inventoryUtils.js');
-    logger.error('INVENTORY', `Error logging materials to Google Sheets: ${error.message}`, error);
+    // Error handling removed - function is deprecated
   }
 }
 
@@ -925,29 +924,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
     }
   }
 
-  // Log materials to Google Sheets if character has an inventory sheet
   // Google Sheets logging removed - materials are logged to database
-  if (false) { // Google Sheets functionality removed
-    try {
-      // Google Sheets logging removed
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const formattedDateTime = formatDateTime(new Date());
-
-      // await logMaterialsToGoogleSheets(
-      //   null, // auth removed
-      //   null, // spreadsheetId removed
-      //   null, // range removed
-      //   character,
-      //   materialsUsed,
-      //   craftableItem,
-      //   interactionUrl,
-      //   formattedDateTime
-      // );
-    } catch (error) {
-      handleError(error, 'inventoryUtils.js');
-      logger.error('INVENTORY', `Error logging materials to sheet: ${error.message}`, error);
-    }
-  }
 
   return materialsUsed;
 };
@@ -1314,29 +1291,7 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
     // so we only reach here for auto-processed materials
   }
 
-  // All materials processed - log to Google Sheets if needed
   // Google Sheets logging removed - materials are logged to database
-  if (false) { // Google Sheets functionality removed
-    try {
-      // Google Sheets logging removed
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const formattedDateTime = formatDateTime(new Date());
-
-      // await logMaterialsToGoogleSheets(
-      //   null, // auth removed
-      //   null, // spreadsheetId removed
-      //   null, // range removed
-      //   character,
-      //   materialsUsed,
-      //   craftableItem,
-      //   interactionUrl,
-      //   formattedDateTime
-      // );
-    } catch (error) {
-      handleError(error, 'inventoryUtils.js');
-      logger.error('INVENTORY', `Error logging materials to sheet: ${error.message}`, error);
-    }
-  }
 
   return materialsUsed;
 };
@@ -1390,7 +1345,7 @@ async function removeInitialItemIfSynced(characterId) {
 
 
 // ---- Function: refundJobVoucher ----
-// Handles refunding a job voucher to a character's inventory and logs it to Google Sheets
+// Handles refunding a job voucher to a character's inventory
 async function refundJobVoucher(character, interaction) {
     try {
         if (!character || !interaction) {
@@ -1403,25 +1358,8 @@ async function refundJobVoucher(character, interaction) {
         await addItemInventoryDatabase(character._id, "Job Voucher", 1, interaction, "Voucher Refund");
         logger.success('INVENTORY', `Successfully refunded job voucher to ${character.name}'s inventory`);
 
-        // Log the refund to Google Sheets if character has an inventory sheet
+        // Log the refund to database
         if (character.inventory) {
-            const values = [[
-                character.name,
-                "Job Voucher",
-                1,
-                "Voucher",
-                "Job",
-                "Refund",
-                "Voucher Refund",
-                character.job || "",
-                character.perk || "",
-                character.currentLocation || character.homeVillage || "",
-                `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-                new Date().toISOString(),
-                uuidv4()
-            ]];
-
-            // Google Sheets logging removed
             logger.success('INVENTORY', `Successfully logged job voucher refund to database for ${character.name}`);
         }
 
