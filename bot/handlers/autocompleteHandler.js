@@ -463,22 +463,6 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             }
             break;
 
-          // ------------------- Character Command -------------------
-          case "character":
-            if (interaction.options._subcommandGroup) {
-              const subcommandGroup = interaction.options.getSubcommandGroup(false);
-              const subcommand = interaction.options.getSubcommand();
-              
-              if (subcommandGroup === "create") {
-                if (focusedOption.name === "race") {
-                  await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
-                } else if (focusedOption.name === "village") {
-                  await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
-                }
-              }
-            }
-            break;
-
           // ------------------- Economy Command -------------------
           case "economy":
             await handleEconomyAutocomplete(interaction, focusedOption);

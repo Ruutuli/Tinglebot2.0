@@ -648,7 +648,7 @@ module.exports = {
           )
           .setThumbnail(item.image || 'https://via.placeholder.com/150')
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-          .setFooter({ text: '✨ You can now create more characters! Use /character create to get started!' });
+          .setFooter({ text: '✨ You can now create more characters! Create them at https://tinglebot.xyz/character-create.html' });
 
         return void await interaction.editReply({ embeds: [voucherEmbed] });
       }

@@ -61,9 +61,6 @@ const {
 } = require('@/shared/utils/validation');
 // Google Sheets functionality removed
 const {
-  createCharacterInteraction,
-} = require("../../handlers/characterInteractionHandler");
-const {
   createJobOptions,
   generalJobs,
   villageJobs,

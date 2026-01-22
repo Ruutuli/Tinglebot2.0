@@ -11,9 +11,6 @@ const {
  ButtonStyle,
  MessageFlags
 } = require("discord.js");
-const axios = require("axios");
-const { v4: uuidv4 } = require("uuid");
-const path = require("path");
 // Google Sheets functionality removed
 const mongoose = require("mongoose");
 const { MongoClient } = require("mongodb");
@@ -43,7 +40,6 @@ const {
  handleAutocomplete,
  handleChangeJobNewJobAutocomplete,
  handleChangeVillageNewVillageAutocomplete,
- handleEditCharacterAutocomplete,
 } = require("../../handlers/autocompleteHandler");
 const {
  canChangeJob,
@@ -81,20 +77,12 @@ const {
  getMountEmoji,
  getMountThumbnail,
 } = require("../../modules/mountModule");
-const bucket = require('@/shared/config/gcsService');
 
 const Character = require('@/shared/models/CharacterModel');
 const User = require('@/shared/models/UserModel');
 const ItemModel = require('@/shared/models/ItemModel');
 const Mount = require('@/shared/models/MountModel');
 const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
-const TempData = require('@/shared/models/TempDataModel');
-const {
-  savePendingEditToStorage,
-  retrievePendingEditFromStorage,
-  deletePendingEditFromStorage
-} = require('@/shared/utils/storage');
-
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
 // Defining constant values such as default images, channel IDs, and emoji lists.
@@ -102,7 +90,6 @@ const {
 
 const DEFAULT_IMAGE_URL =
  "https://storage.googleapis.com/tinglebot/Graphics/border.png";
-const EDIT_NOTIFICATION_CHANNEL_ID = '1381479893090566144';
 const characterEmojis = [
  "🍃",
  "🍂",
@@ -130,118 +117,6 @@ module.exports = {
   .setName("character")
   .setDescription("Manage your characters")
 
-  // ------------------- Create Character Subcommand -------------------
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("create")
-    .setDescription("Create a new character")
-  )
-
-  // ------------------- Edit Character Subcommand -------------------
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("edit")
-    .setDescription("Edit an existing character")
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("The name of the character")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("category")
-      .setDescription("Category to edit")
-      .setRequired(true)
-      .addChoices(
-       { name: "Name", value: "name" },
-       { name: "Age", value: "age" },
-       { name: "Height", value: "height" },
-       { name: "Hearts", value: "hearts" },
-       { name: "Stamina", value: "stamina" },
-       { name: "Pronouns", value: "pronouns" },
-       { name: "Race", value: "race" },
-       { name: "Job", value: "job" },
-       { name: "Village", value: "homeVillage" },
-       { name: "Icon", value: "icon" },
-       { name: "App Link", value: "app_link" },
-       { name: "Inventory", value: "inventory" }
-      )
-    )
-    .addStringOption((option) =>
-     option
-      .setName("updatedinfo")
-      .setDescription("Updated information for the selected category")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addAttachmentOption((option) =>
-     option
-      .setName("newicon")
-      .setDescription("New icon for the character (only if updating icon)")
-      .setRequired(false)
-    )
-  )
-  // ------------------- View Character Subcommand -------------------
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("view")
-    .setDescription("View details of a character")
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("The name of the character")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-  )
-  // ------------------- View List of Characters Subcommand -------------------
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("viewlist")
-    .setDescription("Edit an existing character")
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("The name of the character")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("category")
-      .setDescription("Category to edit")
-      .setRequired(true)
-      .addChoices(
-       { name: "Name", value: "name" },
-       { name: "Age", value: "age" },
-       { name: "Height", value: "height" },
-       { name: "Hearts", value: "hearts" },
-       { name: "Stamina", value: "stamina" },
-       { name: "Pronouns", value: "pronouns" },
-       { name: "Race", value: "race" },
-       { name: "Job", value: "job" },
-       { name: "Village", value: "homeVillage" },
-       { name: "Icon", value: "icon" },
-       { name: "App Link", value: "app_link" },
-       { name: "Inventory", value: "inventory" }
-      )
-    )
-    .addStringOption((option) =>
-     option
-      .setName("updatedinfo")
-      .setDescription("Updated information for the selected category")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addAttachmentOption((option) =>
-     option
-      .setName("newicon")
-      .setDescription("New icon for the character (only if updating icon)")
-      .setRequired(false)
-    )
-  )
   // ------------------- View Character Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
@@ -350,42 +225,33 @@ module.exports = {
 // ============================================================================
 
  async execute(interaction) {
-  const subcommandGroup = interaction.options.getSubcommandGroup(false);
   const subcommand = interaction.options.getSubcommand();
 
-  
   try {
-   if (subcommandGroup === "create") {
-    await handleCreateCharacter(interaction, subcommand);
-   } else {
-    switch (subcommand) {
-     case "edit":
-      await handleEditCharacter(interaction);
-      break;
-     case "view":
-      await handleViewCharacter(interaction);
-      break;
-     case "viewlist":
-      await handleViewCharacterList(interaction);
-      break;
-     case "delete":
-      await handleDeleteCharacter(interaction);
-      break;
-     case "changejob":
-      await handleChangeJob(interaction);
-      break;
-     case "changevillage":
-      await handleChangeVillage(interaction);
-      break;
-     case "setbirthday":
-      await handleSetBirthday(interaction);
-      break;
-     default:
-      await interaction.reply({
-       content: "❌ Unknown command.",
-       flags: 64
-      });
-    }
+   switch (subcommand) {
+    case "view":
+     await handleViewCharacter(interaction);
+     break;
+    case "viewlist":
+     await handleViewCharacterList(interaction);
+     break;
+    case "delete":
+     await handleDeleteCharacter(interaction);
+     break;
+    case "changejob":
+     await handleChangeJob(interaction);
+     break;
+    case "changevillage":
+     await handleChangeVillage(interaction);
+     break;
+    case "setbirthday":
+     await handleSetBirthday(interaction);
+     break;
+    default:
+     await interaction.reply({
+      content: "❌ Unknown command.",
+      flags: 64
+     });
    }
   } catch (error) {
    await handleInteractionError(error, interaction, {
@@ -397,51 +263,10 @@ module.exports = {
 
  async autocomplete(interaction) {
   try {
-   const subcommandGroup = interaction.options.getSubcommandGroup(false);
    const subcommand = interaction.options.getSubcommand();
    const focusedOption = interaction.options.getFocused(true);
- 
-   if (subcommandGroup === "create") {
-    if (focusedOption.name === "race") {
-      await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
-    }
-   } else {
-    switch (subcommand) {
-      case "edit":
-        if (focusedOption.name === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(
-            interaction,
-            focusedOption,
-            "character"
-          );
-        } else if (focusedOption.name === "updatedinfo") {
-          const selectedCategory = interaction.options.getString('category');
-          const characterName = interaction.options.getString('charactername')?.split(' | ')[0];
-      
-          if (selectedCategory === "job") {
-            const allJobs = getAllJobs();
-            const filteredJobs = allJobs
-              .filter(job => job.toLowerCase().includes(focusedOption.value.toLowerCase()))
-              .slice(0, 25)
-              .map(job => ({ name: job, value: job }));
-      
-            await interaction.respond(filteredJobs);
-          } else if (selectedCategory === "Village" || selectedCategory === "homeVillage") {
-            const villages = ["inariko", "rudania", "vhintl"];
-            const filteredVillages = villages
-              .filter(village => village.toLowerCase().includes(focusedOption.value.toLowerCase()))
-              .slice(0, 25)
-              .map(village => ({ name: village, value: village }));
-      
-            await interaction.respond(filteredVillages);
-          } else if (selectedCategory === "race") {
-            await handleEditCharacterAutocomplete(interaction, focusedOption);
-          } else {
-            await interaction.respond([]);
-          }
-        }
-        break;
-      
+
+   switch (subcommand) {
       case "delete":
       case "setbirthday":
         if (focusedOption.name === "charactername") {
@@ -484,7 +309,6 @@ module.exports = {
        );
       }
       break;
-    }
    }
   } catch (error) {
    handleInteractionError(error, interaction, {
@@ -497,603 +321,6 @@ module.exports = {
    
   }
  },
-};
-
-// ============================================================================
-// ------------------- Character Creation Handler -------------------
-// Processes character creation, validation, and database updates.
-// ============================================================================
-
-async function handleCreateCharacter(interaction, subcommand) {
-  await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-
-  try {
-    const userId = interaction.user.id;
-    let user = await User.findOne({ discordId: userId });
-
-    if (!user) {
-      user = new User({
-        discordId: userId,
-        characterSlot: 2,
-      });
-      await user.save();
-      console.log(
-        `[CreateCharacter]: Created new user profile for ${interaction.user.tag} with 2 character slots.`
-      );
-    }
-
-    if (user.characterSlot <= 0) {
-      await interaction.editReply({
-        content:
-          "❌ You do not have enough character slots available to create a new character.",
-     flags: [MessageFlags.Ephemeral]
-    });
-      return;
-    }
-
-    const characterName = interaction.options.getString("name");
-    // Get the actual name part before the "|" if it exists
-    const actualName = characterName.split('|')[0].trim();
-    
-    // Validate numeric fields
-    const age = interaction.options.getInteger("age");
-    const hearts = interaction.options.getInteger("hearts");
-    const stamina = interaction.options.getInteger("stamina");
-    const height = interaction.options.getNumber("height");
-
-    // Validate age
-    if (age < 1) {
-      await interaction.editReply({
-        content: "❌ Age must be a positive number.",
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    // Validate hearts and stamina
-    if (hearts < 1 || stamina < 1) {
-      await interaction.editReply({
-        content: "❌ Hearts and stamina values must be positive numbers.",
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    // Validate height
-    if (isNaN(height) || height <= 0) {
-      await interaction.editReply({
-        content: "❌ Height must be a positive number.",
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    // Validate race
-    const race = interaction.options.getString("race");
-    if (!isValidRace(race)) {
-      await interaction.editReply({
-        content: `❌ "${race}" is not a valid race. Please select a valid race from the autocomplete options.`,
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    // Validate village (for general subcommand)
-    const village = interaction.options.getString("village");
-    if (subcommand === "general" && !["inariko", "rudania", "vhintl"].includes(village)) {
-      await interaction.editReply({
-        content: `❌ "${village}" is not a valid village. Please select a valid village from the choices.`,
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    // Validate job
-    const job = interaction.options.getString("job");
-    if (!job) {
-      await interaction.editReply({
-        content: "❌ Please select a valid job from the choices.",
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    // Validate inventory link
-    const inventory = interaction.options.getString("inventory");
-    // Google Sheets URL validation removed - inventory field can now be any URL
-    // if (!isValidGoogleSheetsUrl(inventory)) {
-    //   await interaction.editReply({
-    //     content: "❌ Please provide a valid Google Sheets URL for the inventory.",
-    //     flags: [MessageFlags.Ephemeral]
-    //   });
-    //   return;
-    // }
-
-    // Validate app link
-    const appLink = interaction.options.getString("applink");
-    if (!appLink) {
-      await interaction.editReply({
-        content: "❌ Please provide a valid application link.",
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    // Validate icon
-    const icon = interaction.options.getAttachment("icon");
-    if (!icon) {
-      await interaction.editReply({
-        content: "❌ Please provide a valid icon image.",
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
-
-    const formattedRace = `Race: ${race}`;
-    const formattedVillage = `${capitalizeFirstLetter(village)} Resident`;
-    const formattedJob = `Job: ${capitalizeWords(job)}`;
-
-    const { perks: jobPerks } = getJobPerk(job) || { perks: [] };
-
-    const member = interaction.member;
-    const roleNames = [formattedRace, formattedVillage, formattedJob];
-    const missingRoles = [];
-    const assignedRoles = [];
-
-    // Check bot's permissions first
-    if (!interaction.guild.members.me.permissions.has('ManageRoles')) {
-      console.warn('[Roles]: Bot lacks the "Manage Roles" permission.');
-      missingRoles.push('All roles (Bot lacks permissions)');
-    } else {
-      // Check if bot's role is high enough in hierarchy
-      const botRole = interaction.guild.members.me.roles.highest;
-
-      // Map role names to their IDs from .env - expanded to include all jobs from rolesModule
-      const roleIdMap = {
-        'Race: Hylian': process.env.RACE_HYLIAN,
-        'Race: Zora': process.env.RACE_ZORA,
-        'Race: Gerudo': process.env.RACE_GERUDO,
-        'Race: Goron': process.env.RACE_GORON,
-        'Race: Mixed': process.env.RACE_MIXED,
-        'Race: Sheikah': process.env.RACE_SHEIKAH,
-        'Race: Rito': process.env.RACE_RITO,
-        'Race: Korok/Kokiri': process.env.RACE_KOROK_KOKIRI,
-        'Race: Keaton': process.env.RACE_KEATON,
-        'Race: Twili': process.env.RACE_TWILI,
-        'Race: Mogma': process.env.RACE_MOGMA,
-        'Inariko Resident': process.env.INARIKO_RESIDENT,
-        'Rudania Resident': process.env.RUDANIA_RESIDENT,
-        'Vhintl Resident': process.env.VHINTL_RESIDENT,
-        ' Resident': process.env.RESIDENT_ROLE_ID, // Generic resident role
-        // All jobs from rolesModule.js
-        'Job: Rancher': process.env.JOB_RANCHER,
-        'Job: Shopkeeper': process.env.JOB_SHOPKEEPER,
-        'Job: Farmer': process.env.JOB_FARMER,
-        'Job: Weaver': process.env.JOB_WEAVER,
-        'Job: Fisherman': process.env.JOB_FISHERMAN,
-        'Job: Researcher': process.env.JOB_RESEARCHER,
-        'Job: Scholar': process.env.JOB_SCHOLAR,
-        'Job: Teacher': process.env.JOB_TEACHER,
-        'Job: Blacksmith': process.env.JOB_BLACKSMITH,
-        'Job: Miner': process.env.JOB_MINER,
-        'Job: Entertainer': process.env.JOB_ENTERTAINER,
-        'Job: Beekeeper': process.env.JOB_BEEKEEPER,
-        'Job: Fortune Teller': process.env.JOB_FORTUNE_TELLER,
-        'Job: Mask Maker': process.env.JOB_MASK_MAKER,
-        'Job: Adventurer': process.env.JOB_ADVENTURER,
-        'Job: Artist': process.env.JOB_ARTIST,
-        'Job: Bandit': process.env.JOB_BANDIT,
-        'Job: Cook': process.env.JOB_COOK,
-        'Job: Courier': process.env.JOB_COURIER,
-        'Job: Craftsman': process.env.JOB_CRAFTSMAN,
-        'Job: Forager': process.env.JOB_FORAGER,
-        'Job: Graveskeeper': process.env.JOB_GRAVESKEEPER,
-        'Job: Guard': process.env.JOB_GUARD,
-        'Job: Healer': process.env.JOB_HEALER,
-        'Job: Herbalist': process.env.JOB_HERBALIST,
-        'Job: Hunter': process.env.JOB_HUNTER,
-        'Job: Merchant': process.env.JOB_MERCHANT,
-        'Job: Mercenary': process.env.JOB_MERCENARY,
-        'Job: Priest': process.env.JOB_PRIEST,
-        'Job: Scout': process.env.JOB_SCOUT,
-        'Job: Stablehand': process.env.JOB_STABLEHAND,
-        'Job: Villager': process.env.JOB_VILLAGER,
-        'Job: Witch': process.env.JOB_WITCH
-      };
-
-      // Map job perks to their IDs
-      const jobPerkIdMap = {
-        'LOOTING': process.env.JOB_PERK_LOOTING,
-        'STEALING': process.env.JOB_PERK_STEALING,
-        'ENTERTAINING': process.env.JOB_PERK_ENTERTAINING,
-        'DELIVERING': process.env.JOB_PERK_DELIVERING,
-        'HEALING': process.env.JOB_PERK_HEALING,
-        'GATHERING': process.env.JOB_PERK_GATHERING,
-        'CRAFTING': process.env.JOB_PERK_CRAFTING,
-        'BOOST': process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING,
-        'VENDING': process.env.JOB_PERK_VENDING
-      };
-
-      // Helper function to find role by name with fallback
-      const findRoleWithFallback = (roleName) => {
-        // First, try to get role ID from environment variable
-        const roleId = roleIdMap[roleName];
-        
-        if (roleId) {
-          const role = interaction.guild.roles.cache.get(roleId);
-          if (role) {
-            return role;
-          }
-        }
-        
-        // Fallback: search for role by name in the guild (case-insensitive)
-        const roleByName = interaction.guild.roles.cache.find(
-          r => r.name.toLowerCase() === roleName.toLowerCase()
-        );
-        
-        if (roleByName) {
-          if (!roleId) {
-            console.log(`[Roles]: Role "${roleName}" found by name search (env var not set).`);
-          }
-          return roleByName;
-        }
-        
-        // If both methods fail, return null
-        return null;
-      };
-
-      // Try to assign roles, but don't fail if they're missing
-      for (const roleName of roleNames) {
-        const role = findRoleWithFallback(roleName);
-        
-        if (!role) {
-          // Both env var lookup and guild name search failed
-          console.warn(`[Roles]: Role ID not found for "${roleName}" in configuration, and role not found in guild by name.`);
-          missingRoles.push(roleName);
-          continue;
-        }
-
-        if (botRole.position <= role.position) {
-          console.warn(`[Roles]: Bot's role is not high enough to assign the "${roleName}" role.`);
-          missingRoles.push(roleName);
-          continue;
-        }
-
-        try {
-          await member.roles.add(role);
-          assignedRoles.push(roleName);
-          console.log(`[Roles]: Assigned role "${roleName}" to user "${member.user.tag}".`);
-        } catch (error) {
-          console.error(`[Roles]: Failed to assign role "${roleName}":`, error.message);
-          missingRoles.push(roleName);
-        }
-      }
-
-      // Helper function to find perk role by name with fallback
-      const findPerkRoleWithFallback = (perk) => {
-        const perkRoleName = `Job Perk: ${perk}`;
-        
-        // First, try to get role ID from environment variable
-        const perkRoleId = jobPerkIdMap[perk];
-        
-        if (perkRoleId) {
-          const role = interaction.guild.roles.cache.get(perkRoleId);
-          if (role) {
-            return role;
-          }
-        }
-        
-        // Fallback: search for role by name in the guild (case-insensitive)
-        const roleByName = interaction.guild.roles.cache.find(
-          r => r.name.toLowerCase() === perkRoleName.toLowerCase()
-        );
-        
-        if (roleByName) {
-          if (!perkRoleId) {
-            console.log(`[Roles]: Perk role "${perkRoleName}" found by name search (env var not set).`);
-          }
-          return roleByName;
-        }
-        
-        // If both methods fail, return null
-        return null;
-      };
-
-      // Try to assign perk roles, but don't fail if they're missing
-      for (const perk of jobPerks) {
-        const perkRoleName = `Job Perk: ${perk}`;
-        const perkRole = findPerkRoleWithFallback(perk);
-        
-        if (!perkRole) {
-          // Both env var lookup and guild name search failed
-          console.warn(`[Roles]: Perk role ID not found for "${perk}" in configuration, and role not found in guild by name.`);
-          missingRoles.push(perkRoleName);
-          continue;
-        }
-
-        if (botRole.position <= perkRole.position) {
-          console.warn(`[Roles]: Bot's role is not high enough to assign the "${perkRoleName}" role.`);
-          missingRoles.push(perkRoleName);
-          continue;
-        }
-
-        try {
-          await member.roles.add(perkRole);
-          assignedRoles.push(perkRoleName);
-          console.log(`[Roles]: Assigned perk role "${perkRoleName}" to user "${member.user.tag}".`);
-        } catch (error) {
-          console.error(`[Roles]: Failed to assign perk role "${perkRoleName}":`, error.message);
-          missingRoles.push(perkRoleName);
-        }
-      }
-    }
-
-    user.characterSlot -= 1;
-    await user.save();
-
-    await createCharacterInteraction(interaction, assignedRoles, missingRoles);
-
-    // Note: createCharacterInteraction already handles sending the reply,
-    // so we don't need to send another one here
-  } catch (error) {
-    handleInteractionError(error, interaction, { source: "character.js" });
-    console.error(
-      "[CreateCharacter]: Error during character creation:",
-      error.message
-    );
-
-    await interaction.editReply({
-      content: "❌ An error occurred during character creation. Please try again later.",
-      flags: [MessageFlags.Ephemeral]
-    });
-  }
-}
-
-// ============================================================================
-// ------------------- Character Editing Handler -------------------
-// Processes updates to existing characters including name, job, race, village, etc.
-// ============================================================================
-
-
-async function handleEditCharacter(interaction) {
-  await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-
-  try {
-    const fullCharacterName = interaction.options.getString("charactername");
-    const characterName = fullCharacterName?.split(' | ')[0];
-    const category = interaction.options.getString("category");
-    const updatedInfo = interaction.options.getString("updatedinfo");
-    const userId = interaction.user.id;
-    const newIcon = interaction.options.getAttachment("newicon");
-
-    console.log(`[handleEditCharacter] Starting edit for character: ${characterName}, category: ${category}`);
-
-    await connectToTinglebot();
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) {
-      return await safeReply(interaction, {
-        color: 0xFF0000,
-        title: '❌ Character Not Found',
-        description: `The character "${characterName}" does not exist in the database.`,
-        image: { url: 'https://storage.googleapis.com/tinglebot/border%20error.png' },
-        footer: { text: 'Character Validation' }
-      }, true);
-    }
-
-    await connectToInventories();
-    const inventoryCollection = await getCharacterInventoryCollection(character.name);
-    const spiritOrb = await inventoryCollection.findOne({
-      characterId: character._id,
-      itemName: { $regex: /^spirit orb$/i }
-    });
-    character.spiritOrbs = spiritOrb?.quantity || 0;
-
-    let previousValue;
-    switch (category) {
-      case 'stamina':
-        previousValue = {
-          maxStamina: character.maxStamina,
-          currentStamina: character.currentStamina
-        };
-        break;
-      case 'hearts':
-        previousValue = character.currentHearts;
-        break;
-      case 'name':
-        previousValue = character.name;
-        break;
-      case 'age':
-        previousValue = character.age;
-        break;
-      case 'height':
-        previousValue = character.height;
-        break;
-      case 'pronouns':
-        previousValue = character.pronouns;
-        break;
-      case 'race':
-        previousValue = character.race;
-        break;
-      case 'job':
-        previousValue = character.job;
-        break;
-      case 'homeVillage':
-        previousValue = character.homeVillage;
-        break;
-      case 'icon':
-        previousValue = character.icon;
-        break;
-      case 'app_link':
-        previousValue = character.appLink;
-        break;
-      case 'inventory':
-        previousValue = character.inventory;
-        break;
-      default:
-        previousValue = character[category];
-    }
-
-    // ------------------- Validation -------------------
-    if (category === "job") {
-      if (!isValidJob(updatedInfo)) {
-        return await safeReply(interaction, `❌ **${updatedInfo}** is not a valid job.`);
-      }
-      const jobValidation = canChangeJob(character, updatedInfo);
-      if (!jobValidation.valid) {
-        return await safeReply(interaction, jobValidation.message);
-      }
-    }
-
-    if (category === "race" && !isValidRace(updatedInfo)) {
-      return await safeReply(interaction, `⚠️ **${updatedInfo}** is not a valid race.`);
-    }
-
-    if (["hearts", "age"].includes(category)) {
-      const parsed = parseInt(updatedInfo, 10);
-      if (isNaN(parsed) || parsed < 0) {
-        return await safeReply(interaction, `⚠️ **${updatedInfo}** is not a valid ${category}. Please provide a non-negative number.`);
-      }
-    }
-
-    if (category === "height") {
-      const height = parseFloat(updatedInfo);
-      if (isNaN(height) || height < 0) {
-        return await safeReply(interaction, `⚠️ **${updatedInfo}** is not a valid height. Please use centimeters.`);
-      }
-    }
-
-    if (category === "stamina") {
-      const stamina = parseInt(updatedInfo, 10);
-      if (isNaN(stamina) || stamina < 0) {
-        return await safeReply(interaction, `⚠️ **${updatedInfo}** is not valid for stamina.`);
-      }
-    }
-
-    // ------------------- Pending Edit Logic -------------------
-    const editId = new mongoose.Types.ObjectId().toString();
-    let finalUpdatedValue;
-    
-    if (category === 'stamina') {
-      finalUpdatedValue = { maxStamina: parseInt(updatedInfo, 10), currentStamina: parseInt(updatedInfo, 10) };
-    } else if (category === 'icon') {
-      if (!newIcon) {
-        return await safeReply(interaction, "❌ Please attach a new icon image when updating the icon.");
-      }
-
-      try {
-        // Download and upload the icon image
-        const response = await axios.get(newIcon.url, { responseType: 'arraybuffer' });
-        const iconData = Buffer.from(response.data, 'binary');
-        const blob = bucket.file(uuidv4() + path.extname(newIcon.name));
-        const blobStream = blob.createWriteStream({ resumable: false });
-        blobStream.end(iconData);
-        await new Promise((resolve, reject) => {
-          blobStream.on('finish', resolve);
-          blobStream.on('error', reject);
-        });
-
-        // Generate public URL for the uploaded icon
-        finalUpdatedValue = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-      } catch (err) {
-        handleInteractionError(err, interaction, { source: "character.js" });
-        return await safeReply(interaction, "❌ Failed to upload the new icon. Please try again later.");
-      }
-    } else {
-      finalUpdatedValue = updatedInfo;
-    }
-
-    const notificationEmbed = formatEditNotification(
-      interaction.user.tag,
-      character.name,
-      category,
-      previousValue,
-      finalUpdatedValue,
-      editId
-    );
-
-    try {
-      const notificationChannel = interaction.guild.channels.cache.get(EDIT_NOTIFICATION_CHANNEL_ID);
-      if (!notificationChannel?.isTextBased()) {
-        throw new Error('Invalid notification channel');
-      }
-
-      const sentMessage = await notificationChannel.send(notificationEmbed);
-      
-      const pendingEdit = {
-        characterId: character._id,
-        userId: userId,
-        category: category,
-        previousValue: previousValue,
-        updatedValue: finalUpdatedValue,
-        status: 'pending',
-        createdAt: new Date(),
-        notificationMessageId: sentMessage.id
-      };
-      
-      await savePendingEditToStorage(editId, pendingEdit);
-    } catch (err) {
-      handleInteractionError(err, interaction, { source: "character.js" });
-      console.error(`[character.js]: Error sending update notification: ${err.message}`);
-      return await safeReply(interaction, "❌ Failed to send edit request to mods. Please try again later.");
-    }
-
-    const successEmbed = new EmbedBuilder()
-      .setColor('#00FF00')
-      .setTitle('📝 Edit Request Submitted')
-      .setDescription(`Your request to change ${character.name}'s ${category} has been sent to the mod team for review.`)
-      .addFields(
-        { name: '⏳ Review Time', value: '> Please allow up to 48 hours for review.', inline: false },
-        { name: '🔗 Request ID', value: `> \`${editId}\``, inline: false }
-      )
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setFooter({
-        text: 'Character Edit Request'
-      })
-      .setTimestamp();
-
-    await safeReply(interaction, successEmbed, true);
-
-  } catch (error) {
-    handleInteractionError(error, interaction, { source: "character.js" });
-    console.error('[handleEditCharacter] Error occurred:', error);
-    await safeReply(interaction, "❌ An error occurred while processing your request.");
-  }
-}
-
-// ------------------- Utility Functions -------------------
-
-function formatEditNotification(userTag, characterName, category, previous, updated, requestId) {
-  const embed = new EmbedBuilder()
-    .setColor('#FF0000')
-    .setTitle('📢 PENDING CHARACTER EDIT REQUEST')
-    .addFields(
-      { name: '🌱 User', value: `> \`${userTag}\``, inline: false },
-      { name: '👤 Character Name', value: `> \`${characterName}\``, inline: false },
-      { name: '🛠️ Edited Category', value: `> \`${category}\``, inline: false },
-      { name: '🔄 Previous Value', value: `> \`${typeof previous === 'object' ? JSON.stringify(previous) : previous}\``, inline: false },
-      { name: '✅ Requested Value', value: `> \`${typeof updated === 'object' ? JSON.stringify(updated) : updated}\``, inline: false },
-      { name: '🔗 Request ID', value: `> \`${requestId}\``, inline: false }
-    )
-    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-    .setFooter({
-      text: 'Character Edit Request'
-    })
-    .setTimestamp();
-
-  return { embeds: [embed] };
-}
-
-async function safeReply(interaction, message, isEmbed = false) {
-  const payload = isEmbed
-    ? { embeds: [message], flags: [MessageFlags.Ephemeral] }
-    : { content: message, flags: [MessageFlags.Ephemeral] };
-
-  if (!interaction.replied && !interaction.deferred) {
-    return interaction.reply(payload);
-  } else {
-    return interaction.followUp(payload);
-  }
-}
 
 // ============================================================================
 // ------------------- Character Viewing Handlers -------------------

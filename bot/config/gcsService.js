@@ -3,7 +3,7 @@
 // Purpose: Initializes and exports Google Cloud Storage bucket instance
 // - Configures GCS client for both Railway (env vars) and local (key file) environments
 // - Provides bucket instance for file uploads/downloads
-// Used by: character.js, modCharacter.js, mod.js, uploadUtils.js, characterInteractionHandler.js
+// Used by: character.js, modCharacter.js, mod.js, uploadUtils.js
 // ============================================================================
 
 const { Storage } = require('@google-cloud/storage');

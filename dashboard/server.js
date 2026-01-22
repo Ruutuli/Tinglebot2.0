@@ -482,6 +482,31 @@ async function uploadPinImageToGCS(file, pinId) {
   }
 }
 
+// Security: Block access to sensitive files (.env, config files, etc.)
+app.use((req, res, next) => {
+  const sensitivePatterns = [
+    /\.env$/i,
+    /\.env\./i,
+    /config\.php$/i,
+    /wp-config\.php$/i,
+    /\.htaccess$/i,
+    /\.htpasswd$/i,
+    /\.user\.ini$/i,
+    /\.pem$/i,
+    /\.key$/i,
+    /\.p12$/i,
+    /\.pfx$/i,
+    /\.bak$/i,
+    /\.backup$/i
+  ];
+  
+  if (sensitivePatterns.some(pattern => pattern.test(req.path))) {
+    logger.warn('SERVER', `Blocked access attempt to sensitive file: ${req.path} from ${req.ip}`);
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  next();
+});
+
 // HTTPS redirect middleware (only in production)
 if (isProduction) {
   app.use((req, res, next) => {
@@ -10141,7 +10166,11 @@ app.get('/auth/discord', (req, res) => {
     return res.status(500).json({ error: 'OAuth not configured' });
   }
 
-  const redirectUri = `${req.protocol}://${req.get('host')}/auth/discord/callback`;
+  // Force HTTPS in production, use request protocol otherwise
+  const protocol = isProduction ? 'https' : req.protocol;
+  // Use x-forwarded-host if available (for proxies), otherwise use host header
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  const redirectUri = `${protocol}://${host}/auth/discord/callback`;
   const state = crypto.randomBytes(16).toString('hex');
   
   // Ensure session exists before setting state
@@ -10210,7 +10239,17 @@ app.get('/auth/discord/callback', async (req, res) => {
       return res.redirect('/?error=oauth_not_configured');
     }
 
-    const redirectUri = `${req.protocol}://${req.get('host')}/auth/discord/callback`;
+    // Use explicit redirect URI from env if set, otherwise construct it (must match the one used in /auth/discord)
+    let redirectUri = process.env.DISCORD_REDIRECT_URI;
+    if (!redirectUri) {
+      // Force HTTPS in production, use request protocol otherwise
+      const protocol = isProduction ? 'https' : req.protocol;
+      // Use x-forwarded-host if available (for proxies), otherwise use host header
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      // Remove port from host if it's the default port (80 for http, 443 for https)
+      const cleanHost = host.replace(/:(80|443)$/, '');
+      redirectUri = `${protocol}://${cleanHost}/auth/discord/callback`;
+    }
 
     // Exchange authorization code for access token
     const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
