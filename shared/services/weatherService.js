@@ -257,6 +257,12 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
     throw new Error('Invalid period bounds: end time is not after start time');
   }
 
+  // Calculate EST-equivalent dates for backward compatibility
+  // startUTC and startEastern represent the same moment (startUTC is 13:00 UTC = 8 AM EST)
+  // We keep both for backward compatibility, but they're the same Date object
+  const startEastern = new Date(startUTC);
+  const endEastern = new Date(endUTC);
+
   return {
     startUTC,
     endUTC,
