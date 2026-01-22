@@ -169,7 +169,7 @@ async function displayCharacter() {
   displayLinks(character);
   
   // Display additional stats
-  displayAdditionalStats(character);
+  await displayAdditionalStats(character);
   
   // Display travel log
   displayTravelLog(character);
@@ -350,7 +350,7 @@ function displayLinks(character) {
 // ============================================================================
 // ------------------- Additional Stats Display -------------------
 // ============================================================================
-function displayAdditionalStats(character) {
+async function displayAdditionalStats(character) {
   const statsGrid = document.getElementById('additional-stats-grid');
   const section = document.getElementById('additional-stats-section');
   statsGrid.innerHTML = '';
@@ -801,24 +801,72 @@ function displayAdditionalStats(character) {
     });
   }
   
-  // Current active pet
+  // Current active pet - fetch pet name
   if (character.currentActivePet) {
-    additionalStats.push({
-      label: 'Active Pet',
-      value: character.currentActivePet,
-      icon: 'fa-paw',
-      category: 'other'
-    });
+    try {
+      // Try to fetch pet name from API
+      const petId = character.currentActivePet;
+      const petResponse = await fetch(`/api/models/pet/${petId}`, { credentials: 'include' });
+      if (petResponse.ok) {
+        const pet = await petResponse.json();
+        additionalStats.push({
+          label: 'Active Pet',
+          value: pet.name || petId,
+          icon: 'fa-paw',
+          category: 'other'
+        });
+      } else {
+        // Fallback to ID if fetch fails
+        additionalStats.push({
+          label: 'Active Pet',
+          value: petId,
+          icon: 'fa-paw',
+          category: 'other'
+        });
+      }
+    } catch (error) {
+      // Fallback to ID if fetch fails
+      additionalStats.push({
+        label: 'Active Pet',
+        value: character.currentActivePet,
+        icon: 'fa-paw',
+        category: 'other'
+      });
+    }
   }
   
-  // Current active mount
+  // Current active mount - fetch mount name
   if (character.currentActiveMount) {
-    additionalStats.push({
-      label: 'Active Mount',
-      value: character.currentActiveMount,
-      icon: 'fa-horse',
-      category: 'other'
-    });
+    try {
+      // Try to fetch mount name from API
+      const mountId = character.currentActiveMount;
+      const mountResponse = await fetch(`/api/models/mount/${mountId}`, { credentials: 'include' });
+      if (mountResponse.ok) {
+        const mount = await mountResponse.json();
+        additionalStats.push({
+          label: 'Active Mount',
+          value: mount.name || mountId,
+          icon: 'fa-horse',
+          category: 'other'
+        });
+      } else {
+        // Fallback to ID if fetch fails
+        additionalStats.push({
+          label: 'Active Mount',
+          value: mountId,
+          icon: 'fa-horse',
+          category: 'other'
+        });
+      }
+    } catch (error) {
+      // Fallback to ID if fetch fails
+      additionalStats.push({
+        label: 'Active Mount',
+        value: character.currentActiveMount,
+        icon: 'fa-horse',
+        category: 'other'
+      });
+    }
   }
   
   // Organize stats into categories

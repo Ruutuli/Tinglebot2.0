@@ -3112,6 +3112,51 @@
   max-height: 85vh;
 }
 
+/* Deny-reason modal: compact, no overflow/centering bugs */
+.character-moderation-page #denyReasonModal {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.character-moderation-page #denyReasonModal.show {
+  display: flex !important;
+}
+
+.character-moderation-page .deny-reason-modal {
+  width: 100%;
+  max-width: 400px;
+  flex-shrink: 0;
+  max-height: none;
+  overflow: visible;
+  padding: 1.25rem;
+  margin: 0;
+}
+
+.character-moderation-page .deny-reason-modal .modal-header {
+  margin-bottom: 0.5rem;
+}
+
+.character-moderation-page .deny-reason-modal .modal-body {
+  margin-bottom: 0.5rem;
+}
+
+.character-moderation-page .deny-reason-modal .modal-body p {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.character-moderation-page .deny-reason-modal .deny-reason-input {
+  min-height: 52px;
+  margin-top: 0.25rem;
+}
+
+.character-moderation-page .deny-reason-modal .modal-actions {
+  margin-top: 0.5rem;
+  flex-wrap: nowrap;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

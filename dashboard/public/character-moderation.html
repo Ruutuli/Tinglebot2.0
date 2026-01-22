@@ -43,25 +43,26 @@
 
   <!-- Denial Reason Modal -->
   <div class="modal-overlay" id="denyReasonModal">
-    <div class="modal">
-      <button class="modal-close" onclick="window.closeDenyReasonModal()">&times;</button>
+    <div class="modal deny-reason-modal">
+      <button type="button" class="modal-close" onclick="window.closeDenyReasonModal()" aria-label="Close">&times;</button>
       <div class="modal-header">
-        <i class="fas fa-times-circle modal-icon error"></i>
+        <i class="fas fa-times-circle modal-icon error" aria-hidden="true"></i>
         <h2 class="modal-title">Deny Character</h2>
       </div>
       <div class="modal-body">
         <p>Provide a reason (required; sent to the user):</p>
-        <textarea 
-          id="denyReasonTextarea" 
-          class="deny-reason-input" 
+        <textarea
+          id="denyReasonTextarea"
+          class="deny-reason-input"
           placeholder="Enter reason for denial..."
           rows="2"
+          aria-label="Reason for denial"
         ></textarea>
       </div>
       <div class="modal-actions">
-        <button class="button button--glass" onclick="window.closeDenyReasonModal()">Cancel</button>
-        <button class="button button--danger" id="confirmDenyBtn">
-          <i class="fas fa-times"></i> Confirm Denial
+        <button type="button" class="button button--glass" onclick="window.closeDenyReasonModal()">Cancel</button>
+        <button type="button" class="button button--danger" id="confirmDenyBtn">
+          <i class="fas fa-times" aria-hidden="true"></i> Confirm Denial
         </button>
       </div>
     </div>
@@ -297,70 +298,12 @@
       const modal = document.getElementById('denyReasonModal');
       const textarea = document.getElementById('denyReasonTextarea');
       const confirmBtn = document.getElementById('confirmDenyBtn');
-      
-      if (!modal) {
-        console.error('Deny reason modal not found in DOM');
-        return;
-      }
-      
-      if (!textarea) {
-        console.error('Deny reason textarea not found in DOM');
-        return;
-      }
-      
-      if (!confirmBtn) {
-        console.error('Confirm deny button not found in DOM');
-        return;
-      }
-      
+      if (!modal || !textarea || !confirmBtn) return;
+
       textarea.value = '';
-      
-      // Force visibility - ensure overlay is flex and modal is visible
       modal.classList.add('show');
-      
-      // Ensure overlay covers full screen and centers content
-      modal.style.position = 'fixed';
-      modal.style.top = '0';
-      modal.style.left = '0';
-      modal.style.right = '0';
-      modal.style.bottom = '0';
-      modal.style.width = '100%';
-      modal.style.height = '100%';
-      modal.style.display = 'flex';
-      modal.style.alignItems = 'center';
-      modal.style.justifyContent = 'center';
-      modal.style.margin = '0';
-      modal.style.padding = '0';
-      
-      const modalContent = modal.querySelector('.modal');
-      if (modalContent) {
-        modalContent.style.opacity = '1';
-        modalContent.style.visibility = 'visible';
-        modalContent.style.display = 'block';
-        modalContent.style.position = 'relative';
-        modalContent.style.zIndex = '1001';
-        modalContent.style.background = 'rgba(20, 20, 30, 0.95)';
-        modalContent.style.color = '#ffffff';
-        modalContent.style.margin = 'auto';
-        modalContent.style.transform = 'none';
-      }
-      
-      console.log('Modal state:', {
-        hasShowClass: modal.classList.contains('show'),
-        overlayDisplay: window.getComputedStyle(modal).display,
-        modalContent: modalContent ? {
-          display: window.getComputedStyle(modalContent).display,
-          opacity: window.getComputedStyle(modalContent).opacity,
-          visibility: window.getComputedStyle(modalContent).visibility
-        } : 'not found'
-      });
-      
-      // Focus textarea after a short delay to ensure modal is visible
-      setTimeout(() => {
-        textarea.focus();
-      }, 100);
-      
-      // Remove old listener and add new one to ensure it works
+      setTimeout(() => textarea.focus(), 80);
+
       const newConfirmBtn = confirmBtn.cloneNode(true);
       confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
       newConfirmBtn.addEventListener('click', window.confirmDeny);
