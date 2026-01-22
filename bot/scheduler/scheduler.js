@@ -807,14 +807,22 @@ async function setupWeatherScheduler(client) {
  const agenda = ensureAgendaInitialized('setup weather scheduler');
  if (!agenda) return;
  
- // Primary weather update at 8:00am EST = 13:00 UTC
- await agenda.every("0 13 * * *", "Daily Weather Update");
- 
- // Fallback check at 8:15am EST = 13:15 UTC - ensures weather was posted, generates if missing
- await agenda.every("15 13 * * *", "Weather Fallback Check");
- 
- // Weather reminder at 8:00pm EST = 01:00 UTC next day
- await agenda.every("0 1 * * *", "Daily Weather Forecast Reminder");
+ try {
+  // Primary weather update at 8:00am EST = 13:00 UTC
+  const job1 = await agenda.every("0 13 * * *", "Daily Weather Update");
+  logger.info('SCHEDULER', `Created recurring job: Daily Weather Update at 8am EST (${job1?.attrs?.name || 'created'})`);
+  
+  // Fallback check at 8:15am EST = 13:15 UTC - ensures weather was posted, generates if missing
+  const job2 = await agenda.every("15 13 * * *", "Weather Fallback Check");
+  logger.info('SCHEDULER', `Created recurring job: Weather Fallback Check at 8:15am EST (${job2?.attrs?.name || 'created'})`);
+  
+  // Weather reminder at 8:00pm EST = 01:00 UTC next day
+  const job3 = await agenda.every("0 1 * * *", "Daily Weather Forecast Reminder");
+  logger.info('SCHEDULER', `Created recurring job: Daily Weather Forecast Reminder at 8pm EST (${job3?.attrs?.name || 'created'})`);
+ } catch (error) {
+  logger.error('SCHEDULER', `Error creating weather scheduler jobs:`, error);
+  throw error;
+ }
 }
 
 async function postWeatherReminder(client) {
@@ -1204,16 +1212,33 @@ async function setupDailyTasks(client) {
  const agenda = ensureAgendaInitialized('setup daily tasks');
  if (!agenda) return;
 
- // Daily tasks at midnight EST = 05:00 UTC
- await agenda.every("0 5 * * *", "reset pet last roll dates");
- await agenda.every("0 5 * * *", "birthday role assignment");
- await agenda.every("0 5 * * *", "reset daily rolls");
- await agenda.every("0 5 * * *", "recover daily stamina");
- await agenda.every("0 5 * * *", "generate daily quests");
- await agenda.every("0 5 * * *", "global steal protections reset");
- 
- // Expiration check - daily at 8 AM EST = 13:00 UTC
- await agenda.every("0 13 * * *", "checkExpiredRequests");
+ try {
+  // Daily tasks at midnight EST = 05:00 UTC
+  const job1 = await agenda.every("0 5 * * *", "reset pet last roll dates");
+  logger.info('SCHEDULER', `Created recurring job: reset pet last roll dates (${job1?.attrs?.name || 'created'})`);
+  
+  const job2 = await agenda.every("0 5 * * *", "birthday role assignment");
+  logger.info('SCHEDULER', `Created recurring job: birthday role assignment (${job2?.attrs?.name || 'created'})`);
+  
+  const job3 = await agenda.every("0 5 * * *", "reset daily rolls");
+  logger.info('SCHEDULER', `Created recurring job: reset daily rolls (${job3?.attrs?.name || 'created'})`);
+  
+  const job4 = await agenda.every("0 5 * * *", "recover daily stamina");
+  logger.info('SCHEDULER', `Created recurring job: recover daily stamina (${job4?.attrs?.name || 'created'})`);
+  
+  const job5 = await agenda.every("0 5 * * *", "generate daily quests");
+  logger.info('SCHEDULER', `Created recurring job: generate daily quests (${job5?.attrs?.name || 'created'})`);
+  
+  const job6 = await agenda.every("0 5 * * *", "global steal protections reset");
+  logger.info('SCHEDULER', `Created recurring job: global steal protections reset (${job6?.attrs?.name || 'created'})`);
+  
+  // Expiration check - daily at 8 AM EST = 13:00 UTC
+  const job7 = await agenda.every("0 13 * * *", "checkExpiredRequests");
+  logger.info('SCHEDULER', `Created recurring job: checkExpiredRequests at 8am EST (${job7?.attrs?.name || 'created'})`);
+ } catch (error) {
+  logger.error('SCHEDULER', `Error creating daily task jobs:`, error);
+  throw error;
+ }
 
  // Weekly tasks - Sunday midnight EST = Monday 05:00 UTC
  await agenda.every("0 5 * * 1", "weekly pet rolls reset");
@@ -1248,10 +1273,102 @@ async function setupBloodMoonScheduling(client) {
  const agenda = ensureAgendaInitialized('setup blood moon scheduling');
  if (!agenda) return;
  
- // 8:00 PM EST = 01:00 UTC next day
- await agenda.every("0 1 * * *", "blood moon start announcement");
- // 8:00 AM EST = 13:00 UTC
- await agenda.every("0 13 * * *", "blood moon end announcement");
+ try {
+  // 8:00 PM EST = 01:00 UTC next day
+  const job1 = await agenda.every("0 1 * * *", "blood moon start announcement");
+  logger.info('SCHEDULER', `Created recurring job: blood moon start announcement (${job1?.attrs?.name || 'created'})`);
+  
+  // 8:00 AM EST = 13:00 UTC
+  const job2 = await agenda.every("0 13 * * *", "blood moon end announcement");
+  logger.info('SCHEDULER', `Created recurring job: blood moon end announcement at 8am EST (${job2?.attrs?.name || 'created'})`);
+ } catch (error) {
+  logger.error('SCHEDULER', `Error creating blood moon scheduler jobs:`, error);
+  throw error;
+ }
+}
+
+// ------------------- Job Verification Function ------------------
+
+/**
+ * Verify and recreate missing recurring jobs
+ * This ensures all scheduled jobs exist in the database
+ */
+async function verifyAndRecreateJobs(client) {
+ const agenda = ensureAgendaInitialized('verify jobs');
+ if (!agenda) return;
+
+ try {
+  // Query MongoDB directly to check for recurring jobs
+  const mongooseConnection = require('../database/connectionManager').getTinglebotConnection();
+  if (!mongooseConnection || mongooseConnection.readyState !== 1) {
+   logger.error('SCHEDULER', 'Database connection not available for job verification');
+   return;
+  }
+  
+  const agendaJobsCollection = mongooseConnection.db.collection('agendaJobs');
+  
+  // Get all jobs with repeatInterval (recurring jobs)
+  const existingJobs = await agendaJobsCollection.find({ 
+   repeatInterval: { $exists: true, $ne: null }
+  }).toArray();
+  
+  logger.info('SCHEDULER', `Found ${existingJobs.length} recurring jobs in database`);
+  
+  // List of all expected recurring jobs that should run at 8am EST (13:00 UTC)
+  const expected8amJobs = [
+   { name: "checkExpiredRequests", schedule: "0 13 * * *", description: "8am EST expiration check" },
+   { name: "Daily Weather Update", schedule: "0 13 * * *", description: "8am EST weather update" },
+   { name: "blood moon end announcement", schedule: "0 13 * * *", description: "8am EST blood moon end" },
+  ];
+  
+  // Also check for 8:15am job
+  const expected815amJobs = [
+   { name: "Weather Fallback Check", schedule: "15 13 * * *", description: "8:15am EST weather fallback" },
+  ];
+  
+  const allExpectedJobs = [...expected8amJobs, ...expected815amJobs];
+  
+  let recreatedCount = 0;
+  for (const expectedJob of allExpectedJobs) {
+   // Check if job exists by name and has the correct schedule
+   const jobExists = existingJobs.some(job => {
+    const jobName = job.name || job.attrs?.name;
+    const repeatInterval = job.repeatInterval || job.attrs?.repeatInterval;
+    return jobName === expectedJob.name && repeatInterval === expectedJob.schedule;
+   });
+   
+   if (!jobExists) {
+    logger.warn('SCHEDULER', `Missing job: ${expectedJob.name} (${expectedJob.description}) - recreating...`);
+    try {
+     const createdJob = await agenda.every(expectedJob.schedule, expectedJob.name);
+     recreatedCount++;
+     logger.success('SCHEDULER', `Recreated missing job: ${expectedJob.name} (ID: ${createdJob?.attrs?._id || 'created'})`);
+    } catch (error) {
+     logger.error('SCHEDULER', `Failed to recreate job ${expectedJob.name}:`, error.message);
+    }
+   } else {
+    logger.debug('SCHEDULER', `Job exists: ${expectedJob.name}`);
+   }
+  }
+  
+  if (recreatedCount > 0) {
+   logger.success('SCHEDULER', `Recreated ${recreatedCount} missing recurring jobs`);
+  } else {
+   logger.info('SCHEDULER', 'All expected recurring jobs exist in database');
+  }
+  
+  // Log all 8am jobs for debugging
+  const eightAmJobs = existingJobs.filter(job => {
+   const repeatInterval = job.repeatInterval || job.attrs?.repeatInterval;
+   return repeatInterval === "0 13 * * *";
+  });
+  logger.info('SCHEDULER', `Found ${eightAmJobs.length} jobs scheduled for 8am EST (13:00 UTC):`, 
+   eightAmJobs.map(j => (j.name || j.attrs?.name || 'unknown')).join(', '));
+   
+ } catch (error) {
+  logger.error('SCHEDULER', `Error verifying jobs:`, error);
+  handleError(error, "scheduler.js", { functionName: 'verifyAndRecreateJobs' });
+ }
 }
 
 // ------------------- Main Initialization Function ------------------
@@ -1280,24 +1397,27 @@ async function initializeScheduler(client) {
  // Run startup checks
  await runStartupChecks(client);
 
- // Setup all schedulers (now using Agenda)
- try {
-  await setupDailyTasks(client);
-  await setupQuestPosting(client);
-  await setupBloodMoonScheduling(client);
-  await setupBlightScheduler(client);
-  await setupBoostingScheduler(client);
-  await setupWeatherScheduler(client);
-  await setupHelpWantedFixedScheduler(client);
-  // Secret Santa - Disabled outside December
-  // await setupSecretSantaScheduler(client);
-  
-  isSchedulerInitialized = true;
-  logger.success('SCHEDULER', 'All scheduled tasks initialized with Agenda');
- } catch (error) {
-  logger.error('SCHEDULER', 'Error initializing scheduler:', error);
-  handleError(error, "scheduler.js", { functionName: 'initializeScheduler' });
- }
+  // Setup all schedulers (now using Agenda)
+  try {
+   await setupDailyTasks(client);
+   await setupQuestPosting(client);
+   await setupBloodMoonScheduling(client);
+   await setupBlightScheduler(client);
+   await setupBoostingScheduler(client);
+   await setupWeatherScheduler(client);
+   await setupHelpWantedFixedScheduler(client);
+   // Secret Santa - Disabled outside December
+   // await setupSecretSantaScheduler(client);
+   
+   // Verify all jobs were created (especially important for 8am jobs)
+   await verifyAndRecreateJobs(client);
+   
+   isSchedulerInitialized = true;
+   logger.success('SCHEDULER', 'All scheduled tasks initialized with Agenda');
+  } catch (error) {
+   logger.error('SCHEDULER', 'Error initializing scheduler:', error);
+   handleError(error, "scheduler.js", { functionName: 'initializeScheduler' });
+  }
  
  // Croner diagnostic code removed - using Agenda for all scheduling
  
@@ -1644,6 +1764,7 @@ async function checkVillageTracking(client) {
 module.exports = {
  initializeScheduler,
  recreateJobsAfterCleanup,
+ verifyAndRecreateJobs,
  setupBlightScheduler,
  setupBoostingScheduler,
  setupWeatherScheduler,

@@ -28,9 +28,6 @@ const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js
 
 // Utilities
 // Google Sheets functionality removed
-const {
- isValidGoogleSheetsUrl,
-} = require('@/shared/utils/validation.js');
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils.js');
 const logger = require('@/shared/utils/logger.js');
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
@@ -1536,10 +1533,7 @@ async function processLootingLogic(
    const totalQuantity = lootedItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
    logger.success('LOOT', `${character.name} looted: ${lootedItems.map(item => `${item.itemName} (x${item.quantity})`).join(', ')} (${lootedItems.length} item${lootedItems.length > 1 ? 's' : ''}, total qty: ${totalQuantity})`);
 
-   const inventoryLink = character.inventory || character.inventoryLink;
-   if (!isValidGoogleSheetsUrl(inventoryLink)) {
-   logger.warn('LOOT', `Invalid inventory link for ${character.name}`);
-    // Use first item for embed display (will be updated to show all items)
+   // Use first item for embed display (will be updated to show all items)
     const embed = await createMonsterEncounterEmbed(
      character,
      encounteredMonster,
@@ -1564,12 +1558,6 @@ async function processLootingLogic(
     // Update timestamp and clear boost only if damage was taken
     await updateCharacterLootTimestamp(character, damageWasTaken, interaction.client);
     
-    await interaction.editReply({
-     content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
-     embeds: [embed],
-    });
-    return;
-   }
 
    await handleInventoryUpdate(interaction, character, lootedItems, encounteredMonster, bloodMoonActive);
   }

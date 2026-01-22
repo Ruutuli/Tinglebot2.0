@@ -780,49 +780,6 @@ module.exports = {
             const weightedItems = createWeightedItemList(items, adjustedRandomValue);
             if (weightedItems.length > 0) {
               const lootedItem = await generateLootedItem(encounteredMonster, weightedItems);
-              const inventoryLink = character.inventory || character.inventoryLink;
-              if (typeof inventoryLink !== 'string' || !isValidGoogleSheetsUrl(inventoryLink)) {
-                const embed = await createMonsterEncounterEmbed(
-                  character,
-                  encounteredMonster,
-                  outcomeMessage,
-                  heartsRemaining,
-                  lootedItem,
-                  bloodMoonActive,
-                  null, // adjustedRandomValue
-                  null, // currentMonster
-                  null, // totalMonsters
-                  entertainerBonusForEmbed || null, // entertainerBonusItem
-                  'Gathering', // boostCategoryOverride
-                  null // elixirBuffInfo - not implemented for gather yet
-                );
-                await safeReply({
-                  content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
-                  embeds: [embed],
-                });
-                return;
-              }
-              const spreadsheetId = extractSpreadsheetId(inventoryLink);
-              const auth = await authorizeSheets();
-              const range = 'loggedInventory!A2:M';
-              const uniqueSyncId = uuidv4();
-              const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-              const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-              const values = [[
-                character.name,
-                lootedItem.itemName,
-                lootedItem.quantity.toString(),
-                lootedItem.category.join(', '),
-                lootedItem.type.join(', '),
-                lootedItem.subtype.join(', '),
-                'Looted',
-                character.job,
-                '',
-                character.currentVillage,
-                interactionUrl,
-                formattedDateTime,
-                uniqueSyncId,
-              ]];
               await addItemInventoryDatabase(
                 character._id,
                 lootedItem.itemName,

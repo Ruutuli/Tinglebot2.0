@@ -759,7 +759,7 @@ for (const { name } of cleanedItems) {
     embeds: [{
       color: 0xFF0000, // Red color
       title: '❌ Missing Inventory Link',
-      description: 'Missing Google Sheets URL for character inventory.',
+      description: 'Missing inventory link for character inventory.',
       image: {
         url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
@@ -771,37 +771,6 @@ for (const { name } of cleanedItems) {
    });
    return;
   }
-
-  if (
-   !isValidGoogleSheetsUrl(fromInventoryLink) ||
-   !isValidGoogleSheetsUrl(toInventoryLink)
-  ) {
-   await interaction.editReply({
-    embeds: [{
-      color: 0xFF0000, // Red color
-      title: '❌ Invalid Inventory Link',
-      description: 'Invalid Google Sheets URL for character inventory.',
-      image: {
-        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-      },
-      footer: {
-        text: 'Valid URL Required'
-      }
-    }],
-    ephemeral: true
-   });
-   return;
-  }
-
-  const fromSpreadsheetId = extractSpreadsheetId(fromInventoryLink);
-  const toSpreadsheetId = extractSpreadsheetId(toInventoryLink);
-  const auth = await authorizeSheets();
-  const range = "loggedInventory!A2:M";
-  const uniqueSyncId = uuidv4();
-  const formattedDateTime = new Date().toLocaleString("en-US", {
-   timeZone: "America/New_York",
-  });
-  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
   const formattedItems = [];
 
@@ -2305,7 +2274,7 @@ for (const { name } of cleanedItems) {
     embeds: [{
       color: 0xFF0000, // Red color
       title: '❌ Missing Inventory Link',
-      description: 'Missing Google Sheets URL for character inventory.',
+      description: 'Missing inventory link for character inventory.',
       image: {
         url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
@@ -2318,33 +2287,7 @@ for (const { name } of cleanedItems) {
    return;
   }
 
-  if (!isValidGoogleSheetsUrl(fromInventoryLink) || !isValidGoogleSheetsUrl(toInventoryLink)) {
-   await interaction.editReply({
-    embeds: [{
-      color: 0xFF0000, // Red color
-      title: '❌ Invalid Inventory Link',
-      description: 'Invalid Google Sheets URL for character inventory.',
-      image: {
-        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-      },
-      footer: {
-        text: 'Valid URL Required'
-      }
-    }],
-    ephemeral: true,
-   });
-   return;
-  }
-
-  const fromSpreadsheetId = extractSpreadsheetId(fromInventoryLink);
-  const toSpreadsheetId = extractSpreadsheetId(toInventoryLink);
-  const auth = await authorizeSheets();
-  const range = "loggedInventory!A2:M";
   const uniqueSyncId = uuidv4();
-  const formattedDateTime = new Date().toLocaleString("en-US", {
-   timeZone: "America/New_York",
-  });
-  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
   const formattedItems = [];
 

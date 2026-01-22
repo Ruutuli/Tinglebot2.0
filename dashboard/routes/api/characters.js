@@ -51,7 +51,7 @@ function isVillageExclusiveJob(job) {
 const { isValidVillage } = require('../../modules/locationsModule');
 const bucket = require('../../config/gcsService');
 
-// Multer configuration for character icon uploads to Google Cloud Storage
+// Multer configuration for character icon and appArt uploads to Google Cloud Storage
 const characterIconUpload = multer({
   storage: multer.memoryStorage(),
   limits: { 
@@ -72,6 +72,32 @@ const characterIconUpload = multer({
     cb(null, true);
   }
 });
+
+// Multer configuration for both icon and appArt uploads
+const characterUploads = multer({
+  storage: multer.memoryStorage(),
+  limits: { 
+    fileSize: 5 * 1024 * 1024, // 5MB limit per file
+    files: 2 // Allow up to 2 files (icon and appArt)
+  },
+  fileFilter: function (req, file, cb) {
+    // Accept images only
+    if (!file.mimetype.startsWith('image/')) {
+      cb(new Error('Only image files are allowed!'), false);
+      return;
+    }
+    // Additional validation for image types
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(new Error('Only JPEG, PNG, GIF, and WebP images are allowed!'), false);
+      return;
+    }
+    cb(null, true);
+  }
+}).fields([
+  { name: 'icon', maxCount: 1 },
+  { name: 'appArt', maxCount: 1 }
+]);
 
 // Helper function to post character creation to Discord
 async function postCharacterCreationToDiscord(character, user, reqUser, req = null) {
@@ -469,6 +495,43 @@ async function uploadCharacterIconToGCS(file) {
   }
 }
 
+// Helper function to upload character appArt to Google Cloud Storage
+async function uploadCharacterAppArtToGCS(file) {
+  try {
+    if (!file) return null;
+    
+    const fileName = `character-appart/${uuidv4()}${path.extname(file.originalname)}`;
+    const fileUpload = bucket.file(fileName);
+    
+    const stream = fileUpload.createWriteStream({
+      metadata: {
+        contentType: file.mimetype,
+        metadata: {
+          originalName: file.originalname,
+          uploadedAt: new Date().toISOString()
+        }
+      }
+    });
+    
+    return new Promise((resolve, reject) => {
+      stream.on('error', (error) => {
+        logger.error('CHARACTERS', 'Error uploading character appArt to GCS', error);
+        reject(error);
+      });
+      
+      stream.on('finish', () => {
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        resolve(publicUrl);
+      });
+      
+      stream.end(file.buffer);
+    });
+  } catch (error) {
+    logger.error('CHARACTERS', 'Error in uploadCharacterAppArtToGCS', error);
+    throw error;
+  }
+}
+
 // Helper function to count spirit orbs (needs to be imported or defined)
 // This is a placeholder - actual implementation should be imported from appropriate module
 async function countSpiritOrbsBatch(characterNames) {
@@ -700,7 +763,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 // ------------------- Function: createCharacter -------------------
 // Creates a new character for the authenticated user
-router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (req, res) => {
+router.post('/create', characterUploads, asyncHandler(async (req, res) => {
   // Check authentication
   if (!req.isAuthenticated() || !req.user) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -726,7 +789,12 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
     starterWeapon,
     starterShield,
     starterArmorChest,
-    starterArmorLegs
+    starterArmorLegs,
+    gender,
+    virtue,
+    personality,
+    history,
+    extras
   } = req.body;
 
   // Validate required fields
@@ -738,8 +806,32 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
   }
 
   // Validate icon file
-  if (!req.file) {
+  const iconFile = req.files?.icon?.[0];
+  if (!iconFile) {
     return res.status(400).json({ error: 'Character icon is required' });
+  }
+
+  // Validate appArt file
+  const appArtFile = req.files?.appArt?.[0];
+  if (!appArtFile) {
+    return res.status(400).json({ error: 'Application art is required' });
+  }
+
+  // Validate biography fields
+  if (!gender || gender.trim().length === 0) {
+    return res.status(400).json({ error: 'Gender (with pronouns) is required' });
+  }
+
+  if (!virtue || !['power', 'wisdom', 'courage'].includes(virtue.toLowerCase())) {
+    return res.status(400).json({ error: 'Virtue must be one of: power, wisdom, or courage' });
+  }
+
+  if (!personality || personality.trim().length === 0) {
+    return res.status(400).json({ error: 'Personality description is required' });
+  }
+
+  if (!history || history.trim().length === 0) {
+    return res.status(400).json({ error: 'History description is required' });
   }
 
   // Validate numeric fields
@@ -812,9 +904,15 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
   let character = null;
   try {
     // Upload icon to GCS
-    const iconUrl = await uploadCharacterIconToGCS(req.file);
+    const iconUrl = await uploadCharacterIconToGCS(iconFile);
     if (!iconUrl) {
       return res.status(500).json({ error: 'Failed to upload character icon' });
+    }
+
+    // Upload appArt to GCS
+    const appArtUrl = await uploadCharacterAppArtToGCS(appArtFile);
+    if (!appArtUrl) {
+      return res.status(500).json({ error: 'Failed to upload application art' });
     }
 
     // Handle starting gear if selected (before creating character)
@@ -886,6 +984,7 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
       inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(name)}`,
       appLink: appLink.trim(),
       icon: iconUrl,
+      appArt: appArtUrl,
       blighted: false,
       spiritOrbs: 0,
       birthday: '',
@@ -893,7 +992,12 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
       gearWeapon: gearWeapon,
       gearShield: gearShield,
       gearArmor: gearArmor,
-      status: 'pending' // New characters start as pending
+      status: 'pending', // New characters start as pending
+      gender: gender.trim(),
+      virtue: virtue.toLowerCase(),
+      personality: personality.trim(),
+      history: history.trim(),
+      extras: extras ? extras.trim() : ''
     });
 
     await character.save();

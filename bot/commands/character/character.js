@@ -1191,24 +1191,7 @@ async function handleChangeVillage(interaction) {
   console.log('[handleChangeVillage] Processing village change and deducting 500 tokens');
   await updateTokenBalance(interaction.user.id, -500);
 
-  // Log to token tracker
-  try {
-    const user = await User.findOne({ discordId: interaction.user.id });
-    if (user?.tokenTracker && isValidGoogleSheetsUrl(user.tokenTracker)) {
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const tokenRow = [
-        `${character.name} - Village Change from ${previousVillage} to ${newVillage}`,
-        interactionUrl,
-        'Village Change',
-        'spent',
-        '-500'
-      ];
-      await safeAppendDataToSheet(user.tokenTracker, user, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
-      console.log(`[handleChangeVillage] ✅ Logged to token tracker: ${character.name}`);
-    }
-  } catch (sheetError) {
-    console.error(`[handleChangeVillage] ❌ Token tracker error:`, sheetError);
-  }
+  // Token tracker logging removed - Google Sheets functionality no longer used
 
   character.homeVillage = newVillage;
   character.lastVillageChange = now;

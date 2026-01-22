@@ -1600,7 +1600,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
         totalLoot.push({ monster: monsterName, item: encounterResult.lootedItem });
         
         const inventoryLink = character.inventory || character.inventoryLink;
-        if (inventoryLink && isValidGoogleSheetsUrl(inventoryLink)) {
+        if (inventoryLink) {
           try {
             await addItemInventoryDatabase(
               character._id,
@@ -1609,8 +1609,6 @@ async function handleMonsterHunt(interaction, questId, characterName) {
               interaction,
               "Quest Loot"
             );
-            
-            // Note: Google Sheets sync is handled by addItemInventoryDatabase
           } catch (error) {
             console.error(`[helpWanted.js]: ❌ Failed to add loot to inventory:`, error);
           }

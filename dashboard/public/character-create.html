@@ -303,6 +303,117 @@
             </div>
           </div>
 
+          <!-- Application Art Upload Section -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-paint-brush"></i> Application Art</h2>
+            
+            <div class="form-field-group full-width">
+              <label for="character-app-art">
+                <span>Application Art Image</span>
+                <span class="required">*</span>
+              </label>
+              <input 
+                type="file" 
+                id="character-app-art" 
+                name="appArt" 
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                required
+              />
+              <small class="field-description">Upload your character's application art - a front-facing full body shot with clean lines and flat colors (JPEG, PNG, GIF, or WebP, max 5MB)</small>
+              
+              <!-- Image Preview -->
+              <div id="appart-preview-container" class="icon-preview-container" style="display: none;">
+                <img id="appart-preview" src="" alt="Application art preview" class="icon-preview" />
+                <button type="button" id="remove-appart-preview" class="remove-icon-btn" aria-label="Remove application art">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Biography Information Section -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-book"></i> Biography Information</h2>
+            
+            <div class="form-grid">
+              <div class="form-field-group">
+                <label for="character-gender">
+                  <span>Gender</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="character-gender" 
+                  name="gender" 
+                  required 
+                  placeholder="e.g., Female | she/her"
+                />
+                <small class="field-description">Character's gender with pronouns (e.g., "Female | she/her", "Nonbinary | they/them")</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-virtue">
+                  <span>Virtue</span>
+                  <span class="required">*</span>
+                </label>
+                <select id="character-virtue" name="virtue" required>
+                  <option value="">Select a virtue...</option>
+                  <option value="power">Power</option>
+                  <option value="wisdom">Wisdom</option>
+                  <option value="courage">Courage</option>
+                </select>
+                <small class="field-description">Which virtue of the Triforce does your character embody?</small>
+              </div>
+            </div>
+
+            <div class="form-field-group full-width">
+              <label for="character-personality">
+                <span>Personality</span>
+                <span class="required">*</span>
+              </label>
+              <textarea 
+                id="character-personality" 
+                name="personality" 
+                required 
+                rows="6"
+                placeholder="Describe your character's personality, core values, attitude, and temperament. Include at least 5 sentences."
+              ></textarea>
+              <small class="field-description">
+                <span id="personality-sentence-count" class="sentence-count">0 sentences</span> - Suggestion: at least 5 sentences
+              </small>
+            </div>
+
+            <div class="form-field-group full-width">
+              <label for="character-history">
+                <span>History</span>
+                <span class="required">*</span>
+              </label>
+              <textarea 
+                id="character-history" 
+                name="history" 
+                required 
+                rows="6"
+                placeholder="Describe influential moments in your character's backstory. Include at least 5 sentences."
+              ></textarea>
+              <small class="field-description">
+                <span id="history-sentence-count" class="sentence-count">0 sentences</span> - Suggestion: at least 5 sentences
+              </small>
+            </div>
+
+            <div class="form-field-group full-width">
+              <label for="character-extras">
+                <span>Extras</span>
+              </label>
+              <textarea 
+                id="character-extras" 
+                name="extras" 
+                rows="4"
+                placeholder="Any additional random facts about your character (optional)"
+              ></textarea>
+              <small class="field-description">Optional additional information about your character</small>
+            </div>
+          </div>
+
           <!-- Form Actions -->
           <div class="form-actions">
             <button type="submit" id="submit-btn" class="btn btn-primary">

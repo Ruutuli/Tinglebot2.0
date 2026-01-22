@@ -58,6 +58,7 @@ const characterSchema = new Schema({
   // ------------------- Inventory and links -------------------
   inventory: { type: String, default: '' },
   appLink: { type: String, required: true },
+  appArt: { type: String, default: '' }, // URL to application art image
 
   // ------------------- Vendor and shop details -------------------
   vendingPoints: { type: Number, default: 0 },
@@ -201,7 +202,18 @@ const characterSchema = new Schema({
     default: 'pending' 
   },
   // Denial reason (only set when status is 'denied')
-  denialReason: { type: String, default: null }
+  denialReason: { type: String, default: null },
+
+  // ------------------- Biography Information -------------------
+  gender: { type: String, default: '' }, // Includes pronouns, e.g., "Female | she/her"
+  virtue: { 
+    type: String, 
+    enum: ['power', 'wisdom', 'courage'],
+    default: '' 
+  },
+  personality: { type: String, default: '' }, // Suggestion: at least 5 sentences
+  history: { type: String, default: '' }, // Suggestion: at least 5 sentences
+  extras: { type: String, default: '' } // Optional
 
 }, { collection: 'characters' });
 

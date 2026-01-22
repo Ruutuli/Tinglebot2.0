@@ -50,6 +50,12 @@ async function initializeForm() {
     // Setup icon preview
     setupIconPreview();
     
+    // Setup appArt preview
+    setupAppArtPreview();
+    
+    // Setup sentence counting
+    setupSentenceCounting();
+    
     // Check authentication
     await checkAuthentication();
   } catch (error) {
@@ -266,17 +272,109 @@ function setupIconPreview() {
   });
 }
 
+function setupAppArtPreview() {
+  const appArtInput = document.getElementById('character-app-art');
+  const previewContainer = document.getElementById('appart-preview-container');
+  const previewImg = document.getElementById('appart-preview');
+  const removeBtn = document.getElementById('remove-appart-preview');
+  
+  if (!appArtInput) return;
+  
+  appArtInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        showMessage('Invalid file type for application art. Please select a JPEG, PNG, GIF, or WebP image.', 'error');
+        appArtInput.value = '';
+        return;
+      }
+      
+      // Validate file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showMessage('Application art file is too large. Maximum size is 5MB.', 'error');
+        appArtInput.value = '';
+        return;
+      }
+      
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewImg.src = e.target.result;
+        previewContainer.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    } else {
+      previewContainer.style.display = 'none';
+    }
+  });
+  
+  if (removeBtn) {
+    removeBtn.addEventListener('click', () => {
+      appArtInput.value = '';
+      previewContainer.style.display = 'none';
+      previewImg.src = '';
+    });
+  }
+}
+
+function countSentences(text) {
+  if (!text || text.trim().length === 0) return 0;
+  // Count sentence endings: . ! ? followed by space or end of string
+  const sentenceEndings = text.match(/[.!?]+(\s|$)/g);
+  return sentenceEndings ? sentenceEndings.length : 1; // At least 1 sentence if there's text
+}
+
+function setupSentenceCounting() {
+  const personalityTextarea = document.getElementById('character-personality');
+  const historyTextarea = document.getElementById('character-history');
+  const personalityCount = document.getElementById('personality-sentence-count');
+  const historyCount = document.getElementById('history-sentence-count');
+  
+  if (personalityTextarea && personalityCount) {
+    personalityTextarea.addEventListener('input', () => {
+      const count = countSentences(personalityTextarea.value);
+      personalityCount.textContent = `${count} sentence${count !== 1 ? 's' : ''}`;
+      if (count < 5) {
+        personalityCount.style.color = 'var(--text-secondary, rgba(255, 255, 255, 0.6))';
+      } else {
+        personalityCount.style.color = 'var(--success-color, #4caf50)';
+      }
+    });
+  }
+  
+  if (historyTextarea && historyCount) {
+    historyTextarea.addEventListener('input', () => {
+      const count = countSentences(historyTextarea.value);
+      historyCount.textContent = `${count} sentence${count !== 1 ? 's' : ''}`;
+      if (count < 5) {
+        historyCount.style.color = 'var(--text-secondary, rgba(255, 255, 255, 0.6))';
+      } else {
+        historyCount.style.color = 'var(--success-color, #4caf50)';
+      }
+    });
+  }
+}
+
 function setupEventListeners() {
   const form = document.getElementById('character-create-form');
   form.addEventListener('submit', handleFormSubmit);
   
   const resetBtn = document.getElementById('reset-btn');
   resetBtn.addEventListener('click', () => {
-    const previewContainer = document.getElementById('icon-preview-container');
-    previewContainer.style.display = 'none';
+    const iconPreviewContainer = document.getElementById('icon-preview-container');
+    if (iconPreviewContainer) iconPreviewContainer.style.display = 'none';
+    const appartPreviewContainer = document.getElementById('appart-preview-container');
+    if (appartPreviewContainer) appartPreviewContainer.style.display = 'none';
     const jobSelect = document.getElementById('character-job');
     jobSelect.disabled = true;
     jobSelect.innerHTML = '<option value="">Select a village first...</option>';
+    // Reset sentence counts
+    const personalityCount = document.getElementById('personality-sentence-count');
+    const historyCount = document.getElementById('history-sentence-count');
+    if (personalityCount) personalityCount.textContent = '0 sentences';
+    if (historyCount) historyCount.textContent = '0 sentences';
   });
 }
 
@@ -353,6 +451,11 @@ function validateForm() {
   const job = document.getElementById('character-job').value;
   const appLink = document.getElementById('character-app-link').value.trim();
   const icon = document.getElementById('character-icon').files[0];
+  const appArt = document.getElementById('character-app-art')?.files[0];
+  const gender = document.getElementById('character-gender')?.value.trim();
+  const virtue = document.getElementById('character-virtue')?.value;
+  const personality = document.getElementById('character-personality')?.value.trim();
+  const history = document.getElementById('character-history')?.value.trim();
   
   // Validate name
   if (!name || name.length === 0) {
@@ -412,6 +515,36 @@ function validateForm() {
   // Validate icon
   if (!icon) {
     showMessage('Character icon is required', 'error');
+    return false;
+  }
+  
+  // Validate appArt
+  if (!appArt) {
+    showMessage('Application art is required', 'error');
+    return false;
+  }
+  
+  // Validate gender
+  if (!gender || gender.length === 0) {
+    showMessage('Gender (with pronouns) is required', 'error');
+    return false;
+  }
+  
+  // Validate virtue
+  if (!virtue || virtue.length === 0) {
+    showMessage('Please select a virtue (Power, Wisdom, or Courage)', 'error');
+    return false;
+  }
+  
+  // Validate personality
+  if (!personality || personality.length === 0) {
+    showMessage('Personality description is required', 'error');
+    return false;
+  }
+  
+  // Validate history
+  if (!history || history.length === 0) {
+    showMessage('History description is required', 'error');
     return false;
   }
   

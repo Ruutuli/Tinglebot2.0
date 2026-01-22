@@ -55,8 +55,6 @@ const {
   canChangeVillage,
   isUniqueCharacterName,
   isUniqueModCharacterName,
-  isValidGoogleSheetsUrl,
-  extractSpreadsheetId,
   convertCmToFeetInches,
 } = require('@/shared/utils/validation');
 // Google Sheets functionality removed

@@ -358,7 +358,7 @@ module.exports = {
 const { fetchItemsByMonster } = require('@/shared/database/db');
 const { createWeightedItemList } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { isValidGoogleSheetsUrl } = require('@/shared/utils/validation');
+// Google Sheets functionality removed
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -672,8 +672,8 @@ async function handleWaveVictory(interaction, waveData) {
         console.log(`[wave.js]: 🎁 [${i + 1}/${defeatedMonsters.length}] Generated loot: ${lootedItem.itemName} × ${lootedItem.quantity} (Rarity: ${lootedItem.itemRarity || 'unknown'})`);
         
 
-        // Add to inventory if character has valid inventory link
-        if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
+        // Add to inventory if character has inventory link
+        if (character.inventory) {
           try {
             console.log(`[wave.js]: 💾 [${i + 1}/${defeatedMonsters.length}] Adding ${lootedItem.itemName} × ${lootedItem.quantity} to ${character.name}'s inventory...`);
             await addItemInventoryDatabase(
