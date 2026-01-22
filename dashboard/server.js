@@ -86,8 +86,6 @@ const calendarModule = require('../bot/modules/calendarModule');
 const logger = require('@/shared/utils/logger');
 const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
 
-// Import croner directly for dashboard's weekly character rotation
-const { Cron } = require('croner');
 
 // Import Google Sheets utilities
 const googleSheets = require('@/shared/utils/googleSheetsUtils');
@@ -4154,9 +4152,9 @@ app.get('/api/characters', async (req, res) => {
 });
 
 // ------------------- Function: setupWeeklyCharacterRotation -------------------
-// Sets up the weekly character rotation scheduler and initializes on server start
+// Initializes character of the week on server start (manual rotation only)
 const setupWeeklyCharacterRotation = async () => {
-  logger.schedule('Setting up weekly character rotation scheduler');
+  logger.info('Setting up weekly character rotation');
   
   // Check if there's already an active character of the week
   const existingCharacter = await CharacterOfWeek.findOne({ isActive: true });
@@ -4176,8 +4174,6 @@ const setupWeeklyCharacterRotation = async () => {
     await rotateCharacterOfWeek();
   }
   
-  // Setup weekly scheduler for Sunday midnight EST (using croner)
-  setupWeeklyCharacterRotationScheduler();
 };
 
 // ------------------- Function: checkIfShouldRotate -------------------
@@ -4216,25 +4212,6 @@ const getNextSundayMidnight = (fromDate) => {
   return nextSunday;
 };
 
-// ------------------- Function: setupWeeklyCharacterRotationScheduler -------------------
-// Sets up the weekly character rotation scheduler using croner directly (Sunday midnight EST = Monday 05:00 UTC)
-const setupWeeklyCharacterRotationScheduler = () => {
-  logger.schedule('Setting up weekly character rotation scheduler (Sunday midnight EST = Monday 05:00 UTC)');
-  new Cron(
-    '0 5 * * 1',
-    {
-      catch: true,
-    },
-    async () => {
-      try {
-        logger.event('Executing scheduled character rotation');
-        await rotateCharacterOfWeek();
-      } catch (error) {
-        logger.error('Error in scheduled weekly character rotation', error);
-      }
-    }
-  );
-};
 
 // ============================================================================
 // ------------------- Section: Map System API Routes -------------------
@@ -10107,69 +10084,6 @@ app.get('/api/admin/security-comprehensive', async (req, res) => {
   }
 });
 
-// Automated security audit (runs daily at midnight EST = 05:00 UTC)
-new Cron(
-  '0 5 * * *',
-  {
-    catch: true,
-  },
-  async () => {
-    try {
-      logger.schedule('Running automated security audit...', 'server.js');
-      const [databaseAudit, codebaseAudit, fileIntegrity, logAnalysis, accessAudit] = await Promise.all([
-        performSecurityAudit(),
-        performCodebaseSecurityScan(),
-        performFileIntegrityCheck(),
-        performLogAnalysis(),
-        performAccessAudit()
-      ]);
-      
-      // Log critical issues immediately
-      const totalCritical = databaseAudit.criticalIssues.length + codebaseAudit.criticalIssues.length;
-      const totalSuspicious = fileIntegrity.suspiciousFiles.length + logAnalysis.suspiciousActivities.length;
-      
-      if (totalCritical > 0 || totalSuspicious > 0) {
-        const criticalDetails = {
-          databaseIssues: databaseAudit.criticalIssues.length,
-          codebaseIssues: codebaseAudit.criticalIssues.length,
-          suspiciousFiles: fileIntegrity.suspiciousFiles.length,
-          suspiciousActivities: logAnalysis.suspiciousActivities.length,
-          totalCritical,
-          totalSuspicious
-        };
-        logger.error(`🚨 CRITICAL SECURITY ISSUES DETECTED:\n${JSON.stringify(criticalDetails, null, 2)}`, null, 'server.js');
-      }
-      
-      // Log summary
-      const auditSummary = {
-        database: databaseAudit.summary,
-        codebase: {
-          filesScanned: codebaseAudit.filesScanned,
-          suspiciousFiles: codebaseAudit.suspiciousFiles.length,
-          criticalIssues: codebaseAudit.criticalIssues.length,
-          warnings: codebaseAudit.warnings.length
-        },
-        fileIntegrity: {
-          filesChecked: fileIntegrity.filesChecked,
-          suspiciousFiles: fileIntegrity.suspiciousFiles.length,
-          unexpectedFiles: fileIntegrity.unexpectedFiles.length,
-          modifiedFiles: fileIntegrity.modifiedFiles.length
-        },
-        logAnalysis: {
-          suspiciousActivities: logAnalysis.suspiciousActivities.length
-        },
-        accessAudit: {
-          recentLogins: accessAudit.recentLogins.length,
-          suspiciousAccess: accessAudit.suspiciousAccess.length
-        }
-      };
-      logger.info(`📊 Daily security audit summary:\n${JSON.stringify(auditSummary, null, 2)}`, 'server.js');
-      
-    } catch (error) {
-      logger.error('❌ Automated security audit failed', error, 'server.js');
-    }
-  }
-);
 
 // ------------------- Section: Authentication Routes -------------------
 // Discord OAuth Login
@@ -13851,9 +13765,9 @@ const startServer = async () => {
   Promise.all([
     setupWeeklyCharacterRotation()
   ]).then(() => {
-    logger.divider('SCHEDULERS INITIALIZED');
+    logger.divider('BACKGROUND TASKS INITIALIZED');
   }).catch(err => {
-    logger.error('server.js', 'Error initializing schedulers', err);
+    logger.error('server.js', 'Error initializing background tasks', err);
   });
   
   // Initialize Discord Gateway (non-blocking, failures are non-fatal)

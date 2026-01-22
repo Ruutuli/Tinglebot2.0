@@ -27,7 +27,7 @@ All croner-based scheduler code and scheduler function calls have been commented
 
 ## Files Modified
 
-### 1. `bot/index.js`:
+### 1. `bot/index.js` (Bot):
    - **Lines 53-58**: Commented out scheduler imports
      ```javascript
      // SCHEDULER DISABLED FOR TESTING
@@ -54,7 +54,7 @@ All croner-based scheduler code and scheduler function calls have been commented
      // }
      ```
 
-### 2. `bot/commands/moderation/mod.js`:
+### 2. `bot/commands/moderation/mod.js` (Bot):
    - **Lines 3910-3917**: Commented out `scheduleDebuffExpiry()` call
      ```javascript
      // SCHEDULER DISABLED FOR TESTING
@@ -64,6 +64,34 @@ All croner-based scheduler code and scheduler function calls have been commented
      // } catch (agendaError) {
      //   ...
      // }
+     ```
+
+### 3. `dashboard/server.js` (Dashboard):
+   - **Line 90**: Commented out croner import
+     ```javascript
+     // SCHEDULER DISABLED FOR TESTING
+     // const { Cron } = require('croner');
+     ```
+   
+   - **Line 4182**: Commented out `setupWeeklyCharacterRotationScheduler()` call
+     ```javascript
+     // setupWeeklyCharacterRotationScheduler();
+     logger.warn('⚠️ SCHEDULER DISABLED: Weekly character rotation scheduler is commented out for testing.');
+     ```
+   
+   - **Lines 4222-4239**: Commented out `setupWeeklyCharacterRotationScheduler` function
+     ```javascript
+     // const setupWeeklyCharacterRotationScheduler = () => {
+     //   new Cron(...)
+     // };
+     ```
+   
+   - **Lines 10114-10176**: Commented out security audit cron job
+     ```javascript
+     // SCHEDULER DISABLED FOR TESTING
+     // new Cron('0 5 * * *', {...}, async () => {
+     //   // Security audit code
+     // });
      ```
 
 ## Testing Plan
@@ -89,11 +117,21 @@ All croner-based scheduler code and scheduler function calls have been commented
 
 To re-enable the scheduler:
 
-1. **Uncomment imports** in `bot/index.js` (lines 53-58)
-2. **Uncomment initialization** in `bot/index.js` (line 450)
-3. **Uncomment shutdown** in `bot/index.js` (lines 208-216)
-4. **Uncomment scheduleDebuffExpiry** in `bot/commands/moderation/mod.js` (lines 3910-3917)
-5. **Remove warning log** message
+### Bot (`bot/index.js`):
+1. **Uncomment imports** (lines 53-58)
+2. **Uncomment initialization** (line 450)
+3. **Uncomment shutdown** (lines 208-216)
+4. **Remove warning log** message
+
+### Bot Commands (`bot/commands/moderation/mod.js`):
+5. **Uncomment scheduleDebuffExpiry** (lines 3910-3917)
+
+### Dashboard (`dashboard/server.js`):
+6. **Uncomment croner import** (line 90)
+7. **Uncomment setupWeeklyCharacterRotationScheduler function** (lines 4222-4239)
+8. **Uncomment setupWeeklyCharacterRotationScheduler call** (line 4182)
+9. **Uncomment security audit cron job** (lines 10114-10176)
+10. **Remove warning log** message
 
 ## Notes
 
@@ -106,17 +144,19 @@ To re-enable the scheduler:
 ## Impact
 
 **What won't work:**
-- Daily quest generation
-- Daily roll resets
-- Stamina recovery
-- Weather updates
-- Blight roll calls
-- Boost cleanup
-- Village raid quota checks
-- Quest completion checks
-- Blood moon announcements
-- Monthly rewards
-- Automatic debuff/buff expiry scheduling
+- Daily quest generation (bot)
+- Daily roll resets (bot)
+- Stamina recovery (bot)
+- Weather updates (bot)
+- Blight roll calls (bot)
+- Boost cleanup (bot)
+- Village raid quota checks (bot)
+- Quest completion checks (bot)
+- Blood moon announcements (bot)
+- Monthly rewards (bot)
+- Automatic debuff/buff expiry scheduling (bot)
+- Weekly character rotation (dashboard)
+- Daily security audit (dashboard)
 
 **What still works:**
 - All bot commands
