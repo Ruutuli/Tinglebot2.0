@@ -55,10 +55,6 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattin
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('@/shared/utils/inventoryUtils');
 // Google Sheets functionality removed
-const {
-  extractSpreadsheetId,
-  isValidGoogleSheetsUrl
-} = require('@/shared/utils/validation');
 const { handleError } = require('@/shared/utils/globalErrorHandler');
 const { info, success, warn, error, debug } = require('@/shared/utils/logger');
 

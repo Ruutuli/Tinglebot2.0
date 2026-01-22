@@ -1162,47 +1162,7 @@ async function distributeItems(quest, participant) {
                 });
                 totalItemsAdded += itemReward.quantity;
                 
-                // Sync to Google Sheets if character has inventory link
-                if (character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
-                    try {
-                        const { client } = require('../index.js');
-                        const category = Array.isArray(item.category) ? item.category.join(', ') : (item.category || '');
-                        const type = Array.isArray(item.type) ? item.type.join(', ') : (item.type || '');
-                        const subtype = Array.isArray(item.subtype) ? item.subtype.join(', ') : (item.subtype || '');
-                        
-                        // Create addition log entry
-                        const additionLogEntry = [
-                            character.name, // Character Name (A)
-                            item.itemName, // Item Name (B)
-                            itemReward.quantity, // Qty of Item (C) - positive for addition
-                            category, // Category (D)
-                            type, // Type (E)
-                            subtype, // Subtype (F)
-                            `Quest: ${quest.title}`, // Obtain (G)
-                            character.job || '', // Job (H)
-                            character.perk || '', // Perk (I)
-                            character.currentVillage || character.homeVillage || '', // Location (J)
-                            '', // Link (K) - no interaction link for quest rewards
-                            formatDateTime(new Date()), // Date/Time (L)
-                            uuidv4() // Confirmed Sync (M)
-                        ];
-                        
-                        // Log to Google Sheets
-                        await safeAppendDataToSheet(
-                            character.inventory,
-                            character,
-                            'loggedInventory!A:M',
-                            [additionLogEntry],
-                            client,
-                            { skipValidation: false, context: { commandName: 'questReward', characterName: character.name } }
-                        );
-                        
-                        console.log(`[questRewardModule.js] 📊 Synced ${itemReward.quantity}x ${item.itemName} to Google Sheets for ${participant.characterName}`);
-                    } catch (sheetError) {
-                        // Don't fail the reward if sheet sync fails
-                        console.error(`[questRewardModule.js] ⚠️ Failed to sync to Google Sheets: ${sheetError.message}`);
-                    }
-                }
+                // Google Sheets sync removed - inventory is handled by database operations
                 
                 // Log to InventoryLog database collection
                 try {

@@ -10741,8 +10741,8 @@ app.post('/api/blupee/claim', async (req, res) => {
     logger.success(`User ${user.username || user.discordId} claimed a blupee! (+${tokensAwarded} tokens, Daily: ${user.blupeeHunt.dailyCount}/${DAILY_LIMIT}, Total: ${user.blupeeHunt.totalClaimed})`);
     logger.debug('SERVER', 'Daily count after claim: ' + user.blupeeHunt.dailyCount + ', reset date: ' + user.blupeeHunt.dailyResetDate);
     
-    // Log to Google Sheets if user has a token tracker
-    if (user.tokenTracker && googleSheets.isValidGoogleSheetsUrl(user.tokenTracker)) {
+    // Google Sheets logging removed
+    if (false) { // Google Sheets functionality removed
       try {
         const newRow = [
           'Dashboard - Blupee Catch',
@@ -11108,8 +11108,8 @@ app.get('/api/levels/leaderboard', async (req, res) => {
 // Helper function to read transactions from Google Sheets
 async function readTransactionsFromGoogleSheets(userId, tokenTrackerUrl) {
   try {
-    if (!tokenTrackerUrl || !googleSheets.isValidGoogleSheetsUrl(tokenTrackerUrl)) {
-      console.log(`[server.js]: ⚠️ Invalid or missing token tracker URL for user ${userId}`);
+    if (!tokenTrackerUrl) {
+      console.log(`[server.js]: ⚠️ Missing token tracker URL for user ${userId}`);
       return [];
     }
     

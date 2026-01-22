@@ -23,7 +23,8 @@ const { isValidVillage } = require('../modules/locationsModule');
 const { isValidRace, getRaceValueByName } = require('../modules/raceModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
 const { capitalizeVillageName } = require('./stringUtils');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('./googleSheetsUtils');
+// Google Sheets functionality removed
+// const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('./googleSheetsUtils');
 const { checkVillageStatus } = require('../modules/villageModule');
 
 
@@ -445,7 +446,7 @@ module.exports = {
     canChangeJob,
     canChangeVillage,
     validateCharacterInventory,
-    isValidGoogleSheetsUrl,
+    // isValidGoogleSheetsUrl, // Google Sheets functionality removed
     extractSpreadsheetId,
     isValidRace,
     getRaceValueByName,

@@ -222,16 +222,15 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             return;
         }
 
-        // Validate Google Sheets URL
+        // Validate inventory URL
         const inventoryUrl = character.inventory;
-        if (!isValidGoogleSheetsUrl(inventoryUrl)) {
-            console.log(`[syncHandler.js]: ⚠️ Invalid Google Sheets URL: ${inventoryUrl}`);
-            await editSyncErrorMessage(interaction, '❌ **Invalid Google Sheets URL. Please check the URL and try again.**');
+        if (!inventoryUrl || typeof inventoryUrl !== 'string') {
+            console.log(`[syncHandler.js]: ⚠️ Invalid inventory URL: ${inventoryUrl}`);
+            await editSyncErrorMessage(interaction, '❌ **Invalid inventory URL. Please check the URL and try again.**');
             return;
         }
 
-        // Authorize and check permissions
-        const auth = await authorizeSheets();
+        // Google Sheets authorization removed
         const spreadsheetId = extractSpreadsheetId(inventoryUrl);
         
         // Validate the inventory sheet before proceeding

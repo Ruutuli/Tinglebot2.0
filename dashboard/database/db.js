@@ -12,7 +12,7 @@ const {
   appendSheetData,
   extractSpreadsheetId,
   getActualSheetName,
-  isValidGoogleSheetsUrl,
+  // isValidGoogleSheetsUrl, // Google Sheets functionality removed
   readSheetData,
   safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
@@ -1652,9 +1652,9 @@ async function syncTokenTracker(userId) {
     tokensSynced: user.tokensSynced
   });
   
-  if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
-   logger.warn('TOKEN', `Invalid or missing token tracker URL`);
-   throw new Error("Invalid URL");
+  if (!user.tokenTracker) {
+   logger.warn('TOKEN', `Missing token tracker URL`);
+   throw new Error("No token tracker configured");
   }
 
   logger.debug('TOKEN', `Authorizing Google Sheets access...`);
@@ -1774,9 +1774,9 @@ async function appendEarnedTokens(
 ) {
  const user = await getOrCreateToken(userId);
  const tokenTrackerLink = user.tokenTracker;
- if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
+ if (!tokenTrackerLink) {
   throw new Error(
-   `[tokenService.js]: Invalid Google Sheets URL for user ${userId}`
+   `[tokenService.js]: No token tracker configured for user ${userId}`
   );
  }
  const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
@@ -1876,9 +1876,9 @@ async function getUserGoogleSheetId(userId) {
  try {
   const user = await User.findOne({ discordId: userId });
   if (user && user.tokenTracker) {
-   if (!isValidGoogleSheetsUrl(user.tokenTracker)) {
+   if (!user.tokenTracker) {
     throw new Error(
-     `[tokenService.js]: Invalid Google Sheets URL for user ${userId}`
+     `[tokenService.js]: No token tracker configured for user ${userId}`
     );
    }
    return extractSpreadsheetId(user.tokenTracker);

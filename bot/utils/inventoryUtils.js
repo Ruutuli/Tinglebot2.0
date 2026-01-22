@@ -1018,30 +1018,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
     }
   }
 
-  // Log materials to Google Sheets if character has an inventory sheet
-  if (character?.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
-    try {
-      const auth = await authorizeSheets();
-      const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const range = 'loggedInventory!A2:M';
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const formattedDateTime = formatDateTime(new Date());
-
-      await logMaterialsToGoogleSheets(
-        auth,
-        spreadsheetId,
-        range,
-        character,
-        materialsUsed,
-        craftableItem,
-        interactionUrl,
-        formattedDateTime
-      );
-    } catch (error) {
-      handleError(error, 'inventoryUtils.js');
-      console.error(`[inventoryUtils.js]: Error logging materials to sheet: ${error.message}`);
-    }
-  }
+  // Google Sheets logging removed - materials are logged to database
 
   return materialsUsed;
 };
@@ -1408,30 +1385,7 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
     // so we only reach here for auto-processed materials
   }
 
-  // All materials processed - log to Google Sheets if needed
-  if (character?.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
-    try {
-      const auth = await authorizeSheets();
-      const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const range = 'loggedInventory!A2:M';
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const formattedDateTime = formatDateTime(new Date());
-
-      await logMaterialsToGoogleSheets(
-        auth,
-        spreadsheetId,
-        range,
-        character,
-        materialsUsed,
-        craftableItem,
-        interactionUrl,
-        formattedDateTime
-      );
-    } catch (error) {
-      handleError(error, 'inventoryUtils.js');
-      console.error(`[inventoryUtils.js]: Error logging materials to sheet: ${error.message}`);
-    }
-  }
+  // Google Sheets logging removed - materials are logged to database
 
   return materialsUsed;
 };

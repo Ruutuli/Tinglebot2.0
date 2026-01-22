@@ -12,7 +12,7 @@ const {
   writeSheetData,
   safeAppendDataToSheet,
   extractSpreadsheetId,
-  isValidGoogleSheetsUrl
+  // Google Sheets functionality removed
 } = require("./googleSheetsUtils");
 const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
@@ -1028,7 +1028,8 @@ const processMaterials = async (interaction, character, inventory, craftableItem
   }
 
   // Log materials to Google Sheets if character has an inventory sheet
-  if (character?.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+  // Google Sheets logging removed - materials are logged to database
+  if (false) { // Google Sheets functionality removed
     try {
       const auth = await authorizeSheets();
       const spreadsheetId = extractSpreadsheetId(character.inventory);
@@ -1418,7 +1419,8 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
   }
 
   // All materials processed - log to Google Sheets if needed
-  if (character?.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+  // Google Sheets logging removed - materials are logged to database
+  if (false) { // Google Sheets functionality removed
     try {
       const auth = await authorizeSheets();
       const spreadsheetId = extractSpreadsheetId(character.inventory);

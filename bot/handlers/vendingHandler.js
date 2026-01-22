@@ -3066,8 +3066,8 @@ async function handleFulfill(interaction) {
                   console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to log barter item removal to InventoryLog:', logError.message);
                 }
                 
-                // Log removal to Google Sheets
-                if (buyer.inventory && typeof buyer.inventory === 'string' && isValidGoogleSheetsUrl(buyer.inventory)) {
+                // Google Sheets logging removed
+                if (false) { // Google Sheets functionality removed
                   try {
                     // Fetch item details for proper categorization
                     let offeredItemDetails;
@@ -4648,9 +4648,9 @@ async function handleShopLink(interaction) {
       const shopLink = interaction.options.getString('link');
   
       // ------------------- Step 1: Validate Link -------------------
-      if (!isValidGoogleSheetsUrl(shopLink)) {
+      if (!shopLink || typeof shopLink !== 'string') {
         await interaction.reply({
-          content: '❌ Invalid Google Sheets link. Please provide a valid link.'
+          content: '❌ Invalid link. Please provide a valid link.'
         });
         return;
       }

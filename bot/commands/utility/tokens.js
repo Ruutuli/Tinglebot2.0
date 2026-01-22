@@ -45,8 +45,8 @@ module.exports = {
       if (subcommand === 'check') {
         const tokenRecord = await getOrCreateToken(userId);
         
-        if (!tokenRecord.tokenTracker || !isValidGoogleSheetsUrl(tokenRecord.tokenTracker)) {
-          const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
+        if (!tokenRecord.tokenTracker) {
+          const { fullMessage } = handleTokenError(new Error('No token tracker configured'), interaction);
           await interaction.editReply({
             content: fullMessage,
             flags: [MessageFlags.Ephemeral],
@@ -54,45 +54,24 @@ module.exports = {
           return;
         }
         
-        try {
-          const auth = await authorizeSheets();
-          const spreadsheetId = extractSpreadsheetId(tokenRecord.tokenTracker);
+        // Prepare embed response
+        const embed = new EmbedBuilder()
+          .setTitle(`${interaction.user.username}'s Token Balance`)
+          .addFields(
+            { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens}**`, inline: false },
+            {
+              name: '🔗 **Token Tracker Link**',
+              value: `> [📄 View your token tracker](${tokenRecord.tokenTracker})`,
+              inline: false,
+            }
+          )
+          .setColor(0xAA926A)
+          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Token Tracker' })
+          .setTimestamp();
 
-          // Fetch overall total from F4
-          const overallTotalData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F4');
-          const overallTotal = overallTotalData?.[0]?.[0] || 'N/A';
-
-          // Fetch spent tokens from F5
-          const spentData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F5');
-          const spent = spentData?.[0]?.[0] || 'N/A';
-
-          // Prepare embed response
-          const embed = new EmbedBuilder()
-            .setTitle(`${interaction.user.username}'s Token Balance`)
-            .addFields(
-              { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens}**`, inline: false },
-              { name: '🧾 **Spent**', value: `> **${spent !== 'N/A' ? spent : 'Data not found'}**`, inline: false },
-              { name: '👛 **Overall Total**', value: `> **${overallTotal !== 'N/A' ? overallTotal : 'Data not found'}**`, inline: false },
-              {
-                name: '🔗 **Token Tracker Link**',
-                value: `> [📄 View your token tracker](${tokenRecord.tokenTracker})`,
-                inline: false,
-              }
-            )
-            .setColor(0xAA926A)
-            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-            .setFooter({ text: 'Token Tracker' })
-            .setTimestamp();
-
-          await interaction.editReply({ embeds: [embed] });
-        } catch (error) {
-          const { fullMessage } = handleTokenError(error, interaction);
-          await interaction.editReply({
-            content: fullMessage,
-            flags: [MessageFlags.Ephemeral],
-          });
-        }
+        await interaction.editReply({ embeds: [embed] });
       }
       // ------------------- Handle 'setup' subcommand -------------------
       else if (subcommand === 'setup') {
@@ -100,16 +79,8 @@ module.exports = {
         logger.info('TOKEN', `Starting setup for user: ${userId} (${interaction.user.username})`);
         logger.debug('TOKEN', `Provided link: ${link}`);
 
-        if (!isValidGoogleSheetsUrl(link)) {
-          logger.warn('TOKEN', `Invalid URL provided by user ${userId}: ${link}`);
-          const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
-          await interaction.editReply({
-            content: fullMessage,
-            flags: [MessageFlags.Ephemeral],
-          });
-          return;
-        }
-        logger.debug('TOKEN', `URL validation passed for user ${userId}`);
+        // URL validation removed - Google Sheets no longer used
+        logger.debug('TOKEN', `Setting up token tracker for user ${userId}`);
 
         try {
           // Save the token tracker link to the user's database
@@ -303,9 +274,9 @@ module.exports = {
             tokensSynced: tokenRecord.tokensSynced
           });
 
-          if (!tokenRecord.tokenTracker || !isValidGoogleSheetsUrl(tokenRecord.tokenTracker)) {
-            logger.warn('TOKEN', `Invalid or missing token tracker URL for user ${userId}`);
-            const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
+          if (!tokenRecord.tokenTracker) {
+            logger.warn('TOKEN', `Missing token tracker URL for user ${userId}`);
+            const { fullMessage } = handleTokenError(new Error('No token tracker configured'), interaction);
             await interaction.editReply({
               content: fullMessage,
               flags: [MessageFlags.Ephemeral],
