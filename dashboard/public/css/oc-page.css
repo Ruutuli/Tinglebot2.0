@@ -888,26 +888,92 @@
 }
 
 /* ============================================================================
+   Scrollbar Styling
+============================================================================ */
+.travel-log-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.travel-log-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.travel-log-list::-webkit-scrollbar-thumb {
+  background: var(--primary-color, #00A3DA);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.travel-log-list::-webkit-scrollbar-thumb:hover {
+  background: #0088b8;
+}
+
+/* ============================================================================
+   Smooth Animations
+============================================================================ */
+.character-display,
+.info-section,
+.stat-card,
+.gear-item,
+.additional-stat-item {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stagger animations for stat cards */
+.stat-card:nth-child(1) { animation-delay: 0.1s; }
+.stat-card:nth-child(2) { animation-delay: 0.2s; }
+.stat-card:nth-child(3) { animation-delay: 0.3s; }
+.stat-card:nth-child(4) { animation-delay: 0.4s; }
+.stat-card:nth-child(5) { animation-delay: 0.5s; }
+
+/* ============================================================================
    Responsive Design
 ============================================================================ */
 @media (max-width: 768px) {
   .character-header {
     flex-direction: column;
     text-align: center;
+    padding: 1.5rem;
+    gap: 1.5rem;
   }
   
   .character-icon {
-    width: 120px;
-    height: 120px;
+    width: 140px;
+    height: 140px;
     margin: 0 auto;
   }
   
   .character-info h1 {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
   }
   
   .character-stats {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .stat-card {
+    padding: 1.5rem;
+  }
+  
+  .info-section {
+    padding: 1.5rem;
+  }
+  
+  .info-section h3 {
+    font-size: 1.2rem;
   }
   
   .gear-grid {
@@ -937,5 +1003,9 @@
   
   .form-actions .btn {
     width: 100%;
+  }
+  
+  .edit-form-card {
+    padding: 1.5rem;
   }
 }

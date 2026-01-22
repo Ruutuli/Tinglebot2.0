@@ -1146,8 +1146,11 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
     return res.status(400).json({ error: 'Character is pending moderation and cannot be edited. Please wait for moderation to complete.' });
   }
 
-  // If resubmitting, change status from 'denied' to 'pending'
-  if (resubmit === 'true' && character.status === 'denied') {
+  // Automatic resubmission for denied characters: if character is denied and being edited, automatically resubmit
+  const isDenied = character.status === 'denied';
+  const shouldResubmit = resubmit === 'true' || isDenied;
+  
+  if (shouldResubmit && character.status === 'denied') {
     character.status = 'pending';
     character.denialReason = null; // Clear denial reason on resubmission
   }
@@ -1172,10 +1175,28 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
 
   // If status is 'accepted', only allow editing profile fields (similar to existing PATCH endpoint)
   if (character.status === 'accepted') {
-    // Only update allowed profile fields
-    if (age !== undefined && age !== '') {
-      character.age = parseInt(age, 10) || null;
+    // Reject attempts to update restricted fields
+    if (name !== undefined && name.trim() !== character.name) {
+      return res.status(400).json({ error: 'Name cannot be edited for accepted characters' });
     }
+    if (hearts !== undefined || stamina !== undefined) {
+      return res.status(400).json({ error: 'Stats cannot be edited for accepted characters' });
+    }
+    if (race !== undefined && race.toLowerCase() !== character.race?.toLowerCase()) {
+      return res.status(400).json({ error: 'Race cannot be edited for accepted characters' });
+    }
+    if (village !== undefined && village.toLowerCase() !== character.homeVillage?.toLowerCase()) {
+      return res.status(400).json({ error: 'Home village cannot be edited for accepted characters' });
+    }
+    if (job !== undefined && job !== character.job) {
+      return res.status(400).json({ error: 'Job cannot be edited for accepted characters' });
+    }
+    if (starterWeapon !== undefined || starterShield !== undefined || starterArmorChest !== undefined || starterArmorLegs !== undefined) {
+      return res.status(400).json({ error: 'Starting gear cannot be edited for accepted characters' });
+    }
+    
+    // Only update allowed profile fields (height, pronouns, icon)
+    // Age is explicitly NOT allowed to be updated
     if (height !== undefined && height !== '') {
       character.height = parseFloat(height) || null;
     }
@@ -1198,7 +1219,12 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   }
 
   // For denied characters (or when resubmitting), allow full editing
-  // Validate required fields
+  // Age cannot be edited - reject if age is being changed
+  if (age !== undefined && age !== '' && parseInt(age, 10) !== character.age) {
+    return res.status(400).json({ error: 'Age cannot be edited' });
+  }
+  
+  // Validate required fields (age is still required but must match current value)
   if (!name || !age || !height || !hearts || !stamina || !pronouns || !race || !village || !job || !appLink) {
     return res.status(400).json({ 
       error: 'Missing required fields',
@@ -1212,8 +1238,14 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   const heartsNum = parseInt(hearts, 10);
   const staminaNum = parseInt(stamina, 10);
 
+  // Age validation - must match current age (already checked above, but validate format)
   if (isNaN(ageNum) || ageNum < 1) {
     return res.status(400).json({ error: 'Age must be a positive number (minimum 1)' });
+  }
+  
+  // Ensure age hasn't changed (double check)
+  if (ageNum !== character.age) {
+    return res.status(400).json({ error: 'Age cannot be edited' });
   }
 
   if (isNaN(heightNum) || heightNum <= 0) {
@@ -1368,10 +1400,10 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
 
   await character.save();
 
-  logger.info('CHARACTERS', `Character updated: ${character.name} by user ${userId}${resubmit === 'true' ? ' (resubmitted)' : ''}`);
+  logger.info('CHARACTERS', `Character updated: ${character.name} by user ${userId}${shouldResubmit ? ' (resubmitted)' : ''}`);
 
-  // If resubmitted, post to Discord
-  if (resubmit === 'true') {
+  // If resubmitted (either explicitly or automatically for denied characters), post to Discord
+  if (shouldResubmit) {
     postCharacterCreationToDiscord(character, await User.findOne({ discordId: userId }), req.user, req).catch(err => {
       logger.error('SERVER', 'Failed to post character resubmission to Discord', err);
     });
@@ -1383,7 +1415,7 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
 
   res.json({
     success: true,
-    message: resubmit === 'true' ? 'Character updated and resubmitted successfully' : 'Character updated successfully',
+    message: shouldResubmit ? 'Character updated and resubmitted successfully' : 'Character updated successfully',
     character: character.toObject(),
     ocPageUrl: ocPageUrl
   });

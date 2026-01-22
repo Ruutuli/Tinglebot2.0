@@ -971,11 +971,11 @@ function showEditForm() {
   // Populate form with character data
   populateEditForm();
   
-  // Always disable Age field (never editable)
+  // Always make Age field readonly (never editable, but still submitted)
   const ageField = document.getElementById('edit-character-age');
   if (ageField) {
-    ageField.disabled = true;
     ageField.readOnly = true;
+    ageField.disabled = false; // Use readonly instead of disabled so value is submitted
     ageField.title = 'Age cannot be edited';
   }
   
@@ -1062,11 +1062,11 @@ function populateEditForm() {
   document.getElementById('edit-character-height').value = character.height || '';
   document.getElementById('edit-character-pronouns').value = character.pronouns || '';
   
-  // Always ensure Age field is disabled
+  // Always ensure Age field is readonly (not disabled, so value is submitted)
   const ageField = document.getElementById('edit-character-age');
   if (ageField) {
-    ageField.disabled = true;
     ageField.readOnly = true;
+    ageField.disabled = false; // Use readonly instead of disabled so value is submitted
   }
   
   // Stats - populate for both denied and accepted (accepted will be disabled)
