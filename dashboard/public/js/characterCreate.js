@@ -234,6 +234,7 @@ function setupIconPreview() {
   const previewContainer = document.getElementById('icon-preview-container');
   const previewImg = document.getElementById('icon-preview');
   const removeBtn = document.getElementById('remove-icon-preview');
+  const filenameDisplay = document.getElementById('icon-filename');
   
   iconInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -243,6 +244,7 @@ function setupIconPreview() {
       if (!allowedTypes.includes(file.type)) {
         showMessage('Invalid file type. Please select a JPEG, PNG, GIF, or WebP image.', 'error');
         iconInput.value = '';
+        if (filenameDisplay) filenameDisplay.style.display = 'none';
         return;
       }
       
@@ -250,7 +252,14 @@ function setupIconPreview() {
       if (file.size > 5 * 1024 * 1024) {
         showMessage('Image file is too large. Maximum size is 5MB.', 'error');
         iconInput.value = '';
+        if (filenameDisplay) filenameDisplay.style.display = 'none';
         return;
+      }
+      
+      // Show filename
+      if (filenameDisplay) {
+        filenameDisplay.textContent = `Selected: ${file.name}`;
+        filenameDisplay.style.display = 'block';
       }
       
       // Show preview
@@ -262,6 +271,7 @@ function setupIconPreview() {
       reader.readAsDataURL(file);
     } else {
       previewContainer.style.display = 'none';
+      if (filenameDisplay) filenameDisplay.style.display = 'none';
     }
   });
   
@@ -269,6 +279,10 @@ function setupIconPreview() {
     iconInput.value = '';
     previewContainer.style.display = 'none';
     previewImg.src = '';
+    if (filenameDisplay) {
+      filenameDisplay.style.display = 'none';
+      filenameDisplay.textContent = '';
+    }
   });
 }
 
@@ -277,6 +291,7 @@ function setupAppArtPreview() {
   const previewContainer = document.getElementById('appart-preview-container');
   const previewImg = document.getElementById('appart-preview');
   const removeBtn = document.getElementById('remove-appart-preview');
+  const filenameDisplay = document.getElementById('appart-filename');
   
   if (!appArtInput) return;
   
@@ -288,6 +303,7 @@ function setupAppArtPreview() {
       if (!allowedTypes.includes(file.type)) {
         showMessage('Invalid file type for application art. Please select a JPEG, PNG, GIF, or WebP image.', 'error');
         appArtInput.value = '';
+        if (filenameDisplay) filenameDisplay.style.display = 'none';
         return;
       }
       
@@ -295,7 +311,14 @@ function setupAppArtPreview() {
       if (file.size > 5 * 1024 * 1024) {
         showMessage('Application art file is too large. Maximum size is 5MB.', 'error');
         appArtInput.value = '';
+        if (filenameDisplay) filenameDisplay.style.display = 'none';
         return;
+      }
+      
+      // Show filename
+      if (filenameDisplay) {
+        filenameDisplay.textContent = `Selected: ${file.name}`;
+        filenameDisplay.style.display = 'block';
       }
       
       // Show preview
@@ -307,6 +330,7 @@ function setupAppArtPreview() {
       reader.readAsDataURL(file);
     } else {
       previewContainer.style.display = 'none';
+      if (filenameDisplay) filenameDisplay.style.display = 'none';
     }
   });
   
@@ -315,6 +339,10 @@ function setupAppArtPreview() {
       appArtInput.value = '';
       previewContainer.style.display = 'none';
       previewImg.src = '';
+      if (filenameDisplay) {
+        filenameDisplay.style.display = 'none';
+        filenameDisplay.textContent = '';
+      }
     });
   }
 }
@@ -367,6 +395,16 @@ function setupEventListeners() {
     if (iconPreviewContainer) iconPreviewContainer.style.display = 'none';
     const appartPreviewContainer = document.getElementById('appart-preview-container');
     if (appartPreviewContainer) appartPreviewContainer.style.display = 'none';
+    const iconFilename = document.getElementById('icon-filename');
+    if (iconFilename) {
+      iconFilename.style.display = 'none';
+      iconFilename.textContent = '';
+    }
+    const appartFilename = document.getElementById('appart-filename');
+    if (appartFilename) {
+      appartFilename.style.display = 'none';
+      appartFilename.textContent = '';
+    }
     const jobSelect = document.getElementById('character-job');
     jobSelect.disabled = true;
     jobSelect.innerHTML = '<option value="">Select a village first...</option>';

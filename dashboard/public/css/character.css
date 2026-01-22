@@ -303,6 +303,18 @@
   margin-top: -0.25rem;
 }
 
+.form-field-group .file-name-display {
+  display: block;
+  color: var(--accent, #00A3DA);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 163, 218, 0.1);
+  border: 1px solid rgba(0, 163, 218, 0.3);
+  border-radius: 6px;
+}
+
 .icon-preview-container {
   position: relative;
   margin-top: 1rem;
