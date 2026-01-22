@@ -55,7 +55,7 @@
 
         <!-- Character Creation Form -->
         <form id="character-create-form" class="character-create-form" enctype="multipart/form-data">
-          <!-- Basic Information Section -->
+          <!-- Basic Information: name, demographics -->
           <div class="form-section">
             <h2 class="section-title"><i class="fas fa-info-circle"></i> Basic Information</h2>
             
@@ -123,6 +123,21 @@
                 />
                 <small class="field-description">Character's pronouns</small>
               </div>
+
+              <div class="form-field-group">
+                <label for="character-gender">
+                  <span>Gender</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="character-gender" 
+                  name="gender" 
+                  required 
+                  placeholder="e.g., Female | she/her"
+                />
+                <small class="field-description">Character's gender with pronouns (e.g., "Female | she/her", "Nonbinary | they/them")</small>
+              </div>
             </div>
           </div>
 
@@ -160,16 +175,16 @@
                   type="hidden" 
                   id="character-stamina" 
                   name="stamina" 
-                  value="3"
+                  value="5"
                 />
-                <small class="field-description">All new characters start with 3 stamina</small>
+                <small class="field-description">All new characters start with 5 stamina</small>
               </div>
             </div>
           </div>
 
-          <!-- Character Details Section -->
+          <!-- World & Role: race, village, job, virtue -->
           <div class="form-section">
-            <h2 class="section-title"><i class="fas fa-user-tag"></i> Character Details</h2>
+            <h2 class="section-title"><i class="fas fa-map-marker-alt"></i> World & Role</h2>
             
             <div class="form-grid">
               <div class="form-field-group">
@@ -209,6 +224,27 @@
               </div>
 
               <div class="form-field-group">
+                <label for="character-virtue">
+                  <span>Virtue</span>
+                  <span class="required">*</span>
+                </label>
+                <select id="character-virtue" name="virtue" required>
+                  <option value="">Select a virtue...</option>
+                  <option value="power">Power</option>
+                  <option value="wisdom">Wisdom</option>
+                  <option value="courage">Courage</option>
+                </select>
+                <small class="field-description">Which virtue of the Triforce does your character embody?</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Application: link + art -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-link"></i> Application</h2>
+            
+            <div class="form-grid">
+              <div class="form-field-group full-width">
                 <label for="character-app-link">
                   <span>Application Link</span>
                   <span class="required">*</span>
@@ -222,14 +258,58 @@
                 />
                 <small class="field-description">Link to character application</small>
               </div>
+
+              <div class="form-field-group full-width">
+                <label for="character-app-art">
+                  <span>Application Art Image</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="file" 
+                  id="character-app-art" 
+                  name="appArt" 
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  required
+                />
+                <small class="field-description">Must be the application from the website with your OC and all their info on it (e.g. screenshot or export of the full application page). JPEG, PNG, GIF, or WebP, max 5MB.</small>
+                
+                <div id="appart-preview-container" class="icon-preview-container" style="display: none;">
+                  <img id="appart-preview" src="" alt="Application art preview" class="icon-preview" />
+                  <button type="button" id="remove-appart-preview" class="remove-icon-btn" aria-label="Remove application art">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-field-group full-width">
+                <label for="character-icon">
+                  <span>Character Icon</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="file" 
+                  id="character-icon" 
+                  name="icon" 
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  required
+                />
+                <small class="field-description">Upload a character icon (JPEG, PNG, GIF, or WebP, max 5MB)</small>
+                
+                <div id="icon-preview-container" class="icon-preview-container" style="display: none;">
+                  <img id="icon-preview" src="" alt="Icon preview" class="icon-preview" />
+                  <button type="button" id="remove-icon-preview" class="remove-icon-btn" aria-label="Remove icon">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- Starting Gear Section -->
           <div class="form-section">
             <h2 class="section-title"><i class="fas fa-shield-alt"></i> Starting Gear</h2>
-            <p style="color: var(--text-secondary, rgba(255, 255, 255, 0.6)); margin-bottom: 1.5rem; font-size: 0.95rem;">
-              Select starting gear for your character. All selections are optional - you can equip gear later.
+            <p class="form-section-description">
+              Select starting gear for your character. All selections are optional — you can equip gear later.
             </p>
             
             <div class="form-grid">
@@ -275,97 +355,10 @@
             </div>
           </div>
 
-          <!-- Icon Upload Section -->
-          <div class="form-section">
-            <h2 class="section-title"><i class="fas fa-image"></i> Character Icon</h2>
-            
-            <div class="form-field-group full-width">
-              <label for="character-icon">
-                <span>Icon Image</span>
-                <span class="required">*</span>
-              </label>
-              <input 
-                type="file" 
-                id="character-icon" 
-                name="icon" 
-                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                required
-              />
-              <small class="field-description">Upload a character icon (JPEG, PNG, GIF, or WebP, max 5MB)</small>
-              
-              <!-- Image Preview -->
-              <div id="icon-preview-container" class="icon-preview-container" style="display: none;">
-                <img id="icon-preview" src="" alt="Icon preview" class="icon-preview" />
-                <button type="button" id="remove-icon-preview" class="remove-icon-btn" aria-label="Remove icon">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Application Art Upload Section -->
-          <div class="form-section">
-            <h2 class="section-title"><i class="fas fa-paint-brush"></i> Application Art</h2>
-            
-            <div class="form-field-group full-width">
-              <label for="character-app-art">
-                <span>Application Art Image</span>
-                <span class="required">*</span>
-              </label>
-              <input 
-                type="file" 
-                id="character-app-art" 
-                name="appArt" 
-                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                required
-              />
-              <small class="field-description">Upload your character's application art - a front-facing full body shot with clean lines and flat colors (JPEG, PNG, GIF, or WebP, max 5MB)</small>
-              
-              <!-- Image Preview -->
-              <div id="appart-preview-container" class="icon-preview-container" style="display: none;">
-                <img id="appart-preview" src="" alt="Application art preview" class="icon-preview" />
-                <button type="button" id="remove-appart-preview" class="remove-icon-btn" aria-label="Remove application art">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-
           <!-- Biography Information Section -->
           <div class="form-section">
             <h2 class="section-title"><i class="fas fa-book"></i> Biography Information</h2>
             
-            <div class="form-grid">
-              <div class="form-field-group">
-                <label for="character-gender">
-                  <span>Gender</span>
-                  <span class="required">*</span>
-                </label>
-                <input 
-                  type="text" 
-                  id="character-gender" 
-                  name="gender" 
-                  required 
-                  placeholder="e.g., Female | she/her"
-                />
-                <small class="field-description">Character's gender with pronouns (e.g., "Female | she/her", "Nonbinary | they/them")</small>
-              </div>
-
-              <div class="form-field-group">
-                <label for="character-virtue">
-                  <span>Virtue</span>
-                  <span class="required">*</span>
-                </label>
-                <select id="character-virtue" name="virtue" required>
-                  <option value="">Select a virtue...</option>
-                  <option value="power">Power</option>
-                  <option value="wisdom">Wisdom</option>
-                  <option value="courage">Courage</option>
-                </select>
-                <small class="field-description">Which virtue of the Triforce does your character embody?</small>
-              </div>
-            </div>
-
             <div class="form-field-group full-width">
               <label for="character-personality">
                 <span>Personality</span>

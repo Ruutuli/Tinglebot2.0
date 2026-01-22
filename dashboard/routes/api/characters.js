@@ -822,8 +822,8 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Gender (with pronouns) is required' });
   }
 
-  if (!virtue || !['power', 'wisdom', 'courage'].includes(virtue.toLowerCase())) {
-    return res.status(400).json({ error: 'Virtue must be one of: power, wisdom, or courage' });
+  if (!virtue || !['power', 'wisdom', 'courage', 'tba'].includes(virtue.toLowerCase())) {
+    return res.status(400).json({ error: 'Virtue must be one of: power, wisdom, courage, or TBA' });
   }
 
   if (!personality || personality.trim().length === 0) {

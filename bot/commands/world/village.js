@@ -999,6 +999,7 @@ async function updateRestSpotCooldown(character, villageName) {
         }
         const cooldownKey = getRestSpotCooldownKey(villageName);
         character.dailyRoll.set(cooldownKey, new Date().toISOString());
+        character.markModified('dailyRoll'); // Required for Mongoose to track Map changes
         await character.save();
     } catch (error) {
         console.error(`[updateRestSpotCooldown] Error updating cooldown for ${character.name} in ${villageName}:`, error);

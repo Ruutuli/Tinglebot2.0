@@ -30,6 +30,7 @@ async function initAgenda() {
       maxConcurrency: 20, // Limit concurrent job execution
     });
 
+    // Agenda event listeners for diagnostics
     agenda.on("start", (job) => {
       logger.info('SCHEDULER', `Job started: ${job.attrs.name}`, { jobId: job.attrs._id });
     });
@@ -44,6 +45,16 @@ async function initAgenda() {
         jobName: job?.attrs?.name,
         jobId: job?.attrs?._id,
       });
+    });
+    
+    // Add ready event listener to know when Agenda is actually ready
+    agenda.on("ready", () => {
+      logger.success('SCHEDULER', 'Agenda is ready and processing jobs');
+    });
+    
+    // Add error event listener for Agenda-level errors
+    agenda.on("error", (err) => {
+      logger.error('SCHEDULER', `Agenda error: ${err.message}`, err);
     });
 
     logger.success('SCHEDULER', 'Agenda initialized with managed connection');
@@ -721,6 +732,66 @@ function defineAgendaJobs({ client }) {
 }
 
 /**
+ * Clean up stuck/locked Agenda jobs before starting
+ * @returns {Promise<number>} Number of stuck jobs cleaned up
+ */
+async function cleanupStuckJobsBeforeStart() {
+  try {
+    const mongooseConnection = DatabaseConnectionManager.getTinglebotConnection();
+    if (!mongooseConnection || mongooseConnection.readyState !== 1) {
+      logger.warn('SCHEDULER', 'Cannot check for stuck jobs - database not ready');
+      return 0;
+    }
+    
+    const agendaJobsCollection = mongooseConnection.db.collection('agendaJobs');
+    
+    // Find stuck jobs (locked for more than 10 minutes - longer than defaultLockLifetime)
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const stuckJobs = await agendaJobsCollection.find({
+      lockedAt: { $exists: true, $ne: null, $lt: tenMinutesAgo }
+    }).toArray();
+    
+    if (stuckJobs.length === 0) {
+      logger.debug('SCHEDULER', 'No stuck jobs found');
+      return 0;
+    }
+    
+    logger.warn('SCHEDULER', `Found ${stuckJobs.length} stuck job(s) - unlocking them...`);
+    
+    // Unlock stuck jobs
+    let unlockedCount = 0;
+    for (const job of stuckJobs) {
+      try {
+        await agendaJobsCollection.updateOne(
+          { _id: job._id },
+          { 
+            $unset: { 
+              lockedAt: "",
+              lastModifiedBy: ""
+            }
+          }
+        );
+        unlockedCount++;
+        const jobName = job.name || job.attrs?.name || 'unknown';
+        logger.debug('SCHEDULER', `   Unlocked: ${jobName}`);
+      } catch (error) {
+        logger.error('SCHEDULER', `   Failed to unlock job ${job._id}: ${error.message}`);
+      }
+    }
+    
+    if (unlockedCount > 0) {
+      logger.success('SCHEDULER', `Unlocked ${unlockedCount} stuck job(s) before starting Agenda`);
+    }
+    
+    return unlockedCount;
+  } catch (error) {
+    logger.error('SCHEDULER', `Error cleaning up stuck jobs: ${error.message}`);
+    // Don't throw - allow Agenda to try starting anyway
+    return 0;
+  }
+}
+
+/**
  * Start the Agenda worker
  * @returns {Promise<void>}
  */
@@ -728,8 +799,52 @@ async function startAgenda() {
   if (!agenda) {
     throw new Error("Agenda not initialized - call initAgenda() first");
   }
-  await agenda.start();
-  logger.success('SCHEDULER', 'Agenda started');
+  
+  try {
+    logger.info('SCHEDULER', 'Calling agenda.start()...');
+    
+    // Clean up stuck jobs before starting (this can help prevent initialization delays)
+    await cleanupStuckJobsBeforeStart();
+    
+    // Add diagnostic logging
+    const startTime = Date.now();
+    logger.debug('SCHEDULER', 'Starting Agenda worker...');
+    
+    // Start Agenda (this returns a promise that resolves when start() is called)
+    // Note: In Agenda v5, start() resolves quickly, but Agenda may still be initializing
+    // The "ready" event will fire when Agenda is actually ready to process jobs
+    // We don't block on this - Agenda will start processing jobs when ready
+    await agenda.start();
+    
+    const duration = Date.now() - startTime;
+    logger.info('SCHEDULER', `Agenda start() called (took ${duration}ms) - Agenda will initialize in background`);
+    logger.info('SCHEDULER', 'Jobs can be created now - Agenda will pick them up when ready');
+    
+    // Note: The "ready" event listener (defined in initAgenda) will log when Agenda is actually ready
+    // We don't wait for it here to avoid blocking initialization
+  } catch (error) {
+    logger.error('SCHEDULER', `Failed to start Agenda: ${error.message}`);
+    logger.warn('SCHEDULER', 'Attempting to continue - jobs may not run until Agenda starts');
+    
+    // Try to get more diagnostic info
+    try {
+      const mongooseConnection = DatabaseConnectionManager.getTinglebotConnection();
+      if (mongooseConnection && mongooseConnection.readyState === 1) {
+        const agendaJobsCollection = mongooseConnection.db.collection('agendaJobs');
+        const totalJobs = await agendaJobsCollection.countDocuments({});
+        const lockedJobs = await agendaJobsCollection.countDocuments({ lockedAt: { $exists: true, $ne: null } });
+        const stuckJobs = await agendaJobsCollection.countDocuments({ 
+          lockedAt: { $exists: true, $ne: null, $lt: new Date(Date.now() - 10 * 60 * 1000) }
+        });
+        logger.warn('SCHEDULER', `Diagnostics: ${totalJobs} total jobs, ${lockedJobs} currently locked, ${stuckJobs} stuck (>10min)`);
+      }
+    } catch (diagError) {
+      logger.debug('SCHEDULER', `Could not get diagnostics: ${diagError.message}`);
+    }
+    
+    // Don't throw - allow initialization to continue
+    // Agenda may still start in the background
+  }
 }
 
 /**

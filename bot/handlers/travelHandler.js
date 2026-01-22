@@ -115,6 +115,7 @@ async function updateDailyRoll(character, activity) {
     }
     const now = new Date().toISOString();
     character.dailyRoll.set(activity, now);
+    character.markModified('dailyRoll'); // Required for Mongoose to track Map changes
     await character.save();
   } catch (err) {
     error('TRAVEL', 'Failed to update daily roll', err);

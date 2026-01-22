@@ -209,8 +209,8 @@ const characterSchema = new Schema({
   gender: { type: String, default: '' }, // Includes pronouns, e.g., "Female | she/her"
   virtue: { 
     type: String, 
-    enum: ['power', 'wisdom', 'courage'],
-    default: '' 
+    enum: ['power', 'wisdom', 'courage', 'TBA', 'tba'],
+    default: 'TBA' 
   },
   personality: { type: String, default: '' }, // Suggestion: at least 5 sentences
   history: { type: String, default: '' }, // Suggestion: at least 5 sentences

@@ -522,10 +522,17 @@ async function initializeClient() {
           logger.info('SCHEDULER', 'Defining Agenda jobs...');
           defineAgendaJobs({ client }); // Defines all job types (recurring + one-time)
           logger.info('SCHEDULER', 'Starting Agenda worker...');
-          await startAgenda();
-          logger.success('SCHEDULER', 'Agenda initialized and started');
+          // Start Agenda in the background - it will initialize asynchronously
+          // Jobs can be created immediately and Agenda will pick them up when ready
+          startAgenda().catch((error) => {
+            logger.warn('SCHEDULER', `Agenda start encountered an issue: ${error.message}`);
+            logger.warn('SCHEDULER', 'Continuing with scheduler setup - Agenda may start later');
+            // Don't throw - allow initialization to continue
+          });
           
           // Initialize scheduler (schedules recurring jobs using Agenda)
+          // Jobs can be created even if Agenda is still initializing
+          // Agenda will pick them up when it's ready (the "ready" event will log when that happens)
           logger.info('SCHEDULER', 'Initializing scheduler (creating recurring jobs)...');
           const { initializeScheduler } = require('./scheduler/scheduler');
           await initializeScheduler(client);

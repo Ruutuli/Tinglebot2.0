@@ -34,6 +34,7 @@ const {
 // Data files
 const { 
   precipitations, 
+  precipitationWeights, 
   specials, 
   specialWeights, 
   temperatureWeights, 

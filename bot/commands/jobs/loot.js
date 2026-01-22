@@ -261,9 +261,10 @@ async function updateDailyRoll(character, activity) {
     }
     const now = new Date().toISOString();
     character.dailyRoll.set(activity, now);
+    character.markModified('dailyRoll'); // Required for Mongoose to track Map changes
     await character.save();
   } catch (error) {
-    logger.error('LOOT', `Failed to update daily roll for ${character.name}`);
+    logger.error('LOOT', `Failed to update daily roll for ${character.name}: ${error.message}`, error);
     throw error;
   }
 }
@@ -752,17 +753,16 @@ module.exports = {
 
   } catch (error) {
     // Log errors
-      handleInteractionError(error, "loot.js", {
-        operation: 'execute',
-        commandName: interaction.commandName || 'loot',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
-        characterName: interaction.options.getString('charactername'),
-        guildId: interaction.guildId,
-        channelId: interaction.channelId
-      });
-      logger.error('LOOT', `Error during loot process: ${error.message}`);
-    }
+    handleInteractionError(error, "loot.js", {
+      operation: 'execute',
+      commandName: interaction.commandName || 'loot',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: interaction.options.getString('charactername'),
+      guildId: interaction.guildId,
+      channelId: interaction.channelId
+    });
+    logger.error('LOOT', `Error during loot process: ${error.message}`);
 
     // Provide more specific error messages based on the error type
     let errorMessage;
@@ -933,7 +933,7 @@ async function processLootingLogic(
  bloodMoonActive,
  shouldDeactivateVoucher = false,
  originalRoll = null,
- blightRainMessage = null
+ weatherMessage = null
 ) {
   try {
   // ------------------- Fetch Village Level -------------------
@@ -1611,7 +1611,7 @@ async function processLootingLogic(
    null, // boostCategoryOverride
    elixirBuffInfo, // Pass elixirBuffInfo to the embed
    originalRoll, // Pass originalRoll to the embed
-   blightRainMessage, // Pass blight rain message to the embed
+   weatherMessage, // Pass combined weather messages to the embed
    entertainerBoostUnused, // Pass flag indicating boost was active but unused
    entertainerDamageReduction, // Pass amount of damage reduced by Entertainer boost
    blightAdjustedRoll, // Pass blightAdjustedRoll for blight boost detection

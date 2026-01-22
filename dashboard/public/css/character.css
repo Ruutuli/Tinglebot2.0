@@ -89,6 +89,13 @@
   font-size: 1.25rem;
 }
 
+.form-section-description {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+  margin: -0.5rem 0 1.5rem 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -131,8 +138,8 @@
   padding: 0.875rem 1.125rem;
   border: 2px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary, #ffffff);
+  background: rgba(28, 32, 38, 0.95);
+  color: rgba(255, 255, 255, 0.95);
   font-size: 1rem;
   transition: all 0.2s ease;
   font-weight: 500;
@@ -155,12 +162,12 @@
 
 .form-field-group select {
   cursor: pointer;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(28, 32, 38, 0.95);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
 .form-field-group select:hover {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(32, 36, 42, 0.95);
   border-color: rgba(255, 255, 255, 0.3);
 }
 
@@ -180,7 +187,7 @@
 .form-field-group select:focus {
   outline: none;
   border-color: var(--accent, #00A3DA);
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(32, 36, 42, 0.98);
   box-shadow: 0 0 0 3px rgba(0, 163, 218, 0.15);
 }
 
@@ -188,7 +195,86 @@
 .form-field-group select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(20, 24, 28, 0.9);
+}
+
+/* Textareas - match inputs: dark bg, light text, easy on eyes */
+.form-field-group textarea {
+  padding: 0.875rem 1.125rem;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(28, 32, 38, 0.95);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 1rem;
+  line-height: 1.5;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.form-field-group textarea:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(32, 36, 42, 0.95);
+}
+
+.form-field-group textarea:focus {
+  outline: none;
+  border-color: var(--accent, #00A3DA);
+  background: rgba(32, 36, 42, 0.98);
+  box-shadow: 0 0 0 3px rgba(0, 163, 218, 0.15);
+}
+
+/* Placeholder - muted, not harsh */
+.form-field-group input::placeholder,
+.form-field-group textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* File inputs - dark, consistent with other fields */
+.form-field-group input[type="file"] {
+  padding: 0.75rem 1rem;
+  background-image: none;
+  background-color: rgba(28, 32, 38, 0.95);
+  color: rgba(255, 255, 255, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.form-field-group input[type="file"]::-webkit-file-upload-button {
+  padding: 0.5rem 1rem;
+  margin-right: 1rem;
+  background: rgba(0, 163, 218, 0.25);
+  border: 1px solid rgba(0, 163, 218, 0.4);
+  border-radius: 6px;
+  color: var(--text-primary, #fff);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-field-group input[type="file"]::-webkit-file-upload-button:hover {
+  background: rgba(0, 163, 218, 0.35);
+  border-color: var(--accent, #00A3DA);
+}
+
+.form-field-group input[type="file"]::file-selector-button {
+  padding: 0.5rem 1rem;
+  margin-right: 1rem;
+  background: rgba(0, 163, 218, 0.25);
+  border: 1px solid rgba(0, 163, 218, 0.4);
+  border-radius: 6px;
+  color: var(--text-primary, #fff);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-field-group input[type="file"]::file-selector-button:hover {
+  background: rgba(0, 163, 218, 0.35);
+  border-color: var(--accent, #00A3DA);
 }
 
 /* Stats Display (for locked hearts/stamina) */

@@ -73,6 +73,7 @@ const getContextColor = (context) => {
   if (ctx.includes('CMBT') || ctx.includes('COMBAT')) return colors.red;
   if (ctx.includes('TRVL') || ctx.includes('TRAVEL')) return colors.blue;
   if (ctx.includes('LVL') || ctx.includes('LEVEL')) return colors.yellow;
+  if (ctx.includes('INV') || ctx.includes('INVENTORY')) return colors.magenta;
   return colors.cyan;
 };
 
@@ -90,6 +91,7 @@ const getMessageColor = (context) => {
   if (ctx.includes('CMBT') || ctx.includes('COMBAT')) return colors.red;
   if (ctx.includes('TRVL') || ctx.includes('TRAVEL')) return colors.blue;
   if (ctx.includes('LVL') || ctx.includes('LEVEL')) return colors.yellow;
+  if (ctx.includes('INV') || ctx.includes('INVENTORY')) return colors.magenta;
   return colors.cyan;
 };
 
@@ -100,6 +102,7 @@ const getContextEmoji = (context) => {
   if (ctx.includes('DB') || ctx.includes('DATABASE')) return '💾 ';
   if (ctx.includes('CLEN') || ctx.includes('CLEANUP')) return '🧹 ';
   if (ctx.includes('SYS') || ctx.includes('SYSTEM')) return '⚙️ ';
+  if (ctx.includes('INV') || ctx.includes('INVENTORY')) return '📦 ';
   return 'ℹ️ ';
 };
 

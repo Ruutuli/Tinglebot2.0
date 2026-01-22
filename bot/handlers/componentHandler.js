@@ -2071,6 +2071,7 @@ async function handleRestSpotChoice(interaction) {
       character.dailyRoll = new Map();
     }
     character.dailyRoll.set(cooldownKey, new Date().toISOString());
+    character.markModified('dailyRoll'); // Required for Mongoose to track Map changes
     await character.save();
 
     // Get theme and images

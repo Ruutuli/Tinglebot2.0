@@ -1711,13 +1711,6 @@ async function appendEarnedTokens(
     // Log error but don't fail the transaction
     console.error('[tokenService.js]: ⚠️ Error logging earned token transaction:', logError);
   }
- } catch (error) {
-  handleError(error, "tokenService.js");
-  console.error(
-   `[tokenService.js]: ❌ Error appending earned token data: ${error.message}`
-  );
-  throw new Error("Error appending earned token data to the Google Sheet.");
- }
 }
 
 // ------------------- appendSpentTokens -------------------

@@ -13,7 +13,7 @@ const v8 = require('v8');
 class MemoryMonitor {
   constructor(options = {}) {
     this.enabled = options.enabled !== false; // Enabled by default
-    this.logInterval = options.logInterval || 1 * 60 * 1000; // 1 minute default (changed from 5 minutes for testing)
+    this.logInterval = options.logInterval || 60 * 60 * 1000; // 1 hour default
     this.warningThreshold = options.warningThreshold || 500 * 1024 * 1024; // 500MB
     this.criticalThreshold = options.criticalThreshold || 1000 * 1024 * 1024; // 1GB
     
