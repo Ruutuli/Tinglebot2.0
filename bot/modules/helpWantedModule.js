@@ -28,30 +28,30 @@ const TRAVEL_BLOCKING_WEATHER = ['Flood', 'Avalanche', 'Rock Slide'];
 
 // Generate full 24-hour schedule with hourly intervals (24 time slots per day)
 const FIXED_CRON_TIMES = [
-  '0 0 * * *',   // 12:00 AM EST (Midnight)
-  '0 1 * * *',   // 1:00 AM EST  
-  '0 2 * * *',   // 2:00 AM EST  
-  '0 3 * * *',   // 3:00 AM EST  
-  '0 4 * * *',   // 4:00 AM EST  
-  '0 5 * * *',   // 5:00 AM EST  
-  '0 6 * * *',   // 6:00 AM EST  
-  '0 7 * * *',   // 7:00 AM EST  
-  '0 8 * * *',   // 8:00 AM EST  
-  '0 9 * * *',   // 9:00 AM EST  
-  '0 10 * * *',  // 10:00 AM EST  
-  '0 11 * * *',  // 11:00 AM EST  
-  '0 12 * * *',  // 12:00 PM EST (Noon)
-  '0 13 * * *',  // 1:00 PM EST  
-  '0 14 * * *',  // 2:00 PM EST  
-  '0 15 * * *',  // 3:00 PM EST  
-  '0 16 * * *',  // 4:00 PM EST  
-  '0 17 * * *',  // 5:00 PM EST  
-  '0 18 * * *',  // 6:00 PM EST  
-  '0 19 * * *',  // 7:00 PM EST  
-  '0 20 * * *',  // 8:00 PM EST  
-  '0 21 * * *',  // 9:00 PM EST  
-  '0 22 * * *',  // 10:00 PM EST  
-  '0 23 * * *'   // 11:00 PM EST  
+  '0 0 * * *',   // 12:00 AM UTC (Midnight)
+  '0 1 * * *',   // 1:00 AM UTC  
+  '0 2 * * *',   // 2:00 AM UTC  
+  '0 3 * * *',   // 3:00 AM UTC  
+  '0 4 * * *',   // 4:00 AM UTC  
+  '0 5 * * *',   // 5:00 AM UTC  
+  '0 6 * * *',   // 6:00 AM UTC  
+  '0 7 * * *',   // 7:00 AM UTC  
+  '0 8 * * *',   // 8:00 AM UTC  
+  '0 9 * * *',   // 9:00 AM UTC  
+  '0 10 * * *',  // 10:00 AM UTC  
+  '0 11 * * *',  // 11:00 AM UTC  
+  '0 12 * * *',  // 12:00 PM UTC (Noon)
+  '0 13 * * *',  // 1:00 PM UTC  
+  '0 14 * * *',  // 2:00 PM UTC  
+  '0 15 * * *',  // 3:00 PM UTC  
+  '0 16 * * *',  // 4:00 PM UTC  
+  '0 17 * * *',  // 5:00 PM UTC  
+  '0 18 * * *',  // 6:00 PM UTC  
+  '0 19 * * *',  // 7:00 PM UTC  
+  '0 20 * * *',  // 8:00 PM UTC  
+  '0 21 * * *',  // 9:00 PM UTC  
+  '0 22 * * *',  // 10:00 PM UTC  
+  '0 23 * * *'   // 11:00 PM UTC  
 ];
 
 const QUEST_TYPE_EMOJIS = {
@@ -88,28 +88,16 @@ const QUEST_PARAMS = {
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
-// ------------------- Helper: getESTDateString -------------------
-// Gets date string in EST format (YYYY-MM-DD) from UTC date
-// EST is UTC-5, so subtract 5 hours to get EST date
-function getESTDateString(date = new Date()) {
-  const utcTime = date.getTime();
-  const estOffsetMs = 5 * 60 * 60 * 1000; // 5 hours in milliseconds
-  const estDate = new Date(utcTime - estOffsetMs);
-  // Format as YYYY-MM-DD (en-CA format)
-  const year = estDate.getUTCFullYear();
-  const month = String(estDate.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(estDate.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+// ------------------- Helper: getUTCDateString -------------------
+// Gets date string in UTC format (YYYY-MM-DD)
+function getUTCDateString(date = new Date()) {
+  return date.toISOString().split('T')[0];
 }
 
-// ------------------- Helper: getHourInEST -------------------
-// Gets hour (0-23) in EST from UTC date
-// EST is UTC-5
-function getHourInEST(date = new Date()) {
-  const utcHour = date.getUTCHours();
-  // EST is UTC-5, so subtract 5 hours and handle wrap-around
-  const estHour = (utcHour - 5 + 24) % 24;
-  return estHour;
+// ------------------- Helper: getHourInUTC -------------------
+// Gets hour (0-23) in UTC
+function getHourInUTC(date = new Date()) {
+  return date.getUTCHours();
 }
 
 // Utility function to convert cron time to hour
@@ -1611,31 +1599,31 @@ async function generateDailyQuests() {
   
   try {
     const now = new Date();
-    // Get EST date string (YYYY-MM-DD format)
-    const date = getESTDateString(now);
+    // Get UTC date string (YYYY-MM-DD format)
+    const date = getUTCDateString(now);
     
-    // Validate EST date format
+    // Validate UTC date format
     if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) {
       logger.error('QUEST', `Invalid date format: ${date}`);
       throw new Error(`Invalid date format: ${date}`);
     }
     
-    // Check if it's after 12pm EST - if so, don't generate art/writing quests
-    const estHour = getHourInEST(now);
-    const isAfterNoon = estHour >= 12;
+    // Check if it's after 12pm UTC - if so, don't generate art/writing quests
+    const utcHour = getHourInUTC(now);
+    const isAfterNoon = utcHour >= 12;
     
-    // Validate EST hour is a number
-    if (isNaN(normalizedEstHour) || normalizedEstHour < 0 || normalizedEstHour > 23) {
-      logger.error('QUEST', `Invalid EST hour: ${normalizedEstHour}`);
-      throw new Error(`Invalid EST hour: ${normalizedEstHour}`);
+    // Validate UTC hour is a number
+    if (isNaN(utcHour) || utcHour < 0 || utcHour > 23) {
+      logger.error('QUEST', `Invalid UTC hour: ${utcHour}`);
+      throw new Error(`Invalid UTC hour: ${utcHour}`);
     }
     
-    logger.info('QUEST', `Time check - Current EST hour: ${normalizedEstHour}, isAfterNoon: ${isAfterNoon}`);
+    logger.info('QUEST', `Time check - Current UTC hour: ${utcHour}, isAfterNoon: ${isAfterNoon}`);
     
     if (isAfterNoon) {
-      logger.info('QUEST', `After 12pm EST (${normalizedEstHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
+      logger.info('QUEST', `After 12pm UTC (${utcHour}:00) - Art and Writing quests will not be generated to ensure adequate completion time`);
     } else {
-      logger.info('QUEST', `Before 12pm EST (${normalizedEstHour}:00) - All quest types including art and writing are available`);
+      logger.info('QUEST', `Before 12pm UTC (${utcHour}:00) - All quest types including art and writing are available`);
     }
 
     // Fetch village levels from database
@@ -1678,7 +1666,7 @@ async function generateDailyQuests() {
       warnings.push('Failed to clean up null questIds');
     }
     
-    // Clean up any art or writing quests that were generated after 12pm EST
+        // Clean up any art or writing quests that were generated after 12pm UTC
     if (isAfterNoon) {
       try {
         const deletedArtWriting = await HelpWantedQuest.deleteMany({ 
@@ -1686,7 +1674,7 @@ async function generateDailyQuests() {
           type: { $in: ['art', 'writing'] } 
         });
         if (deletedArtWriting.deletedCount > 0) {
-          logger.info('QUEST', `Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) that were generated after 12pm EST`);
+          logger.info('QUEST', `Cleaned up ${deletedArtWriting.deletedCount} art/writing quest(s) that were generated after 12pm UTC`);
         }
       } catch (error) {
         logger.warn('QUEST', `Error cleaning up art/writing quests`, error);
@@ -1746,7 +1734,7 @@ async function generateDailyQuests() {
     // For art/writing quests, only use times before 12pm EST
     let availableTimes = FIXED_CRON_TIMES;
     if (isAfterNoon) {
-      // If generating after 12pm, only use times before 12pm for any remaining art/writing quests
+      // If generating after 12pm UTC, only use times before 12pm UTC for any remaining art/writing quests
       availableTimes = FIXED_CRON_TIMES.filter(cronTime => cronToHour(cronTime) < 12);
     }
     
@@ -2151,7 +2139,7 @@ function selectTimesWithBuffer(availableTimes, count) {
 // Checks if a quest is expired (not from today)
 function isQuestExpired(quest) {
   const now = new Date();
-  const today = getESTDateString(now);
+  const today = getUTCDateString(now);
   return quest.date !== today;
 }
 
@@ -2161,7 +2149,7 @@ async function getTodaysQuests() {
   try {
     const now = new Date();
     // Get EST date string (YYYY-MM-DD format)
-    const date = getESTDateString(now);
+    const date = getUTCDateString(now);
     const quests = await HelpWantedQuest.find({ date });
     
     // Ensure all quests have an npcName field
@@ -2185,7 +2173,7 @@ async function getQuestsForScheduledTime(cronTime) {
   try {
     const now = new Date();
     // Get EST date string (YYYY-MM-DD format)
-    const date = getESTDateString(now);
+    const date = getUTCDateString(now);
     return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
   } catch (error) {
     logger.error('QUEST', 'Error fetching quests for scheduled time', error);
@@ -2486,7 +2474,7 @@ async function hasUserCompletedQuestToday(userId) {
     
     // Use EST date for midnight reset
     const now = new Date();
-    const today = getESTDateString(now);
+    const today = getUTCDateString(now);
     const lastCompletion = user.helpWanted?.lastCompletion || 'null';
     
     return lastCompletion === today;
@@ -2796,7 +2784,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
 // Updates user tracking for quest completion (copied from helpWanted.js)
 async function updateUserTracking(user, quest, userId) {
   const now = new Date();
-  const today = getESTDateString(now);
+  const today = getUTCDateString(now);
   
   user.helpWanted.lastCompletion = today;
   // Increment both total and current completions

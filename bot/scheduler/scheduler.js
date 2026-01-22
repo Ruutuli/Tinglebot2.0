@@ -932,9 +932,8 @@ async function checkAndPostScheduledQuests(client, cronTime) {
   try {
     const today = new Date().toISOString().split('T')[0];
     const now = new Date();
-    const estDate = getESTDate(now);
-    const estHour = estDate.getHours();
-    const isAfterNoon = estHour >= 12;
+    const utcHour = now.getUTCHours();
+    const isAfterNoon = utcHour >= 12;
     
     const questsToPost = await HelpWantedQuest.find({
       date: today,
@@ -947,12 +946,12 @@ async function checkAndPostScheduledQuests(client, cronTime) {
       return 0;
     }
     
-    // Regenerate art and writing quests if it's after 12pm EST
+    // Regenerate art and writing quests if it's after 12pm UTC
     let processedQuests = questsToPost;
     if (isAfterNoon) {
       const artWritingQuests = questsToPost.filter(quest => quest.type === 'art' || quest.type === 'writing');
       if (artWritingQuests.length > 0) {
-        logger.info('QUEST', `After 12pm EST (${estHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
+        logger.info('QUEST', `After 12pm UTC (${utcHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
         
         for (const quest of artWritingQuests) {
           try {
@@ -1274,6 +1273,7 @@ async function setupDailyTasks(client) {
    { schedule: "0 13 * * *", name: "checkExpiredRequests" },
    // Weekly tasks - Sunday midnight EST = Monday 05:00 UTC
    { schedule: "0 5 * * 1", name: "weekly pet rolls reset" },
+   { schedule: "0 5 * * 1", name: "weekly inventory snapshot" },
    // Monthly tasks - 1st of month midnight EST = 05:00 UTC
    { schedule: "0 5 1 * *", name: "monthly vending stock generation" },
    { schedule: "0 5 1 * *", name: "monthly nitro boost rewards" },

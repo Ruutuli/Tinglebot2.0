@@ -729,6 +729,47 @@ function defineAgendaJobs({ client }) {
       handleError(error, "agenda.js", { jobName: "memory log" });
     }
   });
+
+  // Weekly inventory snapshot job
+  agenda.define("weekly inventory snapshot", { concurrency: 1 }, async (job) => {
+    try {
+      logger.info('SNAPSHOT', 'Starting weekly inventory snapshot for all characters...');
+      
+      // Ensure database connections are ready
+      const tinglebotConnection = DatabaseConnectionManager.getTinglebotConnection();
+      if (!tinglebotConnection || tinglebotConnection.readyState !== 1) {
+        throw new Error('Tinglebot database connection not ready');
+      }
+      
+      const { createAllSnapshots } = require('../scripts/createInventorySnapshot');
+      
+      // Delete old snapshots before creating new ones (overwrite behavior)
+      const inventoriesConnection = await DatabaseConnectionManager.connectToInventoriesNative();
+      if (!inventoriesConnection) {
+        throw new Error('Failed to connect to inventories database');
+      }
+      
+      const db = inventoriesConnection.useDb('inventories');
+      const snapshotsCollection = db.collection('inventory_snapshots');
+      
+      // Delete all existing snapshots (weekly overwrite)
+      const deleteResult = await snapshotsCollection.deleteMany({});
+      logger.info('SNAPSHOT', `Deleted ${deleteResult.deletedCount} old snapshot(s)`);
+      
+      // Create new snapshots for all characters
+      const results = await createAllSnapshots();
+      
+      logger.success('SNAPSHOT', `Weekly inventory snapshot completed - Created: ${results.created}, Failed: ${results.failed}`);
+      
+      if (results.failed > 0) {
+        logger.warn('SNAPSHOT', `${results.failed} snapshot(s) failed. Check logs for details.`);
+      }
+    } catch (error) {
+      logger.error('SNAPSHOT', `Weekly inventory snapshot failed: ${error.message}`, error);
+      handleError(error, "agenda.js", { jobName: "weekly inventory snapshot" });
+      throw error; // Re-throw so Agenda can retry if configured
+    }
+  });
 }
 
 /**
