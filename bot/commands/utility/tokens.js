@@ -100,49 +100,8 @@ module.exports = {
           await user.save();
           logger.success('TOKEN', `Token tracker link saved to database for user ${userId}`);
 
-          // Test the setup
-          logger.debug('TOKEN', `Testing Google Sheets access...`);
-          const auth = await authorizeSheets();
-          const spreadsheetId = extractSpreadsheetId(link);
-          logger.debug('TOKEN', `Extracted spreadsheet ID: ${spreadsheetId}`);
-
-          logger.debug('TOKEN', `Checking for 'loggedTracker' tab...`);
-          const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedTracker');
-          if (!sheetId) {
-            logger.warn('TOKEN', `'loggedTracker' tab not found in spreadsheet`);
-            const { fullMessage } = handleTokenError(new Error('404'), interaction);
-            await interaction.editReply({
-              content: fullMessage,
-              flags: [MessageFlags.Ephemeral],
-            });
-            return;
-          }
-          logger.success('TOKEN', `'loggedTracker' tab found with ID: ${sheetId}`);
-
-          // Get the actual sheet name (with proper spacing)
-          const actualSheetName = await getActualSheetName(auth, spreadsheetId, 'loggedTracker');
-          logger.debug('TOKEN', `Actual sheet name: "${actualSheetName}"`);
-
-          const expectedHeaders = ['SUBMISSION', 'LINK', 'CATEGORIES', 'TYPE', 'TOKEN AMOUNT'];
-          const headerRange = `${actualSheetName}!B7:F7`;
-          logger.debug('TOKEN', `Checking headers in row 7 (range: ${headerRange})`);
-          const sheetData = await readSheetData(auth, spreadsheetId, headerRange);
-          logger.debug('TOKEN', `Retrieved header data:`, sheetData);
-          
-          if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
-            logger.warn('TOKEN', `Header validation failed. Expected:`, expectedHeaders);
-            logger.warn('TOKEN', `Found:`, sheetData?.[0]);
-            const { fullMessage } = handleTokenError(new Error('headers'), interaction);
-            await interaction.editReply({
-              content: fullMessage,
-              flags: [MessageFlags.Ephemeral],
-            });
-            return;
-          }
-          logger.success('TOKEN', `Headers validation passed`);
-
-          // No need to check for 'earned' entries. Allow sync if headers and tab are present.
-          logger.info('TOKEN', `All validations passed, creating confirmation buttons`);
+          // Google Sheets validation removed
+          logger.info('TOKEN', `Token tracker setup complete`);
 
           // Create confirmation buttons
           const row = new ActionRowBuilder().addComponents(
@@ -177,25 +136,7 @@ module.exports = {
               if (i.customId === 'token-sync-yes') {
                 logger.info('TOKEN', `User ${userId} (${interaction.user.username}) clicked sync button`);
                 
-                // Check if the sheet has any data beyond headers before syncing
-                logger.debug('TOKEN', `Authorizing Google Sheets access...`);
-                const auth = await authorizeSheets();
-                const spreadsheetId = extractSpreadsheetId(link);
-                logger.debug('TOKEN', `Extracted spreadsheet ID: ${spreadsheetId}`);
-                
-                // Get the actual sheet name (with proper spacing)
-                const actualSheetName = await getActualSheetName(auth, spreadsheetId, 'loggedTracker');
-                const dataRange = `${actualSheetName}!B7:F`;
-                logger.debug('TOKEN', `Reading sheet data from range: ${dataRange}`);
-                const sheetData = await readSheetData(auth, spreadsheetId, dataRange);
-                const hasData = sheetData.length > 1; // More than just headers
-                logger.debug('TOKEN', `Sheet data retrieved:`, {
-                  totalRows: sheetData.length,
-                  hasData: hasData,
-                  firstRow: sheetData[0],
-                  sampleData: sheetData.slice(0, 3)
-                });
-                
+                // Google Sheets sync removed - use database sync instead
                 logger.info('TOKEN', `Calling syncTokenTracker function...`);
                 const tokenRecord = await syncTokenTracker(userId);
                 logger.success('TOKEN', `Sync completed:`, {
@@ -203,23 +144,12 @@ module.exports = {
                   tokensSynced: tokenRecord.tokensSynced
                 });
                 
-                // If the sheet was empty, show the setup complete message
-                if (!hasData) {
-                  logger.info('TOKEN', `No earned entries found, showing setup complete message`);
-                  const { fullMessage } = handleTokenError(new Error('No \'earned\' entries found'), interaction);
-                  await i.update({
-                    content: fullMessage,
-                    embeds: [],
-                    components: []
-                  });
-                } else {
-                  logger.success('TOKEN', `Sync successful, showing success message`);
-                  await i.update({
-                    content: '✅ Your token tracker has been synced successfully!',
-                    embeds: [],
-                    components: []
-                  });
-                }
+                logger.success('TOKEN', `Sync successful, showing success message`);
+                await i.update({
+                  content: '✅ Your token tracker has been synced successfully!',
+                  embeds: [],
+                  components: []
+                });
               } else if (i.customId === 'token-sync-no') {
                 await i.update({
                   content: '⏰ Token sync skipped. You can sync later using `/tokens setup` again.',

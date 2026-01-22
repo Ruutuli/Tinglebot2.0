@@ -447,7 +447,6 @@ module.exports = {
     canChangeVillage,
     validateCharacterInventory,
     // isValidGoogleSheetsUrl, // Google Sheets functionality removed
-    extractSpreadsheetId,
     isValidRace,
     getRaceValueByName,
     isValidImageUrl,

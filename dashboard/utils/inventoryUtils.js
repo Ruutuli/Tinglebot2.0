@@ -7,13 +7,8 @@ const { handleError } = require("./globalErrorHandler");
 const {
   appendSheetData,
   authorizeSheets,
-  getSheetIdByTitle,
-  readSheetData,
-  writeSheetData,
-  safeAppendDataToSheet,
-  extractSpreadsheetId,
-  // Google Sheets functionality removed
-} = require("./googleSheetsUtils");
+  // Google Sheets functionality removed - imports removed
+} = {}; // googleSheetsUtils removed
 const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
@@ -195,95 +190,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
       console.log(`[inventoryUtils.js]: ✅ Added new item ${dbDoc.itemName} to database`);
     }
 
-    // Google Sheets Sync
-    try {
-      // Get existing row data if it exists
-      const auth = await authorizeSheets();
-      const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
-      
-      // Find all matching rows (to handle duplicates)
-      const matchingRows = sheetData.filter(row => {
-        const sheetChar = (row[0] || '').trim().toLowerCase();
-        const sheetItem = (row[1] || '').trim().toLowerCase();
-        const sheetSync = (row[12] || '').trim(); // Check Confirmed Sync field
-        const dbChar = characterName.trim().toLowerCase();
-        const dbItem = dbDoc.itemName.trim().toLowerCase();
-        
-        // Skip rows that are already synced
-        if (sheetSync) {
-          return false;
-        }
-        
-        return sheetChar === dbChar && sheetItem === dbItem;
-      });
-
-      if (matchingRows.length > 0) {
-        // Fetch item details to fill empty fields
-        const itemDetails = await dbFunctions.fetchItemByName(dbDoc.itemName);
-        if (itemDetails) {
-          dbDoc.category = Array.isArray(itemDetails.category) ? itemDetails.category.join(", ") : (itemDetails.category || "");
-          dbDoc.type = Array.isArray(itemDetails.type) ? itemDetails.type.join(", ") : (itemDetails.type || "");
-          dbDoc.subtype = Array.isArray(itemDetails.subtype) ? itemDetails.subtype.join(", ") : (itemDetails.subtype || "");
-        }
-
-        // Helper function to check if a value is empty or undefined
-        const isEmptyOrUndefined = (val) => val === undefined || val === null || val === '';
-
-        // Update each matching row
-        for (const existingRow of matchingRows) {
-          const rowIndex = sheetData.indexOf(existingRow);
-
-          const values = [[
-            characterName,
-            dbDoc.itemName,
-            dbDoc.quantity,
-            isEmptyOrUndefined(existingRow[3]) ? dbDoc.category : existingRow[3], // Category
-            isEmptyOrUndefined(existingRow[4]) ? dbDoc.type : existingRow[4], // Type
-            isEmptyOrUndefined(existingRow[5]) ? (Array.isArray(dbDoc.subtype) ? dbDoc.subtype.join(", ") : (dbDoc.subtype || '')) : existingRow[5], // Subtype
-            existingRow[6] || dbDoc.obtain || '', // Obtain (preserve existing)
-            isEmptyOrUndefined(existingRow[7]) ? dbDoc.job : existingRow[7], // Job
-            isEmptyOrUndefined(existingRow[8]) ? dbDoc.perk : existingRow[8], // Perk
-            isEmptyOrUndefined(existingRow[9]) ? dbDoc.location : existingRow[9], // Location
-            isEmptyOrUndefined(existingRow[10]) ? dbDoc.link : existingRow[10], // Link
-            formatDateTime(dbDoc.date), // Date/Time
-            uuidv4() // Confirmed Sync
-          ]];
-
-          // Update existing row with all fields
-          await writeSheetData(
-            auth,
-            spreadsheetId,
-            `loggedInventory!A${rowIndex + 2}:M${rowIndex + 2}`,
-            values
-          );
-          console.log(`[inventoryUtils.js]: ✅ Updated row for ${dbDoc.itemName} (${existingRow[6] || dbDoc.obtain}) in sheet with all fields`);
-        }
-      } else {
-        // No matching rows found, append a new row
-        const newRow = [
-          characterName,
-          dbDoc.itemName,
-          dbDoc.quantity,
-          dbDoc.category,
-          dbDoc.type,
-          Array.isArray(dbDoc.subtype) ? dbDoc.subtype.join(", ") : (dbDoc.subtype || ''),
-          dbDoc.obtain,
-          dbDoc.job,
-          dbDoc.perk,
-          dbDoc.location,
-          dbDoc.link,
-          formatDateTime(dbDoc.date),
-          uuidv4() // Generate new sync ID
-        ];
-
-        // Append the new row to the sheet
-        await appendSheetData(auth, spreadsheetId, 'loggedInventory!A:M', [newRow]);
-        console.log(`[inventoryUtils.js]: ✅ Added new row for ${dbDoc.itemName} to sheet`);
-      }
-    } catch (sheetError) {
-      console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
-    }
+    // Google Sheets Sync removed - inventory is managed in database only
   } catch (error) {
     if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
       handleError(error, "inventoryUtils.js");
@@ -651,17 +558,7 @@ const addItemsToDatabase = async (character, items, interaction) => {
       }
     }
 
-    const spreadsheetId = getSheetIdByTitle(character.inventory);
-    if (interaction) {
-      const sheetRows = items.map((item) => [
-        character.name,
-        item.itemName,
-        item.quantity,
-        new Date().toISOString(),
-        `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-      ]);
-      await appendSheetData(spreadsheetId, "Inventory", sheetRows);
-    }
+    // Google Sheets logging removed
   } catch (error) {
     handleError(error, "inventoryUtils.js");
     console.error("[inventoryUtils.js]: ❌ Error adding multiple items to database:", error);
@@ -753,7 +650,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
         ];
       }
     }));
-    await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
+    // Google Sheets logging removed
   } catch (error) {
     handleError(error, 'inventoryUtils.js');
     console.error(`[inventoryUtils.js]: Error logging materials to Google Sheets: ${error.message}`);
@@ -1031,18 +928,16 @@ const processMaterials = async (interaction, character, inventory, craftableItem
   // Google Sheets logging removed - materials are logged to database
   if (false) { // Google Sheets functionality removed
     try {
-      const auth = await authorizeSheets();
-      const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const range = 'loggedInventory!A2:M';
+      // Google Sheets logging removed
       const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
       const formattedDateTime = formatDateTime(new Date());
 
-      await logMaterialsToGoogleSheets(
-        auth,
-        spreadsheetId,
-        range,
-        character,
-        materialsUsed,
+      // await logMaterialsToGoogleSheets(
+      //   null, // auth removed
+      //   null, // spreadsheetId removed
+      //   null, // range removed
+      //   character,
+      //   materialsUsed,
         craftableItem,
         interactionUrl,
         formattedDateTime
@@ -1422,18 +1317,16 @@ const continueProcessMaterials = async (interaction, character, selectedItems, c
   // Google Sheets logging removed - materials are logged to database
   if (false) { // Google Sheets functionality removed
     try {
-      const auth = await authorizeSheets();
-      const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const range = 'loggedInventory!A2:M';
+      // Google Sheets logging removed
       const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
       const formattedDateTime = formatDateTime(new Date());
 
-      await logMaterialsToGoogleSheets(
-        auth,
-        spreadsheetId,
-        range,
-        character,
-        materialsUsed,
+      // await logMaterialsToGoogleSheets(
+      //   null, // auth removed
+      //   null, // spreadsheetId removed
+      //   null, // range removed
+      //   character,
+      //   materialsUsed,
         craftableItem,
         interactionUrl,
         formattedDateTime
@@ -1527,14 +1420,8 @@ async function refundJobVoucher(character, interaction) {
                 uuidv4()
             ]];
 
-            await safeAppendDataToSheet(
-                character.inventory,
-                character,
-                'loggedInventory!A2:M',
-                values,
-                interaction.client
-            );
-            console.log(`[inventoryUtils.js]: ✅ Successfully logged job voucher refund to Google Sheets for ${character.name}`);
+            // Google Sheets logging removed
+            console.log(`[inventoryUtils.js]: ✅ Successfully logged job voucher refund to database for ${character.name}`);
         }
 
         return true;
@@ -1750,7 +1637,7 @@ module.exports = {
   createRemovedItemDatabase,
   addItemsToDatabase,
   removeInitialItemIfSynced,
-  logMaterialsToGoogleSheets,
+  // logMaterialsToGoogleSheets, // Google Sheets functionality removed
   refundJobVoucher,
   SOURCE_TYPES,
   syncSheetDataToDatabase,

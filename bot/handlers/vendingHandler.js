@@ -1803,40 +1803,7 @@ async function handleRestock(interaction) {
       // Don't fail the request if transaction logging fails
     }
 
-    // ------------------- Update Google Sheets -------------------
-    const shopLink = character.shopLink || character.vendingSetup?.shopLink;
-    if (shopLink) {
-      try {
-        const spreadsheetId = extractSpreadsheetId(shopLink);
-        if (spreadsheetId) {
-          const auth = await authorizeSheets();
-          const currentDate = new Date().toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          });
-          const rowData = [
-            characterName,
-            newSlot,
-            itemName,
-            stockQty,
-            pointCost,
-            totalCost,
-            character.currentVillage,
-            tokenPrice,
-            artPrice,
-            otherPrice,
-            barterOpen ? 'Yes' : 'No',
-            currentDate
-          ];
-          // Always append a new row for every transaction
-          await appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', [rowData]);
-        }
-      } catch (sheetError) {
-        console.error('[handleRestock]: Error updating Google Sheet:', sheetError);
-        // Don't fail the whole operation if sheet update fails
-      }
-    }
+    // Google Sheets update removed
 
     // ------------------- Success Response -------------------
     const priceDisplay = [];
@@ -3101,17 +3068,8 @@ async function handleFulfill(interaction) {
                       uniqueSyncId // Confirmed Sync (M)
                     ];
                     
-                    // Log to Google Sheets
-                    await safeAppendDataToSheet(
-                      buyer.inventory,
-                      buyer,
-                      'loggedInventory!A2:M',
-                      [removalLogEntry],
-                      interaction?.client,
-                      { skipValidation: true, context: { commandName: 'vending', userTag: interaction?.user?.tag, userId: interaction?.user?.id } }
-                    );
-                    
-                    console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removal logged to Google Sheets', {
+                    // Google Sheets logging removed
+                    console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removal logged to database', {
                       fulfillmentId,
                       offeredItem: offeredItemName,
                       quantity: removeQty
@@ -3248,11 +3206,7 @@ async function handleFulfill(interaction) {
               "spent",
               `-${totalCost}`
             ];
-            await retryOperation(
-              () => safeAppendDataToSheet(buyerUser.tokenTracker, buyerUser, "loggedTracker!B7:F", [buyerTokenRow], undefined, { skipValidation: true }),
-              2,
-              'buyer token tracker update'
-            );
+            // Google Sheets token tracker logging removed
             console.log(`[vendingHandler.js]: ✅ Logged token transaction to buyer's tracker for user ${buyerId}`);
           } catch (buyerSheetError) {
             console.error(`[vendingHandler.js]: ❌ Error logging to buyer's token tracker:`, buyerSheetError.message);
@@ -3260,86 +3214,19 @@ async function handleFulfill(interaction) {
           }
         }
 
-        // Log token transaction in vendor's sheet
-        const vendorShopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
-        if (vendorShopLink) {
-          try {
-            const spreadsheetId = extractSpreadsheetId(vendorShopLink);
-            const auth = await authorizeSheets();
-            const paymentNote = isVendorSelfPurchase 
-              ? `Self-purchase (ROTW SELL price: ${perItemPrice} per item)`
-              : 'Token Payment';
-            const tokenTransactionRow = [
-              [
-                vendor.name, // Vendor
-                userCharacterName, // Buyer
-                'Tokens', // Item
-                totalCost, // Amount
-                paymentNote, // Payment Method
-                itemName, // Item Purchased
-                `${quantity}x ${itemName}`, // Notes
-                new Date().toLocaleDateString('en-US') // Date
-              ]
-            ];
-            await retryOperation(
-              () => appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', tokenTransactionRow),
-              2,
-              'vendor token transaction log'
-            );
-          } catch (sheetError) {
-            console.error('[handleFulfill]: Error logging token transaction:', sheetError.message);
-            // Don't fail the transaction - this is just logging
-          }
-        }
+        // Google Sheets token transaction logging removed
       }
   
-      // Update vendor's vendingShop sheet
+      // Google Sheets vendor shop update removed
       const vendorShopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
-      if (vendorShopLink) {
+      if (false) { // Google Sheets functionality removed
         try {
-          const spreadsheetId = extractSpreadsheetId(vendorShopLink);
-          const auth = await authorizeSheets();
-          
-          // Read current sheet data
-          const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
-          
-          // Find the row with the item
-          const itemRowIndex = sheetData.findIndex(row => row[2] === itemName);
-          if (itemRowIndex !== -1) {
-            const row = itemRowIndex + 2; // +2 because sheet data starts at A2
-            const existingRow = sheetData[itemRowIndex];
-            
-            // Calculate new stock quantity
-            const newStockQty = Number(existingRow[3]) - quantity;
-            
-            // Update the row in the sheet
-            const updateData = [
-              existingRow[0], // Character Name
-              existingRow[1], // Slot
-              existingRow[2], // Item Name
-              newStockQty, // Updated Stock Qty
-              existingRow[4], // Cost Each
-              existingRow[5], // Points Spent
-              existingRow[6], // Bought From
-              existingRow[7], // Token Price
-              existingRow[8], // Art Price
-              existingRow[9], // Other Price
-              existingRow[10], // Trades Open
-              new Date().toLocaleDateString('en-US') // Current Date in column L
-            ];
-            
-            await retryOperation(
-              () => writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]),
-              2,
-              'vendor sheet stock update'
-            );
-
-            // Add transaction log to vendor's vendingShop sheet with negative quantity
-            const transactionRow = [
-              [
-                vendor.name, // Vendor
-                userCharacterName, // Buyer
-                itemName, // Item
+          // Google Sheets code removed
+          const transactionRow = [
+            [
+              vendor.name, // Vendor
+              userCharacterName, // Buyer
+              itemName, // Item
                 -quantity, // Negative Quantity for sales
                 paymentMethod, // Payment Method
                 offeredItem || 'N/A', // Offered Item
@@ -3352,20 +3239,18 @@ async function handleFulfill(interaction) {
               2,
               'vendor transaction log'
             );
-          }
-        } catch (sheetError) {
+          } catch (sheetError) {
           console.error('[handleFulfill]: Error updating vendor sheet:', sheetError.message);
           // Don't fail the transaction - this is just logging
         }
       }
 
-      // Update buyer's inventory sheet
+      // Google Sheets buyer inventory update removed
       const buyerInventoryLink = buyer.inventory;
-      if (buyerInventoryLink) {
+      if (false) { // Google Sheets functionality removed
         try {
-          const spreadsheetId = extractSpreadsheetId(buyerInventoryLink);
-          const auth = await authorizeSheets();
-          const range = 'loggedInventory!A2:M';
+          // Google Sheets code removed
+          const range = null; // Google Sheets removed
           const uniqueSyncId = uuidv4();
           const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
           const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
@@ -3397,12 +3282,9 @@ async function handleFulfill(interaction) {
             ]
           ];
           
-          if (buyer?.name && buyer?.inventory && buyer?.userId) {
-            await retryOperation(
-              () => safeAppendDataToSheet(buyer.inventory, buyer, range, purchaseRow, undefined, { skipValidation: true }),
-              2,
-              'buyer inventory sheet update'
-            );
+          // Google Sheets buyer inventory update removed
+          if (false) { // Google Sheets functionality removed
+            // Google Sheets code removed
           } else {
             console.error('[handleFulfill]: Invalid buyer object:', {
               buyer: buyer.name,
@@ -4520,15 +4402,12 @@ async function handleEditShop(interaction) {
           { $set: updateFields }
         );
 
-        // Update Google Sheet
+        // Google Sheets shop update removed
         const shopLink = character.shopLink || character.vendingSetup?.shopLink;
-        if (shopLink) {
+        if (false) { // Google Sheets functionality removed
           try {
-            const spreadsheetId = extractSpreadsheetId(shopLink);
-            const auth = await authorizeSheets();
-            
-            // Read current sheet data
-            const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+            // Google Sheets code removed
+            const sheetData = null; // Google Sheets removed
             
             // Find the row with the item (by slot if slot provided, otherwise by item name)
             const itemRowIndex = slot 

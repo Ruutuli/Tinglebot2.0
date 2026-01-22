@@ -222,49 +222,9 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             return;
         }
 
-        // Validate inventory URL
-        const inventoryUrl = character.inventory;
-        if (!inventoryUrl || typeof inventoryUrl !== 'string') {
-            console.log(`[syncHandler.js]: ⚠️ Invalid inventory URL: ${inventoryUrl}`);
-            await editSyncErrorMessage(interaction, '❌ **Invalid inventory URL. Please check the URL and try again.**');
-            return;
-        }
-
-        // Google Sheets authorization removed
-        const spreadsheetId = extractSpreadsheetId(inventoryUrl);
-        
-        // Validate the inventory sheet before proceeding
-        console.log(`[syncHandler.js]: 🔍 Validating inventory sheet for ${characterName}...`);
-        const validationResult = await validateInventorySheet(inventoryUrl, characterName);
-        
-        if (!validationResult.success) {
-            console.log(`[syncHandler.js]: ❌ Validation failed: ${validationResult.message}`);
-            await editSyncErrorMessage(interaction, validationResult.message);
-            return;
-        }
-
-        // Get the actual sheet name (preserving spaces) for use in range queries
-        const actualSheetName = await getActualInventorySheetName(auth, spreadsheetId);
-        if (!actualSheetName) {
-            console.log(`[syncHandler.js]: ⚠️ Sheet 'loggedInventory' not found`);
-            await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
-            return;
-        }
-
-        // Get sheet ID and read data
-        const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
-        if (!sheetId) {
-            console.log(`[syncHandler.js]: ⚠️ Sheet 'loggedInventory' not found`);
-            await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
-            return;
-        }
-
-        const sheetData = await readSheetData(auth, spreadsheetId, `${actualSheetName}!A2:M`);
-        if (!sheetData?.length) {
-            console.log(`[syncHandler.js]: ⚠️ No data found in sheet`);
-            await editSyncErrorMessage(interaction, `❌ **No data found in the Google Sheet. Please ensure the sheet is correctly set up.**`);
-            return;
-        }
+        // Google Sheets sync functionality has been removed
+        await editSyncErrorMessage(interaction, '❌ **Google Sheets sync is no longer supported. Inventory is now managed through the database directly.**');
+        return;
 
         // Process data
         const mappedData = sheetData.map((row, index) => ({
@@ -356,9 +316,9 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                             const isCraftedItem = inventoryItem.obtain.toLowerCase().includes('crafting') || 
                                                 inventoryItem.obtain.toLowerCase().includes('crafted');
 
-                            // For crafted items, find and update existing row instead of appending
-                            if (isCraftedItem) {
-                                const sheetData = await readSheetData(auth, spreadsheetId, `${actualSheetName}!A2:M`);
+                            // Google Sheets functionality removed
+                            if (false) { // Google Sheets sync removed
+                                const sheetData = null; // Google Sheets removed
                                 const existingRowIndex = sheetData.findIndex(row => {
                                     const sheetChar = (row[0] || '').trim().toLowerCase();
                                     const sheetItem = (row[1] || '').trim().toLowerCase();

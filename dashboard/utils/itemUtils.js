@@ -15,8 +15,9 @@ let connectToInventories = null;
 // ============================================================================
 // Utility Functions
 // ------------------- Importing utility functions -------------------
-const { appendSheetData } = require('./googleSheetsUtils');
-const { extractSpreadsheetId } = require('./googleSheetsUtils');
+// Google Sheets utilities removed
+// const { appendSheetData } = require('./googleSheetsUtils');
+// const { extractSpreadsheetId } = require('./googleSheetsUtils');
 
 // ============================================================================
 // Database Models
@@ -107,19 +108,7 @@ const addItemsToDatabase = async (character, items, interaction = null) => {
             }
         }
 
-        // Use extractSpreadsheetId instead of getSheetIdByName for obtaining the spreadsheet ID from URL.
-        const spreadsheetId = extractSpreadsheetId(character.inventory);
-
-        if (interaction) {
-            const sheetRows = items.map(item => [
-                character.name,
-                item.itemName,
-                item.quantity,
-                new Date().toISOString(),
-                `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
-            ]);
-            await appendSheetData(spreadsheetId, 'Inventory', sheetRows);
-        }
+        // Google Sheets logging removed
     } catch (error) {
     handleError(error, 'itemUtils.js');
 
@@ -155,11 +144,9 @@ const removeItemDatabase = async (character, item, quantity, interaction = null)
             throw new Error(`❌ Item ${item.itemName} not found in inventory`);
         }
 
-        // Use extractSpreadsheetId to get the spreadsheet ID.
-        const spreadsheetId = extractSpreadsheetId(character.inventory);
-
-        if (interaction) {
-            await appendSheetData(spreadsheetId, 'Inventory', [[
+        // Google Sheets logging removed
+        if (false) { // Google Sheets functionality removed
+            // await appendSheetData(null, 'Inventory', [[
                 character.name,
                 item.itemName,
                 -quantity,

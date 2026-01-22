@@ -513,14 +513,32 @@ async function initializeClient() {
         logBloodMoonStatus();
         
         // Initialize Agenda for all scheduled jobs (recurring + one-time)
-        const { initAgenda, defineAgendaJobs, startAgenda } = require('./scheduler/agenda');
-        await initAgenda();
-        defineAgendaJobs({ client }); // Defines all job types (recurring + one-time)
-        await startAgenda();
-        
-        // Initialize scheduler (schedules recurring jobs using Agenda)
-        const { initializeScheduler } = require('./scheduler/scheduler');
-        await initializeScheduler(client);
+        logger.section('Scheduler Initialization');
+        logger.divider();
+        try {
+          const { initAgenda, defineAgendaJobs, startAgenda } = require('./scheduler/agenda');
+          logger.info('SCHEDULER', 'Initializing Agenda...');
+          await initAgenda();
+          logger.info('SCHEDULER', 'Defining Agenda jobs...');
+          defineAgendaJobs({ client }); // Defines all job types (recurring + one-time)
+          logger.info('SCHEDULER', 'Starting Agenda worker...');
+          await startAgenda();
+          logger.success('SCHEDULER', 'Agenda initialized and started');
+          
+          // Initialize scheduler (schedules recurring jobs using Agenda)
+          logger.info('SCHEDULER', 'Initializing scheduler (creating recurring jobs)...');
+          const { initializeScheduler } = require('./scheduler/scheduler');
+          await initializeScheduler(client);
+          logger.success('SCHEDULER', 'Scheduler initialization complete');
+        } catch (schedulerError) {
+          logger.error('SCHEDULER', 'Error initializing scheduler:', schedulerError);
+          handleError(schedulerError, "index.js", {
+            operation: 'scheduler_initialization',
+            context: 'agenda_setup'
+          });
+          // Don't throw - allow bot to continue even if scheduler fails
+        }
+        logger.divider();
         
         logger.divider();
         

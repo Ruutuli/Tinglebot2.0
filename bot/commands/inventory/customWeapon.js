@@ -1373,74 +1373,9 @@ try {
         return;
     }
 
-    // ------------------- Log Crafted Weapon to Google Sheets -------------------
+    // Google Sheets logging removed - inventory is managed in database
     try {
-        const auth = await authorizeSheets();
-        const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-        const formattedDateTime = formatDateTime(new Date());
-
-        // 🛠️ Fetch actual item details from DB for accurate category/type/subtype
-        const item = await fetchItemByName(weaponSubmission.weaponName, {
-          commandName: interaction.commandName,
-          userTag: interaction.user?.tag,
-          userId: interaction.user?.id,
-          operation: 'custom_weapon_submission'
-        });
-
-        const values = [
-            [
-                character.name,
-                weaponSubmission.weaponName,
-                '1',
-                item?.category?.join(', ') || 'Unknown',
-                item?.type?.join(', ') || 'Unknown',
-                item?.subtype?.join(', ') || 'Unknown',
-                'Custom Weapon',
-                character.job || '',
-                '',
-                character.currentVillage,
-                interactionUrl,
-                formattedDateTime,
-                uniqueSyncId
-            ]
-        ];
-
-        if (character?.name && character?.inventory && character?.userId) {
-            await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
-                skipValidation: true,
-                context: {
-                    commandName: 'customWeapon',
-                    userTag: interaction.user.tag,
-                    userId: interaction.user.id,
-                    characterName: character.name,
-                    spreadsheetId: extractSpreadsheetId(character.inventory),
-                    range: range,
-                    sheetType: 'inventory',
-                    options: {
-                        weaponName: weaponSubmission.weaponName,
-                        materials: weaponSubmission.craftingMaterials
-                    }
-                }
-            });
-        } else {
-            console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-        }
-
-        // Log materials used
-        await logMaterialsToGoogleSheets(
-            auth,
-            spreadsheetId,
-            range,
-            character,
-            weaponSubmission.craftingMaterials,
-            { itemName: weaponSubmission.weaponName },
-            interactionUrl,
-            formattedDateTime,
-            interaction
-        );
+        // Google Sheets code removed - inventory operations are handled by database functions
 
     } catch (error) {
         handleInteractionError(error, 'customWeapon.js');

@@ -1374,12 +1374,15 @@ async function verifyAndRecreateJobs(client) {
 // ------------------- Main Initialization Function ------------------
 
 async function initializeScheduler(client) {
+ logger.info('SCHEDULER', `[initializeScheduler] Starting scheduler initialization (call #${schedulerInitCallCount + 1})...`);
  schedulerInitCallCount++;
  
  if (!client || !client.isReady()) {
   logger.error('SCHEDULER', 'Invalid or unready Discord client provided to scheduler');
+  logger.error('SCHEDULER', `Client ready state: ${client ? client.isReady() : 'null'}`);
   return;
  }
+ logger.debug('SCHEDULER', 'Discord client is ready');
 
  // Check if Agenda is initialized
  const agenda = getAgenda();
@@ -1387,12 +1390,14 @@ async function initializeScheduler(client) {
   logger.error('SCHEDULER', `[scheduler.js]❌ Agenda not initialized - cannot initialize scheduler. Make sure initAgenda() and defineAgendaJobs() are called first.`);
   return;
  }
+ logger.debug('SCHEDULER', 'Agenda instance found');
 
  // Prevent duplicate initialization
  if (isSchedulerInitialized) {
   logger.warn('SCHEDULER', `⚠️ Scheduler already initialized (call #${schedulerInitCallCount}) - skipping reinitialization`);
   return;
  }
+ logger.debug('SCHEDULER', 'Scheduler not yet initialized, proceeding...');
 
  // Run startup checks
  await runStartupChecks(client);

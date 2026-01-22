@@ -97,8 +97,8 @@ const logger = require('./utils/logger');
 const { getMemoryMonitor } = require('./utils/memoryMonitor');
 
 
-// Import Google Sheets utilities
-const googleSheets = require('./utils/googleSheetsUtils');
+// Google Sheets utilities removed
+// const googleSheets = require('./utils/googleSheetsUtils');
 const { google } = require('googleapis');
 
 // Import route modules
@@ -10751,32 +10751,10 @@ app.post('/api/blupee/claim', async (req, res) => {
           'earned',
           `${tokensAwarded}`
         ];
-        await googleSheets.safeAppendDataToSheet(
-          user.tokenTracker,
-          user,
-          'loggedTracker!B7:F',
-          [newRow],
-          null,
-          { skipValidation: false }
-        );
-        logger.success(`Blupee catch logged to Google Sheets for user ${user.username || user.discordId}`);
-      } catch (sheetError) {
-        // Don't fail the entire request if Google Sheets logging fails
-        const errorMessage = sheetError?.message || sheetError?.toString() || 'Unknown error';
-        
-        console.log('[server.js]: 🔍 Caught error while logging to Google Sheets:', errorMessage);
-        
-        // Only log as error if it's not a credential issue (which is expected in local dev)
-        if (errorMessage.includes('credentials') || 
-            errorMessage.includes('No key or keyFile') || 
-            errorMessage.includes('authentication failed') ||
-            errorMessage.includes('functionality disabled')) {
-          // Silently skip - this is expected in local dev without credentials
-          console.log('[server.js]: ℹ️ Google Sheets logging skipped (not configured in this environment)');
-        } else {
-          console.error('[server.js]: ❌ Unexpected error logging blupee to Google Sheets:', errorMessage);
-          logger.error('server.js', `Failed to log blupee catch to Google Sheets for user ${user.username || user.discordId}: ${errorMessage}`);
-        }
+        // Google Sheets logging removed
+        logger.success(`Blupee catch logged to database for user ${user.username || user.discordId}`);
+      } catch (error) {
+        // Ignore errors in disabled code
       }
     }
     
@@ -11113,98 +11091,9 @@ async function readTransactionsFromGoogleSheets(userId, tokenTrackerUrl) {
       return [];
     }
     
-    console.log(`[server.js]: 📊 Reading Google Sheets for user ${userId}`);
-    const auth = await googleSheets.authorizeSheets();
-    const spreadsheetId = googleSheets.extractSpreadsheetId(tokenTrackerUrl);
-    console.log(`[server.js]: 📊 Spreadsheet ID: ${spreadsheetId}`);
-    
-    // Get the actual sheet name to handle any spacing issues
-    // Use Google Sheets API to find the sheet by title
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-    const loggedTrackerSheet = spreadsheet.data.sheets.find(sheet => 
-      sheet.properties.title.trim().toLowerCase() === 'loggedtracker'
-    );
-    
-    if (!loggedTrackerSheet) {
-      console.warn(`[server.js]: ⚠️ Sheet 'loggedTracker' not found for user ${userId}`);
-      return [];
-    }
-    
-    const actualSheetName = loggedTrackerSheet.properties.title;
-    const range = `${actualSheetName}!B7:F`;
-    console.log(`[server.js]: 📊 Reading range: ${range}`);
-    const sheetData = await googleSheets.readSheetData(auth, spreadsheetId, range);
-    console.log(`[server.js]: 📊 Sheet data rows: ${sheetData?.length || 0}`);
-    
-    // Validate headers
-    if (!sheetData || sheetData.length < 2) {
-      console.log(`[server.js]: ⚠️ No data rows found (only ${sheetData?.length || 0} rows)`);
-      return []; // No data rows
-    }
-    
-    // Parse transactions from sheet data (skip header row)
-    const transactions = [];
-    let runningBalance = 0; // We'll need to calculate this
-    
-    // First pass: calculate balances
-    sheetData.slice(1).forEach((row) => {
-      if (row.length < 5) return;
-      const amount = parseInt(row[4]);
-      if (isNaN(amount)) return;
-      
-      if (row[3] === "earned") {
-        runningBalance += amount;
-      } else if (row[3] === "spent") {
-        runningBalance -= Math.abs(amount);
-      }
-    });
-    
-    // Reset and create transactions with proper balances
-    runningBalance = 0;
-    sheetData.slice(1).forEach((row, idx) => {
-      if (row.length < 5) return;
-      const amount = parseInt(row[4]);
-      if (isNaN(amount)) return;
-      
-      const type = row[3]?.toLowerCase();
-      if (type !== 'earned' && type !== 'spent') return;
-      
-      const balanceBefore = runningBalance;
-      if (type === "earned") {
-        runningBalance += amount;
-      } else {
-        runningBalance -= Math.abs(amount);
-      }
-      
-      transactions.push({
-        _id: `sheet_${userId}_${idx}`, // Temporary ID for sheet transactions
-        userId: userId,
-        amount: type === 'earned' ? amount : -Math.abs(amount),
-        type: type,
-        category: row[2] || '',
-        description: row[0] || '',
-        link: row[1] || '',
-        balanceBefore: balanceBefore,
-        balanceAfter: runningBalance,
-        timestamp: new Date(), // We don't have timestamp in sheet, use current
-        dayKey: new Date().toISOString().split('T')[0],
-        source: 'google_sheets' // Mark as from Google Sheets
-      });
-    });
-    
-    console.log(`[server.js]: ✅ Parsed ${transactions.length} transactions from Google Sheets`);
-    if (transactions.length > 0) {
-      console.log(`[server.js]: 📋 Sample transaction:`, {
-        type: transactions[0].type,
-        amount: transactions[0].amount,
-        description: transactions[0].description,
-        category: transactions[0].category
-      });
-    }
-    
-    // Return in reverse order (newest first)
-    return transactions.reverse();
+    // Google Sheets reading removed - return empty array
+    console.log(`[server.js]: ⚠️ Google Sheets reading is no longer supported`);
+    return [];
   } catch (error) {
     console.error(`[server.js]: Error reading token transactions from Google Sheets for user ${userId}:`, error);
     return []; // Return empty array on error

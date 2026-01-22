@@ -7,15 +7,15 @@ const { google } = require("googleapis");
 
 // ------------------- Project Utilities -------------------
 const { handleError, resetErrorCounter } = require("../utils/globalErrorHandler");
-const {
-  authorizeSheets,
-  appendSheetData,
-  extractSpreadsheetId,
-  getActualSheetName,
-  // isValidGoogleSheetsUrl, // Google Sheets functionality removed
-  readSheetData,
-  safeAppendDataToSheet,
-} = require("../utils/googleSheetsUtils");
+// Google Sheets utilities removed
+// const {
+//   authorizeSheets,
+//   appendSheetData,
+//   extractSpreadsheetId,
+//   getActualSheetName,
+//   readSheetData,
+//   safeAppendDataToSheet,
+// } = require("../utils/googleSheetsUtils");
 const { characterQueryDetector, modCharacterQueryDetector } = require("../utils/throttleDetector");
 const dbConfig = require('../config/database');
 const logger = require('../utils/logger');
@@ -1388,10 +1388,7 @@ async function completeQuest(userId, questId) {
  const quest = await Quest.findById(questId);
  if (!quest) throw new Error("Quest not found.");
 
- const auth = await authorizeSheets();
- await appendSheetData(auth, quest.spreadsheetId, "Quests!A1", [
-  [userId, questId, quest.rewards],
- ]);
+ // Google Sheets quest completion removed
  return quest.rewards;
 }
 
@@ -1657,95 +1654,11 @@ async function syncTokenTracker(userId) {
    throw new Error("No token tracker configured");
   }
 
-  logger.debug('TOKEN', `Authorizing Google Sheets access...`);
-  const auth = await authorizeSheets();
-  const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-  logger.debug('TOKEN', `Extracted spreadsheet ID: ${spreadsheetId}`);
-  
-  // Get the actual sheet name to handle any spacing issues
-  const actualSheetName = await getActualSheetName(auth, spreadsheetId, 'loggedTracker');
-  if (!actualSheetName) {
-    throw new Error("Sheet 'loggedTracker' not found. Please ensure you have a tab named exactly 'loggedTracker'.");
-  }
-  
-  const range = `${actualSheetName}!B7:F`;
-  logger.debug('TOKEN', `Reading sheet data from range: ${range}`);
-  const sheetData = await readSheetData(auth, spreadsheetId, range);
-  logger.debug('TOKEN', `Raw sheet data retrieved:`, {
-    totalRows: sheetData.length,
-    firstRow: sheetData[0],
-    sampleData: sheetData.slice(0, 3)
-  });
-
-  // Validate headers
-  const headers = sheetData[0];
-  logger.debug('TOKEN', `Validating headers:`, headers);
-  if (!headers || headers.length < 5) {
-    logger.warn('TOKEN', `Invalid headers - expected 5 columns, got:`, headers?.length || 0);
-    throw new Error("Invalid sheet format. Please ensure your sheet has the correct headers in row 7.");
-  }
-
-  // Check if there are any earned entries
-  const earnedRows = sheetData.slice(1).filter(row => row[3] === "earned");
-  const spentRows = sheetData.slice(1).filter(row => row[3] === "spent");
-  logger.debug('TOKEN', `Row analysis:`, {
-    totalDataRows: sheetData.length - 1,
-    earnedRows: earnedRows.length,
-    spentRows: spentRows.length,
-    earnedRowSamples: earnedRows.slice(0, 3),
-    spentRowSamples: spentRows.slice(0, 3)
-  });
-  
-  if (!earnedRows.length) {
-    // Allow setup even with no earned entries - set tokens to 0
-    logger.info('TOKEN', `No earned entries found, setting tokens to 0`);
-    user.tokens = 0;
-    user.tokensSynced = true;
-    await user.save();
-    logger.success('TOKEN', `User record saved with 0 tokens`);
-    return user;
-  }
-
-  let totalEarned = 0;
-  let totalSpent = 0;
-  let skippedRows = 0;
-
-  logger.debug('TOKEN', `Processing rows for token calculation...`);
-  sheetData.slice(1).forEach((row, idx) => {
-    if (row.length < 5) {
-      skippedRows++;
-      logger.debug('TOKEN', `Skipping row ${idx + 8} (invalid length):`, row);
-      return; // Skip invalid rows
-    }
-    const amount = parseInt(row[4]);
-    if (isNaN(amount)) {
-      skippedRows++;
-      logger.debug('TOKEN', `Skipping row ${idx + 8} (invalid amount):`, row);
-      return; // Skip rows with invalid amounts
-    }
-    if (row[3] === "earned") {
-      totalEarned += amount;
-      logger.debug('TOKEN', `Earned ${amount} tokens from row ${idx + 8}:`, row);
-    } else if (row[3] === "spent") {
-      totalSpent += Math.abs(amount);
-      logger.debug('TOKEN', `Spent ${Math.abs(amount)} tokens from row ${idx + 8}:`, row);
-    }
-  });
-
-  const finalTokens = totalEarned - totalSpent;
-  logger.info('TOKEN', `Token calculation summary:`, {
-    totalEarned,
-    totalSpent,
-    finalTokens,
-    skippedRows,
-    processedRows: sheetData.length - 1 - skippedRows
-  });
-
-  user.tokens = finalTokens;
+  // Google Sheets token sync removed - tokens are now managed in database only
+  logger.info('TOKEN', `Token sync from Google Sheets is no longer supported. Tokens are managed in the database.`);
   user.tokensSynced = true;
   await user.save();
-  logger.success('TOKEN', `User record saved with ${finalTokens} tokens`);
-
+  logger.success('TOKEN', `User record saved with ${user.tokens || 0} tokens`);
   return user;
  } catch (error) {
   logger.error('TOKEN', `Error occurred:`, {
@@ -1779,29 +1692,8 @@ async function appendEarnedTokens(
    `[tokenService.js]: No token tracker configured for user ${userId}`
   );
  }
- const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
- const auth = await authorizeSheets();
- const checkRange = "loggedTracker!B7:F";
- let nextRow = 7;
- try {
-  const response = await google
-   .sheets({ version: "v4", auth })
-   .spreadsheets.values.get({
-    spreadsheetId,
-    range: checkRange,
-   });
-  const rows = response.data.values || [];
-  nextRow += rows.length;
-  const appendRange = `loggedTracker!B${nextRow}:F`;
-  const newRow = [fileName, fileUrl, category, "earned", `${amount}`];
-  await google.sheets({ version: "v4", auth }).spreadsheets.values.update({
-   spreadsheetId,
-   range: appendRange,
-   valueInputOption: "USER_ENTERED",
-   resource: { values: [newRow] },
-  });
-  
-  // Also log to TokenTransactionModel
+ // Google Sheets token logging removed
+  // Log to TokenTransactionModel only
   try {
     const TokenTransaction = require('../models/TokenTransactionModel');
     const currentBalance = user.tokens || 0;
@@ -1838,12 +1730,8 @@ async function appendSpentTokens(userId, purchaseName, amount, link = "") {
     `[tokenService.js]: Invalid Google Sheets URL for user ID: ${userId}`
    );
   }
-  const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
-  const auth = await authorizeSheets();
-  const newRow = [purchaseName, link, "", "spent", `-${amount}`];
-  await safeAppendDataToSheet(tokenTrackerLink, user, "loggedTracker!B7:F", [newRow]);
-  
-  // Also log to TokenTransactionModel
+  // Google Sheets token logging removed
+  // Log to TokenTransactionModel only
   try {
     const TokenTransaction = require('../models/TokenTransactionModel');
     const currentBalance = user.tokens || 0;
@@ -1881,7 +1769,8 @@ async function getUserGoogleSheetId(userId) {
      `[tokenService.js]: No token tracker configured for user ${userId}`
     );
    }
-   return extractSpreadsheetId(user.tokenTracker);
+   // Google Sheets functionality removed - return null
+   return null;
   } else {
    console.error(
     `[tokenService.js]: No Token Tracker linked for user ${userId}`
@@ -1943,14 +1832,7 @@ async function updateUserTokens(discordId, amount, activity, link = "") {
  user.tokens += amount;
  await user.save();
 
- if (user.tokenTracker) {
-  const auth = await authorizeSheets();
-  const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-  const range = "loggedTracker!B:F";
-  const dateTime = new Date().toISOString();
-  const values = [["Update", activity, link, amount.toString(), dateTime]];
-  await safeAppendDataToSheet(user.tokenTracker, user, range, values);
- }
+ // Google Sheets token tracker logging removed
 
  return user;
 }

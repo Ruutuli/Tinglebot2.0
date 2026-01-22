@@ -23,7 +23,8 @@ const TableRoll = require('../models/TableRollModel');
 // ============================================================================
 // Utility Functions
 // ------------------- Importing Google Sheets utilities and validation functions -------------------
-const { authorizeSheets } = require('../utils/googleSheetsUtils');
+// Google Sheets utilities removed
+// const { authorizeSheets } = require('../utils/googleSheetsUtils');
 
 // ============================================================================
 // Google Sheets API
@@ -43,7 +44,9 @@ const SPREADSHEET_ID = process.env.TABLE_SPREADSHEET_ID;
 // Fetches table data from a specified sheet tab in the Google Sheets document.
 async function fetchTableData(sheetName) {
     try {
-        const auth = await authorizeSheets();
+        // Google Sheets functionality removed
+        // const auth = await authorizeSheets();
+        const auth = null; // Google Sheets removed
         const sheets = google.sheets({ version: 'v4', auth });
         // Define the range to fetch columns A to C from the specified sheet.
         const range = `'${sheetName}'!A:C`;
