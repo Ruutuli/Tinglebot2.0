@@ -113,6 +113,7 @@ const formatContext = (context) => {
 // ------------------- getDisplayLength ------------------
 // Calculates display length accounting for emoji width
 const getDisplayLength = (str) => {
+  if (!str || typeof str !== 'string') return 0;
   const emojiCount = (str.match(/\p{Emoji}/gu) || []).length;
   return str.length + emojiCount;
 };
@@ -120,6 +121,9 @@ const getDisplayLength = (str) => {
 // ------------------- createBox ------------------
 // Creates a boxed message with borders
 const createBox = (message, color = colors.cyan) => {
+  if (!message || typeof message !== 'string') {
+    message = String(message || '');
+  }
   const lines = message.split('\n');
   const maxLength = Math.max(...lines.map(l => getDisplayLength(l)));
   const width = Math.max(maxLength + 4, 50);
@@ -180,6 +184,9 @@ const logger = {
   // ------------------- info ------------------
   // Logs info message with context-appropriate emoji and color
   info: (context, message) => {
+    if (!message || typeof message !== 'string') {
+      message = String(message || '');
+    }
     const emojiMatch = message.match(/^(\p{Emoji}+)\s/u);
     let emoji = '';
     let cleanMessage = message;

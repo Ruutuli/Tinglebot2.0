@@ -3,7 +3,16 @@
 // Unified error handling with Discord logging, Trello integration, and database error tracking
 // ============================================================================
 
-const { EmbedBuilder } = require('discord.js');
+// Optional Discord.js import - only available in bot context, not dashboard
+let EmbedBuilder = null;
+try {
+  const discord = require('discord.js');
+  EmbedBuilder = discord.EmbedBuilder;
+} catch (err) {
+  // discord.js not available (e.g., in dashboard context) - Discord functionality will be disabled
+  EmbedBuilder = null;
+}
+
 const dbConfig = require('../config/database');
 const logger = require('./logger');
 
@@ -215,6 +224,11 @@ async function sendCriticalErrorNotification(error, source) {
     return;
   }
   
+  if (!EmbedBuilder) {
+    console.error("[globalErrorHandler.js]: ❌ Discord.js not available - cannot send embed notification");
+    return;
+  }
+  
   const consoleChannelId = process.env.CONSOLE_LOG_CHANNEL;
   if (!consoleChannelId) {
     console.error("[globalErrorHandler.js]: ❌ CONSOLE_LOG_CHANNEL not configured");
@@ -329,6 +343,7 @@ async function handleTrelloLogging(error, source, context, extraInfo, timestamp,
 
 async function handleDiscordLogging(error, source, context, extraInfo, message, trelloLink) {
   if (!client || !client.channels?.cache.has(ERROR_LOG_CHANNEL_ID)) return;
+  if (!EmbedBuilder) return; // Discord.js not available - skip Discord logging
   
   const errorChannel = client.channels.cache.get(ERROR_LOG_CHANNEL_ID);
   if (!errorChannel) return;

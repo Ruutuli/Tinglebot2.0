@@ -124,6 +124,43 @@ function displayCharacter() {
   document.getElementById('stat-attack').textContent = character.attack || 0;
   document.getElementById('stat-defense').textContent = character.defense || 0;
   
+  // Display spirit orbs if available
+  if (character.spiritOrbs !== undefined && character.spiritOrbs !== null) {
+    document.getElementById('stat-spirit-orbs').textContent = character.spiritOrbs;
+    document.getElementById('stat-spirit-orbs-card').style.display = 'flex';
+  }
+  
+  // Display current location if different from home
+  if (character.currentVillage && character.currentVillage !== character.homeVillage) {
+    const currentLocationText = document.getElementById('current-location-text');
+    const currentLocationSection = document.getElementById('current-location-section');
+    currentLocationText.textContent = `Currently in ${character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1)}`;
+    currentLocationSection.style.display = 'block';
+  }
+  
+  // Display birthday if available
+  if (character.birthday && character.birthday.trim() !== '') {
+    const birthdayText = document.getElementById('birthday-text');
+    const birthdaySection = document.getElementById('birthday-section');
+    birthdayText.textContent = character.birthday;
+    birthdaySection.style.display = 'block';
+  }
+  
+  // Display gear
+  displayGear(character);
+  
+  // Display links
+  displayLinks(character);
+  
+  // Display additional stats
+  displayAdditionalStats(character);
+  
+  // Display travel log
+  displayTravelLog(character);
+  
+  // Display help wanted info
+  displayHelpWanted(character);
+  
   // Display status badge
   const statusBadge = document.getElementById('status-badge');
   const statusText = document.getElementById('status-text');
@@ -169,6 +206,664 @@ function displayCharacter() {
   
   // Show character display
   document.getElementById('character-display').style.display = 'block';
+}
+
+// ============================================================================
+// ------------------- Gear Display -------------------
+// ============================================================================
+function displayGear(character) {
+  let hasGear = false;
+  
+  // Weapon
+  if (character.gearWeapon?.name) {
+    const weaponCard = document.getElementById('gear-weapon');
+    document.getElementById('gear-weapon-name').textContent = character.gearWeapon.name;
+    const weaponStats = [];
+    if (character.gearWeapon.stats?.modifierHearts) {
+      weaponStats.push(`+${character.gearWeapon.stats.modifierHearts} Hearts`);
+    }
+    if (character.gearWeapon.stats?.staminaToCraft) {
+      weaponStats.push(`${character.gearWeapon.stats.staminaToCraft} Stamina`);
+    }
+    document.getElementById('gear-weapon-stats').textContent = weaponStats.join(' • ') || 'No stats';
+    weaponCard.style.display = 'flex';
+    hasGear = true;
+  }
+  
+  // Shield
+  if (character.gearShield?.name) {
+    const shieldCard = document.getElementById('gear-shield');
+    document.getElementById('gear-shield-name').textContent = character.gearShield.name;
+    const shieldStats = [];
+    if (character.gearShield.stats?.modifierHearts) {
+      shieldStats.push(`+${character.gearShield.stats.modifierHearts} Hearts`);
+    }
+    document.getElementById('gear-shield-stats').textContent = shieldStats.join(' • ') || 'No stats';
+    shieldCard.style.display = 'flex';
+    hasGear = true;
+  }
+  
+  // Head Armor
+  if (character.gearArmor?.head?.name) {
+    const headCard = document.getElementById('gear-armor-head');
+    document.getElementById('gear-armor-head-name').textContent = character.gearArmor.head.name;
+    const headStats = [];
+    if (character.gearArmor.head.stats?.modifierHearts) {
+      headStats.push(`+${character.gearArmor.head.stats.modifierHearts} Hearts`);
+    }
+    document.getElementById('gear-armor-head-stats').textContent = headStats.join(' • ') || 'No stats';
+    headCard.style.display = 'flex';
+    hasGear = true;
+  }
+  
+  // Chest Armor
+  if (character.gearArmor?.chest?.name) {
+    const chestCard = document.getElementById('gear-armor-chest');
+    document.getElementById('gear-armor-chest-name').textContent = character.gearArmor.chest.name;
+    const chestStats = [];
+    if (character.gearArmor.chest.stats?.modifierHearts) {
+      chestStats.push(`+${character.gearArmor.chest.stats.modifierHearts} Hearts`);
+    }
+    document.getElementById('gear-armor-chest-stats').textContent = chestStats.join(' • ') || 'No stats';
+    chestCard.style.display = 'flex';
+    hasGear = true;
+  }
+  
+  // Leg Armor
+  if (character.gearArmor?.legs?.name) {
+    const legsCard = document.getElementById('gear-armor-legs');
+    document.getElementById('gear-armor-legs-name').textContent = character.gearArmor.legs.name;
+    const legsStats = [];
+    if (character.gearArmor.legs.stats?.modifierHearts) {
+      legsStats.push(`+${character.gearArmor.legs.stats.modifierHearts} Hearts`);
+    }
+    document.getElementById('gear-armor-legs-stats').textContent = legsStats.join(' • ') || 'No stats';
+    legsCard.style.display = 'flex';
+    hasGear = true;
+  }
+  
+  // Show empty message if no gear
+  if (!hasGear) {
+    document.getElementById('gear-empty').style.display = 'block';
+  }
+}
+
+// ============================================================================
+// ------------------- Links Display -------------------
+// ============================================================================
+function displayLinks(character) {
+  // Application link
+  if (character.appLink && character.appLink.trim() !== '') {
+    const appLink = document.getElementById('app-link');
+    appLink.href = character.appLink;
+    appLink.style.display = 'flex';
+  }
+  
+  // Inventory link
+  if (character.inventory && character.inventory.trim() !== '') {
+    const inventoryLink = document.getElementById('inventory-link');
+    inventoryLink.href = character.inventory;
+    inventoryLink.style.display = 'flex';
+  }
+}
+
+// ============================================================================
+// ------------------- Additional Stats Display -------------------
+// ============================================================================
+function displayAdditionalStats(character) {
+  const statsGrid = document.getElementById('additional-stats-grid');
+  const section = document.getElementById('additional-stats-section');
+  statsGrid.innerHTML = '';
+  
+  const additionalStats = [];
+  
+  // Vending points
+  if (character.vendingPoints !== undefined && character.vendingPoints !== null && character.vendingPoints > 0) {
+    additionalStats.push({
+      label: 'Vending Points',
+      value: character.vendingPoints,
+      icon: 'fa-coins'
+    });
+  }
+  
+  // Vendor type
+  if (character.vendorType && character.vendorType.trim() !== '') {
+    additionalStats.push({
+      label: 'Vendor Type',
+      value: character.vendorType,
+      icon: 'fa-store'
+    });
+  }
+  
+  // Pouch size
+  if (character.pouchSize && character.pouchSize > 0) {
+    additionalStats.push({
+      label: 'Pouch Size',
+      value: character.pouchSize,
+      icon: 'fa-bag'
+    });
+  }
+  
+  // Job date changed
+  if (character.jobDateChanged) {
+    const date = new Date(character.jobDateChanged);
+    additionalStats.push({
+      label: 'Job Changed',
+      value: date.toLocaleDateString(),
+      icon: 'fa-calendar-alt'
+    });
+  }
+  
+  // Job voucher
+  if (character.jobVoucher) {
+    additionalStats.push({
+      label: 'Job Voucher',
+      value: character.jobVoucherJob || 'Active',
+      icon: 'fa-ticket-alt'
+    });
+  }
+  
+  // Inventory synced status
+  if (character.inventorySynced !== undefined) {
+    additionalStats.push({
+      label: 'Inventory Synced',
+      value: character.inventorySynced ? 'Yes' : 'No',
+      icon: character.inventorySynced ? 'fa-check-circle' : 'fa-times-circle'
+    });
+  }
+  
+  // Last stamina usage
+  if (character.lastStaminaUsage) {
+    const date = new Date(character.lastStaminaUsage);
+    additionalStats.push({
+      label: 'Last Stamina Use',
+      value: date.toLocaleString(),
+      icon: 'fa-clock'
+    });
+  }
+  
+  // Last special weather gather
+  if (character.lastSpecialWeatherGather) {
+    const date = new Date(character.lastSpecialWeatherGather);
+    additionalStats.push({
+      label: 'Last Weather Gather',
+      value: date.toLocaleString(),
+      icon: 'fa-cloud-sun'
+    });
+  }
+  
+  // Blighted status and details
+  if (character.blighted) {
+    additionalStats.push({
+      label: 'Blighted',
+      value: 'Yes',
+      icon: 'fa-skull',
+      warning: true
+    });
+    
+    if (character.blightStage && character.blightStage > 0) {
+      additionalStats.push({
+        label: 'Blight Stage',
+        value: character.blightStage,
+        icon: 'fa-exclamation-triangle',
+        warning: true
+      });
+    }
+    
+    if (character.blightedAt) {
+      const date = new Date(character.blightedAt);
+      additionalStats.push({
+        label: 'Blighted Since',
+        value: date.toLocaleDateString(),
+        icon: 'fa-calendar-times',
+        warning: true
+      });
+    }
+    
+    if (character.deathDeadline) {
+      const date = new Date(character.deathDeadline);
+      additionalStats.push({
+        label: 'Death Deadline',
+        value: date.toLocaleString(),
+        icon: 'fa-hourglass-end',
+        warning: true
+      });
+    }
+    
+    if (character.blightPaused) {
+      additionalStats.push({
+        label: 'Blight Paused',
+        value: character.blightPauseInfo?.reason || 'Yes',
+        icon: 'fa-pause-circle'
+      });
+    }
+  }
+  
+  // Blight effects
+  if (character.blightEffects) {
+    const effects = [];
+    if (character.blightEffects.rollMultiplier && character.blightEffects.rollMultiplier !== 1) {
+      effects.push(`Roll x${character.blightEffects.rollMultiplier}`);
+    }
+    if (character.blightEffects.noMonsters) effects.push('No Monsters');
+    if (character.blightEffects.noGathering) effects.push('No Gathering');
+    if (effects.length > 0) {
+      additionalStats.push({
+        label: 'Blight Effects',
+        value: effects.join(', '),
+        icon: 'fa-vial',
+        warning: true
+      });
+    }
+  }
+  
+  // In jail and details
+  if (character.inJail) {
+    additionalStats.push({
+      label: 'In Jail',
+      value: character.jailReleaseTime ? new Date(character.jailReleaseTime).toLocaleString() : 'Yes',
+      icon: 'fa-lock',
+      warning: true
+    });
+    
+    if (character.jailStartTime) {
+      const date = new Date(character.jailStartTime);
+      additionalStats.push({
+        label: 'Jail Start',
+        value: date.toLocaleString(),
+        icon: 'fa-calendar-check',
+        warning: true
+      });
+    }
+    
+    if (character.jailDurationMs) {
+      const hours = Math.floor(character.jailDurationMs / (1000 * 60 * 60));
+      additionalStats.push({
+        label: 'Jail Duration',
+        value: `${hours} hours`,
+        icon: 'fa-hourglass',
+        warning: true
+      });
+    }
+    
+    if (character.jailBoostSource) {
+      additionalStats.push({
+        label: 'Jail Boost',
+        value: character.jailBoostSource,
+        icon: 'fa-rocket'
+      });
+    }
+  }
+  
+  // KO status
+  if (character.ko) {
+    additionalStats.push({
+      label: 'KO Status',
+      value: 'Knocked Out',
+      icon: 'fa-heartbeat',
+      warning: true
+    });
+  }
+  
+  // Can be stolen from
+  if (character.canBeStolenFrom !== undefined) {
+    additionalStats.push({
+      label: 'Steal Protection',
+      value: character.canBeStolenFrom ? 'Vulnerable' : 'Protected',
+      icon: character.canBeStolenFrom ? 'fa-unlock' : 'fa-shield-alt'
+    });
+  }
+  
+  // Steal protection details
+  if (character.stealProtection) {
+    if (character.stealProtection.isProtected) {
+      const endTime = character.stealProtection.protectionEndTime 
+        ? new Date(character.stealProtection.protectionEndTime).toLocaleString()
+        : 'Active';
+      additionalStats.push({
+        label: 'Protection Until',
+        value: endTime,
+        icon: 'fa-shield-alt'
+      });
+    }
+  }
+  
+  // Failed steal attempts
+  if (character.failedStealAttempts && character.failedStealAttempts > 0) {
+    additionalStats.push({
+      label: 'Failed Steals',
+      value: character.failedStealAttempts,
+      icon: 'fa-hand-paper'
+    });
+  }
+  
+  // Failed flee attempts
+  if (character.failedFleeAttempts && character.failedFleeAttempts > 0) {
+    additionalStats.push({
+      label: 'Failed Flees',
+      value: character.failedFleeAttempts,
+      icon: 'fa-running'
+    });
+  }
+  
+  // Buff information
+  if (character.buff && character.buff.active) {
+    const buffEffects = [];
+    if (character.buff.effects) {
+      Object.entries(character.buff.effects).forEach(([key, value]) => {
+        if (value && value > 0) {
+          const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+          buffEffects.push(`${label}: +${value}`);
+        }
+      });
+    }
+    if (buffEffects.length > 0) {
+      additionalStats.push({
+        label: 'Active Buff',
+        value: character.buff.type || buffEffects.join(', '),
+        icon: 'fa-arrow-up',
+        positive: true
+      });
+    }
+  }
+  
+  // Debuff information
+  if (character.debuff && character.debuff.active) {
+    const endTime = character.debuff.endDate 
+      ? new Date(character.debuff.endDate).toLocaleString()
+      : 'Active';
+    additionalStats.push({
+      label: 'Active Debuff',
+      value: `Until ${endTime}`,
+      icon: 'fa-arrow-down',
+      warning: true
+    });
+  }
+  
+  // Special weather usage
+  if (character.specialWeatherUsage && Object.keys(character.specialWeatherUsage).length > 0) {
+    const weatherEntries = Object.entries(character.specialWeatherUsage).map(([village, date]) => {
+      const d = new Date(date);
+      return `${village}: ${d.toLocaleDateString()}`;
+    });
+    additionalStats.push({
+      label: 'Weather Usage',
+      value: weatherEntries.join('; '),
+      icon: 'fa-cloud-sun-rain'
+    });
+  }
+  
+  // Daily roll cooldowns
+  if (character.dailyRoll) {
+    const rollEntries = Object.entries(character.dailyRoll).map(([type, date]) => {
+      const d = new Date(date);
+      const now = new Date();
+      const hoursAgo = Math.floor((now - d) / (1000 * 60 * 60));
+      return `${type}: ${hoursAgo}h ago`;
+    });
+    if (rollEntries.length > 0) {
+      additionalStats.push({
+        label: 'Daily Rolls',
+        value: rollEntries.join('; '),
+        icon: 'fa-dice'
+      });
+    }
+  }
+  
+  // Last roll date
+  if (character.lastRollDate) {
+    const date = new Date(character.lastRollDate);
+    additionalStats.push({
+      label: 'Last Roll',
+      value: date.toLocaleString(),
+      icon: 'fa-dice-d20'
+    });
+  }
+  
+  // Help wanted quest info
+  if (character.helpWanted) {
+    if (character.helpWanted.cooldownUntil) {
+      const date = new Date(character.helpWanted.cooldownUntil);
+      additionalStats.push({
+        label: 'HWQ Cooldown',
+        value: date.toLocaleString(),
+        icon: 'fa-hourglass-half'
+      });
+    }
+    if (character.helpWanted.completions && character.helpWanted.completions.length > 0) {
+      additionalStats.push({
+        label: 'HWQ Completions',
+        value: character.helpWanted.completions.length,
+        icon: 'fa-check-double'
+      });
+    }
+  }
+  
+  // Boosted by
+  if (character.boostedBy) {
+    additionalStats.push({
+      label: 'Boosted By',
+      value: character.boostedBy,
+      icon: 'fa-magic'
+    });
+  }
+  
+  // Travel log
+  if (character.travelLog && character.travelLog.length > 0) {
+    additionalStats.push({
+      label: 'Travel History',
+      value: `${character.travelLog.length} locations`,
+      icon: 'fa-map-marked-alt'
+    });
+  }
+  
+  // Vending sync
+  if (character.vendingSync !== undefined) {
+    additionalStats.push({
+      label: 'Vending Sync',
+      value: character.vendingSync ? 'Enabled' : 'Disabled',
+      icon: character.vendingSync ? 'fa-sync' : 'fa-sync-alt'
+    });
+  }
+  
+  // Last collected month
+  if (character.lastCollectedMonth && character.lastCollectedMonth > 0) {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    additionalStats.push({
+      label: 'Last Collected',
+      value: monthNames[character.lastCollectedMonth - 1] || `Month ${character.lastCollectedMonth}`,
+      icon: 'fa-calendar-check'
+    });
+  }
+  
+  // Current active pet
+  if (character.currentActivePet) {
+    additionalStats.push({
+      label: 'Active Pet',
+      value: character.currentActivePet,
+      icon: 'fa-paw'
+    });
+  }
+  
+  // Current active mount
+  if (character.currentActiveMount) {
+    additionalStats.push({
+      label: 'Active Mount',
+      value: character.currentActiveMount,
+      icon: 'fa-horse'
+    });
+  }
+  
+  if (additionalStats.length > 0) {
+    additionalStats.forEach(stat => {
+      const statItem = document.createElement('div');
+      statItem.className = 'additional-stat-item';
+      if (stat.warning) {
+        statItem.classList.add('warning');
+      }
+      if (stat.positive) {
+        statItem.classList.add('positive');
+      }
+      statItem.innerHTML = `
+        <i class="fas ${stat.icon}"></i>
+        <div class="stat-details">
+          <span class="stat-detail-label">${stat.label}</span>
+          <span class="stat-detail-value">${stat.value}</span>
+        </div>
+      `;
+      statsGrid.appendChild(statItem);
+    });
+    section.style.display = 'block';
+  }
+}
+
+// ============================================================================
+// ------------------- Travel Log Display -------------------
+// ============================================================================
+function displayTravelLog(character) {
+  const section = document.getElementById('travel-log-section');
+  const list = document.getElementById('travel-log-list');
+  
+  if (!character.travelLog || character.travelLog.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  
+  list.innerHTML = '';
+  
+  // Show most recent travels first
+  const sortedLog = [...character.travelLog].reverse().slice(0, 10); // Show last 10
+  
+  sortedLog.forEach((entry, index) => {
+    const logItem = document.createElement('div');
+    logItem.className = 'travel-log-item';
+    
+    let content = '';
+    if (typeof entry === 'string') {
+      content = entry;
+    } else if (entry.location) {
+      const date = entry.date ? new Date(entry.date).toLocaleString() : '';
+      content = `${entry.location}${date ? ` - ${date}` : ''}`;
+    } else {
+      content = JSON.stringify(entry);
+    }
+    
+    logItem.innerHTML = `
+      <i class="fas fa-map-pin"></i>
+      <span>${content}</span>
+    `;
+    list.appendChild(logItem);
+  });
+  
+  if (character.travelLog.length > 10) {
+    const moreItem = document.createElement('div');
+    moreItem.className = 'travel-log-more';
+    moreItem.textContent = `... and ${character.travelLog.length - 10} more entries`;
+    list.appendChild(moreItem);
+  }
+  
+  section.style.display = 'block';
+}
+
+// ============================================================================
+// ------------------- Help Wanted Display -------------------
+// ============================================================================
+function displayHelpWanted(character) {
+  const section = document.getElementById('help-wanted-section');
+  const info = document.getElementById('help-wanted-info');
+  
+  if (!character.helpWanted) {
+    section.style.display = 'none';
+    return;
+  }
+  
+  info.innerHTML = '';
+  
+  const hwqInfo = [];
+  
+  if (character.helpWanted.lastCompletion) {
+    const date = new Date(character.helpWanted.lastCompletion);
+    hwqInfo.push({
+      label: 'Last Completion',
+      value: date.toLocaleString(),
+      icon: 'fa-check-circle'
+    });
+  }
+  
+  if (character.helpWanted.cooldownUntil) {
+    const date = new Date(character.helpWanted.cooldownUntil);
+    const now = new Date();
+    if (date > now) {
+      hwqInfo.push({
+        label: 'Cooldown Until',
+        value: date.toLocaleString(),
+        icon: 'fa-hourglass-half',
+        warning: true
+      });
+    } else {
+      hwqInfo.push({
+        label: 'Cooldown',
+        value: 'Available',
+        icon: 'fa-check',
+        positive: true
+      });
+    }
+  }
+  
+  if (character.helpWanted.completions && character.helpWanted.completions.length > 0) {
+    hwqInfo.push({
+      label: 'Total Completions',
+      value: character.helpWanted.completions.length,
+      icon: 'fa-trophy'
+    });
+    
+    // Show recent completions
+    const recentCompletions = character.helpWanted.completions.slice(-5).reverse();
+    if (recentCompletions.length > 0) {
+      const completionsList = document.createElement('div');
+      completionsList.className = 'hwq-completions-list';
+      completionsList.innerHTML = '<h4>Recent Completions:</h4>';
+      
+      recentCompletions.forEach(completion => {
+        const item = document.createElement('div');
+        item.className = 'hwq-completion-item';
+        if (typeof completion === 'string') {
+          item.textContent = completion;
+        } else if (completion.date) {
+          const date = new Date(completion.date).toLocaleString();
+          item.textContent = `${completion.questId || 'Quest'} - ${date}`;
+        } else {
+          item.textContent = JSON.stringify(completion);
+        }
+        completionsList.appendChild(item);
+      });
+      
+      info.appendChild(completionsList);
+    }
+  }
+  
+  if (hwqInfo.length > 0) {
+    hwqInfo.forEach(stat => {
+      const statItem = document.createElement('div');
+      statItem.className = 'additional-stat-item';
+      if (stat.warning) statItem.classList.add('warning');
+      if (stat.positive) statItem.classList.add('positive');
+      statItem.innerHTML = `
+        <i class="fas ${stat.icon}"></i>
+        <div class="stat-details">
+          <span class="stat-detail-label">${stat.label}</span>
+          <span class="stat-detail-value">${stat.value}</span>
+        </div>
+      `;
+      info.appendChild(statItem);
+    });
+  }
+  
+  if (hwqInfo.length > 0 || (character.helpWanted.completions && character.helpWanted.completions.length > 0)) {
+    section.style.display = 'block';
+  } else {
+    section.style.display = 'none';
+  }
 }
 
 // ============================================================================
@@ -276,9 +971,17 @@ function showEditForm() {
   // Populate form with character data
   populateEditForm();
   
-  // Show/hide fields based on status
+  // Always disable Age field (never editable)
+  const ageField = document.getElementById('edit-character-age');
+  if (ageField) {
+    ageField.disabled = true;
+    ageField.readOnly = true;
+    ageField.title = 'Age cannot be edited';
+  }
+  
+  // Show/hide and enable/disable fields based on status
   if (character.status === 'denied') {
-    // Show all fields for denied characters
+    // Show all fields for denied characters and enable them
     document.getElementById('name-field-group').style.display = 'block';
     document.getElementById('stats-section').style.display = 'block';
     document.getElementById('details-section').style.display = 'block';
@@ -286,15 +989,53 @@ function showEditForm() {
     document.getElementById('resubmit-btn').style.display = 'inline-block';
     document.getElementById('save-btn-text').textContent = 'Save Changes';
     document.getElementById('icon-required').style.display = 'none';
+    
+    // Enable all fields for denied characters (except age, which is always disabled)
+    document.getElementById('edit-character-name').disabled = false;
+    document.getElementById('edit-character-hearts').disabled = false;
+    document.getElementById('edit-character-stamina').disabled = false;
+    document.getElementById('edit-character-race').disabled = false;
+    document.getElementById('edit-character-village').disabled = false;
+    document.getElementById('edit-character-job').disabled = false;
+    document.getElementById('edit-starter-weapon').disabled = false;
+    document.getElementById('edit-starter-shield').disabled = false;
+    document.getElementById('edit-starter-armor-chest').disabled = false;
+    document.getElementById('edit-starter-armor-legs').disabled = false;
   } else if (character.status === 'accepted') {
-    // Show limited fields for accepted characters
-    document.getElementById('name-field-group').style.display = 'none';
-    document.getElementById('stats-section').style.display = 'none';
-    document.getElementById('details-section').style.display = 'none';
-    document.getElementById('gear-section').style.display = 'none';
+    // Show all sections but disable restricted fields for accepted characters
+    document.getElementById('name-field-group').style.display = 'block';
+    document.getElementById('stats-section').style.display = 'block';
+    document.getElementById('details-section').style.display = 'block';
+    document.getElementById('gear-section').style.display = 'block';
     document.getElementById('resubmit-btn').style.display = 'none';
     document.getElementById('save-btn-text').textContent = 'Save Profile Changes';
     document.getElementById('icon-required').style.display = 'none';
+    
+    // Disable restricted fields for accepted characters
+    document.getElementById('edit-character-name').disabled = true;
+    document.getElementById('edit-character-name').title = 'Name cannot be edited for accepted characters';
+    document.getElementById('edit-character-hearts').disabled = true;
+    document.getElementById('edit-character-hearts').title = 'Stats cannot be edited for accepted characters';
+    document.getElementById('edit-character-stamina').disabled = true;
+    document.getElementById('edit-character-stamina').title = 'Stats cannot be edited for accepted characters';
+    document.getElementById('edit-character-race').disabled = true;
+    document.getElementById('edit-character-race').title = 'Race cannot be edited for accepted characters';
+    document.getElementById('edit-character-village').disabled = true;
+    document.getElementById('edit-character-village').title = 'Home village cannot be edited for accepted characters';
+    document.getElementById('edit-character-job').disabled = true;
+    document.getElementById('edit-character-job').title = 'Job cannot be edited for accepted characters';
+    document.getElementById('edit-starter-weapon').disabled = true;
+    document.getElementById('edit-starter-weapon').title = 'Starting gear cannot be edited for accepted characters';
+    document.getElementById('edit-starter-shield').disabled = true;
+    document.getElementById('edit-starter-shield').title = 'Starting gear cannot be edited for accepted characters';
+    document.getElementById('edit-starter-armor-chest').disabled = true;
+    document.getElementById('edit-starter-armor-chest').title = 'Starting gear cannot be edited for accepted characters';
+    document.getElementById('edit-starter-armor-legs').disabled = true;
+    document.getElementById('edit-starter-armor-legs').title = 'Starting gear cannot be edited for accepted characters';
+    
+    // Keep allowed fields enabled for accepted characters
+    document.getElementById('edit-character-height').disabled = false;
+    document.getElementById('edit-character-pronouns').disabled = false;
   }
   
   // Scroll to form
@@ -321,57 +1062,60 @@ function populateEditForm() {
   document.getElementById('edit-character-height').value = character.height || '';
   document.getElementById('edit-character-pronouns').value = character.pronouns || '';
   
-  // Stats (only for denied)
-  if (character.status === 'denied') {
-    document.getElementById('edit-character-hearts').value = character.maxHearts || 3;
-    document.getElementById('edit-character-stamina').value = character.maxStamina || 3;
+  // Always ensure Age field is disabled
+  const ageField = document.getElementById('edit-character-age');
+  if (ageField) {
+    ageField.disabled = true;
+    ageField.readOnly = true;
   }
   
-  // Details (only for denied)
-  if (character.status === 'denied') {
-    // Populate race dropdown
-    const raceSelect = document.getElementById('edit-character-race');
-    raceSelect.innerHTML = '<option value="">Select a race...</option>';
-    races.forEach(race => {
-      const option = document.createElement('option');
-      option.value = race.toLowerCase();
-      option.textContent = race;
-      if (character.race && character.race.toLowerCase() === race.toLowerCase()) {
-        option.selected = true;
-      }
-      raceSelect.appendChild(option);
-    });
-    
-    // Set village
-    const villageSelect = document.getElementById('edit-character-village');
-    villageSelect.value = character.homeVillage || '';
-    populateJobDropdown(character.homeVillage);
-    
-    // Set job
-    const jobSelect = document.getElementById('edit-character-job');
-    if (character.job) {
-      jobSelect.value = character.job;
+  // Stats - populate for both denied and accepted (accepted will be disabled)
+  document.getElementById('edit-character-hearts').value = character.maxHearts || 3;
+  document.getElementById('edit-character-stamina').value = character.maxStamina || 3;
+  
+  // Details - populate for both denied and accepted (accepted will be disabled)
+  // Populate race dropdown
+  const raceSelect = document.getElementById('edit-character-race');
+  raceSelect.innerHTML = '<option value="">Select a race...</option>';
+  races.forEach(race => {
+    const option = document.createElement('option');
+    option.value = race.toLowerCase();
+    option.textContent = race;
+    if (character.race && character.race.toLowerCase() === race.toLowerCase()) {
+      option.selected = true;
     }
-    
-    // Set app link
-    document.getElementById('edit-character-app-link').value = character.appLink || '';
-    
-    // Populate starter gear
-    populateStarterGearDropdowns();
-    
-    // Set current gear if any
-    if (character.gearWeapon?.name) {
-      document.getElementById('edit-starter-weapon').value = character.gearWeapon.name;
-    }
-    if (character.gearShield?.name) {
-      document.getElementById('edit-starter-shield').value = character.gearShield.name;
-    }
-    if (character.gearArmor?.chest?.name) {
-      document.getElementById('edit-starter-armor-chest').value = character.gearArmor.chest.name;
-    }
-    if (character.gearArmor?.legs?.name) {
-      document.getElementById('edit-starter-armor-legs').value = character.gearArmor.legs.name;
-    }
+    raceSelect.appendChild(option);
+  });
+  
+  // Set village
+  const villageSelect = document.getElementById('edit-character-village');
+  villageSelect.value = character.homeVillage || '';
+  populateJobDropdown(character.homeVillage);
+  
+  // Set job
+  const jobSelect = document.getElementById('edit-character-job');
+  if (character.job) {
+    jobSelect.value = character.job;
+  }
+  
+  // Set app link
+  document.getElementById('edit-character-app-link').value = character.appLink || '';
+  
+  // Populate starter gear
+  populateStarterGearDropdowns();
+  
+  // Set current gear if any
+  if (character.gearWeapon?.name) {
+    document.getElementById('edit-starter-weapon').value = character.gearWeapon.name;
+  }
+  if (character.gearShield?.name) {
+    document.getElementById('edit-starter-shield').value = character.gearShield.name;
+  }
+  if (character.gearArmor?.chest?.name) {
+    document.getElementById('edit-starter-armor-chest').value = character.gearArmor.chest.name;
+  }
+  if (character.gearArmor?.legs?.name) {
+    document.getElementById('edit-starter-armor-legs').value = character.gearArmor.legs.name;
   }
 }
 
@@ -514,6 +1258,10 @@ async function handleFormSubmit(event) {
   const originalText = submitBtn.innerHTML;
   const resubmit = document.getElementById('resubmit-btn')?.getAttribute('data-resubmit') === 'true';
   
+  // Automatically set resubmit flag for denied characters
+  const isDenied = character.status === 'denied';
+  const shouldResubmit = resubmit || isDenied;
+  
   // Disable submit button
   submitBtn.disabled = true;
   submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Saving...</span>';
@@ -525,8 +1273,8 @@ async function handleFormSubmit(event) {
     // Create FormData
     const formData = new FormData(form);
     
-    // Add resubmit flag if resubmitting
-    if (resubmit) {
+    // Add resubmit flag if resubmitting or if character is denied (automatic resubmission)
+    if (shouldResubmit) {
       formData.append('resubmit', 'true');
     }
     
@@ -544,7 +1292,7 @@ async function handleFormSubmit(event) {
     }
     
     // Success
-    const message = resubmit 
+    const message = shouldResubmit 
       ? 'Character updated and resubmitted successfully! It is now pending review.'
       : 'Character updated successfully!';
     showMessage(message, 'success');

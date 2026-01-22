@@ -136,6 +136,117 @@
               <span class="stat-value" id="stat-defense">0</span>
             </div>
           </div>
+          <div class="stat-card" id="stat-spirit-orbs-card" style="display: none;">
+            <i class="fas fa-gem"></i>
+            <div class="stat-info">
+              <span class="stat-label">Spirit Orbs</span>
+              <span class="stat-value" id="stat-spirit-orbs">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="character-sections">
+          <!-- Current Location -->
+          <div class="info-section" id="current-location-section" style="display: none;">
+            <h3><i class="fas fa-map-marker-alt"></i> Current Location</h3>
+            <p id="current-location-text"></p>
+          </div>
+
+          <!-- Birthday -->
+          <div class="info-section" id="birthday-section" style="display: none;">
+            <h3><i class="fas fa-birthday-cake"></i> Birthday</h3>
+            <p id="birthday-text"></p>
+          </div>
+
+          <!-- Gear -->
+          <div class="info-section" id="gear-section-display">
+            <h3><i class="fas fa-shield-alt"></i> Equipped Gear</h3>
+            <div class="gear-grid" id="gear-display">
+              <div class="gear-item" id="gear-weapon" style="display: none;">
+                <i class="fas fa-sword"></i>
+                <div class="gear-info">
+                  <span class="gear-label">Weapon</span>
+                  <span class="gear-name" id="gear-weapon-name"></span>
+                  <span class="gear-stats" id="gear-weapon-stats"></span>
+                </div>
+              </div>
+              <div class="gear-item" id="gear-shield" style="display: none;">
+                <i class="fas fa-shield"></i>
+                <div class="gear-info">
+                  <span class="gear-label">Shield</span>
+                  <span class="gear-name" id="gear-shield-name"></span>
+                  <span class="gear-stats" id="gear-shield-stats"></span>
+                </div>
+              </div>
+              <div class="gear-item" id="gear-armor-head" style="display: none;">
+                <i class="fas fa-hard-hat"></i>
+                <div class="gear-info">
+                  <span class="gear-label">Head Armor</span>
+                  <span class="gear-name" id="gear-armor-head-name"></span>
+                  <span class="gear-stats" id="gear-armor-head-stats"></span>
+                </div>
+              </div>
+              <div class="gear-item" id="gear-armor-chest" style="display: none;">
+                <i class="fas fa-tshirt"></i>
+                <div class="gear-info">
+                  <span class="gear-label">Chest Armor</span>
+                  <span class="gear-name" id="gear-armor-chest-name"></span>
+                  <span class="gear-stats" id="gear-armor-chest-stats"></span>
+                </div>
+              </div>
+              <div class="gear-item" id="gear-armor-legs" style="display: none;">
+                <i class="fas fa-socks"></i>
+                <div class="gear-info">
+                  <span class="gear-label">Leg Armor</span>
+                  <span class="gear-name" id="gear-armor-legs-name"></span>
+                  <span class="gear-stats" id="gear-armor-legs-stats"></span>
+                </div>
+              </div>
+              <div class="gear-empty" id="gear-empty" style="display: none;">
+                <p>No gear equipped</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Links -->
+          <div class="info-section" id="links-section">
+            <h3><i class="fas fa-link"></i> Links</h3>
+            <div class="links-grid">
+              <a href="#" id="app-link" target="_blank" rel="noopener noreferrer" class="link-item" style="display: none;">
+                <i class="fas fa-file-alt"></i>
+                <span>Application</span>
+              </a>
+              <a href="#" id="inventory-link" target="_blank" rel="noopener noreferrer" class="link-item" style="display: none;">
+                <i class="fas fa-box"></i>
+                <span>Inventory Sheet</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Additional Stats -->
+          <div class="info-section" id="additional-stats-section" style="display: none;">
+            <h3><i class="fas fa-chart-line"></i> Additional Information</h3>
+            <div class="additional-stats-grid" id="additional-stats-grid">
+              <!-- Stats will be populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Travel Log -->
+          <div class="info-section" id="travel-log-section" style="display: none;">
+            <h3><i class="fas fa-map-marked-alt"></i> Travel History</h3>
+            <div class="travel-log-list" id="travel-log-list">
+              <!-- Travel log entries will be populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Help Wanted Quests -->
+          <div class="info-section" id="help-wanted-section" style="display: none;">
+            <h3><i class="fas fa-clipboard-list"></i> Help Wanted Quests</h3>
+            <div class="help-wanted-info" id="help-wanted-info">
+              <!-- Help wanted info will be populated dynamically -->
+            </div>
+          </div>
         </div>
 
         <!-- Edit Button (if allowed) -->

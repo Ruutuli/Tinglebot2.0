@@ -251,22 +251,32 @@ async function postCharacterStatusToDiscord(character, status, denialReason, isM
     };
     
     if (status === 'denied' && denialReason) {
-      // Format denial reasons
+      // Format denial reasons - make it more prominent
       const reasonsText = denialReason.length > 1500 ? denialReason.substring(0, 1500) + '...' : denialReason;
       
       embed.fields.push({
-        name: '📝 Denial Reasons',
-        value: reasonsText,
+        name: '❌ **DENIAL REASONS**',
+        value: `\`\`\`\n${reasonsText}\n\`\`\``,
         inline: false
       });
       
-      // Get admin account mention (from env or use a default)
-      const adminAccountId = process.env.ADMIN_DISCORD_ID || '211219306137124865'; // Default to ruutuli's ID
-      const adminMention = `<@${adminAccountId}>`;
+      // Generate OC page URL
+      const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const dashboardUrl = process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com';
+      const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
+      
+      embed.fields.push({
+        name: '✏️ Edit & Resubmit',
+        value: `You can edit your character and resubmit it for review.\n\n🔗 **[Go to OC Page](${ocPageUrl})**`,
+        inline: false
+      });
+      
+      // Admin account mention
+      const adminMention = `<@668281042414600212> (roots.admin)`;
       
       embed.fields.push({
         name: '💬 Need Help?',
-        value: `If you have any questions about this decision, please DM ${adminMention} directly.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
+        value: `If you have any questions about this decision, please DM ${adminMention}.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
         inline: false
       });
     }
@@ -307,9 +317,16 @@ async function sendDenialDM(character, denialReason) {
       return;
     }
     
-    // Get admin account mention
-    const adminAccountId = process.env.ADMIN_DISCORD_ID || '211219306137124865';
-    const adminMention = `<@${adminAccountId}>`;
+    // Admin account mention
+    const adminMention = `<@668281042414600212> (roots.admin)`;
+    
+    // Generate OC page URL
+    const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const dashboardUrl = process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com';
+    const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
+    
+    // Format denial reasons - make it more prominent
+    const reasonsText = denialReason.length > 1500 ? denialReason.substring(0, 1500) + '...' : denialReason;
     
     // Create DM embed
     const embed = {
@@ -318,13 +335,18 @@ async function sendDenialDM(character, denialReason) {
       color: 0xf44336,
       fields: [
         {
-          name: '📝 Denial Reasons',
-          value: denialReason.length > 1500 ? denialReason.substring(0, 1500) + '...' : denialReason,
+          name: '❌ **DENIAL REASONS**',
+          value: `\`\`\`\n${reasonsText}\n\`\`\``,
+          inline: false
+        },
+        {
+          name: '✏️ Edit & Resubmit',
+          value: `You can edit your character and resubmit it for review.\n\n🔗 **[Go to OC Page](${ocPageUrl})**`,
           inline: false
         },
         {
           name: '💬 Need Help?',
-          value: `If you have any questions about this decision, please DM ${adminMention} directly.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
+          value: `If you have any questions about this decision, please DM ${adminMention}.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
           inline: false
         }
       ],
@@ -1072,14 +1094,19 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   
   // Return character data with ownership flag
   // Ensure all required fields exist before sending
-  const responseData = {
-    ...character,
-    icon: character?.icon || null,
-    isOwner: isOwner, // Frontend can use this to hide/edit edit buttons
-    name: character?.name || 'Unknown'
-  };
-  
-  res.json(responseData);
+  try {
+    const responseData = {
+      ...character,
+      icon: character?.icon || null,
+      isOwner: isOwner, // Frontend can use this to hide/edit edit buttons
+      name: character?.name || 'Unknown'
+    };
+    
+    res.json(responseData);
+  } catch (error) {
+    logger.error(`[characters.js] Error sending response for character "${character?.name || nameSlug}": ${error.message}`, error);
+    throw new Error('Failed to send character data');
+  }
 }));
 
 // ------------------- Function: editCharacter -------------------
