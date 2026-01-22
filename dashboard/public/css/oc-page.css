@@ -879,6 +879,20 @@
   flex: 1;
 }
 
+.travel-log-item.travel-failed {
+  border-left-color: #ff6b6b;
+  opacity: 0.8;
+}
+
+.travel-log-item.travel-failed:hover {
+  opacity: 1;
+}
+
+.travel-log-item span strong {
+  color: var(--text-primary, #ffffff);
+  font-weight: 600;
+}
+
 .travel-log-more {
   text-align: center;
   padding: 0.5rem;
