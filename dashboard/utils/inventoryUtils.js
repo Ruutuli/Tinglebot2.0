@@ -945,7 +945,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       // );
     } catch (error) {
       handleError(error, 'inventoryUtils.js');
-      console.error(`[inventoryUtils.js]: Error logging materials to sheet: ${error.message}`);
+      logger.error('INVENTORY', `Error logging materials to sheet: ${error.message}`, error);
     }
   }
 
@@ -1422,13 +1422,13 @@ async function refundJobVoucher(character, interaction) {
             ]];
 
             // Google Sheets logging removed
-            console.log(`[inventoryUtils.js]: ✅ Successfully logged job voucher refund to database for ${character.name}`);
+            logger.success('INVENTORY', `Successfully logged job voucher refund to database for ${character.name}`);
         }
 
         return true;
     } catch (error) {
         handleError(error, "inventoryUtils.js");
-        console.error(`[inventoryUtils.js]: ❌ Error refunding job voucher:`, error.message);
+        logger.error('INVENTORY', `Error refunding job voucher: ${error.message}`, error);
         throw error;
     }
 }
@@ -1478,17 +1478,17 @@ const syncSheetDataToDatabase = async (character, sheetData) => {
             });
 
             if (!existingItem) {
-                console.log(`[inventoryUtils.js]: ➕ Adding new item ${item.itemName} (${item.quantity}) to ${character.name}'s inventory`);
+                logger.info('INVENTORY', `➕ Adding new item ${item.itemName} (${item.quantity}) to ${character.name}'s inventory`);
                 await inventoryCollection.insertOne(item);
             } else {
-                console.log(`[inventoryUtils.js]: ⚠️ Item ${item.itemName} with sync ID ${item.syncId} already exists in database`);
+                logger.warn('INVENTORY', `Item ${item.itemName} with sync ID ${item.syncId} already exists in database`);
             }
         }
 
         return true;
     } catch (error) {
         handleError(error, "inventoryUtils.js");
-        console.error(`[inventoryUtils.js]: ❌ Error syncing sheet data to database:`, error.message);
+        logger.error('INVENTORY', `Error syncing sheet data to database: ${error.message}`, error);
         throw error;
     }
 };
@@ -1544,13 +1544,13 @@ async function logItemAcquisitionToDatabase(character, itemData, acquisitionData
 
     // Save to InventoryLog collection
     await InventoryLog.create(logEntry);
-    
-    console.log(`[inventoryUtils.js] 📝 Logged item acquisition: ${quantity}x ${itemName} for ${character.name} (${obtain})`);
-    
+
+    logger.info('INVENTORY', `📝 Logged item acquisition: ${quantity}x ${itemName} for ${character.name} (${obtain})`);
+
     return logEntry;
   } catch (error) {
     // Don't fail the main operation if logging fails
-    console.error(`[inventoryUtils.js] ⚠️ Failed to log item acquisition to database:`, error.message);
+    logger.warn('INVENTORY', `Failed to log item acquisition to database: ${error.message}`);
     return null;
   }
 }
@@ -1609,13 +1609,13 @@ async function logItemRemovalToDatabase(character, itemData, removalData) {
 
     // Save to InventoryLog collection
     await InventoryLog.create(logEntry);
-    
-    console.log(`[inventoryUtils.js] 📝 Logged item removal: ${negativeQuantity}x ${itemName} for ${character.name} (${obtain})`);
-    
+
+    logger.info('INVENTORY', `📝 Logged item removal: ${negativeQuantity}x ${itemName} for ${character.name} (${obtain})`);
+
     return logEntry;
   } catch (error) {
     // Don't fail the main operation if logging fails
-    console.error(`[inventoryUtils.js] ⚠️ Failed to log item removal to database:`, error.message);
+    logger.warn('INVENTORY', `Failed to log item removal to database: ${error.message}`);
     return null;
   }
 }

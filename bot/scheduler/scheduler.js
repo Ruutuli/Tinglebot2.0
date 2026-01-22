@@ -192,16 +192,18 @@ function ensureAgendaInitialized(context) {
 // ------------------- Job Creation Helper ------------------
 // Check if a recurring job already exists before creating it
 // This prevents duplicate jobs on restart
-async function ensureRecurringJob(schedule, jobName) {
+// Returns: { job, created: boolean } - created is true if job was newly created, false if it already existed
+async function ensureRecurringJob(schedule, jobName, silent = false) {
  const agenda = ensureAgendaInitialized('ensure recurring job');
- if (!agenda) return null;
+ if (!agenda) return { job: null, created: false };
  
  try {
   // Query MongoDB directly to check for existing job
   const mongooseConnection = require('../database/connectionManager').getTinglebotConnection();
   if (!mongooseConnection || mongooseConnection.readyState !== 1) {
-   logger.warn('SCHEDULER', `Database not ready, creating job ${jobName} anyway`);
-   return await agenda.every(schedule, jobName);
+   if (!silent) logger.warn('SCHEDULER', `Database not ready, creating job ${jobName} anyway`);
+   const job = await agenda.every(schedule, jobName);
+   return { job, created: true };
   }
   
   const agendaJobsCollection = mongooseConnection.db.collection('agendaJobs');
@@ -216,23 +218,22 @@ async function ensureRecurringJob(schedule, jobName) {
   });
   
   if (existingJob) {
-   logger.debug('SCHEDULER', `Job already exists: ${jobName} (${schedule}) - skipping creation`);
    // Return a mock job object for consistency
-   return { attrs: { name: jobName, _id: existingJob._id } };
+   return { job: { attrs: { name: jobName, _id: existingJob._id } }, created: false };
   }
   
   // Job doesn't exist, create it
   const job = await agenda.every(schedule, jobName);
-  logger.info('SCHEDULER', `Created recurring job: ${jobName} (${schedule})`);
-  return job;
+  return { job, created: true };
  } catch (error) {
   logger.error('SCHEDULER', `Error ensuring recurring job ${jobName}:`, error.message);
   // Fallback: try to create anyway
   try {
-   return await agenda.every(schedule, jobName);
+   const job = await agenda.every(schedule, jobName);
+   return { job, created: true };
   } catch (fallbackError) {
    logger.error('SCHEDULER', `Failed to create job ${jobName} even as fallback:`, fallbackError.message);
-   return null;
+   return { job: null, created: false };
   }
  }
 }
@@ -829,7 +830,10 @@ async function resetPetLastRollDates(client) {
 
 async function setupBlightScheduler(client) {
  // 8:00 PM EST = 01:00 UTC next day
- await ensureRecurringJob("0 1 * * *", "Blight Roll Call");
+ const result = await ensureRecurringJob("0 1 * * *", "Blight Roll Call", true);
+ if (result.created) {
+  logger.info('SCHEDULER', 'Blight scheduler job created');
+ }
 }
 
 // ============================================================================
@@ -847,17 +851,22 @@ async function setupBoostingScheduler(client) {
 
 async function setupWeatherScheduler(client) {
  try {
-  // Primary weather update at 8:00am EST = 13:00 UTC
-  const job1 = await ensureRecurringJob("0 13 * * *", "Daily Weather Update");
-  logger.info('SCHEDULER', `Created recurring job: Daily Weather Update at 8am EST (${job1?.attrs?.name || 'created'})`);
+  let created = 0;
+  let skipped = 0;
   
-  // Fallback check at 8:15am EST = 13:15 UTC - ensures weather was posted, generates if missing
-  const job2 = await ensureRecurringJob("15 13 * * *", "Weather Fallback Check");
-  logger.info('SCHEDULER', `Created recurring job: Weather Fallback Check at 8:15am EST (${job2?.attrs?.name || 'created'})`);
+  const jobs = [
+   { schedule: "0 13 * * *", name: "Daily Weather Update" },
+   { schedule: "15 13 * * *", name: "Weather Fallback Check" },
+   { schedule: "0 1 * * *", name: "Daily Weather Forecast Reminder" },
+  ];
   
-  // Weather reminder at 8:00pm EST = 01:00 UTC next day
-  const job3 = await ensureRecurringJob("0 1 * * *", "Daily Weather Forecast Reminder");
-  logger.info('SCHEDULER', `Created recurring job: Daily Weather Forecast Reminder at 8pm EST (${job3?.attrs?.name || 'created'})`);
+  for (const { schedule, name } of jobs) {
+   const result = await ensureRecurringJob(schedule, name, true);
+   if (result.created) created++;
+   else skipped++;
+  }
+  
+  logger.info('SCHEDULER', `Weather scheduler: ${created} created, ${skipped} already existed`);
  } catch (error) {
   logger.error('SCHEDULER', `Error creating weather scheduler jobs:`, error);
   throw error;
@@ -1044,15 +1053,15 @@ async function setupHelpWantedFixedScheduler(client) {
  for (const cronTime of FIXED_CRON_TIMES) {
   const utcCronTime = convertEstCronToUtc(cronTime);
   const jobName = `Help Wanted Board Check - ${cronTime} (EST)`;
-  const job = await ensureRecurringJob(utcCronTime, jobName);
-  if (job && job.attrs?._id) {
+  const result = await ensureRecurringJob(utcCronTime, jobName, true);
+  if (result.created) {
    jobsCreated++;
   } else {
    jobsSkipped++;
   }
  }
  
- logger.success('SCHEDULER', `Help Wanted scheduler configured with ${jobsCreated} time slots (${jobsSkipped} already existed, full 24-hour coverage with variable 3-6 hour buffer in quest generation)`);
+ logger.info('SCHEDULER', `Help Wanted scheduler: ${jobsCreated} created, ${jobsSkipped} already existed (24 time slots total)`);
 }
 
 // ============================================================================
@@ -1251,57 +1260,55 @@ async function runStartupChecks(client) {
 
 async function setupDailyTasks(client) {
  try {
+  let created = 0;
+  let skipped = 0;
+  
   // Daily tasks at midnight EST = 05:00 UTC
-  const job1 = await ensureRecurringJob("0 5 * * *", "reset pet last roll dates");
-  logger.info('SCHEDULER', `Created recurring job: reset pet last roll dates (${job1?.attrs?.name || 'created'})`);
+  const jobs = [
+   { schedule: "0 5 * * *", name: "reset pet last roll dates" },
+   { schedule: "0 5 * * *", name: "birthday role assignment" },
+   { schedule: "0 5 * * *", name: "reset daily rolls" },
+   { schedule: "0 5 * * *", name: "recover daily stamina" },
+   { schedule: "0 5 * * *", name: "generate daily quests" },
+   { schedule: "0 5 * * *", name: "global steal protections reset" },
+   { schedule: "0 13 * * *", name: "checkExpiredRequests" },
+   // Weekly tasks - Sunday midnight EST = Monday 05:00 UTC
+   { schedule: "0 5 * * 1", name: "weekly pet rolls reset" },
+   // Monthly tasks - 1st of month midnight EST = 05:00 UTC
+   { schedule: "0 5 1 * *", name: "monthly vending stock generation" },
+   { schedule: "0 5 1 * *", name: "monthly nitro boost rewards" },
+   // Monthly quest reward distribution - runs at 11:59 PM EST = 04:59 UTC on the last day of month
+   { schedule: "59 4 * * *", name: "monthly quest reward distribution" },
+   // Periodic raid expiration check (every 5 minutes)
+   { schedule: "*/5 * * * *", name: "raid expiration check" },
+   // Hourly tasks
+   { schedule: "0 * * * *", name: "village raid quota check" },
+   { schedule: "0 * * * *", name: "memory log" },
+   { schedule: "0 */6 * * *", name: "quest completion check" },
+   { schedule: "0 */2 * * *", name: "village tracking check" },
+   // Blood moon tracking cleanup at 1 AM EST = 06:00 UTC
+   { schedule: "0 6 * * *", name: "blood moon tracking cleanup" },
+  ];
   
-  const job2 = await ensureRecurringJob("0 5 * * *", "birthday role assignment");
-  logger.info('SCHEDULER', `Created recurring job: birthday role assignment (${job2?.attrs?.name || 'created'})`);
+  for (const { schedule, name } of jobs) {
+   const result = await ensureRecurringJob(schedule, name, true);
+   if (result.created) created++;
+   else skipped++;
+  }
   
-  const job3 = await ensureRecurringJob("0 5 * * *", "reset daily rolls");
-  logger.info('SCHEDULER', `Created recurring job: reset daily rolls (${job3?.attrs?.name || 'created'})`);
-  
-  const job4 = await ensureRecurringJob("0 5 * * *", "recover daily stamina");
-  logger.info('SCHEDULER', `Created recurring job: recover daily stamina (${job4?.attrs?.name || 'created'})`);
-  
-  const job5 = await ensureRecurringJob("0 5 * * *", "generate daily quests");
-  logger.info('SCHEDULER', `Created recurring job: generate daily quests (${job5?.attrs?.name || 'created'})`);
-  
-  const job6 = await ensureRecurringJob("0 5 * * *", "global steal protections reset");
-  logger.info('SCHEDULER', `Created recurring job: global steal protections reset (${job6?.attrs?.name || 'created'})`);
-  
-  // Expiration check - daily at 8 AM EST = 13:00 UTC
-  const job7 = await ensureRecurringJob("0 13 * * *", "checkExpiredRequests");
-  logger.info('SCHEDULER', `Created recurring job: checkExpiredRequests at 8am EST (${job7?.attrs?.name || 'created'})`);
+  logger.info('SCHEDULER', `Daily tasks: ${created} created, ${skipped} already existed`);
  } catch (error) {
   logger.error('SCHEDULER', `Error creating daily task jobs:`, error);
   throw error;
  }
-
- // Weekly tasks - Sunday midnight EST = Monday 05:00 UTC
- await ensureRecurringJob("0 5 * * 1", "weekly pet rolls reset");
-
- // Monthly tasks - 1st of month midnight EST = 05:00 UTC
- await ensureRecurringJob("0 5 1 * *", "monthly vending stock generation");
- await ensureRecurringJob("0 5 1 * *", "monthly nitro boost rewards");
- // Monthly quest reward distribution - runs at 11:59 PM EST = 04:59 UTC on the last day of month
- await ensureRecurringJob("59 4 * * *", "monthly quest reward distribution");
-
- // Periodic raid expiration check (every 5 minutes) to ensure raids timeout even if bot restarts
- await ensureRecurringJob("*/5 * * * *", "raid expiration check");
-
- // Hourly tasks
- await ensureRecurringJob("0 * * * *", "village raid quota check");
- await ensureRecurringJob("0 * * * *", "memory log"); // Memory stats logging
- await ensureRecurringJob("0 */6 * * *", "quest completion check");
- await ensureRecurringJob("0 */2 * * *", "village tracking check"); // Every 2 hours
- // Blood moon tracking cleanup at 1 AM EST = 06:00 UTC
- await ensureRecurringJob("0 6 * * *", "blood moon tracking cleanup");
 }
 
 async function setupQuestPosting(client) {
  // Quest posting check - runs on 1st of month at midnight EST = 05:00 UTC
- await ensureRecurringJob("0 5 1 * *", "quest posting check");
+ const result = await ensureRecurringJob("0 5 1 * *", "quest posting check", true);
+ if (result.created) {
+  logger.info('SCHEDULER', 'Quest posting job created');
+ }
 }
 
 async function setupBloodMoonScheduling(client) {
@@ -1372,16 +1379,14 @@ async function verifyAndRecreateJobs(client) {
    if (!jobExists) {
     logger.warn('SCHEDULER', `Missing job: ${expectedJob.name} (${expectedJob.description}) - recreating...`);
     try {
-     const createdJob = await ensureRecurringJob(expectedJob.schedule, expectedJob.name);
-     if (createdJob && createdJob.attrs?._id) {
+     const result = await ensureRecurringJob(expectedJob.schedule, expectedJob.name, true);
+     if (result.job && result.job.attrs?._id) {
       recreatedCount++;
-      logger.success('SCHEDULER', `Recreated missing job: ${expectedJob.name} (ID: ${createdJob.attrs._id})`);
+      logger.success('SCHEDULER', `Recreated missing job: ${expectedJob.name}`);
      }
     } catch (error) {
      logger.error('SCHEDULER', `Failed to recreate job ${expectedJob.name}:`, error.message);
     }
-   } else {
-    logger.debug('SCHEDULER', `Job exists: ${expectedJob.name}`);
    }
   }
   
@@ -1391,13 +1396,14 @@ async function verifyAndRecreateJobs(client) {
    logger.info('SCHEDULER', 'All expected recurring jobs exist in database');
   }
   
-  // Log all 8am jobs for debugging
-  const eightAmJobs = existingJobs.filter(job => {
-   const repeatInterval = job.repeatInterval || job.attrs?.repeatInterval;
-   return repeatInterval === "0 13 * * *";
-  });
-  logger.info('SCHEDULER', `Found ${eightAmJobs.length} jobs scheduled for 8am EST (13:00 UTC):`, 
-   eightAmJobs.map(j => (j.name || j.attrs?.name || 'unknown')).join(', '));
+  // Log all 8am jobs for debugging (only if there are issues)
+  if (recreatedCount > 0) {
+   const eightAmJobs = existingJobs.filter(job => {
+    const repeatInterval = job.repeatInterval || job.attrs?.repeatInterval;
+    return repeatInterval === "0 13 * * *";
+   });
+   logger.debug('SCHEDULER', `Found ${eightAmJobs.length} jobs scheduled for 8am EST (13:00 UTC)`);
+  }
    
  } catch (error) {
   logger.error('SCHEDULER', `Error verifying jobs:`, error);
@@ -1408,15 +1414,12 @@ async function verifyAndRecreateJobs(client) {
 // ------------------- Main Initialization Function ------------------
 
 async function initializeScheduler(client) {
- logger.info('SCHEDULER', `[initializeScheduler] Starting scheduler initialization (call #${schedulerInitCallCount + 1})...`);
  schedulerInitCallCount++;
  
  if (!client || !client.isReady()) {
   logger.error('SCHEDULER', 'Invalid or unready Discord client provided to scheduler');
-  logger.error('SCHEDULER', `Client ready state: ${client ? client.isReady() : 'null'}`);
   return;
  }
- logger.debug('SCHEDULER', 'Discord client is ready');
 
  // Check if Agenda is initialized
  const agenda = getAgenda();
@@ -1424,14 +1427,12 @@ async function initializeScheduler(client) {
   logger.error('SCHEDULER', `[scheduler.js]❌ Agenda not initialized - cannot initialize scheduler. Make sure initAgenda() and defineAgendaJobs() are called first.`);
   return;
  }
- logger.debug('SCHEDULER', 'Agenda instance found');
 
  // Prevent duplicate initialization
  if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', `⚠️ Scheduler already initialized (call #${schedulerInitCallCount}) - skipping reinitialization`);
+  logger.warn('SCHEDULER', `⚠️ Scheduler already initialized - skipping reinitialization`);
   return;
  }
- logger.debug('SCHEDULER', 'Scheduler not yet initialized, proceeding...');
 
  // Run startup checks
  await runStartupChecks(client);
@@ -1440,35 +1441,21 @@ async function initializeScheduler(client) {
   // Note: Even if Agenda.start() timed out, we can still create jobs
   // Agenda will pick them up when it eventually starts
   try {
-   logger.info('SCHEDULER', 'Setting up daily tasks...');
    await setupDailyTasks(client);
-   
-   logger.info('SCHEDULER', 'Setting up quest posting...');
    await setupQuestPosting(client);
-   
-   logger.info('SCHEDULER', 'Setting up blood moon scheduling...');
    await setupBloodMoonScheduling(client);
-   
-   logger.info('SCHEDULER', 'Setting up blight scheduler...');
    await setupBlightScheduler(client);
-   
-   logger.info('SCHEDULER', 'Setting up boosting scheduler...');
    await setupBoostingScheduler(client);
-   
-   logger.info('SCHEDULER', 'Setting up weather scheduler...');
    await setupWeatherScheduler(client);
-   
-   logger.info('SCHEDULER', 'Setting up help wanted scheduler...');
    await setupHelpWantedFixedScheduler(client);
    // Secret Santa - Disabled outside December
    // await setupSecretSantaScheduler(client);
    
    // Verify all jobs were created (especially important for 8am jobs)
-   logger.info('SCHEDULER', 'Verifying all jobs were created...');
    await verifyAndRecreateJobs(client);
    
    isSchedulerInitialized = true;
-   logger.success('SCHEDULER', 'All scheduled tasks initialized with Agenda');
+   logger.success('SCHEDULER', 'Scheduler initialized successfully');
   } catch (error) {
    logger.error('SCHEDULER', 'Error initializing scheduler:', error);
    handleError(error, "scheduler.js", { functionName: 'initializeScheduler' });
