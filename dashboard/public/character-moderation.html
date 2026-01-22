@@ -725,7 +725,7 @@
 
   <!-- Denial Reason Modal -->
   <div class="modal-overlay" id="denyReasonModal">
-    <div class="modal" style="max-width: 600px;">
+    <div class="modal modal-large">
       <button class="modal-close" onclick="closeDenyReasonModal()">&times;</button>
       <div class="modal-header">
         <i class="fas fa-times-circle modal-icon error"></i>
@@ -738,7 +738,6 @@
           class="deny-reason-input" 
           placeholder="Enter the reason for denial (required)..."
           rows="6"
-          style="width: 100%; margin-top: 16px;"
         ></textarea>
       </div>
       <div class="modal-actions">
@@ -845,7 +844,7 @@
             <div class="character-info">
               <div class="character-name">
                 ${character.name}
-                ${character.isModCharacter ? '<span class="status-badge" style="margin-left: 8px; background: #e3f2fd; color: #1976d2;">Mod Character</span>' : ''}
+                ${character.isModCharacter ? '<span class="status-badge" style="margin-left: 8px; background: rgba(0, 163, 218, 0.2); color: var(--accent); border: 1px solid rgba(0, 163, 218, 0.3);">Mod Character</span>' : ''}
               </div>
               <div class="character-details">
                 <div class="detail-item">
@@ -895,7 +894,7 @@
             </div>
             
             ${hasVoted ? `
-              <div style="padding: 14px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 10px; color: var(--accent-blue); display: flex; align-items: center; gap: 10px;">
+              <div class="vote-info-message">
                 <i class="fas fa-info-circle"></i> <span>You have already voted on this character.</span>
               </div>
             ` : `
@@ -925,7 +924,7 @@
                     <div>
                       <div class="vote-item-user"><i class="fas fa-times-circle"></i> ${vote.modUsername}</div>
                       <div class="vote-item-reason">${vote.reason || 'No reason provided'}</div>
-                      <div class="vote-item-reason" style="font-size: 12px; margin-top: 2px;">${new Date(vote.createdAt).toLocaleString()}</div>
+                      <div class="vote-item-reason vote-item-time">${new Date(vote.createdAt).toLocaleString()}</div>
                     </div>
                   </div>
                 `).join('')}
