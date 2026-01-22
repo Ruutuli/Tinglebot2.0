@@ -62,9 +62,7 @@ const {
 const {
   appendSheetData,
   authorizeSheets,
-  deleteInventorySheetData,
-  safeAppendDataToSheet,
-} = require('@/shared/utils/googleSheetsUtils');
+  // Google Sheets functionality removed
 const {
   createCharacterInteraction,
 } = require("../../handlers/characterInteractionHandler");

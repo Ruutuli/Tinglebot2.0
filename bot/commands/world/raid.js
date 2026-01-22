@@ -14,8 +14,8 @@ const Raid = require('@/shared/models/RaidModel');
 const { fetchItemsByMonster } = require('@/shared/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('@/shared/utils/validation');
-const { authorizeSheets, safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets validation removed
+// Google Sheets functionality removed
 const { v4: uuidv4 } = require('uuid');
 
 // ============================================================================
@@ -550,8 +550,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
           continue;
         }
 
-        // Add to inventory if character has valid inventory link
-        if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
+        // Add to inventory if character has inventory link (Google Sheets validation removed)
+        if (character.inventory) {
           try {
             await addItemInventoryDatabase(
               character._id,

@@ -56,9 +56,7 @@ const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('@/shared/utils/inventoryUtils');
 const {
   appendSheetData,
-  authorizeSheets,
-  safeAppendDataToSheet
-} = require('@/shared/utils/googleSheetsUtils');
+  // Google Sheets functionality removed
 const {
   extractSpreadsheetId,
   isValidGoogleSheetsUrl

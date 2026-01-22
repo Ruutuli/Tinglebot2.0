@@ -43,9 +43,7 @@ const {
  authorizeSheets,
  appendSheetData,
  extractSpreadsheetId,
- isValidGoogleSheetsUrl,
- safeAppendDataToSheet,
-} = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 const { uploadPetImage } = require('@/shared/utils/uploadUtils');
 const { checkInventorySync } = require('@/shared/utils/characterUtils');
 const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
@@ -1155,7 +1153,7 @@ module.exports = {
 
      // Log to token tracker sheet if available
      const User = require('@/shared/models/UserModel');
-     const { safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
+     // Google Sheets functionality removed
      const user = await User.findOne({ discordId: userId });
      if (user && user.tokenTracker) {
        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
@@ -1166,11 +1164,12 @@ module.exports = {
          "spent",
          `-${cost}`
        ];
-       try {
-         await safeAppendDataToSheet(user.tokenTracker, user, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
-       } catch (sheetError) {
-         console.error(`[pet.js]: ❌ Error logging pet upgrade to token tracker:`, sheetError);
-       }
+       // Google Sheets functionality removed
+       // try {
+       //   await safeAppendDataToSheet(user.tokenTracker, user, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
+       // } catch (sheetError) {
+       //   console.error(`[pet.js]: ❌ Error logging pet upgrade to token tracker:`, sheetError);
+       // }
      }
 
      // ------------------- Determine Embed Color Based on Village -------------------

@@ -54,13 +54,7 @@ const { generateBlightSubmissionExpiryFlavorText } = require('../modules/flavorT
 // Global error handler, inventory utils, Google Sheets utils, storage, and unique ID utils
 const { handleError } = require('@/shared/utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const {
-  appendSheetData,
-  authorizeSheets,
-  extractSpreadsheetId,
-  safeAppendDataToSheet,
-  deleteInventorySheetData
-} = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 const {
   deleteSubmissionFromStorage,
   saveSubmissionToStorage,
@@ -108,28 +102,18 @@ function get8PMESTInUTC(date = new Date()) {
 
 // ============================================================================
 // ------------------- Database Connection -------------------
-// Connects to MongoDB inventories database
+// Use DatabaseConnectionManager for unified connection management
 // ============================================================================
+const DatabaseConnectionManager = require('../database/connectionManager');
 
 // ------------------- Function: connectToInventories -------------------
-// Connects to the inventories MongoDB database if not already connected.
+// Connects to the inventories MongoDB database using connection manager.
 async function connectToInventories() {
   try {
-    if (mongoose.connection.readyState === 0) {
-      const dbConfig = require('@/shared/config/database');
-      await mongoose.connect(dbConfig.inventories, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-      });
-    }
-    return mongoose.connection;
+    return await DatabaseConnectionManager.connectToInventories();
   } catch (error) {
     handleError(error, 'blightHandler.js', {
-      operation: 'connectToInventories',
-      options: {
-        readyState: mongoose.connection.readyState,
-        uri: dbConfig.inventories ? '[REDACTED]' : 'undefined'
-      }
+      operation: 'connectToInventories'
     });
     logger.error('BLIGHT', 'Error connecting to inventories database');
     throw error;

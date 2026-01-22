@@ -17,8 +17,8 @@ const {
 } = require('@/shared/database/db');
 const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('@/shared/utils/inventoryUtils');
 const { getNPCItems, NPCs, getStealFlavorText, getStealFailText } = require('../../modules/NPCsModule');
-const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('@/shared/utils/validation');
+// Google Sheets functionality removed
+// Google Sheets validation removed - isValidGoogleSheetsUrl and extractSpreadsheetId no longer available
 const ItemModel = require('@/shared/models/ItemModel');
 const Character = require('@/shared/models/CharacterModel');
 const User = require('@/shared/models/UserModel');
@@ -128,61 +128,6 @@ const stealStreaks = new Map(); // Track successful steal streaks
 // Note: Individual NPC cooldowns are now stored in the NPC model database
 // instead of in-memory Map for persistence across bot restarts
 
-// ------------------- NPC Item Cache -------------------
-// Cache NPC items to avoid repeated database queries
-const npcItemCache = new Map();
-const NPC_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
-
-// ------------------- Preload Common NPC Items -------------------
-// Preload items for commonly used NPCs to avoid database queries
-const COMMON_NPC_CATEGORIES = {
-    'Lukan': ['Apple', 'Dazzlefruit', 'Fire Fruit', 'Fleet-Lotus Seeds', 'Golden Apple', 'Hearty Durian', 'Hydromelon', 'Ice Fruit', 'Mighty Bananas', 'Palm Fruit', 'Shock Fruit', 'Spicy Pepper', 'Splash Fruit', 'Thornberry', 'Voltfruit', 'Wild berry'],
-    'Hank': ['Swift Carrot', 'Endura Carrot', 'Hearty Radish', 'Mighty Thistle', 'Silent Princess', 'Sunshroom', 'Zapshroom', 'Rushroom', 'Razorshroom', 'Ironshroom', 'Stamellashroom', 'Chillshroom', 'Sunshroom', 'Zapshroom', 'Rushroom', 'Razorshroom', 'Ironshroom', 'Stamellashroom', 'Chillshroom'],
-    'Sue': ['Hearty Bass', 'Hyrule Bass', 'Staminoka Bass', 'Armored Carp', 'Mighty Carp', 'Sanke Carp', 'Bright-Eyed Crab', 'Ironshell Crab', 'Razorclaw Crab']
-};
-
-// Preload common NPC items on startup
-function preloadCommonNPCItems() {
-    for (const [npcName, items] of Object.entries(COMMON_NPC_CATEGORIES)) {
-        // Set default rarity of 1 (common) for preloaded items
-        const itemsWithRarity = items.map(itemName => ({
-            itemName,
-            itemRarity: 1,
-            quantity: Infinity,
-            isNPC: true
-        }));
-        setCachedNPCItems(npcName, itemsWithRarity);
-        logger.info('SYSTEM', `Preloaded ${items.length} items for ${npcName}`);
-    }
-}
-
-// Initialize preloaded items
-preloadCommonNPCItems();
-
-// ------------------- NPC Item Cache Management -------------------
-function getCachedNPCItems(npcName) {
-    const cacheEntry = npcItemCache.get(npcName);
-    if (cacheEntry && Date.now() - cacheEntry.timestamp < NPC_CACHE_DURATION) {
-        return cacheEntry.items;
-    }
-    return null;
-}
-
-function setCachedNPCItems(npcName, items) {
-    npcItemCache.set(npcName, {
-        items: items,
-        timestamp: Date.now()
-    });
-}
-
-function clearExpiredNPCCache() {
-    const now = Date.now();
-    for (const [npcName, cacheEntry] of npcItemCache.entries()) {
-        if (now - cacheEntry.timestamp >= NPC_CACHE_DURATION) {
-            npcItemCache.delete(npcName);
-        }
-    }
-}
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -1238,8 +1183,6 @@ async function resetAllStealProtections() {
 // ------------------- Cleanup expired protections -------------------
 function cleanupExpiredProtections() {
     // Database models now handle their own cleanup via pre-save middleware
-    // Just clear expired NPC cache
-    clearExpiredNPCCache();
 }
 
 // ------------------- Statistics Functions -------------------
@@ -3217,20 +3160,11 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                     };
                 }
             } else {
-                // For other NPCs, use cached items or fetch from database
-                const cachedItems = getCachedNPCItems(targetName);
-                if (cachedItems) {
-                    npcInventory = cachedItems;
-                } else {
-                    try {
-                        npcInventory = await getNPCItems(targetName);
-                        
-                        // Cache the results for future use
-                        if (Array.isArray(npcInventory) && npcInventory.length > 0) {
-                            setCachedNPCItems(targetName, npcInventory);
-                        }
-                    } catch (npcError) {
-                        logger.error('LOOT', `❌ Error fetching items for NPC ${targetName}`, npcError);
+                // For other NPCs, fetch from database
+                try {
+                    npcInventory = await getNPCItems(targetName);
+                } catch (npcError) {
+                    logger.error('LOOT', `❌ Error fetching items for NPC ${targetName}`, npcError);
                         
                         // Call global error handler for tracking
                         handleInteractionError(npcError, 'steal.js', {
@@ -3251,7 +3185,6 @@ async function processItemsForStealing(targetName, targetType, raritySelection, 
                                 error: `❌ **Error fetching items from ${targetName}!**\n🔄 Please try again in a moment.\n\n**Debug Info:**\n• NPC: ${targetName}\n• Error: ${npcError.name}: ${npcError.message}` 
                             };
                         }
-                    }
                 }
                 
                 // Check if we got a valid inventory
@@ -3872,7 +3805,8 @@ async function validateCharacterStatus(thiefCharacter, interaction) {
 
         // Check if thief has a valid inventory URL
         const thiefInventoryLink = thiefCharacter.inventory || thiefCharacter.inventoryLink;
-        if (typeof thiefInventoryLink !== 'string' || !isValidGoogleSheetsUrl(thiefInventoryLink)) {
+        // Google Sheets validation removed - just check if it's a string
+        if (typeof thiefInventoryLink !== 'string') {
             await interaction.editReply({ 
                 content: `❌ **Invalid Google Sheets URL for "${thiefCharacter.name}".**`, 
                 ephemeral: true 

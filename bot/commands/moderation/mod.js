@@ -64,14 +64,6 @@ const { addItemInventoryDatabase, escapeRegExp } = require('@/shared/utils/inven
 const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('@/shared/utils/interactionUtils');
 const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
 const {
-  authorizeSheets,
-  extractSpreadsheetId,
-  isValidGoogleSheetsUrl,
-  safeAppendDataToSheet,
-  retryPendingSheetOperations,
-  getPendingSheetOperationsCount
-} = require('@/shared/utils/googleSheetsUtils');
-const {
   deletePendingEditFromStorage,
   deleteSubmissionFromStorage,
   retrievePendingEditFromStorage,
@@ -1419,24 +1411,24 @@ async function execute(interaction) {
           target.tokens = (target.tokens || 0) + amount;
           await target.save();
 
-          // Log to token tracker if user has one
-          if (target.tokenTracker && isValidGoogleSheetsUrl(target.tokenTracker)) {
-            try {
-              const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-              const tokenRow = [
-                `Mod Token Grant by ${interaction.user.username}`,
-                interactionUrl,
-                'Mod Grant',
-                'earned',
-                `+${amount}`
-              ];
-              await safeAppendDataToSheet(target.tokenTracker, target, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
-              console.log(`[mod.js]: ✅ Logged token grant to tracker for user ${user.id}`);
-            } catch (sheetError) {
-              console.error(`[mod.js]: ❌ Error logging to token tracker:`, sheetError);
-              // Don't throw here, just log the error since the tokens were already given
-            }
-          }
+          // Google Sheets token tracker functionality removed
+          // if (target.tokenTracker) {
+          //   try {
+          //     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+          //     const tokenRow = [
+          //       `Mod Token Grant by ${interaction.user.username}`,
+          //       interactionUrl,
+          //       'Mod Grant',
+          //       'earned',
+          //       `+${amount}`
+          //     ];
+          //     await safeAppendDataToSheet(target.tokenTracker, target, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
+          //     console.log(`[mod.js]: ✅ Logged token grant to tracker for user ${user.id}`);
+          //   } catch (sheetError) {
+          //     console.error(`[mod.js]: ❌ Error logging to token tracker:`, sheetError);
+          //     // Don't throw here, just log the error since the tokens were already given
+          //   }
+          // }
           
           return interaction.editReply({
             content: `💠 <@${user.id}> has been given **${amount} tokens**. They now have **${target.tokens} total**.`,
@@ -1475,8 +1467,6 @@ async function execute(interaction) {
         return await handleBlight(interaction);
     } else if (subcommand === 'debuff') {
         return await handleDebuff(interaction);
-    } else if (subcommand === 'sheets') {
-        return await handleSheets(interaction);
     } else if (subcommand === 'rpposts') {
         return await handleRPPosts(interaction);
     } else if (subcommand === 'minigame') {
@@ -4402,80 +4392,6 @@ async function handleBlight(interaction) {
   }
 }
 
-// ============================================================================
-// ------------------- Function: handleSheets -------------------
-// Manages Google Sheets operations and retry functionality
-// ============================================================================
-
-async function handleSheets(interaction) {
-  try {
-    const action = interaction.options.getString('action');
-    
-    if (action === 'retry') {
-      const pendingCount = await getPendingSheetOperationsCount();
-      
-      if (pendingCount === 0) {
-        return interaction.editReply('✅ No pending Google Sheets operations to retry.');
-      }
-      
-      await interaction.editReply(`🔄 Attempting to retry ${pendingCount} pending operations...`);
-      
-      const result = await retryPendingSheetOperations();
-      
-      if (result.success) {
-        const embed = new EmbedBuilder()
-          .setColor('#88cc88')
-          .setTitle('📊 Google Sheets Retry Results')
-          .setDescription(`Successfully processed pending operations.`)
-          .addFields(
-            { name: '✅ Successful', value: result.retried.toString(), inline: true },
-            { name: '❌ Failed', value: result.failed.toString(), inline: true },
-            { name: '📦 Total Processed', value: (result.retried + result.failed).toString(), inline: true }
-          )
-          .setTimestamp();
-        
-        return interaction.editReply({ embeds: [embed] });
-      } else {
-        return interaction.editReply(`❌ Failed to retry operations: ${result.error}`);
-      }
-      
-    } else if (action === 'status') {
-      const pendingCount = await getPendingSheetOperationsCount();
-      
-      const embed = new EmbedBuilder()
-        .setColor(pendingCount > 0 ? '#ffaa00' : '#88cc88')
-        .setTitle('📊 Google Sheets Status')
-        .setDescription(pendingCount > 0 
-          ? `There are **${pendingCount}** pending operations waiting to be retried.`
-          : '✅ All Google Sheets operations are up to date.'
-        )
-        .addFields(
-          { name: '📦 Pending Operations', value: pendingCount.toString(), inline: true },
-          { name: '🔄 Auto Retry', value: 'Every 15 minutes', inline: true },
-          { name: '⏰ Max Retries', value: '3 attempts', inline: true }
-        )
-        .setTimestamp();
-      
-      return interaction.editReply({ embeds: [embed] });
-      
-    } else if (action === 'clear') {
-      const TempData = require('@/shared/models/TempDataModel');
-      const deleteResult = await TempData.deleteMany({ type: 'pendingSheetOperation' });
-      
-      const embed = new EmbedBuilder()
-        .setColor('#ff6666')
-        .setTitle('🗑️ Google Sheets Operations Cleared')
-        .setDescription(`Cleared **${deleteResult.deletedCount}** pending operations.`)
-        .setTimestamp();
-      
-      return interaction.editReply({ embeds: [embed] });
-    }
-    
-  } catch (error) {
-    console.error('[mod.js]: Error during sheets handling:', error);
-    return interaction.editReply('⚠️ An error occurred while processing the sheets action.');
-  }
-}
 // ============================================================================
 // ------------------- Function: handleRPPosts -------------------
 // Updates RP post count for a quest participant

@@ -4,8 +4,7 @@
 const { handleError } = require('@/shared/utils/globalErrorHandler');
 const logger = require('@/shared/utils/logger');
 const { removeItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@/shared/utils/googleSheetsUtils');
-const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('@/shared/database/db'); 
 const { v4: uuidv4 } = require('uuid');
 const { getJobPerk } = require('./jobsModule');

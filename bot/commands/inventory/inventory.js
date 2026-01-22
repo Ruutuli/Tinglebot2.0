@@ -27,9 +27,7 @@ const {
 
 // ------------------- Project Utilities -------------------
 const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('@/shared/utils/googleSheetsUtils.js');
-const { authorizeSheets, appendSheetData, getSheetIdByTitle, getActualInventorySheetName, readSheetData, validateInventorySheet } = require('@/shared/utils/googleSheetsUtils.js');
-const { google } = require('googleapis');
+// Google Sheets functionality removed
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
 const { checkInventorySync } = require('@/shared/utils/characterUtils.js');
 

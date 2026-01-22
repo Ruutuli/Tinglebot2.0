@@ -7,8 +7,7 @@ const { handleError } = require('@/shared/utils/globalErrorHandler');
 const { createWeightedItemList, calculateFinalValue } = require('../modules/rngModule');
 const { fetchItemsByMonster, fetchCharacterByName } = require('@/shared/database/db');
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { extractSpreadsheetId } = require('@/shared/utils/googleSheetsUtils');
-const { authorizeSheets, appendSheetData,  safeAppendDataToSheet, } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 
 // Additional utilities and services
 const { v4: uuidv4 } = require('uuid');

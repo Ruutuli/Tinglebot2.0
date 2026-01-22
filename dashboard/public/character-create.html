@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Create Character - Tinglebot 2.0 Dashboard</title>
+  
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="Create a new character for Tinglebot 2.0" />
+  <link rel="icon" type="image/png" href="/images/tingleicon.png" />
+  <meta name="theme-color" content="#00A3DA" />
+  
+  <!-- Critical CSS - Load immediately -->
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/buttons.css" />
+  <link rel="stylesheet" href="css/character.css" />
+  
+  <!-- External Scripts -->
+  <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <!-- Skip Links for Accessibility -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  
+  <!-- Header -->
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <a href="/" class="back-button" aria-label="Back to Dashboard">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i>
+        <span>Back to Dashboard</span>
+      </a>
+      <div class="breadcrumb">Create Character</div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-menu" id="user-menu">
+        <img src="/images/ankleicon.png" alt="Profile picture" class="user-avatar" id="user-avatar" />
+        <span class="username" id="username">Loading...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main id="main-content" class="main-content">
+    <div class="character-create-container">
+      <div class="character-create-card">
+        <div class="character-create-header">
+          <h1><i class="fas fa-user-plus"></i> Create New Character</h1>
+          <p class="subtitle">Fill out the form below to create your character. All fields are required.</p>
+        </div>
+
+        <!-- Error/Success Messages -->
+        <div id="message-container" class="message-container" style="display: none;">
+          <div id="message-content" class="message-content"></div>
+        </div>
+
+        <!-- Character Creation Form -->
+        <form id="character-create-form" class="character-create-form" enctype="multipart/form-data">
+          <!-- Basic Information Section -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-info-circle"></i> Basic Information</h2>
+            
+            <div class="form-grid">
+              <div class="form-field-group">
+                <label for="character-name">
+                  <span>Character Name</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="character-name" 
+                  name="name" 
+                  required 
+                  placeholder="Enter character name"
+                  autocomplete="off"
+                />
+                <small class="field-description">Choose a unique name for your character</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-age">
+                  <span>Age</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="number" 
+                  id="character-age" 
+                  name="age" 
+                  required 
+                  min="1"
+                  placeholder="Enter age"
+                />
+                <small class="field-description">Character's age (must be 1 or greater)</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-height">
+                  <span>Height (cm)</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="number" 
+                  id="character-height" 
+                  name="height" 
+                  required 
+                  min="0.1"
+                  step="0.1"
+                  placeholder="Enter height in centimeters"
+                />
+                <small class="field-description">Character's height in centimeters</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-pronouns">
+                  <span>Pronouns</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="character-pronouns" 
+                  name="pronouns" 
+                  required 
+                  placeholder="e.g., they/them, he/him, she/her"
+                />
+                <small class="field-description">Character's pronouns</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stats Section -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-heart"></i> Stats</h2>
+            
+            <div class="form-grid">
+              <div class="form-field-group">
+                <label for="character-hearts">
+                  <span>Hearts</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="number" 
+                  id="character-hearts" 
+                  name="hearts" 
+                  required 
+                  min="1"
+                  placeholder="Enter hearts"
+                />
+                <small class="field-description">Starting hearts (minimum 1)</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-stamina">
+                  <span>Stamina</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="number" 
+                  id="character-stamina" 
+                  name="stamina" 
+                  required 
+                  min="1"
+                  placeholder="Enter stamina"
+                />
+                <small class="field-description">Starting stamina (minimum 1)</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Character Details Section -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-user-tag"></i> Character Details</h2>
+            
+            <div class="form-grid">
+              <div class="form-field-group">
+                <label for="character-race">
+                  <span>Race</span>
+                  <span class="required">*</span>
+                </label>
+                <select id="character-race" name="race" required>
+                  <option value="">Select a race...</option>
+                </select>
+                <small class="field-description">Character's race</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-village">
+                  <span>Home Village</span>
+                  <span class="required">*</span>
+                </label>
+                <select id="character-village" name="village" required>
+                  <option value="">Select a village...</option>
+                  <option value="inariko">Inariko</option>
+                  <option value="rudania">Rudania</option>
+                  <option value="vhintl">Vhintl</option>
+                </select>
+                <small class="field-description">Character's home village</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-job">
+                  <span>Job</span>
+                  <span class="required">*</span>
+                </label>
+                <select id="character-job" name="job" required disabled>
+                  <option value="">Select a village first...</option>
+                </select>
+                <small class="field-description">Character's job (filtered by village)</small>
+              </div>
+
+              <div class="form-field-group">
+                <label for="character-app-link">
+                  <span>Application Link</span>
+                  <span class="required">*</span>
+                </label>
+                <input 
+                  type="url" 
+                  id="character-app-link" 
+                  name="appLink" 
+                  required 
+                  placeholder="https://..."
+                />
+                <small class="field-description">Link to character application</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Icon Upload Section -->
+          <div class="form-section">
+            <h2 class="section-title"><i class="fas fa-image"></i> Character Icon</h2>
+            
+            <div class="form-field-group full-width">
+              <label for="character-icon">
+                <span>Icon Image</span>
+                <span class="required">*</span>
+              </label>
+              <input 
+                type="file" 
+                id="character-icon" 
+                name="icon" 
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                required
+              />
+              <small class="field-description">Upload a character icon (JPEG, PNG, GIF, or WebP, max 5MB)</small>
+              
+              <!-- Image Preview -->
+              <div id="icon-preview-container" class="icon-preview-container" style="display: none;">
+                <img id="icon-preview" src="" alt="Icon preview" class="icon-preview" />
+                <button type="button" id="remove-icon-preview" class="remove-icon-btn" aria-label="Remove icon">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="form-actions">
+            <button type="submit" id="submit-btn" class="btn btn-primary">
+              <i class="fas fa-check"></i>
+              <span>Create Character</span>
+            </button>
+            <button type="reset" id="reset-btn" class="btn btn-secondary">
+              <i class="fas fa-undo"></i>
+              <span>Reset Form</span>
+            </button>
+            <a href="/" class="btn btn-tertiary">
+              <i class="fas fa-times"></i>
+              <span>Cancel</span>
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script type="module" src="js/characterCreate.js"></script>
+</body>
+</html>

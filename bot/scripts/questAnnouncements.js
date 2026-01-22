@@ -10,11 +10,10 @@ const fs = require('fs');
 const path = require('path');
 
 // Third-party
-const { google } = require('googleapis');
+// Google Sheets functionality removed - no longer using googleapis
 
 // Utils
 const { handleError } = require('@/shared/utils/globalErrorHandler');
-const { authorizeSheets, writeSheetData } = require('@/shared/utils/googleSheetsUtils'); 
 const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
 
 // Models
@@ -31,9 +30,9 @@ const { BORDER_IMAGE, QUEST_TYPES, QUEST_CHANNEL_ID, extractVillageFromLocation 
 const MOD_CHANNEL_ID = '795747760691216384';
 const MOD_ROLE_ID = '606128760655183882';
 
-// Google Sheets Configuration
-const SHEET_ID = '1M106nBghmgng9xigxkVpUXuKIF60QXXKiAERlG1a0Gs';
-const SHEET_RANGE = 'loggedQuests!A2:U';
+// Google Sheets Configuration - Disabled (no longer using Google Sheets)
+// const SHEET_ID = '1M106nBghmgng9xigxkVpUXuKIF60QXXKiAERlG1a0Gs';
+// const SHEET_RANGE = 'loggedQuests!A2:U';
 const MAX_COLUMNS = 21;
 
 // Column Mapping Configuration
@@ -72,41 +71,7 @@ const client = new Client({
 // ============================================================================
 // ------------------- Google Sheets API Setup -------------------
 // ============================================================================
-
-let serviceAccount;
-
-if (process.env.RAILWAY_ENVIRONMENT) {
-    serviceAccount = {
-        type: "service_account",
-        project_id: process.env.GOOGLE_PROJECT_ID,
-        private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        auth_uri: "https://accounts.google.com/o/oauth2/auth",
-        token_uri: "https://oauth2.googleapis.com/token",
-        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-        client_x509_cert_url: process.env.GOOGLE_CLIENT_X509_CERT_URL,
-        universe_domain: "googleapis.com"
-    };
-} else {
-    const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../config/service_account.json');
-    if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-        console.error('[questAnnouncements.js] ❌ Service account file not found at', SERVICE_ACCOUNT_PATH);
-        process.exit(1);
-    }
-    serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
-}
-
-const sheets = google.sheets({
-    version: 'v4',
-    auth: new google.auth.JWT(
-        serviceAccount.client_email,
-        null,
-        serviceAccount.private_key,
-        ['https://www.googleapis.com/auth/spreadsheets.readonly']
-    )
-});
+// Google Sheets functionality removed - no longer using Google Sheets API
 
 // ============================================================================
 // ------------------- Utility Functions -------------------
@@ -275,19 +240,10 @@ function parseQuestRow(questRow) {
 }
 
 // ------------------- fetchQuestData -
+// Google Sheets functionality removed - returns empty array
 async function fetchQuestData() {
-    try {
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: SHEET_ID,
-            range: SHEET_RANGE,
-        });
-        const questData = response.data.values || [];
-        return validateSheetData(questData);
-    } catch (error) {
-        handleError(error, 'questAnnouncements.js');
-        console.error('[questAnnouncements.js] ❌ Error fetching data from Google Sheets:', error);
-        return [];
-    }
+    console.warn('[questAnnouncements.js]⚠️ fetchQuestData called but Google Sheets is disabled');
+    return [];
 }
 
 // ============================================================================
@@ -1351,14 +1307,10 @@ async function postQuests(externalClient = null) {
 // ============================================================================
 
 // ------------------- markQuestAsPosted -
+// Google Sheets functionality removed - no-op function
 async function markQuestAsPosted(auth, rowIndex, questID) {
-    try {
-        const now = new Date().toISOString();
-        await writeSheetData(auth, SHEET_ID, `loggedQuests!Q${rowIndex + 2}:T${rowIndex + 2}`, [[questID, 'active', 'Posted', now]]);
-    } catch (error) {
-        handleError(error, 'questAnnouncements.js');
-        console.error('[questAnnouncements.js] ❌ Failed to mark quest as posted in Google Sheets:', error);
-    }
+    // Google Sheets is no longer used - function is kept for compatibility but does nothing
+    // No-op: Google Sheets functionality has been removed
 }
 
 // ============================================================================

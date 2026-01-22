@@ -3,20 +3,13 @@
   "version": "1.0.0",
   "description": "Tinglebot 2.0 - Discord bot and dashboard",
   "private": true,
-  "workspaces": [
-    "bot",
-    "dashboard"
-  ],
   "scripts": {
-    "start:bot": "npm -w bot run start",
-    "start:dashboard": "npm -w dashboard run start",
+    "dev:bot": "cd bot && npm run dev",
+    "dev:dashboard": "cd dashboard && npm run dev",
     "dev": "concurrently \"npm run dev:bot\" \"npm run dev:dashboard\"",
-    "dev:bot": "npm -w bot run dev",
-    "dev:dashboard": "npm -w dashboard run dev",
     "deploy:commands": "node bot/scripts/deploy-commands.js"
   },
   "devDependencies": {
-    "concurrently": "^8.2.0",
-    "nodemon": "^3.0.0"
+    "concurrently": "^8.2.0"
   }
 }

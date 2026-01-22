@@ -48,9 +48,7 @@ const {
  appendSheetData,
  authorizeSheets,
  extractSpreadsheetId,
- isValidGoogleSheetsUrl,
- safeAppendDataToSheet,
-} = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 
 // ------------------- Temporary In-Memory Storage -------------------
 const deliveryTasks = {};

@@ -3,16 +3,22 @@
 // Bot-specific scheduler setup functions
 // ============================================================================
 
-// Core dependencies
+// ============================================================================
+// ------------------- Core Dependencies -------------------
+// ============================================================================
 const dotenv = require("dotenv");
 const path = require("path");
-const { createCronJob: createCronJobWrapper, shutdownCroner, listCronJobs, getCronJobStats, checkInitialization, cleanupOrphanedTimers, checkJobHealth, restartAllJobs, forceCleanupCronerTimers } = require("./croner");
 const { v4: uuidv4 } = require("uuid");
+// Croner removed - using Agenda for all scheduling
 
-// Discord.js
+// ============================================================================
+// ------------------- Discord.js -------------------
+// ============================================================================
 const { EmbedBuilder } = require("discord.js");
 
-// Database models
+// ============================================================================
+// ------------------- Database Models -------------------
+// ============================================================================
 const Character = require('@/shared/models/CharacterModel');
 const Pet = require('@/shared/models/PetModel');
 const Raid = require('@/shared/models/RaidModel');
@@ -21,7 +27,9 @@ const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
 const ItemModel = require('@/shared/models/ItemModel');
 const Weather = require('@/shared/models/WeatherModel');
 
-// Database functions
+// ============================================================================
+// ------------------- Database Functions -------------------
+// ============================================================================
 const {
  generateVendingStockList,
  resetPetRollsForAllCharacters,
@@ -30,7 +38,9 @@ const {
  fetchItemByName,
 } = require('@/shared/database/db');
 
-// Bot-specific handlers (relative to bot folder)
+// ============================================================================
+// ------------------- Bot Handlers -------------------
+// ============================================================================
 const {
  postBlightRollCall,
  cleanupExpiredBlightRequests,
@@ -40,7 +50,9 @@ const {
  checkAndPostMissedBlightPing,
 } = require("../handlers/blightHandler");
 
-// Bot-specific scripts (relative to bot folder)
+// ============================================================================
+// ------------------- Bot Scripts -------------------
+// ============================================================================
 const {
  sendBloodMoonAnnouncement,
  sendBloodMoonEndAnnouncement,
@@ -50,53 +62,58 @@ const {
  cleanupOldTrackingData,
 } = require("../scripts/bloodmoon");
 const { resetAllVillageRaidQuotas, checkVillageRaidQuotas } = require("../scripts/randomMonsterEncounters");
+const { postQuests } = require('../scripts/questAnnouncements');
 
-// Bot-specific modules (relative to bot folder)
+// ============================================================================
+// ------------------- Bot Modules -------------------
+// ============================================================================
 const { recoverDailyStamina } = require("../modules/characterStatsModule");
 const { bloodmoonDates, convertToHyruleanDate } = require('../modules/calendarModule');
 const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, isTravelBlockedByWeather, regenerateEscortQuest, regenerateArtWritingQuest } = require('../modules/helpWantedModule');
 const { processMonthlyQuestRewards } = require('../modules/questRewardModule');
 const { updateAllRoleCountChannels } = require('../modules/roleCountChannelsModule');
-// Secret Santa - Disabled outside December
-// const { setupSecretSantaScheduler } = require('../../bot/modules/secretSantaModule');
+const { damageVillage, Village } = require('../modules/villageModule');
 const { addBoostFlavorText, buildFooterText } = require('../embeds/embeds');
 const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+// Secret Santa - Disabled outside December
+// const { setupSecretSantaScheduler } = require('../modules/secretSantaModule');
 
-// Utilities
-const { safeAppendDataToSheet, extractSpreadsheetId } = require('@/shared/utils/googleSheetsUtils');
-const { logItemAcquisitionToDatabase } = require('@/shared/utils/inventoryUtils');
-
-// Services
-const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration, getCurrentPeriodBounds } = require('@/shared/services/weatherService');
-
-// Bot-specific village modules (relative to bot folder)
-const { damageVillage, Village } = require('../modules/villageModule');
-
-// Utils
+// ============================================================================
+// ------------------- Shared Utilities -------------------
+// ============================================================================
 const { handleError } = require('@/shared/utils/globalErrorHandler');
 const { sendUserDM } = require('@/shared/utils/messageUtils');
-// Expiration handler removed - see docs/FUTURE_PLANS.md
-// const { checkExpiredRequests } = require('@/shared/utils/expirationHandler");
-const { isValidImageUrl } = require('@/shared/utils/validation');
-const notificationService = require('@/shared/utils/notificationService');
 const logger = require('@/shared/utils/logger');
 const { releaseFromJail, DEFAULT_JAIL_DURATION_MS } = require('@/shared/utils/jailCheck');
+const { logItemAcquisitionToDatabase } = require('@/shared/utils/inventoryUtils');
+const { isValidImageUrl } = require('@/shared/utils/validation');
+const notificationService = require('@/shared/utils/notificationService');
 const {
  cleanupExpiredHealingRequests,
  cleanupExpiredBoostingRequests,
  getBoostingStatistics,
  archiveOldBoostingRequests,
 } = require('@/shared/utils/storage');
-const {
- retryPendingSheetOperations,
- getPendingSheetOperationsCount,
-} = require('@/shared/utils/googleSheetsUtils');
 
-// Constants
+// ============================================================================
+// ------------------- Shared Services -------------------
+// ============================================================================
+const { getCurrentWeather, generateWeatherEmbed, getWeatherWithoutGeneration, getCurrentPeriodBounds } = require('@/shared/services/weatherService');
+
+// ============================================================================
+// ------------------- Scheduler Dependencies -------------------
+// ============================================================================
+const { getAgenda } = require('./agenda');
+
+// ============================================================================
+// ------------------- Constants -------------------
+// ============================================================================
 const DEFAULT_IMAGE_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
 
-// Channel mappings
+// ============================================================================
+// ------------------- Channel Mappings -------------------
+// ============================================================================
 const TOWNHALL_CHANNELS = {
  Rudania: process.env.RUDANIA_TOWNHALL,
  Inariko: process.env.INARIKO_TOWNHALL,
@@ -108,12 +125,6 @@ const BLOOD_MOON_CHANNELS = [
  process.env.INARIKO_TOWNHALL,
  process.env.VHINTL_TOWNHALL,
 ];
-
-// Monthly quest posting (uses existing postQuests function)
-const { postQuests } = require('../scripts/questAnnouncements');
-
-// Agenda for one-time scheduled jobs (relative to bot folder)
-const { getAgenda } = require('./agenda');
 
 // ============================================================================
 // ------------------- Environment Setup -------------------
@@ -151,89 +162,9 @@ function convertEstCronToUtc(estCronTime) {
   return estCronTime; // Return as-is if format is unexpected
 }
 
-// Track all cron jobs to prevent leaks (for backward compatibility)
-const activeCronJobs = new Set();
+// Track scheduler initialization state
 let isSchedulerInitialized = false;
 let schedulerInitCallCount = 0; // Track how many times initializeScheduler is called
-
-/**
- * Create a cron job using the Croner wrapper
- * Wraps the wrapper to maintain backward compatibility with existing code
- * @param {string} schedule - Cron pattern (in UTC)
- * @param {string} jobName - Unique name for the job
- * @param {Function} jobFunction - Function to execute
- * @param {string|Object} timezone - Deprecated: Timezone string or options object (no longer used - kept for backward compatibility)
- * @returns {Object} The created Cron instance (from croner library)
- */
-function createCronJob(
- schedule,
- jobName,
- jobFunction,
- timezone = null, // Deprecated - no longer used, kept for backward compatibility
- silent = false // If true, suppress individual job creation logs (for batch operations)
-) {
- // Log when creating jobs to track timer leaks (unless silent)
- if (!silent) {
-  const stack = new Error().stack;
-  const caller = stack.split('\n')[2]?.trim() || 'unknown';
-  logger.warn('SCHEDULER', `🔍 Creating cron job "${jobName}" (schedule: ${schedule}) - Called from: ${caller}`);
- }
- 
- // Guard: Warn if creating jobs after initialization (this should only happen during init)
- // Note: We allow it during init (when schedulerInitCallCount > 0 but isSchedulerInitialized is false)
- if (isSchedulerInitialized) {
-  logger.error('SCHEDULER', `⚠️ CRITICAL: Attempted to create cron job "${jobName}" after scheduler already initialized! This will cause timer leaks!`);
-  logger.error('SCHEDULER', `Full stack trace:`, stack);
- }
- 
- // Adapt signature: wrapper expects (name, pattern, fn, options)
- // No longer pass timezone to avoid memory leaks
- const options = {};
- if (timezone && typeof timezone === 'object' && !timezone.timezone) {
-   // If timezone is an object with other options, use those
-   Object.assign(options, timezone);
- }
- // Explicitly do NOT set timezone option
- // Pass silent flag to wrapper
- if (silent) {
-   options.silent = true;
- }
- 
- const task = createCronJobWrapper(
-  jobName,
-  schedule,
-  async () => {
-   try {
-    await jobFunction();
-   } catch (error) {
-    handleError(error, "scheduler.js");
-    logger.error('SCHEDULER', `[scheduler.js]❌ ${jobName} failed:`, error.message);
-   }
-  },
-  options
- );
- 
- // Track the cron job instance (for backward compatibility)
- activeCronJobs.add(task);
- 
- return task;
-}
-
-// Function to destroy all active cron jobs
-function destroyAllCronJobs() {
- let destroyedCount = 0;
- for (const task of activeCronJobs) {
-  try {
-   task.stop(); // croner uses stop() instead of destroy()
-   destroyedCount++;
-  } catch (error) {
-   logger.error('SCHEDULER', 'Error destroying cron job', error.message);
-  }
- }
- activeCronJobs.clear();
- logger.info('SCHEDULER', `Destroyed ${destroyedCount} cron jobs`);
- return destroyedCount;
-}
 
 // ============================================================================
 // ------------------- Helper Functions -------------------
@@ -246,6 +177,50 @@ function getVillageChannelId(villageName) {
 function getESTDate(date = new Date()) {
  const estDate = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
  return estDate;
+}
+
+// ------------------- Agenda Helper ------------------
+// Ensure Agenda is initialized with consistent error logging -
+function ensureAgendaInitialized(context) {
+ const agenda = getAgenda();
+ if (!agenda) {
+  logger.error('SCHEDULER', `[scheduler.js]❌ Agenda not initialized - cannot ${context}`);
+ }
+ return agenda;
+}
+
+// ------------------- Birthday Helper ------------------
+// Check if character's birthday is today -
+function isBirthdayToday(character, today) {
+ const characterBirthday = new Date(character.birthday);
+ return characterBirthday.getMonth() === today.getMonth() && 
+        characterBirthday.getDate() === today.getDate();
+}
+
+// ------------------- Channel Helper ------------------
+// Fetch village channel with consistent error handling -
+async function fetchVillageChannel(client, villageName) {
+ const channelId = getVillageChannelId(villageName);
+ if (!channelId) {
+  logger.error('CHANNEL', `[scheduler.js]❌ No channel ID configured for ${villageName}`);
+  return null;
+ }
+ 
+ let channel = client.channels.cache.get(channelId);
+ if (!channel) {
+  try {
+   channel = await client.channels.fetch(channelId);
+   if (!channel) {
+    logger.error('CHANNEL', `[scheduler.js]❌ Channel ${channelId} does not exist for ${villageName}`);
+    return null;
+   }
+  } catch (fetchError) {
+   logger.error('CHANNEL', `[scheduler.js]❌ Failed to fetch channel ${channelId} for ${villageName}:`, fetchError.message);
+   return null;
+  }
+ }
+ 
+ return channel;
 }
 
 // ============================================================================
@@ -289,27 +264,10 @@ async function postWeatherForVillage(client, village, isReminder = false) {
    return false;
   }
 
-  const channelId = TOWNHALL_CHANNELS[village];
-  if (!channelId) {
-   logger.error('WEATHER', `[scheduler.js]❌ No channel ID configured for ${village} in TOWNHALL_CHANNELS`);
-   return false;
-  }
-
-  let channel = client.channels.cache.get(channelId);
-
+  const channel = await fetchVillageChannel(client, village);
   if (!channel) {
-   logger.error('WEATHER', `[scheduler.js]❌ Channel not found in cache: ${channelId} for ${village}. Attempting fetch...`);
-   try {
-    channel = await client.channels.fetch(channelId);
-    if (!channel) {
-     logger.error('WEATHER', `[scheduler.js]❌ Channel ${channelId} does not exist for ${village}`);
-     return false;
-    }
-    logger.info('WEATHER', `Successfully fetched channel ${channelId} for ${village}`);
-   } catch (fetchError) {
-    logger.error('WEATHER', `[scheduler.js]❌ Failed to fetch channel ${channelId} for ${village}: ${fetchError.message}`);
-    return false;
-   }
+   logger.error('WEATHER', `[scheduler.js]❌ Failed to fetch channel for ${village}`);
+   return false;
   }
 
   const embedResult = await generateWeatherEmbed(village, weather);
@@ -670,16 +628,9 @@ async function executeBirthdayAnnouncements(client) {
   
   for (const character of characters) {
    try {
-    const characterBirthday = new Date(character.birthday);
-    const isToday = characterBirthday.getMonth() === today.getMonth() && 
-                   characterBirthday.getDate() === today.getDate();
+    if (!isBirthdayToday(character, today)) continue;
     
-    if (!isToday) continue;
-    
-    const villageChannelId = getVillageChannelId(character.currentVillage);
-    if (!villageChannelId) continue;
-    
-    const channel = await client.channels.fetch(villageChannelId);
+    const channel = await fetchVillageChannel(client, character.currentVillage);
     if (!channel) continue;
     
     const embed = new EmbedBuilder()
@@ -693,7 +644,7 @@ async function executeBirthdayAnnouncements(client) {
     
    } catch (error) {
     handleError(error, "scheduler.js");
-    logger.error('BIRTHDAY', `Failed to announce birthday for ${character.name}`, error.message);
+    logger.error('BIRTHDAY', `[scheduler.js]❌ Failed to announce birthday for ${character.name}:`, error.message);
    }
   }
   
@@ -724,8 +675,7 @@ async function handleJailRelease(client) {
   try {
    await releaseFromJail(character);
    
-   const villageChannelId = getVillageChannelId(character.currentVillage);
-   const villageChannel = await client.channels.fetch(villageChannelId);
+   const villageChannel = await fetchVillageChannel(client, character.currentVillage);
    
    if (villageChannel) {
     await villageChannel.send({
@@ -735,7 +685,7 @@ async function handleJailRelease(client) {
     releasedCount++;
    }
   } catch (error) {
-   logger.error('JOB', `Error releasing ${character.name} from jail:`, error.message);
+   logger.error('JOB', `[scheduler.js]❌ Error releasing ${character.name} from jail:`, error.message);
   }
  }
  
@@ -802,7 +752,7 @@ async function resetDailyRolls(client) {
   
   logger.success('CLEANUP', `Reset daily rolls for ${resetCount} characters`);
  } catch (error) {
-  logger.error('CLEANUP', 'Error resetting daily rolls', error);
+  logger.error('CLEANUP', `[scheduler.js]❌ Error resetting daily rolls:`, error);
  }
 }
 
@@ -821,7 +771,7 @@ async function resetPetLastRollDates(client) {
   
   logger.success('CLEANUP', `Reset last roll dates for ${resetCount} pets`);
  } catch (error) {
-  logger.error('CLEANUP', 'Failed to reset pet lastRollDates', error.message);
+  logger.error('CLEANUP', `[scheduler.js]❌ Failed to reset pet lastRollDates:`, error.message);
  }
 }
 
@@ -829,24 +779,12 @@ async function resetPetLastRollDates(client) {
 // ------------------- Blight Functions -------------------
 // ============================================================================
 
-function setupBlightScheduler(client) {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupBlightScheduler called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
- }
+async function setupBlightScheduler(client) {
+ const agenda = ensureAgendaInitialized('setup blight scheduler');
+ if (!agenda) return;
+ 
  // 8:00 PM EST = 01:00 UTC next day
- createCronJob("0 1 * * *", "Blight Roll Call", async () => {
-  try {
-   await postBlightRollCall(client);
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   logger.error('BLIGHT', 'Blight roll call failed', error.message);
-  }
- });
+ await agenda.every("0 1 * * *", "Blight Roll Call");
 }
 
 // ============================================================================
@@ -854,57 +792,29 @@ function setupBlightScheduler(client) {
 // ============================================================================
 
 async function setupBoostingScheduler(client) {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupBoostingScheduler called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
- }
+ const agenda = ensureAgendaInitialized('setup boosting scheduler');
+ if (!agenda) return;
+ 
  // Daily boost cleanup at midnight EST = 05:00 UTC
- createCronJob("0 5 * * *", "Boost Cleanup", async () => {
-  try {
-   logger.info('CLEANUP', 'Starting boost cleanup');
-   await cleanupExpiredBoostingRequests();
-   await archiveOldBoostingRequests();
-   logger.success('CLEANUP', 'Boost cleanup completed');
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   logger.error('CLEANUP', 'Boost cleanup failed', error.message);
-  }
- });
+ await agenda.every("0 5 * * *", "Boost Cleanup");
 }
 
 // ============================================================================
 // ------------------- Weather Scheduler -------------------
 // ============================================================================
 
-function setupWeatherScheduler(client) {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupWeatherScheduler called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
- }
- const { createCronJob: createCronJobDirect } = require('./croner');
+async function setupWeatherScheduler(client) {
+ const agenda = ensureAgendaInitialized('setup weather scheduler');
+ if (!agenda) return;
  
  // Primary weather update at 8:00am EST = 13:00 UTC
- createCronJobDirect("Daily Weather Update", "0 13 * * *", () =>
-  postWeatherUpdate(client)
- );
+ await agenda.every("0 13 * * *", "Daily Weather Update");
  
  // Fallback check at 8:15am EST = 13:15 UTC - ensures weather was posted, generates if missing
- createCronJobDirect("Weather Fallback Check", "15 13 * * *", () =>
-  checkAndPostWeatherIfNeeded(client)
- );
+ await agenda.every("15 13 * * *", "Weather Fallback Check");
  
  // Weather reminder at 8:00pm EST = 01:00 UTC next day
- createCronJobDirect("Daily Weather Forecast Reminder", "0 1 * * *", () =>
-  postWeatherReminder(client)
- );
+ await agenda.every("0 1 * * *", "Daily Weather Forecast Reminder");
 }
 
 async function postWeatherReminder(client) {
@@ -928,7 +838,7 @@ async function checkAndGenerateDailyQuests() {
     handleError(error, 'scheduler.js', {
       commandName: 'checkAndGenerateDailyQuests'
     });
-    logger.error('QUEST', 'Error checking/generating daily quests', error);
+    logger.error('QUEST', `[scheduler.js]❌ Error checking/generating daily quests:`, error);
   }
 }
 
@@ -958,7 +868,7 @@ async function checkAndPostMissedQuests(client) {
       // Post missed quests logic here
     }
   } catch (error) {
-    logger.error('QUEST', 'Error checking for missed quests', error);
+    logger.error('QUEST', `[scheduler.js]❌ Error checking for missed quests:`, error);
   }
 }
 
@@ -1030,28 +940,22 @@ async function checkAndPostScheduledQuests(client, cronTime) {
       commandName: 'checkAndPostScheduledQuests',
       scheduledTime: cronTime
     });
-    logger.error('QUEST', 'Error checking and posting scheduled quests', error);
+    logger.error('QUEST', `[scheduler.js]❌ Error checking and posting scheduled quests:`, error);
     return 0;
   }
 }
 
 async function postQuestToChannel(client, quest, context) {
   try {
-    const villageChannelId = getVillageChannelId(quest.village);
-    if (!villageChannelId) {
-      logger.error('QUEST', `No channel ID for village ${quest.village}`);
-      return false;
-    }
-    
-    const channel = await client.channels.fetch(villageChannelId);
+    const channel = await fetchVillageChannel(client, quest.village);
     if (!channel) {
-      logger.error('QUEST', `Channel not found for ${quest.village}`);
+      logger.error('QUEST', `[scheduler.js]❌ Failed to fetch channel for ${quest.village}`);
       return false;
     }
     
     const embeds = await formatSpecificQuestsAsEmbedsByVillage([quest], quest.village);
     if (!embeds || embeds.length === 0) {
-      logger.error('QUEST', `No embeds generated for quest ${quest.questId}`);
+      logger.error('QUEST', `[scheduler.js]❌ No embeds generated for quest ${quest.questId}`);
       return false;
     }
     
@@ -1077,40 +981,29 @@ async function handleEscortQuestWeather(quest) {
     }
     return true;
   } catch (error) {
-    logger.error('QUEST', `Error checking weather for escort quest:`, error);
+    logger.error('QUEST', `[scheduler.js]❌ Error checking weather for escort quest:`, error);
     return true; // Allow quest to post if weather check fails
   }
 }
 
-function setupHelpWantedFixedScheduler(client) {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupHelpWantedFixedScheduler called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
+async function setupHelpWantedFixedScheduler(client) {
+ const agenda = ensureAgendaInitialized('setup help wanted scheduler');
+ if (!agenda) return;
+ 
+ const { FIXED_CRON_TIMES } = require('../modules/helpWantedModule');
+ 
+ // Schedule all 24 time slots for full 24-hour coverage
+ // The variable buffer (3-6 hours) is handled in the quest generation logic
+ // Note: FIXED_CRON_TIMES contains EST times, convert to UTC (add 5 hours)
+ let jobsCreated = 0;
+ for (const cronTime of FIXED_CRON_TIMES) {
+  const utcCronTime = convertEstCronToUtc(cronTime);
+  const jobName = `Help Wanted Board Check - ${cronTime} (EST)`;
+  await agenda.every(utcCronTime, jobName);
+  jobsCreated++;
  }
-  const { FIXED_CRON_TIMES } = require('../modules/helpWantedModule');
-  
-  // Schedule all 24 time slots for full 24-hour coverage
-  // The variable buffer (3-6 hours) is handled in the quest generation logic
-  // Note: FIXED_CRON_TIMES contains EST times, convert to UTC (add 5 hours)
-  // Use silent=true to suppress individual job creation logs (we'll log once at the end)
-  let jobsCreated = 0;
-  FIXED_CRON_TIMES.forEach(cronTime => {
-    const utcCronTime = convertEstCronToUtc(cronTime);
-    createCronJob(
-      utcCronTime,
-      `Help Wanted Board Check - ${cronTime} (EST) -> ${utcCronTime} (UTC)`,
-      () => checkAndPostScheduledQuests(client, cronTime),
-      null, // timezone (deprecated)
-      true  // silent - suppress individual logs
-    );
-    jobsCreated++;
-  });
-  
-  logger.success('SCHEDULER', `Help Wanted scheduler configured with ${jobsCreated} time slots (full 24-hour coverage with variable 3-6 hour buffer in quest generation)`);
+ 
+ logger.success('SCHEDULER', `Help Wanted scheduler configured with ${jobsCreated} time slots (full 24-hour coverage with variable 3-6 hour buffer in quest generation)`);
 }
 
 // ============================================================================
@@ -1307,180 +1200,63 @@ async function runStartupChecks(client) {
 
 // ------------------- Scheduler Setup Functions ------------------
 
-function setupDailyTasks(client) {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupDailyTasks called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
- }
+async function setupDailyTasks(client) {
+ const agenda = ensureAgendaInitialized('setup daily tasks');
+ if (!agenda) return;
+
  // Daily tasks at midnight EST = 05:00 UTC
- // Note: jail release is now handled by Agenda (scheduled at exact release time)
- createCronJob("0 5 * * *", "reset pet last roll dates", () => resetPetLastRollDates(client));
- createCronJob("0 5 * * *", "birthday role assignment", () => handleBirthdayRoleAssignment(client));
- createCronJob("0 5 * * *", "reset daily rolls", () => resetDailyRolls(client));
- createCronJob("0 5 * * *", "recover daily stamina", () => recoverDailyStamina(client));
- createCronJob("0 5 * * *", "generate daily quests", () => generateDailyQuestsAtMidnight());
- createCronJob("0 5 * * *", "global steal protections reset", () => {
-  try {
-   resetAllStealProtections();
-   logger.success('CLEANUP', 'Global steal protections reset completed');
-  } catch (error) {
-   logger.error('CLEANUP', 'Error resetting global steal protections', error);
-  }
- });
+ await agenda.every("0 5 * * *", "reset pet last roll dates");
+ await agenda.every("0 5 * * *", "birthday role assignment");
+ await agenda.every("0 5 * * *", "reset daily rolls");
+ await agenda.every("0 5 * * *", "recover daily stamina");
+ await agenda.every("0 5 * * *", "generate daily quests");
+ await agenda.every("0 5 * * *", "global steal protections reset");
+ 
+ // Expiration check - daily at 8 AM EST = 13:00 UTC
+ await agenda.every("0 13 * * *", "checkExpiredRequests");
 
  // Weekly tasks - Sunday midnight EST = Monday 05:00 UTC
- createCronJob("0 5 * * 1", "weekly pet rolls reset", () => resetPetRollsForAllCharacters(client));
+ await agenda.every("0 5 * * 1", "weekly pet rolls reset");
 
  // Monthly tasks - 1st of month midnight EST = 05:00 UTC
- createCronJob("0 5 1 * *", "monthly vending stock generation", () => generateVendingStockList(client));
- createCronJob("0 5 1 * *", "monthly nitro boost rewards", async () => {
-  try {
-   logger.info('BOOST', 'Starting monthly Nitro boost reward distribution (1st of month)...');
-   const result = await distributeMonthlyBoostRewards(client);
-   logger.success('BOOST', `Nitro boost rewards distributed - Rewarded: ${result.rewardedCount}, Already Rewarded: ${result.alreadyRewardedCount}, Errors: ${result.errorCount}, Total Tokens: ${result.totalTokens}`);
-  } catch (error) {
-   handleError(error, 'scheduler.js');
-   logger.error('BOOST', 'Monthly Nitro boost reward distribution failed', error.message);
-  }
- });
+ await agenda.every("0 5 1 * *", "monthly vending stock generation");
+ await agenda.every("0 5 1 * *", "monthly nitro boost rewards");
  // Monthly quest reward distribution - runs at 11:59 PM EST = 04:59 UTC on the last day of month
- createCronJob("59 4 * * *", "monthly quest reward distribution", async () => {
-  try {
-   // Get current date/time in UTC
-   const now = new Date();
-   // Calculate tomorrow by adding 24 hours (86400000 milliseconds)
-   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-   
-   // Check if tomorrow is the 1st (using UTC, which is 5 hours ahead of EST)
-   // If tomorrow is the 1st in UTC, then today is the last day of the month
-   if (tomorrow.getUTCDate() === 1) {
-    logger.info('QUEST', 'Starting monthly quest reward distribution (last day of month at 11:59 PM EST / 04:59 UTC)...');
-    const result = await processMonthlyQuestRewards();
-    logger.success('SCHEDULER', `Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
-   } else {
-    logger.info('SCHEDULER', 'Not last day of month, skipping monthly quest reward distribution');
-   }
-  } catch (error) {
-   handleError(error, 'scheduler.js');
-   logger.error('QUEST', 'Monthly quest reward distribution failed', error.message);
-  }
- });
+ await agenda.every("59 4 * * *", "monthly quest reward distribution");
 
  // Periodic raid expiration check (every 5 minutes) to ensure raids timeout even if bot restarts
- createCronJob("*/5 * * * *", "raid expiration check", async () => {
-  const startTime = Date.now();
-  logger.warn('SCHEDULER', `🔍 [RAID CHECK] Starting execution at ${new Date().toISOString()}`);
-  
-  try {
-   const result = await cleanupExpiredRaids(client);
-   const duration = Date.now() - startTime;
-   if (result.expiredCount > 0) {
-    logger.info('RAID', `Periodic raid check - ${result.expiredCount} raid(s) expired (took ${duration}ms)`);
-   } else {
-    logger.warn('SCHEDULER', `🔍 [RAID CHECK] Completed in ${duration}ms (no expired raids)`);
-   }
-  } catch (error) {
-   const duration = Date.now() - startTime;
-   logger.error('RAID', `Periodic raid expiration check failed after ${duration}ms`, error);
-   handleError(error, 'scheduler.js');
-  }
- });
+ await agenda.every("*/5 * * * *", "raid expiration check");
 
  // Hourly tasks
- createCronJob("0 * * * *", "village raid quota check", async () => {
-  try {
-    logger.info('RAID_QUOTA', 'Starting hourly village raid quota check...');
-    await checkVillageRaidQuotas(client);
-  } catch (error) {
-    logger.error('RAID_QUOTA', 'Error during hourly village raid quota check', error.message);
-    handleError(error, 'scheduler.js');
-  }
- });
- createCronJob("0 */6 * * *", "quest completion check", () => checkQuestCompletions(client));
- createCronJob("0 */2 * * *", "village tracking check", () => checkVillageTracking(client)); // Every 2 hours
+ await agenda.every("0 * * * *", "village raid quota check");
+ await agenda.every("0 * * * *", "memory log"); // Memory stats logging
+ await agenda.every("0 */6 * * *", "quest completion check");
+ await agenda.every("0 */2 * * *", "village tracking check"); // Every 2 hours
  // Blood moon tracking cleanup at 1 AM EST = 06:00 UTC
- createCronJob("0 6 * * *", "blood moon tracking cleanup", () => {
-  logger.info('CLEANUP', 'Starting Blood Moon tracking cleanup');
-  cleanupOldTrackingData();
-  logger.success('CLEANUP', 'Blood Moon tracking cleanup completed');
- });
+ await agenda.every("0 6 * * *", "blood moon tracking cleanup");
 }
 
-function setupQuestPosting(client) {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupQuestPosting called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
- }
+async function setupQuestPosting(client) {
+ const agenda = ensureAgendaInitialized('setup quest posting');
+ if (!agenda) return;
+ 
  // Quest posting check - runs on 1st of month at midnight EST = 05:00 UTC
- createCronJob("0 5 1 * *", "quest posting check", async () => {
-  try {
-   process.env.TEST_CHANNEL_ID = '706880599863853097';
-   delete require.cache[require.resolve('../../bot/scripts/questAnnouncements')];
-   const { postQuests } = require('../scripts/questAnnouncements');
-   await postQuests(client);
-  } catch (error) {
-   handleError(error, 'scheduler.js');
-   logger.error('QUEST', 'Quest posting check failed', error.message);
-  }
- });
+ await agenda.every("0 5 1 * *", "quest posting check");
 }
 
-function setupBloodMoonScheduling(client) {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupBloodMoonScheduling called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
- }
+async function setupBloodMoonScheduling(client) {
+ const agenda = ensureAgendaInitialized('setup blood moon scheduling');
+ if (!agenda) return;
+ 
  // 8:00 PM EST = 01:00 UTC next day
- createCronJob("0 1 * * *", "blood moon start announcement", () => handleBloodMoonStart(client));
+ await agenda.every("0 1 * * *", "blood moon start announcement");
  // 8:00 AM EST = 13:00 UTC
- createCronJob("0 13 * * *", "blood moon end announcement", () => handleBloodMoonEnd(client));
-}
-
- function setupGoogleSheetsRetry() {
- // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
- if (isSchedulerInitialized) {
-  logger.warn('SCHEDULER', '⚠️ setupGoogleSheetsRetry called after scheduler already initialized! This will cause timer leaks!');
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
-  }
-  return;
- }
-  createCronJob("*/15 * * * *", "retry pending Google Sheets operations", async () => {
-   try {
-    const pendingCount = await getPendingSheetOperationsCount();
-    if (pendingCount > 0) {
-     logger.info('SYNC', `Retrying ${pendingCount} pending Google Sheets operations`);
-     const result = await retryPendingSheetOperations();
-     if (result.success) {
-      logger.success('SYNC', `Retry completed: ${result.retried} successful, ${result.failed} failed`);
-     } else {
-      logger.error('SYNC', 'Retry failed', result.error);
-     }
-    } else {
-     logger.info('SCHEDULER', 'No pending Google Sheets operations to retry');
-    }
-   } catch (error) {
-    handleError(error, "scheduler.js");
-    logger.error('SYNC', 'Google Sheets retry task failed', error.message);
-   }
-  });
+ await agenda.every("0 13 * * *", "blood moon end announcement");
 }
 
 // ------------------- Main Initialization Function ------------------
 
-function initializeScheduler(client) {
+async function initializeScheduler(client) {
  schedulerInitCallCount++;
  
  if (!client || !client.isReady()) {
@@ -1488,192 +1264,42 @@ function initializeScheduler(client) {
   return;
  }
 
- // Check shared scheduler initialization
- if (!checkInitialization()) {
-  logger.error('SCHEDULER', `⚠️ CRITICAL: Shared scheduler already initialized (call #${schedulerInitCallCount}) - refusing to reinitialize. This indicates a bug!`);
-  // Only log stack trace and job list in verbose mode to avoid spam
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.error('SCHEDULER', 'Stack trace:', new Error().stack);
-   const existingJobs = listCronJobs();
-   logger.error('SCHEDULER', `Existing jobs (${existingJobs.length}):`, existingJobs.slice(0, 10).join(', '), existingJobs.length > 10 ? '...' : '');
-  }
-  return; // DO NOT reinitialize - this prevents timer leaks
+ // Check if Agenda is initialized
+ const agenda = getAgenda();
+ if (!agenda) {
+  logger.error('SCHEDULER', `[scheduler.js]❌ Agenda not initialized - cannot initialize scheduler. Make sure initAgenda() and defineAgendaJobs() are called first.`);
+  return;
  }
 
- // Prevent duplicate initialization - this should NEVER happen in normal operation
+ // Prevent duplicate initialization
  if (isSchedulerInitialized) {
-  logger.error('SCHEDULER', `⚠️ CRITICAL: Scheduler already initialized (call #${schedulerInitCallCount}) - refusing to reinitialize. This indicates a bug!`);
-  // Only log stack trace and job list in verbose mode to avoid spam
-  if (process.env.VERBOSE_LOGGING === 'true') {
-   logger.error('SCHEDULER', 'Stack trace:', new Error().stack);
-   const existingJobs = listCronJobs();
-   logger.error('SCHEDULER', `Existing jobs (${existingJobs.length}):`, existingJobs.slice(0, 10).join(', '), existingJobs.length > 10 ? '...' : '');
-  }
-  return; // DO NOT reinitialize - this prevents timer leaks
+  logger.warn('SCHEDULER', `⚠️ Scheduler already initialized (call #${schedulerInitCallCount}) - skipping reinitialization`);
+  return;
  }
 
  // Run startup checks
- runStartupChecks(client);
+ await runStartupChecks(client);
 
- // Setup all schedulers
- setupDailyTasks(client);
- setupQuestPosting(client);
- setupBloodMoonScheduling(client);
- setupGoogleSheetsRetry();
-
- // Initialize specialized schedulers
- setupBlightScheduler(client);
- setupBoostingScheduler(client);
- setupWeatherScheduler(client);
- setupHelpWantedFixedScheduler(client);
- // Secret Santa - Disabled outside December
- // setupSecretSantaScheduler(client);
- 
- isSchedulerInitialized = true;
- const totalCronJobs = listCronJobs().length;
- logger.success('SCHEDULER', `All scheduled tasks initialized (${totalCronJobs} active cron jobs)`);
- 
- // Log all job names to help debug
- if (process.env.VERBOSE_LOGGING === 'true') {
-  const jobNames = listCronJobs();
-  logger.info('SCHEDULER', `Active cron jobs: ${jobNames.join(', ')}`);
+ // Setup all schedulers (now using Agenda)
+ try {
+  await setupDailyTasks(client);
+  await setupQuestPosting(client);
+  await setupBloodMoonScheduling(client);
+  await setupBlightScheduler(client);
+  await setupBoostingScheduler(client);
+  await setupWeatherScheduler(client);
+  await setupHelpWantedFixedScheduler(client);
+  // Secret Santa - Disabled outside December
+  // await setupSecretSantaScheduler(client);
+  
+  isSchedulerInitialized = true;
+  logger.success('SCHEDULER', 'All scheduled tasks initialized with Agenda');
+ } catch (error) {
+  logger.error('SCHEDULER', 'Error initializing scheduler:', error);
+  handleError(error, "scheduler.js", { functionName: 'initializeScheduler' });
  }
  
- // Set up periodic diagnostic check for timer leaks with fallback solutions
- // This will help us track when timers are being created and auto-fix leaks
- // Store client reference for job recreation after cleanup
- const schedulerClient = client;
- setTimeout(() => {
-  const { logCronJobStats } = require('./croner');
-  const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
-  const memMonitor = getMemoryMonitor();
-  
-  const checkTimerLeak = async () => {
-   try {
-    const cronerTimers = Array.from(memMonitor.activeTimers.values()).filter(t => t.isCroner).length;
-    const stats = getCronJobStats();
-    const timersPerJob = stats.totalJobs > 0 ? Math.round(cronerTimers / stats.totalJobs) : 0;
-    
-    // Check if jobs are missing (should have ~48 jobs but have 0)
-    const expectedJobCount = 48; // Approximate expected job count
-    if (stats.totalJobs === 0 && isSchedulerInitialized && schedulerClient && schedulerClient.isReady()) {
-     logger.error('SCHEDULER', `🚨 CRITICAL: No jobs active but scheduler is initialized! Jobs may have been stopped by cleanup. Recreating...`);
-     try {
-      await recreateJobsAfterCleanup(schedulerClient);
-      const newStats = getCronJobStats();
-      logger.success('SCHEDULER', `✅ Recreated ${newStats.totalJobs} jobs`);
-      // Recalculate after recreation
-      const newCronerTimers = Array.from(memMonitor.activeTimers.values()).filter(t => t.isCroner).length;
-      const newTimersPerJob = newStats.totalJobs > 0 ? Math.round(newCronerTimers / newStats.totalJobs) : 0;
-      logger.warn('SCHEDULER', `🔍 Timer leak diagnostic: ${newCronerTimers} croner timers, ${newStats.totalJobs} jobs, ${newTimersPerJob} timers/job`);
-      return; // Skip rest of check since we just recreated
-     } catch (recreateError) {
-      logger.error('SCHEDULER', `❌ Failed to recreate missing jobs:`, recreateError.message);
-     }
-    }
-    
-    logger.warn('SCHEDULER', `🔍 Timer leak diagnostic: ${cronerTimers} croner timers, ${stats.totalJobs} jobs, ${timersPerJob} timers/job`);
-    logCronJobStats();
-    
-    // Fallback execution order based on timer ratio
-    const ratioThreshold = parseInt(process.env.TIMER_LEAK_RATIO_THRESHOLD) || 5;
-    const growthThreshold = parseFloat(process.env.TIMER_LEAK_GROWTH_THRESHOLD) || 1.0;
-    
-    // Calculate timer growth rate
-    const now = Date.now();
-    const timeSinceLastCheck = (now - (checkTimerLeak.lastCheckTime || now)) / 1000; // seconds
-    const timerGrowth = cronerTimers - (checkTimerLeak.lastTimerCount || cronerTimers);
-    const growthRate = timeSinceLastCheck > 0 ? timerGrowth / timeSinceLastCheck : 0;
-    
-    checkTimerLeak.lastTimerCount = cronerTimers;
-    checkTimerLeak.lastCheckTime = now;
-    
-    // Always log detailed analysis
-    if (timersPerJob > 3 || growthRate > growthThreshold) {
-     logger.warn('SCHEDULER', `📈 Timer growth rate: ${growthRate.toFixed(2)} timers/sec (${timerGrowth} timers in ${Math.round(timeSinceLastCheck)}s)`);
-    }
-    
-    // Fallback 1: Job deduplication check (if ratio > 3)
-    if (timersPerJob > 3) {
-     const health = await checkJobHealth();
-     if (health.unhealthyJobs.length > 0) {
-      logger.warn('SCHEDULER', `⚠️ Found ${health.unhealthyJobs.length} unhealthy jobs, will attempt cleanup`);
-     }
-    }
-    
-    // Fallback 2: Cleanup orphaned timers (if ratio > 5)
-    if (timersPerJob > ratioThreshold) {
-     logger.warn('SCHEDULER', `🧹 Timer ratio ${timersPerJob} exceeds threshold ${ratioThreshold}, triggering cleanup...`);
-     const cleanupResult = await cleanupOrphanedTimers();
-     if (cleanupResult.cleaned > 0) {
-      logger.warn('SCHEDULER', `✅ Cleaned ${cleanupResult.cleaned} jobs with orphaned timers`);
-      
-      // Check memory impact
-      const memStats = memMonitor.getMemoryStats();
-      const memMB = memStats.rss / (1024 * 1024);
-      if (memMB > 200) {
-       logger.warn('SCHEDULER', `💾 Memory after cleanup: ${memMB.toFixed(2)} MB RSS. ${cleanupResult.totalTimers} timers still active.`);
-      }
-      
-      // CRITICAL: Recreate jobs after cleanup
-      // Jobs were stopped but need to be recreated to continue functioning
-      const currentJobCount = listCronJobs().length;
-      if (currentJobCount === 0 && isSchedulerInitialized && schedulerClient && schedulerClient.isReady()) {
-       logger.warn('SCHEDULER', `🔄 All jobs were stopped. Recreating ${cleanupResult.cleaned} jobs...`);
-       try {
-        // Temporarily allow setup functions to run (they check for existing jobs and stop them first)
-        // This is safe because we just stopped all jobs
-        await recreateJobsAfterCleanup(schedulerClient);
-        const newJobCount = listCronJobs().length;
-        logger.success('SCHEDULER', `✅ Recreated ${newJobCount} jobs after cleanup`);
-        
-        // Check memory after recreation
-        const memStatsAfter = memMonitor.getMemoryStats();
-        const memMBAfter = memStatsAfter.rss / (1024 * 1024);
-        logger.info('SCHEDULER', `💾 Memory after recreation: ${memMBAfter.toFixed(2)} MB RSS`);
-       } catch (recreateError) {
-        logger.error('SCHEDULER', `❌ Failed to recreate jobs after cleanup:`, recreateError.message);
-       }
-      } else if (currentJobCount === 0) {
-       logger.warn('SCHEDULER', `⚠️ Jobs were stopped but cannot recreate: client=${!!schedulerClient}, ready=${schedulerClient?.isReady()}, initialized=${isSchedulerInitialized}`);
-      }
-     }
-    }
-    
-    // Fallback 3: Force cleanup croner timers (if ratio > 8)
-    if (timersPerJob > 8) {
-     logger.warn('SCHEDULER', `🔧 Attempting to force cleanup croner internal timers...`);
-     const forceResult = forceCleanupCronerTimers();
-     if (forceResult.cleaned > 0) {
-      logger.warn('SCHEDULER', `✅ Force cleaned ${forceResult.cleaned} internal timers`);
-     }
-    }
-    
-    // Fallback 4: Restart all jobs (if ratio > 10) - last resort
-    if (timersPerJob > 10) {
-     logger.error('SCHEDULER', `🚨 CRITICAL: Timer ratio ${timersPerJob} is extremely high! Restarting all jobs...`);
-     const restartResult = await restartAllJobs();
-     logger.error('SCHEDULER', `🔄 Restarted ${restartResult.stopped} jobs. Scheduler will need to recreate them.`);
-     // Note: Jobs will need to be recreated - this is a last resort
-    }
-   } catch (error) {
-    logger.error('SCHEDULER', `Error in timer leak check:`, error.message);
-   }
-  };
-  
-  // Initialize tracking
-  checkTimerLeak.lastTimerCount = 0;
-  checkTimerLeak.lastCheckTime = Date.now();
-  
-  // Run diagnostic every 2 minutes
-  const diagnosticInterval = setInterval(checkTimerLeak, 2 * 60 * 1000);
-  checkTimerLeak(); // Run immediately
-  
-  // Cleanup interval on process exit
-  process.on('exit', () => {
-   clearInterval(diagnosticInterval);
-  });
- }, 30000); // Start after 30 seconds
+ // Croner diagnostic code removed - using Agenda for all scheduling
  
  // Check and post weather on restart if needed (non-blocking)
  checkAndPostWeatherOnRestart(client).catch(error => {
@@ -1690,8 +1316,7 @@ function initializeScheduler(client) {
 // ============================================================================
 
 /**
- * Recreate all jobs after cleanup
- * Called automatically after cleanupOrphanedTimers stops jobs
+ * Recreate all jobs after cleanup (Agenda jobs are persistent, so this just re-initializes)
  * @param {Client} client - Discord client
  */
 async function recreateJobsAfterCleanup(client) {
@@ -1705,30 +1330,23 @@ async function recreateJobsAfterCleanup(client) {
   return { recreated: 0, error: 'Scheduler not initialized' };
  }
 
- logger.info('SCHEDULER', '🔄 Recreating all jobs after cleanup...');
+ logger.info('SCHEDULER', '🔄 Re-initializing schedulers...');
  
- const jobsBefore = listCronJobs().length;
- 
- // Recreate all schedulers
- // Note: Setup functions check for existing jobs and stop them first, which is safe
- // since we just stopped all jobs in cleanup
- setupDailyTasks(client);
- setupQuestPosting(client);
- setupBloodMoonScheduling(client);
- setupGoogleSheetsRetry();
+ // Re-initialize all schedulers
+ // Agenda jobs are persistent in the database, so this just ensures they're set up
+ await setupDailyTasks(client);
+ await setupQuestPosting(client);
+ await setupBloodMoonScheduling(client);
  
  // Initialize specialized schedulers
- setupBlightScheduler(client);
- setupBoostingScheduler(client);
- setupWeatherScheduler(client);
- setupHelpWantedFixedScheduler(client);
+ await setupBlightScheduler(client);
+ await setupBoostingScheduler(client);
+ await setupWeatherScheduler(client);
+ await setupHelpWantedFixedScheduler(client);
  
- const jobsAfter = listCronJobs().length;
- const recreated = jobsAfter - jobsBefore;
+ logger.success('SCHEDULER', '✅ Schedulers re-initialized');
  
- logger.success('SCHEDULER', `✅ Recreated ${recreated} jobs (${jobsBefore} → ${jobsAfter})`);
- 
- return { recreated, jobsBefore, jobsAfter };
+ return { recreated: 0, message: 'Agenda jobs are persistent - no recreation needed' };
 }
 
 // ============================================================================
@@ -1736,105 +1354,96 @@ async function recreateJobsAfterCleanup(client) {
 // ============================================================================
 
 async function scheduleJailRelease(character) {
-  if (!character.jailReleaseTime || !character.inJail) {
-    return; // Nothing to schedule
-  }
+ if (!character.jailReleaseTime || !character.inJail) {
+  return; // Nothing to schedule
+ }
 
-  const agenda = getAgenda();
-  if (!agenda) {
-    logger.warn('SCHEDULER', 'Agenda not initialized, cannot schedule jail release');
-    return;
-  }
+ const agenda = ensureAgendaInitialized('schedule jail release');
+ if (!agenda) return;
 
-  try {
-    // Cancel any existing job for this character
-    await agenda.cancel({
-      name: 'releaseFromJail',
-      'data.characterId': character._id.toString(),
-    });
+ try {
+  // Cancel any existing job for this character
+  await agenda.cancel({
+   name: 'releaseFromJail',
+   'data.characterId': character._id.toString(),
+  });
 
-    // Schedule new job
-    await agenda.schedule(character.jailReleaseTime, 'releaseFromJail', {
-      characterId: character._id.toString(),
-      userId: character.userId,
-    });
+  // Schedule new job
+  await agenda.schedule(character.jailReleaseTime, 'releaseFromJail', {
+   characterId: character._id.toString(),
+   userId: character.userId,
+  });
 
-    logger.info('SCHEDULER', `Scheduled jail release for ${character.name} at ${character.jailReleaseTime}`);
-  } catch (error) {
-    logger.error('SCHEDULER', `Error scheduling jail release for ${character.name}:`, error.message);
-    handleError(error, 'scheduler.js', {
-      functionName: 'scheduleJailRelease',
-      characterId: character._id?.toString(),
-    });
-  }
+  logger.info('SCHEDULER', `Scheduled jail release for ${character.name} at ${character.jailReleaseTime}`);
+ } catch (error) {
+  logger.error('SCHEDULER', `[scheduler.js]❌ Error scheduling jail release for ${character.name}:`, error.message);
+  handleError(error, 'scheduler.js', {
+   functionName: 'scheduleJailRelease',
+   characterId: character._id?.toString(),
+  });
+ }
 }
 
 async function scheduleDebuffExpiry(character) {
-  if (!character.debuff || !character.debuff.active || !character.debuff.endDate) {
-    return; // Nothing to schedule
-  }
+ if (!character.debuff || !character.debuff.active || !character.debuff.endDate) {
+  return; // Nothing to schedule
+ }
 
-  const agenda = getAgenda();
-  if (!agenda) {
-    logger.warn('SCHEDULER', 'Agenda not initialized, cannot schedule debuff expiry');
-    return;
-  }
+ const agenda = ensureAgendaInitialized('schedule debuff expiry');
+ if (!agenda) return;
 
-  try {
-    // Cancel any existing job for this character
-    await agenda.cancel({
-      name: 'expireDebuff',
-      'data.characterId': character._id.toString(),
-    });
+ try {
+  // Cancel any existing job for this character
+  await agenda.cancel({
+   name: 'expireDebuff',
+   'data.characterId': character._id.toString(),
+  });
 
-    // Schedule new job
-    await agenda.schedule(character.debuff.endDate, 'expireDebuff', {
-      characterId: character._id.toString(),
-      userId: character.userId,
-    });
+  // Schedule new job
+  await agenda.schedule(character.debuff.endDate, 'expireDebuff', {
+   characterId: character._id.toString(),
+   userId: character.userId,
+  });
 
-    logger.info('SCHEDULER', `Scheduled debuff expiry for ${character.name} at ${character.debuff.endDate}`);
-  } catch (error) {
-    logger.error('SCHEDULER', `Error scheduling debuff expiry for ${character.name}:`, error.message);
-    handleError(error, 'scheduler.js', {
-      functionName: 'scheduleDebuffExpiry',
-      characterId: character._id?.toString(),
-    });
-  }
+  logger.info('SCHEDULER', `Scheduled debuff expiry for ${character.name} at ${character.debuff.endDate}`);
+ } catch (error) {
+  logger.error('SCHEDULER', `[scheduler.js]❌ Error scheduling debuff expiry for ${character.name}:`, error.message);
+  handleError(error, 'scheduler.js', {
+   functionName: 'scheduleDebuffExpiry',
+   characterId: character._id?.toString(),
+  });
+ }
 }
 
 async function scheduleBuffExpiry(character) {
-  if (!character.buff || !character.buff.active || !character.buff.endDate) {
-    return; // Nothing to schedule
-  }
+ if (!character.buff || !character.buff.active || !character.buff.endDate) {
+  return; // Nothing to schedule
+ }
 
-  const agenda = getAgenda();
-  if (!agenda) {
-    logger.warn('SCHEDULER', 'Agenda not initialized, cannot schedule buff expiry');
-    return;
-  }
+ const agenda = ensureAgendaInitialized('schedule buff expiry');
+ if (!agenda) return;
 
-  try {
-    // Cancel any existing job for this character
-    await agenda.cancel({
-      name: 'expireBuff',
-      'data.characterId': character._id.toString(),
-    });
+ try {
+  // Cancel any existing job for this character
+  await agenda.cancel({
+   name: 'expireBuff',
+   'data.characterId': character._id.toString(),
+  });
 
-    // Schedule new job
-    await agenda.schedule(character.buff.endDate, 'expireBuff', {
-      characterId: character._id.toString(),
-      userId: character.userId,
-    });
+  // Schedule new job
+  await agenda.schedule(character.buff.endDate, 'expireBuff', {
+   characterId: character._id.toString(),
+   userId: character.userId,
+  });
 
-    logger.info('SCHEDULER', `Scheduled buff expiry for ${character.name} at ${character.buff.endDate}`);
-  } catch (error) {
-    logger.error('SCHEDULER', `Error scheduling buff expiry for ${character.name}:`, error.message);
-    handleError(error, 'scheduler.js', {
-      functionName: 'scheduleBuffExpiry',
-      characterId: character._id?.toString(),
-    });
-  }
+  logger.info('SCHEDULER', `Scheduled buff expiry for ${character.name} at ${character.buff.endDate}`);
+ } catch (error) {
+  logger.error('SCHEDULER', `[scheduler.js]❌ Error scheduling buff expiry for ${character.name}:`, error.message);
+  handleError(error, 'scheduler.js', {
+   functionName: 'scheduleBuffExpiry',
+   characterId: character._id?.toString(),
+  });
+ }
 }
 
 // ============================================================================
@@ -1861,7 +1470,7 @@ async function handleBirthdayRoleAssignment(client) {
     
     const birthdayRole = guild.roles.cache.find(role => role.name === 'Birthday');
     if (!birthdayRole) {
-      logger.error('BIRTHDAY', 'Birthday role not found');
+      logger.error('BIRTHDAY', `[scheduler.js]❌ Birthday role not found`);
       return;
     }
     
@@ -1869,11 +1478,7 @@ async function handleBirthdayRoleAssignment(client) {
     
     for (const character of characters) {
       try {
-        const characterBirthday = new Date(character.birthday);
-        const isToday = characterBirthday.getMonth() === today.getMonth() && 
-                       characterBirthday.getDate() === today.getDate();
-        
-        if (!isToday) continue;
+        if (!isBirthdayToday(character, today)) continue;
         
         const member = await guild.members.fetch(character.userId).catch(() => null);
         if (!member) continue;
@@ -1892,7 +1497,7 @@ async function handleBirthdayRoleAssignment(client) {
       logger.success('BIRTHDAY', `Assigned birthday role to ${assignedCount} characters`);
     }
   } catch (error) {
-    logger.error('BIRTHDAY', 'Error in birthday role assignment', error);
+    logger.error('BIRTHDAY', `[scheduler.js]❌ Error in birthday role assignment:`, error);
     handleError(error, "scheduler.js", {
       commandName: 'handleBirthdayRoleAssignment'
     });
@@ -1919,7 +1524,7 @@ async function handleBirthdayRoleRemoval(client) {
     
     const birthdayRole = guild.roles.cache.find(role => role.name === 'Birthday');
     if (!birthdayRole) {
-      logger.error('BIRTHDAY', 'Birthday role not found');
+      logger.error('BIRTHDAY', `[scheduler.js]❌ Birthday role not found`);
       return;
     }
     
@@ -1927,11 +1532,7 @@ async function handleBirthdayRoleRemoval(client) {
     
     for (const character of characters) {
       try {
-        const characterBirthday = new Date(character.birthday);
-        const wasYesterday = characterBirthday.getMonth() === yesterday.getMonth() && 
-                            characterBirthday.getDate() === yesterday.getDate();
-        
-        if (!wasYesterday) continue;
+        if (!isBirthdayToday(character, yesterday)) continue;
         
         const member = await guild.members.fetch(character.userId).catch(() => null);
         if (!member) continue;
@@ -1950,7 +1551,7 @@ async function handleBirthdayRoleRemoval(client) {
       logger.success('BIRTHDAY', `Removed birthday role from ${removedCount} characters`);
     }
   } catch (error) {
-    logger.error('CLEANUP', 'Error in birthday role cleanup', error);
+    logger.error('CLEANUP', `[scheduler.js]❌ Error in birthday role cleanup:`, error);
     handleError(error, "scheduler.js", {
       commandName: 'handleBirthdayRoleRemoval'
     });
@@ -1973,16 +1574,9 @@ async function sendBirthdayAnnouncements(client) {
     
     for (const character of characters) {
       try {
-        const characterBirthday = new Date(character.birthday);
-        const isToday = characterBirthday.getMonth() === today.getMonth() && 
-                       characterBirthday.getDate() === today.getDate();
+        if (!isBirthdayToday(character, today)) continue;
         
-        if (!isToday) continue;
-        
-        const villageChannelId = getVillageChannelId(character.currentVillage);
-        if (!villageChannelId) continue;
-        
-        const channel = await client.channels.fetch(villageChannelId);
+        const channel = await fetchVillageChannel(client, character.currentVillage);
         if (!channel) continue;
         
         const embed = new EmbedBuilder()
@@ -1996,7 +1590,7 @@ async function sendBirthdayAnnouncements(client) {
         logger.info('BIRTHDAY', `🎂 Announced birthday for ${character.name}`);
       } catch (error) {
         handleError(error, "scheduler.js");
-        logger.error('BIRTHDAY', `Failed to announce birthday for ${character.name}`, error.message);
+        logger.error('BIRTHDAY', `[scheduler.js]❌ Failed to announce birthday for ${character.name}:`, error.message);
       }
     }
     
@@ -2040,7 +1634,7 @@ async function checkVillageTracking(client) {
     logger.info('VILLAGE', 'Checking village tracking');
     // TODO: Implement village tracking check
   } catch (error) {
-    logger.error('VILLAGE', 'Error checking village tracking:', error.message);
+    logger.error('VILLAGE', `[scheduler.js]❌ Error checking village tracking:`, error.message);
     handleError(error, "scheduler.js", {
       functionName: 'checkVillageTracking'
     });
@@ -2049,7 +1643,6 @@ async function checkVillageTracking(client) {
 
 module.exports = {
  initializeScheduler,
- destroyAllCronJobs,
  recreateJobsAfterCleanup,
  setupBlightScheduler,
  setupBoostingScheduler,

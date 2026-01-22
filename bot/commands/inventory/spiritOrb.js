@@ -12,7 +12,6 @@ const { getCharacterInventoryCollection } = require('@/shared/database/db');
 const { exchangeSpiritOrbs } = require('../../modules/characterStatsModule');
 
 // ------------------- Add Google Sheets Logging -------------------
-const { authorizeSheets, appendSheetData, extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet  } = require('@/shared/utils/googleSheetsUtils');
 const { v4: uuidv4 } = require('uuid');
 
 const { checkInventorySync } = require('@/shared/utils/characterUtils');
@@ -218,59 +217,8 @@ const updatedOrb = await inventoryCollection.findOne({
       
   ]);
 
-  // Validate inventory link before logging
-const inventoryLink = character.inventory || character.inventoryLink;
-if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
-  console.warn(`[spiritOrb.js]: Invalid or missing Google Sheets URL for character ${character.name}`);
-} else {
-  try {
-    const spreadsheetId = extractSpreadsheetId(inventoryLink);
-    const auth = await authorizeSheets();
-    const range = 'loggedInventory!A2:M';
-    const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-    const uniqueSyncId = uuidv4();
-
-    const sheetRow = [
-      character.name,                          // Character Name
-      'Spirit Orb',                            // Item Name
-      '-4',                                    // Quantity
-      'Material',                              // Category
-      'Special',                               // Type
-      '',                                      // Subtype
-      `Stat Upgrade (${type})`,                // How it was used
-      character.job || '',                     // Character Job
-      '',                                      // Perk
-      character.currentVillage || '',          // Location
-      interactionUrl,                          // Link to the Discord interaction
-      formattedDateTime,                       // Date & Time
-      uniqueSyncId                             // Unique ID
-    ];
-
-    await safeAppendDataToSheet(character.inventory, character, range, [sheetRow], undefined, { 
-        skipValidation: true,
-        context: {
-            commandName: 'spiritOrb',
-            userTag: interaction.user.tag,
-            userId: interaction.user.id,
-            characterName: character.name,
-            spreadsheetId: extractSpreadsheetId(character.inventory),
-            range: range,
-            sheetType: 'inventory',
-            options: {
-                type: type,
-                oldValue: oldValue,
-                newValue: newValue,
-                orbCount: orbCount
-            }
-        }
-    });
-  } catch (err) {
-    handleInteractionError(err, 'spiritOrb.js');
-
-    console.error(`[spiritOrb.js]: Failed to log Spirit Orb exchange to sheet: ${err.message}`);
-  }
-}
+  // Google Sheets sync removed
+  console.log('[spiritOrb.js]: ✅ Spirit orb action processed (Google Sheets sync removed)');
 
         // ------------------- Send Embed -------------------
         return await interaction.reply({ embeds: [embed], ephemeral: false });

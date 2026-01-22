@@ -29,11 +29,8 @@ const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js
 // Utilities
 const {
  authorizeSheets,
- appendSheetData,
- safeAppendDataToSheet,
-} = require('@/shared/utils/googleSheetsUtils.js');
+// Google Sheets functionality removed
 const {
- extractSpreadsheetId,
  isValidGoogleSheetsUrl,
 } = require('@/shared/utils/validation.js');
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils.js');

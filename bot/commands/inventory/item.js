@@ -34,7 +34,6 @@ const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = r
 const { handleInteractionError, ERROR_RESPONSE_TYPES } = require('@/shared/utils/globalErrorHandler');
 const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
 const { checkInventorySync } = require('@/shared/utils/characterUtils');
-const { safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
 const { enforceJail } = require('@/shared/utils/jailCheck');
 
 // ------------------- Database Models -------------------
@@ -365,13 +364,7 @@ module.exports = {
               formattedDateTime,
               ''
             ]];
-            await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
-              skipValidation: true,
-              context: {
-                commandName: 'item',
-                userTag: interaction.user.tag,
-                userId: interaction.user.id,
-                options: {
+            // Google Sheets sync removed
                   characterName,
                   itemName,
                   quantity,

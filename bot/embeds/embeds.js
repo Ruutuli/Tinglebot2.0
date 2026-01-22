@@ -6,22 +6,22 @@
 const { EmbedBuilder } = require("discord.js");
 
 // ------------------- Utility Module Imports ------------------
-const { handleError } = require('@/shared/utils/globalErrorHandler');
-const logger = require('@/shared/utils/logger');
+const { handleError } = require('../utils/globalErrorHandler');
+const logger = require('../utils/logger');
 const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
 const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
 const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateUnusedBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText, generateSubmissionBoostFlavorText } = require("../modules/flavorTextModule");
-const { convertCmToFeetInches, isValidImageUrl } = require('@/shared/utils/validation');
-const { validateInventorySheet } = require('@/shared/utils/googleSheetsUtils');
+const { convertCmToFeetInches, isValidImageUrl } = require('../utils/validation');
+// Google Sheets functionality removed
 const { getCharacterBoostStatus } = require('../modules/boostIntegration');
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
+const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Database Model Imports ------------------
-const Character = require('@/shared/models/CharacterModel');
-const ItemModel = require('@/shared/models/ItemModel');
-const { monsterMapping } = require('@/shared/models/MonsterModel');
+const Character = require('../models/CharacterModel');
+const ItemModel = require('../models/ItemModel');
+const { monsterMapping } = require('../models/MonsterModel');
 
 // ============================================================================
 // CONSTANTS
@@ -2160,7 +2160,7 @@ const createHealEmbed = async (
  let updatedHealer = healerCharacter;
  if (isFulfilled && healerCharacter && healerCharacter._id) {
   try {
-   const Character = require('@/shared/models/CharacterModel');
+   const Character = require('../models/CharacterModel');
    updatedHealer = await Character.findById(healerCharacter._id);
   } catch (error) {
    // Fallback to original character data if refresh fails
@@ -2298,7 +2298,7 @@ const createHealEmbed = async (
 
   // Patient current status
   try {
-   const Character = require('@/shared/models/CharacterModel');
+   const Character = require('../models/CharacterModel');
    const refreshedPatient = await Character.findById(characterToHeal._id);
    if (refreshedPatient) {
     // Check if patient has temporary hearts (exceeds maxHearts)
@@ -3101,7 +3101,7 @@ const createRaidVictoryEmbed = (monsterName, monsterImage = null) => {
 // Creates an embed for displaying wave information
 const createWaveEmbed = (wave) => {
   const { getVillageEmojiByName } = require('../modules/locationsModule');
-  const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
+  const { capitalizeVillageName } = require('../utils/stringUtils');
   const { WAVE_DIFFICULTY_GROUPS } = require('../modules/waveModule');
   
   const villageName = capitalizeVillageName(wave.village);

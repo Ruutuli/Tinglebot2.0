@@ -14,7 +14,7 @@ const {
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
-const { google } = require("googleapis");
+// Google Sheets functionality removed
 const mongoose = require("mongoose");
 const { MongoClient } = require("mongodb");
 
@@ -51,16 +51,9 @@ const {
  canChangeJob,
  canChangeVillage,
  isUniqueCharacterName,
- isValidGoogleSheetsUrl,
- extractSpreadsheetId,
- convertCmToFeetInches,
+  convertCmToFeetInches,
 } = require('@/shared/utils/validation');
-const {
- appendSheetData,
- authorizeSheets,
- deleteInventorySheetData,
- safeAppendDataToSheet,
-} = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 const {
  createCharacterAutocomplete,
  createCharacterInteraction,
@@ -884,13 +877,14 @@ async function handleCreateCharacter(interaction, subcommand) {
 
     // Validate inventory link
     const inventory = interaction.options.getString("inventory");
-    if (!isValidGoogleSheetsUrl(inventory)) {
-      await interaction.editReply({
-        content: "❌ Please provide a valid Google Sheets URL for the inventory.",
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
-    }
+    // Google Sheets URL validation removed - inventory field can now be any URL
+    // if (!isValidGoogleSheetsUrl(inventory)) {
+    //   await interaction.editReply({
+    //     content: "❌ Please provide a valid Google Sheets URL for the inventory.",
+    //     flags: [MessageFlags.Ephemeral]
+    //   });
+    //   return;
+    // }
 
     // Validate app link
     const appLink = interaction.options.getString("applink");
@@ -1644,36 +1638,37 @@ async function handleDeleteCharacter(interaction) {
    return;
   }
 
-  if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
-   try {
-    const spreadsheetId = extractSpreadsheetId(character.inventory);
-    await deleteInventorySheetData(spreadsheetId, characterName, {
-      commandName: "delete",
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      characterName: character.name,
-      spreadsheetId: extractSpreadsheetId(character.inventory),
-      range: 'loggedInventory!A2:M',
-      sheetType: 'inventory',
-      options: interaction.options.data
-    });
-   } catch (error) {
-    handleInteractionError(error, interaction, {
-      commandName: "delete",
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      characterName: character.name,
-      spreadsheetId: extractSpreadsheetId(character.inventory),
-      range: 'loggedInventory!A2:M',
-      sheetType: 'inventory',
-      options: interaction.options.data
-    });
-    console.error(
-     `❌ Failed to delete inventory data for character ${characterName}:`,
-     error
-    );
-   }
-  }
+  // Google Sheets functionality removed
+  // if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
+  //  try {
+  //   const spreadsheetId = extractSpreadsheetId(character.inventory);
+  //   await deleteInventorySheetData(spreadsheetId, characterName, {
+  //     commandName: "delete",
+  //     userTag: interaction.user.tag,
+  //     userId: interaction.user.id,
+  //     characterName: character.name,
+  //     spreadsheetId: extractSpreadsheetId(character.inventory),
+  //     range: 'loggedInventory!A2:M',
+  //     sheetType: 'inventory',
+  //     options: interaction.options.data
+  //   });
+  //  } catch (error) {
+  //   handleInteractionError(error, interaction, {
+  //     commandName: "delete",
+  //     userTag: interaction.user.tag,
+  //     userId: interaction.user.id,
+  //     characterName: character.name,
+  //     spreadsheetId: extractSpreadsheetId(character.inventory),
+  //     range: 'loggedInventory!A2:M',
+  //     sheetType: 'inventory',
+  //     options: interaction.options.data
+  //   });
+  //   console.error(
+  //    `❌ Failed to delete inventory data for character ${characterName}:`,
+  //    error
+  //   );
+  //  }
+  // }
 
   await connectToInventories();
   await deleteCharacterInventoryCollection(character.name);
@@ -1884,18 +1879,19 @@ async function handleChangeJob(interaction) {
   // Log to token tracker
   try {
     const user = await User.findOne({ discordId: interaction.user.id });
-    if (user?.tokenTracker && isValidGoogleSheetsUrl(user.tokenTracker)) {
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const tokenRow = [
-        `${character.name} - Job Change from ${previousJob} to ${newJob}`,
-        interactionUrl,
-        'Job Change',
-        'spent',
-        '-500'
-      ];
-      await safeAppendDataToSheet(user.tokenTracker, user, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
-      console.log(`[handleChangeJob] ✅ Logged to token tracker: ${character.name}`);
-    }
+    // Google Sheets token tracker functionality removed
+    // if (user?.tokenTracker && isValidGoogleSheetsUrl(user.tokenTracker)) {
+    //   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+    //   const tokenRow = [
+    //     `${character.name} - Job Change from ${previousJob} to ${newJob}`,
+    //     interactionUrl,
+    //     'Job Change',
+    //     'spent',
+    //     '-500'
+    //   ];
+    //   await safeAppendDataToSheet(user.tokenTracker, user, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
+    //   console.log(`[handleChangeJob] ✅ Logged to token tracker: ${character.name}`);
+    // }
   } catch (sheetError) {
     console.error(`[handleChangeJob] ❌ Token tracker error:`, sheetError);
   }

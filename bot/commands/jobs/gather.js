@@ -41,8 +41,7 @@ const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js
 const { checkInventorySync } = require('@/shared/utils/characterUtils');
 const { enforceJail } = require('@/shared/utils/jailCheck');
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils.js');
-const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@/shared/utils/googleSheetsUtils.js');
+// Google Sheets functionality removed
 
 // ============================================================================
 // ------------------- Services -------------------

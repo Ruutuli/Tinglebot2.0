@@ -9,7 +9,7 @@ const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchItemByName } = r
 const TableRoll = require('@/shared/models/TableRollModel');
 const Quest = require('@/shared/models/QuestModel');
 const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { safeAppendDataToSheet, extractSpreadsheetId, isValidGoogleSheetsUrl, authorizeSheets } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds.js');
 const { 
   validateTableName, 

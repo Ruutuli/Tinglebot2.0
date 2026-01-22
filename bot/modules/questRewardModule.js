@@ -1068,7 +1068,7 @@ async function distributeItems(quest, participant) {
         // Import inventory utilities and database functions
         const { connectToInventories } = require('@/shared/database/db');
         const Item = require('@/shared/models/ItemModel');
-        const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId } = require('@/shared/utils/googleSheetsUtils');
+        // Google Sheets functionality removed
         const { logItemAcquisitionToDatabase } = require('@/shared/utils/inventoryUtils');
         const { v4: uuidv4 } = require('uuid');
         

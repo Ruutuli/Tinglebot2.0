@@ -1,45 +1,58 @@
 // scheduler/agenda.js
 const Agenda = require("agenda");
-const dbConfig = require("@/shared/config/database");
-const Character = require("@/shared/models/CharacterModel");
-const { handleError } = require("@/shared/utils/globalErrorHandler");
-const { sendUserDM } = require("@/shared/utils/messageUtils");
+const DatabaseConnectionManager = require("../database/connectionManager");
+const Character = require("../models/CharacterModel");
+const { handleError } = require("../utils/globalErrorHandler");
+const { sendUserDM } = require("../utils/messageUtils");
+const logger = require("../utils/logger");
 
 let agenda;
 
 /**
- * Initialize Agenda with MongoDB connection
+ * Initialize Agenda with MongoDB connection from DatabaseConnectionManager
  * @returns {Promise<Agenda>} The initialized Agenda instance
  */
 async function initAgenda() {
-  const mongo = dbConfig.tinglebot || process.env.MONGODB_URI;
-  if (!mongo) {
-    throw new Error("Missing MONGODB_URI - cannot initialize Agenda");
-  }
+  try {
+    // Get Mongoose connection from connection manager (shares connection pool)
+    const mongooseConnection = DatabaseConnectionManager.getTinglebotConnection();
+    
+    if (!mongooseConnection || mongooseConnection.readyState !== 1) {
+      throw new Error("Tinglebot connection not established. Call DatabaseConnectionManager.initialize() first.");
+    }
 
-  agenda = new Agenda({
-    db: { address: mongo, collection: "agendaJobs" },
-    processEvery: "10 seconds",
-    defaultLockLifetime: 10 * 60 * 1000, // 10 min
-  });
-
-  agenda.on("start", (job) => {
-    console.log(`[Agenda] start ${job.attrs.name} (id: ${job.attrs._id})`);
-  });
-  
-  agenda.on("complete", (job) => {
-    console.log(`[Agenda] done  ${job.attrs.name} (id: ${job.attrs._id})`);
-  });
-  
-  agenda.on("fail", (err, job) => {
-    console.error(`[Agenda] fail ${job?.attrs?.name} (id: ${job?.attrs?._id})`, err);
-    handleError(err, "agenda.js", {
-      jobName: job?.attrs?.name,
-      jobId: job?.attrs?._id,
+    // Use existing Mongoose connection to share connection pool
+    agenda = new Agenda({
+      mongo: mongooseConnection.db, // Use existing connection
+      collection: "agendaJobs",
+      processEvery: "30 seconds", // Reduced from 10s to reduce polling overhead
+      defaultLockLifetime: 10 * 60 * 1000, // 10 min
+      maxConcurrency: 20, // Limit concurrent job execution
     });
-  });
 
-  return agenda;
+    agenda.on("start", (job) => {
+      logger.info('SCHEDULER', `Job started: ${job.attrs.name}`, { jobId: job.attrs._id });
+    });
+    
+    agenda.on("complete", (job) => {
+      logger.success('SCHEDULER', `Job completed: ${job.attrs.name}`, { jobId: job.attrs._id });
+    });
+    
+    agenda.on("fail", (err, job) => {
+      logger.error('SCHEDULER', `Job failed: ${job?.attrs?.name}`, err);
+      handleError(err, "agenda.js", {
+        jobName: job?.attrs?.name,
+        jobId: job?.attrs?._id,
+      });
+    });
+
+    logger.success('SCHEDULER', 'Agenda initialized with managed connection');
+    return agenda;
+  } catch (error) {
+    logger.error('SCHEDULER', `Failed to initialize Agenda: ${error.message}`);
+    handleError(error, "agenda.js");
+    throw error;
+  }
 }
 
 // Store client reference for Agenda jobs
@@ -65,19 +78,19 @@ function defineAgendaJobs({ client }) {
     try {
       const character = await Character.findById(characterId);
       if (!character) {
-        console.log(`[Agenda:releaseFromJail] Character ${characterId} not found, skipping`);
+        logger.debug('SCHEDULER', `Character ${characterId} not found, skipping releaseFromJail`);
         return;
       }
 
       // Double-check the release time hasn't changed (character might have been released early)
       if (!character.inJail || !character.jailReleaseTime) {
-        console.log(`[Agenda:releaseFromJail] Character ${character.name} is not in jail, skipping`);
+        logger.debug('SCHEDULER', `Character ${character.name} is not in jail, skipping releaseFromJail`);
         return;
       }
 
       const now = new Date();
       if (character.jailReleaseTime > now) {
-        console.log(`[Agenda:releaseFromJail] Character ${character.name} release time not yet reached, rescheduling`);
+        logger.debug('SCHEDULER', `Character ${character.name} release time not yet reached, rescheduling`);
         // Reschedule for the correct time
         await agenda.schedule(character.jailReleaseTime, "releaseFromJail", {
           characterId: characterId,
@@ -92,6 +105,13 @@ function defineAgendaJobs({ client }) {
       const DEFAULT_JAIL_DURATION_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
       const wasBoostedRelease = typeof jailDurationMs === 'number' && jailDurationMs > 0 && jailDurationMs < DEFAULT_JAIL_DURATION_MS;
       const servedDays = jailDurationMs ? Math.max(1, Math.round(jailDurationMs / (24 * 60 * 60 * 1000))) : 3;
+
+      // Generate boost flavor text if needed
+      let boostDetails = null;
+      if (wasBoostedRelease) {
+        const { generateBoostFlavorText } = require('../modules/flavorTextModule');
+        boostDetails = generateBoostFlavorText();
+      }
 
       // Release the character using shared function
       const { releaseFromJail } = require("@/shared/utils/jailCheck");
@@ -111,7 +131,7 @@ function defineAgendaJobs({ client }) {
       const villageChannelId = TOWNHALL_CHANNELS[capitalizedVillage] || HELP_WANTED_TEST_CHANNEL;
       
       try {
-        const villageChannel = await client.channels.fetch(villageChannelId);
+        const villageChannel = await clientRef.channels.fetch(villageChannelId);
         if (villageChannel) {
           const { EmbedBuilder } = require("discord.js");
           const releaseEmbed = new EmbedBuilder()
@@ -129,10 +149,10 @@ function defineAgendaJobs({ client }) {
             content: `<@${userId}>, your character **${character.name}** has been released from jail.`,
             embeds: [releaseEmbed],
           });
-          console.log(`[Agenda:releaseFromJail] Posted release for ${character.name} in ${character.currentVillage} town hall`);
+          logger.debug('SCHEDULER', `Posted release for ${character.name} in ${character.currentVillage} town hall`);
         }
       } catch (channelError) {
-        console.error(`[Agenda:releaseFromJail] Error posting release message:`, channelError);
+        logger.error('SCHEDULER', `Error posting release message for ${character.name}`, channelError);
       }
 
       // Send DM notification
@@ -140,11 +160,11 @@ function defineAgendaJobs({ client }) {
         ? `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail.\n✨ ${boostDetails.boostFlavorText}`
         : `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`;
       
-      await sendUserDM(userId, dmMessage, client);
+      await sendUserDM(userId, dmMessage, clientRef);
 
-      console.log(`[Agenda:releaseFromJail] Successfully released ${character.name} from jail`);
+      logger.info('SCHEDULER', `Successfully released ${character.name} from jail`);
     } catch (error) {
-      console.error(`[Agenda:releaseFromJail] Error releasing character ${characterId}:`, error);
+      logger.error('SCHEDULER', `Error releasing character ${characterId}`, error);
       handleError(error, "agenda.js", {
         jobName: "releaseFromJail",
         characterId: characterId,
@@ -160,13 +180,13 @@ function defineAgendaJobs({ client }) {
     try {
       const character = await Character.findById(characterId);
       if (!character) {
-        console.log(`[Agenda:expireDebuff] Character ${characterId} not found, skipping`);
+        logger.debug('SCHEDULER', `Character ${characterId} not found, skipping expireDebuff`);
         return;
       }
 
       // Check if debuff is still active and hasn't been manually removed
       if (!character.debuff || !character.debuff.active) {
-        console.log(`[Agenda:expireDebuff] Character ${character.name} debuff is not active, skipping`);
+        logger.debug('SCHEDULER', `Character ${character.name} debuff is not active, skipping expireDebuff`);
         return;
       }
 
@@ -177,7 +197,7 @@ function defineAgendaJobs({ client }) {
 
       // Only expire if we're past midnight EST
       if (character.debuff.endDate && character.debuff.endDate > midnightEST) {
-        console.log(`[Agenda:expireDebuff] Character ${character.name} debuff not yet expired, rescheduling`);
+        logger.debug('SCHEDULER', `Character ${character.name} debuff not yet expired, rescheduling`);
         await agenda.schedule(character.debuff.endDate, "expireDebuff", {
           characterId: characterId,
           userId: userId,
@@ -194,12 +214,12 @@ function defineAgendaJobs({ client }) {
       await sendUserDM(
         userId,
         `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`,
-        client
+        clientRef
       );
 
-      console.log(`[Agenda:expireDebuff] Successfully expired debuff for ${character.name}`);
+      logger.info('SCHEDULER', `Successfully expired debuff for ${character.name}`);
     } catch (error) {
-      console.error(`[Agenda:expireDebuff] Error expiring debuff for character ${characterId}:`, error);
+      logger.error('SCHEDULER', `Error expiring debuff for character ${characterId}`, error);
       handleError(error, "agenda.js", {
         jobName: "expireDebuff",
         characterId: characterId,
@@ -215,13 +235,13 @@ function defineAgendaJobs({ client }) {
     try {
       const character = await Character.findById(characterId);
       if (!character) {
-        console.log(`[Agenda:expireBuff] Character ${characterId} not found, skipping`);
+        logger.debug('SCHEDULER', `Character ${characterId} not found, skipping expireBuff`);
         return;
       }
 
       // Check if buff is still active and hasn't been manually removed
       if (!character.buff || !character.buff.active) {
-        console.log(`[Agenda:expireBuff] Character ${character.name} buff is not active, skipping`);
+        logger.debug('SCHEDULER', `Character ${character.name} buff is not active, skipping expireBuff`);
         return;
       }
 
@@ -232,7 +252,7 @@ function defineAgendaJobs({ client }) {
 
       // Only expire if we're past midnight EST
       if (character.buff.endDate && character.buff.endDate > midnightEST) {
-        console.log(`[Agenda:expireBuff] Character ${character.name} buff not yet expired, rescheduling`);
+        logger.debug('SCHEDULER', `Character ${character.name} buff not yet expired, rescheduling`);
         await agenda.schedule(character.buff.endDate, "expireBuff", {
           characterId: characterId,
           userId: userId,
@@ -249,12 +269,12 @@ function defineAgendaJobs({ client }) {
       await sendUserDM(
         userId,
         `Your character **${character.name}**'s buff has ended! You can now heal them with items or a Healer.`,
-        client
+        clientRef
       );
 
-      console.log(`[Agenda:expireBuff] Successfully expired buff for ${character.name}`);
+      logger.info('SCHEDULER', `Successfully expired buff for ${character.name}`);
     } catch (error) {
-      console.error(`[Agenda:expireBuff] Error expiring buff for character ${characterId}:`, error);
+      logger.error('SCHEDULER', `Error expiring buff for character ${characterId}`, error);
       handleError(error, "agenda.js", {
         jobName: "expireBuff",
         characterId: characterId,
@@ -271,7 +291,7 @@ function defineAgendaJobs({ client }) {
       // Get client from stored reference
       if (!clientRef) {
         // If no client available, weather will be posted by regular cron job
-        console.log(`[Agenda:postScheduledSpecialWeather] No client available, weather will be posted by cron job`);
+        logger.debug('SCHEDULER', `No client available, weather will be posted by cron job for ${village}`);
         return;
       }
 
@@ -279,14 +299,423 @@ function defineAgendaJobs({ client }) {
       
       // Post the weather (checkExisting=false ensures it posts even if already exists)
       await postWeatherForVillage(clientRef, village, false, false);
-      console.log(`[Agenda:postScheduledSpecialWeather] Successfully posted special weather for ${village}`);
+      logger.info('SCHEDULER', `Successfully posted special weather for ${village}`);
     } catch (error) {
-      console.error(`[Agenda:postScheduledSpecialWeather] Error posting special weather for ${village}:`, error);
+      logger.error('SCHEDULER', `Error posting special weather for ${village}`, error);
       handleError(error, "agenda.js", {
         jobName: "postScheduledSpecialWeather",
         village: village,
       });
       // Don't throw - let cron job handle it as fallback
+    }
+  });
+
+  // ============================================================================
+  // ------------------- Recurring Job Definitions -------------------
+  // ============================================================================
+
+  // Import scheduler functions for recurring jobs
+  const {
+    resetPetLastRollDates,
+    handleBirthdayRoleAssignment,
+    resetDailyRolls,
+    recoverDailyStamina,
+    generateDailyQuestsAtMidnight,
+    resetAllStealProtections,
+    resetPetRollsForAllCharacters,
+    generateVendingStockList,
+    distributeMonthlyBoostRewards,
+    cleanupExpiredRaids,
+    checkVillageRaidQuotas,
+    checkQuestCompletions,
+    checkVillageTracking,
+    cleanupOldTrackingData,
+    postWeatherUpdate,
+    checkAndPostWeatherIfNeeded,
+    postWeatherReminder,
+    postBlightRollCall,
+    cleanupExpiredBoostingRequests,
+    archiveOldBoostingRequests,
+    handleBloodMoonStart,
+    handleBloodMoonEnd,
+    checkAndPostScheduledQuests,
+  } = require("./scheduler");
+  
+  // Import from modules
+  const { processMonthlyQuestRewards } = require('../modules/questRewardModule');
+
+  // Daily Tasks (Midnight EST = 05:00 UTC)
+  agenda.define("reset pet last roll dates", { concurrency: 1 }, async (job) => {
+    try {
+      await resetPetLastRollDates(clientRef);
+    } catch (error) {
+      logger.error('SCHEDULER', `Error in reset pet last roll dates:`, error);
+      handleError(error, "agenda.js", { jobName: "reset pet last roll dates" });
+    }
+  });
+
+  agenda.define("birthday role assignment", { concurrency: 1 }, async (job) => {
+    try {
+      await handleBirthdayRoleAssignment(clientRef);
+    } catch (error) {
+      logger.error('SCHEDULER', `Error in birthday role assignment:`, error);
+      handleError(error, "agenda.js", { jobName: "birthday role assignment" });
+    }
+  });
+
+  agenda.define("reset daily rolls", { concurrency: 1 }, async (job) => {
+    try {
+      await resetDailyRolls(clientRef);
+    } catch (error) {
+      logger.error('SCHEDULER', `Error in reset daily rolls:`, error);
+      handleError(error, "agenda.js", { jobName: "reset daily rolls" });
+    }
+  });
+
+  agenda.define("recover daily stamina", { concurrency: 1 }, async (job) => {
+    try {
+      await recoverDailyStamina(clientRef);
+    } catch (error) {
+      logger.error('SCHEDULER', `Error in recover daily stamina:`, error);
+      handleError(error, "agenda.js", { jobName: "recover daily stamina" });
+    }
+  });
+
+  agenda.define("generate daily quests", { concurrency: 1 }, async (job) => {
+    try {
+      await generateDailyQuestsAtMidnight();
+    } catch (error) {
+      logger.error('SCHEDULER', `Error in generate daily quests:`, error);
+      handleError(error, "agenda.js", { jobName: "generate daily quests" });
+    }
+  });
+
+  agenda.define("global steal protections reset", { concurrency: 1 }, async (job) => {
+    try {
+      await resetAllStealProtections();
+      logger.success('CLEANUP', 'Global steal protections reset completed');
+    } catch (error) {
+      logger.error('CLEANUP', 'Error resetting global steal protections', error);
+      handleError(error, "agenda.js", { jobName: "global steal protections reset" });
+    }
+  });
+
+  // Weekly Tasks (Sunday Midnight EST = Monday 05:00 UTC)
+  agenda.define("weekly pet rolls reset", { concurrency: 1 }, async (job) => {
+    try {
+      await resetPetRollsForAllCharacters(clientRef);
+    } catch (error) {
+      logger.error('SCHEDULER', `Error in weekly pet rolls reset:`, error);
+      handleError(error, "agenda.js", { jobName: "weekly pet rolls reset" });
+    }
+  });
+
+  // Monthly Tasks
+  agenda.define("monthly vending stock generation", { concurrency: 1 }, async (job) => {
+    try {
+      await generateVendingStockList(clientRef);
+    } catch (error) {
+      logger.error('SCHEDULER', `Error in monthly vending stock generation:`, error);
+      handleError(error, "agenda.js", { jobName: "monthly vending stock generation" });
+    }
+  });
+
+  agenda.define("monthly nitro boost rewards", { concurrency: 1 }, async (job) => {
+    try {
+      logger.info('BOOST', 'Starting monthly Nitro boost reward distribution (1st of month)...');
+      const result = await distributeMonthlyBoostRewards(clientRef);
+      logger.success('BOOST', `Nitro boost rewards distributed - Rewarded: ${result.rewardedCount}, Already Rewarded: ${result.alreadyRewardedCount}, Errors: ${result.errorCount}, Total Tokens: ${result.totalTokens}`);
+    } catch (error) {
+      logger.error('BOOST', 'Monthly Nitro boost reward distribution failed', error.message);
+      handleError(error, "agenda.js", { jobName: "monthly nitro boost rewards" });
+    }
+  });
+
+  agenda.define("monthly quest reward distribution", { concurrency: 1 }, async (job) => {
+    try {
+      // Get current date/time in UTC
+      const now = new Date();
+      // Calculate tomorrow by adding 24 hours (86400000 milliseconds)
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      
+      // Check if tomorrow is the 1st (using UTC, which is 5 hours ahead of EST)
+      // If tomorrow is the 1st in UTC, then today is the last day of the month
+      if (tomorrow.getUTCDate() === 1) {
+        logger.info('QUEST', 'Starting monthly quest reward distribution (last day of month at 11:59 PM EST / 04:59 UTC)...');
+        const result = await processMonthlyQuestRewards();
+        logger.success('SCHEDULER', `Monthly quest rewards distributed - Processed: ${result.processed}, Rewarded: ${result.rewarded}, Errors: ${result.errors}`);
+      } else {
+        logger.info('SCHEDULER', 'Not last day of month, skipping monthly quest reward distribution');
+      }
+    } catch (error) {
+      logger.error('QUEST', 'Monthly quest reward distribution failed', error.message);
+      handleError(error, "agenda.js", { jobName: "monthly quest reward distribution" });
+    }
+  });
+
+  // Periodic Tasks
+  agenda.define("raid expiration check", { concurrency: 5 }, async (job) => {
+    const startTime = Date.now();
+    logger.warn('SCHEDULER', `🔍 [RAID CHECK] Starting execution at ${new Date().toISOString()}`);
+    
+    try {
+      const result = await cleanupExpiredRaids(clientRef);
+      const duration = Date.now() - startTime;
+      if (result.expiredCount > 0) {
+        logger.info('RAID', `Periodic raid check - ${result.expiredCount} raid(s) expired (took ${duration}ms)`);
+      } else {
+        logger.warn('SCHEDULER', `🔍 [RAID CHECK] Completed in ${duration}ms (no expired raids)`);
+      }
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('RAID', `Periodic raid expiration check failed after ${duration}ms`, error);
+      handleError(error, "agenda.js", { jobName: "raid expiration check" });
+    }
+  });
+
+  agenda.define("village raid quota check", { concurrency: 1 }, async (job) => {
+    try {
+      logger.info('RAID_QUOTA', 'Starting hourly village raid quota check...');
+      await checkVillageRaidQuotas(clientRef);
+    } catch (error) {
+      logger.error('RAID_QUOTA', 'Error during hourly village raid quota check', error.message);
+      handleError(error, "agenda.js", { jobName: "village raid quota check" });
+    }
+  });
+
+  agenda.define("quest completion check", { concurrency: 1 }, async (job) => {
+    try {
+      await checkQuestCompletions(clientRef);
+    } catch (error) {
+      logger.error('QUEST', 'Error checking quest completions:', error.message);
+      handleError(error, "agenda.js", { jobName: "quest completion check" });
+    }
+  });
+
+  agenda.define("village tracking check", { concurrency: 1 }, async (job) => {
+    try {
+      await checkVillageTracking(clientRef);
+    } catch (error) {
+      logger.error('VILLAGE', 'Error checking village tracking:', error.message);
+      handleError(error, "agenda.js", { jobName: "village tracking check" });
+    }
+  });
+
+  agenda.define("blood moon tracking cleanup", { concurrency: 1 }, async (job) => {
+    try {
+      logger.info('CLEANUP', 'Starting Blood Moon tracking cleanup');
+      cleanupOldTrackingData();
+      logger.success('CLEANUP', 'Blood Moon tracking cleanup completed');
+    } catch (error) {
+      logger.error('CLEANUP', 'Error in blood moon tracking cleanup', error);
+      handleError(error, "agenda.js", { jobName: "blood moon tracking cleanup" });
+    }
+  });
+
+  // Weather Tasks
+  agenda.define("Daily Weather Update", { concurrency: 3 }, async (job) => {
+    try {
+      await postWeatherUpdate(clientRef);
+    } catch (error) {
+      logger.error('WEATHER', `Error in Daily Weather Update:`, error);
+      handleError(error, "agenda.js", { jobName: "Daily Weather Update" });
+    }
+  });
+
+  agenda.define("Weather Fallback Check", { concurrency: 1 }, async (job) => {
+    try {
+      await checkAndPostWeatherIfNeeded(clientRef);
+    } catch (error) {
+      logger.error('WEATHER', `Error in Weather Fallback Check:`, error);
+      handleError(error, "agenda.js", { jobName: "Weather Fallback Check" });
+    }
+  });
+
+  agenda.define("Daily Weather Forecast Reminder", { concurrency: 1 }, async (job) => {
+    try {
+      await postWeatherReminder(clientRef);
+    } catch (error) {
+      logger.error('WEATHER', `Error in Daily Weather Forecast Reminder:`, error);
+      handleError(error, "agenda.js", { jobName: "Daily Weather Forecast Reminder" });
+    }
+  });
+
+  // Blight Tasks
+  agenda.define("Blight Roll Call", { concurrency: 1 }, async (job) => {
+    try {
+      await postBlightRollCall(clientRef);
+    } catch (error) {
+      logger.error('BLIGHT', 'Blight roll call failed', error.message);
+      handleError(error, "agenda.js", { jobName: "Blight Roll Call" });
+    }
+  });
+
+  // Boost Tasks
+  agenda.define("Boost Cleanup", { concurrency: 1 }, async (job) => {
+    try {
+      logger.info('CLEANUP', 'Starting boost cleanup');
+      await cleanupExpiredBoostingRequests();
+      await archiveOldBoostingRequests();
+      logger.success('CLEANUP', 'Boost cleanup completed');
+    } catch (error) {
+      logger.error('CLEANUP', 'Boost cleanup failed', error.message);
+      handleError(error, "agenda.js", { jobName: "Boost Cleanup" });
+    }
+  });
+
+  // Expiration Tasks - Check for expired TempData requests
+  agenda.define("checkExpiredRequests", { concurrency: 1 }, async (job) => {
+    try {
+      if (!clientRef) {
+        logger.debug('SCHEDULER', 'No client available for expiration check');
+        return;
+      }
+
+      const TempData = require('../models/TempDataModel');
+      const { EmbedBuilder } = require('discord.js');
+      
+      // Find all expired requests
+      const expiredRequests = await TempData.findExpired();
+      
+      logger.info('CLEANUP', `Checking ${expiredRequests.length} expired TempData requests`);
+      
+      for (const request of expiredRequests) {
+        try {
+          // Get the request data
+          const { type, key, data } = request;
+          
+          // Prepare notification message based on request type
+          let message = '';
+          let userId = '';
+          
+          switch (type) {
+            case 'healing':
+              message = `Your healing request for ${data.characterName} has expired after 48 hours without being fulfilled.`;
+              userId = data.userId;
+              break;
+            case 'vending':
+              message = `Your vending request for ${data.characterName} has expired after 48 hours without being fulfilled.`;
+              userId = data.userId;
+              break;
+            case 'boosting':
+              message = `Your boosting request for ${data.characterName} has expired after 48 hours without being fulfilled.`;
+              userId = data.userId;
+              break;
+            case 'battle':
+              message = `Your battle progress for ${data.characterName} has expired after 48 hours without being completed.`;
+              userId = data.userId;
+              break;
+            case 'encounter':
+              message = `Your encounter request for ${data.characterName} has expired after 48 hours without being fulfilled.`;
+              userId = data.userId;
+              break;
+            case 'blight':
+              message = `Your blight healing request for ${data.characterName} has expired after 48 hours without being fulfilled.`;
+              userId = data.userId;
+              break;
+            case 'travel':
+              message = `Your travel request for ${data.characterName} has expired after 48 hours without being completed.`;
+              userId = data.userId;
+              break;
+            case 'gather':
+              message = `Your gathering request for ${data.characterName} has expired after 48 hours without being completed.`;
+              userId = data.userId;
+              break;
+            case 'delivery':
+              message = `Your delivery request from ${data.sender} to ${data.recipient} has expired after 48 hours without being completed.`;
+              userId = data.userId;
+              break;
+            default:
+              message = `Your ${type} request has expired after 48 hours without being fulfilled.`;
+              userId = data.userId;
+          }
+
+          // Send DM to user if we have their ID
+          if (userId) {
+            try {
+              await sendUserDM(userId, message, clientRef);
+            } catch (dmError) {
+              logger.debug('CLEANUP', `Could not send DM to user ${userId} for expired ${type} request - user may have blocked DMs`);
+            }
+          }
+
+          // Delete the expired request
+          await TempData.findByIdAndDelete(request._id);
+          
+          logger.debug('CLEANUP', `Deleted expired ${type} request for ${key}`);
+        } catch (requestError) {
+          logger.error('CLEANUP', `Error processing expired request ${request._id}:`, requestError);
+        }
+      }
+      
+      if (expiredRequests.length > 0) {
+        logger.success('CLEANUP', `Processed ${expiredRequests.length} expired TempData requests`);
+      }
+    } catch (error) {
+      logger.error('CLEANUP', 'Error checking expired requests:', error);
+      handleError(error, "agenda.js", { jobName: "checkExpiredRequests" });
+    }
+  });
+
+  // Blood Moon Tasks
+  agenda.define("blood moon start announcement", { concurrency: 1 }, async (job) => {
+    try {
+      await handleBloodMoonStart(clientRef);
+    } catch (error) {
+      logger.error('BLOODMOON', 'Blood moon start announcement failed', error.message);
+      handleError(error, "agenda.js", { jobName: "blood moon start announcement" });
+    }
+  });
+
+  agenda.define("blood moon end announcement", { concurrency: 1 }, async (job) => {
+    try {
+      await handleBloodMoonEnd(clientRef);
+    } catch (error) {
+      logger.error('BLOODMOON', 'Blood moon end announcement failed', error.message);
+      handleError(error, "agenda.js", { jobName: "blood moon end announcement" });
+    }
+  });
+
+  // Quest Tasks
+  agenda.define("quest posting check", { concurrency: 1 }, async (job) => {
+    try {
+      process.env.TEST_CHANNEL_ID = '706880599863853097';
+      delete require.cache[require.resolve('../scripts/questAnnouncements')];
+      const { postQuests } = require('../scripts/questAnnouncements');
+      await postQuests(clientRef);
+    } catch (error) {
+      logger.error('QUEST', 'Quest posting check failed', error.message);
+      handleError(error, "agenda.js", { jobName: "quest posting check" });
+    }
+  });
+
+  // Help Wanted Tasks (24 time slots)
+  // Create separate job definitions for each time slot
+  const { FIXED_CRON_TIMES } = require('../modules/helpWantedModule');
+  
+  FIXED_CRON_TIMES.forEach((cronTime, index) => {
+    const jobName = `Help Wanted Board Check - ${cronTime} (EST)`;
+    agenda.define(jobName, { concurrency: 1 }, async (job) => {
+      try {
+        await checkAndPostScheduledQuests(clientRef, cronTime);
+      } catch (error) {
+        logger.error('QUEST', `Error in ${jobName}:`, error);
+        handleError(error, "agenda.js", { jobName, cronTime });
+      }
+    });
+  });
+
+  // Memory logging job - runs hourly
+  agenda.define("memory log", { concurrency: 1 }, async (job) => {
+    try {
+      const { getMemoryMonitor } = require('../utils/memoryMonitor');
+      const memoryMonitor = getMemoryMonitor();
+      if (memoryMonitor && memoryMonitor.enabled) {
+        memoryMonitor.logMemoryStats();
+      }
+    } catch (error) {
+      logger.error('MEM', 'Memory log job failed', error.message);
+      handleError(error, "agenda.js", { jobName: "memory log" });
     }
   });
 }
@@ -300,7 +729,7 @@ async function startAgenda() {
     throw new Error("Agenda not initialized - call initAgenda() first");
   }
   await agenda.start();
-  console.log("[Agenda] started");
+  logger.success('SCHEDULER', 'Agenda started');
 }
 
 /**
@@ -310,7 +739,7 @@ async function startAgenda() {
 async function stopAgenda() {
   if (!agenda) return;
   await agenda.stop();
-  console.log("[Agenda] stopped");
+  logger.info('SCHEDULER', 'Agenda stopped');
 }
 
 /**

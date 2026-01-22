@@ -1534,7 +1534,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   const { handleKO } = require('../../modules/characterStatsModule.js');
   const { createMonsterEncounterEmbed } = require('../../embeds/embeds.js');
   const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils.js');
-  const { isValidGoogleSheetsUrl, safeAppendDataToSheet, extractSpreadsheetId, authorizeSheets } = require('@/shared/utils/googleSheetsUtils.js');
+  // Google Sheets functionality removed
   const { v4: uuidv4 } = require('uuid');
   
   let summary = [];

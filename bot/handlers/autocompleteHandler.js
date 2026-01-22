@@ -7,10 +7,7 @@
 const { MongoClient } = require("mongodb");
 
 // ------------------- Database Connections -------------------
-const {
- connectToInventories,
- connectToTinglebot
-} = require('@/shared/database/db');
+const DatabaseConnectionManager = require('../database/connectionManager');
 const dbConfig = require('@/shared/config/database');
 
 // ------------------- Database Services -------------------
@@ -24,7 +21,6 @@ const {
  fetchCharactersByUserId,
  fetchCraftableItemsAndCheckMaterials,
  fetchModCharactersByUserId,
- getCharacterInventoryCollection,
  getCurrentVendingStockList,
  getVendingModel
 } = require('@/shared/database/db');
@@ -41,53 +37,6 @@ try {
   // Memory monitor not available, continue without it
 }
 
-// ------------------- Autocomplete Request Management -------------------
-// Per-user debounce and inflight request tracking to prevent self-DOS
-const autocompleteLocks = new Map(); // userId -> { promise, timestamp }
-const autocompleteCache = new Map(); // userId -> { data, timestamp, ttl }
-const AUTCOMPLETE_DEBOUNCE_MS = 200; // 200ms debounce
-const AUTCOMPLETE_CACHE_TTL = 30 * 1000; // 30 second cache
-const AUTCOMPLETE_MAX_INFLIGHT_AGE = 5000; // Clean up stale locks after 5s
-
-// Cleanup function for autocomplete caches
-function cleanupAutocompleteCaches() {
-  const now = Date.now();
-  let cleanedLocks = 0;
-  let cleanedCache = 0;
-  
-  // Clean up stale locks
-  for (const [userId, lock] of autocompleteLocks.entries()) {
-    if (now - lock.timestamp > AUTCOMPLETE_MAX_INFLIGHT_AGE) {
-      autocompleteLocks.delete(userId);
-      cleanedLocks++;
-    }
-  }
-  
-  // Clean up expired cache entries
-  for (const [userId, cached] of autocompleteCache.entries()) {
-    if (now - cached.timestamp >= cached.ttl) {
-      autocompleteCache.delete(userId);
-      cleanedCache++;
-    }
-  }
-  
-  // Update memory monitor
-  if (memoryMonitor) {
-    memoryMonitor.trackCache('autocompleteCache', autocompleteCache.size);
-    memoryMonitor.trackResource('autocompleteLocks', autocompleteLocks.size);
-  }
-  
-  // Log if caches are getting large
-  if (autocompleteCache.size > 100) {
-    logger.warn('AUTOCOMPLETE', `Autocomplete cache is large: ${autocompleteCache.size} entries`);
-  }
-  if (autocompleteLocks.size > 50) {
-    logger.warn('AUTOCOMPLETE', `Autocomplete locks are high: ${autocompleteLocks.size} active locks`);
-  }
-}
-
-// Run cleanup every 30 seconds
-setInterval(cleanupAutocompleteCaches, 30 * 1000);
 
 // ------------------- Custom Modules -------------------
 const {
@@ -306,34 +255,22 @@ async function handleAutocomplete(interaction) {
         try {
             focusedOption = interaction.options.getFocused(true);
         } catch (getFocusedError) {
-            console.error('[handleAutocomplete]: Error getting focused option:', getFocusedError);
-            // Try to respond with empty array if we can't get focused option
-            try {
-                if (!interaction.responded && interaction.isRepliable()) {
-                    await interaction.respond([]);
-                }
-            } catch (respondError) {
-                // Ignore if already expired
-            }
+            handleError(getFocusedError, "autocompleteHandler.js");
+            console.error("[autocompleteHandler.js]❌ Error in handleAutocomplete getting focused option:", getFocusedError);
+            await safeAutocompleteResponse(interaction, []);
             return;
         }
 
         if (!focusedOption) {
-            console.warn('[handleAutocomplete]: No focused option found');
-            try {
-                if (!interaction.responded && interaction.isRepliable()) {
-                    await interaction.respond([]);
-                }
-            } catch (respondError) {
-                // Ignore if already expired
-            }
+            console.warn("[autocompleteHandler.js]⚠️ No focused option found in handleAutocomplete");
+            await safeAutocompleteResponse(interaction, []);
             return;
         }
 
         // Route to internal handler
         await handleAutocompleteInternal(interaction, commandName, focusedOption);
     } catch (error) {
-        // Enhanced error handling with better logging
+        handleError(error, "autocompleteHandler.js");
         const commandName = interaction?.commandName || 'unknown';
         let focusedOptionName = 'unknown';
         try {
@@ -343,21 +280,8 @@ async function handleAutocomplete(interaction) {
             // Ignore error getting focused option in error handler
         }
         
-        console.error(`[handleAutocomplete]: Error in main autocomplete handler for ${commandName}/${focusedOptionName}:`, error);
-        logger.error('AUTOCOMPLETE', `Error in main autocomplete handler for ${commandName}/${focusedOptionName}: ${error.message}`, error);
-        
-        try {
-            if (!interaction.responded && interaction.isRepliable()) {
-                await interaction.respond([]);
-            }
-        } catch (respondError) {
-            if (respondError.code === 10062) {
-                logger.warn('AUTOCOMPLETE', `Main handler - interaction expired for ${commandName}, ignoring response attempt`);
-            } else {
-                console.error(`[handleAutocomplete]: Error responding:`, respondError);
-                logger.error('AUTOCOMPLETE', `Main handler - respond error for ${commandName}: ${respondError.message}`, respondError);
-            }
-        }
+        console.error(`[autocompleteHandler.js]❌ Error in handleAutocomplete for ${commandName}/${focusedOptionName}:`, error);
+        await safeRespondWithError(interaction, error);
     }
 }
 
@@ -928,23 +852,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             break;
         }
     } catch (error) {
-        // Enhanced error handling with better logging
+        handleError(error, "autocompleteHandler.js");
         const focusedOptionName = focusedOption?.name || 'unknown';
-        console.error(`[handleAutocompleteInternal]: Error for ${commandName}/${focusedOptionName}:`, error);
-        logger.error('AUTOCOMPLETE', `Error in handleAutocompleteInternal for ${commandName}/${focusedOptionName}: ${error.message}`, error);
-        
-        try {
-            if (!interaction.responded && interaction.isAutocomplete()) {
-                await interaction.respond([]);
-            }
-        } catch (respondError) {
-            if (respondError.code === 10062) {
-                logger.warn('AUTOCOMPLETE', `Interaction expired for ${commandName}, ignoring response attempt`);
-            } else {
-                console.error(`[handleAutocompleteInternal]: Error responding:`, respondError);
-                logger.error('AUTOCOMPLETE', `Error sending error response for ${commandName}: ${respondError.message}`, respondError);
-            }
-        }
+        console.error(`[autocompleteHandler.js]❌ Error in handleAutocompleteInternal for ${commandName}/${focusedOptionName}:`, error);
+        await safeRespondWithError(interaction, error);
     }
 }
 
@@ -989,59 +900,6 @@ async function handleCharacterBasedCommandsAutocomplete(
     const userId = interaction.user.id;
     const mongoose = require('mongoose');
     
-    // ========== DEBOUNCE & INFLIGHT LOCK ==========
-    // Check for existing inflight request
-    const existingLock = autocompleteLocks.get(userId);
-    if (existingLock) {
-      const lockAge = Date.now() - existingLock.timestamp;
-      if (lockAge < AUTCOMPLETE_MAX_INFLIGHT_AGE) {
-        try {
-          const cachedResult = await existingLock.promise;
-          // Respond with cached result
-          const choices = cachedResult.map((character) => ({
-            name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-            value: character.name,
-          }));
-          await respondWithFilteredChoices(interaction, focusedOption, choices);
-          return;
-        } catch (error) {
-          // If the inflight request failed, continue to make a new one
-          autocompleteLocks.delete(userId);
-        }
-      } else {
-        // Stale lock, remove it
-        autocompleteLocks.delete(userId);
-      }
-    }
-    
-    // Check cache first
-    const cached = autocompleteCache.get(userId);
-    if (cached && (Date.now() - cached.timestamp) < cached.ttl) {
-      const choices = cached.data.map((character) => ({
-        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-        value: character.name,
-      }));
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
-      return;
-    }
-    
-    // Create new request promise and lock
-    let resolveLock, rejectLock;
-    const requestPromise = new Promise((resolve, reject) => {
-      resolveLock = resolve;
-      rejectLock = reject;
-    });
-    
-    autocompleteLocks.set(userId, {
-      promise: requestPromise,
-      timestamp: Date.now()
-    });
-    
-    // Clean up lock after request completes (or fails)
-    const cleanupLock = () => {
-      autocompleteLocks.delete(userId);
-    };
-    
     const requiredFields = ['name', 'currentVillage', 'job'];
     const timeoutMs = 2500; // 2.5 seconds timeout
     
@@ -1063,23 +921,6 @@ async function handleCharacterBasedCommandsAutocomplete(
       // Combine regular characters and mod characters
       const allCharacters = [...(characters || []), ...(modCharacters || [])];
       
-      // Cache the result
-      autocompleteCache.set(userId, {
-        data: allCharacters,
-        timestamp: Date.now(),
-        ttl: AUTCOMPLETE_CACHE_TTL
-      });
-      
-      // Update memory monitor
-      if (memoryMonitor) {
-        memoryMonitor.trackCache('autocompleteCache', autocompleteCache.size);
-        memoryMonitor.trackResource('autocompleteLocks', autocompleteLocks.size);
-      }
-      
-      // Resolve the lock promise so other concurrent requests can use this result
-      resolveLock(allCharacters);
-      cleanupLock();
-    
       // Map all characters to choices with their basic info
       const choices = allCharacters.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
@@ -1088,45 +929,16 @@ async function handleCharacterBasedCommandsAutocomplete(
       
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     } catch (queryError) {
-      clearTimeout(timeoutId); // Clear timeout if query fails
-      // Reject the lock promise and clean up
-      rejectLock(queryError);
-      cleanupLock();
-      
-      logger.error('AUTOCOMPLETE', `Database query error for ${commandName}: ${queryError.message}`, queryError);
-      
-      // Respond with empty array on query failure
-      try {
-        if (!interaction.responded && interaction.isAutocomplete()) {
-          await interaction.respond([]);
-        }
-      } catch (respondError) {
-        if (respondError.code !== 10062) {
-          logger.error('AUTOCOMPLETE', `Error responding to autocomplete: ${respondError.message}`, respondError);
-        }
-      }
+      clearTimeout(timeoutId);
+      handleError(queryError, "autocompleteHandler.js");
+      console.error(`[autocompleteHandler.js]❌ Error in handleCharacterBasedCommandsAutocomplete database query for ${commandName}:`, queryError);
+      await safeAutocompleteResponse(interaction, []);
       return;
     }
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error(
-   `[handleCharacterBasedCommandsAutocomplete]: Error handling ${commandName} autocomplete:`,
-   error
-  );
-  
-  // Ensure we always respond, even on error
-  try {
-    if (!interaction.responded && interaction.isAutocomplete()) {
-      await interaction.respond([]);
-    }
-  } catch (respondError) {
-    if (respondError.code === 10062) {
-      // Interaction expired, ignore
-    } else {
-      console.error(`[handleCharacterBasedCommandsAutocomplete]: Error sending error response for ${commandName}:`, respondError);
-    }
-  }
+  console.error(`[autocompleteHandler.js]❌ Error in handleCharacterBasedCommandsAutocomplete for ${commandName}:`, error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1195,7 +1007,7 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
   }
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-  console.error("[handleBlightCharacterAutocomplete]: Error occurred:", error);
+  console.error("[autocompleteHandler.js]❌ Error in handleBlightCharacterAutocomplete:", error);
   await safeRespondWithError(interaction, error);
  }
 }
@@ -1216,7 +1028,7 @@ async function handleModBlightCharacterAutocomplete(interaction, focusedOption) 
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleModBlightCharacterAutocomplete]: Error occurred:", error);
+    console.error("[autocompleteHandler.js]❌ Error in handleModBlightCharacterAutocomplete:", error);
     await safeRespondWithError(interaction, error);
   }
 }
@@ -1271,7 +1083,7 @@ async function handleModBlightedCharacterAutocomplete(interaction, focusedOption
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleModBlightedCharacterAutocomplete]: Error occurred:", error);
+    console.error("[autocompleteHandler.js]❌ Error in handleModBlightedCharacterAutocomplete:", error);
     await safeRespondWithError(interaction, error);
   }
 }
@@ -1323,19 +1135,19 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
     const healerName = interaction.options.getString("healer_name");
 
     if (!characterName || !healerName) {
-      await interaction.respond([]);
+      await safeAutocompleteResponse(interaction, []);
       return;
     }
 
     // Get the healer character
     const healer = await fetchCharacterByName(healerName);
     if (!healer) {
-      await interaction.respond([]);
+      await safeAutocompleteResponse(interaction, []);
       return;
     }
 
     // Get the healer's inventory
-    const inventoryCollection = await getCharacterInventoryCollection(healer.name);
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(healer.name);
     const inventoryItems = await inventoryCollection.find().toArray();
 
     // Initialize an array to store items that are relevant for healing requirements
@@ -1373,8 +1185,8 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
     await safeRespondWithValidation(interaction, choices.slice(0, 25));
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleBlightItemAutocomplete]: ❌ Error occurred:", error);
-    // Don't try to respond again if there was an error
+    console.error("[autocompleteHandler.js]❌ Error in handleBlightItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -1409,8 +1221,7 @@ async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleBoostingCharacterAutocomplete]: Error:", error);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingCharacterAutocomplete:", error);
   await safeRespondWithError(interaction, error);
  }
 }
@@ -1433,8 +1244,7 @@ async function handleBoostingRequestCharacterAutocomplete(interaction, focusedOp
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleBoostingRequestCharacterAutocomplete]: Error:", error);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingRequestCharacterAutocomplete:", error);
   await safeRespondWithError(interaction, error);
  }
 }
@@ -1463,8 +1273,7 @@ async function handleBoostingRequestBoosterAutocomplete(interaction, focusedOpti
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleBoostingRequestBoosterAutocomplete]: Error:", error);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingRequestBoosterAutocomplete:", error);
   await safeRespondWithError(interaction, error);
  }
 }
@@ -1512,9 +1321,8 @@ async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOpt
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  logger.error('AUTOCOMPLETE', 'Error handling boosting accept character autocomplete', error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingAcceptCharacterAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1536,9 +1344,8 @@ async function handleBoostingStatusCharacterAutocomplete(interaction, focusedOpt
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleBoostingStatusCharacterAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingStatusCharacterAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1563,9 +1370,8 @@ async function handleBoostingOtherCharacterAutocomplete(interaction, focusedOpti
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  logger.error('AUTOCOMPLETE', 'Error handling boosting other character autocomplete', error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingOtherCharacterAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1609,9 +1415,8 @@ async function handleBoostingRequestIdAutocomplete(interaction, focusedOption) {
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-  
-  logger.error('AUTOCOMPLETE', 'Error handling boosting request ID autocomplete', error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingRequestIdAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1664,9 +1469,8 @@ async function handleBoostingCancelRequestIdAutocomplete(interaction, focusedOpt
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-  
-  console.error('AUTOCOMPLETE', 'Error handling boosting cancel request ID autocomplete', error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingCancelRequestIdAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1687,18 +1491,16 @@ async function handleChangeJobNewJobAutocomplete(interaction, focusedOption) {
   const characterName = interaction.options.getString("charactername") || "";
 
   if (!characterName) {
-   console.warn(`[handleChangeJobNewJobAutocomplete]: No character selected.`);
-   await interaction.respond([]);
+   console.warn("[autocompleteHandler.js]⚠️ No character selected in handleChangeJobNewJobAutocomplete");
+   await safeAutocompleteResponse(interaction, []);
    return;
   }
 
   // Fetch the character by user and character name
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
   if (!character) {
-   console.warn(
-    `[handleChangeJobNewJobAutocomplete]: Character not found for userId: ${userId}, characterName: ${characterName}`
-   );
-   await interaction.respond([]);
+   console.warn(`[autocompleteHandler.js]⚠️ Character not found in handleChangeJobNewJobAutocomplete for userId: ${userId}, characterName: ${characterName}`);
+   await safeAutocompleteResponse(interaction, []);
    return;
   }
 
@@ -1724,9 +1526,8 @@ async function handleChangeJobNewJobAutocomplete(interaction, focusedOption) {
   await interaction.respond(formattedChoices.slice(0, 25));
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error(`[handleChangeJobNewJobAutocomplete] Error:`, error);
-  await interaction.respond([]);
+  console.error("[autocompleteHandler.js]❌ Error in handleChangeJobNewJobAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1764,18 +1565,16 @@ async function handleChangeVillageNewVillageAutocomplete(interaction, focusedOpt
   const characterName = interaction.options.getString("charactername") || "";
 
   if (!characterName) {
-   console.warn(`[handleChangeVillageNewVillageAutocomplete]: No character selected.`);
-   await interaction.respond([]);
+   console.warn("[autocompleteHandler.js]⚠️ No character selected in handleChangeVillageNewVillageAutocomplete");
+   await safeAutocompleteResponse(interaction, []);
    return;
   }
 
   // Fetch the character by user and character name
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
   if (!character) {
-   console.warn(
-    `[handleChangeVillageNewVillageAutocomplete]: Character not found for userId: ${userId}, characterName: ${characterName}`
-   );
-   await interaction.respond([]);
+   console.warn(`[autocompleteHandler.js]⚠️ Character not found in handleChangeVillageNewVillageAutocomplete for userId: ${userId}, characterName: ${characterName}`);
+   await safeAutocompleteResponse(interaction, []);
    return;
   }
 
@@ -1797,9 +1596,8 @@ async function handleChangeVillageNewVillageAutocomplete(interaction, focusedOpt
   await interaction.respond(formattedChoices.slice(0, 25));
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error(`[handleChangeVillageNewVillageAutocomplete] Error:`, error);
-  await interaction.respond([]);
+  console.error("[autocompleteHandler.js]❌ Error in handleChangeVillageNewVillageAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -1849,7 +1647,7 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
         })
         .select('itemName craftingTags craftingMaterial cook blacksmith craftsman maskMaker researcher weaver artist witch staminaToCraft')
         .lean(),
-        getCharacterInventoryCollection(characterName)
+        DatabaseConnectionManager.getInventoryCollection(characterName)
       ]);
 
       if (!character) {
@@ -2156,8 +1954,9 @@ async function handleCustomWeaponIdAutocomplete(interaction, focusedOption) {
                 
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleCustomWeaponIdAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleCustomWeaponIdAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2184,8 +1983,8 @@ async function handleBaseWeaponAutocomplete(interaction, focusedOption) {
   await interaction.respond(choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-  console.error("[handleBaseWeaponAutocomplete]: Error occurred:", error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleBaseWeaponAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -2222,8 +2021,8 @@ async function handleSubtypeAutocomplete(interaction, focusedOption) {
   await interaction.respond(choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-  console.error("[handleSubtypeAutocomplete]: Error occurred:", error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleSubtypeAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -2353,7 +2152,7 @@ async function handleDeliverItemAutocomplete(interaction, focusedOption) {
   );
   if (!senderCharacter) return await interaction.respond([]);
 
-  const inventoryCollection = await getCharacterInventoryCollection(
+  const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(
    senderCharacter.name
   );
   const inventory = await inventoryCollection.find().toArray();
@@ -2388,11 +2187,11 @@ async function handleDeliverItemAutocomplete(interaction, focusedOption) {
 async function handleVendorItemAutocomplete(interaction, focusedOption) {
   try {
     const characterName = interaction.options.getString("charactername");
-    if (!characterName) return await interaction.respond([]);
+    if (!characterName) return await safeAutocompleteResponse(interaction, []);
 
                 const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) return await interaction.respond([]);
+    if (!character) return await safeAutocompleteResponse(interaction, []);
 
     const village = character.currentVillage?.toLowerCase()?.trim();
     const vendorType = character.job?.toLowerCase();
@@ -2436,8 +2235,9 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
 
     await interaction.respond(choices.slice(0, 25));
   } catch (error) {
-    console.error("[handleVendorItemAutocomplete]: Error:", error);
-    await interaction.respond([]);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleVendorItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2475,8 +2275,9 @@ async function handleEconomyAutocomplete(interaction, focusedOption) {
         return await handleTransferAutocomplete(interaction, focusedOption, focusedValue);
     }
   } catch (error) {
-    console.error('[handleEconomyAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleEconomyAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2516,8 +2317,9 @@ async function handleTradeFromCharacterAutocomplete(interaction, focusedValue) {
     
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleTradeFromCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleTradeFromCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2545,8 +2347,9 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
     
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleTradeToCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleTradeToCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2555,9 +2358,9 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
 async function handleTradeItemAutocomplete(interaction, focusedValue) {
   try {
     const fromCharacter = interaction.options.getString('fromcharacter');
-    if (!fromCharacter) return await interaction.respond([]);
+    if (!fromCharacter) return await safeAutocompleteResponse(interaction, []);
     
-    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
     
     // Aggregate by name, exclude 'Initial Item' and items with quantity <= 0
@@ -2613,8 +2416,9 @@ async function handleGiftAutocomplete(interaction, focusedOption, focusedValue) 
       return await handleGiftItemAutocomplete(interaction, focusedOption);
     }
   } catch (error) {
-    console.error('[handleGiftAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleGiftAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2636,8 +2440,9 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
     
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleGiftFromCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleGiftFromCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2659,9 +2464,10 @@ async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
     
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleGiftToCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
-    }
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleGiftToCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
+  }
 }
 
 // ------------------- Function: handleGiftItemAutocomplete -------------------
@@ -2669,8 +2475,8 @@ async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
 async function handleGiftItemAutocomplete(interaction, focusedOption) {
   try {
     const fromCharacter = interaction.options.getString('fromcharacter');
-    if (!fromCharacter) return await interaction.respond([]);
-    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
+    if (!fromCharacter) return await safeAutocompleteResponse(interaction, []);
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
     // Aggregate by name, exclude 'Initial Item' and items with quantity <= 0
     const itemMap = new Map();
@@ -2690,8 +2496,9 @@ async function handleGiftItemAutocomplete(interaction, focusedOption) {
     }));
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleGiftItemAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleGiftItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2701,13 +2508,13 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
   try {
     const characterName = interaction.options.getString('charactername');
     if (!characterName) {
-      return await interaction.respond([]);
+      return await safeAutocompleteResponse(interaction, []);
     }
 
     const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
-      return await interaction.respond([]);
+      return await safeAutocompleteResponse(interaction, []);
     }
 
     // Get items from the village's shop using ShopStock model
@@ -2730,7 +2537,9 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
 
     await interaction.respond(choices);
   } catch (error) {
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleShopBuyItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2770,8 +2579,9 @@ async function handleShopCharacterAutocomplete(interaction, focusedValue) {
     
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleShopCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleShopCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2782,7 +2592,7 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
     const character = interaction.options.getString('charactername');
     if (!character) return await interaction.respond([]);
 
-    const inventoryCollection = await getCharacterInventoryCollection(character);
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(character);
     // Escape special regex characters in the search value
     const escapedValue = focusedValue.replace(/[.*+?^${}()|[\\]/g, '\\$&');
     const searchQuery = focusedValue.toLowerCase();
@@ -2855,8 +2665,9 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
     
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleShopItemAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleShopItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2896,8 +2707,9 @@ async function handleTransferFromCharacterAutocomplete(interaction, focusedValue
     
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleTransferFromCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleTransferFromCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2925,8 +2737,9 @@ async function handleTransferToCharacterAutocomplete(interaction, focusedValue) 
     
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleTransferToCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleTransferToCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2935,9 +2748,9 @@ async function handleTransferToCharacterAutocomplete(interaction, focusedValue) 
 async function handleTransferItemAutocomplete(interaction, focusedValue) {
   try {
     const fromCharacter = interaction.options.getString('fromcharacter');
-    if (!fromCharacter) return await interaction.respond([]);
+    if (!fromCharacter) return await safeAutocompleteResponse(interaction, []);
 
-    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
 
     // Aggregate by name, exclude 'Initial Item'
@@ -2970,8 +2783,9 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
       }))
     );
   } catch (error) {
-    console.error('[handleTransferItemAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleTransferItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -2996,7 +2810,7 @@ async function handleItemAutocomplete(interaction, focusedOption) {
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) return await interaction.respond([]);
 
-    const inventoryCollection = await getCharacterInventoryCollection(
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(
       character.name
     );
     const inventoryItems = await inventoryCollection.find().toArray();
@@ -3097,17 +2911,8 @@ async function handleItemAutocomplete(interaction, focusedOption) {
     }
     
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleItemAutocomplete]: Error:", error);
-    
-    if (!interaction.responded) {
-      try {
-        await interaction.respond([]);
-      } catch (respondError) {
-        if (respondError.code === 10062) {
-          console.log('[handleItemAutocomplete]: Interaction expired during error response');
-        }
-      }
-    }
+    console.error("[autocompleteHandler.js]❌ Error in handleItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -3118,7 +2923,7 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
    const characterName = interaction.options.getString("charactername");
    if (!characterName) return await interaction.respond([]);
  
-   const inventoryCollection = await getCharacterInventoryCollection(
+   const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(
     characterName
    );
    const inventoryItems = await inventoryCollection
@@ -3170,8 +2975,8 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
     await interaction.respond(formattedChoices.slice(0, 25));
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleItemJobNameAutocomplete]: Error:", error);
-    await safeRespondWithError(interaction);
+    console.error("[autocompleteHandler.js]❌ Error in handleItemJobNameAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
  }
 
@@ -3198,7 +3003,7 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
     const characterName = interaction.options.getString("charactername");
     if (!characterName) return await interaction.respond([]);
  
-    const inventoryCollection = await getCharacterInventoryCollection(
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(
      characterName
     );
     const inventoryItems = await inventoryCollection.find().toArray();
@@ -3262,9 +3067,8 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
    await interaction.respond(choices.slice(0, 25));
   } catch (error) {
    handleError(error, "autocompleteHandler.js");
- 
-   console.error("[handleShopsAutocomplete]: Error:", error);
-   await safeRespondWithError(interaction);
+   console.error("[autocompleteHandler.js]❌ Error in handleShopsAutocomplete:", error);
+   await safeRespondWithError(interaction, error);
   }
  }
 
@@ -3282,9 +3086,8 @@ async function handleTransferCharacterAutocomplete(interaction, focusedOption) {
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
    handleError(error, "autocompleteHandler.js");
- 
-   console.error("[handleTransferCharacterAutocomplete]: Error:", error);
-   await safeRespondWithError(interaction);
+   console.error("[autocompleteHandler.js]❌ Error in handleTransferCharacterAutocomplete:", error);
+   await safeRespondWithError(interaction, error);
   }
  }
  
@@ -3330,9 +3133,8 @@ async function handleEditCharacterAutocomplete(interaction, focusedOption) {
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleEditCharacterAutocomplete]: Error occurred:", error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleEditCharacterAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -3412,7 +3214,7 @@ async function handleExploreItemAutocomplete(interaction, focusedOption) {
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
   if (!character) return await interaction.respond([]);
 
-  const inventoryCollection = await getCharacterInventoryCollection(
+  const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(
    character.name
   );
   const inventoryItems = await inventoryCollection.find().toArray();
@@ -3548,7 +3350,7 @@ async function handleGearAutocomplete(interaction, focusedOption) {
   const character = characters.find((c) => c.name === characterName);
   if (!character) return await interaction.respond([]);
 
-  const inventoryCollection = await getCharacterInventoryCollection(
+  const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(
    character.name
   );
   const characterInventory = await inventoryCollection.find().toArray();
@@ -3620,8 +3422,8 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
                 await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
       handleError(error, "autocompleteHandler.js");
-      console.error("[handleQuestIdAutocomplete]: Error:", error);
-      await safeRespondWithError(interaction);
+      console.error("[autocompleteHandler.js]❌ Error in handleQuestIdAutocomplete:", error);
+      await safeRespondWithError(interaction, error);
   }
 }
 
@@ -3850,8 +3652,9 @@ async function handleLookupItemAutocomplete(interaction, focusedValue) {
 
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleLookupItemAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleLookupItemAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -3894,8 +3697,9 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
 
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleLookupIngredientAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleLookupIngredientAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -3935,8 +3739,9 @@ async function handleVillageCharacterAutocomplete(interaction, focusedOption, su
 
     return await safeRespondWithValidation(interaction, choices);
   } catch (error) {
-    console.error('[handleVillageCharacterAutocomplete]: Error:', error);
-    await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[autocompleteHandler.js]❌ Error in handleVillageCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -3985,7 +3790,7 @@ async function handleVillageItemAutocomplete(interaction, focusedOption, subcomm
     }
 
     // Get character inventory items
-    const inventoryCollection = await getCharacterInventoryCollection(characterName);
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(characterName);
     const inventoryItems = await inventoryCollection.find({ characterId: character._id }).toArray();
 
     // Create a map of items in inventory (by itemName, case-insensitive)
@@ -4111,8 +3916,8 @@ async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
     await interaction.respond(choices.slice(0, 25));
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleModGiveCharacterAutocomplete]: Error:", error);
-    await safeRespondWithError(interaction);
+    console.error("[autocompleteHandler.js]❌ Error in handleModGiveCharacterAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -4158,7 +3963,7 @@ async function handleModPetLevelCharacterAutocomplete(interaction, focusedOption
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleModPetLevelCharacterAutocomplete]: Error:", error);
+    console.error("[autocompleteHandler.js]❌ Error in handleModPetLevelCharacterAutocomplete:", error);
     await safeRespondWithError(interaction);
   }
 }
@@ -4189,8 +3994,8 @@ async function handleModPetLevelPetNameAutocomplete(interaction, focusedOption) 
     await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
-    console.error("[handleModPetLevelPetNameAutocomplete]: Error:", error);
-    await safeRespondWithError(interaction);
+    console.error("[autocompleteHandler.js]❌ Error in handleModPetLevelPetNameAutocomplete:", error);
+    await safeRespondWithError(interaction, error);
   }
 }
 
@@ -4206,8 +4011,8 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-  console.error("[handleModCharacterAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
+  console.error("[autocompleteHandler.js]❌ Error in handleModCharacterAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
  }
 }
 
@@ -5595,7 +5400,7 @@ async function handleVendingOfferAutocomplete(interaction, focusedOption) {
     }
 
     // Get items from buyer's inventory
-    const inventoryCollection = await getCharacterInventoryCollection(buyerCharacterName);
+    const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(buyerCharacterName);
     const items = await inventoryCollection.find().toArray();
 
     // Aggregate by name, exclude 'Initial Item' and items with quantity <= 0

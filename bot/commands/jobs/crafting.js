@@ -31,8 +31,7 @@ const { info, success, error } = require('@/shared/utils/logger');
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('@/shared/utils/inventoryUtils');
 const { checkInventorySync } = require('@/shared/utils/characterUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@/shared/utils/googleSheetsUtils');
-const { safeAppendDataToSheet } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
 const { enforceJail } = require('@/shared/utils/jailCheck');
 
@@ -41,7 +40,7 @@ const { enforceJail } = require('@/shared/utils/jailCheck');
 const { createCraftingEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- External API Integrations -------------------
-const { appendSheetData, authorizeSheets } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 
 // ------------------- Models and Constants -------------------
 const generalCategories = require('@/shared/models/GeneralItemCategories');

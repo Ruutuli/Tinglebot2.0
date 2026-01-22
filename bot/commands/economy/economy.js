@@ -35,10 +35,7 @@ const {
 const {
  authorizeSheets,
  appendSheetData,
- isValidGoogleSheetsUrl,
- extractSpreadsheetId,
- safeAppendDataToSheet,
-} = require('@/shared/utils/googleSheetsUtils.js');
+// Google Sheets functionality removed
 const { checkInventorySync } = require('@/shared/utils/characterUtils.js');
 const ItemModel = require('@/shared/models/ItemModel.js');
 const ShopStock = require('@/shared/models/VillageShopsModel');

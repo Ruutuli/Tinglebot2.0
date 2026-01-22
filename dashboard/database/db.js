@@ -6,44 +6,79 @@ const { MongoClient, ObjectId } = require("mongodb");
 const { google } = require("googleapis");
 
 // ------------------- Project Utilities -------------------
-const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { handleError, resetErrorCounter } = require("../utils/globalErrorHandler");
 const {
- authorizeSheets,
- appendSheetData,
- extractSpreadsheetId,
- isValidGoogleSheetsUrl,
- readSheetData,
- safeAppendDataToSheet,
-} = require('@/shared/utils/googleSheetsUtils');
-const dbConfig = require('@/shared/config/database');
+  authorizeSheets,
+  appendSheetData,
+  extractSpreadsheetId,
+  getActualSheetName,
+  isValidGoogleSheetsUrl,
+  readSheetData,
+  safeAppendDataToSheet,
+} = require("../utils/googleSheetsUtils");
+const { characterQueryDetector, modCharacterQueryDetector } = require("../utils/throttleDetector");
+const dbConfig = require('../config/database');
+const logger = require('../utils/logger');
+const DatabaseConnectionManager = require('./connectionManager');
+
+// Memory monitor (optional - won't break if not initialized)
+let memoryMonitor = null;
+try {
+  const { getMemoryMonitor } = require('../utils/memoryMonitor');
+  memoryMonitor = getMemoryMonitor();
+} catch (err) {
+  // Memory monitor not available, continue without it
+}
+
+// Database operation tracking
+let dbOperationCounts = {
+  queries: 0,
+  updates: 0,
+  inserts: 0,
+  deletes: 0,
+  transactions: 0
+};
+
+// Track database operations
+function trackDbOperation(type) {
+  if (dbOperationCounts[type] !== undefined) {
+    dbOperationCounts[type]++;
+  }
+  
+  // Update memory monitor every 100 operations
+  const totalOps = Object.values(dbOperationCounts).reduce((a, b) => a + b, 0);
+  if (memoryMonitor && totalOps % 100 === 0) {
+    memoryMonitor.trackResource('dbQueries', dbOperationCounts.queries);
+    memoryMonitor.trackResource('dbUpdates', dbOperationCounts.updates);
+    memoryMonitor.trackResource('dbInserts', dbOperationCounts.inserts);
+    memoryMonitor.trackResource('dbDeletes', dbOperationCounts.deletes);
+    memoryMonitor.trackResource('dbTransactions', dbOperationCounts.transactions);
+  }
+}
+
+// Export function to get operation counts
+function getDbOperationCounts() {
+  return { ...dbOperationCounts };
+}
 
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
-const inventoryUtils = require('@/shared/utils/inventoryUtils');
+const inventoryUtils = require("../utils/inventoryUtils");
 
 // ------------------- Models -------------------
-const Character = require('@/shared/models/CharacterModel');
-const ModCharacter = require('@/shared/models/ModCharacterModel');
-const Monster = require('@/shared/models/MonsterModel');
-const Quest = require('@/shared/models/QuestModel');
-const RelicModel = require('@/shared/models/RelicModel');
-const User = require('@/shared/models/UserModel');
-const Pet = require('@/shared/models/PetModel');
-const generalCategories = require('@/shared/models/GeneralItemCategories');
+const Character = require("../models/CharacterModel");
+const ModCharacter = require("../models/ModCharacterModel");
+const Monster = require("../models/MonsterModel");
+const Quest = require("../models/QuestModel");
+const RelicModel = require("../models/RelicModel");
+const User = require("../models/UserModel");
+const Pet = require("../models/PetModel");
+const generalCategories = require("../models/GeneralItemCategories");
 
 // ============================================================================
 // ------------------- Database Connection Functions -------------------
 // Functions to establish and retrieve MongoDB connections.
+// All connection functions now use DatabaseConnectionManager
 // ============================================================================
-const tinglebotUri = dbConfig.tinglebot;
-const inventoriesUri = dbConfig.inventories;
-let tinglebotDbConnection;
-let inventoriesDbConnection;
-let inventoriesDbNativeConnection = null;
-let vendingDbConnection = null;
-
-// Add these at the top with other connection variables
-let inventoriesClient = null;
-let inventoriesDb = null;
 
 // ============================================================================
 // ------------------- Configuration Constants -------------------
@@ -55,174 +90,48 @@ const LIMITED_ITEMS_COUNT = 5;
 
 const VILLAGE_IMAGES = {
  Rudania:
-  "https://static.wixstatic.com/media/7573f4_a0d0d9c6b91644f3b67de8612a312e42~mv2.png",
+  "https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_red_bottom.png",
  Inariko:
-  "https://static.wixstatic.com/media/7573f4_c88757c19bf244aa9418254c43046978~mv2.png",
+  "https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_blue_bottom.png",
  Vhintl:
-  "https://static.wixstatic.com/media/7573f4_968160b5206e4d9aa1b254464d97f9a9~mv2.png",
+  "https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_green_bottom.png",
 };
 
 const VILLAGE_ICONS = {
- Rudania:
-  "https://static.wixstatic.com/media/7573f4_ffb523e41dbb43c183283a5afbbc74e1~mv2.png",
- Inariko:
-  "https://static.wixstatic.com/media/7573f4_066600957d904b1dbce10912d698f5a2~mv2.png",
- Vhintl:
-  "https://static.wixstatic.com/media/7573f4_15ac377e0dd643309853fc77250a86a1~mv2.png",
-};
-
+  Rudania:
+   "https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_rudania_.png",
+  Inariko:
+   "https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_inariko_.png",
+  Vhintl:
+   "https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png",
+ };
 
 // ------------------- connectToTinglebot -------------------
 async function connectToTinglebot() {
- try {
-  if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
-   mongoose.set("strictQuery", false);
-   const uri = dbConfig.tinglebot;
-   try {
-    tinglebotDbConnection = await mongoose.connect(uri, {
-     serverSelectionTimeoutMS: 30000,
-     socketTimeoutMS: 45000,
-     connectTimeoutMS: 30000,
-     maxPoolSize: 10,
-     minPoolSize: 5,
-     retryWrites: true,
-     retryReads: true,
-     w: 'majority',
-     wtimeoutMS: 2500,
-     heartbeatFrequencyMS: 10000,
-     maxIdleTimeMS: 60000,
-     family: 4
-    });
-   } catch (connectError) {
-    // Try to reconnect once
-    try {
-     tinglebotDbConnection = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 30000,
-      maxPoolSize: 10,
-      minPoolSize: 5,
-      retryWrites: true,
-      retryReads: true,
-      w: 'majority',
-      wtimeoutMS: 2500,
-      heartbeatFrequencyMS: 10000,
-      maxIdleTimeMS: 60000,
-      family: 4
-     });
-    } catch (retryError) {
-     throw retryError;
-    }
-   }
-  }
-  return tinglebotDbConnection;
- } catch (error) {
-  handleError(error, "connection.js");
-  throw error;
- }
+  return await DatabaseConnectionManager.connectToTinglebot();
 }
 
 // ------------------- connectToInventories -------------------
 async function connectToInventories() {
- try {
-  if (!inventoriesDbConnection) {
-   const uri = dbConfig.inventories;
-   
-   if (!uri) {
-     throw new Error('Missing MongoDB URI for inventories database');
-   }
-   
-   inventoriesDbConnection = await mongoose.createConnection(uri, {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 2500,
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
-   });
-
-   // Set the database name
-   inventoriesDbConnection.useDb('inventories');
-  }
-  return inventoriesDbConnection;
- } catch (error) {
-  handleError(error, "db.js");
-  throw error;
- }
+  return await DatabaseConnectionManager.connectToInventories();
 }
 
 // ------------------- connectToInventoriesNative -------------------
 const connectToInventoriesNative = async () => {
- if (!inventoriesDbNativeConnection) {
-  const uri = dbConfig.inventories;
-  
-  if (!uri) {
-    throw new Error('Missing MongoDB URI for inventories database');
-  }
-  
-  const client = new MongoClient(uri, {
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    serverSelectionTimeoutMS: 30000,
-    connectTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 2500,
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
-  });
-  await client.connect();
-  inventoriesDbNativeConnection = client.db('inventories');
- }
- return inventoriesDbNativeConnection;
+  return await DatabaseConnectionManager.connectToInventoriesNative();
 };
 
 // ------------------- getInventoryCollection -------------------
 const getInventoryCollection = async (characterName) => {
- if (typeof characterName !== "string") {
-  throw new Error("Character name must be a string.");
- }
- const inventoriesDb = await connectToInventoriesNative();
- const collectionName = characterName.trim().toLowerCase();
- return inventoriesDb.collection(collectionName);
+  return await DatabaseConnectionManager.getInventoryCollection(characterName);
 };
 
 // ------------------- connectToVending -------------------
 async function connectToVending() {
- try {
-  if (!vendingDbConnection) {
-   const uri = dbConfig.vending;
-   vendingDbConnection = await mongoose.createConnection(uri, {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 2500,
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
-   });
-  }
-  return vendingDbConnection;
- } catch (error) {
-  handleError(error, "db.js");
-  console.error("❌ Error in connectToVending:", error);
-  throw error;
- }
+  return await DatabaseConnectionManager.connectToVending();
 }
+
+
 
 // ============================================================================
 // ------------------- Character Service Functions -------------------
@@ -254,6 +163,7 @@ const fetchCharacterByName = async (characterName) => {
   await connectToTinglebot();
   // Escape special regex characters in the character name
   const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  trackDbOperation('queries');
   const character = await Character.findOne({
    name: new RegExp(`^${escapedName}$`, "i"),
   });
@@ -275,6 +185,7 @@ const fetchCharacterByName = async (characterName) => {
 const fetchBlightedCharactersByUserId = async (userId) => {
  try {
   await connectToTinglebot();
+  trackDbOperation('queries');
   return await Character.find({ userId, blighted: true }).lean().exec();
  } catch (error) {
   handleError(error, "db.js");
@@ -289,12 +200,8 @@ const fetchBlightedCharactersByUserId = async (userId) => {
 const fetchAllCharacters = async () => {
  try {
   await connectToTinglebot();
-  const regularCharacters = await Character.find().lean().exec();
-  const modCharacters = await ModCharacter.find().lean().exec();
-  
-  // Combine both character types
-  const allCharacters = [...regularCharacters, ...modCharacters];
-  return allCharacters;
+  trackDbOperation('queries');
+  return await Character.find().lean().exec();
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -308,15 +215,7 @@ const fetchAllCharacters = async () => {
 const fetchCharacterById = async (characterId) => {
  try {
   await connectToTinglebot();
-  
-  // Try to find in regular characters first
-  let character = await Character.findById(characterId);
-  
-  // If not found in regular characters, try mod characters
-  if (!character) {
-   character = await ModCharacter.findById(characterId);
-  }
-  
+  const character = await Character.findById(characterId);
   if (!character) {
    return null; // Return null instead of throwing error
   }
@@ -331,16 +230,53 @@ const fetchCharacterById = async (characterId) => {
 };
 
 // ------------------- fetchCharactersByUserId -------------------
-const fetchCharactersByUserId = async (userId) => {
+const fetchCharactersByUserId = async (userId, fields = null) => {
+  const startTime = Date.now();
+  
+  // Check circuit breaker
+  if (characterQueryDetector.shouldBlock()) {
+    const duration = Date.now() - startTime;
+    characterQueryDetector.recordQuery(false, duration);
+    throw new Error('Database queries temporarily blocked due to circuit breaker');
+  }
+  
+  // Wait for backoff if throttled
+  await characterQueryDetector.waitIfNeeded();
+  
   try {
-    await connectToTinglebot();
-    const regularCharacters = await Character.find({ userId }).lean().exec();
-    const modCharacters = await ModCharacter.find({ userId }).lean().exec();
+    let query = Character.find({ userId }).lean();
+    if (fields && Array.isArray(fields)) {
+      query = query.select(fields.join(' '));
+    }
     
-    // Combine both character types
-    const allCharacters = [...regularCharacters, ...modCharacters];
-    return allCharacters;
+    const characters = await query.exec();
+    const duration = Date.now() - startTime;
+    characterQueryDetector.recordQuery(true, duration);
+    return characters;
   } catch (error) {
+    const duration = Date.now() - startTime;
+    
+    // If query fails, try reconnecting once
+    if (mongoose.connection.readyState !== 1) {
+      try {
+        await connectToTinglebot();
+        let retryQuery = Character.find({ userId }).lean();
+        if (fields && Array.isArray(fields)) {
+          retryQuery = retryQuery.select(fields.join(' '));
+        }
+        const retryResult = await retryQuery.exec();
+        const retryDuration = Date.now() - startTime;
+        characterQueryDetector.recordQuery(true, retryDuration);
+        return retryResult;
+      } catch (retryError) {
+        const retryDuration = Date.now() - startTime;
+        characterQueryDetector.recordQuery(false, retryDuration);
+        handleError(retryError, "db.js");
+        throw retryError;
+      }
+    }
+    
+    characterQueryDetector.recordQuery(false, duration);
     handleError(error, "db.js");
     throw error;
   }
@@ -350,6 +286,12 @@ const fetchCharactersByUserId = async (userId) => {
 const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  try {
   await connectToTinglebot();
+  
+  // Handle null/undefined characterName
+  if (!characterName) {
+    return null;
+  }
+  
   // Get the actual name part before the "|" if it exists
   const actualName = characterName.split('|')[0].trim();
   
@@ -368,7 +310,42 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   return character;
  } catch (error) {
   handleError(error, "db.js");
+  const actualName = characterName ? characterName.split('|')[0].trim() : 'null/undefined';
   console.error(`[characterService]: ❌ Error searching for "${actualName}": ${error.message}`);
+  throw error;
+ }
+};
+
+// ------------------- fetchAnyCharacterByNameAndUserId -------------------
+const fetchAnyCharacterByNameAndUserId = async (characterName, userId) => {
+ try {
+  await connectToTinglebot();
+  // Get the actual name part before the "|" if it exists
+  const actualName = characterName.split('|')[0].trim();
+  
+  // Escape special regex characters in the character name
+  const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // First try to find a regular character
+  const character = await Character.findOne({
+    name: new RegExp(`^${escapedName}$`, "i"),
+    userId
+  });
+
+  if (character) {
+    return character;
+  }
+
+  // If no regular character found, try to find a mod character
+  const modCharacter = await ModCharacter.findOne({
+    name: new RegExp(`^${escapedName}$`, "i"),
+    userId
+  });
+
+  return modCharacter;
+ } catch (error) {
+  handleError(error, "db.js");
+  console.error(`[characterService]: ❌ Error searching for "${actualName}" in both character collections: ${error.message}`);
   throw error;
  }
 };
@@ -377,12 +354,7 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
 const fetchAllCharactersExceptUser = async (userId) => {
  try {
   await connectToTinglebot();
-  const regularCharacters = await Character.find({ userId: { $ne: userId } }).exec();
-  const modCharacters = await ModCharacter.find({ userId: { $ne: userId } }).exec();
-  
-  // Combine both character types
-  const allCharacters = [...regularCharacters, ...modCharacters];
-  return allCharacters;
+  return await Character.find({ userId: { $ne: userId } }).exec();
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -594,18 +566,90 @@ const fetchModCharacterByNameAndUserId = async (characterName, userId) => {
  }
 };
 
-const fetchModCharactersByUserId = async (userId) => {
+// ------------------- fetchModCharacterByName -------------------
+const fetchModCharacterByName = async (characterName) => {
  try {
   await connectToTinglebot();
-  const modCharacters = await ModCharacter.find({ userId: userId });
-  return modCharacters;
+  // Get the actual name part before the "|" if it exists
+  const actualName = characterName.split('|')[0].trim();
+  
+  // Escape special regex characters in the character name
+  const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  const modCharacter = await ModCharacter.findOne({
+    name: new RegExp(`^${escapedName}$`, "i")
+  });
+
+  if (!modCharacter) {
+    return null;
+  }
+
+  return modCharacter;
  } catch (error) {
   handleError(error, "db.js", {
-   function: "fetchModCharactersByUserId",
-   userId: userId,
+   function: "fetchModCharacterByName",
+   characterName: characterName,
   });
   throw error;
  }
+};
+
+const fetchModCharactersByUserId = async (userId, fields = null) => {
+  const startTime = Date.now();
+  
+  // Check circuit breaker
+  if (modCharacterQueryDetector.shouldBlock()) {
+    const duration = Date.now() - startTime;
+    modCharacterQueryDetector.recordQuery(false, duration);
+    throw new Error('Database queries temporarily blocked due to circuit breaker');
+  }
+  
+  // Wait for backoff if throttled
+  await modCharacterQueryDetector.waitIfNeeded();
+  
+  try {
+    let query = ModCharacter.find({ userId: userId }).lean();
+    if (fields && Array.isArray(fields)) {
+      query = query.select(fields.join(' '));
+    }
+    
+    const modCharacters = await query.exec();
+    const duration = Date.now() - startTime;
+    modCharacterQueryDetector.recordQuery(true, duration);
+    return modCharacters;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    
+    // If query fails, try reconnecting once
+    if (mongoose.connection.readyState !== 1) {
+      try {
+        await connectToTinglebot();
+        let retryQuery = ModCharacter.find({ userId: userId }).lean();
+        if (fields && Array.isArray(fields)) {
+          retryQuery = retryQuery.select(fields.join(' '));
+        }
+        const retryResult = await retryQuery.exec();
+        const retryDuration = Date.now() - startTime;
+        modCharacterQueryDetector.recordQuery(true, retryDuration);
+        return retryResult;
+      } catch (retryError) {
+        const retryDuration = Date.now() - startTime;
+        modCharacterQueryDetector.recordQuery(false, retryDuration);
+        handleError(retryError, "db.js", {
+          function: "fetchModCharactersByUserId",
+          userId: userId,
+        });
+        throw retryError;
+      }
+    }
+    
+    modCharacterQueryDetector.recordQuery(false, duration);
+    handleError(error, "db.js", {
+      function: "fetchModCharactersByUserId",
+      userId: userId,
+    });
+    throw error;
+  }
 };
 
 const fetchAllModCharacters = async () => {
@@ -795,6 +839,8 @@ async function resetPetRollsForAllCharacters() {
   // Update each pet's rolls based on their level
   let successCount = 0;
   let failCount = 0;
+  let totalOldRolls = 0;
+  let totalNewRolls = 0;
   
   for (const pet of activePets) {
     try {
@@ -808,6 +854,8 @@ async function resetPetRollsForAllCharacters() {
         { $set: { rollsRemaining: newRolls } }
       );
       
+      totalOldRolls += oldRolls;
+      totalNewRolls += newRolls;
       console.log(`[db.js]: ✅ Reset pet "${pet.name}" (${pet.ownerName}) from ${oldRolls} to ${newRolls} rolls`);
       successCount++;
     } catch (petError) {
@@ -817,6 +865,16 @@ async function resetPetRollsForAllCharacters() {
   }
   
   console.log(`[db.js]: 📊 Pet roll reset complete. Success: ${successCount}, Failed: ${failCount}`);
+  
+  // Return result object with oldRolls and newRolls for mod.js compatibility
+  return {
+    success: true,
+    oldRolls: totalOldRolls,
+    newRolls: totalNewRolls,
+    successCount,
+    failCount,
+    totalPets: activePets.length
+  };
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -885,6 +943,12 @@ async function forceResetPetRolls(characterId, petName) {
 const fetchAllItems = async () => {
     try {
         const db = await connectToInventoriesForItems();
+        
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
+        
         const items = await db.collection("items").find().toArray();
         return items;
     } catch (error) {
@@ -895,11 +959,18 @@ const fetchAllItems = async () => {
 };
 
 // ------------------- fetchItemByName -------------------
-async function fetchItemByName(itemName) {
+async function fetchItemByName(itemName, context = {}) {
     try {
-        const db = await connectToInventoriesForItems();
+        const db = await connectToInventoriesForItems(context);
+        
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
+        
         const normalizedItemName = itemName.trim();
-        const escapedName = normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        // Note: We don't escape the + character as it's commonly used in item names
+        const escapedName = normalizedItemName.replace(/[-\/\\^$*?.()|[\]{}]/g, "\\$&");
         const item = await db.collection("items").findOne({
             itemName: new RegExp(`^${escapedName}$`, "i"),
         });
@@ -910,6 +981,8 @@ async function fetchItemByName(itemName) {
     } catch (error) {
         handleError(error, "itemService.js");
         console.error("[itemService.js]: ❌ Error fetching item by name:", error);
+        
+        
         throw error;
     }
 };
@@ -918,11 +991,19 @@ async function fetchItemByName(itemName) {
 const fetchItemById = async (itemId) => {
     try {
         const db = await connectToInventoriesForItems();
+        
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
+        
         const item = await db.collection("items").findOne({ _id: ObjectId(itemId) });
         return item;
     } catch (error) {
         handleError(error, "itemService.js");
         console.error("[itemService.js]: ❌ Error fetching item by ID:", error);
+        
+        
         throw error;
     }
 };
@@ -932,22 +1013,66 @@ const fetchItemsByMonster = async (monsterName) => {
     try {
         const db = await connectToInventoriesForItems();
         
-        // Map monster names to their corresponding item field names
-        const monsterToFieldMap = {
-            'Frox': 'littleFrox',
-            'Little Frox': 'littleFrox',
-            'Yiga Blademaster': 'yigaBlademaster',
-            'Yiga Footsoldier': 'yigaFootsoldier'
-        };
+        // Check if database connection is null
+        if (!db) {
+            throw new Error('Database connection failed - unable to connect to items database');
+        }
         
-        const fieldName = monsterToFieldMap[monsterName] || monsterName;
+        // Import monsterMapping to get the correct field names
+        const { monsterMapping } = require('../models/MonsterModel');
+        
+        // Find the monster mapping entry that matches the monster name
+        let fieldName = null;
+        for (const [key, value] of Object.entries(monsterMapping)) {
+            if (value.name === monsterName) {
+                fieldName = key;
+                break;
+            }
+        }
+        
+        // Fallback to manual mapping if not found in monsterMapping
+        if (!fieldName) {
+            const manualMapping = {
+                'Frox': 'littleFrox',
+                'Little Frox': 'littleFrox',
+                // Chuchu mappings
+                'Chuchu (Large)': 'chuchuLarge',
+                'Chuchu (Medium)': 'chuchuMedium', 
+                'Chuchu (Small)': 'chuchuSmall',
+                'Fire Chuchu (Large)': 'fireChuchuLarge',
+                'Fire Chuchu (Medium)': 'fireChuchuMedium',
+                'Fire Chuchu (Small)': 'fireChuchuSmall',
+                'Ice Chuchu (Large)': 'iceChuchuLarge',
+                'Ice Chuchu (Medium)': 'iceChuchuMedium',
+                'Ice Chuchu (Small)': 'iceChuchuSmall',
+                'Electric Chuchu (Large)': 'electricChuchuLarge',
+                'Electric Chuchu (Medium)': 'electricChuchuMedium',
+                'Electric Chuchu (Small)': 'electricChuchuSmall',
+                // Other monster mappings
+                'Fire-breath Lizalfos': 'fireBreathLizalfos',
+                'Ice-breath Lizalfos': 'iceBreathLizalfos',
+                'Blue-Maned Lynel': 'blueManedLynel',
+                'White-maned Lynel': 'whiteManedLynel',
+                'Like Like': 'likeLike',
+                'Gloom Hands': 'gloomHands',
+                'Boss Bokoblin': 'bossBokoblin',
+                'Moth Gibdo': 'mothGibdo',
+                'Little Frox': 'littleFrox',
+                'Yiga Blademaster': 'yigaBlademaster',
+                'Yiga Footsoldier': 'yigaFootsoldier'
+            };
+            fieldName = manualMapping[monsterName] || toCamelCase(monsterName);
+        }
+        
         const query = {
             $or: [
                 { monsterList: monsterName }, 
                 { monsterList: { $in: [monsterName] } },
-                { [fieldName]: true }
+                { [fieldName]: true },
+                { [monsterName]: true }  // Also check the original monster name as a field
             ],
         };
+        
         const items = await db.collection("items").find(query).toArray();
         return items.filter((item) => item.itemName && item.itemRarity);
     } catch (error) {
@@ -1037,7 +1162,8 @@ const fetchItemRarityByName = async (itemName) => {
     try {
         const db = await connectToInventoriesForItems();
         const normalizedItemName = itemName.trim().toLowerCase();
-        const escapedName = normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        // Properly escape all regex special characters including +
+        const escapedName = normalizedItemName.replace(/[.*?^${}()|[\]\\+]/g, "\\$&");
         const item = await db.collection("items").findOne({
             itemName: new RegExp(`^${escapedName}$`, "i"),
         });
@@ -1401,6 +1527,24 @@ async function getTokenBalance(userId) {
  }
 }
 
+// ------------------- getUserTokenData -------------------
+async function getUserTokenData(userId) {
+ try {
+  const user = await User.findOne({ discordId: userId });
+  if (!user) {
+    return { tokens: 0, tokenTracker: '' };
+  }
+  return {
+    tokens: user.tokens || 0,
+    tokenTracker: user.tokenTracker || ''
+  };
+ } catch (error) {
+  handleError(error, "tokenService.js");
+  console.error("[tokenService.js]: ❌ Error fetching user token data:", error);
+  throw error;
+ }
+}
+
 // ------------------- getOrCreateToken -------------------
 async function getOrCreateToken(userId, tokenTrackerLink = "") {
  await connectToTinglebot();
@@ -1422,7 +1566,7 @@ async function getOrCreateToken(userId, tokenTrackerLink = "") {
 }
 
 // ------------------- updateTokenBalance -------------------
-async function updateTokenBalance(userId, change) {
+async function updateTokenBalance(userId, change, transactionMetadata = null) {
  try {
   if (isNaN(change)) {
    throw new Error(
@@ -1443,6 +1587,28 @@ async function updateTokenBalance(userId, change) {
   }
   user.tokens = newBalance;
   await user.save();
+  
+  // Log transaction to TokenTransactionModel if metadata is provided
+  if (transactionMetadata) {
+    try {
+      const TokenTransaction = require('../models/TokenTransactionModel');
+      const transactionType = change >= 0 ? 'earned' : 'spent';
+      await TokenTransaction.createTransaction({
+        userId: userId,
+        amount: Math.abs(change),
+        type: transactionType,
+        category: transactionMetadata.category || '',
+        description: transactionMetadata.description || '',
+        link: transactionMetadata.link || '',
+        balanceBefore: currentBalance,
+        balanceAfter: newBalance
+      });
+    } catch (logError) {
+      // Log error but don't fail the transaction
+      console.error('[tokenService.js]: ⚠️ Error logging token transaction:', logError);
+    }
+  }
+  
   return newBalance;
  } catch (error) {
   handleError(error, "tokenService.js");
@@ -1457,56 +1623,117 @@ async function updateTokenBalance(userId, change) {
 // ------------------- syncTokenTracker -------------------
 async function syncTokenTracker(userId) {
  try {
+  logger.info('TOKEN', `Starting sync for user: ${userId}`);
+  
   const user = await getOrCreateToken(userId);
+  logger.debug('TOKEN', `Retrieved user record:`, {
+    hasTokenTracker: !!user.tokenTracker,
+    tokenTrackerUrl: user.tokenTracker,
+    currentTokens: user.tokens,
+    tokensSynced: user.tokensSynced
+  });
+  
   if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
+   logger.warn('TOKEN', `Invalid or missing token tracker URL`);
    throw new Error("Invalid URL");
   }
 
+  logger.debug('TOKEN', `Authorizing Google Sheets access...`);
   const auth = await authorizeSheets();
   const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-  const range = "loggedTracker!B7:F";
+  logger.debug('TOKEN', `Extracted spreadsheet ID: ${spreadsheetId}`);
+  
+  // Get the actual sheet name to handle any spacing issues
+  const actualSheetName = await getActualSheetName(auth, spreadsheetId, 'loggedTracker');
+  if (!actualSheetName) {
+    throw new Error("Sheet 'loggedTracker' not found. Please ensure you have a tab named exactly 'loggedTracker'.");
+  }
+  
+  const range = `${actualSheetName}!B7:F`;
+  logger.debug('TOKEN', `Reading sheet data from range: ${range}`);
   const sheetData = await readSheetData(auth, spreadsheetId, range);
+  logger.debug('TOKEN', `Raw sheet data retrieved:`, {
+    totalRows: sheetData.length,
+    firstRow: sheetData[0],
+    sampleData: sheetData.slice(0, 3)
+  });
 
   // Validate headers
   const headers = sheetData[0];
+  logger.debug('TOKEN', `Validating headers:`, headers);
   if (!headers || headers.length < 5) {
+    logger.warn('TOKEN', `Invalid headers - expected 5 columns, got:`, headers?.length || 0);
     throw new Error("Invalid sheet format. Please ensure your sheet has the correct headers in row 7.");
   }
 
   // Check if there are any earned entries
   const earnedRows = sheetData.slice(1).filter(row => row[3] === "earned");
+  const spentRows = sheetData.slice(1).filter(row => row[3] === "spent");
+  logger.debug('TOKEN', `Row analysis:`, {
+    totalDataRows: sheetData.length - 1,
+    earnedRows: earnedRows.length,
+    spentRows: spentRows.length,
+    earnedRowSamples: earnedRows.slice(0, 3),
+    spentRowSamples: spentRows.slice(0, 3)
+  });
+  
   if (!earnedRows.length) {
     // Allow setup even with no earned entries - set tokens to 0
+    logger.info('TOKEN', `No earned entries found, setting tokens to 0`);
     user.tokens = 0;
     user.tokensSynced = true;
     await user.save();
+    logger.success('TOKEN', `User record saved with 0 tokens`);
     return user;
   }
 
   let totalEarned = 0;
   let totalSpent = 0;
+  let skippedRows = 0;
 
+  logger.debug('TOKEN', `Processing rows for token calculation...`);
   sheetData.slice(1).forEach((row, idx) => {
     if (row.length < 5) {
+      skippedRows++;
+      logger.debug('TOKEN', `Skipping row ${idx + 8} (invalid length):`, row);
       return; // Skip invalid rows
     }
     const amount = parseInt(row[4]);
     if (isNaN(amount)) {
+      skippedRows++;
+      logger.debug('TOKEN', `Skipping row ${idx + 8} (invalid amount):`, row);
       return; // Skip rows with invalid amounts
     }
     if (row[3] === "earned") {
       totalEarned += amount;
+      logger.debug('TOKEN', `Earned ${amount} tokens from row ${idx + 8}:`, row);
     } else if (row[3] === "spent") {
       totalSpent += Math.abs(amount);
+      logger.debug('TOKEN', `Spent ${Math.abs(amount)} tokens from row ${idx + 8}:`, row);
     }
   });
 
-  user.tokens = totalEarned - totalSpent;
+  const finalTokens = totalEarned - totalSpent;
+  logger.info('TOKEN', `Token calculation summary:`, {
+    totalEarned,
+    totalSpent,
+    finalTokens,
+    skippedRows,
+    processedRows: sheetData.length - 1 - skippedRows
+  });
+
+  user.tokens = finalTokens;
   user.tokensSynced = true;
   await user.save();
+  logger.success('TOKEN', `User record saved with ${finalTokens} tokens`);
 
   return user;
  } catch (error) {
+  logger.error('TOKEN', `Error occurred:`, {
+    message: error.message,
+    userId: userId
+  });
+  
   // Only log non-validation errors
   if (!error.message.includes('Invalid sheet format') && 
       !error.message.includes('Invalid URL')) {
@@ -1554,6 +1781,25 @@ async function appendEarnedTokens(
    valueInputOption: "USER_ENTERED",
    resource: { values: [newRow] },
   });
+  
+  // Also log to TokenTransactionModel
+  try {
+    const TokenTransaction = require('../models/TokenTransactionModel');
+    const currentBalance = user.tokens || 0;
+    await TokenTransaction.createTransaction({
+      userId: userId,
+      amount: amount,
+      type: 'earned',
+      category: category || '',
+      description: fileName || '',
+      link: fileUrl || '',
+      balanceBefore: currentBalance,
+      balanceAfter: currentBalance + amount
+    });
+  } catch (logError) {
+    // Log error but don't fail the transaction
+    console.error('[tokenService.js]: ⚠️ Error logging earned token transaction:', logError);
+  }
  } catch (error) {
   handleError(error, "tokenService.js");
   console.error(
@@ -1577,6 +1823,25 @@ async function appendSpentTokens(userId, purchaseName, amount, link = "") {
   const auth = await authorizeSheets();
   const newRow = [purchaseName, link, "", "spent", `-${amount}`];
   await safeAppendDataToSheet(tokenTrackerLink, user, "loggedTracker!B7:F", [newRow]);
+  
+  // Also log to TokenTransactionModel
+  try {
+    const TokenTransaction = require('../models/TokenTransactionModel');
+    const currentBalance = user.tokens || 0;
+    await TokenTransaction.createTransaction({
+      userId: userId,
+      amount: amount,
+      type: 'spent',
+      category: '',
+      description: purchaseName || '',
+      link: link || '',
+      balanceBefore: currentBalance,
+      balanceAfter: currentBalance - amount
+    });
+  } catch (logError) {
+    // Log error but don't fail the transaction
+    console.error('[tokenService.js]: ⚠️ Error logging spent token transaction:', logError);
+  }
  } catch (error) {
   handleError(error, "tokenService.js");
   console.error(
@@ -1694,35 +1959,30 @@ async function updateUserTokenTracker(discordId, tokenTracker) {
 
 // ------------------- connectToDatabase -------------------
 const connectToDatabase = async () => {
- const client = new MongoClient(inventoriesUri, {});
- try {
-  await client.connect();
-  return client;
- } catch (error) {
-  handleError(error, "vendingService.js");
-  console.error("[vendingService.js]: ❌ Error connecting to database:", error);
-  throw error;
- }
+  // This function is kept for backward compatibility but should use connection manager
+  // For vending operations, we use tinglebot database
+  const db = await DatabaseConnectionManager.connectToInventoriesForItems();
+  // Return a client-like object for compatibility
+  return {
+    db: (dbName) => db,
+    close: async () => {} // Connection manager handles closing
+  };
 };
 
 // ------------------- connectToTinglebotDatabase -------------------
 const connectToTinglebotDatabase = async () => {
- const client = new MongoClient(tinglebotUri, {});
- try {
-  await client.connect();
-  return client;
- } catch (error) {
-  handleError(error, "vendingService.js");
-  console.error("[vendingService.js]: ❌ Error connecting to tinglebot database:", error);
-  throw error;
- }
+  // Use connection manager to get tinglebot database
+  const db = await DatabaseConnectionManager.connectToInventoriesForItems();
+  // Return a client-like object for compatibility
+  return {
+    db: (dbName) => db,
+    close: async () => {} // Connection manager handles closing
+  };
 };
 
 // ------------------- clearExistingStock -------------------
 const clearExistingStock = async () => {
- const client = await connectToTinglebotDatabase();
- const dbName = tinglebotUri.split('/').pop();
- const db = client.db(dbName);
+ const db = await DatabaseConnectionManager.connectToInventoriesForItems();
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1735,16 +1995,12 @@ const clearExistingStock = async () => {
  } catch (error) {
   handleError(error, "vendingService.js");
   console.error("[vendingService.js]: ❌ Error clearing vending stock:", error);
- } finally {
-  await client.close();
  }
 };
 
 // ------------------- generateVendingStockList -------------------
 const generateVendingStockList = async () => {
- const client = await connectToTinglebotDatabase();
- const dbName = tinglebotUri.split('/').pop();
- const db = client.db(dbName);
+ const db = await DatabaseConnectionManager.connectToInventoriesForItems();
  const stockCollection = db.collection("vending_stock");
 
  const priorityItems = [
@@ -1892,16 +2148,12 @@ const generateVendingStockList = async () => {
    "[vendingService.js]: ❌ Error generating vending stock list:",
    error
   );
- } finally {
-  await client.close();
  }
 };
 
 // ------------------- getCurrentVendingStockList -------------------
 const getCurrentVendingStockList = async () => {
- const client = await connectToTinglebotDatabase();
- const dbName = tinglebotUri.split('/').pop();
- const db = client.db(dbName);
+ const db = await DatabaseConnectionManager.connectToInventoriesForItems();
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1934,16 +2186,12 @@ const getCurrentVendingStockList = async () => {
    error
   );
   throw error;
- } finally {
-  await client.close();
  }
 };
 
 // ------------------- getLimitedItems -------------------
 const getLimitedItems = async () => {
- const client = await connectToTinglebotDatabase();
- const dbName = tinglebotUri.split('/').pop();
- const db = client.db(dbName);
+ const db = await DatabaseConnectionManager.connectToInventoriesForItems();
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1959,16 +2207,12 @@ const getLimitedItems = async () => {
    error
   );
   throw error;
- } finally {
-  await client.close();
  }
 };
 
 // ------------------- updateItemStockByName -------------------
 const updateItemStockByName = async (itemName, quantity) => {
- const client = await connectToTinglebotDatabase();
- const dbName = tinglebotUri.split('/').pop();
- const db = client.db(dbName);
+ const db = await DatabaseConnectionManager.connectToInventoriesForItems();
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1999,8 +2243,6 @@ const updateItemStockByName = async (itemName, quantity) => {
    error
   );
   throw error;
- } finally {
-  await client.close();
  }
 };
 
@@ -2014,9 +2256,7 @@ async function updateVendingStock({
  otherPrice,
  tradesOpen,
 }) {
- const client = await connectToTinglebotDatabase();
- const dbName = tinglebotUri.split('/').pop();
- const db = client.db(dbName);
+ const db = await DatabaseConnectionManager.connectToInventoriesForItems();
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -2040,8 +2280,6 @@ async function updateVendingStock({
   handleError(error, "vendingService.js");
   console.error("[vendingService.js]: ❌ Error updating vending stock:", error);
   throw error;
- } finally {
-  await client.close();
  }
 }
 
@@ -2096,63 +2334,8 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
  }
 };
 
-const connectToInventoriesForItems = async () => {
-    try {
-        if (!inventoriesClient) {
-            const env = process.env.NODE_ENV || 'development';
-            const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
-            inventoriesClient = new MongoClient(uri, {
-                maxPoolSize: 10,
-                minPoolSize: 5,
-                serverSelectionTimeoutMS: 30000,
-                connectTimeoutMS: 30000,
-                socketTimeoutMS: 45000,
-                retryWrites: true,
-                retryReads: true,
-                w: 'majority',
-                wtimeoutMS: 2500,
-                heartbeatFrequencyMS: 10000,
-                maxIdleTimeMS: 60000,
-                family: 4
-            });
-            await inventoriesClient.connect();
-            // Use tinglebot database for items
-            inventoriesDb = inventoriesClient.db('tinglebot');
-            console.log(`[db.js]: 🔌 Connected to Items database: tinglebot`);
-        } else {
-            // Try to ping the server to check connection
-            try {
-                await inventoriesClient.db('tinglebot').command({ ping: 1 });
-            } catch (error) {
-                // If ping fails, reconnect
-                await inventoriesClient.close();
-                const env = process.env.NODE_ENV || 'development';
-                const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
-                inventoriesClient = new MongoClient(uri, {
-                    maxPoolSize: 10,
-                    minPoolSize: 5,
-                    serverSelectionTimeoutMS: 30000,
-                    connectTimeoutMS: 30000,
-                    socketTimeoutMS: 45000,
-                    retryWrites: true,
-                    retryReads: true,
-                    w: 'majority',
-                    wtimeoutMS: 2500,
-                    heartbeatFrequencyMS: 10000,
-                    maxIdleTimeMS: 60000,
-                    family: 4
-                });
-                await inventoriesClient.connect();
-                inventoriesDb = inventoriesClient.db('tinglebot');
-                console.log(`[db.js]: 🔌 Reconnected to Items database: tinglebot`);
-            }
-        }
-        return inventoriesDb;
-    } catch (error) {
-        handleError(error, "itemService.js");
-        console.error("[itemService.js]: ❌ Error connecting to Items database:", error);
-        throw error;
-    }
+const connectToInventoriesForItems = async (context = {}) => {
+  return await DatabaseConnectionManager.connectToInventoriesForItems(context);
 };
 
 // Initialize the inventoryUtils module with the necessary functions
@@ -2174,7 +2357,7 @@ inventoryUtils.initializeInventoryUtils({
 const recordBlightRoll = async (characterId, characterName, userId, rollValue, previousStage, newStage, notes = '') => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('@/shared/models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
     
     const rollRecord = new BlightRollHistory({
       characterId,
@@ -2199,7 +2382,7 @@ const recordBlightRoll = async (characterId, characterName, userId, rollValue, p
 const getCharacterBlightHistory = async (characterId, limit = 10) => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('@/shared/models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
     
     return await BlightRollHistory.find({ characterId })
       .sort({ timestamp: -1 })
@@ -2217,7 +2400,7 @@ const getCharacterBlightHistory = async (characterId, limit = 10) => {
 const getUserBlightHistory = async (userId, limit = 20) => {
   try {
     await connectToTinglebot();
-    const BlightRollHistory = require('@/shared/models/BlightRollHistoryModel');
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
     
     return await BlightRollHistory.find({ userId })
       .sort({ timestamp: -1 })
@@ -2230,6 +2413,8 @@ const getUserBlightHistory = async (userId, limit = 20) => {
     throw error;
   }
 };
+
+
 
 // ============================================================================
 // ------------------- Module Exports -------------------
@@ -2262,13 +2447,7 @@ const addItemToInventory = async (inventoryCollection, itemName, quantity) => {
   }
 };
 
-// Add this at the end of the file, before module.exports
-process.on('SIGINT', async () => {
-    if (inventoriesClient) {
-        await inventoriesClient.close();
-    }
-    process.exit(0);
-});
+// Connection cleanup is handled by DatabaseConnectionManager
 
 module.exports = {
  connectToTinglebot,
@@ -2281,6 +2460,7 @@ module.exports = {
  fetchCharacterById,
  fetchCharactersByUserId,
  fetchCharacterByNameAndUserId,
+ fetchAnyCharacterByNameAndUserId,
  fetchAllCharactersExceptUser,
  createCharacter,
  updateCharacterById,
@@ -2293,6 +2473,7 @@ module.exports = {
  deleteCharacterInventoryCollection,
  getModSharedInventoryCollection,
  // Mod Character Functions
+ fetchModCharacterByName,
  fetchModCharacterByNameAndUserId,
  fetchModCharactersByUserId,
  fetchAllModCharacters,
@@ -2339,6 +2520,7 @@ module.exports = {
  appendSpentTokens,
  getUserGoogleSheetId,
  getTokenBalance,
+ getUserTokenData,
  getOrCreateUser,
  getUserById,
  updateUserTokens,
@@ -2361,5 +2543,6 @@ module.exports = {
  connectToVending,
  addItemToInventory,
  restorePetLevel,
- forceResetPetRolls
+ forceResetPetRolls,
+ getDbOperationCounts
 };

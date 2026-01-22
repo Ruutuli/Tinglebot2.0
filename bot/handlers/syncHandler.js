@@ -10,7 +10,7 @@
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
-const { google } = require('googleapis');
+// Google Sheets functionality removed
 
 // ============================================================================
 // Database Connections
@@ -36,8 +36,7 @@ function escapeRegExp(string) {
 const { handleError } = require('@/shared/utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds.js');
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { authorizeSheets, getSheetIdByTitle, getActualInventorySheetName, readSheetData, writeBatchData, validateInventorySheet } = require('@/shared/utils/googleSheetsUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 
 // ============================================================================
 // Constants

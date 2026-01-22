@@ -4,40 +4,6 @@ const { connectToTinglebot } = require('@/shared/database/db');
 const logger = require('@/shared/utils/logger');
 
 // ============================================================================
-// ---- State Management ----
-// ============================================================================
-
-// ------------------- NPC Item Cache -------------------
-// Cache NPC items to avoid repeated database queries
-const npcItemCache = new Map();
-const NPC_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
-
-// ------------------- NPC Item Cache Management -------------------
-function getCachedNPCItems(npcName) {
-    const cacheEntry = npcItemCache.get(npcName);
-    if (cacheEntry && Date.now() - cacheEntry.timestamp < NPC_CACHE_DURATION) {
-        return cacheEntry.items;
-    }
-    return null;
-}
-
-function setCachedNPCItems(npcName, items) {
-    npcItemCache.set(npcName, {
-        items: items,
-        timestamp: Date.now()
-    });
-}
-
-function clearExpiredNPCCache() {
-    const now = Date.now();
-    for (const [npcName, cacheEntry] of npcItemCache.entries()) {
-        if (now - cacheEntry.timestamp >= NPC_CACHE_DURATION) {
-            npcItemCache.delete(npcName);
-        }
-    }
-}
-
-// ============================================================================
 // ------------------- NPC Data Structure -------------------
 // ============================================================================
 
@@ -391,13 +357,6 @@ const getRandomElement = (arr) => {
 
 // ------------------- Function to get available items from an NPC -------------------
 const getNPCItems = async (npcName) => {
-  // Check cache first
-  const cachedItems = getCachedNPCItems(npcName);
-  if (cachedItems) {
-    logger.debug('NPC', `Using cached items for ${npcName}`);
-    return cachedItems;
-  }
-  
   logger.debug('NPC', `Fetching items for ${npcName} from database`);
   
   const npc = NPCs[npcName];
@@ -419,8 +378,6 @@ const getNPCItems = async (npcName) => {
   // Handle NPCs with specific items (like Lil Tim)
   if (npc.items && Array.isArray(npc.items)) {
     availableItems.push(...npc.items);
-    // Cache the results
-    setCachedNPCItems(npcName, availableItems);
     return availableItems;
   }
   
@@ -463,12 +420,6 @@ const getNPCItems = async (npcName) => {
       }
     }
                 }
-
-              // Cache the results before returning
-              if (availableItems.length > 0) {
-                setCachedNPCItems(npcName, availableItems);
-                logger.debug('NPC', `Cached ${availableItems.length} items for ${npcName}`);
-              }
               
               return availableItems;
 };
@@ -1057,8 +1008,5 @@ module.exports = {
   getStealFlavorText,
   getStealFailText,
   getNPCQuestFlavor,
-  getRandomElement,
-  getCachedNPCItems,
-  setCachedNPCItems,
-  clearExpiredNPCCache
+  getRandomElement
 };

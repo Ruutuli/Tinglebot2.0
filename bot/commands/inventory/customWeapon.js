@@ -15,7 +15,7 @@ const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, updateC
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase, escapeRegExp } = require('@/shared/utils/inventoryUtils');
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('@/shared/utils/googleSheetsUtils');
+// Google Sheets functionality removed
 const { retrieveWeaponSubmissionFromStorage, saveWeaponSubmissionToStorage, updateWeaponSubmissionData, deleteWeaponSubmissionFromStorage, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('@/shared/utils/storage');
 const { uploadSubmissionImage } = require('@/shared/utils/uploadUtils');
 const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');

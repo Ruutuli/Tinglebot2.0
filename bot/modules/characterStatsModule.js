@@ -8,11 +8,11 @@
 // ============================================================================
 // Database Models
 // ------------------- Importing database models -------------------
-const Character = require('@/shared/models/CharacterModel');
-const ModCharacter = require('@/shared/models/ModCharacterModel');
+const Character = require('../models/CharacterModel');
+const ModCharacter = require('../models/ModCharacterModel');
 
-const { handleError } = require('@/shared/utils/globalErrorHandler');
-const { info, success, debug } = require('@/shared/utils/logger');
+const { handleError } = require('../utils/globalErrorHandler');
+const { info, success, debug } = require('../utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -342,7 +342,7 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     if (!character) throw new Error('Character not found');
 
     // Dynamically require the character service function.
-    const { getCharacterInventoryCollection } = require('@/shared/database/db');
+    const { getCharacterInventoryCollection } = require('../database/db');
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
 
     const orbEntry = await inventoryCollection.findOne({

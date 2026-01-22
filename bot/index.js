@@ -1,64 +1,78 @@
 // Auto-deployed via GitHub Actions
-// ------------------- Load Environment -------------------
+
+// ============================================================================
+// ------------------- Environment Setup -------------------
+// ============================================================================
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 
-// Load environment variables from project root .env file
-const envPath = path.resolve(__dirname, '..', '.env');
-dotenv.config({ path: envPath });
+// Load environment variables - try root .env first, then bot/.env as fallback
+const rootEnvPath = path.resolve(__dirname, '..', '.env');
+const botEnvPath = path.resolve(__dirname, '.env');
 
-// ------------------- Setup Path Aliases -------------------
+if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else if (fs.existsSync(botEnvPath)) {
+  dotenv.config({ path: botEnvPath });
+}
+
+// ------------------- Path Aliases ------------------
+// Setup module aliases for shared code
 require('module-alias/register');
 const moduleAlias = require('module-alias');
-moduleAlias.addAlias('@/shared', path.resolve(__dirname, '..', 'shared'));
+moduleAlias.addAlias('@/shared', path.resolve(__dirname));
 
 const port = process.env.PORT || 5001;
 
+// ============================================================================
 // ------------------- Standard Libraries -------------------
+// ============================================================================
+const http = require('http');
 const figlet = require("figlet");
 
+// ============================================================================
 // ------------------- Discord.js Components -------------------
-const { Client, GatewayIntentBits, Partials, REST, Routes } = require("discord.js");
+// ============================================================================
+const { Client, GatewayIntentBits, Partials, REST, Routes, EmbedBuilder } = require("discord.js");
 
+// ============================================================================
 // ------------------- Database Connections -------------------
-const { connectToTinglebot, connectToInventories } = require('@/shared/database/db');
-const TempData = require('@/shared/models/TempDataModel');
+// ============================================================================
+const DatabaseConnectionManager = require('./database/connectionManager');
+const { connectToTinglebot, connectToInventories } = require('./database/db');
+const TempData = require('./models/TempDataModel');
 
+// ============================================================================
 // ------------------- Handlers -------------------
-
+// ============================================================================
 const { handleAutocomplete } = require("./handlers/autocompleteHandler");
 const { handleComponentInteraction } = require("./handlers/componentHandler");
 const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { handleInteraction, initializeReactionHandler } = require('./handlers/interactionHandler');
 const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHandler');
-// const { handleMessage } = require('./handlers/messageHandler');
-// Expiration handler removed - see docs/FUTURE_PLANS.md
-// const { startExpirationChecks } = require('@/shared/utils/expirationHandler');
-const logger = require('@/shared/utils/logger');
-const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
 
-// ------------------- Scripts -------------------
-const {
-  handleError,
-  initializeErrorHandler,
-  initializeErrorTracking,
-} = require('@/shared/utils/globalErrorHandler');
+// ============================================================================
+// ------------------- Scripts & Modules -------------------
+// ============================================================================
 const {
   createTrelloCard,
   logWishlistToTrello,
   logErrorToTrello,
 } = require("./scripts/trello");
 const { isBloodMoonDay } = require("./scripts/bloodmoon");
-// const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
-// SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
-// const {
-//   initializeScheduler,
-//   setupWeatherScheduler,
-//   setupBlightScheduler
-// } = require('./scheduler/scheduler');
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
-// ------------------- Weather -------------------
+// ============================================================================
+// ------------------- Utils -------------------
+// ============================================================================
+const logger = require('@/shared/utils/logger');
+const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
+const {
+  handleError,
+  initializeErrorHandler,
+  initializeErrorTracking,
+} = require('@/shared/utils/globalErrorHandler');
 
 
 // ============================================================================
@@ -66,7 +80,56 @@ const { convertToHyruleanDate } = require("./modules/calendarModule");
 // ============================================================================
 let client;
 
-// Suppress circular dependency warnings
+// ============================================================================
+// ------------------- Helper Functions -------------------
+// ============================================================================
+
+// ------------------- isBotMessage ------------------
+// Checks if message is from a bot
+function isBotMessage(message) {
+  return message.author.bot;
+}
+
+// ------------------- isGuildMessage ------------------
+// Validates message has guild context
+function isGuildMessage(message) {
+  return !!message.guild;
+}
+
+// ------------------- handleChannelMessage ------------------
+// Generic handler for channel-specific message processing
+async function handleChannelMessage(message, channelId, handler) {
+  if (message.channelId !== channelId) return;
+  if (isBotMessage(message)) return;
+  await handler(message);
+}
+
+// ------------------- sendErrorResponse ------------------
+// Standardized error response for interactions
+async function sendErrorResponse(interaction, error) {
+  const errorMessage = { content: 'There was an error while executing this command!', flags: [4096] };
+  try {
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp(errorMessage);
+    } else {
+      await interaction.reply(errorMessage);
+    }
+  } catch (responseError) {
+    logger.error('COMMAND', `[index.js]❌ Failed to send error response: ${responseError.message}`);
+    // Final fallback - send as regular message
+    try {
+      await interaction.channel.send('❌ There was an error while executing this command!');
+    } catch (sendError) {
+      logger.error('COMMAND', `[index.js]❌ Failed to send fallback error message`);
+    }
+  }
+}
+
+// ============================================================================
+// ------------------- Process Event Handlers -------------------
+// ============================================================================
+
+// ------------------- Suppress Circular Dependency Warnings ------------------
 process.removeAllListeners('warning');
 process.on('warning', (warning) => {
   if (warning.name === 'DeprecationWarning' || warning.name === 'ExperimentalWarning') {
@@ -75,12 +138,15 @@ process.on('warning', (warning) => {
   logger.warn('SYSTEM', `${warning.name}: ${warning.message}`);
 });
 
-// ----------------------------------------------------------------------------
-// ──────────────────── Database Initialization ──────────────────────────────
-// ----------------------------------------------------------------------------
+// ============================================================================
+// ------------------- Database Initialization -------------------
+// ============================================================================
+
+// ------------------- initializeDatabases ------------------
+// Connects to databases and performs initial cleanup
 async function initializeDatabases() {
   try {
-    logger.info('DATABASE', 'Connecting to databases...');
+    logger.info('DATABASE', 'Initializing database connections...');
     
     // Add timeout to database connections (increased to 60 seconds)
     const connectionTimeout = setTimeout(() => {
@@ -88,11 +154,11 @@ async function initializeDatabases() {
       process.exit(1);
     }, 60000);
 
-    await connectToTinglebot();
-    await connectToInventories();
+    // Use new connection manager for initialization
+    await DatabaseConnectionManager.initialize();
     
     clearTimeout(connectionTimeout);
-    logger.success('DATABASE', 'Connected to databases');
+    logger.success('DATABASE', 'All databases connected');
     
     // Clean up temp data entries without expiration dates (TTL handles expiresAt automatically)
     const noExpirationResult = await TempData.deleteMany({ expiresAt: { $exists: false } });
@@ -165,35 +231,33 @@ async function initializeDatabases() {
 
 
 
-// Add process error handlers
+// ------------------- Uncaught Exception Handler ------------------
 process.on('uncaughtException', (error) => {
   logger.error('SYSTEM', `Uncaught Exception: ${error.message}`);
   process.exit(1);
 });
 
+// ------------------- Unhandled Rejection Handler ------------------
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('SYSTEM', `Unhandled Rejection: ${reason}`);
   process.exit(1);
 });
 
-// Add graceful shutdown handler
+// ------------------- SIGTERM Handler ------------------
 process.on('SIGTERM', async () => {
   logger.info('SYSTEM', 'Received SIGTERM. Performing graceful shutdown...');
   await performGracefulShutdown();
 });
 
-// Shared graceful shutdown function
+// ============================================================================
+// ------------------- Process Handlers -------------------
+// ============================================================================
+
+// ------------------- performGracefulShutdown ------------------
+// Handles graceful shutdown of all services
 async function performGracefulShutdown() {
   try {
-    // Expiration handler removed - see docs/FUTURE_PLANS.md
-    // 1. Stop expiration checks (prevents recursive timer creation)
-    // try {
-    //   const { stopExpirationChecks } = require('@/shared/utils/expirationHandler');
-    //   stopExpirationChecks();
-    //   logger.info('SYSTEM', 'Expiration checks stopped');
-    // } catch (error) {
-    //   logger.warn('SYSTEM', `Error stopping expiration checks: ${error.message}`);
-    // }
+    // Expiration checks are now handled by Agenda - no need to stop separately
     
     // 2. Stop Agenda worker (one-time scheduled jobs)
     try {
@@ -207,8 +271,7 @@ async function performGracefulShutdown() {
     // 3. Destroy all cron jobs (prevents new timers from being created)
     // SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
     // try {
-    //   const { shutdownCroner } = require('./scheduler/croner');
-    //   shutdownCroner();
+    // Croner removed - using Agenda for all scheduling
     //   logger.info('SYSTEM', 'All cron jobs stopped');
     // } catch (error) {
     //   logger.error('SYSTEM', 'Error stopping cron jobs:', error.message);
@@ -223,38 +286,13 @@ async function performGracefulShutdown() {
     
     // 5. Close all database connections gracefully
     logger.info('SYSTEM', 'Closing database connections...');
-    const mongoose = require('mongoose');
-    
-    // Close main mongoose connection
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.disconnect();
-    }
-    
-    // Close additional database connections
     try {
-      const DatabaseConnectionManager = require('@/shared/database/connectionManager');
-      await DatabaseConnectionManager.closeAllConnections();
+      await DatabaseConnectionManager.closeAll();
     } catch (error) {
-      logger.warn('SYSTEM', `Error closing additional database connections: ${error.message}`);
+      logger.warn('SYSTEM', `Error closing database connections: ${error.message}`);
     }
     
-    // 5. Clear all caches
-    try {
-      const { inventoryCache, characterListCache, characterDataCache, spiritOrbCache } = require('@/shared/utils/cache');
-      [inventoryCache, characterListCache, characterDataCache, spiritOrbCache].forEach(cache => {
-        if (cache && typeof cache.clear === 'function') {
-          cache.clear();
-          if (cache.stopCleanup && typeof cache.stopCleanup === 'function') {
-            cache.stopCleanup();
-          }
-        }
-      });
-      logger.info('SYSTEM', 'All caches cleared');
-    } catch (error) {
-      logger.warn('SYSTEM', `Error clearing caches: ${error.message}`);
-    }
-    
-    // 6. Stop memory monitor
+    // 5. Stop memory monitor
     try {
       const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
       const memoryMonitor = getMemoryMonitor();
@@ -274,38 +312,55 @@ async function performGracefulShutdown() {
   }
 }
 
-// Also handle SIGINT (Ctrl+C) gracefully
+// ------------------- SIGINT Handler ------------------
 process.on('SIGINT', async () => {
   logger.info('SYSTEM', 'Received SIGINT. Performing graceful shutdown...');
   await performGracefulShutdown();
 });
 
-// ----------------------------------------------------------------------------
-// ──────────────────── Client Setup and Event Binding ───────────────────────
-// ----------------------------------------------------------------------------
+// ============================================================================
+// ------------------- Client Initialization -------------------
+// ============================================================================
+
+// ------------------- initializeClient ------------------
+// Sets up Discord client and all event handlers
 async function initializeClient() {
   try {
+    // ------------------- System Initialization ------------------
+    logger.section('System Initialization');
+    logger.divider();
+    
     // Apply Railway-specific optimizations
     try {
       const { configureRailwayOptimizations, setupRailwayMemoryMonitoring } = require('@/shared/utils/railwayOptimizations');
       configureRailwayOptimizations();
       setupRailwayMemoryMonitoring();
     } catch (error) {
-      logger.warn('SYSTEM', `Could not apply Railway optimizations: ${error.message}`);
+      logger.warn('RAILWAY', `Could not apply Railway optimizations: ${error.message}`);
     }
     
-    // Initialize memory monitoring
+    // Initialize memory monitoring (will log hourly via agenda)
     const memoryMonitor = getMemoryMonitor({
       enabled: true,
-      logInterval: 1 * 60 * 1000, // 1 minute (changed from 5 minutes for testing)
       warningThreshold: 500 * 1024 * 1024, // 500MB
       criticalThreshold: 1000 * 1024 * 1024 // 1GB
     });
-    logger.info('SYSTEM', 'Memory monitoring initialized');
     
-    // Initialize databases first
+    logger.divider();
+    
+    // ------------------- Database Connections ------------------
+    logger.section('Database Connections');
+    logger.divider();
+    
+    // Initialize databases
     await initializeDatabases();
-
+    
+    logger.divider();
+    
+    // ------------------- Discord Client Setup ------------------
+    logger.section('Discord Client Setup');
+    logger.divider();
+    
     client = new Client({
       intents: [
         GatewayIntentBits.GuildMembers,
@@ -320,6 +375,8 @@ async function initializeClient() {
         Partials.Reaction,
       ],
     });
+    
+    logger.info('SYSTEM', 'Discord client created');
 
     // Add error handler for Discord client
     client.on('error', error => {
@@ -333,12 +390,9 @@ async function initializeClient() {
       process.exit(1);
     });
 
-    // --------------------------------------------------------------------------
-    // HTTP Server Error Handling (for Railway health checks and HTTP connections)
-    // --------------------------------------------------------------------------
+    // ------------------- HTTP Server Error Handling ------------------
     // Handle HTTP parse errors from malformed client requests or premature disconnections
     // These errors are common and shouldn't crash the bot
-    const http = require('http');
     const originalCreateServer = http.createServer;
     http.createServer = function(...args) {
       const server = originalCreateServer.apply(this, args);
@@ -420,46 +474,59 @@ async function initializeClient() {
       }
       readyHandlerExecuted = true;
 
-      // Initialize error handling first
+      // Update error handlers with client reference
       initializeErrorHandler(logErrorToTrello, client);
       initializeErrorTracking(client);
 
-      // Display compact banner
-      console.log('\n');
+      // Display banner
+      logger.space();
       logger.banner('TINGLEBOT 2.0', 'Discord Bot Service');
-      console.log('\n');
+      logger.space();
+      logger.divider();
 
       try {
-        // Register commands with Discord
+        // ------------------- Command Registration ------------------
+        logger.section('Command Registration');
+        logger.divider();
         await registerCommands(client);
+        
+        logger.divider();
+        
+        // ------------------- System Modules ------------------
+        logger.section('System Modules');
+        logger.divider();
         
         // Initialize core systems
         initializeReactionHandler(client);
         initializeReactionRolesHandler(client);
+        logger.info('SYSTEM', 'Reaction handlers initialized');
         
         // Initialize role count channels system
         const { initializeRoleCountChannels } = require('./modules/roleCountChannelsModule');
         initializeRoleCountChannels(client);
         
-        // Initialize random encounters system (before scheduler to avoid log mixing)
+        // Initialize random encounters system
         const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
         initializeRandomEncounterBot(client);
         
+        // Check blood moon status
         logBloodMoonStatus();
-        // SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
-        logger.warn('SYSTEM', '⚠️ SCHEDULER DISABLED: All cron jobs are commented out for testing. This is to diagnose memory/timer leak issues.');
-        // initializeScheduler(client);
         
-        // Initialize Agenda for one-time scheduled jobs (Agenda uses MongoDB, separate from croner)
+        // Initialize Agenda for all scheduled jobs (recurring + one-time)
         const { initAgenda, defineAgendaJobs, startAgenda } = require('./scheduler/agenda');
         await initAgenda();
-        defineAgendaJobs({ client });
+        defineAgendaJobs({ client }); // Defines all job types (recurring + one-time)
         await startAgenda();
-        logger.success('SCHEDULER', 'Agenda initialized and started');
         
-        // Expiration handler removed - see docs/FUTURE_PLANS.md
-        // startExpirationChecks(client);
+        // Initialize scheduler (schedules recurring jobs using Agenda)
+        const { initializeScheduler } = require('./scheduler/scheduler');
+        await initializeScheduler(client);
         
+        logger.divider();
+        
+        // ------------------- Ready Status ------------------
+        logger.section('Ready Status');
+        logger.divider();
         logger.success('SYSTEM', 'Bot is online and ready');
       } catch (error) {
         handleError(error, "index.js", {
@@ -469,9 +536,9 @@ async function initializeClient() {
       }
     });
 
-    // --------------------------------------------------------------------------
-    // Interaction Handling
-    // --------------------------------------------------------------------------
+    // ============================================================================
+    // ------------------- Interaction Event Handlers -------------------
+    // ============================================================================
     client.on("interactionCreate", async (interaction) => {
       try {
         if (interaction.isCommand()) {
@@ -487,40 +554,25 @@ async function initializeClient() {
               userId: interaction.user?.id,
               options: interaction.options?.data
             });
-            logger.error('COMMAND', 'Command execution error');
+            logger.error('COMMAND', '[index.js]❌ Command execution error');
             
             // Check if it's a webhook token error
             if (error.code === 50027) {
-              logger.warn('COMMAND', 'Webhook token expired, sending error as regular message');
+              logger.warn('COMMAND', '[index.js]⚠️ Webhook token expired, sending error as regular message');
               try {
                 await interaction.channel.send('❌ The command took too long to complete. Please try again.');
               } catch (sendError) {
-                logger.error('COMMAND', 'Failed to send fallback error message');
+                logger.error('COMMAND', '[index.js]❌ Failed to send fallback error message');
               }
               return;
             }
             
-            const errorMessage = { content: 'There was an error while executing this command!', flags: [4096] };
-            try {
-              if (interaction.replied || interaction.deferred) {
-                await interaction.followUp(errorMessage);
-              } else {
-                await interaction.reply(errorMessage);
-              }
-            } catch (responseError) {
-              console.error('[index.js]: Failed to send error response:', responseError);
-              // Final fallback - send as regular message
-              try {
-                await interaction.channel.send('❌ There was an error while executing this command!');
-              } catch (sendError) {
-                logger.error('COMMAND', 'Failed to send fallback error message');
-              }
-            }
+            await sendErrorResponse(interaction, error);
           }
         } else if (interaction.isButton()) {
           await handleComponentInteraction(interaction);
         } else if (interaction.isStringSelectMenu()) {
-          logger.info('INTERACTION', `🔄 Processing select menu interaction: ${interaction.customId}`);
+          logger.info('INTERACTION', `[index.js]🔄 Processing select menu interaction: ${interaction.customId}`);
           
           // Route submission-related select menus to the submission handler
           const submissionMenuIds = ['baseSelect', 'typeMultiplierSelect', 'productMultiplierSelect', 'addOnsSelect', 'specialWorksSelect'];
@@ -542,17 +594,14 @@ async function initializeClient() {
                 userId: interaction.user?.id,
                 operation: 'autocomplete'
               });
-              console.error(
-                `[index.js]: ❌ Error in command autocomplete handler for '${interaction.commandName}':`,
-                error
-              );
+              logger.error('COMMAND', `[index.js]❌ Error in command autocomplete handler for '${interaction.commandName}':`, error.message);
               try {
                 if (!interaction.responded && interaction.isRepliable()) {
                   await interaction.respond([]);
                 }
               } catch (respondError) {
                 if (respondError.code !== 10062) {
-                  console.error(`[index.js]: Error responding to autocomplete:`, respondError);
+                  logger.error('COMMAND', `[index.js]❌ Error responding to autocomplete:`, respondError.message);
                 }
               }
             }
@@ -566,17 +615,14 @@ async function initializeClient() {
                 userId: interaction.user?.id,
                 operation: 'autocomplete_handler'
               });
-              console.error(
-                `[index.js]: ❌ Error in handleAutocomplete for '${interaction.commandName}':`,
-                error
-              );
+              logger.error('COMMAND', `[index.js]❌ Error in handleAutocomplete for '${interaction.commandName}':`, error.message);
               try {
                 if (!interaction.responded && interaction.isRepliable()) {
                   await interaction.respond([]);
                 }
               } catch (respondError) {
                 if (respondError.code !== 10062) {
-                  console.error(`[index.js]: Error responding to autocomplete:`, respondError);
+                  logger.error('COMMAND', `[index.js]❌ Error responding to autocomplete:`, respondError.message);
                 }
               }
             }
@@ -594,165 +640,125 @@ async function initializeClient() {
           userId: interaction?.user?.id || 'Unknown',
           interactionType: interaction?.type || 'Unknown'
         });
-        logger.error('INTERACTION', 'Interaction error');
+        logger.error('INTERACTION', '[index.js]❌ Interaction error');
       }
     });
 
-    // --------------------------------------------------------------------------
-    // Error Report Channel Handling
-    // --------------------------------------------------------------------------
+    // ============================================================================
+    // ------------------- Message Event Handlers -------------------
+    // ============================================================================
+
+    // ------------------- Error Report Channel ------------------
+    const ERROR_REPORT_CHANNEL_ID = "1379974822506795030";
     client.on("messageCreate", async (message) => {
-      const ERROR_REPORT_CHANNEL_ID = "1379974822506795030";
-      
-      // Check if the message is in the error report channel
-      if (message.channelId !== ERROR_REPORT_CHANNEL_ID) {
-        return;
-      }
-
-      if (message.author.bot) {
-        return;
-      }
-
-      if (!message.content.replace(/\*/g, "").startsWith("Command")) {
-        const reply = await message.reply(
-          "❌ **Bug Report Rejected — Missing Required Format!**\n\n" +
-            "Your message must start with this line:\n" +
-            "`Command: [Command Name]`\n\n" +
-            "> Example:\n> `Command: /gather`\n\n" +
-            "Please update your post to match this format:\n\n" +
-            "**Command:** [Specify the command or feature]\n" +
-            "**Issue:** [Brief description of the problem]\n" +
-            "**Steps to Reproduce:**\n1. [Step 1]\n2. [Step 2]\n" +
-            "**Error Output:** [Error message]\n**Screenshots:** [Attach images]\n" +
-            "**Expected Behavior:** [What you expected to happen]\n" +
-            "**Actual Behavior:** [What actually happened]"
-        );
-
-        setTimeout(() => reply.delete().catch(() => {}), 600000);
-        return;
-      }
-
-      try {
-        // Extract command name from the message content
-        const commandMatch = message.content.match(/Command:\s*\[?([^\n\]]+)\]?/i);
-        const threadName = commandMatch ? commandMatch[1].trim() : 'Unknown Command';
-        
-        const username = message.author?.tag || message.author?.username || `User-${message.author?.id}`;
-        const content = message.content;
-        const createdAt = message.createdAt;
-        const images = message.attachments.map((attachment) => attachment.url);
-
-        const cardUrl = await createTrelloCard({
-          threadName,
-          username,
-          content,
-          images,
-          createdAt,
-        });
-
-        if (cardUrl) {
-          await message.reply(
-            `✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`
+      await handleChannelMessage(message, ERROR_REPORT_CHANNEL_ID, async (msg) => {
+        if (!msg.content.replace(/\*/g, "").startsWith("Command")) {
+          const reply = await msg.reply(
+            "❌ **Bug Report Rejected — Missing Required Format!**\n\n" +
+              "Your message must start with this line:\n" +
+              "`Command: [Command Name]`\n\n" +
+              "> Example:\n> `Command: /gather`\n\n" +
+              "Please update your post to match this format:\n\n" +
+              "**Command:** [Specify the command or feature]\n" +
+              "**Issue:** [Brief description of the problem]\n" +
+              "**Steps to Reproduce:**\n1. [Step 1]\n2. [Step 2]\n" +
+              "**Error Output:** [Error message]\n**Screenshots:** [Attach images]\n" +
+              "**Expected Behavior:** [What you expected to happen]\n" +
+              "**Actual Behavior:** [What actually happened]"
           );
-        } else {
-          await message.reply(`❌ Failed to send bug report to Trello.`);
+          setTimeout(() => reply.delete().catch(() => {}), 600000);
+          return;
         }
-      } catch (err) {
-        console.error("[index.js]: ❌ Error handling error report for Trello:", err);
-        console.error("[index.js]: Error details:", {
-          name: err.name,
-          message: err.message,
-          stack: err.stack
-        });
-      }
+
+        try {
+          const commandMatch = msg.content.match(/Command:\s*\[?([^\n\]]+)\]?/i);
+          const threadName = commandMatch ? commandMatch[1].trim() : 'Unknown Command';
+          const username = msg.author?.tag || msg.author?.username || `User-${msg.author?.id}`;
+          const cardUrl = await createTrelloCard({
+            threadName,
+            username,
+            content: msg.content,
+            images: msg.attachments.map((attachment) => attachment.url),
+            createdAt: msg.createdAt,
+          });
+
+          if (cardUrl) {
+            await msg.reply(
+              `✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`
+            );
+          } else {
+            await msg.reply(`❌ Failed to send bug report to Trello.`);
+          }
+        } catch (err) {
+          logger.error('TRELLO', `[index.js]❌ Error handling error report for Trello: ${err.message}`);
+        }
+      });
     });
 
-    // --------------------------------------------------------------------------
-    // Wishlist Channel Handling
-    // --------------------------------------------------------------------------
-    client.on("messageCreate", async (message) => {
-      const WISHLIST_CHANNEL_ID = "1319826690935099463";
-      if (message.channelId !== WISHLIST_CHANNEL_ID) return;
-      if (message.author.bot) return;
-
+    // ------------------- Wishlist Channel Handler ------------------
+    // Shared handler for wishlist and new channel
+    async function handleWishlistMessage(message) {
       const content = message.content;
       const author = message.author.tag;
-
       try {
         await logWishlistToTrello(content, author, process.env.TRELLO_WISHLIST);
         await message.react("⭐");
       } catch (err) {
-        console.error("[index.js]: Failed to log wishlist to Trello:", err);
+        logger.error('TRELLO', `[index.js]❌ Failed to log wishlist to Trello: ${err.message}`);
         await message.reply("❌ Could not send this wishlist item to Trello.");
       }
+    }
+
+    // Wishlist Channel
+    const WISHLIST_CHANNEL_ID = "1319826690935099463";
+    client.on("messageCreate", async (message) => {
+      await handleChannelMessage(message, WISHLIST_CHANNEL_ID, handleWishlistMessage);
     });
 
-    // --------------------------------------------------------------------------
-    // New Channel Handling
-    // --------------------------------------------------------------------------
+    // New Channel (uses same handler as wishlist)
+    const NEW_CHANNEL_ID = "1381442926667763773";
     client.on("messageCreate", async (message) => {
-      const NEW_CHANNEL_ID = "1381442926667763773";
-      if (message.channelId !== NEW_CHANNEL_ID) return;
-      if (message.author.bot) return;
-
-      const content = message.content;
-      const author = message.author.tag;
-
-      try {
-        await logWishlistToTrello(content, author, process.env.TRELLO_WISHLIST);
-        await message.react("⭐");
-      } catch (err) {
-        console.error("[index.js]: Failed to log wishlist to Trello:", err);
-        await message.reply("❌ Could not send this wishlist item to Trello.");
-      }
+      await handleChannelMessage(message, NEW_CHANNEL_ID, handleWishlistMessage);
     });
 
-    // --------------------------------------------------------------------------
-    // RP Quest Post Tracking
-    // --------------------------------------------------------------------------
+    // ------------------- RP Quest Post Tracking ------------------
     client.on("messageCreate", async (message) => {
-      if (message.author.bot) return;
-      if (!message.guild) return;
+      if (isBotMessage(message)) return;
+      if (!isGuildMessage(message)) return;
       
-      // Check if this is an RP thread
       if (message.channel.isThread()) {
         try {
           const { handleRPPostTracking } = require('./modules/rpQuestTrackingModule');
           await handleRPPostTracking(message);
         } catch (error) {
-          console.error("[index.js]: Error tracking RP post:", error);
+          logger.error('RP_TRACKING', `[index.js]❌ Error tracking RP post: ${error.message}`);
         }
       }
     });
 
-    // --------------------------------------------------------------------------
-    // Leveling System - XP Tracking
-    // --------------------------------------------------------------------------
+    // ------------------- Leveling System - XP Tracking ------------------
     client.on("messageCreate", async (message) => {
-      if (message.author.bot) return;
-      if (!message.guild) return;
+      if (isBotMessage(message)) return;
+      if (!isGuildMessage(message)) return;
       
       try {
-        // Handle XP tracking for leveling system
         const { handleXP } = require('./modules/levelingModule');
         await handleXP(message);
-        
-        // Handle existing message tracking
         const { trackLastMessage } = require('@/shared/utils/messageUtils');
         await trackLastMessage(message);
       } catch (error) {
-        console.error("[index.js]: Error handling XP tracking:", error);
+        logger.error('XP_TRACKING', `[index.js]❌ Error handling XP tracking: ${error.message}`);
       }
     });
 
-    // --------------------------------------------------------------------------
-    // Welcome Message System
-    // --------------------------------------------------------------------------
+    // ============================================================================
+    // ------------------- Guild Event Handlers -------------------
+    // ============================================================================
+
+    // ------------------- Welcome Message System ------------------
     client.on("guildMemberAdd", async (member) => {
       try {
-        // Create welcome embed
-        const { EmbedBuilder } = require('discord.js');
-        
+        // ------------------- Create Welcome Embed ------------------
         const welcomeEmbed = new EmbedBuilder()
           .setColor(0x00ff88)
           .setTitle(`🌱 Welcome to ${member.guild.name}, ${member.user.username}!`)
@@ -792,26 +798,20 @@ async function initializeClient() {
           })
           .setTimestamp();
 
-        // Send welcome message as DM
+        // ------------------- Send Welcome Message ------------------
         await member.send({ embeds: [welcomeEmbed] });
-        
-        console.log(`[index.js]: 🌱 Welcome message sent to ${member.user.tag} (${member.id})`);
-        
+        logger.info('WELCOME', `[index.js]✅ Welcome message sent to ${member.user.tag} (${member.id})`);
       } catch (error) {
-        console.error(`[index.js]: ❌ Error sending welcome message to ${member.user.tag}:`, error);
-        // If DM fails, we could send to a welcome channel instead
-        // For now, just log the error
+        logger.error('WELCOME', `[index.js]❌ Error sending welcome message to ${member.user.tag}: ${error.message}`);
       }
     });
 
-    // --------------------------------------------------------------------------
-    // Intro Detection and Verified Role Assignment
-    // --------------------------------------------------------------------------
+    // ------------------- Intro Detection and Verified Role Assignment ------------------
     const INTRO_CHANNEL_ID = '795200689918836736';
     const VERIFIED_ROLE_ID = '1460099245347700962';
     const TRAVELER_ROLE_ID = '788137818135330837';
     
-    // ------------------- Validate Intro Format -------------------
+    // ------------------- validateIntroFormat ------------------
     // Validates that an intro message contains required Name and Age fields
     function validateIntroFormat(message) {
       const content = message.content;
@@ -882,17 +882,17 @@ async function initializeClient() {
         // Only process messages in intro channel
         if (message.channelId !== INTRO_CHANNEL_ID) return;
         
-        console.log(`[index.js]: 📝 Message detected in intro channel from ${message.author.tag}`);
+        logger.info('INTRO', `[index.js]📝 Message detected in intro channel from ${message.author.tag}`);
         
         // Skip bot messages
         if (message.author.bot) {
-          console.log(`[index.js]: ⏭️  Skipping bot message`);
+          logger.info('INTRO', `[index.js]⏭️ Skipping bot message`);
           return;
         }
         
         // Ensure we have the member object
         if (!message.guild) {
-          console.log(`[index.js]: ⚠️  No guild found for message`);
+          logger.warn('INTRO', `[index.js]⚠️ No guild found for message`);
           return;
         }
         
@@ -901,31 +901,31 @@ async function initializeClient() {
           // Try to fetch the member
           try {
             member = await message.guild.members.fetch(message.author.id);
-            console.log(`[index.js]: ✅ Fetched member ${message.author.tag}`);
+            logger.info('INTRO', `[index.js]✅ Fetched member ${message.author.tag}`);
           } catch (fetchError) {
-            console.error(`[index.js]: ❌ Could not fetch member ${message.author.tag}:`, fetchError);
+            logger.error('INTRO', `[index.js]❌ Could not fetch member ${message.author.tag}: ${fetchError.message}`);
             return;
           }
         }
         
         // Check if user already has Verified role
         if (member.roles.cache.has(VERIFIED_ROLE_ID)) {
-          console.log(`[index.js]: ⏭️  User ${message.author.tag} already has Verified role`);
+          logger.info('INTRO', `[index.js]⏭️ User ${message.author.tag} already has Verified role`);
           return; // Already verified
         }
         
         // Check if user has Traveler role (they should have this to post)
         if (!member.roles.cache.has(TRAVELER_ROLE_ID)) {
-          console.log(`[index.js]: ⚠️  User ${message.author.tag} posted in intro without Traveler role`);
+          logger.warn('INTRO', `[index.js]⚠️ User ${message.author.tag} posted in intro without Traveler role`);
           return;
         }
         
-        console.log(`[index.js]: 🔍 Processing intro post for ${message.author.tag}...`);
+        logger.info('INTRO', `[index.js]🔍 Processing intro post for ${message.author.tag}...`);
         
         // Validate intro format before assigning role
         const validation = validateIntroFormat(message);
         if (!validation.valid) {
-          console.log(`[index.js]: ❌ Intro validation failed for ${message.author.tag}. Missing: ${validation.errors.join(', ')}`);
+          logger.warn('INTRO', `[index.js]❌ Intro validation failed for ${message.author.tag}. Missing: ${validation.errors.join(', ')}`);
           
           // Build error message
           const missingFields = validation.errors.filter(e => !e.includes('(field exists but is empty)')).join(' and ');
@@ -954,32 +954,32 @@ async function initializeClient() {
               await message.delete();
             } catch (deleteError) {
               // Messages may already be deleted, that's okay
-              console.log(`[index.js]: ⚠️  Could not delete intro rejection message(s): ${deleteError.message}`);
+              logger.warn('INTRO', `[index.js]⚠️ Could not delete intro rejection message(s): ${deleteError.message}`);
             }
           }, 30000);
           
           return;
         }
         
-        console.log(`[index.js]: ✅ Intro validation passed for ${message.author.tag}`);
+        logger.info('INTRO', `[index.js]✅ Intro validation passed for ${message.author.tag}`);
         
         // Get Verified role and assign it
         const verifiedRole = message.guild.roles.cache.get(VERIFIED_ROLE_ID);
         if (!verifiedRole) {
-          console.error(`[index.js]: ❌ Verified role not found (ID: ${VERIFIED_ROLE_ID})`);
+          logger.error('INTRO', `[index.js]❌ Verified role not found (ID: ${VERIFIED_ROLE_ID})`);
           return;
         }
         
         // Add Verified role
         await member.roles.add(verifiedRole);
-        console.log(`[index.js]: ✅ Added Verified role to ${message.author.tag} after intro post`);
+        logger.info('INTRO', `[index.js]✅ Added Verified role to ${message.author.tag} after intro post`);
         
         // React to the intro message with blue checkmark emoji
         try {
           await message.react('☑️'); // Blue ballot box with check
-          console.log(`[index.js]: ✅ Reacted to intro message for ${message.author.tag}`);
+          logger.info('INTRO', `[index.js]✅ Reacted to intro message for ${message.author.tag}`);
         } catch (reactError) {
-          console.log(`[index.js]: ⚠️  Could not react to intro message: ${reactError.message}`);
+          logger.warn('INTRO', `[index.js]⚠️ Could not react to intro message: ${reactError.message}`);
         }
         
         // Track intro post in database
@@ -987,11 +987,10 @@ async function initializeClient() {
         const userDoc = await User.getOrCreateUser(message.author.id);
         userDoc.introPostedAt = new Date();
         await userDoc.save();
-        console.log(`[index.js]: ✅ Saved intro timestamp to database for ${message.author.tag}`);
+        logger.info('INTRO', `[index.js]✅ Saved intro timestamp to database for ${message.author.tag}`);
         
         // Send confirmation DM
         try {
-          const { EmbedBuilder } = require('discord.js');
           const confirmEmbed = new EmbedBuilder()
             .setColor(0x00ff00)
             .setTitle('✅ Intro Posted!')
@@ -1000,21 +999,18 @@ async function initializeClient() {
             .setTimestamp();
           
           await message.author.send({ embeds: [confirmEmbed] });
-          console.log(`[index.js]: ✅ Sent confirmation DM to ${message.author.tag}`);
+          logger.info('INTRO', `[index.js]✅ Sent confirmation DM to ${message.author.tag}`);
         } catch (error) {
           // DM might be disabled, that's okay
-          console.log(`[index.js]: ⚠️  Could not send intro confirmation DM to ${message.author.tag} (DMs may be disabled)`);
+          logger.warn('INTRO', `[index.js]⚠️ Could not send intro confirmation DM to ${message.author.tag} (DMs may be disabled)`);
         }
         
       } catch (error) {
-        console.error(`[index.js]: ❌ Error handling intro post:`, error);
-        console.error(`[index.js]: Error stack:`, error.stack);
+        logger.error('INTRO', `[index.js]❌ Error handling intro post: ${error.message}`);
       }
     });
 
-    // --------------------------------------------------------------------------
-    // Raid Thread Slow Mode Management
-    // --------------------------------------------------------------------------
+    // ------------------- Raid Thread Slow Mode Management ------------------
     // Enable slow mode on raid and wave threads when they're created
     client.on("threadCreate", async (thread) => {
       try {
@@ -1026,20 +1022,18 @@ async function initializeClient() {
         if (isWaveThread) {
           // Enable 20-second slow mode on wave threads
           await thread.setRateLimitPerUser(20);
-          console.log(`[index.js]: ⏰ Enabled 20-second slow mode on wave thread: ${thread.name} (${thread.id})`);
+          logger.info('THREAD', `[index.js]⏰ Enabled 20-second slow mode on wave thread: ${thread.name} (${thread.id})`);
         } else if (isRaidThread) {
           // Enable 10-second slow mode on raid threads
           await thread.setRateLimitPerUser(10);
-          console.log(`[index.js]: ⏰ Enabled 10-second slow mode on raid thread: ${thread.name} (${thread.id})`);
+          logger.info('THREAD', `[index.js]⏰ Enabled 10-second slow mode on raid thread: ${thread.name} (${thread.id})`);
         }
       } catch (error) {
-        console.error(`[index.js]: ❌ Error enabling slow mode on thread:`, error);
+        logger.error('THREAD', `[index.js]❌ Error enabling slow mode on thread: ${error.message}`);
       }
     });
 
-    // --------------------------------------------------------------------------
-    // User Data Cleanup on Server Leave
-    // --------------------------------------------------------------------------
+    // ------------------- User Data Cleanup on Server Leave ------------------
     // Delete all user data when they leave the server
     client.on("guildMemberRemove", async (member) => {
       try {
@@ -1109,7 +1103,7 @@ async function initializeClient() {
             } catch (inventoryError) {
               // Collection might not exist, which is fine
               if (inventoryError.code !== 26) { // Ignore "namespace not found" error
-                console.error(`[index.js]: ⚠️ Error deleting inventory collection for ${characterName}:`, inventoryError.message);
+                logger.warn('CLEANUP', `[index.js]⚠️ Error deleting inventory collection for ${characterName}: ${inventoryError.message}`);
               }
             }
           }
@@ -1128,7 +1122,7 @@ async function initializeClient() {
               const vendingResult = await vendingCollection.deleteMany({});
               vendingItemsDeleted += vendingResult.deletedCount;
             } catch (vendingError) {
-              console.error(`[index.js]: ⚠️ Error deleting vending items for ${characterName}:`, vendingError.message);
+              logger.warn('CLEANUP', `[index.js]⚠️ Error deleting vending items for ${characterName}: ${vendingError.message}`);
             }
           }
           deletionResults.vendingItems = vendingItemsDeleted;
@@ -1236,9 +1230,14 @@ async function initializeClient() {
       }
     });
 
-    // --------------------------------------------------------------------------
-    // HTTP Healthcheck Server (for Railway auto-restart on high memory)
-    // --------------------------------------------------------------------------
+    logger.divider();
+    
+    // ──────────────────────────────────────────────────────────────────────────
+    // Healthcheck Server
+    // ──────────────────────────────────────────────────────────────────────────
+    logger.section('Healthcheck Server');
+    logger.divider();
+    
     // Note: http is already required above for error handling
     const healthcheckServer = http.createServer((req, res) => {
       // Log all healthcheck requests for debugging
@@ -1313,10 +1312,10 @@ async function initializeClient() {
     });
     
     healthcheckServer.listen(port, '0.0.0.0', () => {
-      logger.success('HEALTHCHECK', `✅ Healthcheck server listening on port ${port}`);
-      logger.info('HEALTHCHECK', `📍 Healthcheck endpoint: http://0.0.0.0:${port}/health or /healthcheck`);
-      logger.info('HEALTHCHECK', '⚠️ Returns 503 (unhealthy) when memory > 1GB');
-      logger.warn('HEALTHCHECK', '🔧 IMPORTANT: Configure Railway Healthcheck Path to /health in service settings!');
+      logger.success('HEALTHCHECK', `Healthcheck server listening on port ${port}`);
+      logger.info('HEALTHCHECK', `Healthcheck endpoint: http://0.0.0.0:${port}/health or /healthcheck`);
+      logger.info('HEALTHCHECK', 'Returns 503 (unhealthy) when memory > 1GB');
+      logger.warn('HEALTHCHECK', 'IMPORTANT: Configure Railway Healthcheck Path to /health in service settings!');
     });
     
     healthcheckServer.on('error', (error) => {
@@ -1324,9 +1323,12 @@ async function initializeClient() {
       // Don't exit - bot can still run without healthcheck
     });
 
-    // --------------------------------------------------------------------------
-    // Start the Bot
-    // --------------------------------------------------------------------------
+    logger.divider();
+    
+    // ------------------- Discord Login ------------------
+    logger.section('Discord Login');
+    logger.divider();
+    
     try {
       logger.info('SYSTEM', 'Attempting to login to Discord...');
       await client.login(process.env.DISCORD_TOKEN);
@@ -1344,9 +1346,11 @@ async function initializeClient() {
 }
 
 // ============================================================================
-// ------------------- Helper Functions -------------------
-// Brief description: Logging and utilities.
+// ------------------- Command Registration -------------------
 // ============================================================================
+
+// ------------------- registerCommands ------------------
+// Registers all bot commands with Discord API
 async function registerCommands(client) {
   try {
     logger.info('COMMANDS', 'Registering commands with Discord...');
@@ -1429,6 +1433,8 @@ async function registerCommands(client) {
   }
 }
 
+// ------------------- logBloodMoonStatus ------------------
+// Logs blood moon status if active
 function logBloodMoonStatus() {
   try {
     const isBloodMoon = isBloodMoonDay();

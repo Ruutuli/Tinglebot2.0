@@ -45,19 +45,7 @@ const {
 } = require('@/shared/database/db.js');
 
 // ------------------- Utility Functions -------------------
-const {
-  appendSheetData,
-  authorizeSheets,
-  extractSpreadsheetId,
-  getSheetIdByTitle,
-  isValidGoogleSheetsUrl,
-  readSheetData,
-  writeSheetData,
-  safeAppendDataToSheet,
-  fetchSheetData,
-  validateVendingSheet,
-  parseSheetData
-} = require('@/shared/utils/googleSheetsUtils.js');
+// Google Sheets functionality removed
 
 const {
   addItemToVendingInventory,
@@ -1037,25 +1025,15 @@ async function markRequestAsProcessing(fulfillmentId, session = null) {
 // and include error handling + DB updates where relevant.
 // ============================================================================
 
-// ------------------- Vending Database Connection (Singleton) -------------------
-let vendingClient = null;
-let vendingDb = null;
+// ------------------- Vending Database Connection -------------------
+// Use DatabaseConnectionManager for unified connection management
+const DatabaseConnectionManager = require('../database/connectionManager');
 
 // ------------------- Connect to vending database -------------------
 async function connectToVendingDatabase() {
-  if (!vendingClient || !vendingDb) {
-    vendingClient = new MongoClient(dbConfig.vending, {});
-    try {
-      await vendingClient.connect();
-      vendingDb = vendingClient.db("vendingInventories");
-    } catch (error) {
-      handleError(error, 'vendingHandler.js');
-      vendingClient = null;
-      vendingDb = null;
-      throw error;
-    }
-  }
-  return vendingDb;
+  // Use the connection manager instead of creating a separate connection
+  const vendingConnection = await DatabaseConnectionManager.connectToVending();
+  return vendingConnection.db || vendingConnection;
 }
 
 // ------------------- Get Vending Collection -------------------

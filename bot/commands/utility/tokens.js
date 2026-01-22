@@ -7,13 +7,7 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder } = r
 const { ButtonStyle, MessageFlags } = require('discord.js');
 const User = require('@/shared/models/UserModel.js');
 const { getOrCreateToken, syncTokenTracker } = require('@/shared/database/db.js');
-const {
-  authorizeSheets,
-  getSheetIdByTitle,
-  getActualSheetName,
-  readSheetData,
-} = require('@/shared/utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('@/shared/utils/googleSheetsUtils.js');
+// Google Sheets functionality removed
 const { createTokenTrackerSetupEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Command data definition for managing tokens -------------------

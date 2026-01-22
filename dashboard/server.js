@@ -12,7 +12,7 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 // ------------------- Setup Path Aliases -------------------
 require('module-alias/register');
 const moduleAlias = require('module-alias');
-moduleAlias.addAlias('@/shared', path.resolve(__dirname, '..', 'shared'));
+// moduleAlias.addAlias('@/shared', path.resolve(__dirname, '..', 'shared')); // Shared directory removed
 
 const express = require('express');
 const cors = require('cors');
@@ -21,14 +21,16 @@ const fetch = require('node-fetch');
 const { MongoClient, ObjectId } = require('mongodb');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
-const { getDiscordGateway } = require('@/shared/utils/discordGateway');
-const MessageTracking = require('@/shared/models/MessageTrackingModel');
+const MessageTracking = require('./models/MessageTrackingModel');
 const compression = require('compression');
 const multer = require('multer');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
+
+// Import database connection manager
+const DatabaseConnectionManager = require('./database/connectionManager');
 
 // Import database methods from db.js
 const {
@@ -52,29 +54,29 @@ const {
 } = require('./database/db');
 
 // Import models
-const Character = require('@/shared/models/CharacterModel');
-const ModCharacter = require('@/shared/models/ModCharacterModel');
-const Quest = require('@/shared/models/QuestModel');
-const Item = require('@/shared/models/ItemModel');
-const Monster = require('@/shared/models/MonsterModel');
-const User = require('@/shared/models/UserModel');
-const Pet = require('@/shared/models/PetModel');
-const Mount = require('@/shared/models/MountModel');
-const VillageShops = require('@/shared/models/VillageShopsModel');
-const Weather = require('@/shared/models/WeatherModel');
-const { VendingRequest } = require('@/shared/models/VendingModel');
-const { initializeVendingStockModel, getVendingStockModel } = require('@/shared/models/VendingStockModel');
-const Square = require('@/shared/models/mapModel');
-const { Village } = require('@/shared/models/VillageModel');
-const Party = require('@/shared/models/PartyModel');
-const Relic = require('@/shared/models/RelicModel');
-const CharacterOfWeek = require('@/shared/models/CharacterOfWeekModel');
-const Relationship = require('@/shared/models/RelationshipModel');
-const Raid = require('@/shared/models/RaidModel');
-const StealStats = require('@/shared/models/StealStatsModel');
-const BlightRollHistory = require('@/shared/models/BlightRollHistoryModel');
-const InventoryLog = require('@/shared/models/InventoryLogModel');
-const { getGearType, getWeaponStyle } = require('./gearModule');
+const Character = require('./models/CharacterModel');
+const ModCharacter = require('./models/ModCharacterModel');
+const Quest = require('./models/QuestModel');
+const Item = require('./models/ItemModel');
+const Monster = require('./models/MonsterModel');
+const User = require('./models/UserModel');
+const Pet = require('./models/PetModel');
+const Mount = require('./models/MountModel');
+const VillageShops = require('./models/VillageShopsModel');
+const Weather = require('./models/WeatherModel');
+const { VendingRequest } = require('./models/VendingModel');
+const { initializeVendingStockModel, getVendingStockModel } = require('./models/VendingStockModel');
+const Square = require('./models/mapModel');
+const { Village } = require('./models/VillageModel');
+const Party = require('./models/PartyModel');
+const Relic = require('./models/RelicModel');
+const CharacterOfWeek = require('./models/CharacterOfWeekModel');
+const Relationship = require('./models/RelationshipModel');
+const Raid = require('./models/RaidModel');
+const StealStats = require('./models/StealStatsModel');
+const BlightRollHistory = require('./models/BlightRollHistoryModel');
+const InventoryLog = require('./models/InventoryLogModel');
+const { getGearType, getWeaponStyle } = require('./utils/gearModule');
 
 // Import character stats module for updating attack and defense
 const { updateCharacterDefense, updateCharacterAttack } = require('../bot/modules/characterStatsModule');
@@ -83,12 +85,12 @@ const { updateCharacterDefense, updateCharacterAttack } = require('../bot/module
 const calendarModule = require('../bot/modules/calendarModule');
 
 // Import pretty logger utility
-const logger = require('@/shared/utils/logger');
-const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
+const logger = require('./utils/logger');
+const { getMemoryMonitor } = require('./utils/memoryMonitor');
 
 
 // Import Google Sheets utilities
-const googleSheets = require('@/shared/utils/googleSheetsUtils');
+const googleSheets = require('./utils/googleSheetsUtils');
 const { google } = require('googleapis');
 
 // Import route modules
@@ -143,7 +145,7 @@ const {
   characterListCache,
   characterDataCache,
   spiritOrbCache
-} = require('@/shared/utils/cache');
+} = require('./utils/cache');
 
 // Cache duration constants (in milliseconds)
 const SPIRIT_ORB_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
@@ -160,7 +162,7 @@ async function runMigrations() {
     logger.info('Running database migrations...', 'server.js');
     
     // Migration: Update homes pins color to lime green
-    const Pin = require('@/shared/models/PinModel');
+    const Pin = require('./models/PinModel');
     
     // Update from old gold color
     const result1 = await Pin.updateMany(
@@ -195,14 +197,18 @@ async function runMigrations() {
 }
 
 // ------------------- Function: initializeDatabases -------------------
-// Establishes connections to all required databases using db.js methods
+// Establishes connections to all required databases using DatabaseConnectionManager
 async function initializeDatabases() {
   try {
     logger.divider('DATABASE INITIALIZATION');
     
-    // Connect to Tinglebot database using db.js method
-    await connectToTinglebot();
-    logger.database('Connected to Tinglebot database', 'server.js');
+    // Initialize all database connections using DatabaseConnectionManager
+    await DatabaseConnectionManager.initialize();
+    logger.database('All database connections initialized via DatabaseConnectionManager', 'server.js');
+    
+    // Get connection references for backward compatibility
+    inventoriesConnection = DatabaseConnectionManager.getInventoriesConnection();
+    vendingConnection = DatabaseConnectionManager.getVendingConnection();
     
     // Initialize VendingStock model (uses tinglebot database)
     try {
@@ -210,24 +216,6 @@ async function initializeDatabases() {
       logger.database('Initialized VendingStock model', 'server.js');
     } catch (vendingStockError) {
       logger.warn(`Failed to initialize VendingStock model: ${vendingStockError.message}`, 'server.js');
-    }
-    
-    // Connect to Inventories database using db.js method
-    try {
-      inventoriesConnection = await connectToInventories();
-      logger.database('Connected to Inventories database', 'server.js');
-    } catch (inventoryError) {
-      logger.warn(`Failed to connect to Inventories database: ${inventoryError.message}`, 'server.js');
-      // Continue without inventories connection - spirit orb counting will fail gracefully
-    }
-    
-    // Connect to Vending database using db.js method
-    try {
-      vendingConnection = await connectToVending();
-      logger.database('Connected to Vending database', 'server.js');
-    } catch (vendingError) {
-      logger.warn(`Failed to connect to Vending database: ${vendingError.message}`, 'server.js');
-      // Continue without vending connection
     }
     
     logger.success('All databases connected successfully!', 'server.js');
@@ -450,7 +438,7 @@ async function uploadPinImageToGCS(file, pinId) {
   try {
     if (!file) return null;
     
-    const bucket = require('@/shared/config/gcsService');
+    const bucket = require('./config/gcsService');
     const fileName = `tinglebot/mapUserImages/${pinId}_${Date.now()}_${Math.round(Math.random() * 1E9)}`;
     
     const fileUpload = bucket.file(fileName);
@@ -1600,7 +1588,7 @@ app.get('/api/steal/cooldowns/:characterId', async (req, res) => {
     };
 
     // Get all NPCs
-    const NPC = require('@/shared/models/NPCModel');
+    const NPC = require('./models/NPCModel');
     const allNPCs = await NPC.find({});
     
     for (const npc of allNPCs) {
@@ -2700,7 +2688,7 @@ app.get('/api/models/:modelType', asyncHandler(async (req, res) => {
 
     // Transform village data to include VILLAGE_CONFIG and convert Maps to objects
     if (modelType === 'village') {
-      const { VILLAGE_CONFIG } = require('@/shared/models/VillageModel');
+      const { VILLAGE_CONFIG } = require('./models/VillageModel');
       
       data = data.map(village => {
         const villageObj = { ...village };
@@ -4815,17 +4803,12 @@ app.get('/api/guild/activity', async (req, res) => {
     
     const guildData = await response.json();
     
-    // Get real-time data from Gateway
-    const gateway = getDiscordGateway();
-    const presences = await gateway.getGuildPresences(guildId);
-    const voiceCount = await gateway.getVoiceChannelMembers(guildId);
-    
     // Get message count for today
     const messagesToday = await MessageTracking.getTodayMessageCount(guildId);
     
     res.json({
-      onlineCount: presences ? (presences.online + presences.idle + presences.dnd) : (guildData.approximate_presence_count || 0),
-      voiceCount: voiceCount,
+      onlineCount: guildData.approximate_presence_count || 0,
+      voiceCount: 0, // Voice count not available without Discord Gateway
       messagesToday: messagesToday,
       boostCount: guildData.premium_subscription_count || 0
     });
@@ -6926,7 +6909,7 @@ app.get('/api/characters/:characterId/vending', async (req, res) => {
     // Get items from vending database using VendingInventory model
     let items = [];
     try {
-      const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
+      const { initializeVendingInventoryModel } = require('./models/VendingModel');
       const VendingInventory = await initializeVendingInventoryModel(character.name);
       const vendingItems = await VendingInventory.find({ characterName: character.name }).lean();
       items = vendingItems;
@@ -7049,7 +7032,7 @@ app.post('/api/characters/:characterId/vending/setup', async (req, res) => {
     const vendorType = job === 'shopkeeper' ? 'shopkeeper' : 'merchant';
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // First, validate all items before saving any
@@ -7338,7 +7321,7 @@ app.post('/api/characters/:characterId/vending/items', async (req, res) => {
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Calculate slots used
@@ -7507,7 +7490,7 @@ app.post('/api/characters/:characterId/vending/restock', async (req, res) => {
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the existing item
@@ -8017,7 +8000,7 @@ app.patch('/api/characters/:characterId/vending/items/:itemId', async (req, res)
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find the item - handle both ObjectId and string formats
@@ -8146,7 +8129,7 @@ app.delete('/api/characters/:characterId/vending/items/:itemId', async (req, res
     }
 
     // Initialize vending inventory model
-    const { initializeVendingInventoryModel } = require('@/shared/models/VendingModel');
+    const { initializeVendingInventoryModel } = require('./models/VendingModel');
     const VendingInventory = await initializeVendingInventoryModel(character.name);
 
     // Find and delete the item
@@ -8930,7 +8913,7 @@ app.post('/api/member-lore', async (req, res) => {
     console.log('✅ Security validation passed - no malicious content detected');
 
     // Save to database
-    const MemberLore = require('@/shared/models/MemberLoreModel');
+    const MemberLore = require('./models/MemberLoreModel');
     const loreSubmission = new MemberLore({
       memberName: memberName.trim(),
       topic: topic.trim(),
@@ -9852,7 +9835,7 @@ async function performAccessAudit() {
 
   try {
     // Get all users with admin roles
-    const User = require('@/shared/models/UserModel');
+    const User = require('./models/UserModel');
     const users = await User.find({}).lean();
     
     for (const user of users) {
@@ -10807,7 +10790,7 @@ app.get('/api/blupee/status', async (req, res) => {
 
 // ------------------- Section: Notification API Routes -------------------
 
-const notificationService = require('@/shared/utils/notificationService');
+const notificationService = require('./utils/notificationService');
 
 // ------------------- Section: Data Export API Routes -------------------
 
@@ -11977,22 +11960,22 @@ app.delete('/api/admin/village-shops/:id', async (req, res) => {
 // ------------------- Section: Admin Database Editor -------------------
 
 // ------------------- Import AuditLog model for audit logging -------------------
-const AuditLog = require('@/shared/models/AuditLogModel');
+const AuditLog = require('./models/AuditLogModel');
 
 // ------------------- Import all remaining models for database management -------------------
-const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
-const BloodMoonTracking = require('@/shared/models/BloodMoonTrackingModel');
-const GeneralItem = require('@/shared/models/GeneralItemModel');
-const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
-const Inventory = require('@/shared/models/InventoryModel');
-const MemberLore = require('@/shared/models/MemberLoreModel');
-const Minigame = require('@/shared/models/MinigameModel');
-const NPC = require('@/shared/models/NPCModel');
-const RuuGame = require('@/shared/models/RuuGameModel');
-const TableModel = require('@/shared/models/TableModel');
-const TableRoll = require('@/shared/models/TableRollModel');
-const TempData = require('@/shared/models/TempDataModel');
-const TokenTransaction = require('@/shared/models/TokenTransactionModel');
+const ApprovedSubmission = require('./models/ApprovedSubmissionModel');
+const BloodMoonTracking = require('./models/BloodMoonTrackingModel');
+const GeneralItem = require('./models/GeneralItemModel');
+const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+const Inventory = require('./models/InventoryModel');
+const MemberLore = require('./models/MemberLoreModel');
+const Minigame = require('./models/MinigameModel');
+const NPC = require('./models/NPCModel');
+const RuuGame = require('./models/RuuGameModel');
+const TableModel = require('./models/TableModel');
+const TableRoll = require('./models/TableRollModel');
+const TempData = require('./models/TempDataModel');
+const TokenTransaction = require('./models/TokenTransactionModel');
 // Note: Raid, StealStats, and BlightRollHistory are imported at the top of the file
 
 // ------------------- Model Registry -------------------
@@ -13253,7 +13236,7 @@ app.use(errorHandler); // Handle errors and send responses
 // ============================================================================
 
 // Import Pin model
-const Pin = require('@/shared/models/PinModel');
+const Pin = require('./models/PinModel');
 
 // ------------------- Function: checkUserAccess -------------------
 // Helper function to check if user has access to pin operations
@@ -13770,17 +13753,7 @@ const startServer = async () => {
     logger.error('server.js', 'Error initializing background tasks', err);
   });
   
-  // Initialize Discord Gateway (non-blocking, failures are non-fatal)
-  const gateway = getDiscordGateway();
-  gateway.connect().then(gatewayConnected => {
-    if (gatewayConnected) {
-      logger.info('server.js', 'Discord Gateway connected successfully');
-    } else {
-      logger.warn('server.js', 'Discord Gateway failed to connect - some features will be limited');
-    }
-  }).catch(err => {
-    logger.warn('server.js', 'Discord Gateway connection error - some features will be limited', err);
-  });
+  // Discord Gateway removed - dashboard doesn't need real-time Discord data
 };
 
 // ------------------- Section: Graceful Shutdown -------------------
@@ -13788,19 +13761,8 @@ const startServer = async () => {
 // ------------------- Function: gracefulShutdown -------------------
 // Handles graceful shutdown of the server and database connections
 const gracefulShutdown = async () => {
-  // Close all database connections
-  if (mongoose.connection.readyState === 1) {
-    await mongoose.connection.close();
-  }
-  
-  if (inventoriesConnection) {
-    await inventoriesConnection.close();
-  }
-  
-  if (vendingConnection) {
-    await vendingConnection.close();
-  }
-  
+  // Close all database connections using DatabaseConnectionManager
+  await DatabaseConnectionManager.closeAll();
   process.exit(0);
 };
 
