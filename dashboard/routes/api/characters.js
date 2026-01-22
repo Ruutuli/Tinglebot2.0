@@ -1018,11 +1018,23 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
     extras
   } = req.body;
 
-  // Validate required fields
-  if (!name || !age || !height || !hearts || !stamina || !pronouns || !race || !village || !job || !appLink) {
+  // Validate required fields (appLink is now optional)
+  const missingFields = [];
+  if (!name) missingFields.push('name');
+  if (!age) missingFields.push('age');
+  if (!height) missingFields.push('height');
+  if (!hearts) missingFields.push('hearts');
+  if (!stamina) missingFields.push('stamina');
+  if (!pronouns) missingFields.push('pronouns');
+  if (!race) missingFields.push('race');
+  if (!village) missingFields.push('village');
+  if (!job) missingFields.push('job');
+  
+  if (missingFields.length > 0) {
     return res.status(400).json({ 
-      error: 'Missing required fields',
-      required: ['name', 'age', 'height', 'hearts', 'stamina', 'pronouns', 'race', 'village', 'job', 'appLink']
+      error: `Missing required fields: ${missingFields.join(', ')}`,
+      missingFields: missingFields,
+      required: ['name', 'age', 'height', 'hearts', 'stamina', 'pronouns', 'race', 'village', 'job']
     });
   }
 
@@ -1203,7 +1215,7 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
       currentVillage: village.toLowerCase(),
       job: job,
       inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(name)}`,
-      appLink: appLink.trim(),
+      appLink: appLink ? appLink.trim() : '',
       icon: iconUrl,
       appArt: appArtUrl,
       blighted: false,
@@ -1213,7 +1225,9 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
       gearWeapon: gearWeapon,
       gearShield: gearShield,
       gearArmor: gearArmor,
-      status: 'pending', // New characters start as pending
+      status: null, // New characters start as DRAFT (null) - must be submitted
+      applicationVersion: 1, // Start at version 1
+      submittedAt: null, // Not submitted yet
       gender: gender.trim(),
       virtue: virtue.toLowerCase(),
       personality: personality.trim(),
@@ -1285,12 +1299,10 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
     user.characterSlot -= 1;
     await user.save();
 
-    logger.info('CHARACTERS', `Character created: ${character.name} by user ${userId}`);
+    logger.info('CHARACTERS', `Character created as DRAFT: ${character.name} by user ${userId}`);
 
-    // Post to Discord (non-blocking)
-    postCharacterCreationToDiscord(character, user, req.user, req).catch(err => {
-      logger.error('SERVER', 'Failed to post character creation to Discord', err);
-    });
+    // Don't post to Discord yet - wait for submission
+    // postCharacterCreationToDiscord will be called when character is submitted
 
     // Generate OC page URL slug from character name
     const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -1411,8 +1423,15 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   const requestUserId = String(userId || '');
   const isOwner = characterUserId === requestUserId;
   
+  // Public visibility: Only show approved characters to non-owners
   if (!isOwner) {
-    // Character exists but user doesn't own it - allow viewing but mark as read-only
+    // Character exists but user doesn't own it
+    // Only allow viewing if character is approved (status: 'accepted')
+    if (character.status !== 'accepted') {
+      logger.info(`[characters.js] Blocked access to non-approved character "${character?.name || nameSlug}" by user ${requestUserId}`);
+      throw new NotFoundError('Character not found or not yet approved for public viewing');
+    }
+    
     const charName = character?.name || 'Unknown';
     logger.info(`[characters.js] Character "${charName}" viewed by non-owner - userId: ${requestUserId}, ownerId: ${characterUserId}`);
   }
@@ -1466,23 +1485,16 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
     return res.status(404).json({ error: 'Character not found or access denied' });
   }
 
-  // Check if character can be edited
+  // Import field editability utility
+  const { isFieldEditable } = require('../../utils/fieldEditability');
+
+  // Check if character can be edited based on status
   if (character.status === 'pending') {
     return res.status(400).json({ error: 'Character is pending moderation and cannot be edited. Please wait for moderation to complete.' });
   }
 
-  // Automatic resubmission for denied characters: if character is denied and being edited, automatically resubmit
-  const isDenied = character.status === 'denied';
-  const shouldResubmit = resubmit === 'true' || isDenied;
-  
-  if (shouldResubmit && character.status === 'denied') {
-    character.status = 'pending';
-    character.denialReason = null; // Clear denial reason on resubmission
-    
-    // Clear all votes for this character when resubmitting
-    await CharacterModeration.deleteMany({ characterId: character._id });
-    logger.info('CHARACTERS', `Cleared all votes for resubmitted character: ${character.name}`);
-  }
+  // Don't auto-resubmit on edit - resubmit should be explicit via resubmit endpoint
+  // But allow editing of denied characters
 
   // Extract form data
   const {
@@ -1499,43 +1511,92 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
     starterWeapon,
     starterShield,
     starterArmorChest,
-    starterArmorLegs
+    starterArmorLegs,
+    personality,
+    history,
+    extras,
+    gender,
+    virtue,
+    birthday
   } = req.body;
 
-  // If status is 'accepted', only allow editing profile fields (similar to existing PATCH endpoint)
+  // Check field editability for each field being updated
+  const status = character.status; // null=DRAFT, 'pending', 'denied', 'accepted'
+  const lockedFields = [];
+
+  // Check each field
+  if (name !== undefined && name.trim() !== character.name && !isFieldEditable('name', status)) {
+    lockedFields.push('name');
+  }
+  if (age !== undefined && age !== '' && parseInt(age, 10) !== character.age && !isFieldEditable('age', status)) {
+    lockedFields.push('age');
+  }
+  if (race !== undefined && race.toLowerCase() !== character.race?.toLowerCase() && !isFieldEditable('race', status)) {
+    lockedFields.push('race');
+  }
+  if (village !== undefined && village.toLowerCase() !== character.homeVillage?.toLowerCase() && !isFieldEditable('homeVillage', status)) {
+    lockedFields.push('homeVillage');
+  }
+  if (job !== undefined && job !== character.job && !isFieldEditable('job', status)) {
+    lockedFields.push('job');
+  }
+  if (hearts !== undefined && !isFieldEditable('maxHearts', status)) {
+    lockedFields.push('hearts');
+  }
+  if (stamina !== undefined && !isFieldEditable('maxStamina', status)) {
+    lockedFields.push('stamina');
+  }
+  if (starterWeapon !== undefined && !isFieldEditable('gearWeapon', status)) {
+    lockedFields.push('starterWeapon');
+  }
+  if (starterShield !== undefined && !isFieldEditable('gearShield', status)) {
+    lockedFields.push('starterShield');
+  }
+  if (starterArmorChest !== undefined && !isFieldEditable('gearArmor', status)) {
+    lockedFields.push('starterArmorChest');
+  }
+  if (starterArmorLegs !== undefined && !isFieldEditable('gearArmor', status)) {
+    lockedFields.push('starterArmorLegs');
+  }
+
+  if (lockedFields.length > 0) {
+    return res.status(400).json({ 
+      error: `The following fields cannot be edited: ${lockedFields.join(', ')}`,
+      lockedFields: lockedFields
+    });
+  }
+
+  // If status is 'accepted', only allow editing approved-editable fields
   if (character.status === 'accepted') {
-    // Reject attempts to update restricted fields
-    if (name !== undefined && name.trim() !== character.name) {
-      return res.status(400).json({ error: 'Name cannot be edited for accepted characters' });
-    }
-    if (age !== undefined && age !== '' && parseInt(age, 10) !== character.age) {
-      return res.status(400).json({ error: 'Age cannot be edited' });
-    }
-    if (hearts !== undefined || stamina !== undefined) {
-      return res.status(400).json({ error: 'Stats cannot be edited for accepted characters' });
-    }
-    if (race !== undefined && race.toLowerCase() !== character.race?.toLowerCase()) {
-      return res.status(400).json({ error: 'Race cannot be edited for accepted characters' });
-    }
-    if (village !== undefined && village.toLowerCase() !== character.homeVillage?.toLowerCase()) {
-      return res.status(400).json({ error: 'Home village cannot be edited for accepted characters' });
-    }
-    if (job !== undefined && job !== character.job) {
-      return res.status(400).json({ error: 'Job cannot be edited for accepted characters' });
-    }
-    if (starterWeapon !== undefined || starterShield !== undefined || starterArmorChest !== undefined || starterArmorLegs !== undefined) {
-      return res.status(400).json({ error: 'Starting gear cannot be edited for accepted characters' });
-    }
-    
-    // Only update allowed profile fields (height, pronouns, icon)
-    // Age is explicitly NOT allowed to be updated
-    if (height !== undefined && height !== '') {
+    // Only update allowed profile fields
+    if (height !== undefined && height !== '' && isFieldEditable('height', status)) {
       character.height = parseFloat(height) || null;
     }
-    if (pronouns !== undefined) {
+    if (pronouns !== undefined && isFieldEditable('pronouns', status)) {
       character.pronouns = pronouns.trim();
     }
-    if (req.file) {
+    if (personality !== undefined && isFieldEditable('personality', status)) {
+      character.personality = personality.trim();
+    }
+    if (history !== undefined && isFieldEditable('history', status)) {
+      character.history = history.trim();
+    }
+    if (extras !== undefined && isFieldEditable('extras', status)) {
+      character.extras = extras.trim();
+    }
+    if (gender !== undefined && isFieldEditable('gender', status)) {
+      character.gender = gender.trim();
+    }
+    if (virtue !== undefined && isFieldEditable('virtue', status)) {
+      character.virtue = virtue.toLowerCase();
+    }
+    if (appLink !== undefined && isFieldEditable('appLink', status)) {
+      character.appLink = appLink.trim();
+    }
+    if (birthday !== undefined && isFieldEditable('birthday', status)) {
+      character.birthday = birthday.trim();
+    }
+    if (req.file && isFieldEditable('icon', status)) {
       const iconUrl = await uploadCharacterIconToGCS(req.file);
       if (iconUrl) {
         character.icon = iconUrl;
@@ -1550,7 +1611,7 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
     });
   }
 
-  // For denied characters (or when resubmitting), allow full editing
+  // For denied characters (needs changes) or DRAFT, allow full editing except locked fields
   // Age cannot be edited - reject if age is being changed
   if (age !== undefined && age !== '' && parseInt(age, 10) !== character.age) {
     return res.status(400).json({ error: 'Age cannot be edited' });
@@ -1816,11 +1877,11 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
   
   // Get all pending characters (both regular and mod)
   const pendingCharacters = await Character.find({ status: 'pending' })
-    .select('name userId age height pronouns race homeVillage job icon appLink createdAt')
+    .select('name userId age height pronouns race homeVillage job icon appLink createdAt applicationVersion discordMessageId discordThreadId submittedAt')
     .lean();
   
   const pendingModCharacters = await ModCharacter.find({ status: 'pending' })
-    .select('name userId age height pronouns race homeVillage job icon appLink createdAt modTitle modType')
+    .select('name userId age height pronouns race homeVillage job icon appLink createdAt modTitle modType applicationVersion discordMessageId discordThreadId submittedAt')
     .lean();
   
   // Get moderation votes for each character
@@ -1838,12 +1899,21 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
   moderationVotes.forEach(vote => {
     const charId = vote.characterId.toString();
     if (!votesByCharacter[charId]) {
-      votesByCharacter[charId] = { approves: [], denies: [] };
+      votesByCharacter[charId] = { approves: [], denies: [], needsChanges: [] };
     }
     if (vote.vote === 'approve') {
       votesByCharacter[charId].approves.push({
         modId: vote.modId,
         modUsername: vote.modUsername,
+        note: vote.note,
+        createdAt: vote.createdAt
+      });
+    } else if (vote.vote === 'needs_changes') {
+      votesByCharacter[charId].needsChanges.push({
+        modId: vote.modId,
+        modUsername: vote.modUsername,
+        reason: vote.reason,
+        note: vote.note,
         createdAt: vote.createdAt
       });
     } else {
@@ -1851,6 +1921,7 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
         modId: vote.modId,
         modUsername: vote.modUsername,
         reason: vote.reason,
+        note: vote.note,
         createdAt: vote.createdAt
       });
     }
@@ -1858,20 +1929,30 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
   
   // Add vote counts to characters
   const charactersWithVotes = [
-    ...pendingCharacters.map(char => ({
-      ...char,
-      isModCharacter: false,
-      votes: votesByCharacter[char._id.toString()] || { approves: [], denies: [] },
-      approveCount: (votesByCharacter[char._id.toString()]?.approves || []).length,
-      denyCount: (votesByCharacter[char._id.toString()]?.denies || []).length
-    })),
-    ...pendingModCharacters.map(char => ({
-      ...char,
-      isModCharacter: true,
-      votes: votesByCharacter[char._id.toString()] || { approves: [], denies: [] },
-      approveCount: (votesByCharacter[char._id.toString()]?.approves || []).length,
-      denyCount: (votesByCharacter[char._id.toString()]?.denies || []).length
-    }))
+    ...pendingCharacters.map(char => {
+      const charId = char._id.toString();
+      const votes = votesByCharacter[charId] || { approves: [], denies: [], needsChanges: [] };
+      return {
+        ...char,
+        isModCharacter: false,
+        votes: votes,
+        approveCount: votes.approves.length,
+        needsChangesCount: votes.needsChanges.length,
+        denyCount: votes.denies.length
+      };
+    }),
+    ...pendingModCharacters.map(char => {
+      const charId = char._id.toString();
+      const votes = votesByCharacter[charId] || { approves: [], denies: [], needsChanges: [] };
+      return {
+        ...char,
+        isModCharacter: true,
+        votes: votes,
+        approveCount: votes.approves.length,
+        needsChangesCount: votes.needsChanges.length,
+        denyCount: votes.denies.length
+      };
+    })
   ];
   
   res.json({ characters: charactersWithVotes });
@@ -1884,14 +1965,16 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'Moderator access required' });
   }
   
-  const { characterId, vote, reason, isModCharacter } = req.body;
+  const { characterId, vote, reason, note, isModCharacter } = req.body;
   
-  if (!characterId || !vote || !['approve', 'deny'].includes(vote)) {
-    return res.status(400).json({ error: 'Invalid request. characterId and vote (approve/deny) are required.' });
+  // Support 'needs_changes' in addition to 'approve' and 'deny'
+  if (!characterId || !vote || !['approve', 'deny', 'needs_changes'].includes(vote)) {
+    return res.status(400).json({ error: 'Invalid request. characterId and vote (approve/deny/needs_changes) are required.' });
   }
   
-  if (vote === 'deny' && !reason) {
-    return res.status(400).json({ error: 'Reason is required for denial votes.' });
+  // Reason required for deny and needs_changes
+  if ((vote === 'deny' || vote === 'needs_changes') && !reason && !note) {
+    return res.status(400).json({ error: 'Reason or note is required for deny/needs_changes votes.' });
   }
   
   await connectToTinglebot();
@@ -1908,128 +1991,423 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Character is not pending moderation' });
   }
   
-  // Check if mod has already voted
-  const existingVote = await CharacterModeration.findOne({
-    characterId: characterId,
-    modId: req.user.discordId
-  });
-  
-  if (existingVote) {
-    return res.status(400).json({ error: 'You have already voted on this character' });
-  }
-  
   // Get mod user info
   const modUser = req.session?.user || req.user;
+  const modId = modUser.discordId;
+  const modUsername = modUser.username || modUser.discordId;
   
-  // Create moderation vote
-  const moderationVote = new CharacterModeration({
-    characterId: characterId,
-    characterName: character.name,
-    userId: character.userId,
-    isModCharacter: isModCharacter || false,
-    modId: modUser.discordId,
-    modUsername: modUser.username || modUser.discordId,
-    vote: vote,
-    reason: vote === 'deny' ? reason : null
+    // Use ocApplicationService to record vote
+    const ocApplicationService = require('../../services/ocApplicationService');
+    const auditService = require('../../services/auditService');
+    const notificationService = require('../../utils/notificationService');
+    const feedback = note || reason || null;
+  
+  try {
+    // Check for existing vote to detect vote changes
+    const applicationVersion = character.applicationVersion || 1;
+    const existingVote = await CharacterModeration.findOne({
+      characterId: characterId,
+      modId: modId,
+      applicationVersion: applicationVersion
+    });
+    
+    const voteResult = await ocApplicationService.recordVote(
+      characterId,
+      modId,
+      modUsername,
+      vote,
+      feedback
+    );
+    
+    // Log vote (or vote change)
+    if (existingVote && existingVote.vote !== vote) {
+      await auditService.logVoteChange(
+        characterId,
+        applicationVersion,
+        modId,
+        modUsername,
+        existingVote.vote,
+        vote
+      );
+    } else {
+      await auditService.logVote(
+        characterId,
+        applicationVersion,
+        modId,
+        modUsername,
+        vote,
+        feedback
+      );
+    }
+    
+    // Update Discord embed if message exists
+    if (character.discordMessageId) {
+      const discordPostingService = require('../../services/discordPostingService');
+      await discordPostingService.updateApplicationEmbed(character.discordMessageId, character).catch(err => {
+        logger.error('CHARACTERS', 'Failed to update Discord embed', err);
+      });
+    }
+    
+    // Check if decision has been reached
+    const decision = await ocApplicationService.checkDecision(characterId);
+    
+    if (decision) {
+      if (decision.decision === 'approved') {
+        // Process approval
+        await ocApplicationService.processApproval(characterId);
+        
+        // Log decision
+        await auditService.logDecision(
+          characterId,
+          applicationVersion,
+          'approved',
+          modId,
+          { modUsername, voteCounts: voteResult.counts }
+        );
+        
+        // Refresh character
+        const refreshedCharacter = await CharacterModel.findById(characterId);
+        
+        // Assign Discord roles
+        try {
+          await assignCharacterRoles(refreshedCharacter);
+        } catch (err) {
+          logger.error('CHARACTERS', 'Failed to assign character roles', err);
+          // Log role assignment failure to mod channel if configured
+          const LOGGING_CHANNEL_ID = process.env.LOGGING_CHANNEL_ID;
+          if (LOGGING_CHANNEL_ID && process.env.DISCORD_TOKEN) {
+            const failedRoles = err.message || 'Unknown error';
+            await fetch(`https://discord.com/api/v10/channels/${LOGGING_CHANNEL_ID}/messages`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                content: `⚠️ **Role Assignment Failed**\n\nUser: <@${refreshedCharacter.userId}>\nCharacter: ${refreshedCharacter.name}\nOC Link: ${process.env.DASHBOARD_URL || 'https://tinglebot.xyz'}/ocs/${refreshedCharacter.publicSlug || refreshedCharacter.name.toLowerCase().replace(/\s+/g, '-')}\n\n**Error:** ${failedRoles}\n\nPlease assign roles manually.`
+              })
+            }).catch(() => {});
+          }
+        }
+        
+        // Send notification via notificationService
+        await notificationService.sendOCDecisionNotification(
+          refreshedCharacter.userId,
+          'approved',
+          refreshedCharacter.toObject(),
+          null
+        ).catch(err => {
+          logger.error('CHARACTERS', 'Failed to send approval notification', err);
+        });
+        
+        // Also post to Discord channel
+        postCharacterStatusToDiscord(refreshedCharacter, 'accepted', null, isModCharacter).catch(err => {
+          logger.error('CHARACTERS', 'Failed to post character acceptance to Discord', err);
+        });
+        
+        return res.json({
+          success: true,
+          message: 'Character approved',
+          character: refreshedCharacter.toObject(),
+          voteCounts: voteResult.counts
+        });
+      } else if (decision.decision === 'needs_changes') {
+        // Process needs changes (fast fail)
+        const feedbackText = feedback || 'Changes requested by moderator';
+        await ocApplicationService.processNeedsChanges(characterId, feedbackText);
+        
+        // Log decision
+        await auditService.logDecision(
+          characterId,
+          applicationVersion,
+          'needs_changes',
+          modId,
+          { modUsername, feedback: feedbackText }
+        );
+        
+        // Log feedback sent
+        await auditService.logFeedbackSent(
+          characterId,
+          applicationVersion,
+          modId,
+          feedbackText
+        );
+        
+        // Refresh character
+        const refreshedCharacter = await CharacterModel.findById(characterId);
+        
+        // Send notification via notificationService
+        await notificationService.sendOCDecisionNotification(
+          refreshedCharacter.userId,
+          'needs_changes',
+          refreshedCharacter.toObject(),
+          feedbackText
+        ).catch(err => {
+          logger.error('CHARACTERS', 'Failed to send needs changes notification', err);
+        });
+        
+        // Also post to Discord channel
+        postCharacterStatusToDiscord(refreshedCharacter, 'denied', feedbackText, isModCharacter).catch(err => {
+          logger.error('CHARACTERS', 'Failed to post character needs changes to Discord', err);
+        });
+        
+        return res.json({
+          success: true,
+          message: 'Character marked as needs changes',
+          character: refreshedCharacter.toObject(),
+          voteCounts: voteResult.counts,
+          feedback: feedbackText
+        });
+      }
+    }
+    
+    // No decision yet - return vote counts
+    const { APPROVAL_THRESHOLD } = ocApplicationService;
+    return res.json({
+      success: true,
+      message: 'Vote recorded',
+      voteCounts: voteResult.counts,
+      remaining: {
+        approvesNeeded: APPROVAL_THRESHOLD - voteResult.counts.approves,
+        needsChangesNeeded: 0 // Fast fail - already checked above
+      }
+    });
+  } catch (error) {
+    logger.error('CHARACTERS', 'Error recording vote', error);
+    return res.status(500).json({ 
+      error: 'An error occurred while recording your vote',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}));
+
+// ------------------- Function: submitCharacter -------------------
+// Submit character for review (move from DRAFT to PENDING)
+router.post('/:id/submit', validateObjectId('id'), asyncHandler(async (req, res) => {
+  // Check authentication
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const userId = req.user.discordId;
+  const characterId = req.params.id;
+
+  // Find character and verify ownership
+  let character = await Character.findOne({ 
+    _id: characterId, 
+    userId: String(userId) 
   });
   
-  await moderationVote.save();
+  if (!character) {
+    character = await Character.findOne({ 
+      _id: characterId, 
+      userId: userId 
+    });
+  }
   
-  // Get current vote counts
+  if (!character) {
+    return res.status(404).json({ error: 'Character not found or access denied' });
+  }
+
+  // Check if character is in DRAFT state
+  if (character.status !== null && character.status !== undefined) {
+    return res.status(400).json({ 
+      error: `Character cannot be submitted. Current status: ${character.status || 'DRAFT'}` 
+    });
+  }
+
+    try {
+    const ocApplicationService = require('../../services/ocApplicationService');
+    const auditService = require('../../services/auditService');
+    await ocApplicationService.submitCharacter(characterId);
+
+    // Refresh character
+    character = await Character.findById(characterId);
+
+    // Log submission
+    await auditService.logOCAction(
+      'character',
+      characterId,
+      character.applicationVersion,
+      'submitted',
+      userId,
+      { characterName: character.name }
+    );
+
+    // Post to Discord admin channel/thread
+    const discordPostingService = require('../../services/discordPostingService');
+    await discordPostingService.postApplicationToAdminChannel(character).catch(err => {
+      logger.error('SERVER', 'Failed to post character submission to Discord', err);
+    });
+
+    logger.info('CHARACTERS', `Character ${character.name} submitted for review by user ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Character submitted for review successfully',
+      character: character.toObject()
+    });
+  } catch (error) {
+    logger.error('CHARACTERS', 'Error submitting character', error);
+    res.status(500).json({ 
+      error: 'An error occurred while submitting your character',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}));
+
+// ------------------- Function: resubmitCharacter -------------------
+// Resubmit character after needs changes (increment version, reset votes)
+router.post('/:id/resubmit', validateObjectId('id'), asyncHandler(async (req, res) => {
+  // Check authentication
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const userId = req.user.discordId;
+  const characterId = req.params.id;
+
+  // Find character and verify ownership
+  let character = await Character.findOne({ 
+    _id: characterId, 
+    userId: String(userId) 
+  });
+  
+  if (!character) {
+    character = await Character.findOne({ 
+      _id: characterId, 
+      userId: userId 
+    });
+  }
+  
+  if (!character) {
+    return res.status(404).json({ error: 'Character not found or access denied' });
+  }
+
+  // Check if character is in NEEDS_CHANGES state (denied)
+  if (character.status !== 'denied') {
+    return res.status(400).json({ 
+      error: `Character cannot be resubmitted. Current status: ${character.status || 'DRAFT'}` 
+    });
+  }
+
+  try {
+    const ocApplicationService = require('../../services/ocApplicationService');
+    const auditService = require('../../services/auditService');
+    
+    const oldVersion = character.applicationVersion || 1;
+    await ocApplicationService.resubmitCharacter(characterId);
+
+    // Refresh character
+    character = await Character.findById(characterId);
+    
+    // Log resubmission
+    await auditService.logResubmission(
+      characterId,
+      oldVersion,
+      character.applicationVersion,
+      userId
+    );
+
+    // Post update to Discord thread if thread exists
+    if (character.discordThreadId) {
+      const discordPostingService = require('../../services/discordPostingService');
+      discordPostingService.postResubmissionUpdate(character).catch(err => {
+        logger.error('CHARACTERS', 'Failed to post resubmission update to Discord', err);
+      });
+    } else {
+      // Post new submission to Discord
+      const user = await User.findOne({ discordId: userId });
+      postCharacterCreationToDiscord(character, user, req.user, req).catch(err => {
+        logger.error('SERVER', 'Failed to post character resubmission to Discord', err);
+      });
+    }
+
+    logger.info('CHARACTERS', `Character ${character.name} resubmitted (v${character.applicationVersion}) by user ${userId}`);
+
+    res.json({
+      success: true,
+      message: `Character resubmitted successfully (v${character.applicationVersion})`,
+      character: character.toObject()
+    });
+  } catch (error) {
+    logger.error('CHARACTERS', 'Error resubmitting character', error);
+    res.status(500).json({ 
+      error: 'An error occurred while resubmitting your character',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}));
+
+// ------------------- Function: getApplicationStatus -------------------
+// Get current application status for a character
+router.get('/:id/application', validateObjectId('id'), asyncHandler(async (req, res) => {
+  // Check authentication
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const userId = req.user.discordId;
+  const characterId = req.params.id;
+
+  // Find character
+  let character = await Character.findOne({ 
+    _id: characterId, 
+    userId: String(userId) 
+  });
+  
+  if (!character) {
+    character = await Character.findOne({ 
+      _id: characterId, 
+      userId: userId 
+    });
+  }
+  
+  if (!character) {
+    return res.status(404).json({ error: 'Character not found or access denied' });
+  }
+
+  // Get vote counts
+  const applicationVersion = character.applicationVersion || 1;
   const approveCount = await CharacterModeration.countDocuments({
     characterId: characterId,
+    applicationVersion: applicationVersion,
     vote: 'approve'
+  });
+  
+  const needsChangesCount = await CharacterModeration.countDocuments({
+    characterId: characterId,
+    applicationVersion: applicationVersion,
+    vote: 'needs_changes'
   });
   
   const denyCount = await CharacterModeration.countDocuments({
     characterId: characterId,
+    applicationVersion: applicationVersion,
     vote: 'deny'
   });
-  
-  // Check if we have 1 approve or 1 deny (reduced for testing)
-  const VOTE_THRESHOLD = 1;
-  
-  if (approveCount >= VOTE_THRESHOLD) {
-    // Character is accepted
-    character.status = 'accepted';
-    await character.save();
-    
-    // Refresh character to ensure we have the latest data
-    const refreshedCharacter = await CharacterModel.findById(character._id).lean();
-    if (!refreshedCharacter) {
-      logger.error('CHARACTERS', `Failed to refresh character ${character._id} after acceptance`);
-      return res.status(500).json({ error: 'Failed to refresh character after acceptance' });
-    }
-    
-    // Convert back to mongoose document for role assignment if needed
-    const characterForRoles = await CharacterModel.findById(character._id);
-    
-    logger.info('CHARACTERS', `Character "${character.name}" accepted by ${VOTE_THRESHOLD} mod(s)`);
-    
-    // Assign Discord roles to user (await to ensure it completes)
-    try {
-      await assignCharacterRoles(characterForRoles);
-    } catch (err) {
-      logger.error('CHARACTERS', 'Failed to assign character roles', err);
-      // Don't fail the request, but log the error
-    }
-    
-    // Send notification to user via Discord
-    postCharacterStatusToDiscord(characterForRoles, 'accepted', null, isModCharacter).catch(err => {
-      logger.error('CHARACTERS', 'Failed to post character acceptance to Discord', err);
-    });
-    
-    return res.json({
-      success: true,
-      message: 'Character accepted',
-      character: refreshedCharacter,
-      voteCounts: { approves: approveCount, denies: denyCount }
-    });
-  } else if (denyCount >= VOTE_THRESHOLD) {
-    // Character is denied - combine all denial reasons
-    const denialReasons = await CharacterModeration.find({
-      characterId: characterId,
-      vote: 'deny'
-    }).select('modUsername reason').lean();
-    
-    const combinedReason = denialReasons
-      .map(v => `${v.modUsername}: ${v.reason}`)
-      .join('\n');
-    
-    character.status = 'denied';
-    character.denialReason = combinedReason;
-    await character.save();
-    
-    logger.info('CHARACTERS', `Character "${character.name}" denied by ${VOTE_THRESHOLD} mod(s)`);
-    
-    // Send notification to user with denial reason via Discord
-    postCharacterStatusToDiscord(character, 'denied', combinedReason, isModCharacter).catch(err => {
-      logger.error('CHARACTERS', 'Failed to post character denial to Discord', err);
-    });
-    
-    // Try to send DM to user
-    await sendDenialDM(character, combinedReason).catch(err => {
-      logger.error('CHARACTERS', 'Failed to send denial DM to user', err);
-    });
-    
-    return res.json({
-      success: true,
-      message: 'Character denied',
-      character: character,
-      voteCounts: { approves: approveCount, denies: denyCount },
-      denialReason: combinedReason
-    });
-  }
-  
-  // Not enough votes yet
+
+  // Get all votes
+  const votes = await CharacterModeration.find({
+    characterId: characterId,
+    applicationVersion: applicationVersion
+  }).sort({ createdAt: -1 }).lean();
+
   res.json({
-    success: true,
-    message: 'Vote recorded',
-    voteCounts: { approves: approveCount, denies: denyCount },
-    remaining: {
-      approvesNeeded: VOTE_THRESHOLD - approveCount,
-      deniesNeeded: VOTE_THRESHOLD - denyCount
-    }
+    status: character.status, // null=DRAFT, 'pending'=PENDING, 'denied'=NEEDS_CHANGES, 'accepted'=APPROVED
+    applicationVersion: character.applicationVersion,
+    submittedAt: character.submittedAt,
+    decidedAt: character.decidedAt,
+    approvedAt: character.approvedAt,
+    applicationFeedback: character.applicationFeedback || [],
+    voteCounts: {
+      approves: approveCount,
+      needsChanges: needsChangesCount,
+      denies: denyCount
+    },
+    votes: votes,
+    discordMessageId: character.discordMessageId,
+    discordThreadId: character.discordThreadId
   });
 }));
 

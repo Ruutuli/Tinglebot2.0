@@ -2,36 +2,179 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Character Moderation - Tinglebot Dashboard</title>
+  
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="Moderate pending OC character submissions for Tinglebot." />
+  <meta property="og:title" content="Character Moderation - Tinglebot Dashboard" />
+  <meta property="og:description" content="Moderate pending OC character submissions for Tinglebot." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://tinglebot.xyz/character-moderation" />
+  <meta property="og:image" content="https://tinglebot.xyz/images/tingleicon.png" />
+  <link rel="icon" type="image/png" href="/images/tingleicon.png" />
+  <meta name="theme-color" content="#00A3DA" />
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://tinglebot.xyz/character-moderation" />
+  
+  <!-- JSON-LD Organization schema -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Organization",
+    "name":"Tinglebot Dashboard",
+    "url":"https://tinglebot.xyz/",
+    "logo":"https://tinglebot.xyz/images/tingleicon.png",
+    "description":"Moderate pending OC character submissions for Tinglebot."
+  }
+  </script>
+  
+  <!-- Resource Preloading for Critical Assets -->
+  <link rel="preload" href="/css/styles.css" as="style">
+  <link rel="dns-prefetch" href="https://kit.fontawesome.com">
+  
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/css/character.css">
   <link rel="stylesheet" href="/css/buttons.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
 </head>
 <body class="character-moderation-page">
+  <!-- Skip Links for Accessibility -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <a href="#sidebar-navigation" class="skip-link">Skip to navigation</a>
+  
   <header class="topbar" role="banner">
     <div class="topbar-left">
-      <a href="/" class="topbar-back-button" aria-label="Back to Dashboard">
-        <i class="fas fa-arrow-left" aria-hidden="true"></i>
-        <span>Back to Dashboard</span>
-      </a>
+      <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars" aria-hidden="true"></i>
+      </button>
       <div class="breadcrumb">Character Moderation</div>
     </div>
     <div class="topbar-right">
+      <button class="btn btn-secondary" onclick="loadPendingCharacters()" aria-label="Refresh pending characters">
+        <i class="fas fa-sync-alt" aria-hidden="true"></i>
+        <span>Refresh</span>
+      </button>
+      <div class="bot-status online">
+        <span class="status-dot"></span>
+        <span class="status-text">Online</span>
+      </div>
+      <!-- Notification Container -->
+      <div id="notification-container" class="notification-container"></div>
       <div class="user-menu" id="user-menu">
-        <img src="" alt="Profile picture" class="user-avatar" id="user-avatar">
+        <img src="/images/ankleicon.png" alt="Profile picture" class="user-avatar" id="user-avatar">
         <span class="username" id="username">Loading...</span>
       </div>
     </div>
   </header>
 
-  <div class="moderation-container">
+  <div class="main-wrapper">
+    <aside class="sidebar" id="sidebar-navigation" role="navigation" aria-label="Main sidebar navigation">
+      <div class="sidebar-header">
+        <img src="/images/tingleicon.png" alt="Tinglebot Logo" class="bot-logo" />
+        <h1>Tinglebot</h1>
+      </div>
+      <nav class="sidebar-nav" aria-label="Main sidebar navigation">
+        <ul>
+          <li>
+            <a href="/#dashboard" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+          </li>
+          
+          <!-- Characters Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-user-friends"></i><span>Characters</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/character-create.html"><i class="fas fa-user-plus"></i><span>Create Character</span></a></li>
+              <li><a href="/oc-list.html"><i class="fas fa-th"></i><span>OC List</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- Community Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-users"></i><span>Community</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a></li>
+              <li><a href="/#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a></li>
+              <li><a href="/#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a></li>
+              <li><a href="/#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a></li>
+              <li><a href="/#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a></li>
+              <li><a href="/#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- Game Features Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-gamepad"></i><span>Game Features</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a></li>
+              <li><a href="/#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a></li>
+              <li><a href="/map"><i class="fas fa-map"></i><span>Map</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- Models Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-database"></i><span>Models</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#character"><i class="fas fa-user"></i><span>Characters</span></a></li>
+              <li><a href="/#helpwantedquest"><i class="fas fa-clipboard-list"></i><span>Help Wanted Quests</span></a></li>
+              <li id="inventories-nav-item-models" style="display: none;"><a href="/#inventory"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li><a href="/#item"><i class="fas fa-gem"></i><span>Items</span></a></li>
+              <li><a href="/#monster"><i class="fas fa-dragon"></i><span>Monsters</span></a></li>
+              <li><a href="/#mount"><i class="fas fa-horse"></i><span>Mounts</span></a></li>
+              <li><a href="/#pet"><i class="fas fa-paw"></i><span>Pets</span></a></li>
+              <li><a href="/#quest"><i class="fas fa-tasks"></i><span>Quests</span></a></li>
+              <li><a href="/#relic"><i class="fas fa-scroll"></i><span>Relics</span></a></li>
+              <li><a href="/#starterGear"><i class="fas fa-tshirt"></i><span>Starter Gear</span></a></li>
+              <li><a href="/#vendingShops"><i class="fas fa-shopping-cart"></i><span>Vending Shops</span></a></li>
+              <li><a href="/#vending"><i class="fas fa-store"></i><span>Vending Stock</span></a></li>
+              <li><a href="/#villageShops"><i class="fas fa-shop"></i><span>Village Shops</span></a></li>
+              <li><a href="/#village"><i class="fas fa-map-marker-alt"></i><span>Villages</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- User Area Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-user-circle"></i><span>User Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li id="inventories-nav-item" style="display: none;"><a href="/inventories"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li><a href="/#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a></li>
+              <li><a href="/#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+              <li><a href="/#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a></li>
+              <li><a href="/#tokens-section" data-section="tokens-section"><i class="fas fa-coins"></i><span>Tokens</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- Admin Area (Conditional) -->
+          <li id="admin-area-nav-item" class="nav-dropdown" style="display: none;">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-shield-alt"></i><span>Admin Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a></li>
+              <li class="active"><a href="/character-moderation.html"><i class="fas fa-gavel"></i><span>Character Moderation</span></a></li>
+            </ul>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content" class="main-content">
+    <div class="moderation-container">
     <div class="moderation-header">
       <h1><i class="fas fa-gavel"></i> Character Moderation</h1>
-      <button class="button button--glass" onclick="loadPendingCharacters()">
-        <i class="fas fa-sync-alt"></i> Refresh
-      </button>
     </div>
 
     <div id="characters-list">
@@ -39,6 +182,8 @@
         <i class="fas fa-spinner fa-spin"></i> Loading pending characters...
       </div>
     </div>
+    </div>
+    </main>
   </div>
 
   <!-- Denial Reason Modal -->
@@ -60,8 +205,8 @@
         ></textarea>
       </div>
       <div class="modal-actions">
-        <button type="button" class="button button--glass" onclick="window.closeDenyReasonModal()">Cancel</button>
-        <button type="button" class="button button--danger" id="confirmDenyBtn">
+        <button type="button" class="btn btn-secondary" onclick="window.closeDenyReasonModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDenyBtn">
           <i class="fas fa-times" aria-hidden="true"></i> Confirm Denial
         </button>
       </div>
@@ -80,13 +225,92 @@
         <!-- Content will be inserted here -->
       </div>
       <div class="modal-actions">
-        <button type="button" class="button button--glass" onclick="window.closeVoteModal()">OK</button>
+        <button type="button" class="btn btn-secondary" onclick="window.closeVoteModal()">OK</button>
       </div>
     </div>
   </div>
 
   <script type="module">
     import { checkUserAuthStatus } from '/js/auth.js';
+    import { setupSidebarNavigation } from '/js/modules/navigation.js';
+    
+    // Initialize sidebar navigation and dropdowns
+    function initializeNavigation() {
+      setupSidebarNavigation();
+      initializeDropdownToggles();
+    }
+    
+    // Initialize dropdown toggles
+    function initializeDropdownToggles() {
+      const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
+      
+      if (dropdownToggles.length === 0) {
+        // Retry if elements aren't ready yet
+        setTimeout(initializeDropdownToggles, 100);
+        return;
+      }
+      
+      dropdownToggles.forEach(toggle => {
+        // Use once option to avoid duplicate listeners, or check if already has listener
+        if (toggle.dataset.listenerAttached) {
+          return;
+        }
+        toggle.dataset.listenerAttached = 'true';
+        
+        toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const dropdown = toggle.closest('.nav-dropdown');
+          if (!dropdown) return;
+          
+          const isActive = dropdown.classList.contains('active');
+          
+          // Close all other dropdowns
+          document.querySelectorAll('.nav-dropdown').forEach(item => {
+            if (item !== dropdown) {
+              item.classList.remove('active');
+              const otherToggle = item.querySelector('.nav-dropdown-toggle');
+              if (otherToggle) {
+                otherToggle.setAttribute('aria-expanded', 'false');
+              }
+            }
+          });
+          
+          // Toggle current dropdown
+          if (isActive) {
+            dropdown.classList.remove('active');
+            toggle.setAttribute('aria-expanded', 'false');
+          } else {
+            dropdown.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        });
+      });
+      
+      // Close dropdowns when clicking outside (only attach once)
+      if (!document.dropdownOutsideClickHandler) {
+        document.dropdownOutsideClickHandler = (e) => {
+          if (!e.target.closest('.nav-dropdown')) {
+            document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+              dropdown.classList.remove('active');
+              const toggle = dropdown.querySelector('.nav-dropdown-toggle');
+              if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+              }
+            });
+          }
+        };
+        document.addEventListener('click', document.dropdownOutsideClickHandler);
+      }
+    }
+    
+    // Initialize navigation when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeNavigation);
+    } else {
+      initializeNavigation();
+    }
     
     // Check authentication on page load
     window.addEventListener('DOMContentLoaded', async () => {
@@ -139,6 +363,7 @@
           return;
         }
         
+        // Characters already have needsChanges votes from API
         listContainer.innerHTML = characters.map(char => createCharacterCard(char)).join('');
         
         // Attach event listeners
@@ -153,8 +378,15 @@
     };
     
     function createCharacterCard(character) {
-      const hasVoted = character.votes.approves.some(v => v.modId === window.currentUserId) || 
-                      character.votes.denies.some(v => v.modId === window.currentUserId);
+      // Get current user ID from auth
+      const authStatus = window.currentAuthStatus || {};
+      const currentUserId = authStatus.currentUser?.discordId || window.currentUserId;
+      
+      // Check if user has voted (any vote type)
+      // Note: votes structure is { approves: [], denies: [], needsChanges: [] }
+      const hasVoted = (character.votes?.approves || []).some(v => v.modId === currentUserId) || 
+                      (character.votes?.denies || []).some(v => v.modId === currentUserId) ||
+                      (character.votes?.needsChanges || []).some(v => v.modId === currentUserId);
       
       return `
         <div class="character-card pending" data-character-id="${String(character._id)}" data-is-mod="${character.isModCharacter || false}">
@@ -167,31 +399,38 @@
               </div>
               <div class="character-details">
                 <div class="detail-item">
+                  <i class="fas fa-user" aria-hidden="true"></i>
                   <span class="detail-label">Age</span>
                   <span class="detail-value">${character.age || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
+                  <i class="fas fa-ruler" aria-hidden="true"></i>
                   <span class="detail-label">Height</span>
                   <span class="detail-value">${character.height || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
+                  <i class="fas fa-info" aria-hidden="true"></i>
                   <span class="detail-label">Pronouns</span>
                   <span class="detail-value">${character.pronouns || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
+                  <i class="fas fa-dragon" aria-hidden="true"></i>
                   <span class="detail-label">Race</span>
                   <span class="detail-value">${character.race || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
+                  <i class="fas fa-home" aria-hidden="true"></i>
                   <span class="detail-label">Village</span>
                   <span class="detail-value">${character.homeVillage || 'N/A'}</span>
                 </div>
                 <div class="detail-item">
+                  <i class="fas fa-briefcase" aria-hidden="true"></i>
                   <span class="detail-label">Job</span>
                   <span class="detail-value">${character.job || 'N/A'}</span>
                 </div>
                 ${character.appLink ? `
                 <div class="detail-item">
+                  <i class="fas fa-link" aria-hidden="true"></i>
                   <span class="detail-label">App Link</span>
                   <span class="detail-value"><a href="${character.appLink}" target="_blank">View</a></span>
                 </div>
@@ -204,7 +443,11 @@
             <div class="vote-counts">
               <div class="vote-count approves">
                 <i class="fas fa-check-circle"></i>
-                <span><strong>${character.approveCount || 0}</strong> Approves</span>
+                <span><strong>${character.approveCount || 0}/4</strong> Approves</span>
+              </div>
+              <div class="vote-count needs-changes">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span><strong>${character.needsChangesCount || 0}</strong> Needs Changes</span>
               </div>
               <div class="vote-count denies">
                 <i class="fas fa-times-circle"></i>
@@ -212,22 +455,39 @@
               </div>
             </div>
             
+            ${character.applicationVersion ? `
+              <div class="application-version-info" style="margin: 10px 0; font-size: 0.9em; color: #9CA3AF;">
+                <i class="fas fa-code-branch"></i> Application Version: ${character.applicationVersion}
+              </div>
+            ` : ''}
+            
+            ${character.discordThreadId ? `
+              <div class="discord-thread-link" style="margin: 10px 0;">
+                <a href="https://discord.com/channels/${character.discordThreadId ? 'GUILD_ID' : ''}/${character.discordThreadId}" target="_blank" class="btn btn-secondary" style="font-size: 0.9em;">
+                  <i class="fab fa-discord"></i> View Discord Thread
+                </a>
+              </div>
+            ` : ''}
+            
             ${hasVoted ? `
               <div class="vote-info-message">
-                <i class="fas fa-info-circle"></i> <span>You have already voted on this character.</span>
+                <i class="fas fa-info-circle"></i> <span>You have already voted. You can change your vote below.</span>
               </div>
-            ` : `
-              <div class="vote-actions">
-                <button class="btn-vote approve" data-action="approve">
-                  <i class="fas fa-check"></i> Approve
-                </button>
-                <button class="btn-vote deny button--danger" data-action="deny">
-                  <i class="fas fa-times"></i> Deny
-                </button>
-              </div>
-            `}
+            ` : ''}
             
-            ${(character.votes.approves.length > 0 || character.votes.denies.length > 0) ? `
+            <div class="vote-actions">
+              <button class="btn-vote approve" data-action="approve">
+                <i class="fas fa-check"></i> Approve
+              </button>
+              <button class="btn-vote needs-changes" data-action="needs_changes" style="background: #FFA500; border-color: #FFA500;">
+                <i class="fas fa-exclamation-triangle"></i> Needs Changes
+              </button>
+              <button class="btn-vote deny btn btn-danger" data-action="deny">
+                <i class="fas fa-times"></i> Deny
+              </button>
+            </div>
+            
+            ${((character.votes?.approves || []).length > 0 || (character.votes?.denies || []).length > 0 || (character.votes?.needsChanges || []).length > 0) ? `
               <div class="vote-history">
                 <h4>Vote History</h4>
                 ${character.votes.approves.map(vote => `
@@ -235,10 +495,20 @@
                     <div>
                       <div class="vote-item-user"><i class="fas fa-check-circle"></i> ${vote.modUsername}</div>
                       <div class="vote-item-reason">Approved on ${new Date(vote.createdAt).toLocaleString()}</div>
+                      ${vote.note ? `<div class="vote-item-note" style="margin-top: 5px; font-style: italic;">Note: ${vote.note}</div>` : ''}
                     </div>
                   </div>
                 `).join('')}
-                ${character.votes.denies.map(vote => `
+                ${(character.votes.needsChanges || []).map(vote => `
+                  <div class="vote-item needs-changes" style="border-left-color: #FFA500;">
+                    <div>
+                      <div class="vote-item-user"><i class="fas fa-exclamation-triangle"></i> ${vote.modUsername}</div>
+                      <div class="vote-item-reason">${vote.note || vote.reason || 'Changes requested'}</div>
+                      <div class="vote-item-reason vote-item-time">${new Date(vote.createdAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                `).join('')}
+                ${(character.votes?.denies || []).map(vote => `
                   <div class="vote-item deny">
                     <div>
                       <div class="vote-item-user"><i class="fas fa-times-circle"></i> ${vote.modUsername}</div>
@@ -277,31 +547,45 @@
         return;
       }
       
-      if (action === 'deny') {
-        // Store context and show denial reason modal
+      if (action === 'deny' || action === 'needs_changes') {
+        // Store context and show reason modal
         currentVoteContext = {
           characterId: String(characterId), // Ensure it's a string
           isModCharacter: isModCharacter === true || isModCharacter === 'true',
-          card: card
+          card: card,
+          action: action
         };
         
-        console.log('Showing deny reason modal for character:', characterId);
-        window.showDenyReasonModal();
+        console.log(`Showing reason modal for ${action} on character:`, characterId);
+        window.showDenyReasonModal(action);
         return;
       }
       
       // For approve, submit directly
-      await submitVote(String(characterId), 'approve', null, isModCharacter === true || isModCharacter === 'true', card);
+      await submitVote(String(characterId), 'approve', null, null, isModCharacter === true || isModCharacter === 'true', card);
     };
     
-    window.showDenyReasonModal = function() {
+    window.showDenyReasonModal = function(action = 'deny') {
       const modal = document.getElementById('denyReasonModal');
       const textarea = document.getElementById('denyReasonTextarea');
       const confirmBtn = document.getElementById('confirmDenyBtn');
+      const modalTitle = modal?.querySelector('.modal-title');
       if (!modal || !textarea || !confirmBtn) return;
 
       textarea.value = '';
       modal.classList.add('show');
+      
+      // Update modal title and button text based on action
+      if (action === 'needs_changes') {
+        if (modalTitle) modalTitle.textContent = 'Needs Changes';
+        confirmBtn.innerHTML = '<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Confirm Needs Changes';
+        textarea.placeholder = 'Enter feedback explaining what needs to be changed...';
+      } else {
+        if (modalTitle) modalTitle.textContent = 'Deny Character';
+        confirmBtn.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i> Confirm Denial';
+        textarea.placeholder = 'Enter reason for denial...';
+      }
+      
       setTimeout(() => textarea.focus(), 80);
 
       const newConfirmBtn = confirmBtn.cloneNode(true);
@@ -351,8 +635,9 @@
       
       await submitVote(
         context.characterId,
-        'deny',
+        context.action || 'deny',
         reason,
+        reason, // Use same reason as note for needs_changes
         context.isModCharacter,
         context.card
       );
@@ -366,11 +651,17 @@
       }
     });
     
-    async function submitVote(characterId, vote, reason, isModCharacter, card) {
+    async function submitVote(characterId, vote, reason, note, isModCharacter, card) {
       // Validate required parameters
       if (!characterId || !vote) {
         console.error('Missing required parameters:', { characterId, vote });
         showVoteModal('error', 'Error', 'Missing required information. Please try again.');
+        return;
+      }
+      
+      // Require reason/note for deny and needs_changes
+      if ((vote === 'deny' || vote === 'needs_changes') && !reason && !note) {
+        showVoteModal('error', 'Error', 'Reason or note is required for ' + (vote === 'needs_changes' ? 'needs changes' : 'denial') + ' votes.');
         return;
       }
       
@@ -386,9 +677,12 @@
           isModCharacter: isModCharacter || false
         };
         
-        // Only include reason if it's a deny vote
-        if (vote === 'deny' && reason) {
+        // Include reason and note
+        if (reason) {
           requestBody.reason = reason;
+        }
+        if (note) {
+          requestBody.note = note;
         }
         
         const response = await fetch('/api/characters/moderation/vote', {
@@ -410,29 +704,22 @@
         loadPendingCharacters();
         
         // Show success message in modal
-        if (data.message === 'Character accepted') {
-          showVoteModal('success', 'Character Accepted', 
-            `The character has been accepted and is now active!`);
-        } else if (data.message === 'Character denied') {
-          let denialHtml = `<strong>Character Denied</strong><br><br>The character has been denied.`;
-          if (data.denialReason) {
-            const reasons = data.denialReason.split('\n');
-            denialHtml += '<div class="denial-reasons"><div class="denial-reasons-title">Denial Reasons:</div>';
-            reasons.forEach(reason => {
-              if (reason.trim()) {
-                denialHtml += `<div class="denial-reason-item">${reason}</div>`;
-              }
-            });
-            denialHtml += '</div>';
-          }
-          showVoteModal('error', 'Character Denied', denialHtml);
+        if (data.message === 'Character approved') {
+          showVoteModal('success', 'Character Approved', 
+            `The character has been approved and is now active! Roles have been assigned.`);
+        } else if (data.message === 'Character marked as needs changes') {
+          showVoteModal('warning', 'Needs Changes', 
+            `The character has been marked as needs changes. The user has been notified and can edit and resubmit.`);
         } else {
-          const approvesNeeded = data.remaining.approvesNeeded;
-          const deniesNeeded = data.remaining.deniesNeeded;
+          const approvesNeeded = data.remaining?.approvesNeeded || 0;
+          const voteCounts = data.voteCounts || {};
           showVoteModal('info', 'Vote Recorded', 
             `Your vote has been recorded!<br><br>` +
-            `<strong>${approvesNeeded}</strong> more approve${approvesNeeded !== 1 ? 's' : ''} or ` +
-            `<strong>${deniesNeeded}</strong> more deny${deniesNeeded !== 1 ? 's' : ''} needed.`);
+            `<strong>Vote Status:</strong><br>` +
+            `✅ Approves: ${voteCounts.approves || 0}/4<br>` +
+            `⚠️ Needs Changes: ${voteCounts.needsChanges || 0}<br>` +
+            `❌ Denies: ${voteCounts.denies || 0}<br><br>` +
+            `<strong>${approvesNeeded}</strong> more approval${approvesNeeded !== 1 ? 's' : ''} needed.`);
         }
         
       } catch (error) {
@@ -516,6 +803,87 @@
         window.confirmDeny();
       }
     });
+  </script>
+  <script src="/js/notifications.js"></script>
+  <script type="module" src="/js/modules/navigation.js"></script>
+  <script type="module">
+    import { setupSidebarNavigation } from '/js/modules/navigation.js';
+    
+    // Initialize sidebar navigation
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setupSidebarNavigation();
+        initializeDropdownToggles();
+      });
+    } else {
+      setupSidebarNavigation();
+      initializeDropdownToggles();
+    }
+    
+    // Initialize dropdown toggles
+    function initializeDropdownToggles() {
+      const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
+      
+      if (dropdownToggles.length === 0) {
+        // Retry if elements aren't ready yet
+        setTimeout(initializeDropdownToggles, 100);
+        return;
+      }
+      
+      dropdownToggles.forEach(toggle => {
+        // Use once option to avoid duplicate listeners, or check if already has listener
+        if (toggle.dataset.listenerAttached) {
+          return;
+        }
+        toggle.dataset.listenerAttached = 'true';
+        
+        toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const dropdown = toggle.closest('.nav-dropdown');
+          if (!dropdown) return;
+          
+          const isActive = dropdown.classList.contains('active');
+          
+          // Close all other dropdowns
+          document.querySelectorAll('.nav-dropdown').forEach(item => {
+            if (item !== dropdown) {
+              item.classList.remove('active');
+              const otherToggle = item.querySelector('.nav-dropdown-toggle');
+              if (otherToggle) {
+                otherToggle.setAttribute('aria-expanded', 'false');
+              }
+            }
+          });
+          
+          // Toggle current dropdown
+          if (isActive) {
+            dropdown.classList.remove('active');
+            toggle.setAttribute('aria-expanded', 'false');
+          } else {
+            dropdown.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        });
+      });
+      
+      // Close dropdowns when clicking outside (only attach once)
+      if (!document.dropdownOutsideClickHandler) {
+        document.dropdownOutsideClickHandler = (e) => {
+          if (!e.target.closest('.nav-dropdown')) {
+            document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+              dropdown.classList.remove('active');
+              const toggle = dropdown.querySelector('.nav-dropdown-toggle');
+              if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+              }
+            });
+          }
+        };
+        document.addEventListener('click', document.dropdownOutsideClickHandler);
+      }
+    }
   </script>
 </body>
 </html>

@@ -15,7 +15,7 @@ const notificationSchema = new Schema({
   type: { 
     type: String, 
     required: true,
-    enum: ['character_denied', 'character_accepted', 'system'],
+    enum: ['character_denied', 'character_accepted', 'oc_approved', 'oc_needs_changes', 'oc_resubmitted', 'system'],
     default: 'system'
   },
   title: { 
@@ -38,6 +38,24 @@ const notificationSchema = new Schema({
     type: Boolean, 
     default: false 
   },
+  readAt: {
+    type: Date,
+    default: null
+  },
+  // DM and fallback tracking
+  dmDelivered: {
+    type: Boolean,
+    default: false
+  },
+  fallbackPosted: {
+    type: Boolean,
+    default: false
+  },
+  // Links array for notification actions
+  links: [{
+    text: { type: String, required: true },
+    url: { type: String, required: true }
+  }],
   createdAt: { 
     type: Date, 
     default: Date.now 

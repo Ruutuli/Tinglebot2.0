@@ -57,7 +57,7 @@ const characterSchema = new Schema({
 
   // ------------------- Inventory and links -------------------
   inventory: { type: String, default: '' },
-  appLink: { type: String, required: true },
+  appLink: { type: String, default: '' }, // Optional - obsolete field, kept for external app links
   appArt: { type: String, default: '' }, // URL to application art image
 
   // ------------------- Vendor and shop details -------------------

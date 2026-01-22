@@ -84,6 +84,7 @@ const Raid = require('./models/RaidModel');
 const StealStats = require('./models/StealStatsModel');
 const BlightRollHistory = require('./models/BlightRollHistoryModel');
 const InventoryLog = require('./models/InventoryLogModel');
+const Notification = require('./models/NotificationModel');
 const { getGearType, getWeaponStyle } = require('./utils/gearModule');
 
 // Import character stats module for updating attack and defense
@@ -564,6 +565,15 @@ app.get('/character-moderation', (req, res) => {
 
 app.get('/character-moderation.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'character-moderation.html'));
+});
+
+// ------------------- Function: serveOCListPage -------------------
+app.get('/oc-list', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'oc-list.html'));
+});
+
+app.get('/oc-list.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'oc-list.html'));
 });
 
 // ------------------- Function: serveOCPage -------------------
@@ -8368,17 +8378,15 @@ function getESTTime() {
   return new Date(utcTime - estOffsetMs);
 }
 
-// ------------------- Function: get8AMESTInUTC -------------------
-// Converts 8:00 AM EST on a given date to UTC
-// Uses fixed UTC-5 offset (EST) for simplicity
-function get8AMESTInUTC(year, month, day) {
-  // EST is UTC-5, so 8 AM EST = 13:00 UTC
-  const utcDate = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
+// ------------------- Function: get8AMUTC -------------------
+// Gets 8:00 AM UTC on a given date
+function get8AMUTC(year, month, day) {
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 8, 0, 0));
   return utcDate;
 }
 
 // ------------------- Function: getWeatherDayBounds -------------------
-// Calculates the start and end of the current weather day (8am to 8am EST = 13:00 to 13:00 UTC)
+// Calculates the start and end of the current weather day (8am to 8am UTC)
 function getWeatherDayBounds() {
   // Get current time in UTC
   const now = new Date();
@@ -8389,20 +8397,20 @@ function getWeatherDayBounds() {
   
   let weatherDayStart, weatherDayEnd;
   
-  if (currentHour >= 13) {
-    // If it's 13:00 UTC or later (8am EST or later), the weather day started at 13:00 UTC today
-    weatherDayStart = get8AMESTInUTC(currentYear, currentMonth, currentDay);
+  if (currentHour >= 8) {
+    // If it's 8:00 UTC or later, the weather day started at 8:00 UTC today
+    weatherDayStart = get8AMUTC(currentYear, currentMonth, currentDay);
     
-    // End is 13:00 UTC tomorrow (8am EST tomorrow)
-    const tomorrow = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay + 1, 13, 0, 0));
+    // End is 8:00 UTC tomorrow
+    const tomorrow = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay + 1, 8, 0, 0));
     weatherDayEnd = tomorrow;
   } else {
-    // If it's before 13:00 UTC (before 8am EST), the weather day started at 13:00 UTC yesterday
-    const yesterday = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay - 1, 13, 0, 0));
+    // If it's before 8:00 UTC, the weather day started at 8:00 UTC yesterday
+    const yesterday = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay - 1, 8, 0, 0));
     weatherDayStart = yesterday;
     
-    // End is 13:00 UTC today (8am EST today)
-    weatherDayEnd = get8AMESTInUTC(currentYear, currentMonth, currentDay);
+    // End is 8:00 UTC today
+    weatherDayEnd = get8AMUTC(currentYear, currentMonth, currentDay);
   }
   
   return { weatherDayStart, weatherDayEnd };
@@ -10871,6 +10879,142 @@ app.get('/api/blupee/status', async (req, res) => {
 // ------------------- Section: Notification API Routes -------------------
 
 const notificationService = require('./utils/notificationService');
+
+// Get all notifications for the current user
+app.get('/api/notifications', async (req, res) => {
+  try {
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user.discordId;
+    const { read, limit = 50, skip = 0 } = req.query;
+
+    const query = { userId };
+    if (read !== undefined) {
+      query.read = read === 'true';
+    }
+
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip(parseInt(skip))
+      .lean();
+
+    const total = await Notification.countDocuments(query);
+
+    res.json({
+      success: true,
+      notifications,
+      total,
+      unreadCount: await Notification.countDocuments({ userId, read: false })
+    });
+  } catch (error) {
+    console.error('[server.js]: Error fetching notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Get all notifications (including read ones) for notifications page
+app.get('/api/notifications/all', async (req, res) => {
+  try {
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user.discordId;
+    const { limit = 100, skip = 0 } = req.query;
+
+    const notifications = await Notification.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip(parseInt(skip))
+      .lean();
+
+    const total = await Notification.countDocuments({ userId });
+
+    res.json({
+      success: true,
+      notifications,
+      total,
+      unreadCount: await Notification.countDocuments({ userId, read: false })
+    });
+  } catch (error) {
+    console.error('[server.js]: Error fetching all notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Mark a notification as read
+app.post('/api/notifications/:id/read', async (req, res) => {
+  try {
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user.discordId;
+    const notificationId = req.params.id;
+
+    const notification = await Notification.findOne({ _id: notificationId, userId });
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    notification.read = true;
+    notification.readAt = new Date();
+    await notification.save();
+
+    res.json({ success: true, notification });
+  } catch (error) {
+    console.error('[server.js]: Error marking notification as read:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+// Mark all notifications as read
+app.post('/api/notifications/read-all', async (req, res) => {
+  try {
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user.discordId;
+
+    await Notification.updateMany(
+      { userId, read: false },
+      { $set: { read: true, readAt: new Date() } }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[server.js]: Error marking all notifications as read:', error);
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
+// Delete a notification
+app.delete('/api/notifications/:id', async (req, res) => {
+  try {
+    if (!req.user || !req.user.discordId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user.discordId;
+    const notificationId = req.params.id;
+
+    const notification = await Notification.findOne({ _id: notificationId, userId });
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    await Notification.deleteOne({ _id: notificationId, userId });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[server.js]: Error deleting notification:', error);
+    res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
 
 // ------------------- Section: Data Export API Routes -------------------
 
@@ -13710,6 +13854,28 @@ const startServer = async () => {
   } catch (err) {
     logger.warn('SERVER', 'Cache cleanup initialization failed');
   }
+  
+  // Setup reminder service for 24-hour pending application reminders
+  const reminderService = require('./services/reminderService');
+  
+  // Check for pending reminders every hour
+  setInterval(async () => {
+    try {
+      await reminderService.processReminders();
+    } catch (error) {
+      logger.error('SERVER', 'Error processing reminders', error);
+    }
+  }, 60 * 60 * 1000); // Every hour
+  
+  // Also run immediately on startup (after a short delay to let DB connect)
+  setTimeout(async () => {
+    try {
+      logger.info('SERVER', 'Running initial reminder check...');
+      await reminderService.processReminders();
+    } catch (error) {
+      logger.error('SERVER', 'Error in initial reminder check', error);
+    }
+  }, 30000); // 30 seconds after startup
   
   // Start server FIRST so health checks pass immediately
   // Bind to 0.0.0.0 for Railway/Docker deployments

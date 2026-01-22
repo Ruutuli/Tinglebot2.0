@@ -218,7 +218,7 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
     referenceDate = new Date(); // Fallback to now
   }
 
-  // Weather day is 8am EST to 8am EST = 13:00 UTC to 13:00 UTC
+  // Weather day is 8am UTC to 8am UTC
   const currentHour = referenceDate.getUTCHours();
   const currentYear = referenceDate.getUTCFullYear();
   const currentMonth = referenceDate.getUTCMonth();
@@ -226,16 +226,16 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
 
   let startUTC, endUTC;
 
-  if (currentHour >= 13) {
-    // If it's 13:00 UTC or later (8am EST or later), period started at 13:00 UTC today
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
-    // End is 13:00 UTC tomorrow
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 13, 0, 0, 0));
+  if (currentHour >= 8) {
+    // If it's 8:00 UTC or later, period started at 8:00 UTC today
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
+    // End is 8:00 UTC tomorrow
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 8, 0, 0, 0));
   } else {
-    // If it's before 13:00 UTC (before 8am EST), period started at 13:00 UTC yesterday
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
-    // End is 13:00 UTC today
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
+    // If it's before 8:00 UTC, period started at 8:00 UTC yesterday
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 8, 0, 0, 0));
+    // End is 8:00 UTC today
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
   }
 
   // Validate calculated bounds
@@ -258,7 +258,7 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
   }
 
   // Calculate EST-equivalent dates for backward compatibility
-  // startUTC and startEastern represent the same moment (startUTC is 13:00 UTC = 8 AM EST)
+  // startUTC and startEastern represent the same moment (startUTC is 8:00 UTC)
   // We keep both for backward compatibility, but they're the same Date object
   const startEastern = new Date(startUTC);
   const endEastern = new Date(endUTC);
@@ -1145,7 +1145,7 @@ function specialWeatherFlavorText(weatherType, character = null) {
 
 // ------------------- Schedule Guaranteed Special Weather -------------------
 /**
- * Schedules guaranteed special weather for the **next** period (8am–7:59am EST).
+ * Schedules guaranteed special weather for the **next** period (8am–7:59am UTC).
  * Song of Storms and any caller of this function schedule special weather for the next period
  * only; the current period is never modified.
  *

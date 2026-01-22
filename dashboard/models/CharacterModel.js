@@ -57,7 +57,7 @@ const characterSchema = new Schema({
 
   // ------------------- Inventory and links -------------------
   inventory: { type: String, default: '' },
-  appLink: { type: String, required: true },
+  appLink: { type: String, default: '' }, // Optional - obsolete field, kept for external app links
   inventorySynced: { type: Boolean, default: false },
   appArt: { type: String, default: '' }, // URL to application art image
 
@@ -197,13 +197,34 @@ const characterSchema = new Schema({
 
   // ------------------- Character Status -------------------
   // Status: 'pending', 'accepted', 'denied'
+  // DRAFT → status: null/undefined (character not yet submitted)
+  // PENDING → status: 'pending'
+  // NEEDS_CHANGES → status: 'denied'
+  // APPROVED → status: 'accepted'
   status: { 
     type: String, 
     enum: ['pending', 'accepted', 'denied'], 
-    default: 'pending' 
+    default: null  // Changed to null for DRAFT state
   },
   // Denial reason (only set when status is 'denied')
   denialReason: { type: String, default: null },
+
+  // ------------------- Application Tracking -------------------
+  // Tracks application versioning and workflow state
+  applicationVersion: { type: Number, default: 1 },
+  submittedAt: { type: Date, default: null },
+  decidedAt: { type: Date, default: null },
+  approvedAt: { type: Date, default: null },
+  applicationFeedback: [{
+    modId: { type: String, required: true },
+    modUsername: { type: String, required: true },
+    text: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  discordMessageId: { type: String, default: null },
+  discordThreadId: { type: String, default: null },
+  reminderLastSentAt: { type: Date, default: null },
+  publicSlug: { type: String, default: null },
 
   // ------------------- Biography Information -------------------
   gender: { type: String, default: '' }, // Includes pronouns, e.g., "Female | she/her"
@@ -229,15 +250,32 @@ characterSchema.pre('save', function (next) {
     this.jobVoucher = false;
   }
   
-  // New characters always start as 'pending' when submitted
-  if (this.isNew) {
-    this.status = 'pending';
+  // New characters start as DRAFT (status: null) - they need to be submitted
+  // Don't auto-set status to 'pending' on creation anymore
+  // Status will be set when character is submitted for review
+  
+  // IMPORTANT: Only set status to 'accepted' for OLD characters (created before moderation system)
+  // This is for backward compatibility ONLY. New characters should remain as DRAFT (null)
+  // Check if character was created before the moderation system was implemented
+  // We can identify old characters by checking if they have a createdAt date but no applicationVersion
+  // AND they're being updated (not newly created)
+  if (!this.isNew && this.status === null && !this.applicationVersion && this.createdAt) {
+    // Only auto-approve if this is clearly an old character (has createdAt from before)
+    // For safety, we'll be conservative and NOT auto-approve unless explicitly needed
+    // Commented out to prevent auto-approval of new characters
+    // this.status = 'accepted';
   }
   
-  // If this is an existing character (not new) and doesn't have a status, set it to 'accepted'
-  // This handles backward compatibility for characters created before the moderation system
-  if (!this.isNew && !this.status) {
-    this.status = 'accepted';
+  // Auto-generate publicSlug from name if not set
+  if (this.name && !this.publicSlug) {
+    this.publicSlug = this.name.toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+  }
+  
+  // Set applicationVersion default if not set
+  if (!this.applicationVersion) {
+    this.applicationVersion = 1;
   }
   
   next();

@@ -1,0 +1,362 @@
+// ============================================================================
+// ------------------- Discord Posting Service -------------------
+// Handles posting OC applications to Discord admin channels/threads
+// ============================================================================
+
+const logger = require('../utils/logger');
+const Character = require('../models/CharacterModel');
+const CharacterModeration = require('../models/CharacterModerationModel');
+
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+// Use the specific channel ID for OC application reviews (964342870796537909)
+const ADMIN_REVIEW_CHANNEL_ID = process.env.ADMIN_REVIEW_CHANNEL_ID || process.env.CHARACTER_CREATION_CHANNEL_ID || '964342870796537909';
+const ADMIN_REVIEW_THREAD_ID = process.env.ADMIN_REVIEW_THREAD_ID; // Optional
+
+/**
+ * Post application to admin review channel/thread
+ * @param {Object} character - Character document
+ * @returns {Promise<Object>} - Discord message and thread info
+ */
+async function postApplicationToAdminChannel(character) {
+  try {
+    if (!DISCORD_TOKEN) {
+      logger.warn('DISCORD_POSTING', 'DISCORD_TOKEN not configured, skipping Discord post');
+      return null;
+    }
+
+    // Get vote counts
+    const applicationVersion = character.applicationVersion || 1;
+    const approveCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'approve'
+    });
+    
+    const needsChangesCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'needs_changes'
+    });
+    
+    const denyCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'deny'
+    });
+
+    // Helper functions for formatting
+    const capitalize = (str) => {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    };
+
+    const capitalizeFirstLetter = (str) => {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    };
+
+    const convertCmToFeetInches = (heightInCm) => {
+      const totalInches = heightInCm / 2.54;
+      const feet = Math.floor(totalInches / 12);
+      const inches = Math.round(totalInches % 12);
+      return `${feet}' ${inches}"`;
+    };
+
+    const getVillageEmoji = (village) => {
+      const emojiMap = {
+        'inariko': '🌊',
+        'rudania': '🔥',
+        'vhintl': '🌿'
+      };
+      return emojiMap[village?.toLowerCase()] || '';
+    };
+
+    const heightInFeetInches = character.height ? convertCmToFeetInches(character.height) : 'N/A';
+    const homeVillageEmoji = getVillageEmoji(character.homeVillage);
+    const currentVillageEmoji = getVillageEmoji(character.currentVillage);
+
+    // Build gear info
+    const gearInfo = [];
+    if (character.gearWeapon?.name) {
+      gearInfo.push(`🗡️ **Weapon:** ${character.gearWeapon.name}`);
+    }
+    if (character.gearShield?.name) {
+      gearInfo.push(`🛡️ **Shield:** ${character.gearShield.name}`);
+    }
+    if (character.gearArmor?.chest?.name) {
+      gearInfo.push(`👕 **Chest:** ${character.gearArmor.chest.name}`);
+    }
+    if (character.gearArmor?.legs?.name) {
+      gearInfo.push(`👖 **Legs:** ${character.gearArmor.legs.name}`);
+    }
+    const gearText = gearInfo.length > 0 ? gearInfo.join('\n') : 'None selected';
+
+    // Generate OC page URL
+    const ocPageSlug = character.publicSlug || character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const dashboardUrl = (process.env.DASHBOARD_URL || 'https://tinglebot.xyz').replace(/\/+$/, '');
+    const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
+    const moderationUrl = `${dashboardUrl}/character-moderation`;
+
+    // Create embed
+    const embed = {
+      title: `✨ OC Application Review: ${character.name} (v${applicationVersion})`,
+      description: `A new character application is pending review.`,
+      color: 0xFFA500, // Orange for pending
+      thumbnail: {
+        url: character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      fields: [
+        {
+          name: '👤 Character Information',
+          value: `**Name:** ${character.name}\n**Pronouns:** ${character.pronouns}\n**Age:** ${character.age}\n**Height:** ${character.height} cm (${heightInFeetInches})`,
+          inline: false
+        },
+        {
+          name: '🏘️ Location & Job',
+          value: `**Race:** ${capitalize(character.race)}\n**Home Village:** ${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}\n**Job:** ${capitalizeFirstLetter(character.job)}`,
+          inline: false
+        },
+        {
+          name: '❤️ Stats',
+          value: `**Hearts:** ${character.currentHearts}/${character.maxHearts}\n**Stamina:** ${character.currentStamina}/${character.maxStamina}\n**Attack:** ${character.attack || 0}\n**Defense:** ${character.defense || 0}`,
+          inline: false
+        },
+        {
+          name: '⚔️ Starting Gear',
+          value: gearText || 'None selected',
+          inline: false
+        },
+        {
+          name: '📊 Vote Status',
+          value: `✅ **Approves:** ${approveCount}/4\n⚠️ **Needs Changes:** ${needsChangesCount}\n❌ **Denies:** ${denyCount}`,
+          inline: false
+        },
+        {
+          name: '🔗 Links',
+          value: `[📋 View OC Page](${ocPageUrl})\n[⚖️ Review in Moderation Panel](${moderationUrl})`,
+          inline: false
+        }
+      ],
+      footer: {
+        text: `Application v${applicationVersion} • Submitted: ${character.submittedAt ? new Date(character.submittedAt).toLocaleDateString() : 'N/A'}`
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    // Post to channel or thread
+    let targetChannelId = ADMIN_REVIEW_CHANNEL_ID;
+    let messageResponse;
+
+    if (ADMIN_REVIEW_THREAD_ID) {
+      // Post to thread
+      messageResponse = await fetch(`https://discord.com/api/v10/channels/${ADMIN_REVIEW_THREAD_ID}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bot ${DISCORD_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          embeds: [embed]
+        })
+      });
+      targetChannelId = ADMIN_REVIEW_THREAD_ID;
+    } else {
+      // Post to channel
+      messageResponse = await fetch(`https://discord.com/api/v10/channels/${ADMIN_REVIEW_CHANNEL_ID}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bot ${DISCORD_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          embeds: [embed]
+        })
+      });
+    }
+
+    if (!messageResponse.ok) {
+      const errorText = await messageResponse.text();
+      logger.error('DISCORD_POSTING', `Failed to post application to Discord: ${messageResponse.status} - ${errorText}`);
+      return null;
+    }
+
+    const messageData = await messageResponse.json();
+    
+    // Update character with Discord message/thread IDs
+    character.discordMessageId = messageData.id;
+    if (ADMIN_REVIEW_THREAD_ID) {
+      character.discordThreadId = ADMIN_REVIEW_THREAD_ID;
+    }
+    await character.save();
+
+    logger.success('DISCORD_POSTING', `Application posted to Discord: ${character.name} (v${applicationVersion})`);
+    
+    return {
+      messageId: messageData.id,
+      threadId: ADMIN_REVIEW_THREAD_ID || null,
+      channelId: targetChannelId
+    };
+  } catch (error) {
+    logger.error('DISCORD_POSTING', 'Error posting application to Discord', error);
+    return null;
+  }
+}
+
+/**
+ * Update application embed with current vote counts
+ * @param {string} messageId - Discord message ID
+ * @param {Object} character - Character document
+ * @returns {Promise<boolean>} - Success status
+ */
+async function updateApplicationEmbed(messageId, character) {
+  try {
+    if (!DISCORD_TOKEN || !messageId) {
+      return false;
+    }
+
+    // Get vote counts
+    const applicationVersion = character.applicationVersion || 1;
+    const approveCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'approve'
+    });
+    
+    const needsChangesCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'needs_changes'
+    });
+    
+    const denyCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'deny'
+    });
+
+    // Determine channel ID (thread or channel)
+    const channelId = character.discordThreadId || ADMIN_REVIEW_CHANNEL_ID;
+
+    // Get existing message
+    const getMessageResponse = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!getMessageResponse.ok) {
+      logger.warn('DISCORD_POSTING', `Could not fetch message ${messageId} for update`);
+      return false;
+    }
+
+    const existingMessage = await getMessageResponse.json();
+    const existingEmbed = existingMessage.embeds?.[0];
+
+    if (!existingEmbed) {
+      logger.warn('DISCORD_POSTING', `Message ${messageId} has no embed to update`);
+      return false;
+    }
+
+    // Update vote status field
+    const updatedFields = existingEmbed.fields.map(field => {
+      if (field.name === '📊 Vote Status') {
+        return {
+          name: '📊 Vote Status',
+          value: `✅ **Approves:** ${approveCount}/4\n⚠️ **Needs Changes:** ${needsChangesCount}\n❌ **Denies:** ${denyCount}`,
+          inline: false
+        };
+      }
+      return field;
+    });
+
+    // Update embed
+    const updatedEmbed = {
+      ...existingEmbed,
+      fields: updatedFields
+    };
+
+    // Patch message
+    const patchResponse = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        embeds: [updatedEmbed]
+      })
+    });
+
+    if (!patchResponse.ok) {
+      const errorText = await patchResponse.text();
+      logger.error('DISCORD_POSTING', `Failed to update embed: ${patchResponse.status} - ${errorText}`);
+      return false;
+    }
+
+    logger.info('DISCORD_POSTING', `Updated application embed for ${character.name}`);
+    return true;
+  } catch (error) {
+    logger.error('DISCORD_POSTING', 'Error updating application embed', error);
+    return false;
+  }
+}
+
+/**
+ * Post resubmission update to Discord thread
+ * @param {Object} character - Character document
+ * @returns {Promise<boolean>} - Success status
+ */
+async function postResubmissionUpdate(character) {
+  try {
+    if (!DISCORD_TOKEN) {
+      return false;
+    }
+
+    const channelId = character.discordThreadId || ADMIN_REVIEW_CHANNEL_ID;
+    if (!channelId) {
+      logger.warn('DISCORD_POSTING', `No channel/thread ID for resubmission update: ${character.name}`);
+      return false;
+    }
+
+    const embed = {
+      title: `🔄 Application Resubmitted: ${character.name}`,
+      description: `Application has been resubmitted as **version ${character.applicationVersion}**.\n\nPlease review the updated application.`,
+      color: 0x00A3DA, // Tinglebot blue
+      footer: {
+        text: `Resubmitted: ${new Date().toLocaleDateString()}`
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    const response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        embeds: [embed]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('DISCORD_POSTING', `Failed to post resubmission update: ${response.status} - ${errorText}`);
+      return false;
+    }
+
+    logger.success('DISCORD_POSTING', `Posted resubmission update for ${character.name} (v${character.applicationVersion})`);
+    return true;
+  } catch (error) {
+    logger.error('DISCORD_POSTING', 'Error posting resubmission update', error);
+    return false;
+  }
+}
+
+module.exports = {
+  postApplicationToAdminChannel,
+  updateApplicationEmbed,
+  postResubmissionUpdate
+};

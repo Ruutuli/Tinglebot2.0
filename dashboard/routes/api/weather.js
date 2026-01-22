@@ -11,9 +11,9 @@ const logger = require('../../utils/logger.js');
 const { getWeatherWithoutGeneration } = require('../../services/weatherService.js');
 
 // ------------------- Function: getWeatherDayBounds -------------------
-// Calculates the start and end of the current weather day (8am to 7:59am EST)
+// Calculates the start and end of the current weather day (8am to 7:59am UTC)
 // Returns UTC timestamps for database queries
-// Weather day is 8am EST to 8am EST = 13:00 UTC to 13:00 UTC
+// Weather day is 8am UTC to 8am UTC
 function getWeatherDayBounds() {
   const now = new Date();
   const currentHour = now.getUTCHours();
@@ -23,16 +23,16 @@ function getWeatherDayBounds() {
   
   let weatherDayStart, weatherDayEnd;
   
-  if (currentHour >= 13) {
-    // If it's 13:00 UTC or later (8am EST or later), period started at 13:00 UTC today
-    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
-    // End is 13:00 UTC tomorrow (8am EST tomorrow)
-    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 13, 0, 0, 0));
+  if (currentHour >= 8) {
+    // If it's 8:00 UTC or later, period started at 8:00 UTC today
+    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
+    // End is 8:00 UTC tomorrow
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 8, 0, 0, 0));
   } else {
-    // If it's before 13:00 UTC (before 8am EST), period started at 13:00 UTC yesterday
-    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
-    // End is 13:00 UTC today (8am EST today)
-    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
+    // If it's before 8:00 UTC, period started at 8:00 UTC yesterday
+    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 8, 0, 0, 0));
+    // End is 8:00 UTC today
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
   }
   
   return { weatherDayStart, weatherDayEnd };

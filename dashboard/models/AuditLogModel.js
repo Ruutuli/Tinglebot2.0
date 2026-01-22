@@ -31,7 +31,7 @@ const auditLogSchema = new Schema({
   // ------------------- Action Information -------------------
   action: { 
     type: String, 
-    enum: ['CREATE', 'UPDATE', 'DELETE'],
+    enum: ['CREATE', 'UPDATE', 'DELETE', 'vote', 'vote_changed', 'decision', 'feedback_sent'],
     required: true,
     index: true
   },
@@ -87,6 +87,7 @@ auditLogSchema.index({ modelName: 1, timestamp: -1 });
 auditLogSchema.index({ adminUserId: 1, timestamp: -1 });
 auditLogSchema.index({ action: 1, timestamp: -1 });
 auditLogSchema.index({ recordId: 1, modelName: 1 });
+auditLogSchema.index({ recordId: 1, applicationVersion: 1 }); // For versioned OC workflow tracking
 
 // ============================================================================
 // ------------------- Static Methods -------------------

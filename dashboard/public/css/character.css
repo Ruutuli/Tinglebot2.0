@@ -160,6 +160,23 @@
   padding-right: 1.125rem;
 }
 
+/* Fix autofill styling - prevent white background that makes text invisible */
+.form-field-group input:-webkit-autofill,
+.form-field-group input:-webkit-autofill:hover,
+.form-field-group input:-webkit-autofill:focus,
+.form-field-group input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px rgba(28, 32, 38, 0.95) inset !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 0 0 30px rgba(28, 32, 38, 0.95) inset !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  background-color: rgba(28, 32, 38, 0.95) !important;
+}
+
+.form-field-group input:-moz-autofill {
+  background-color: rgba(28, 32, 38, 0.95) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
 .form-field-group select {
   cursor: pointer;
   background-color: rgba(28, 32, 38, 0.95);
@@ -379,6 +396,68 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
+
+/* ============================================================================
+   Base Button Classes (for use outside form-actions)
+============================================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 500;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--card-radius, 8px);
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--text-primary, #ffffff);
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent, #00A3DA) 0%, #0088b8 100%);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #0088b8 0%, #006d96 100%);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #ffffff);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-danger {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid var(--error-color, #EF4444);
+  color: var(--error-color, #EF4444);
+}
+
+.btn-danger:hover {
+  background: var(--error-color, #EF4444);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Form Actions Button Classes (scoped to form-actions)
+============================================================================ */
 
 .form-actions .btn-primary {
   background: linear-gradient(135deg, var(--accent, #00A3DA) 0%, #0088b8 100%);
@@ -2796,7 +2875,7 @@
 }
 
 .character-moderation-page .moderation-container {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: calc(64px + 2rem) var(--main-padding) 2rem;
   min-height: calc(100vh - 64px);
@@ -2809,9 +2888,6 @@
 }
 
 .character-moderation-page .moderation-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
   border-bottom: 2px solid var(--glass-border);
@@ -3224,76 +3300,59 @@
 /* Modal Styles */
 .character-moderation-page .modal-overlay {
   display: none;
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  background: rgba(0, 0, 0, 0.7);
-  z-index: 1000;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 10000;
   backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
-  margin: 0 !important;
-  padding: 0 !important;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .character-moderation-page .modal-overlay.show {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  flex-direction: row !important;
+  display: flex;
+  opacity: 1;
 }
 
 .character-moderation-page .modal {
-  background: var(--glass-bg, rgba(20, 20, 30, 0.95)) !important;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1)) !important;
-  border-radius: var(--card-radius, 12px);
-  padding: 1.25rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1.5rem 2rem;
   max-width: 500px;
   width: 90%;
-  max-height: 60vh;
-  box-shadow: var(--section-glow, 0 8px 32px rgba(0, 0, 0, 0.3));
-  backdrop-filter: blur(var(--frost-blur, 10px));
-  animation: slideUp 0.3s ease;
-  position: relative !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  display: block !important;
-  z-index: 1001;
-  color: var(--text-primary, #ffffff) !important;
-  margin: auto !important;
-  transform: none !important;
+  max-height: 85vh;
+  box-shadow: var(--section-glow);
+  backdrop-filter: blur(var(--frost-blur));
+  position: relative;
+  color: var(--text-primary);
   overflow-y: auto;
+  transform: scale(0.9) translateY(20px);
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  opacity: 0;
+}
+
+.character-moderation-page .modal-overlay.show .modal {
+  transform: scale(1) translateY(0);
+  opacity: 1;
 }
 
 .character-moderation-page .modal.modal-large {
   max-width: 600px;
-  max-height: 85vh;
 }
 
 /* Deny-reason modal: compact, no overflow/centering bugs */
-.character-moderation-page #denyReasonModal {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.character-moderation-page #denyReasonModal.show {
-  display: flex !important;
-}
-
 .character-moderation-page .deny-reason-modal {
-  width: 90%;
   max-width: 480px;
-  flex-shrink: 0;
-  align-self: center;
-  max-height: 42vh;
-  overflow-y: auto;
-  padding: 1rem 1.25rem;
-  margin: 0;
+  max-height: 60vh;
+  padding: 1.5rem 2rem;
 }
 
 .character-moderation-page .deny-reason-modal .modal-header {
@@ -3321,27 +3380,15 @@
   flex-wrap: nowrap;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* Modal animations are handled via transitions on .modal-overlay.show and .modal */
 
 .character-moderation-page .modal-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .character-moderation-page .modal-icon {
@@ -3387,7 +3434,9 @@
   justify-content: flex-end;
   gap: 0.75rem;
   flex-wrap: wrap;
-  margin-top: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--glass-border);
 }
 
 .character-moderation-page .modal-close {
@@ -3440,7 +3489,7 @@
 
 /* Topbar styling for character moderation page */
 .character-moderation-page .topbar {
-  padding: 0.75rem var(--main-padding);
+  padding: 1rem var(--main-padding);
 }
 
 .character-moderation-page .topbar-left {
@@ -3452,6 +3501,18 @@
 .character-moderation-page .topbar-right {
   gap: 1rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.character-moderation-page .topbar-right .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.character-moderation-page .topbar-right .btn i {
+  font-size: 0.85rem;
 }
 
 .character-moderation-page .breadcrumb {
@@ -3465,8 +3526,11 @@
 }
 
 .character-moderation-page .breadcrumb::before {
-  content: '⚖️';
+  content: '\f0e3';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
   font-size: 1.25rem;
+  margin-right: 0.25rem;
 }
 
 .character-moderation-page .user-menu {
@@ -3544,6 +3608,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  
+  .character-moderation-page .topbar-right .btn span {
+    display: none;
+  }
+  
+  .character-moderation-page .topbar-right .btn {
+    padding: 0.5rem;
+    min-width: 40px;
+    justify-content: center;
   }
   
   .character-moderation-page .username {

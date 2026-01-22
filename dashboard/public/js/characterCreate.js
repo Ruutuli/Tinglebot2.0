@@ -459,14 +459,14 @@ async function handleFormSubmit(event) {
       throw new Error(data.error || 'Failed to create character');
     }
     
-    // Success
-    showMessage('Character created successfully! Redirecting to your OC page...', 'success');
+    // Success - character created as DRAFT
+    showMessage('Character saved as draft! Redirecting to your OC page where you can review and submit for approval...', 'success');
     
     // Redirect to OC page if URL is provided, otherwise go to dashboard
-    const ocPageUrl = data.ocPageUrl || '/';
+    const ocPageUrl = data.ocPageUrl || data.character?.publicSlug ? `/ocs/${data.character.publicSlug}` : '/';
     setTimeout(() => {
       window.location.href = ocPageUrl;
-    }, 2000);
+    }, 3000);
     
   } catch (error) {
     console.error('Error creating character:', error);
@@ -540,17 +540,14 @@ function validateForm() {
     return false;
   }
   
-  // Validate app link
-  if (!appLink || appLink.length === 0) {
-    showMessage('Application link is required', 'error');
-    return false;
-  }
-  
-  try {
-    new URL(appLink);
-  } catch (e) {
-    showMessage('Please enter a valid URL for the application link', 'error');
-    return false;
+  // Validate app link (only if provided - it's optional now)
+  if (appLink && appLink.length > 0) {
+    try {
+      new URL(appLink);
+    } catch (e) {
+      showMessage('Please enter a valid URL for the application link', 'error');
+      return false;
+    }
   }
   
   // Validate icon

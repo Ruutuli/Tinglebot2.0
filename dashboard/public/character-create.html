@@ -7,13 +7,38 @@
   
   <!-- SEO & Social Meta -->
   <meta name="description" content="Create a new character for Tinglebot 2.0" />
+  <meta property="og:title" content="Create Character - Tinglebot 2.0 Dashboard" />
+  <meta property="og:description" content="Create a new character for Tinglebot 2.0" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://tinglebot.xyz/character-create" />
+  <meta property="og:image" content="https://tinglebot.xyz/images/tingleicon.png" />
   <link rel="icon" type="image/png" href="/images/tingleicon.png" />
   <meta name="theme-color" content="#00A3DA" />
   
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://tinglebot.xyz/character-create" />
+  
+  <!-- JSON-LD Organization schema -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Organization",
+    "name":"Tinglebot Dashboard",
+    "url":"https://tinglebot.xyz/",
+    "logo":"https://tinglebot.xyz/images/tingleicon.png",
+    "description":"Create a new character for Tinglebot 2.0"
+  }
+  </script>
+  
+  <!-- Resource Preloading for Critical Assets -->
+  <link rel="preload" href="/css/styles.css" as="style">
+  <link rel="preload" href="/js/characterCreate.js" as="script" crossorigin="anonymous">
+  <link rel="dns-prefetch" href="https://kit.fontawesome.com">
+  
   <!-- Critical CSS - Load immediately -->
-  <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/buttons.css" />
-  <link rel="stylesheet" href="css/character.css" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="stylesheet" href="/css/buttons.css" />
+  <link rel="stylesheet" href="/css/character.css" />
   
   <!-- External Scripts -->
   <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
@@ -32,6 +57,12 @@
       <div class="breadcrumb">Create Character</div>
     </div>
     <div class="topbar-right">
+      <div class="bot-status online">
+        <span class="status-dot"></span>
+        <span class="status-text">Online</span>
+      </div>
+      <!-- Notification Container -->
+      <div id="notification-container" class="notification-container"></div>
       <div class="user-menu" id="user-menu">
         <img src="/images/ankleicon.png" alt="Profile picture" class="user-avatar" id="user-avatar" />
         <span class="username" id="username">Loading...</span>
@@ -247,16 +278,14 @@
               <div class="form-field-group full-width">
                 <label for="character-app-link">
                   <span>Application Link</span>
-                  <span class="required">*</span>
                 </label>
                 <input 
                   type="url" 
                   id="character-app-link" 
                   name="appLink" 
-                  required 
                   placeholder="https://..."
                 />
-                <small class="field-description">Link to character application</small>
+                <small class="field-description">This field is obsolete - we now use the bot to store all info. However, if you still want to make your own external app, you can link it here! (Optional)</small>
               </div>
 
               <div class="form-field-group full-width">
@@ -445,6 +474,7 @@
   </div>
 
   <!-- Scripts -->
-  <script type="module" src="js/characterCreate.js"></script>
+  <script src="/js/notifications.js"></script>
+  <script type="module" src="/js/characterCreate.js"></script>
 </body>
 </html>

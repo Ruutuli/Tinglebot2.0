@@ -673,6 +673,145 @@ async function sendNotificationEnabledConfirmation(userId, notificationType) {
   }
 }
 
+/**
+ * Send OC decision notification (approval or needs changes)
+ * @param {string} userId - Discord user ID
+ * @param {string} decision - 'approved' or 'needs_changes'
+ * @param {object} characterData - Character information
+ * @param {string} feedback - Feedback text (for needs changes)
+ * @returns {Promise<object>} - Notification result with DM and fallback status
+ */
+async function sendOCDecisionNotification(userId, decision, characterData, feedback = null) {
+  try {
+    const Notification = require('../models/NotificationModel');
+    const dashboardUrl = (process.env.DASHBOARD_URL || 'https://tinglebot.xyz').replace(/\/+$/, '');
+    const ocPageSlug = characterData.publicSlug || characterData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
+
+    let embed;
+    let notificationType;
+    let title;
+    let message;
+
+    if (decision === 'approved') {
+      embed = {
+        title: '✅ Character Approved!',
+        description: `Your character **${characterData.name}** has been approved and is now active!`,
+        color: 0x4caf50, // Green
+        fields: [
+          {
+            name: '🎉 Congratulations!',
+            value: 'Your character is now part of the Tinglebot world!',
+            inline: false
+          },
+          {
+            name: '🔗 View Your Character',
+            value: `[Open OC Page](${ocPageUrl})`,
+            inline: false
+          }
+        ],
+        timestamp: new Date().toISOString(),
+        footer: {
+          text: 'Roots of the Wild • Character Approval'
+        }
+      };
+      notificationType = 'oc_approved';
+      title = `Character Approved: ${characterData.name}`;
+      message = `Your character "${characterData.name}" has been approved!`;
+    } else {
+      embed = {
+        title: '⚠️ Character Needs Changes',
+        description: `Your character **${characterData.name}** needs some changes before it can be approved.`,
+        color: 0xFFA500, // Orange
+        fields: [
+          {
+            name: '📝 Feedback',
+            value: feedback || 'Changes requested by moderators',
+            inline: false
+          },
+          {
+            name: '✏️ Edit & Resubmit',
+            value: `You can edit your character and resubmit it for review.\n\n[Edit Character](${ocPageUrl})`,
+            inline: false
+          }
+        ],
+        timestamp: new Date().toISOString(),
+        footer: {
+          text: 'Roots of the Wild • Character Review'
+        }
+      };
+      notificationType = 'oc_needs_changes';
+      title = `Character Needs Changes: ${characterData.name}`;
+      message = feedback || 'Changes requested by moderators';
+    }
+
+    // Try to send DM
+    let dmDelivered = false;
+    try {
+      dmDelivered = await sendDiscordDM(userId, embed);
+    } catch (dmError) {
+      logger.warn('NOTIFICATION', `Failed to send DM to user ${userId}`, dmError);
+    }
+
+    // Always create dashboard notification
+    const notification = new Notification({
+      userId: userId,
+      type: notificationType,
+      title: title,
+      message: message,
+      characterId: characterData._id?.toString() || characterData.id,
+      characterName: characterData.name,
+      dmDelivered: dmDelivered,
+      fallbackPosted: false,
+      links: [{
+        text: decision === 'approved' ? 'View Character' : 'Edit Character',
+        url: ocPageUrl
+      }],
+      read: false
+    });
+    await notification.save();
+
+    // If DM failed, post fallback ping in public channel
+    let fallbackPosted = false;
+    if (!dmDelivered) {
+      try {
+        const DECISION_CHANNEL_ID = process.env.DECISION_CHANNEL_ID || process.env.CHARACTER_CREATION_CHANNEL_ID;
+        if (DECISION_CHANNEL_ID && process.env.DISCORD_TOKEN) {
+          const pingMessage = `<@${userId}> A determination has been made on your OC application. Please check your DMs from Tinglebot or your Dashboard Notifications.`;
+          
+          await fetch(`https://discord.com/api/v10/channels/${DECISION_CHANNEL_ID}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              content: pingMessage
+            })
+          });
+
+          fallbackPosted = true;
+          notification.fallbackPosted = true;
+          await notification.save();
+        }
+      } catch (fallbackError) {
+        logger.warn('NOTIFICATION', `Failed to post fallback ping for user ${userId}`, fallbackError);
+      }
+    }
+
+    logger.success('NOTIFICATION', `OC decision notification sent to user ${userId} (DM: ${dmDelivered}, Fallback: ${fallbackPosted})`);
+
+    return {
+      dmDelivered,
+      fallbackPosted,
+      notificationId: notification._id
+    };
+  } catch (error) {
+    logger.error('NOTIFICATION', 'Error sending OC decision notification', error);
+    throw error;
+  }
+}
+
 module.exports = {
   sendDiscordDM,
   sendBloodMoonAlerts,
@@ -681,6 +820,7 @@ module.exports = {
   sendBlightCallNotifications,
   sendDebuffEndNotification,
   sendDailyWeatherNotifications,
-  sendNotificationEnabledConfirmation
+  sendNotificationEnabledConfirmation,
+  sendOCDecisionNotification
 };
 

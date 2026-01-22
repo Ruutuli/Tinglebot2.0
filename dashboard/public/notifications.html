@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Notifications • Tinglebot Dashboard</title>
+  <link rel="icon" type="image/png" href="/images/tingleicon.png" />
+  <link rel="preload" href="js/auth.js" as="script" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/users.css" />
+  <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
+  <style>
+    .notifications-page {
+      padding: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .notifications-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .notifications-header h1 {
+      margin: 0;
+      font-size: 2rem;
+      color: var(--text-primary, #ffffff);
+    }
+
+    .notifications-actions {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .notifications-actions button {
+      padding: 0.5rem 1rem;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: var(--text-primary, #ffffff);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.9rem;
+    }
+
+    .notifications-actions button:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .notifications-stats {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-primary, #ffffff);
+    }
+
+    .notifications-filters {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-button {
+      padding: 0.5rem 1rem;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: var(--text-primary, #ffffff);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.9rem;
+    }
+
+    .filter-button.active {
+      background: var(--primary-color, #00A3DA);
+      border-color: var(--primary-color, #00A3DA);
+    }
+
+    .filter-button:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .notifications-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .notification-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .notification-card:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .notification-card.read {
+      opacity: 0.6;
+    }
+
+    .notification-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.5rem;
+    }
+
+    .notification-card-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+    }
+
+    .notification-icon {
+      font-size: 1.25rem;
+      color: var(--primary-color, #00A3DA);
+    }
+
+    .notification-card-title h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary, #ffffff);
+    }
+
+    .notification-card-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .notification-action-btn {
+      padding: 0.25rem 0.5rem;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.85rem;
+      border-radius: 4px;
+    }
+
+    .notification-action-btn:hover {
+      color: var(--text-primary, #ffffff);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .notification-card-message {
+      color: var(--text-secondary, rgba(255, 255, 255, 0.8));
+      margin-bottom: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .notification-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .notification-card-time {
+      font-size: 0.85rem;
+      color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+    }
+
+    .notification-card-links {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .notification-link {
+      color: var(--primary-color, #00A3DA);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+    }
+
+    .notification-link:hover {
+      text-decoration: underline;
+    }
+
+    .notification-empty {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+    }
+
+    .notification-empty i {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .notification-loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+    }
+
+    .notification-type-badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-left: 0.5rem;
+    }
+
+    .notification-type-oc_approved {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+    }
+
+    .notification-type-oc_needs_changes {
+      background: rgba(255, 165, 0, 0.2);
+      color: #ffa500;
+    }
+
+    .notification-type-character_denied {
+      background: rgba(244, 67, 54, 0.2);
+      color: #f44336;
+    }
+
+    .notification-type-character_accepted {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4caf50;
+    }
+
+    .notification-type-system {
+      background: rgba(0, 163, 218, 0.2);
+      color: #00a3da;
+    }
+  </style>
+</head>
+<body class="notifications-page">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <a href="#sidebar-navigation" class="skip-link">Skip to navigation</a>
+
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars" aria-hidden="true"></i>
+      </button>
+      <div class="breadcrumb">Notifications</div>
+    </div>
+    <div class="topbar-right">
+      <div class="bot-status online">
+        <span class="status-dot"></span>
+        <span class="status-text">Online</span>
+      </div>
+      <!-- Notification Container -->
+      <div id="notification-container" class="notification-container"></div>
+      <div class="user-menu" id="user-menu">
+        <img src="/images/ankleicon.png" alt="Profile picture of the user" class="user-avatar" id="user-avatar" />
+        <span class="username" id="username">Loading...</span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-content">
+            <div class="user-info" id="user-info" style="display: none;">
+              <div class="user-details">
+                <img src="/images/ankleicon.png" alt="User avatar" class="user-dropdown-avatar" id="user-dropdown-avatar">
+                <div>
+                  <div class="user-name" id="user-name">Loading...</div>
+                  <div class="user-discriminator" id="user-discriminator">#0000</div>
+                </div>
+              </div>
+              <div class="user-stats">
+                <div>
+                  <div class="stat-label">Tokens</div>
+                  <div class="stat-value" id="user-tokens">0</div>
+                </div>
+                <div>
+                  <div class="stat-label">Character Slots</div>
+                  <div class="stat-value" id="user-slots">0</div>
+                </div>
+              </div>
+              <div class="user-actions">
+                <button class="profile-button" type="button">
+                  <i class="fas fa-user"></i> Profile
+                </button>
+                <button class="logout-button" type="button">
+                  <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+              </div>
+            </div>
+            <div class="guest-info" id="guest-info" style="display: none;">
+              <div class="guest-message">
+                <i class="fas fa-user-circle"></i>
+                <span>Guest User</span>
+              </div>
+              <div class="guest-actions">
+                <button class="login-button" type="button">
+                  <i class="fab fa-discord"></i> Login with Discord
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-wrapper">
+    <aside class="sidebar" id="sidebar-navigation" role="navigation" aria-label="Main sidebar navigation">
+      <div class="sidebar-header">
+        <img src="/images/tingleicon.png" alt="Tinglebot Logo" class="bot-logo" />
+        <h1>Tinglebot</h1>
+      </div>
+      <nav class="sidebar-nav" aria-label="Main sidebar navigation">
+        <ul>
+          <li>
+            <a href="/#dashboard" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+          </li>
+          
+          <!-- Characters Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-user-friends"></i><span>Characters</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/character-create.html"><i class="fas fa-user-plus"></i><span>Create Character</span></a></li>
+              <li><a href="/oc-list.html"><i class="fas fa-th"></i><span>OC List</span></a></li>
+            </ul>
+          </li>
+
+          <li>
+            <a href="/inventories.html"><i class="fas fa-box"></i><span>Inventories</span></a>
+          </li>
+
+          <li>
+            <a href="/notifications.html" class="active"><i class="fas fa-bell"></i><span>Notifications</span></a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main id="main-content" class="main-content">
+      <div class="notifications-page">
+        <div class="notifications-header">
+          <h1><i class="fas fa-bell"></i> Notifications</h1>
+          <div class="notifications-actions">
+            <button onclick="markAllAsRead()" id="mark-all-read-btn">
+              <i class="fas fa-check-double"></i> Mark All as Read
+            </button>
+            <button onclick="refreshNotifications()" id="refresh-btn">
+              <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="notifications-stats">
+          <div class="stat-item">
+            <div class="stat-label">Total Notifications</div>
+            <div class="stat-value" id="total-count">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Unread</div>
+            <div class="stat-value" id="unread-count">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Read</div>
+            <div class="stat-value" id="read-count">0</div>
+          </div>
+        </div>
+
+        <div class="notifications-filters">
+          <button class="filter-button active" onclick="filterNotifications('all')" data-filter="all">
+            All
+          </button>
+          <button class="filter-button" onclick="filterNotifications('unread')" data-filter="unread">
+            Unread
+          </button>
+          <button class="filter-button" onclick="filterNotifications('read')" data-filter="read">
+            Read
+          </button>
+        </div>
+
+        <div id="notifications-list" class="notifications-list">
+          <div class="notification-loading">
+            <i class="fas fa-spinner fa-spin"></i> Loading notifications...
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="js/auth.js"></script>
+  <script src="js/notifications.js"></script>
+  <script>
+    let allNotifications = [];
+    let currentFilter = 'all';
+
+    async function loadAllNotifications() {
+      try {
+        const response = await fetch('/api/notifications/all', {
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            window.location.href = '/auth/discord';
+            return;
+          }
+          throw new Error('Failed to load notifications');
+        }
+
+        const data = await response.json();
+        allNotifications = data.notifications || [];
+        
+        updateStats(data);
+        renderNotifications();
+      } catch (error) {
+        console.error('[notifications.html]: Error loading notifications:', error);
+        document.getElementById('notifications-list').innerHTML = `
+          <div class="notification-empty">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>Failed to load notifications. Please try again.</p>
+          </div>
+        `;
+      }
+    }
+
+    function updateStats(data) {
+      const total = data.total || 0;
+      const unread = data.unreadCount || 0;
+      const read = total - unread;
+
+      document.getElementById('total-count').textContent = total;
+      document.getElementById('unread-count').textContent = unread;
+      document.getElementById('read-count').textContent = read;
+    }
+
+    function filterNotifications(filter) {
+      currentFilter = filter;
+      
+      // Update filter buttons
+      document.querySelectorAll('.filter-button').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.filter === filter) {
+          btn.classList.add('active');
+        }
+      });
+
+      renderNotifications();
+    }
+
+    function renderNotifications() {
+      const container = document.getElementById('notifications-list');
+      
+      let filtered = allNotifications;
+      if (currentFilter === 'unread') {
+        filtered = allNotifications.filter(n => !n.read);
+      } else if (currentFilter === 'read') {
+        filtered = allNotifications.filter(n => n.read);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="notification-empty">
+            <i class="fas fa-bell-slash"></i>
+            <p>No ${currentFilter === 'all' ? '' : currentFilter} notifications</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(notification => {
+        const timeAgo = getTimeAgo(notification.createdAt);
+        const icon = getNotificationIcon(notification.type);
+        const typeClass = `notification-type-${notification.type}`;
+        const typeLabel = notification.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        return `
+          <div class="notification-card ${notification.read ? 'read' : ''}" data-id="${notification._id}">
+            <div class="notification-card-header">
+              <div class="notification-card-title">
+                <i class="fas ${icon} notification-icon"></i>
+                <h3>${escapeHtml(notification.title || 'Notification')}</h3>
+                <span class="notification-type-badge ${typeClass}">${typeLabel}</span>
+              </div>
+              <div class="notification-card-actions">
+                ${!notification.read ? `
+                  <button class="notification-action-btn" onclick="markAsRead('${notification._id}')" title="Mark as read">
+                    <i class="fas fa-check"></i>
+                  </button>
+                ` : ''}
+                <button class="notification-action-btn" onclick="deleteNotification('${notification._id}')" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+            <div class="notification-card-message">
+              ${escapeHtml(notification.message || '')}
+            </div>
+            <div class="notification-card-footer">
+              <div class="notification-card-time">
+                <i class="fas fa-clock"></i> ${timeAgo}
+              </div>
+              <div class="notification-card-links">
+                ${(notification.links || []).map(link => `
+                  <a href="${link.url}" class="notification-link" target="_blank">
+                    <i class="fas fa-external-link-alt"></i> ${escapeHtml(link.text)}
+                  </a>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function markAsRead(notificationId) {
+      try {
+        const response = await fetch(`/api/notifications/${notificationId}/read`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+
+        if (!response.ok) throw new Error('Failed to mark as read');
+
+        // Update local state
+        const notification = allNotifications.find(n => n._id === notificationId);
+        if (notification) {
+          notification.read = true;
+          notification.readAt = new Date();
+        }
+
+        renderNotifications();
+        await loadAllNotifications(); // Refresh stats
+      } catch (error) {
+        console.error('[notifications.html]: Error marking as read:', error);
+      }
+    }
+
+    async function markAllAsRead() {
+      try {
+        const response = await fetch('/api/notifications/read-all', {
+          method: 'POST',
+          credentials: 'include'
+        });
+
+        if (!response.ok) throw new Error('Failed to mark all as read');
+
+        // Update local state
+        allNotifications.forEach(n => {
+          n.read = true;
+          n.readAt = new Date();
+        });
+
+        renderNotifications();
+        await loadAllNotifications(); // Refresh stats
+      } catch (error) {
+        console.error('[notifications.html]: Error marking all as read:', error);
+      }
+    }
+
+    async function deleteNotification(notificationId) {
+      if (!confirm('Are you sure you want to delete this notification?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/notifications/${notificationId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        if (!response.ok) throw new Error('Failed to delete notification');
+
+        // Remove from local state
+        allNotifications = allNotifications.filter(n => n._id !== notificationId);
+
+        renderNotifications();
+        await loadAllNotifications(); // Refresh stats
+      } catch (error) {
+        console.error('[notifications.html]: Error deleting notification:', error);
+      }
+    }
+
+    async function refreshNotifications() {
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+      
+      await loadAllNotifications();
+      
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+    }
+
+    function getNotificationIcon(type) {
+      const iconMap = {
+        'oc_approved': 'fa-check-circle',
+        'oc_needs_changes': 'fa-exclamation-triangle',
+        'oc_resubmitted': 'fa-redo',
+        'character_denied': 'fa-times-circle',
+        'character_accepted': 'fa-check-circle',
+        'system': 'fa-info-circle'
+      };
+      return iconMap[type] || 'fa-info-circle';
+    }
+
+    function getTimeAgo(date) {
+      if (!date) return 'Unknown';
+      const d = new Date(date);
+      const seconds = Math.floor((new Date() - d) / 1000);
+      
+      if (seconds < 60) return 'Just now';
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+      if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+      if (seconds < 2592000) return `${Math.floor(seconds / 604800)}w ago`;
+      if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo ago`;
+      return `${Math.floor(seconds / 31536000)}y ago`;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Load notifications on page load
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadAllNotifications);
+    } else {
+      loadAllNotifications();
+    }
+
+    // Poll for new notifications every 30 seconds
+    setInterval(loadAllNotifications, 30000);
+  </script>
+</body>
+</html>

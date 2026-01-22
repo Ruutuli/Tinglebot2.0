@@ -28,17 +28,31 @@ const characterModerationSchema = new Schema({
   // Vote information
   vote: { 
     type: String, 
-    enum: ['approve', 'deny'], 
+    enum: ['approve', 'deny', 'needs_changes'], 
     required: true 
   },
-  reason: { type: String, default: null }, // Required for deny votes
+  reason: { type: String, default: null }, // Required for deny/needs_changes votes
+  note: { type: String, default: null }, // Optional feedback/note from mod
   
-  // Timestamp
-  createdAt: { type: Date, default: Date.now, index: true }
+  // Application versioning
+  applicationVersion: { type: Number, default: 1, index: true },
+  
+  // Timestamps
+  createdAt: { type: Date, default: Date.now, index: true },
+  updatedAt: { type: Date, default: Date.now }
 }, { collection: 'charactermoderations' });
 
-// Compound index to prevent duplicate votes from same mod on same character
-characterModerationSchema.index({ characterId: 1, modId: 1 }, { unique: true });
+// Compound index to prevent duplicate votes from same mod on same character/version
+// Allows one vote per mod per character per version
+characterModerationSchema.index({ characterId: 1, modId: 1, applicationVersion: 1 }, { unique: true });
+
+// Pre-save hook to update updatedAt when vote changes
+characterModerationSchema.pre('save', function(next) {
+  if (this.isModified('vote') || this.isModified('reason') || this.isModified('note')) {
+    this.updatedAt = new Date();
+  }
+  next();
+});
 
 // ============================================================================
 // ------------------- Define and export model -------------------

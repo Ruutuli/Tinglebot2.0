@@ -4,6 +4,114 @@
 ============================================================================ */
 
 // ============================================================================
+// ------------------- Submit/Resubmit Handlers -------------------
+// ============================================================================
+
+/**
+ * Handle character submission for review
+ */
+async function handleSubmitCharacter() {
+  if (!character || !character._id) {
+    showError('Character data not loaded');
+    return;
+  }
+  
+  if (character.status !== null && character.status !== undefined) {
+    showError('Character is already submitted or cannot be submitted');
+    return;
+  }
+  
+  const submitBtn = document.getElementById('submit-character-btn');
+  const originalText = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+  
+  try {
+    const response = await fetch(`/api/characters/${character._id}/submit`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to submit character');
+    }
+    
+    showMessage('Character submitted for review! Moderators will review your application.', 'success');
+    
+    // Reload character to update status
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Error submitting character:', error);
+    showError(error.message || 'An error occurred while submitting your character');
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalText;
+  }
+}
+
+/**
+ * Handle character resubmission after needs changes
+ */
+async function handleResubmitCharacter() {
+  if (!character || !character._id) {
+    showError('Character data not loaded');
+    return;
+  }
+  
+  if (character.status !== 'denied') {
+    showError('Character cannot be resubmitted');
+    return;
+  }
+  
+  if (!confirm('Are you sure you want to resubmit this character? This will create a new version and reset all votes.')) {
+    return;
+  }
+  
+  const resubmitBtn = document.getElementById('resubmit-character-btn');
+  const originalText = resubmitBtn.innerHTML;
+  resubmitBtn.disabled = true;
+  resubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resubmitting...';
+  
+  try {
+    const response = await fetch(`/api/characters/${character._id}/resubmit`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to resubmit character');
+    }
+    
+    showMessage(`Character resubmitted successfully (v${data.character.applicationVersion})! Moderators will review your updated application.`, 'success');
+    
+    // Reload character to update status
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+    
+  } catch (error) {
+    console.error('Error resubmitting character:', error);
+    showError(error.message || 'An error occurred while resubmitting your character');
+    resubmitBtn.disabled = false;
+    resubmitBtn.innerHTML = originalText;
+  }
+}
+
+import { getVillageCrestUrl } from './utils.js';
+
+// ============================================================================
 // ------------------- Global Variables -------------------
 // ============================================================================
 let character = null;
@@ -108,10 +216,43 @@ async function loadCharacter(nameSlug) {
 }
 
 // ============================================================================
+// ------------------- SEO Updates -------------------
+// ============================================================================
+function updateSEOForCharacter(characterName) {
+  // Update canonical URL
+  const canonicalLink = document.getElementById('canonical-link');
+  if (canonicalLink) {
+    const currentUrl = window.location.href;
+    canonicalLink.href = currentUrl;
+  }
+  
+  // Update og:url
+  let ogUrl = document.querySelector('meta[property="og:url"]');
+  if (!ogUrl) {
+    ogUrl = document.createElement('meta');
+    ogUrl.setAttribute('property', 'og:url');
+    document.head.appendChild(ogUrl);
+  }
+  ogUrl.content = window.location.href;
+  
+  // Update og:title with character name
+  let ogTitle = document.querySelector('meta[property="og:title"]');
+  if (ogTitle) {
+    ogTitle.content = `${characterName} - OC Page - Tinglebot 2.0 Dashboard`;
+  }
+  
+  // Update page title
+  document.title = `${characterName} - OC Page - Tinglebot 2.0 Dashboard`;
+}
+
+// ============================================================================
 // ------------------- Character Display -------------------
 // ============================================================================
 async function displayCharacter() {
   hideLoading();
+  
+  // Update SEO meta tags with character-specific URL
+  updateSEOForCharacter(character.name);
   
   // Update breadcrumb
   document.getElementById('breadcrumb').textContent = character.name;
@@ -120,6 +261,22 @@ async function displayCharacter() {
   const iconImg = document.getElementById('character-icon');
   iconImg.src = character.icon || '/images/ankleicon.png';
   iconImg.alt = `${character.name}'s icon`;
+  
+  // Display village crest
+  const villageCrest = document.getElementById('village-crest');
+  const villageCrestImg = document.getElementById('village-crest-img');
+  if (character.homeVillage) {
+    const crestUrl = getVillageCrestUrl(character.homeVillage);
+    if (crestUrl) {
+      villageCrestImg.src = crestUrl;
+      villageCrestImg.alt = `${character.homeVillage} Crest`;
+      villageCrest.style.display = 'block';
+    } else {
+      villageCrest.style.display = 'none';
+    }
+  } else {
+    villageCrest.style.display = 'none';
+  }
   
   // Display character name
   document.getElementById('character-name').textContent = character.name;
@@ -182,42 +339,104 @@ async function displayCharacter() {
   const statusText = document.getElementById('status-text');
   statusBadge.className = 'status-badge';
   
-  switch (character.status) {
-    case 'pending':
-      statusBadge.classList.add('status-pending');
-      statusText.textContent = 'Pending Review';
-      break;
-    case 'accepted':
-      statusBadge.classList.add('status-accepted');
-      statusText.textContent = 'Accepted';
-      break;
-    case 'denied':
-      statusBadge.classList.add('status-denied');
-      statusText.textContent = 'Denied';
-      break;
-    default:
-      statusBadge.classList.add('status-pending');
-      statusText.textContent = 'Unknown';
+  // Map status to display text
+  // null/undefined = DRAFT, 'pending' = PENDING, 'denied' = NEEDS_CHANGES, 'accepted' = APPROVED
+  const statusDisplay = {
+    null: { class: 'status-draft', text: 'Draft', color: '#9CA3AF' },
+    undefined: { class: 'status-draft', text: 'Draft', color: '#9CA3AF' },
+    'pending': { class: 'status-pending', text: 'Pending Review', color: '#FFA500' },
+    'denied': { class: 'status-denied', text: 'Needs Changes', color: '#F44336' },
+    'accepted': { class: 'status-accepted', text: 'Approved', color: '#4CAF50' }
+  };
+  
+  const statusInfo = statusDisplay[character.status] || statusDisplay.null;
+  statusBadge.classList.add(statusInfo.class);
+  statusText.textContent = statusInfo.text;
+  
+  // Show application version if available
+  if (character.applicationVersion && character.applicationVersion > 1) {
+    const versionText = document.getElementById('application-version');
+    if (versionText) {
+      versionText.textContent = `Version ${character.applicationVersion}`;
+      versionText.style.display = 'block';
+    }
   }
   
-  // Display denial reason if denied
+  // Display application feedback if needs changes
+  if (character.status === 'denied' && character.applicationFeedback && character.applicationFeedback.length > 0) {
+    const feedbackContainer = document.getElementById('application-feedback-container');
+    if (feedbackContainer) {
+      let feedbackHTML = '<h3>Feedback from Moderators:</h3><ul>';
+      character.applicationFeedback.forEach(feedback => {
+        feedbackHTML += `<li><strong>${feedback.modUsername}:</strong> ${feedback.text}</li>`;
+      });
+      feedbackHTML += '</ul>';
+      feedbackContainer.innerHTML = feedbackHTML;
+      feedbackContainer.style.display = 'block';
+    }
+  } else {
+    const feedbackContainer = document.getElementById('application-feedback-container');
+    if (feedbackContainer) {
+      feedbackContainer.style.display = 'none';
+    }
+  }
+  
+  // Display denial reason if denied (legacy support)
   if (character.status === 'denied' && character.denialReason) {
     const denialContainer = document.getElementById('denial-reason-container');
     const denialText = document.getElementById('denial-reason-text');
-    denialText.textContent = character.denialReason;
-    denialContainer.style.display = 'block';
+    if (denialContainer && denialText) {
+      denialText.textContent = character.denialReason;
+      denialContainer.style.display = 'block';
+    }
   } else {
-    document.getElementById('denial-reason-container').style.display = 'none';
+    const denialContainer = document.getElementById('denial-reason-container');
+    if (denialContainer) {
+      denialContainer.style.display = 'none';
+    }
   }
   
-  // Show/hide edit button based on status and ownership
+  // Show/hide action buttons based on status and ownership
   const actionButtons = document.getElementById('action-buttons');
-  const isOwner = character.isOwner !== false; // Default to true if not specified (for backwards compatibility)
+  const isOwner = character.isOwner !== false;
   
+  // Show submit/resubmit buttons
+  const submitButtons = document.getElementById('submit-buttons');
+  if (submitButtons && isOwner) {
+    submitButtons.style.display = 'block';
+    
+    // Show submit button for DRAFT status
+    const submitButton = document.getElementById('submit-character-btn');
+    if (submitButton) {
+      if (character.status === null || character.status === undefined) {
+        submitButton.style.display = 'inline-block';
+        submitButton.onclick = handleSubmitCharacter;
+      } else {
+        submitButton.style.display = 'none';
+      }
+    }
+    
+    // Show resubmit button for NEEDS_CHANGES (denied) status
+    const resubmitButton = document.getElementById('resubmit-character-btn');
+    if (resubmitButton) {
+      if (character.status === 'denied') {
+        resubmitButton.style.display = 'inline-block';
+        resubmitButton.onclick = handleResubmitCharacter;
+      } else {
+        resubmitButton.style.display = 'none';
+      }
+    }
+  }
+  
+  // Show edit button for accepted/denied (existing logic)
   if (isOwner && (character.status === 'denied' || character.status === 'accepted')) {
-    actionButtons.style.display = 'block';
+    if (actionButtons) {
+      actionButtons.style.display = 'block';
+    }
   } else {
-    actionButtons.style.display = 'none';
+    if (actionButtons) {
+      actionButtons.style.display = 'none';
+    }
   }
   
   // Show character display
@@ -930,11 +1149,11 @@ async function displayAdditionalStats(character) {
   
   // Render stats by category
   const categoryLabels = {
-    economy: '💰 Economy',
-    status: '📊 Status',
-    combat: '⚔️ Combat',
-    activities: '🎯 Activities',
-    other: '📝 Other'
+    economy: '<i class="fas fa-coins" aria-hidden="true"></i> Economy',
+    status: '<i class="fas fa-info-circle" aria-hidden="true"></i> Status',
+    combat: '<i class="fas fa-sword" aria-hidden="true"></i> Combat',
+    activities: '<i class="fas fa-tasks" aria-hidden="true"></i> Activities',
+    other: '<i class="fas fa-ellipsis-h" aria-hidden="true"></i> Other'
   };
   
   let hasAnyStats = false;
@@ -946,7 +1165,7 @@ async function displayAdditionalStats(character) {
       // Add category header
       const categoryHeader = document.createElement('div');
       categoryHeader.className = 'stats-category-header';
-      categoryHeader.textContent = categoryLabels[category] || category;
+      categoryHeader.innerHTML = categoryLabels[category] || category;
       statsGrid.appendChild(categoryHeader);
       
       // Add stats in this category
