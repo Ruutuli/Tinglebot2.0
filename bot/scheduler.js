@@ -153,6 +153,7 @@ function convertEstCronToUtc(estCronTime) {
 // Track all cron jobs to prevent leaks (for backward compatibility)
 const activeCronJobs = new Set();
 let isSchedulerInitialized = false;
+let schedulerInitCallCount = 0; // Track how many times initializeScheduler is called
 
 /**
  * Create a cron job using the Croner wrapper
@@ -169,6 +170,16 @@ function createCronJob(
  jobFunction,
  timezone = null // Deprecated - no longer used, kept for backward compatibility
 ) {
+ // Guard: Warn if creating jobs after initialization (this should only happen during init)
+ // Note: We allow it during init (when schedulerInitCallCount > 0 but isSchedulerInitialized is false)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', `⚠️ Attempted to create cron job "${jobName}" after scheduler already initialized! This will cause timer leaks!`);
+  // Only log stack trace in verbose mode to avoid spam
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+ }
+ 
  // Adapt signature: wrapper expects (name, pattern, fn, options)
  // No longer pass timezone to avoid memory leaks
  const options = {};
@@ -1951,6 +1962,14 @@ async function resetPetLastRollDates(client) {
 // ============================================================================
 
 function setupBlightScheduler(client) {
+ // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', '⚠️ setupBlightScheduler called after scheduler already initialized! This will cause timer leaks!');
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+  return;
+ }
  // 8:00 PM EST = 01:00 UTC next day
  createCronJob("0 1 * * *", "Blight Roll Call", async () => {
   try {
@@ -2033,6 +2052,14 @@ function setupBlightScheduler(client) {
 // ============================================================================
 
 async function setupBoostingScheduler(client) {
+ // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', '⚠️ setupBoostingScheduler called after scheduler already initialized! This will cause timer leaks!');
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+  return;
+ }
  // Daily boost cleanup at midnight EST = 05:00 UTC
  createCronJob("0 5 * * *", "Boost Cleanup", async () => {
   try {
@@ -2094,6 +2121,14 @@ async function setupBoostingScheduler(client) {
 // ============================================================================
 
 function setupWeatherScheduler(client) {
+ // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', '⚠️ setupWeatherScheduler called after scheduler already initialized! This will cause timer leaks!');
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+  return;
+ }
  const { createCronJob: createCronJobDirect } = require('./scheduler/croner');
  
  // Primary weather update at 8:00am EST = 13:00 UTC
@@ -2561,6 +2596,14 @@ async function checkAndPostScheduledQuests(client, cronTime) {
 }
 
 function setupHelpWantedFixedScheduler(client) {
+ // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', '⚠️ setupHelpWantedFixedScheduler called after scheduler already initialized! This will cause timer leaks!');
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+  return;
+ }
   const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
   
   // Schedule all 24 time slots for full 24-hour coverage
@@ -2896,6 +2939,14 @@ async function runStartupChecks(client) {
 // ------------------- Scheduler Setup Functions ------------------
 
 function setupDailyTasks(client) {
+ // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', '⚠️ setupDailyTasks called after scheduler already initialized! This will cause timer leaks!');
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+  return;
+ }
  // Daily tasks at midnight EST = 05:00 UTC
  // Note: jail release is now handled by Agenda (scheduled at exact release time)
  createCronJob("0 5 * * *", "reset pet last roll dates", () => resetPetLastRollDates(client));
@@ -3022,6 +3073,14 @@ function setupDailyTasks(client) {
 }
 
 function setupQuestPosting(client) {
+ // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', '⚠️ setupQuestPosting called after scheduler already initialized! This will cause timer leaks!');
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+  return;
+ }
  // Quest posting check - runs on 1st of month at midnight EST = 05:00 UTC
  createCronJob("0 5 1 * *", "quest posting check", async () => {
   try {
@@ -3037,6 +3096,14 @@ function setupQuestPosting(client) {
 }
 
 function setupBloodMoonScheduling(client) {
+ // Guard: Prevent setup if scheduler is already initialized (should only be called during init)
+ if (isSchedulerInitialized) {
+  logger.warn('SCHEDULER', '⚠️ setupBloodMoonScheduling called after scheduler already initialized! This will cause timer leaks!');
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.warn('SCHEDULER', 'Stack trace:', new Error().stack);
+  }
+  return;
+ }
  // 8:00 PM EST = 01:00 UTC next day
  createCronJob("0 1 * * *", "blood moon start announcement", () => handleBloodMoonStart(client));
  // 8:00 AM EST = 13:00 UTC
@@ -3044,6 +3111,11 @@ function setupBloodMoonScheduling(client) {
 }
 
  function setupGoogleSheetsRetry() {
+ // Guard: Only allow setup during initialization
+ if (!isSchedulerInitialized && schedulerInitCallCount === 0) {
+  logger.error('SCHEDULER', '⚠️ setupGoogleSheetsRetry called before initialization!');
+  return;
+ }
   createCronJob("*/15 * * * *", "retry pending Google Sheets operations", async () => {
    try {
     const pendingCount = await getPendingSheetOperationsCount();
@@ -3068,16 +3140,23 @@ function setupBloodMoonScheduling(client) {
 // ------------------- Main Initialization Function ------------------
 
 function initializeScheduler(client) {
+ schedulerInitCallCount++;
+ 
  if (!client || !client.isReady()) {
   logger.error('SCHEDULER', 'Invalid or unready Discord client provided to scheduler');
   return;
  }
 
- // Prevent duplicate initialization
+ // Prevent duplicate initialization - this should NEVER happen in normal operation
  if (isSchedulerInitialized) {
-  const destroyedCount = destroyAllCronJobs();
-  logger.warn('SCHEDULER', `Scheduler already initialized - destroyed ${destroyedCount} existing jobs and reinitializing`);
-  isSchedulerInitialized = false; // Reset flag before reinitializing
+  logger.error('SCHEDULER', `⚠️ CRITICAL: Scheduler already initialized (call #${schedulerInitCallCount}) - refusing to reinitialize. This indicates a bug!`);
+  // Only log stack trace and job list in verbose mode to avoid spam
+  if (process.env.VERBOSE_LOGGING === 'true') {
+   logger.error('SCHEDULER', 'Stack trace:', new Error().stack);
+   const existingJobs = listCronJobs();
+   logger.error('SCHEDULER', `Existing jobs (${existingJobs.length}):`, existingJobs.slice(0, 10).join(', '), existingJobs.length > 10 ? '...' : '');
+  }
+  return; // DO NOT reinitialize - this prevents timer leaks
  }
 
  // Run startup checks

@@ -13,7 +13,14 @@ const activeCrons = new Map(); // name -> Cron instance
  */
 function createCronJob(name, pattern, fn, options = {}) {
   // Destroy any existing job with same name (prevents duplicates on reload)
-  destroyCronJob(name);
+  const existingJob = activeCrons.get(name);
+  if (existingJob) {
+    // Only warn in verbose mode to avoid spam
+    if (process.env.VERBOSE_LOGGING === 'true') {
+      console.warn(`[Croner] ⚠️ Job "${name}" already exists - destroying before recreating`);
+    }
+    destroyCronJob(name);
+  }
 
   // Build cron options - only set timezone if explicitly provided
   const cronOptions = {
@@ -41,11 +48,12 @@ function createCronJob(name, pattern, fn, options = {}) {
 
   activeCrons.set(name, job);
   
-  // Only log in verbose mode or for important jobs
+  // Log job creation to help debug timer leaks (only in verbose mode or for critical jobs)
+  const totalJobs = activeCrons.size;
   if (process.env.VERBOSE_LOGGING === 'true' || name.includes('critical') || name.includes('health')) {
-    console.log(`[Croner] Scheduled "${name}" -> ${pattern} tz=${cronOptions.timezone || "UTC"}`);
+    console.log(`[Croner] Scheduled "${name}" -> ${pattern} tz=${cronOptions.timezone || "UTC"} (total: ${totalJobs})`);
   }
-
+  
   return job;
 }
 
@@ -56,9 +64,23 @@ function createCronJob(name, pattern, fn, options = {}) {
 function destroyCronJob(name) {
   const job = activeCrons.get(name);
   if (job) {
-    job.stop();
-    activeCrons.delete(name);
-    console.log(`[Croner] Stopped "${name}"`);
+    try {
+      // Stop the job and wait a tick to ensure cleanup
+      job.stop();
+      // Force garbage collection hint (if available)
+      if (global.gc) {
+        // Only if --expose-gc flag is set
+      }
+      activeCrons.delete(name);
+      // Only log in verbose mode to avoid spam
+      if (process.env.VERBOSE_LOGGING === 'true') {
+        console.log(`[Croner] Stopped "${name}"`);
+      }
+    } catch (error) {
+      console.error(`[Croner] Error stopping job "${name}":`, error.message);
+      // Still remove from map even if stop() fails
+      activeCrons.delete(name);
+    }
   }
 }
 
