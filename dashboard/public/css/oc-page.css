@@ -7,7 +7,8 @@
    Container & Layout
 ============================================================================ */
 .oc-page-container {
-  max-width: 1400px;
+  max-width: 95%;
+  width: 100%;
   margin: 0 auto;
   padding: 2rem 1.5rem;
 }
@@ -233,7 +234,7 @@
 ============================================================================ */
 .character-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1.25rem;
   margin-bottom: 2.5rem;
 }
@@ -616,7 +617,7 @@
 ============================================================================ */
 .gear-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
 }
 
@@ -734,7 +735,7 @@
 ============================================================================ */
 .additional-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
 }
 

@@ -147,7 +147,7 @@ function displayCharacter() {
   }
   
   // Display gear
-  displayGear(character);
+  await displayGear(character);
   
   // Display links
   displayLinks(character);
@@ -211,8 +211,27 @@ function displayCharacter() {
 // ============================================================================
 // ------------------- Gear Display -------------------
 // ============================================================================
-function displayGear(character) {
+async function displayGear(character) {
   let hasGear = false;
+  
+  // Helper function to fetch and set item icon
+  async function setGearIcon(gearName, iconElementId) {
+    if (!gearName) return;
+    try {
+      const response = await fetch(`/api/items/${encodeURIComponent(gearName)}`);
+      if (response.ok) {
+        const item = await response.json();
+        if (item.image) {
+          const iconElement = document.getElementById(iconElementId);
+          if (iconElement) {
+            iconElement.innerHTML = `<img src="${item.image}" alt="${gearName}" class="gear-item-icon" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-sword\\'></i>';">`;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching icon for ${gearName}:`, error);
+    }
+  }
   
   // Weapon
   if (character.gearWeapon?.name) {
@@ -226,6 +245,7 @@ function displayGear(character) {
       weaponStats.push(`${character.gearWeapon.stats.staminaToCraft} Stamina`);
     }
     document.getElementById('gear-weapon-stats').textContent = weaponStats.join(' • ') || 'No stats';
+    await setGearIcon(character.gearWeapon.name, 'gear-weapon-icon');
     weaponCard.style.display = 'flex';
     hasGear = true;
   }
@@ -239,6 +259,7 @@ function displayGear(character) {
       shieldStats.push(`+${character.gearShield.stats.modifierHearts} Hearts`);
     }
     document.getElementById('gear-shield-stats').textContent = shieldStats.join(' • ') || 'No stats';
+    await setGearIcon(character.gearShield.name, 'gear-shield-icon');
     shieldCard.style.display = 'flex';
     hasGear = true;
   }
@@ -252,6 +273,7 @@ function displayGear(character) {
       headStats.push(`+${character.gearArmor.head.stats.modifierHearts} Hearts`);
     }
     document.getElementById('gear-armor-head-stats').textContent = headStats.join(' • ') || 'No stats';
+    await setGearIcon(character.gearArmor.head.name, 'gear-armor-head-icon');
     headCard.style.display = 'flex';
     hasGear = true;
   }
@@ -265,6 +287,7 @@ function displayGear(character) {
       chestStats.push(`+${character.gearArmor.chest.stats.modifierHearts} Hearts`);
     }
     document.getElementById('gear-armor-chest-stats').textContent = chestStats.join(' • ') || 'No stats';
+    await setGearIcon(character.gearArmor.chest.name, 'gear-armor-chest-icon');
     chestCard.style.display = 'flex';
     hasGear = true;
   }
@@ -278,6 +301,7 @@ function displayGear(character) {
       legsStats.push(`+${character.gearArmor.legs.stats.modifierHearts} Hearts`);
     }
     document.getElementById('gear-armor-legs-stats').textContent = legsStats.join(' • ') || 'No stats';
+    await setGearIcon(character.gearArmor.legs.name, 'gear-armor-legs-icon');
     legsCard.style.display = 'flex';
     hasGear = true;
   }
@@ -315,10 +339,19 @@ function displayAdditionalStats(character) {
   const section = document.getElementById('additional-stats-section');
   statsGrid.innerHTML = '';
   
+  // Organize stats into categories
+  const statsByCategory = {
+    economy: [],
+    status: [],
+    combat: [],
+    activities: [],
+    other: []
+  };
+  
   const additionalStats = [];
   
-  // Vending points
-  if (character.vendingPoints !== undefined && character.vendingPoints !== null && character.vendingPoints > 0) {
+  // Vending points (show even if 0)
+  if (character.vendingPoints !== undefined && character.vendingPoints !== null) {
     additionalStats.push({
       label: 'Vending Points',
       value: character.vendingPoints,
@@ -335,12 +368,31 @@ function displayAdditionalStats(character) {
     });
   }
   
-  // Pouch size
-  if (character.pouchSize && character.pouchSize > 0) {
+  // Shop pouch
+  if (character.shopPouch && character.shopPouch.trim() !== '') {
+    additionalStats.push({
+      label: 'Shop Pouch',
+      value: character.shopPouch,
+      icon: 'fa-shopping-bag'
+    });
+  }
+  
+  // Pouch size (show even if 0)
+  if (character.pouchSize !== undefined && character.pouchSize !== null) {
     additionalStats.push({
       label: 'Pouch Size',
       value: character.pouchSize,
       icon: 'fa-bag'
+    });
+  }
+  
+  // Shop link
+  if (character.shopLink && character.shopLink.trim() !== '') {
+    additionalStats.push({
+      label: 'Shop Link',
+      value: character.shopLink,
+      icon: 'fa-link',
+      isLink: true
     });
   }
   
@@ -672,7 +724,39 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Last Collected',
       value: monthNames[character.lastCollectedMonth - 1] || `Month ${character.lastCollectedMonth}`,
-      icon: 'fa-calendar-check'
+      icon: 'fa-calendar-check',
+      category: 'economy'
+    });
+  }
+  
+  // Shop image
+  if (character.shopImage && character.shopImage.trim() !== '') {
+    additionalStats.push({
+      label: 'Shop Image',
+      value: character.shopImage,
+      icon: 'fa-image',
+      isLink: true,
+      category: 'economy'
+    });
+  }
+  
+  // Birthday
+  if (character.birthday && character.birthday.trim() !== '') {
+    additionalStats.push({
+      label: 'Birthday',
+      value: character.birthday,
+      icon: 'fa-birthday-cake',
+      category: 'other'
+    });
+  }
+  
+  // Job voucher job (if voucher exists)
+  if (character.jobVoucher && character.jobVoucherJob) {
+    additionalStats.push({
+      label: 'Job Voucher Job',
+      value: character.jobVoucherJob,
+      icon: 'fa-briefcase',
+      category: 'activities'
     });
   }
   
@@ -681,7 +765,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Active Pet',
       value: character.currentActivePet,
-      icon: 'fa-paw'
+      icon: 'fa-paw',
+      category: 'other'
     });
   }
   
@@ -690,29 +775,74 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Active Mount',
       value: character.currentActiveMount,
-      icon: 'fa-horse'
+      icon: 'fa-horse',
+      category: 'other'
     });
   }
   
-  if (additionalStats.length > 0) {
-    additionalStats.forEach(stat => {
-      const statItem = document.createElement('div');
-      statItem.className = 'additional-stat-item';
-      if (stat.warning) {
-        statItem.classList.add('warning');
-      }
-      if (stat.positive) {
-        statItem.classList.add('positive');
-      }
-      statItem.innerHTML = `
-        <i class="fas ${stat.icon}"></i>
-        <div class="stat-details">
-          <span class="stat-detail-label">${stat.label}</span>
-          <span class="stat-detail-value">${stat.value}</span>
-        </div>
-      `;
-      statsGrid.appendChild(statItem);
-    });
+  // Organize stats into categories
+  additionalStats.forEach(stat => {
+    const category = stat.category || 'other';
+    if (!statsByCategory[category]) {
+      statsByCategory[category] = [];
+    }
+    statsByCategory[category].push(stat);
+  });
+  
+  // Render stats by category
+  const categoryLabels = {
+    economy: '💰 Economy',
+    status: '📊 Status',
+    combat: '⚔️ Combat',
+    activities: '🎯 Activities',
+    other: '📝 Other'
+  };
+  
+  let hasAnyStats = false;
+  
+  Object.entries(statsByCategory).forEach(([category, stats]) => {
+    if (stats.length > 0) {
+      hasAnyStats = true;
+      
+      // Add category header
+      const categoryHeader = document.createElement('div');
+      categoryHeader.className = 'stats-category-header';
+      categoryHeader.textContent = categoryLabels[category] || category;
+      statsGrid.appendChild(categoryHeader);
+      
+      // Add stats in this category
+      stats.forEach(stat => {
+        const statItem = document.createElement('div');
+        statItem.className = 'additional-stat-item';
+        if (stat.warning) {
+          statItem.classList.add('warning');
+        }
+        if (stat.positive) {
+          statItem.classList.add('positive');
+        }
+        if (stat.isLink) {
+          statItem.innerHTML = `
+            <i class="fas ${stat.icon}"></i>
+            <div class="stat-details">
+              <span class="stat-detail-label">${stat.label}</span>
+              <span class="stat-detail-value"><a href="${stat.value}" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color, #00A3DA); text-decoration: underline;">${stat.value}</a></span>
+            </div>
+          `;
+        } else {
+          statItem.innerHTML = `
+            <i class="fas ${stat.icon}"></i>
+            <div class="stat-details">
+              <span class="stat-detail-label">${stat.label}</span>
+              <span class="stat-detail-value">${stat.value}</span>
+            </div>
+          `;
+        }
+        statsGrid.appendChild(statItem);
+      });
+    }
+  });
+  
+  if (hasAnyStats) {
     section.style.display = 'block';
   }
 }

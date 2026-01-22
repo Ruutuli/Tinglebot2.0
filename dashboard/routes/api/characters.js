@@ -1153,6 +1153,10 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   if (shouldResubmit && character.status === 'denied') {
     character.status = 'pending';
     character.denialReason = null; // Clear denial reason on resubmission
+    
+    // Clear all votes for this character when resubmitting
+    await CharacterModeration.deleteMany({ characterId: character._id });
+    logger.info('CHARACTERS', `Cleared all votes for resubmitted character: ${character.name}`);
   }
 
   // Extract form data
@@ -1178,6 +1182,9 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
     // Reject attempts to update restricted fields
     if (name !== undefined && name.trim() !== character.name) {
       return res.status(400).json({ error: 'Name cannot be edited for accepted characters' });
+    }
+    if (age !== undefined && age !== '' && parseInt(age, 10) !== character.age) {
+      return res.status(400).json({ error: 'Age cannot be edited' });
     }
     if (hearts !== undefined || stamina !== undefined) {
       return res.status(400).json({ error: 'Stats cannot be edited for accepted characters' });
