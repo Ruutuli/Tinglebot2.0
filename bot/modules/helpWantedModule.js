@@ -224,15 +224,15 @@ function getAvailableQuestTypes(isAfterNoon = false, travelBlocked = false, excl
   let availableTypes = [...QUEST_TYPES];
   const excludedReasons = [];
   
-  // Exclude art and writing if after 12pm EST
+      // Exclude art and writing if after 12pm UTC
   if (isAfterNoon) {
     if (availableTypes.includes('art')) {
       availableTypes = availableTypes.filter(type => type !== 'art');
-      excludedReasons.push('art (after 12pm EST)');
+        excludedReasons.push('art (after 12pm UTC)');
     }
     if (availableTypes.includes('writing')) {
       availableTypes = availableTypes.filter(type => type !== 'writing');
-      excludedReasons.push('writing (after 12pm EST)');
+        excludedReasons.push('writing (after 12pm UTC)');
     }
   }
   
@@ -387,13 +387,13 @@ async function regenerateEscortQuest(quest) {
 }
 
 // ------------------- Function: regenerateArtWritingQuest -------------------
-// Regenerates an art or writing quest as a different quest type when it's after 12pm EST
+// Regenerates an art or writing quest as a different quest type when it's after 12pm UTC
 // Includes retry logic and fallback quest types
 async function regenerateArtWritingQuest(quest) {
   const maxRetries = 3;
   const typePreferences = ['item', 'monster', 'crafting', 'escort']; // Order of preference (excluding art/writing)
   
-  logger.info('QUEST', `Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} due to time restriction (after 12pm EST)`);
+  logger.info('QUEST', `Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} due to time restriction (after 12pm UTC)`);
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {

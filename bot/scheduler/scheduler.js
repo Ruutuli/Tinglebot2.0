@@ -1041,26 +1041,46 @@ async function handleEscortQuestWeather(quest) {
   }
 }
 
-async function setupHelpWantedFixedScheduler(client) {
- const { FIXED_CRON_TIMES } = require('../modules/helpWantedModule');
- 
- // Schedule all 24 time slots for full 24-hour coverage
- // The variable buffer (3-6 hours) is handled in the quest generation logic
- // Note: FIXED_CRON_TIMES contains EST times, convert to UTC (add 5 hours)
- let jobsCreated = 0;
- let jobsSkipped = 0;
- for (const cronTime of FIXED_CRON_TIMES) {
-  const utcCronTime = convertEstCronToUtc(cronTime);
-  const jobName = `Help Wanted Board Check - ${cronTime} (EST)`;
-  const result = await ensureRecurringJob(utcCronTime, jobName, true);
-  if (result.created) {
-   jobsCreated++;
-  } else {
-   jobsSkipped++;
+async function checkAndPostAllScheduledQuests(client) {
+  try {
+    const { FIXED_CRON_TIMES } = require('../modules/helpWantedModule');
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const currentHour = now.getUTCHours();
+    const currentMinute = now.getUTCMinutes();
+    
+    // Find the current time slot (check if we're at the top of the hour)
+    // Only check quests scheduled for the current hour
+    const currentCronTime = `0 ${currentHour} * * *`;
+    
+    // Check if current time matches any of the scheduled times
+    const isScheduledTime = FIXED_CRON_TIMES.includes(currentCronTime) && currentMinute === 0;
+    
+    if (!isScheduledTime) {
+      // Not at a scheduled time, skip
+      return 0;
+    }
+    
+    // Check and post quests for the current time slot
+    return await checkAndPostScheduledQuests(client, currentCronTime);
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'checkAndPostAllScheduledQuests'
+    });
+    logger.error('QUEST', `[scheduler.js]❌ Error checking all scheduled quests:`, error);
+    return 0;
   }
+}
+
+async function setupHelpWantedFixedScheduler(client) {
+ // Use a single recurring job that runs every hour to check for scheduled quests
+ // This is cleaner than creating 24 separate recurring jobs
+ const result = await ensureRecurringJob("0 * * * *", "help wanted board check", true);
+ if (result.created) {
+  logger.info('SCHEDULER', 'Help Wanted board check job created (runs every hour)');
+ } else {
+  logger.info('SCHEDULER', 'Help Wanted board check job already exists');
  }
- 
- logger.info('SCHEDULER', `Help Wanted scheduler: ${jobsCreated} created, ${jobsSkipped} already existed (24 time slots total)`);
 }
 
 // ============================================================================
@@ -1825,8 +1845,9 @@ module.exports = {
  resetPetLastRollDates,
  checkAndGenerateDailyQuests,
  generateDailyQuestsAtMidnight,
- checkAndPostMissedQuests,
- cleanupOldRuuGameSessions,
+  checkAndPostMissedQuests,
+  checkAndPostAllScheduledQuests,
+  cleanupOldRuuGameSessions,
   cleanupExpiredRaids,
   distributeMonthlyBoostRewards,
   checkAndDistributeMonthlyBoostRewards,

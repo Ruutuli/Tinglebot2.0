@@ -350,6 +350,7 @@ function defineAgendaJobs({ client }) {
     handleBloodMoonStart,
     handleBloodMoonEnd,
     checkAndPostScheduledQuests,
+    checkAndPostAllScheduledQuests,
   } = require("./scheduler");
   
   // Import from modules
@@ -700,20 +701,14 @@ function defineAgendaJobs({ client }) {
     }
   });
 
-  // Help Wanted Tasks (24 time slots)
-  // Create separate job definitions for each time slot
-  const { FIXED_CRON_TIMES } = require('../modules/helpWantedModule');
-  
-  FIXED_CRON_TIMES.forEach((cronTime, index) => {
-    const jobName = `Help Wanted Board Check - ${cronTime} (EST)`;
-    agenda.define(jobName, { concurrency: 1 }, async (job) => {
-      try {
-        await checkAndPostScheduledQuests(clientRef, cronTime);
-      } catch (error) {
-        logger.error('QUEST', `Error in ${jobName}:`, error);
-        handleError(error, "agenda.js", { jobName, cronTime });
-      }
-    });
+  // Help Wanted Task - single recurring job that runs every hour
+  agenda.define("help wanted board check", { concurrency: 1 }, async (job) => {
+    try {
+      await checkAndPostAllScheduledQuests(clientRef);
+    } catch (error) {
+      logger.error('QUEST', `Error in help wanted board check:`, error);
+      handleError(error, "agenda.js", { jobName: "help wanted board check" });
+    }
   });
 
   // Memory logging job - runs hourly
