@@ -137,6 +137,19 @@ try {
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
+// Convert EST cron expression to UTC (EST is UTC-5, so add 5 hours)
+// Format: "minute hour * * *" -> "minute (hour+5) * * *"
+function convertEstCronToUtc(estCronTime) {
+  const parts = estCronTime.split(' ');
+  if (parts.length >= 2) {
+    const minute = parts[0];
+    const hour = parseInt(parts[1]);
+    const utcHour = (hour + 5) % 24; // EST is UTC-5, wrap around at 24
+    return `${minute} ${utcHour} ${parts.slice(2).join(' ')}`;
+  }
+  return estCronTime; // Return as-is if format is unexpected
+}
+
 // Track all cron jobs to prevent leaks (for backward compatibility)
 const activeCronJobs = new Set();
 let isSchedulerInitialized = false;
@@ -2400,7 +2413,7 @@ async function checkAndPostMissedQuests(client) {
     if (isAfterNoon) {
       const artWritingQuests = unpostedQuests.filter(quest => quest.type === 'art' || quest.type === 'writing');
       if (artWritingQuests.length > 0) {
-        logger.info('QUEST', `After 12pm EST (${currentHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
+        logger.info('QUEST', `After 12pm EST (${estHour}:00) - Regenerating ${artWritingQuests.length} art/writing quest(s) to ensure adequate completion time`);
         
         // Regenerate each art/writing quest
         for (const quest of artWritingQuests) {
@@ -2442,7 +2455,7 @@ async function checkAndPostMissedQuests(client) {
       const scheduledMinute = parseInt(parts[0]);
       const scheduledHour = parseInt(parts[1]);
       const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
-      const currentTimeInMinutes = currentHour * 60 + currentMinute;
+      const currentTimeInMinutes = estHour * 60 + estMinute;
       
       if (currentTimeInMinutes >= scheduledTimeInMinutes) {
         const weatherHandled = await handleEscortQuestWeather(quest);
