@@ -195,27 +195,48 @@ router.get('/history/:village', asyncHandler(async (req, res) => {
 }));
 
 // ------------------- Function: getWeatherStats -------------------
-// Returns weather statistics
+// Returns weather statistics/history for all villages
 router.get('/stats', asyncHandler(async (req, res) => {
   const villages = ['Rudania', 'Inariko', 'Vhintl'];
-  const stats = {};
+  const days = parseInt(req.query.days) || 30;
+  
+  // Calculate date range
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  
+  const villagesData = {};
   
   for (const village of villages) {
-    const villageWeather = await Weather.find({ village }).lean();
-    const weatherTypes = {};
-    
-    villageWeather.forEach(w => {
-      const type = w.weatherType || 'unknown';
-      weatherTypes[type] = (weatherTypes[type] || 0) + 1;
-    });
-    
-    stats[village] = {
-      totalDays: villageWeather.length,
-      weatherTypes
-    };
+    try {
+      // Fetch weather history for the specified number of days
+      const villageWeather = await Weather.find({ 
+        village,
+        date: { $gte: startDate, $lte: endDate }
+      })
+        .sort({ date: -1 })
+        .lean();
+      
+      // Convert dates to ISO strings for JSON serialization
+      const formattedWeather = villageWeather.map(w => {
+        const weatherObj = { ...w };
+        if (weatherObj.date instanceof Date) {
+          weatherObj.date = weatherObj.date.toISOString();
+        }
+        if (weatherObj.postedAt instanceof Date) {
+          weatherObj.postedAt = weatherObj.postedAt.toISOString();
+        }
+        return weatherObj;
+      });
+      
+      villagesData[village] = formattedWeather;
+    } catch (error) {
+      logger.error('WEATHER', `Error fetching weather stats for ${village}: ${error.message || error}`);
+      villagesData[village] = [];
+    }
   }
   
-  res.json({ stats });
+  res.json({ villages: villagesData });
 }));
 
 module.exports = router;
