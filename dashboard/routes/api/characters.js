@@ -996,7 +996,7 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   
   // Helper function to create slug from character name
   const createSlug = (name) => {
-    if (!name) return '';
+    if (!name || typeof name !== 'string') return '';
     return name
       .toLowerCase()
       .replace(/\s+/g, '-')
@@ -1007,25 +1007,56 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   
   // First, search all characters to see if the character exists
   // This helps provide better error messages
-  const allCharacters = await Character.find({}).lean();
+  let allCharacters;
+  try {
+    allCharacters = await Character.find({}).lean();
+  } catch (error) {
+    logger.error(`[characters.js] Error fetching characters: ${error.message}`, error);
+    throw new Error('Failed to fetch characters from database');
+  }
   
   // Find character whose name matches the slug pattern (across all characters)
-  let character = allCharacters.find(char => {
-    const charSlug = createSlug(char.name);
-    return charSlug === normalizedSlug;
-  });
-  
-  // Fallback: try direct name match (case-insensitive) if slug match fails
-  if (!character) {
+  // Filter out characters without names first to avoid errors
+  let character;
+  try {
     character = allCharacters.find(char => {
-      return char.name && char.name.toLowerCase() === normalizedSlug;
+      if (!char || !char.name) return false;
+      try {
+        const charSlug = createSlug(char.name);
+        return charSlug === normalizedSlug;
+      } catch (error) {
+        logger.warn(`[characters.js] Error creating slug for character: ${char._id}, name: ${char.name}, error: ${error.message}`);
+        return false;
+      }
     });
+    
+    // Fallback: try direct name match (case-insensitive) if slug match fails
+    if (!character) {
+      character = allCharacters.find(char => {
+        if (!char || !char.name || typeof char.name !== 'string') return false;
+        try {
+          return char.name.toLowerCase() === normalizedSlug;
+        } catch (error) {
+          logger.warn(`[characters.js] Error matching name for character: ${char._id}, name: ${char.name}, error: ${error.message}`);
+          return false;
+        }
+      });
+    }
+  } catch (error) {
+    logger.error(`[characters.js] Error finding character: ${error.message}`, error);
+    throw new Error('Failed to search for character');
   }
   
   if (!character) {
     // Character doesn't exist at all
     logger.warn(`[characters.js] Character not found for slug: "${nameSlug}" (userId: ${userId})`);
     throw new NotFoundError(`Character "${nameSlug}" not found. Please check the character name and try again.`);
+  }
+  
+  // Validate character object has required properties
+  if (!character || typeof character !== 'object') {
+    logger.error(`[characters.js] Invalid character object found for slug: "${nameSlug}"`);
+    throw new Error('Invalid character data');
   }
   
   // Check ownership - convert both to strings for comparison (Discord IDs can be stored as strings or numbers)
@@ -1035,15 +1066,20 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   
   if (!isOwner) {
     // Character exists but user doesn't own it - allow viewing but mark as read-only
-    logger.info(`[characters.js] Character "${character.name}" viewed by non-owner - userId: ${requestUserId}, ownerId: ${characterUserId}`);
+    const charName = character?.name || 'Unknown';
+    logger.info(`[characters.js] Character "${charName}" viewed by non-owner - userId: ${requestUserId}, ownerId: ${characterUserId}`);
   }
   
   // Return character data with ownership flag
-  res.json({ 
-    ...character, 
-    icon: character.icon,
-    isOwner: isOwner // Frontend can use this to hide/edit edit buttons
-  });
+  // Ensure all required fields exist before sending
+  const responseData = {
+    ...character,
+    icon: character?.icon || null,
+    isOwner: isOwner, // Frontend can use this to hide/edit edit buttons
+    name: character?.name || 'Unknown'
+  };
+  
+  res.json(responseData);
 }));
 
 // ------------------- Function: editCharacter -------------------
