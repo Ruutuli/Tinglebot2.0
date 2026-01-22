@@ -87,10 +87,10 @@ const InventoryLog = require('./models/InventoryLogModel');
 const { getGearType, getWeaponStyle } = require('./utils/gearModule');
 
 // Import character stats module for updating attack and defense
-const { updateCharacterDefense, updateCharacterAttack } = require('../bot/modules/characterStatsModule');
+const { updateCharacterDefense, updateCharacterAttack } = require('./modules/characterStatsModule');
 
 // Import calendar module
-const calendarModule = require('../bot/modules/calendarModule');
+const calendarModule = require('./modules/calendarModule');
 
 // Import pretty logger utility
 const logger = require('./utils/logger');

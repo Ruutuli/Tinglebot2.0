@@ -18,13 +18,13 @@ const Character = require('../models/CharacterModel');
 // ============================================================================
 // Modules
 // ------------------- Importing custom modules -------------------
-const { isVillageExclusiveJob } = require('../../bot/modules/jobsModule');
-const { isValidVillage } = require('../../bot/modules/locationsModule');
-const { isValidRace, getRaceValueByName } = require('../../bot/modules/raceModule');
-const { capitalizeFirstLetter } = require('../../bot/modules/formattingModule');
+const { isVillageExclusiveJob } = require('../modules/jobsModule');
+const { isValidVillage } = require('../modules/locationsModule');
+const { isValidRace, getRaceValueByName } = require('../modules/raceModule');
+const { capitalizeFirstLetter } = require('../modules/formattingModule');
 const { capitalizeVillageName } = require('./stringUtils');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('./googleSheetsUtils');
-const { checkVillageStatus } = require('../../bot/modules/villageModule');
+const { checkVillageStatus } = require('../modules/villageModule');
 
 
 // ============================================================================

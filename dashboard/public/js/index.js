@@ -95,6 +95,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSidebarNavigation();
     setupBackToTopButton();
     setupModelCards();
+    initializeNotificationSystem();
+    
+    // Check for denied applications after a short delay to ensure auth is ready
+    setTimeout(() => {
+      checkForDeniedApplications();
+    }, 1000);
     
     // Check for login success and refresh suggestion box if needed
     if (urlParams.get('login') === 'success') {
@@ -3785,6 +3791,226 @@ function getQuestTypeIcon(type) {
 document.addEventListener('DOMContentLoaded', () => {
   loadRecentQuests();
 });
+
+// ============================================================================
+// ------------------- Notification System -------------------
+// Handles notifications for denied applications and other alerts
+// ============================================================================
+
+let notifications = [];
+let notificationBadge = null;
+let notificationDropdown = null;
+
+/**
+ * Initialize the notification system UI
+ */
+function initializeNotificationSystem() {
+  const container = document.getElementById('notification-container');
+  if (!container) return;
+
+  // Create notification badge
+  notificationBadge = document.createElement('div');
+  notificationBadge.className = 'notification-badge';
+  notificationBadge.innerHTML = `
+    <i class="fas fa-bell notification-icon"></i>
+    <span class="notification-count" style="display: none;">0</span>
+  `;
+  notificationBadge.addEventListener('click', toggleNotificationDropdown);
+
+  // Create dropdown
+  notificationDropdown = document.createElement('div');
+  notificationDropdown.className = 'notification-dropdown';
+  notificationDropdown.innerHTML = `
+    <div class="notification-header">
+      <h3>Notifications</h3>
+      <button class="notification-clear" onclick="clearAllNotifications()">Clear All</button>
+    </div>
+    <div class="notification-list"></div>
+  `;
+
+  container.appendChild(notificationBadge);
+  container.appendChild(notificationDropdown);
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (notificationDropdown && !container.contains(e.target)) {
+      notificationDropdown.classList.remove('show');
+    }
+  });
+}
+
+/**
+ * Check for denied applications and show notifications
+ */
+async function checkForDeniedApplications() {
+  try {
+    const response = await fetch('/api/user/characters', {
+      credentials: 'include'
+    });
+
+    if (!response.ok) return;
+
+    const { data: characters } = await response.json();
+    const deniedCharacters = characters.filter(char => char.status === 'denied');
+
+    // Clear existing denied notifications
+    notifications = notifications.filter(n => n.type !== 'denied');
+
+    // Add new denied notifications
+    deniedCharacters.forEach(character => {
+      const existingNotification = notifications.find(
+        n => n.type === 'denied' && n.characterId === character._id
+      );
+
+      if (!existingNotification) {
+        notifications.push({
+          type: 'denied',
+          title: `Application Denied: ${character.name}`,
+          characterId: character._id,
+          characterName: character.name,
+          message: character.denialReason || 'Your application has been denied.',
+          timestamp: new Date(),
+          id: `denied-${character._id}`
+        });
+      }
+    });
+
+    updateNotificationBadge();
+    renderNotifications();
+  } catch (error) {
+    console.error('[index.js]: Error checking for denied applications:', error);
+  }
+}
+
+/**
+ * Add a notification
+ */
+function addNotification(type, title, message, data = {}) {
+  const notification = {
+    type,
+    title,
+    message,
+    timestamp: new Date(),
+    id: `notification-${Date.now()}-${Math.random()}`,
+    ...data
+  };
+
+  notifications.unshift(notification);
+  updateNotificationBadge();
+  renderNotifications();
+}
+
+/**
+ * Update the notification badge display
+ */
+function updateNotificationBadge() {
+  if (!notificationBadge) return;
+
+  const count = notifications.length;
+  const countElement = notificationBadge.querySelector('.notification-count');
+  const badge = notificationBadge;
+
+  if (count > 0) {
+    countElement.textContent = count > 99 ? '99+' : count;
+    countElement.style.display = 'flex';
+    badge.classList.add('has-notifications');
+  } else {
+    countElement.style.display = 'none';
+    badge.classList.remove('has-notifications');
+  }
+}
+
+/**
+ * Render notifications in the dropdown
+ */
+function renderNotifications() {
+  if (!notificationDropdown) return;
+
+  const list = notificationDropdown.querySelector('.notification-list');
+  if (!list) return;
+
+  if (notifications.length === 0) {
+    list.innerHTML = '<div class="notification-empty">No notifications</div>';
+    return;
+  }
+
+  list.innerHTML = notifications.map(notification => {
+    const timeAgo = getTimeAgo(notification.timestamp);
+    const icon = notification.type === 'denied' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    const characterLink = notification.characterId 
+      ? `/ocs/${encodeURIComponent(notification.characterName)}`
+      : '#';
+
+    return `
+      <div class="notification-item ${notification.type}" onclick="handleNotificationClick('${notification.id}')">
+        <div class="notification-item-title">
+          <i class="fas ${icon}"></i>
+          <span>${notification.title || 'Notification'}</span>
+        </div>
+        <div class="notification-item-message">${notification.message}</div>
+        ${notification.type === 'denied' ? `<div class="notification-item-time"><a href="${characterLink}" style="color: var(--primary-color);">View Character</a> • ${timeAgo}</div>` : `<div class="notification-item-time">${timeAgo}</div>`}
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * Toggle notification dropdown
+ */
+function toggleNotificationDropdown() {
+  if (!notificationDropdown) return;
+  notificationDropdown.classList.toggle('show');
+}
+
+/**
+ * Handle notification click
+ */
+function handleNotificationClick(notificationId) {
+  const notification = notifications.find(n => n.id === notificationId);
+  if (!notification) return;
+
+  if (notification.type === 'denied' && notification.characterId) {
+    window.location.href = `/ocs/${encodeURIComponent(notification.characterName)}`;
+  }
+
+  // Remove notification after clicking
+  removeNotification(notificationId);
+}
+
+/**
+ * Remove a notification
+ */
+function removeNotification(notificationId) {
+  notifications = notifications.filter(n => n.id !== notificationId);
+  updateNotificationBadge();
+  renderNotifications();
+}
+
+/**
+ * Clear all notifications
+ */
+window.clearAllNotifications = function() {
+  notifications = [];
+  updateNotificationBadge();
+  renderNotifications();
+};
+
+/**
+ * Get time ago string
+ */
+function getTimeAgo(date) {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+  return `${Math.floor(seconds / 604800)}w ago`;
+}
+
+// Make notification functions available globally
+window.addNotification = addNotification;
+window.checkForDeniedApplications = checkForDeniedApplications;
 
 // ============================================================================
 // ------------------- Exports -------------------

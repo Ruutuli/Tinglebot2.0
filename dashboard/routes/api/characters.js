@@ -48,7 +48,7 @@ function isVillageExclusiveJob(job) {
   }
   return null;
 }
-const { isValidVillage } = require('../../../bot/modules/locationsModule');
+const { isValidVillage } = require('../../modules/locationsModule');
 const bucket = require('../../config/gcsService');
 
 // Multer configuration for character icon uploads to Google Cloud Storage
@@ -262,7 +262,7 @@ async function postCharacterStatusToDiscord(character, status, denialReason, isM
       
       // Generate OC page URL
       const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const dashboardUrl = process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com';
+      const dashboardUrl = (process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com').replace(/\/+$/, '');
       const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
       
       embed.fields.push({
@@ -322,7 +322,7 @@ async function sendDenialDM(character, denialReason) {
     
     // Generate OC page URL
     const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    const dashboardUrl = process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com';
+    const dashboardUrl = (process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com').replace(/\/+$/, '');
     const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
     
     // Format denial reasons - make it more prominent
@@ -479,7 +479,7 @@ async function countSpiritOrbsBatch(characterNames) {
 // ------------------- Function: getRaces -------------------
 // Returns list of all valid races
 router.get('/races', asyncHandler(async (req, res) => {
-  const { getAllRaces } = require('../../../bot/modules/raceModule');
+  const { getAllRaces } = require('../../modules/raceModule');
   const races = getAllRaces();
   res.json({ data: races });
 }));

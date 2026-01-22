@@ -309,10 +309,9 @@
    Action Buttons
 ============================================================================ */
 .action-buttons {
-  margin-bottom: 2rem;
-  text-align: center;
+  margin-top: 1.5rem;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 1rem;
 }
 

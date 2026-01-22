@@ -19,7 +19,7 @@ const {
 } = require('../data/weatherData');
 const seasonsData = require('../data/seasonsData');
 const { validateWeatherCombination, findWeatherEmoji } = require('../utils/weatherValidation');
-const { convertToHyruleanDate } = require('../../bot/modules/calendarModule');
+const { convertToHyruleanDate } = require('../modules/calendarModule');
 const path = require('path');
 const fs = require('fs');
 // Import jimp - it's installed in the root node_modules

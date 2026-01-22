@@ -3125,12 +3125,13 @@
 }
 
 .character-moderation-page .deny-reason-modal {
-  width: 100%;
-  max-width: 400px;
+  width: 90%;
+  max-width: 480px;
   flex-shrink: 0;
-  max-height: none;
-  overflow: visible;
-  padding: 1.25rem;
+  align-self: center;
+  max-height: 42vh;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
   margin: 0;
 }
 
@@ -3143,13 +3144,15 @@
 }
 
 .character-moderation-page .deny-reason-modal .modal-body p {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
   font-size: 0.875rem;
 }
 
 .character-moderation-page .deny-reason-modal .deny-reason-input {
-  min-height: 52px;
+  min-height: 48px;
+  max-height: 80px;
   margin-top: 0.25rem;
+  resize: vertical;
 }
 
 .character-moderation-page .deny-reason-modal .modal-actions {

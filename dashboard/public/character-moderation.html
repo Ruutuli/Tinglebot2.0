@@ -71,7 +71,7 @@
   <!-- Vote Result Modal -->
   <div class="modal-overlay" id="voteModal">
     <div class="modal">
-      <button class="modal-close" onclick="closeVoteModal()">&times;</button>
+      <button type="button" class="modal-close" onclick="window.closeVoteModal()" aria-label="Close">&times;</button>
       <div class="modal-header">
         <i class="fas modal-icon" id="modalIcon"></i>
         <h2 class="modal-title" id="modalTitle">Vote Recorded</h2>
@@ -80,7 +80,7 @@
         <!-- Content will be inserted here -->
       </div>
       <div class="modal-actions">
-        <button class="button button--glass" onclick="closeVoteModal()">OK</button>
+        <button type="button" class="button button--glass" onclick="window.closeVoteModal()">OK</button>
       </div>
     </div>
   </div>
@@ -477,8 +477,9 @@
     
     function closeVoteModal() {
       const modal = document.getElementById('voteModal');
-      modal.classList.remove('show');
+      if (modal) modal.classList.remove('show');
     }
+    window.closeVoteModal = closeVoteModal;
     
     // Close modals on overlay click
     const voteModal = document.getElementById('voteModal');
