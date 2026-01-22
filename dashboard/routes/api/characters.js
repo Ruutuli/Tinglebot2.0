@@ -56,7 +56,7 @@ const bucket = require('../../config/gcsService');
 const characterIconUpload = multer({
   storage: multer.memoryStorage(),
   limits: { 
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 7 * 1024 * 1024 // 7MB limit
   },
   fileFilter: function (req, file, cb) {
     // Accept images only
@@ -78,7 +78,7 @@ const characterIconUpload = multer({
 const characterUploads = multer({
   storage: multer.memoryStorage(),
   limits: { 
-    fileSize: 5 * 1024 * 1024, // 5MB limit per file
+    fileSize: 7 * 1024 * 1024, // 7MB limit per file
     files: 2 // Allow up to 2 files (icon and appArt)
   },
   fileFilter: function (req, file, cb) {

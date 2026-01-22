@@ -1550,9 +1550,9 @@ function setupIconPreview() {
         return;
       }
       
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        showMessage('Image file is too large. Maximum size is 5MB.', 'error');
+      // Validate file size (7MB)
+      if (file.size > 7 * 1024 * 1024) {
+        showMessage('Image file is too large. Maximum size is 7MB.', 'error');
         iconInput.value = '';
         return;
       }
