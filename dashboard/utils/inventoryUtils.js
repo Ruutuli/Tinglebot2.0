@@ -5,11 +5,6 @@
 
 const { handleError } = require("./globalErrorHandler");
 const logger = require("./logger");
-const {
-  appendSheetData,
-  authorizeSheets,
-  // Google Sheets functionality removed - imports removed
-} = {}; // googleSheetsUtils removed
 const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
@@ -586,75 +581,6 @@ function combineMaterials(materialsUsed) {
   }
 
   return Array.from(materialMap.values());
-}
-
-// ---- Function: logMaterialsToGoogleSheets ----
-// Logs materials used in crafting to Google Sheets
-async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
-  try {
-    const combinedMaterials = combineMaterials(materialsUsed);
-    const usedMaterialsValues = await Promise.all(combinedMaterials.map(async material => {
-      try {
-        const materialObjectId = new mongoose.Types.ObjectId(material._id);
-        let materialItem = await ItemModel.findById(materialObjectId);
-        if (!materialItem) {
-          materialItem = await ItemModel.findOne({ itemName: material.itemName });
-        }
-        if (!materialItem) {
-          return [
-            character.name,
-            material.itemName,
-            `-${material.quantity}`,
-            'Unknown',
-            'Unknown',
-            'Unknown',
-            `Used for ${craftedItem.itemName}`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            uuidv4()
-          ];
-        }
-        return [
-          character.name,
-          material.itemName,
-          `-${material.quantity}`,
-          materialItem.category.join(', '),
-          materialItem.type.join(', '),
-          materialItem.subtype.join(', '),
-          `Used for ${craftedItem.itemName}`,
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uuidv4()
-        ];
-      } catch (error) {
-        handleError(error, 'inventoryUtils.js');
-        return [
-          character.name,
-          material.itemName,
-          `-${material.quantity}`,
-          'Unknown',
-          'Unknown',
-          'Unknown',
-          `Used for ${craftedItem.itemName}`,
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uuidv4()
-        ];
-      }
-    }));
-    // Google Sheets logging removed
-  } catch (error) {
-    // Error handling removed - function is deprecated
-  }
 }
 
 // ---- Function: createMaterialSelectionMenu ----
@@ -1371,66 +1297,6 @@ async function refundJobVoucher(character, interaction) {
     }
 }
 
-// ---- Function: syncSheetDataToDatabase ----
-// Syncs data from a sheet directly to the database
-const syncSheetDataToDatabase = async (character, sheetData) => {
-    try {
-        if (!dbFunctions.connectToInventories) {
-            throw new Error("Required database functions not initialized");
-        }
-
-        const inventoriesConnection = await dbFunctions.connectToInventories();
-        const db = inventoriesConnection.useDb('inventories');
-        const collectionName = character.name.toLowerCase();
-        logger.info('INVENTORY', `📁 Using collection: ${collectionName}`);
-
-        const inventoryCollection = db.collection(collectionName);
-
-        // Process the sheet data
-        const processedItems = sheetData.map(row => {
-            const [_, itemName, quantity, category, type, subtype, obtain, job, perk, location, link, date, syncId] = row;
-            return {
-                characterId: character._id,
-                characterName: character.name,
-                itemName: itemName.trim().toLowerCase(),
-                quantity: parseInt(quantity) || 0,
-                category: category || '',
-                type: type || '',
-                subtype: subtype || '',
-                job: job || '',
-                perk: perk || '',
-                location: location || '',
-                link: link || '',
-                date: date || new Date().toISOString(),
-                obtain: obtain || 'Manual Sync',
-                syncId: syncId || ''
-            };
-        });
-
-        // Add each item to the database
-        for (const item of processedItems) {
-            const existingItem = await inventoryCollection.findOne({
-                characterId: character._id,
-                itemName: item.itemName,
-                syncId: item.syncId // Check for existing sync ID to prevent duplicates
-            });
-
-            if (!existingItem) {
-                logger.info('INVENTORY', `➕ Adding new item ${item.itemName} (${item.quantity}) to ${character.name}'s inventory`);
-                await inventoryCollection.insertOne(item);
-            } else {
-                logger.warn('INVENTORY', `Item ${item.itemName} with sync ID ${item.syncId} already exists in database`);
-            }
-        }
-
-        return true;
-    } catch (error) {
-        handleError(error, "inventoryUtils.js");
-        logger.error('INVENTORY', `Error syncing sheet data to database: ${error.message}`, error);
-        throw error;
-    }
-};
-
 // ============================================================================
 // ---- Function: logItemAcquisitionToDatabase ----
 // Logs item acquisition events to InventoryLog collection
@@ -1576,10 +1442,8 @@ module.exports = {
   createRemovedItemDatabase,
   addItemsToDatabase,
   removeInitialItemIfSynced,
-  // logMaterialsToGoogleSheets, // Google Sheets functionality removed
   refundJobVoucher,
   SOURCE_TYPES,
-  syncSheetDataToDatabase,
   escapeRegExp,
   logItemAcquisitionToDatabase,
   logItemRemovalToDatabase
