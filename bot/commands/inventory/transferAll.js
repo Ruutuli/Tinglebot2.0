@@ -73,27 +73,9 @@ module.exports = {
         });
       }
 
-      // Check inventory sync for both characters
-      try {
-        await checkInventorySync(fromChar);
-        await checkInventorySync(toChar);
-      } catch (error) {
-        return await interaction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setColor('#FF0000')
-              .setTitle('❌ Inventory Not Synced')
-              .setDescription(error.message)
-              .addFields({
-                name: 'How to Fix',
-                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-              })
-              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setFooter({ text: 'Inventory Sync Required' })
-          ],
-          ephemeral: true
-        });
-      }
+      // Check inventory sync for both characters (no longer required, but kept for compatibility)
+      await checkInventorySync(fromChar);
+      await checkInventorySync(toChar);
 
       // Check for equipped gear
       const equipped = [];

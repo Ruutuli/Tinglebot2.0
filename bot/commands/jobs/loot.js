@@ -507,39 +507,8 @@ module.exports = {
     (blightRainMessage ? blightRainMessage + (lightningStrikeMessage ? '\n\n' + lightningStrikeMessage : '') : lightningStrikeMessage) : 
     null;
 
-  // Check inventory sync before proceeding
-   try {
-     await checkInventorySync(character);
-   } catch (error) {
-     if (error.message.includes('inventory is not synced')) {
-       await interaction.editReply({
-         embeds: [{
-           color: 0xFF0000, // Red color
-           title: '❌ Inventory Not Synced',
-           description: error.message,
-           fields: [
-             {
-               name: 'How to Fix',
-               value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-             }
-           ],
-           image: {
-             url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-           },
-           footer: {
-             text: 'Inventory Sync Required'
-           }
-         }],
-         ephemeral: true
-       });
-       return;
-     }
-     await interaction.editReply({
-       content: error.message,
-       ephemeral: true
-     });
-     return;
-   }
+  // Check inventory sync before proceeding (no longer required, but kept for compatibility)
+  await checkInventorySync(character);
 
    if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
@@ -785,8 +754,7 @@ module.exports = {
    
 
   } catch (error) {
-    // Only log errors that aren't inventory sync related
-    if (!error.message.includes('inventory is not synced')) {
+    // Log errors
       handleInteractionError(error, "loot.js", {
         operation: 'execute',
         commandName: interaction.commandName || 'loot',
@@ -801,29 +769,7 @@ module.exports = {
 
     // Provide more specific error messages based on the error type
     let errorMessage;
-    if (error.message.includes('inventory is not synced')) {
-      await interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Inventory Not Synced',
-          description: error.message,
-          fields: [
-            {
-              name: 'How to Fix',
-              value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-            }
-          ],
-          image: {
-            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-          },
-          footer: {
-            text: 'Inventory Sync Required'
-          }
-        }],
-        ephemeral: true
-      });
-      return;
-    } else if (error.message.includes('MongoDB')) {
+    if (error.message.includes('MongoDB')) {
       errorMessage = '❌ **Database connection error.** Please try again in a few moments.';
     } else if (error.message.includes('Google Sheets')) {
       errorMessage = '❌ **Inventory sync error.** Your items were looted but may not appear in your inventory sheet immediately.';

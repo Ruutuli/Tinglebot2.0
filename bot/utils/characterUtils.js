@@ -1,14 +1,8 @@
 // Function: checkInventorySync
 // Validates if a character's inventory is synced before allowing actions
+// NOTE: Inventory sync is no longer required - inventory is managed entirely in the bot
 async function checkInventorySync(character) {
-  // Mod characters are automatically considered synced
-  if (character.isModCharacter) {
-    return true;
-  }
-  
-  if (!character.inventorySynced) {
-    throw new Error(`❌ **${character.name}'s** inventory is not synced. Please first use </inventory test:1370788960267272302> to test your inventory, then use </inventory sync:1370788960267272302> to sync it.`);
-  }
+  // Always return true - inventory sync check is disabled
   return true;
 }
 

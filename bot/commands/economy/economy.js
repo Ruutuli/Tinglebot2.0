@@ -1196,31 +1196,8 @@ async function handleShopBuy(interaction) {
     }
 
     // ------------------- Check Inventory Sync -------------------
-    try {
-      await checkInventorySync(character);
-    } catch (error) {
-      await interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Inventory Not Synced',
-          description: error.message,
-          fields: [
-            {
-              name: 'How to Fix',
-              value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-            }
-          ],
-          image: {
-            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-          },
-          footer: {
-            text: 'Inventory Sync Required'
-          }
-        }],
-        ephemeral: true
-      });
-      return;
-    }
+    // (no longer required, but kept for compatibility)
+    await checkInventorySync(character);
 
     // ------------------- Validate Shop Item -------------------
     let shopItem;
@@ -1648,31 +1625,8 @@ if (quantity <= 0) {
   }
 
   // ------------------- Check Inventory Sync -------------------
-  try {
-    await checkInventorySync(character);
-  } catch (error) {
-    await interaction.editReply({
-      embeds: [{
-        color: 0xFF0000, // Red color
-        title: '❌ Inventory Not Synced',
-        description: error.message,
-        fields: [
-          {
-            name: 'How to Fix',
-            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-          }
-        ],
-        image: {
-          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-        },
-        footer: {
-          text: 'Inventory Sync Required'
-        }
-      }],
-      ephemeral: true
-    });
-    return;
-  }
+  // (no longer required, but kept for compatibility)
+  await checkInventorySync(character);
 
   const inventoryCollection = await getCharacterInventoryCollectionWithModSupport(
    character
@@ -2237,36 +2191,13 @@ for (const { name } of cleanedItems) {
     }
     // If they have 2 or more, allow the transfer to continue (they can unequip and still have items left)
   }
-}
+  }
 
 
   // ------------------- Check Inventory Sync for Both Characters -------------------
-  try {
-    await checkInventorySync(fromCharacter);
-    await checkInventorySync(toCharacter);
-  } catch (error) {
-    await interaction.editReply({
-      embeds: [{
-        color: 0xFF0000, // Red color
-        title: '❌ Inventory Not Synced',
-        description: error.message,
-        fields: [
-          {
-            name: 'How to Fix',
-            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-          }
-        ],
-        image: {
-          url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-        },
-        footer: {
-          text: 'Inventory Sync Required'
-        }
-      }],
-      ephemeral: true
-    });
-    return;
-  }
+  // (no longer required, but kept for compatibility)
+  await checkInventorySync(fromCharacter);
+  await checkInventorySync(toCharacter);
 
   let allItemsAvailable = true;
   const unavailableItems = [];
@@ -2979,32 +2910,9 @@ async function handleTrade(interaction) {
     }
 
     // ------------------- Check Inventory Sync -------------------
-    try {
-      await checkInventorySync(fromCharacter);
-      await checkInventorySync(toCharacter);
-    } catch (error) {
-      await interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Inventory Not Synced',
-          description: error.message,
-          fields: [
-            {
-              name: 'How to Fix',
-              value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-            }
-          ],
-          image: {
-            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-          },
-          footer: {
-            text: 'Inventory Sync Required'
-          }
-        }],
-        ephemeral: true
-      });
-      return;
-    }
+    // (no longer required, but kept for compatibility)
+    await checkInventorySync(fromCharacter);
+    await checkInventorySync(toCharacter);
 
     if (tradeId) {
       // ------------------- Handle Trade Completion -------------------

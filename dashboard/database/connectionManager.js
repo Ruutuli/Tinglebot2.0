@@ -347,10 +347,19 @@ class DatabaseConnectionManager {
     // If already connected, check health and return
     if (connections.inventoriesNative && connections.inventoriesNativeClient) {
       try {
-        await Promise.race([
-          connections.inventoriesNative.admin().ping(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000))
-        ]);
+        let timeoutId = null;
+        const pingPromise = connections.inventoriesNative.admin().ping();
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Ping timeout')), 2000);
+        });
+        
+        try {
+          await Promise.race([pingPromise, timeoutPromise]);
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
         return connections.inventoriesNative;
       } catch (pingError) {
         logger.warn('DATABASE', 'Native inventories connection lost, reconnecting...');
@@ -498,10 +507,19 @@ class DatabaseConnectionManager {
     // If already connected, check health and return
     if (connections.itemsClient && connections.items) {
       try {
-        await Promise.race([
-          connections.itemsClient.db('tinglebot').admin().ping(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000))
-        ]);
+        let timeoutId = null;
+        const pingPromise = connections.itemsClient.db('tinglebot').admin().ping();
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Ping timeout')), 2000);
+        });
+        
+        try {
+          await Promise.race([pingPromise, timeoutPromise]);
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
         return connections.items;
       } catch (pingError) {
         logger.warn('DATABASE', 'Items connection lost, reconnecting...');

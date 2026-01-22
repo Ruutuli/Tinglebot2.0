@@ -555,25 +555,8 @@ module.exports = {
       }
 
       // ------------------- Check Inventory Sync -------------------
-      try {
-        await checkInventorySync(character);
-      } catch (error) {
-        await interaction.editReply({
-          embeds: [{
-            color: 0xFF0000,
-            title: '❌ Inventory Sync Required',
-            description: error.message,
-            fields: [
-              {
-                name: 'How to Fix',
-                value: '1. Use </inventory test:1370788960267272302> to test your inventory\n2. Use </inventory sync:1370788960267272302> to sync your inventory'
-              }
-            ]
-          }],
-          ephemeral: true
-        });
-        return;
-      }
+      // (no longer required, but kept for compatibility)
+      await checkInventorySync(character);
 
       // ------------------- Check if KO'd -------------------
       if (character.currentHearts <= 0 || character.ko) {

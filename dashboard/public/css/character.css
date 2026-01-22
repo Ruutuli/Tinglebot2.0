@@ -3062,34 +3062,45 @@
 /* Modal Styles */
 .character-moderation-page .modal-overlay {
   display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
   background: rgba(0, 0, 0, 0.7);
   z-index: 1000;
   backdrop-filter: blur(4px);
   animation: fadeIn 0.2s ease;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .character-moderation-page .modal-overlay.show {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: row !important;
 }
 
 .character-moderation-page .modal {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--card-radius);
+  background: var(--glass-bg, rgba(20, 20, 30, 0.95)) !important;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1)) !important;
+  border-radius: var(--card-radius, 12px);
   padding: 2rem;
   max-width: 500px;
   width: 90%;
-  box-shadow: var(--section-glow);
-  backdrop-filter: blur(var(--frost-blur));
+  min-height: 200px;
+  box-shadow: var(--section-glow, 0 8px 32px rgba(0, 0, 0, 0.3));
+  backdrop-filter: blur(var(--frost-blur, 10px));
   animation: slideUp 0.3s ease;
   position: relative;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  z-index: 1001;
+  color: var(--text-primary, #ffffff) !important;
 }
 
 .character-moderation-page .modal.modal-large {
@@ -3138,12 +3149,12 @@
 .character-moderation-page .modal-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text-primary, #ffffff) !important;
   margin: 0;
 }
 
 .character-moderation-page .modal-body {
-  color: var(--text-secondary);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.8)) !important;
   line-height: 1.6;
   margin-bottom: 1.5rem;
 }
@@ -3165,7 +3176,7 @@
   right: 1rem;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-muted, rgba(255, 255, 255, 0.6)) !important;
   font-size: 1.5rem;
   cursor: pointer;
   width: 2rem;
@@ -3175,11 +3186,12 @@
   justify-content: center;
   border-radius: 8px;
   transition: all 0.2s ease;
+  z-index: 1002;
 }
 
 .character-moderation-page .modal-close:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
+  color: var(--text-primary, #ffffff) !important;
 }
 
 .character-moderation-page .denial-reasons {

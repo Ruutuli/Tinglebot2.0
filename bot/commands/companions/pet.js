@@ -886,43 +886,8 @@ module.exports = {
      }
 
      // ------------------- Check Inventory Sync -------------------
-     try {
-       await checkInventorySync(character);
-     } catch (error) {
-       // Check if this is an inventory sync error and create an embed for it
-       if (error.message.includes('inventory is not synced')) {
-         const inventorySyncEmbed = new EmbedBuilder()
-           .setAuthor({ name: character.name, iconURL: character.icon })
-           .setTitle("❌ Inventory Sync Required")
-           .setDescription(`${character.name}'s inventory needs to be synchronized before your pet can perform actions.`)
-           .addFields(
-             { 
-               name: "🔧 Required Steps", 
-               value: "1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync it", 
-               inline: false 
-             },
-             { 
-               name: "📋 Why This Happens", 
-               value: "Your inventory data needs to be synchronized with the database to ensure accurate item tracking.", 
-               inline: false 
-             }
-           )
-           .setColor("#FF6B35")
-           .setImage("https://storage.googleapis.com/tinglebot/Graphics/border.png")
-           .setFooter({ 
-             text: "Please sync your inventory and try again" 
-           });
-         
-         return interaction.editReply({ embeds: [inventorySyncEmbed], ephemeral: true });
-       }
-       
-       // For other errors, use the original error message
-       await interaction.editReply({
-         content: error.message,
-         ephemeral: true
-       });
-       return;
-     }
+     // (no longer required, but kept for compatibility)
+     await checkInventorySync(character);
 
      // ------------------- Determine Roll Combination and Type -------------------
      const petTypeData = getPetTypeData(pet.petType);

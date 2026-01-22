@@ -30,9 +30,8 @@ export function updateUserMenu() {
       shouldShow,
       display: adminAreaNavItem.style.display
     });
-  } else {
-    console.warn('[auth.js] updateUserMenu - Admin nav item not found in DOM');
   }
+  // Note: Admin nav item may not exist on all pages - this is expected
   
   // Show/hide inventories navigation based on authentication status
   if (inventoriesNavItem) {

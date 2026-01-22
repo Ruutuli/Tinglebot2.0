@@ -289,9 +289,7 @@ async function validateCharacter(characterName, userId, requireInventorySync = f
             return { valid: false, error: '❌ **You can only perform this action with your own characters.**' };
         }
         
-        if (requireInventorySync && !character.inventorySynced) {
-            return { valid: false, error: ERROR_MESSAGES.INVENTORY_NOT_SYNCED };
-        }
+        // Inventory sync check removed - no longer required
         
         return { valid: true, character };
     } catch (error) {
@@ -3024,13 +3022,7 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
                 };
             }
             
-            // Check if target has synced inventory
-            if (!targetCharacter.inventorySynced) {
-                return { 
-                    valid: false, 
-                    error: `❌ **You cannot steal from a character whose inventory is not synced!**\n📦 ${targetCharacter.name} needs to sync their inventory first.` 
-                };
-            }
+            // Inventory sync check removed - no longer required
             
             // Check village restriction
             if (thiefCharacter.currentVillage !== targetCharacter.currentVillage && interaction.channelId !== '1391812848099004578') {
@@ -3756,14 +3748,7 @@ async function validateAndActivateJobVoucher(thiefCharacter, job, interaction) {
 // Centralized function to validate character status for stealing
 async function validateCharacterStatus(thiefCharacter, interaction) {
     try {
-        // Check if thief's inventory is set up
-        if (!thiefCharacter.inventorySynced) {
-            await interaction.editReply({ 
-                content: '❌ **Your inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.', 
-                ephemeral: true 
-            });
-            return { valid: false, error: 'Inventory not synced' };
-        }
+        // Inventory sync check removed - no longer required
 
         // Prevent characters with canBeStolenFrom disabled from using job vouchers to steal
         if (!thiefCharacter.canBeStolenFrom && thiefCharacter.jobVoucher) {

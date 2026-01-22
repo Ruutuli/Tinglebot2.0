@@ -108,31 +108,8 @@ module.exports = {
       }
 
       // ------------------- Check Inventory Sync -------------------
-      try {
-        await checkInventorySync(character);
-      } catch (error) {
-        await interaction.editReply({
-          embeds: [{
-            color: 0xFF0000, // Red color
-            title: '❌ Inventory Not Synced',
-            description: error.message,
-            fields: [
-              {
-                name: 'How to Fix',
-                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-              }
-            ],
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Inventory Sync Required'
-            }
-          }],
-          ephemeral: true
-        });
-        return;
-      }
+      // (no longer required, but kept for compatibility)
+      await checkInventorySync(character);
 
       // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
 

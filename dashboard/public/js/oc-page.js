@@ -157,9 +157,11 @@ function displayCharacter() {
     document.getElementById('denial-reason-container').style.display = 'none';
   }
   
-  // Show/hide edit button based on status
+  // Show/hide edit button based on status and ownership
   const actionButtons = document.getElementById('action-buttons');
-  if (character.status === 'denied' || character.status === 'accepted') {
+  const isOwner = character.isOwner !== false; // Default to true if not specified (for backwards compatibility)
+  
+  if (isOwner && (character.status === 'denied' || character.status === 'accepted')) {
     actionButtons.style.display = 'block';
   } else {
     actionButtons.style.display = 'none';
@@ -617,7 +619,11 @@ function hideMessage() {
 // ============================================================================
 async function checkAuthentication() {
   try {
-    const response = await fetch('/api/auth/check', {
+    const response = await fetch('/api/user', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
       credentials: 'include'
     });
     

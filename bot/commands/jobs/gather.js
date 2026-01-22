@@ -223,25 +223,8 @@ module.exports = {
         return;
       }
 
-      // Check inventory sync before proceeding
-      // Add timeout protection for long operations
-      const inventorySyncPromise = checkInventorySync(character);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Inventory sync timeout')), 25000)
-      );
-      
-      try {
-        await Promise.race([inventorySyncPromise, timeoutPromise]);
-      } catch (syncError) {
-        if (syncError.message === 'Inventory sync timeout') {
-          await safeReply({
-            content: '❌ **Inventory sync is taking too long. Please try again.**',
-            flags: 64
-          });
-          return;
-        }
-        throw syncError;
-      }
+      // Check inventory sync before proceeding (no longer required, but kept for compatibility)
+      await checkInventorySync(character);
 
       // Initialize job variable
       job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
@@ -1217,31 +1200,29 @@ module.exports = {
         return; // Can't respond to expired interaction
       }
       
-      // Only log errors that aren't inventory sync related
-      if (!error.message.includes('inventory is not synced')) {
-        handleInteractionError(error, 'gather.js', {
-          commandName: '/gather',
-          userTag: userInfo.userTag,
+      // Log errors
+      handleInteractionError(error, 'gather.js', {
+        commandName: '/gather',
+        userTag: userInfo.userTag,
+        userId: userInfo.userId,
+        characterName: userInfo.characterName,
+        options: {
+          job: job,
+          region: region,
+          currentVillage: currentVillage,
+          bloodMoonActive: isBloodMoonActive()
+        }
+      });
+
+      console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
+        stack: error.stack,
+        interactionData: {
           userId: userInfo.userId,
           characterName: userInfo.characterName,
-          options: {
-            job: job,
-            region: region,
-            currentVillage: currentVillage,
-            bloodMoonActive: isBloodMoonActive()
-          }
-        });
-
-        console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
-          stack: error.stack,
-          interactionData: {
-            userId: userInfo.userId,
-            characterName: userInfo.characterName,
-            guildId: interaction.guildId,
-            channelId: interaction.channelId,
-          },
-        });
-      }
+          guildId: interaction.guildId,
+          channelId: interaction.channelId,
+        },
+      });
 
       // Check if interaction is still valid before trying to respond
       if (!interaction.isRepliable()) {
@@ -1251,29 +1232,7 @@ module.exports = {
       
       // Provide more specific error messages based on the error type
       let errorMessage;
-      if (error.message.includes('inventory is not synced')) {
-        await safeReply({
-          embeds: [{
-            color: 0xFF0000, // Red color
-            title: '❌ Inventory Not Synced',
-            description: error.message,
-            fields: [
-              {
-                name: 'How to Fix',
-                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-              }
-            ],
-            image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-            },
-            footer: {
-              text: 'Inventory Sync Required'
-            }
-          }],
-          flags: 64
-        });
-        return;
-      } else if (error.message.includes('MongoDB')) {
+      if (error.message.includes('MongoDB')) {
         errorMessage = '❌ **Database connection error.** Please try again in a few moments.';
       } else if (error.message.includes('Google Sheets')) {
         errorMessage = '❌ **Inventory sync error.** Your items were gathered but may not appear in your inventory sheet immediately.';

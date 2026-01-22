@@ -343,29 +343,9 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
 
 // ---- Function: handleInventorySync ----
 // Handles inventory sync for multiple characters
+// (no longer required, but kept for compatibility)
 async function handleInventorySync(characters, interaction) {
-  try {
-    await Promise.all(characters.map(char => checkInventorySync(char)));
-  } catch (error) {
-    await interaction.editReply({
-      embeds: [{
-        color: 0xFF0000,
-        title: '❌ Inventory Sync Required',
-        description: error.message,
-        fields: [
-          {
-            name: '📝 How to Fix',
-            value: '1. Use </inventory test:1370788960267272302> to test your inventory\n2. Use </inventory sync:1370788960267272302> to sync your inventory'
-          }
-        ],
-        footer: {
-          text: 'Inventory System'
-        }
-      }],
-      ephemeral: true
-    });
-    return false;
-  }
+  await Promise.all(characters.map(char => checkInventorySync(char)));
   return true;
 }
 

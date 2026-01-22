@@ -78,11 +78,19 @@ async function checkMongooseHealth(connection, name) {
 
     // Ping with timeout
     const pingPromise = connection.db.admin().ping();
+    let timeoutId = null;
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Ping timeout')), pingTimeout);
+      timeoutId = setTimeout(() => reject(new Error('Ping timeout')), pingTimeout);
     });
 
-    await Promise.race([pingPromise, timeoutPromise]);
+    try {
+      await Promise.race([pingPromise, timeoutPromise]);
+    } finally {
+      // Always clear the timeout to prevent leaks
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
     
     const responseTime = Date.now() - startTime;
     
@@ -134,11 +142,19 @@ async function checkNativeClientHealth(client, name) {
 
     // Ping with timeout
     const pingPromise = client.db().admin().ping();
+    let timeoutId = null;
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Ping timeout')), pingTimeout);
+      timeoutId = setTimeout(() => reject(new Error('Ping timeout')), pingTimeout);
     });
 
-    await Promise.race([pingPromise, timeoutPromise]);
+    try {
+      await Promise.race([pingPromise, timeoutPromise]);
+    } finally {
+      // Always clear the timeout to prevent leaks
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
     
     const responseTime = Date.now() - startTime;
     

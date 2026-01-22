@@ -185,6 +185,32 @@ function renderCharacterGrid(characters, container) {
   }
 
   container.innerHTML = characters.map(char => renderCharacterCard(char)).join('');
+  
+  // Add click handlers to navigate to OC pages
+  const characterCards = container.querySelectorAll('.inventory-character-card');
+  characterCards.forEach(card => {
+    card.addEventListener('click', (e) => {
+      // Don't navigate if clicking on a link or button inside the card
+      if (e.target.closest('a') || e.target.closest('button')) {
+        return;
+      }
+      
+      const characterName = card.getAttribute('data-character');
+      if (!characterName) return;
+      
+      // Generate URL slug from character name (same logic as backend)
+      const nameSlug = characterName
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
+      
+      // Navigate to OC page
+      window.location.href = `/ocs/${nameSlug}`;
+    });
+    
+    // Add cursor pointer style to indicate clickability
+    card.style.cursor = 'pointer';
+  });
 }
 
 /**

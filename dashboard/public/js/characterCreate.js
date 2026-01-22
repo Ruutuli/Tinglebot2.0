@@ -321,11 +321,12 @@ async function handleFormSubmit(event) {
     }
     
     // Success
-    showMessage('Character created successfully! Redirecting...', 'success');
+    showMessage('Character created successfully! Redirecting to your OC page...', 'success');
     
-    // Redirect to character list or view after a short delay
+    // Redirect to OC page if URL is provided, otherwise go to dashboard
+    const ocPageUrl = data.ocPageUrl || '/';
     setTimeout(() => {
-      window.location.href = '/';
+      window.location.href = ocPageUrl;
     }, 2000);
     
   } catch (error) {

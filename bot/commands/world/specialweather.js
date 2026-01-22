@@ -623,31 +623,7 @@ module.exports = {
         channelId: interaction.channelId
       };
       
-      if (!error.message.includes('inventory is not synced')) {
-        handleInteractionError(error, 'specialweather.js', context);
-      }
-
-      // Handle inventory sync errors with specific embed
-      if (error.message.includes('inventory is not synced')) {
-        const embed = createErrorEmbed(
-          '❌ Inventory Not Synced',
-          error.message,
-          'Inventory Sync Required',
-          0xFF0000
-        );
-        embed.addFields([{
-          name: 'How to Fix',
-          value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
-        }]);
-        
-        try {
-          await interaction.editReply({ embeds: [embed], ephemeral: true });
-        } catch (replyError) {
-          if (replyError.code !== 10062) throw replyError;
-          console.warn(`[specialweather.js]: ⚠️ Interaction expired for user ${interaction.user.tag}`);
-        }
-        return;
-      }
+      handleInteractionError(error, 'specialweather.js', context);
 
       // Create detailed error embed for all other errors
       const errorEmbed = createDetailedErrorEmbed(error, context);

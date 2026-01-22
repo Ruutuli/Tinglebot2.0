@@ -455,32 +455,32 @@ function renderCharacterCards(characters, page = 1, enableModals = true, isFromF
       `;
     }).join('');
   
-    // ------------------- Attach Modal Handlers -------------------
-    if (enableModals) {
-      const characterCards = grid.querySelectorAll('.character-card');
-      characterCards.forEach(card => {
-        card.addEventListener('click', () => {
-          const name = card.getAttribute('data-character');
-          const character = window.allCharacters.find(c => c.name === name);
-          if (!character) return;
-    
-          const modal = createMobileFriendlyModal(character);
-          document.body.appendChild(modal);
-    
-          const closeBtn = modal.querySelector('.close-modal');
-          closeBtn?.addEventListener('click', () => closeModal(modal));
-    
-          modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal(modal);
-          });
-    
-          document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal(modal);
-          }, { once: true });
-        });
+    // ------------------- Attach Click Handlers -------------------
+    // Navigate to OC page when character card is clicked
+    const characterCards = grid.querySelectorAll('.character-card');
+    characterCards.forEach(card => {
+      card.addEventListener('click', (e) => {
+        // Don't navigate if clicking on a link or button inside the card
+        if (e.target.closest('a') || e.target.closest('button')) {
+          return;
+        }
+        
+        const name = card.getAttribute('data-character');
+        if (!name) return;
+        
+        // Generate URL slug from character name (same logic as backend)
+        const nameSlug = name
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '');
+        
+        // Navigate to OC page
+        window.location.href = `/ocs/${nameSlug}`;
       });
-      } else {
-    }
+      
+      // Add cursor pointer style to indicate clickability
+      card.style.cursor = 'pointer';
+    });
 
     // Setup mobile event handlers after rendering
     setupMobileEventHandlers();

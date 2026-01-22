@@ -985,7 +985,7 @@ router.post('/create', characterIconUpload.single('icon'), asyncHandler(async (r
 // Returns character data by character name (for OC page URL lookup)
 // Verifies ownership - only the character owner can access
 router.get('/by-name/:name', asyncHandler(async (req, res) => {
-  const name = decodeURIComponent(req.params.name);
+  const nameSlug = decodeURIComponent(req.params.name);
   
   // Check authentication
   if (!req.isAuthenticated() || !req.user) {
@@ -994,34 +994,55 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   
   const userId = req.user.discordId;
   
-  // Find character by name (case-insensitive, handle URL slug conversion)
-  // Convert URL slug back to name: "john-doe" -> "John Doe"
-  const nameFromSlug = name
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+  // Helper function to create slug from character name
+  const createSlug = (name) => {
+    if (!name) return '';
+    return name
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+  };
   
-  // Try exact match first, then case-insensitive
-  let character = await Character.findOne({ 
-    name: { $regex: new RegExp(`^${nameFromSlug}$`, 'i') },
-    userId: userId
-  }).lean();
+  const normalizedSlug = nameSlug.toLowerCase();
   
+  // First, search all characters to see if the character exists
+  // This helps provide better error messages
+  const allCharacters = await Character.find({}).lean();
+  
+  // Find character whose name matches the slug pattern (across all characters)
+  let character = allCharacters.find(char => {
+    const charSlug = createSlug(char.name);
+    return charSlug === normalizedSlug;
+  });
+  
+  // Fallback: try direct name match (case-insensitive) if slug match fails
   if (!character) {
-    // Try with original name format
-    character = await Character.findOne({ 
-      name: { $regex: new RegExp(`^${name}$`, 'i') },
-      userId: userId
-    }).lean();
+    character = allCharacters.find(char => {
+      return char.name && char.name.toLowerCase() === normalizedSlug;
+    });
   }
   
   if (!character) {
-    throw new NotFoundError('Character not found or access denied');
+    // Character doesn't exist at all
+    logger.warn(`[characters.js] Character not found for slug: "${nameSlug}" (userId: ${userId})`);
+    throw new NotFoundError(`Character "${nameSlug}" not found. Please check the character name and try again.`);
   }
   
+  // Check ownership - convert both to strings for comparison (Discord IDs can be stored as strings or numbers)
+  const characterUserId = String(character.userId || '');
+  const requestUserId = String(userId || '');
+  const isOwner = characterUserId === requestUserId;
+  
+  if (!isOwner) {
+    // Character exists but user doesn't own it - allow viewing but mark as read-only
+    logger.info(`[characters.js] Character "${character.name}" viewed by non-owner - userId: ${requestUserId}, ownerId: ${characterUserId}`);
+  }
+  
+  // Return character data with ownership flag
   res.json({ 
     ...character, 
-    icon: character.icon 
+    icon: character.icon,
+    isOwner: isOwner // Frontend can use this to hide/edit edit buttons
   });
 }));
 
@@ -1039,7 +1060,20 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   const { resubmit } = req.body; // Flag to resubmit denied character
 
   // Find character and verify ownership
-  const character = await Character.findOne({ _id: characterId, userId: userId });
+  // Try both string and original type for userId (Discord IDs can be stored as strings or numbers)
+  let character = await Character.findOne({ 
+    _id: characterId, 
+    userId: String(userId) 
+  });
+  
+  // If not found, try with the userId as-is in case it's already the right type
+  if (!character) {
+    character = await Character.findOne({ 
+      _id: characterId, 
+      userId: userId 
+    });
+  }
+  
   if (!character) {
     return res.status(404).json({ error: 'Character not found or access denied' });
   }
