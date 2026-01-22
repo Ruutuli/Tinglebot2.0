@@ -389,8 +389,11 @@ function setupEventListeners() {
   const form = document.getElementById('character-create-form');
   form.addEventListener('submit', handleFormSubmit);
   
+  setupErrorModalListeners();
+  
   const resetBtn = document.getElementById('reset-btn');
   resetBtn.addEventListener('click', () => {
+    hideMessage();
     const iconPreviewContainer = document.getElementById('icon-preview-container');
     if (iconPreviewContainer) iconPreviewContainer.style.display = 'none';
     const appartPreviewContainer = document.getElementById('appart-preview-container');
@@ -592,7 +595,26 @@ function validateForm() {
 // ============================================================================
 // ------------------- Message Display -------------------
 // ============================================================================
+function setupErrorModalListeners() {
+  const overlay = document.getElementById('error-modal-overlay');
+  const dismissBtn = document.getElementById('error-modal-dismiss');
+  if (!overlay || !dismissBtn) return;
+  
+  dismissBtn.addEventListener('click', hideMessage);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) hideMessage();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('show')) hideMessage();
+  });
+}
+
 function showMessage(message, type = 'info') {
+  if (type === 'error') {
+    showErrorModal(message);
+    return;
+  }
+  
   const container = document.getElementById('message-container');
   const content = document.getElementById('message-content');
   
@@ -600,7 +622,7 @@ function showMessage(message, type = 'info') {
   content.textContent = message;
   container.style.display = 'block';
   
-  // Scroll to top
+  // Scroll to top so user sees the banner
   window.scrollTo({ top: 0, behavior: 'smooth' });
   
   // Auto-hide success messages after 5 seconds
@@ -611,9 +633,29 @@ function showMessage(message, type = 'info') {
   }
 }
 
+function showErrorModal(message) {
+  const overlay = document.getElementById('error-modal-overlay');
+  const messageEl = document.getElementById('error-modal-message');
+  const dismissBtn = document.getElementById('error-modal-dismiss');
+  if (!overlay || !messageEl) return;
+  
+  messageEl.textContent = message;
+  overlay.classList.add('show');
+  overlay.setAttribute('aria-hidden', 'false');
+  dismissBtn?.focus();
+}
+
+function hideErrorModal() {
+  const overlay = document.getElementById('error-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('show');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
 function hideMessage() {
   const container = document.getElementById('message-container');
-  container.style.display = 'none';
+  if (container) container.style.display = 'none';
+  hideErrorModal();
 }
 
 // ============================================================================

@@ -429,6 +429,21 @@
     </div>
   </main>
 
+  <!-- Error popup modal (for validation / API errors) -->
+  <div id="error-modal-overlay" class="character-create-error-overlay" aria-hidden="true">
+    <div class="character-create-error-modal" role="alertdialog" aria-labelledby="error-modal-title" aria-describedby="error-modal-message">
+      <div class="character-create-error-modal-icon" aria-hidden="true">
+        <i class="fas fa-exclamation-circle"></i>
+      </div>
+      <h2 id="error-modal-title" class="character-create-error-modal-title">Error</h2>
+      <p id="error-modal-message" class="character-create-error-modal-message"></p>
+      <button type="button" id="error-modal-dismiss" class="btn btn-primary character-create-error-modal-dismiss">
+        <i class="fas fa-check"></i>
+        <span>OK</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script type="module" src="js/characterCreate.js"></script>
 </body>

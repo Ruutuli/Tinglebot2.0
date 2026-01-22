@@ -371,23 +371,44 @@ async function assignCharacterRoles(character) {
     const villageRoleId = villageName ? VILLAGE_RESIDENT_ROLES[villageName] : null;
     if (villageRoleId && !currentRoleIds.includes(villageRoleId)) {
       rolesToAdd.push(villageRoleId);
+      logger.info('CHARACTERS', `Adding village role for ${villageName}: ${villageRoleId}`);
+    } else if (villageRoleId) {
+      logger.info('CHARACTERS', `User already has village role for ${villageName}`);
+    } else if (character.homeVillage) {
+      logger.warn('CHARACTERS', `No village role ID found for village: ${villageName || character.homeVillage}`);
     }
     
     // Add race role (find by name)
-    const raceRoleName = raceRoleNames[character.race] || `Race: ${character.race}`;
-    const raceRole = guildRoles.find(r => r.name === raceRoleName);
-    if (raceRole && !currentRoleIds.includes(raceRole.id)) {
-      rolesToAdd.push(raceRole.id);
+    // Handle race case-insensitively
+    const characterRace = character.race ? character.race.charAt(0).toUpperCase() + character.race.slice(1).toLowerCase() : null;
+    const raceRoleName = characterRace ? (raceRoleNames[characterRace] || `Race: ${characterRace}`) : null;
+    if (raceRoleName) {
+      const raceRole = guildRoles.find(r => r.name === raceRoleName);
+      if (raceRole && !currentRoleIds.includes(raceRole.id)) {
+        rolesToAdd.push(raceRole.id);
+        logger.info('CHARACTERS', `Adding race role: ${raceRoleName} (${raceRole.id})`);
+      } else if (raceRole) {
+        logger.info('CHARACTERS', `User already has race role: ${raceRoleName}`);
+      } else {
+        logger.warn('CHARACTERS', `Race role not found in guild: ${raceRoleName}`);
+      }
+    } else {
+      logger.warn('CHARACTERS', `No race role name determined for race: ${character.race}`);
     }
     
     // Add job role
-    const jobRoleId = jobRoleIdMap[character.job];
+    const jobRoleId = character.job ? jobRoleIdMap[character.job] : null;
     if (jobRoleId && !currentRoleIds.includes(jobRoleId)) {
       rolesToAdd.push(jobRoleId);
+      logger.info('CHARACTERS', `Adding job role for ${character.job}: ${jobRoleId}`);
+    } else if (jobRoleId) {
+      logger.info('CHARACTERS', `User already has job role for ${character.job}`);
+    } else if (character.job) {
+      logger.warn('CHARACTERS', `No job role ID found for job: ${character.job}`);
     }
     
     // Add job perk roles
-    const jobPerkInfo = getJobPerk(character.job);
+    const jobPerkInfo = character.job ? getJobPerk(character.job) : null;
     if (jobPerkInfo && jobPerkInfo.perks) {
       for (const perk of jobPerkInfo.perks) {
         if (perk === 'NONE' || perk === 'N/A' || perk === 'ALL') continue;
@@ -395,6 +416,11 @@ async function assignCharacterRoles(character) {
         const perkRoleId = jobPerkIdMap[perk];
         if (perkRoleId && !currentRoleIds.includes(perkRoleId)) {
           rolesToAdd.push(perkRoleId);
+          logger.info('CHARACTERS', `Adding job perk role: ${perk} (${perkRoleId})`);
+        } else if (perkRoleId) {
+          logger.info('CHARACTERS', `User already has job perk role: ${perk}`);
+        } else {
+          logger.warn('CHARACTERS', `No job perk role ID found for perk: ${perk}`);
         }
       }
     }
@@ -402,6 +428,8 @@ async function assignCharacterRoles(character) {
     // Assign all roles at once
     if (rolesToAdd.length > 0) {
       const newRoles = [...currentRoleIds, ...rolesToAdd];
+      
+      logger.info('CHARACTERS', `Attempting to assign ${rolesToAdd.length} role(s) to user ${character.userId} for character ${character.name}. Roles: ${rolesToAdd.join(', ')}`);
       
       const updateResponse = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${character.userId}`, {
         method: 'PATCH',
@@ -416,13 +444,13 @@ async function assignCharacterRoles(character) {
       
       if (!updateResponse.ok) {
         const errorText = await updateResponse.text();
-        logger.error('CHARACTERS', `Failed to assign roles: ${updateResponse.status} - ${errorText}`);
-        return;
+        logger.error('CHARACTERS', `Failed to assign roles: ${updateResponse.status} - ${errorText}. Character: ${character.name}, User: ${character.userId}, Roles attempted: ${rolesToAdd.join(', ')}`);
+        throw new Error(`Discord API error: ${updateResponse.status} - ${errorText}`);
       }
       
-      logger.success('CHARACTERS', `Assigned ${rolesToAdd.length} role(s) to user ${character.userId} for character ${character.name}`);
+      logger.success('CHARACTERS', `Successfully assigned ${rolesToAdd.length} role(s) to user ${character.userId} for character ${character.name}`);
     } else {
-      logger.info('CHARACTERS', `No new roles to assign for character ${character.name}`);
+      logger.info('CHARACTERS', `No new roles to assign for character ${character.name} (user may already have all required roles)`);
     }
   } catch (error) {
     logger.error('CHARACTERS', 'Error assigning character roles', error);
@@ -1926,22 +1954,35 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
     character.status = 'accepted';
     await character.save();
     
+    // Refresh character to ensure we have the latest data
+    const refreshedCharacter = await CharacterModel.findById(character._id).lean();
+    if (!refreshedCharacter) {
+      logger.error('CHARACTERS', `Failed to refresh character ${character._id} after acceptance`);
+      return res.status(500).json({ error: 'Failed to refresh character after acceptance' });
+    }
+    
+    // Convert back to mongoose document for role assignment if needed
+    const characterForRoles = await CharacterModel.findById(character._id);
+    
     logger.info('CHARACTERS', `Character "${character.name}" accepted by ${VOTE_THRESHOLD} mod(s)`);
     
-    // Assign Discord roles to user
-    assignCharacterRoles(character).catch(err => {
+    // Assign Discord roles to user (await to ensure it completes)
+    try {
+      await assignCharacterRoles(characterForRoles);
+    } catch (err) {
       logger.error('CHARACTERS', 'Failed to assign character roles', err);
-    });
+      // Don't fail the request, but log the error
+    }
     
     // Send notification to user via Discord
-    postCharacterStatusToDiscord(character, 'accepted', null, isModCharacter).catch(err => {
+    postCharacterStatusToDiscord(characterForRoles, 'accepted', null, isModCharacter).catch(err => {
       logger.error('CHARACTERS', 'Failed to post character acceptance to Discord', err);
     });
     
     return res.json({
       success: true,
       message: 'Character accepted',
-      character: character,
+      character: refreshedCharacter,
       voteCounts: { approves: approveCount, denies: denyCount }
     });
   } else if (denyCount >= VOTE_THRESHOLD) {

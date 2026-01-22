@@ -446,6 +446,69 @@
   font-weight: 500;
 }
 
+/* Character create page: error popup modal (impossible to miss) */
+.character-create-error-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.character-create-error-overlay.show {
+  display: flex !important;
+}
+
+.character-create-error-modal {
+  background: var(--glass-bg, rgba(25, 25, 35, 0.98));
+  border: 2px solid #ef4444;
+  border-radius: 12px;
+  padding: 1.75rem 2rem;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3), 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 80px rgba(239, 68, 68, 0.15);
+  animation: slideUp 0.3s ease;
+  text-align: center;
+}
+
+.character-create-error-modal-icon {
+  font-size: 3rem;
+  color: #ef4444;
+  margin-bottom: 0.75rem;
+  line-height: 1;
+}
+
+.character-create-error-modal-icon i {
+  display: block;
+}
+
+.character-create-error-modal-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ef4444;
+  margin: 0 0 0.5rem;
+}
+
+.character-create-error-modal-message {
+  color: var(--text-primary, #ffffff);
+  margin: 0 0 1.5rem;
+  line-height: 1.5;
+  font-size: 1rem;
+}
+
+.character-create-error-modal-dismiss {
+  min-width: 120px;
+}
+
 /* Topbar Back Button */
 .topbar-back-button {
   display: inline-flex;
