@@ -13,7 +13,7 @@ const v8 = require('v8');
 class MemoryMonitor {
   constructor(options = {}) {
     this.enabled = options.enabled !== false; // Enabled by default
-    this.logInterval = options.logInterval || 5 * 60 * 1000; // 5 minutes default
+    this.logInterval = options.logInterval || 1 * 60 * 1000; // 1 minute default (changed from 5 minutes for testing)
     this.warningThreshold = options.warningThreshold || 500 * 1024 * 1024; // 500MB
     this.criticalThreshold = options.criticalThreshold || 1000 * 1024 * 1024; // 1GB
     
@@ -26,6 +26,12 @@ class MemoryMonitor {
     this.activeIntervals = new Map(); // Track interval IDs
     this.cacheSizes = new Map(); // Track cache sizes
     this.resourceCounts = new Map(); // Track various resource counts
+    
+    // Timer leak tracking
+    this.lastTimerCount = 0;
+    this.lastCronerTimerCount = 0;
+    this.lastCronerTimerTime = 0;
+    this.lastCronerTimerLog = 0; // Throttle croner timer logging
     
     // Throttle warnings to avoid log spam
     this.lastTimerWarning = 0;
@@ -215,6 +221,85 @@ class MemoryMonitor {
         
         if (hasCroner) {
           isCronerTimer = true;
+          
+          // Enhanced logging for croner internal timers (throttled to avoid spam)
+          const now = Date.now();
+          // Log more frequently to catch the pattern (every 2 seconds instead of 5)
+          if (!self.lastCronerTimerLog || (now - self.lastCronerTimerLog > 2000)) {
+            // Find the actual caller that triggered croner (skip croner internals and node internals)
+            let actualCaller = null;
+            let cronerMethod = null;
+            
+            // First, find which croner method is being called
+            for (let i = 0; i < stackLines.length; i++) {
+              const line = stackLines[i];
+              if (line.includes('croner') && !line.includes('memoryMonitor')) {
+                // Extract method name from croner line (e.g., "at N.schedule" or "at N._checkTrigger")
+                const match = line.match(/at\s+(?:N\.|Cron\.)?(\w+)/);
+                if (match) {
+                  cronerMethod = match[1];
+                }
+                break;
+              }
+            }
+            
+            // Now find the actual caller (skip memoryMonitor, croner, node internals)
+            for (let i = 0; i < stackLines.length; i++) {
+              const line = stackLines[i];
+              // Skip memoryMonitor, croner internals, node internals, and timers
+              if (line.includes('memoryMonitor') || 
+                  line.includes('node_modules/croner') || 
+                  line.includes('node_modules\\croner') ||
+                  line.includes('timers.js') ||
+                  line.includes('internal/') ||
+                  line.includes('process.processTimers') ||
+                  line.includes('listOnTimeout')) {
+                continue;
+              }
+              
+              // Try to extract file and function from the line
+              // Format: "at functionName (file.js:123:45)" or "at file.js:123:45"
+              const fileMatch = line.match(/at\s+(?:\w+\.)?(\w+)?\s*\(?([^:()]+):(\d+):(\d+)\)?/);
+              if (fileMatch) {
+                const func = fileMatch[1] || 'anonymous';
+                const file = fileMatch[2].split(/[/\\]/).pop();
+                const lineNum = fileMatch[3];
+                
+                // Only use if it's from our codebase (not node_modules)
+                if (!file.includes('node_modules') && (file.includes('scheduler') || file.includes('bot') || file.includes('shared'))) {
+                  actualCaller = `${file}:${func}:${lineNum}`;
+                  break;
+                }
+              }
+            }
+            
+            const cronerTimerCount = Array.from(self.activeTimers.values()).filter(t => t.isCroner).length;
+            
+            // Build informative message
+            let message = `[TimerTracker] 🔍 Croner timer #${cronerTimerCount} created`;
+            if (cronerMethod) {
+              message += ` via croner.${cronerMethod}()`;
+            }
+            if (actualCaller) {
+              message += ` - Triggered by: ${actualCaller}`;
+            } else {
+              message += ` - Internal croner scheduling (timer fired → scheduling next execution)`;
+            }
+            
+            console.warn(message);
+            
+            // If timer count is growing rapidly, show full stack trace
+            if (cronerTimerCount > 100 && cronerTimerCount % 20 === 0) {
+              const relevantStack = stackLines
+                .slice(0, 10)
+                .filter(l => !l.includes('memoryMonitor') && !l.includes('timers.js') && !l.includes('process.processTimers'))
+                .map(l => `    ${l.trim()}`)
+                .join('\n');
+              console.warn(`[TimerTracker] Full stack trace:\n${relevantStack}`);
+            }
+            
+            self.lastCronerTimerLog = now;
+          }
         }
         
         // Check if this is an undici timer (HTTP client library - expected)
@@ -541,84 +626,136 @@ class MemoryMonitor {
       return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
     };
     
-    // Log memory stats
+    // Calculate timer breakdown
     const cronerTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isCroner).length;
     const undiciTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isUndici).length;
     const expectedTimerCount = Array.from(this.activeTimers.values()).filter(t => t.isExpected).length;
     const unexpectedTimerCount = stats.activeTimers - expectedTimerCount;
-    const timerInfo = expectedTimerCount > 0 
-      ? ` (${cronerTimerCount} croner, ${undiciTimerCount} undici, ${unexpectedTimerCount} other)` 
-      : '';
-    logger.info('MEM', `Memory Stats - RSS: ${formatBytes(stats.rss)}, Heap Used: ${formatBytes(stats.heapUsed)}, Heap Total: ${formatBytes(stats.heapTotal)}`);
-    logger.info('MEM', `Active Resources - Intervals: ${stats.activeIntervals}, Timers: ${stats.activeTimers}${timerInfo}, Total Created: ${stats.totalIntervalsCreated} intervals, ${stats.totalTimersCreated} timers`);
     
-    // Log top timer sources if there are many active timers
-    if (stats.activeTimers > 50) {
-      const topTimerSources = Array.from(this.timerSources.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([source, count]) => `${source}: ${count}`)
-        .join(', ');
-      if (topTimerSources) {
-        logger.info('MEM', `Top timer sources: ${topTimerSources}`);
-      }
-      // Also show croner count if significant
-      if (cronerTimerCount > 0) {
-        const cronerSources = Array.from(this.timerSources.entries())
+    // Get top timer sources (consolidated)
+    const topTimerSources = stats.activeTimers > 50 
+      ? Array.from(this.timerSources.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([source, count]) => `${source}:${count}`)
+          .join(' ')
+      : '';
+    
+    // Get croner sources (consolidated)
+    const cronerSources = cronerTimerCount > 0
+      ? Array.from(this.timerSources.entries())
           .filter(([source]) => source.startsWith('croner:'))
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3)
-          .map(([source, count]) => `${source}: ${count}`)
-          .join(', ');
-        if (cronerSources) {
-          logger.info('MEM', `Croner timer sources: ${cronerSources} (expected behavior)`);
+          .map(([source, count]) => source.replace('croner:', '') + ':' + count)
+          .join(' ')
+      : '';
+    
+    // Add cron job stats if available (to help debug timer leaks)
+    let cronJobInfo = '';
+    try {
+      const { getCronJobStats, logCronJobStats } = require('../../bot/scheduler/croner');
+      const cronStats = getCronJobStats();
+      
+      // Calculate timer-to-job ratio to detect leaks
+      const timersPerJob = cronStats.totalJobs > 0 ? Math.round(cronerTimerCount / cronStats.totalJobs) : 0;
+      const warningInfo = timersPerJob > 20 ? ' ⚠️' : '';
+      
+      cronJobInfo = ` | Cron:${cronStats.totalJobs} jobs (${timersPerJob} timers/job${warningInfo})`;
+      
+      // Log detailed stats if timer leak detected
+      if (timersPerJob > 20) {
+        logger.warn('MEM', `⚠️ Timer leak: ${timersPerJob} croner timers/job (${cronerTimerCount} timers / ${cronStats.totalJobs} jobs)`);
+        logger.warn('MEM', `📋 Cron job details:`);
+        logCronJobStats();
+        
+        // Log which jobs might be problematic
+        const runningJobs = cronStats.jobs.filter(j => j.running);
+        if (runningJobs.length > 0) {
+          logger.warn('MEM', `⚠️ ${runningJobs.length} jobs currently running (may indicate stuck jobs):`, runningJobs.map(j => j.name).join(', '));
         }
       }
-    }
-    
-    // Log top interval sources if there are many active intervals
-    if (stats.activeIntervals > 20) {
-      const topIntervalSources = Array.from(this.intervalSources.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([source, count]) => `${source}: ${count}`)
-        .join(', ');
-      if (topIntervalSources) {
-        logger.info('MEM', `Top interval sources: ${topIntervalSources}`);
+      
+      // Track timer growth rate
+      if (!this.lastCronerTimerCount) {
+        this.lastCronerTimerCount = cronerTimerCount;
+        this.lastCronerTimerTime = now;
+      } else {
+        const timeDiff = (now - this.lastCronerTimerTime) / 1000; // seconds
+        const timerDiff = cronerTimerCount - this.lastCronerTimerCount;
+        if (timeDiff > 0 && timerDiff > 0) {
+          const growthRate = timerDiff / timeDiff; // timers per second
+          if (growthRate > 1) {
+            logger.warn('MEM', `📈 Timer growth: +${timerDiff} timers in ${Math.round(timeDiff)}s (${growthRate.toFixed(2)} timers/sec)`);
+          }
+        }
+        this.lastCronerTimerCount = cronerTimerCount;
+        this.lastCronerTimerTime = now;
       }
+    } catch (error) {
+      // Silently fail if croner isn't available (e.g., in dashboard)
     }
     
-    // Log database connections
-    if (stats.dbConnections > 0) {
-      const stateNames = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
-      const states = Object.entries(stats.dbConnectionStates)
-        .map(([name, state]) => `${name}: ${stateNames[state] || state}`)
-        .join(', ');
-      logger.info('MEM', `Database Connections - ${stats.dbConnections} connection(s): ${states}`);
+    // Consolidate all info into fewer, more readable lines
+    logger.info('MEM', `📊 Memory: RSS=${formatBytes(stats.rss)} | Heap=${formatBytes(stats.heapUsed)}/${formatBytes(stats.heapTotal)}`);
+    
+    // Calculate timer growth rate
+    const timerGrowthInfo = this.lastTimerCount 
+      ? ` | Growth: +${stats.activeTimers - this.lastTimerCount}`
+      : '';
+    this.lastTimerCount = stats.activeTimers;
+    
+    logger.info('MEM', `⏱️  Timers: ${stats.activeTimers} (${cronerTimerCount} croner, ${undiciTimerCount} undici, ${unexpectedTimerCount} other)${timerGrowthInfo} | Intervals: ${stats.activeIntervals}${cronJobInfo}`);
+    
+    // Show top sources in compact format
+    if (topTimerSources) {
+      logger.info('MEM', `🔝 Top: ${topTimerSources}`);
+    }
+    if (cronerSources) {
+      logger.info('MEM', `⏰ Croner: ${cronerSources}`);
     }
     
-    // Log cache sizes if tracked
-    if (this.cacheSizes.size > 0) {
-      const cacheInfo = Array.from(this.cacheSizes.entries())
-        .map(([name, size]) => `${name}: ${size}`)
-        .join(', ');
-      logger.info('MEM', `Cache Sizes - ${cacheInfo}`);
+    // Database, caches, resources on one line
+    const dbInfo = stats.dbConnections > 0 
+      ? Object.entries(stats.dbConnectionStates)
+          .map(([name, state]) => {
+            const stateNames = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+            return `${name}:${stateNames[state] || state}`;
+          })
+          .join(' ')
+      : '';
+    const cacheInfo = this.cacheSizes.size > 0
+      ? Array.from(this.cacheSizes.entries())
+          .map(([name, size]) => `${name}:${size}`)
+          .join(' ')
+      : '';
+    const resourceInfo = this.resourceCounts.size > 0
+      ? Array.from(this.resourceCounts.entries())
+          .map(([name, count]) => `${name}:${count}`)
+          .join(' ')
+      : '';
+    
+    const resourcesLine = [dbInfo, cacheInfo, resourceInfo].filter(Boolean).join(' | ');
+    if (resourcesLine) {
+      logger.info('MEM', `💾 Resources: ${resourcesLine}`);
     }
     
-    // Log resource counts if tracked
-    if (this.resourceCounts.size > 0) {
-      const resourceInfo = Array.from(this.resourceCounts.entries())
-        .map(([name, count]) => `${name}: ${count}`)
-        .join(', ');
-      logger.info('MEM', `Resource Counts - ${resourceInfo}`);
-    }
-    
-    // Log database operation counts if available
+    // Log database operation counts if available (compact format)
     try {
       const dbOps = require('../database/db').getDbOperationCounts?.();
       if (dbOps) {
         const totalOps = Object.values(dbOps).reduce((a, b) => a + b, 0);
-        logger.info('MEM', `Database Operations - Queries: ${dbOps.queries || 0}, Updates: ${dbOps.updates || 0}, Inserts: ${dbOps.inserts || 0}, Deletes: ${dbOps.deletes || 0}, Transactions: ${dbOps.transactions || 0}, Total: ${totalOps}`);
+        if (totalOps > 0) {
+          const opsParts = [
+            `Q:${dbOps.queries || 0}`,
+            `U:${dbOps.updates || 0}`,
+            `I:${dbOps.inserts || 0}`,
+            `D:${dbOps.deletes || 0}`,
+            `T:${dbOps.transactions || 0}`,
+            `Total:${totalOps}`
+          ].filter(p => !p.includes(':0') || p.includes('Total')).join(' ');
+          logger.info('MEM', `🗄️  DB Ops: ${opsParts}`);
+        }
       }
     } catch (e) {
       // Ignore errors accessing db operations
@@ -627,13 +764,36 @@ class MemoryMonitor {
     // Warn about memory issues
     if (stats.rss > this.criticalThreshold) {
       logger.error('MEM', `CRITICAL: Memory usage exceeds ${formatBytes(this.criticalThreshold)} - RSS: ${formatBytes(stats.rss)}`);
+      
+      // If memory is critical and we have orphaned timers, suggest cleanup
+      if (cronerTimerCount > 100 && stats.totalJobs === 0) {
+        logger.error('MEM', `🚨 CRITICAL: High memory + ${cronerTimerCount} orphaned croner timers! Jobs need to be recreated.`);
+      }
     } else if (stats.rss > this.warningThreshold) {
       logger.warn('MEM', `WARNING: Memory usage exceeds ${formatBytes(this.warningThreshold)} - RSS: ${formatBytes(stats.rss)}`);
     }
     
-    // Warn about memory growth
+    // Warn about memory growth - more aggressive warnings
     if (growth.isGrowing) {
+      const growthMB = growth.growth / (1024 * 1024);
+      const rateMBPerMin = growth.ratePerMinute / (1024 * 1024);
+      
       logger.warn('MEM', `Memory growth detected: ${formatBytes(growth.growth)} over ${Math.round(growth.duration / 1000)}s (${formatBytes(growth.ratePerMinute)}/min)`);
+      
+      // If growing faster than 5MB/min, it's concerning
+      if (rateMBPerMin > 5) {
+        logger.error('MEM', `⚠️ RAPID MEMORY GROWTH: ${rateMBPerMin.toFixed(2)} MB/min! This may indicate a memory leak.`);
+        
+        // Check if orphaned timers might be the cause
+        if (cronerTimerCount > 50 && stats.totalJobs === 0) {
+          logger.error('MEM', `💡 Likely cause: ${cronerTimerCount} orphaned croner timers holding memory. Jobs need to be recreated.`);
+        }
+      }
+      
+      // If total growth > 50MB, it's very concerning
+      if (growthMB > 50) {
+        logger.error('MEM', `🚨 SIGNIFICANT MEMORY GROWTH: ${growthMB.toFixed(2)} MB! Consider restarting the process.`);
+      }
     }
     
     // Warn about timer leaks
@@ -710,9 +870,60 @@ class MemoryMonitor {
     // Get all timers, but exclude expected ones (croner/undici) for leak detection
     const allTimers = Array.from(this.activeTimers.values());
     const unexpectedTimers = allTimers.filter(t => !t.isExpected);
+    const cronerTimers = allTimers.filter(t => t.isCroner);
     const timerAge = unexpectedTimers
       .map(t => ({ ...t, age: now - t.createdAt }))
       .sort((a, b) => b.age - a.age);
+    
+    // CRONER-SPECIFIC LEAK DETECTION
+    let cronerLeak = null;
+    if (cronerTimers.length > 0) {
+      try {
+        const { getCronJobStats, getCurrentTimerCount } = require('../../bot/scheduler/croner');
+        const stats = getCronJobStats();
+        const currentTimerCount = getCurrentTimerCount();
+        const timersPerJob = stats.totalJobs > 0 ? Math.round(currentTimerCount / stats.totalJobs) : 0;
+        const ratioThreshold = parseInt(process.env.TIMER_LEAK_RATIO_THRESHOLD) || 5;
+        const growthThreshold = parseFloat(process.env.TIMER_LEAK_GROWTH_THRESHOLD) || 1.0;
+        
+        // Calculate timer growth rate
+        if (!this.lastCronerTimerCheck) {
+          this.lastCronerTimerCheck = now;
+          this.lastCronerTimerCount = currentTimerCount;
+        } else {
+          const timeSinceLastCheck = (now - this.lastCronerTimerCheck) / 1000; // seconds
+          const timerGrowth = currentTimerCount - this.lastCronerTimerCount;
+          const growthRate = timeSinceLastCheck > 0 ? timerGrowth / timeSinceLastCheck : 0;
+          
+          // Detect croner-specific leaks
+          if (timersPerJob > ratioThreshold || growthRate > growthThreshold) {
+            cronerLeak = {
+              hasLeak: true,
+              type: 'croner-timers',
+              activeCount: currentTimerCount,
+              jobCount: stats.totalJobs,
+              timersPerJob: timersPerJob,
+              growthRate: growthRate,
+              timerGrowth: timerGrowth,
+              timeSinceLastCheck: timeSinceLastCheck,
+              threshold: ratioThreshold
+            };
+            
+            // Auto-trigger cleanup if enabled
+            const autoCleanupEnabled = process.env.ENABLE_TIMER_AUTO_CLEANUP !== 'false';
+            if (autoCleanupEnabled && timersPerJob > ratioThreshold) {
+              this.autoCleanupTimerLeak(cronerLeak);
+            }
+          }
+          
+          this.lastCronerTimerCheck = now;
+          this.lastCronerTimerCount = currentTimerCount;
+        }
+      } catch (error) {
+        // Scheduler not available (e.g., in dashboard)
+        logger.debug('MEM', 'Could not check croner stats:', error.message);
+      }
+    }
     
     // Check intervals
     if (this.activeIntervals.size > 20) {
@@ -723,7 +934,8 @@ class MemoryMonitor {
           type: 'intervals',
           activeCount: this.activeIntervals.size,
           createdCount: this.intervalCount,
-          oldest: intervalAge[0]
+          oldest: intervalAge[0],
+          cronerLeak: cronerLeak
         };
       }
     }
@@ -739,12 +951,76 @@ class MemoryMonitor {
           activeCount: this.activeTimers.size,
           unexpectedCount: unexpectedTimers.length,
           createdCount: this.timerCount,
-          oldest: timerAge[0]
+          oldest: timerAge[0],
+          cronerLeak: cronerLeak
         };
       }
     }
     
+    // Return croner leak even if no other leaks detected
+    if (cronerLeak) {
+      return cronerLeak;
+    }
+    
     return { hasLeak: false };
+  }
+
+  // ------------------- Auto Cleanup Timer Leak -------------------
+  async autoCleanupTimerLeak(leakInfo) {
+    if (!leakInfo || !leakInfo.hasLeak) {
+      return { success: false, reason: 'No leak detected' };
+    }
+
+    try {
+      const { cleanupOrphanedTimers, checkJobHealth, forceCleanupCronerTimers, restartAllJobs } = require('../../bot/scheduler/croner');
+      
+      logger.warn('MEM', `🧹 Auto-cleanup triggered for croner timer leak (${leakInfo.timersPerJob} timers/job)`);
+      
+      // Fallback execution order
+      let result = { success: false, actions: [] };
+      
+      // Fallback 1: Job health check
+      const health = await checkJobHealth();
+      if (health.unhealthyJobs.length > 0) {
+        result.actions.push(`Found ${health.unhealthyJobs.length} unhealthy jobs`);
+      }
+      
+      // Fallback 2: Cleanup orphaned timers (if ratio > 5)
+      if (leakInfo.timersPerJob > 5) {
+        const cleanupResult = await cleanupOrphanedTimers();
+        result.actions.push(`Cleaned ${cleanupResult.cleaned} orphaned timers`);
+        if (cleanupResult.cleaned > 0) {
+          result.success = true;
+        }
+      }
+      
+      // Fallback 3: Force cleanup internal timers (if ratio > 8)
+      if (leakInfo.timersPerJob > 8) {
+        const forceResult = forceCleanupCronerTimers();
+        result.actions.push(`Force cleaned ${forceResult.cleaned} internal timers`);
+        if (forceResult.cleaned > 0) {
+          result.success = true;
+        }
+      }
+      
+      // Fallback 4: Restart all jobs (if ratio > 10) - last resort
+      if (leakInfo.timersPerJob > 10) {
+        logger.error('MEM', `🚨 CRITICAL: Timer ratio extremely high, restarting all jobs (last resort)`);
+        const restartResult = await restartAllJobs();
+        result.actions.push(`Restarted ${restartResult.stopped} jobs`);
+        result.success = true;
+        result.critical = true;
+      }
+      
+      if (result.success) {
+        logger.warn('MEM', `✅ Auto-cleanup completed: ${result.actions.join(', ')}`);
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('MEM', `Error during auto-cleanup:`, error.message);
+      return { success: false, error: error.message };
+    }
   }
 
   // ------------------- Track Cache Size -------------------
@@ -944,10 +1220,23 @@ class MemoryMonitor {
 // ============================================================================
 
 let memoryMonitorInstance = null;
+let memoryMonitorInitialized = false;
 
 function getMemoryMonitor(options = {}) {
+  // Singleton enforcement - prevent duplicate initialization
+  if (memoryMonitorInitialized && !memoryMonitorInstance) {
+    logger.warn('MEM', '⚠️ Memory monitor was destroyed but getMemoryMonitor called again. Creating new instance.');
+  }
+  
   if (!memoryMonitorInstance) {
     memoryMonitorInstance = new MemoryMonitor(options);
+    memoryMonitorInitialized = true;
+    logger.debug('MEM', 'Memory monitor singleton created');
+  } else {
+    // Log if options are provided but instance already exists (potential misconfiguration)
+    if (Object.keys(options).length > 0) {
+      logger.warn('MEM', '⚠️ getMemoryMonitor called with options but instance already exists. Options ignored.');
+    }
   }
   return memoryMonitorInstance;
 }

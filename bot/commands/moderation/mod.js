@@ -3907,14 +3907,15 @@ async function handleDebuff(interaction) {
 
       await character.save();
 
+      // SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
       // Schedule Agenda job for debuff expiry
-      try {
-        const { scheduleDebuffExpiry } = require('../../scheduler');
-        await scheduleDebuffExpiry(character);
-      } catch (agendaError) {
-        // Log but don't fail - the daily cron check will still catch it as fallback
-        console.warn(`[mod.js]: ⚠️ Failed to schedule Agenda job for debuff expiry on ${character.name}, will use fallback: ${agendaError.message}`);
-      }
+      // try {
+      //   const { scheduleDebuffExpiry } = require('../../scheduler/scheduler');
+      //   await scheduleDebuffExpiry(character);
+      // } catch (agendaError) {
+      //   // Log but don't fail - the daily cron check will still catch it as fallback
+      //   console.warn(`[mod.js]: ⚠️ Failed to schedule Agenda job for debuff expiry on ${character.name}, will use fallback: ${agendaError.message}`);
+      // }
 
       console.log(`[mod.js]: ✅ Applied ${days}-day debuff to ${character.name} (ends: ${debuffEndDate.toISOString()})`);
 

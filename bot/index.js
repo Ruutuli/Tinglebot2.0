@@ -50,11 +50,12 @@ const {
 } = require("./scripts/trello");
 const { isBloodMoonDay } = require("./scripts/bloodmoon");
 // const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
-const {
-  initializeScheduler,
-  setupWeatherScheduler,
-  setupBlightScheduler
-} = require('./scheduler');
+// SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
+// const {
+//   initializeScheduler,
+//   setupWeatherScheduler,
+//   setupBlightScheduler
+// } = require('./scheduler/scheduler');
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
 // ------------------- Weather -------------------
@@ -204,13 +205,15 @@ async function performGracefulShutdown() {
     }
     
     // 3. Destroy all cron jobs (prevents new timers from being created)
-    try {
-      const { shutdownCroner } = require('./scheduler/croner');
-      shutdownCroner();
-      logger.info('SYSTEM', 'All cron jobs stopped');
-    } catch (error) {
-      logger.warn('SYSTEM', `Error stopping cron jobs: ${error.message}`);
-    }
+    // SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
+    // try {
+    //   const { shutdownCroner } = require('./scheduler/croner');
+    //   shutdownCroner();
+    //   logger.info('SYSTEM', 'All cron jobs stopped');
+    // } catch (error) {
+    //   logger.error('SYSTEM', 'Error stopping cron jobs:', error.message);
+    // }
+    // Note: Scheduler is disabled, so no cron jobs to stop
     
     // 3. Destroy Discord client
     if (client) {
@@ -294,7 +297,7 @@ async function initializeClient() {
     // Initialize memory monitoring
     const memoryMonitor = getMemoryMonitor({
       enabled: true,
-      logInterval: 5 * 60 * 1000, // 5 minutes
+      logInterval: 1 * 60 * 1000, // 1 minute (changed from 5 minutes for testing)
       warningThreshold: 500 * 1024 * 1024, // 500MB
       criticalThreshold: 1000 * 1024 * 1024 // 1GB
     });
@@ -407,12 +410,20 @@ async function initializeClient() {
     const commandHandler = require("./handlers/commandHandler");
     commandHandler(client);
 
+    // Single ready handler to prevent duplicate initialization
+    let readyHandlerExecuted = false;
     client.once("ready", async () => {
+      // Guard against duplicate execution
+      if (readyHandlerExecuted) {
+        logger.error('SYSTEM', '⚠️ CRITICAL: Ready handler already executed! This should never happen.');
+        return;
+      }
+      readyHandlerExecuted = true;
+
+      // Initialize error handling first
       initializeErrorHandler(logErrorToTrello, client);
       initializeErrorTracking(client);
-    });
 
-    client.once("ready", async () => {
       // Display compact banner
       console.log('\n');
       logger.banner('TINGLEBOT 2.0', 'Discord Bot Service');
@@ -435,9 +446,11 @@ async function initializeClient() {
         initializeRandomEncounterBot(client);
         
         logBloodMoonStatus();
-        initializeScheduler(client);
+        // SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
+        logger.warn('SYSTEM', '⚠️ SCHEDULER DISABLED: All cron jobs are commented out for testing. This is to diagnose memory/timer leak issues.');
+        // initializeScheduler(client);
         
-        // Initialize Agenda for one-time scheduled jobs
+        // Initialize Agenda for one-time scheduled jobs (Agenda uses MongoDB, separate from croner)
         const { initAgenda, defineAgendaJobs, startAgenda } = require('./scheduler/agenda');
         await initAgenda();
         defineAgendaJobs({ client });

@@ -31,14 +31,6 @@ class SettingsManager {
       itemsPerPage: 24,
       defaultSort: 'date-desc',
       
-      // Notifications
-      bloodMoonAlerts: false,
-      dailyResetReminders: false,
-      weatherNotifications: false,
-      characterWeekUpdates: false,
-      blightCallNotifications: false,
-      debuffEndNotifications: false,
-      dailyWeatherNotifications: false
     };
   }
 
@@ -202,8 +194,6 @@ class SettingsManager {
       'image-quality', 'animation-speed',
       'date-format', 'timezone', 'currency-format', 'number-format',
       'items-per-page', 'default-sort',
-      'blood-moon-alerts', 'daily-reset-reminders', 'weather-notifications', 'character-week-updates',
-      'blight-call-notifications', 'debuff-end-notifications', 'daily-weather-notifications'
     ];
 
     settingsInputs.forEach(id => {
@@ -273,21 +263,6 @@ class SettingsManager {
       this.settings[settingKey] = settingValue;
       this.applySetting(settingKey, settingValue);
       
-      // Auto-save notification settings immediately to trigger DM
-      const notificationSettings = ['bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates', 'blightCallNotifications', 'debuffEndNotifications', 'dailyWeatherNotifications'];
-      if (notificationSettings.includes(settingKey)) {
-        // Clear any existing timeout for this setting to prevent duplicates
-        if (this.saveTimeouts[settingKey]) {
-          clearTimeout(this.saveTimeouts[settingKey]);
-        }
-        
-        // Debounce the save to prevent duplicate API calls
-        this.saveTimeouts[settingKey] = setTimeout(() => {
-          // Only show DM confirmation message if turning ON
-          this.saveSettings(settingValue === true);
-          delete this.saveTimeouts[settingKey];
-        }, 300); // 300ms debounce
-      }
     }
   }
 
@@ -305,13 +280,6 @@ class SettingsManager {
       'number-format': 'numberFormat',
       'items-per-page': 'itemsPerPage',
       'default-sort': 'defaultSort',
-      'blood-moon-alerts': 'bloodMoonAlerts',
-      'daily-reset-reminders': 'dailyResetReminders',
-      'weather-notifications': 'weatherNotifications',
-      'character-week-updates': 'characterWeekUpdates',
-      'blight-call-notifications': 'blightCallNotifications',
-      'debuff-end-notifications': 'debuffEndNotifications',
-      'daily-weather-notifications': 'dailyWeatherNotifications'
     };
     return mapping[elementId];
   }
@@ -491,13 +459,6 @@ class SettingsManager {
       'numberFormat': 'number-format',
       'itemsPerPage': 'items-per-page',
       'defaultSort': 'default-sort',
-      'bloodMoonAlerts': 'blood-moon-alerts',
-      'dailyResetReminders': 'daily-reset-reminders',
-      'weatherNotifications': 'weather-notifications',
-      'characterWeekUpdates': 'character-week-updates',
-      'blightCallNotifications': 'blight-call-notifications',
-      'debuffEndNotifications': 'debuff-end-notifications',
-      'dailyWeatherNotifications': 'daily-weather-notifications'
     };
     return mapping[settingKey];
   }

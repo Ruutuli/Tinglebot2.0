@@ -275,7 +275,7 @@ function defineAgendaJobs({ client }) {
         return;
       }
 
-      const { postWeatherForVillage } = require("../scheduler");
+      const { postWeatherForVillage } = require("./scheduler");
       
       // Post the weather (checkExisting=false ensures it posts even if already exists)
       await postWeatherForVillage(clientRef, village, false, false);

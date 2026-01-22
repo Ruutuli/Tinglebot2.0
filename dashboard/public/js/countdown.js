@@ -28,15 +28,6 @@ class CountdownManager {
     
     this.events = [
       {
-        id: 'daily-reset',
-        name: 'Daily Reset',
-        time: '08:00',
-        description: 'Weather updates, stamina recovery, daily rolls reset',
-        icon: 'fas fa-sun',
-        type: 'primary',
-        isDaily: true
-      },
-      {
         id: 'blood-moon',
         name: 'Blood Moon',
         description: 'Channel renaming, Blood Moon announcements',

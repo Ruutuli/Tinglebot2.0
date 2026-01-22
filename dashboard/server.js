@@ -86,7 +86,7 @@ const calendarModule = require('../bot/modules/calendarModule');
 const logger = require('@/shared/utils/logger');
 const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
 
-// Import croner for scheduling
+// Import croner directly for dashboard's weekly character rotation
 const { Cron } = require('croner');
 
 // Import Google Sheets utilities
@@ -4217,7 +4217,7 @@ const getNextSundayMidnight = (fromDate) => {
 };
 
 // ------------------- Function: setupWeeklyCharacterRotationScheduler -------------------
-// Sets up the weekly character rotation scheduler using croner (Sunday midnight EST = Monday 05:00 UTC)
+// Sets up the weekly character rotation scheduler using croner directly (Sunday midnight EST = Monday 05:00 UTC)
 const setupWeeklyCharacterRotationScheduler = () => {
   logger.schedule('Setting up weekly character rotation scheduler (Sunday midnight EST = Monday 05:00 UTC)');
   new Cron(
@@ -4408,194 +4408,11 @@ app.delete('/api/map/user-pins/:pinId', async (req, res) => {
 
 
 // ============================================================================
-// ------------------- Section: Daily Reset Reminder Scheduler -------------------
-// Sends daily reset reminders at 8am EST every day
-// ============================================================================
 
-// ------------------- Function: getNext8amEST -------------------
-// Gets the next 8am EST from current time
-const getNext8amEST = (fromDate) => {
-  const date = new Date(fromDate);
-  
-  // 8 AM EST = 1 PM UTC (during standard time) or 12 PM UTC (during daylight saving)
-  // We'll use 1 PM UTC = 8 AM EST for consistency
-  const next8am = new Date(date);
-  next8am.setUTCHours(13, 0, 0, 0); // 1 PM UTC = 8 AM EST
-  
-  // If we've already passed 8am today, schedule for tomorrow
-  if (date >= next8am) {
-    next8am.setUTCDate(next8am.getUTCDate() + 1);
-  }
-  
-  return next8am;
-};
 
-// ------------------- Function: setupDailyResetReminders -------------------
-// Sets up the daily reset reminder scheduler using croner (8am EST = 13:00 UTC)
-const setupDailyResetReminders = () => {
-  logger.schedule('Setting up daily reset reminder scheduler (8am EST = 13:00 UTC)');
-  new Cron(
-    '0 13 * * *',
-    {
-      catch: true,
-    },
-    async () => {
-      try {
-        logger.event('Executing scheduled daily reset reminder');
-        await notificationService.sendDailyResetReminders();
-      } catch (error) {
-        logger.error('Error in scheduled daily reset reminder', error);
-      }
-    }
-  );
-};
 
 // ============================================================================
-// ------------------- Section: Blood Moon Alert Scheduler -------------------
-// Sends blood moon alerts at midnight the day before blood moon starts
-// ============================================================================
 
-// ------------------- Function: getNextMidnightEST -------------------
-// Gets the next midnight EST from current time
-const getNextMidnightEST = (fromDate) => {
-  const date = new Date(fromDate);
-  
-  // Midnight EST = 5 AM UTC (during standard time) or 4 AM UTC (during daylight saving)
-  // We'll use 5 AM UTC = Midnight EST for consistency
-  const nextMidnight = new Date(date);
-  nextMidnight.setUTCHours(5, 0, 0, 0); // 5 AM UTC = Midnight EST
-  
-  // If we've already passed midnight today, schedule for tomorrow
-  if (date >= nextMidnight) {
-    nextMidnight.setUTCDate(nextMidnight.getUTCDate() + 1);
-  }
-  
-  return nextMidnight;
-};
-
-// ------------------- Function: checkIfTodayIsBeforeBloodMoon -------------------
-// Checks if today is the day before a blood moon event
-const checkIfTodayIsBeforeBloodMoon = () => {
-  const { bloodmoonDates } = require('../bot/modules/calendarModule');
-  
-  const now = new Date();
-  // Get EST date (UTC-5) for date comparison
-  const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-  const today = new Date(estTime.getUTCFullYear(), estTime.getUTCMonth(), estTime.getUTCDate());
-  
-  if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
-    return false;
-  }
-  
-  for (const { realDate } of bloodmoonDates) {
-    const [month, day] = realDate.split('-').map(Number);
-    const bloodMoonDate = new Date(today.getFullYear(), month - 1, day);
-    const dayBefore = new Date(bloodMoonDate);
-    dayBefore.setDate(bloodMoonDate.getDate() - 1);
-    
-    if (today.getTime() === dayBefore.getTime()) {
-      return true;
-    }
-  }
-  
-  return false;
-};
-
-// ------------------- Function: setupBloodMoonAlerts -------------------
-// Sets up the blood moon alert scheduler using croner (midnight EST = 05:00 UTC)
-const setupBloodMoonAlerts = () => {
-  logger.schedule('Setting up blood moon alert scheduler (midnight EST = 05:00 UTC)');
-  new Cron(
-    '0 5 * * *',
-    {
-      catch: true,
-    },
-    async () => {
-      try {
-        logger.event('Executing blood moon check at midnight');
-        
-        // Check if today is the day before blood moon
-        if (checkIfTodayIsBeforeBloodMoon()) {
-          logger.custom('🌑', 'Today is the day before Blood Moon! Sending alerts...', '\x1b[35m');
-          
-          const bloodMoonData = {
-            description: '⚠️ **Beware!** Tonight the Blood Moon starts at **8 PM EST**!',
-            fields: [
-              {
-                name: '🌙 Blood Moon Event',
-                value: 'The ominous red glow will appear in the sky starting at 8 PM EST tonight. Prepare yourself!',
-                inline: false
-              },
-              {
-                name: '⏰ Start Time',
-                value: '8:00 PM EST',
-                inline: true
-              },
-              {
-                name: '📅 Duration',
-                value: 'Until 8:00 AM EST',
-                inline: true
-              },
-              {
-                name: '💀 Warning',
-                value: 'Monsters will be more dangerous during this period. Stay safe!',
-                inline: false
-              }
-            ]
-          };
-          
-          await notificationService.sendBloodMoonAlerts(bloodMoonData);
-        }
-      } catch (error) {
-        logger.error('Error in scheduled blood moon check', error);
-      }
-    }
-  );
-};
-
-// ============================================================================
-// ------------------- Section: Blight Call Notification Scheduler -------------------
-// Sends blight call notifications 15 minutes before the daily blight call at 8pm EST
-// ============================================================================
-
-// ------------------- Function: getNext745pmEST -------------------
-// Gets the next 7:45pm EST from current time
-const getNext745pmEST = (fromDate) => {
-  const date = new Date(fromDate);
-  
-  // 7:45 PM EST = 12:45 AM UTC next day (during standard time, UTC-5)
-  // 7:45 PM EDT = 11:45 PM UTC (during daylight saving, UTC-4)
-  // We'll use 0:45 UTC (12:45 AM) = 7:45 PM EST for consistency
-  const next745pm = new Date(date);
-  next745pm.setUTCHours(0, 45, 0, 0); // 0:45 UTC = 7:45 PM EST (or 8:45 PM EDT)
-  
-  // If we've already passed 7:45pm today, schedule for tomorrow
-  if (date >= next745pm) {
-    next745pm.setUTCDate(next745pm.getUTCDate() + 1);
-  }
-  
-  return next745pm;
-};
-
-// ------------------- Function: setupBlightCallNotifications -------------------
-// Sets up the blight call notification scheduler using croner
-const setupBlightCallNotifications = () => {
-  logger.schedule('Setting up blight call notification scheduler (7:45pm EST = 00:45 UTC next day)');
-  new Cron(
-    '45 0 * * *',
-    {
-      catch: true,
-    },
-    async () => {
-      try {
-        logger.event('Executing scheduled blight call notification');
-        await notificationService.sendBlightCallNotifications();
-      } catch (error) {
-        logger.error('Error in scheduled blight call notification', error);
-      }
-    }
-  );
-};
 
 // ------------------- Function: rotateCharacterOfWeek -------------------
 // Helper function to rotate the character of the week
@@ -10688,13 +10505,6 @@ app.get('/api/user/settings', async (req, res) => {
       numberFormat: 'comma',
       itemsPerPage: 24,
       defaultSort: 'date-desc',
-      bloodMoonAlerts: false,
-      dailyResetReminders: false,
-      weatherNotifications: false,
-      characterWeekUpdates: false,
-      blightCallNotifications: false,
-      debuffEndNotifications: false,
-      dailyWeatherNotifications: false,
       activityLogging: true,
       dataRetention: 90,
       profileVisibility: 'friends'
@@ -10733,30 +10543,16 @@ app.put('/api/user/settings', async (req, res) => {
       'theme', 'fontSize', 'highContrast', 'imageQuality', 'animationSpeed',
       'dateFormat', 'timezone', 'currencyFormat', 'numberFormat',
       'itemsPerPage', 'defaultSort',
-      'bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates',
-      'blightCallNotifications', 'debuffEndNotifications', 'dailyWeatherNotifications',
       'activityLogging', 'dataRetention', 'profileVisibility'
     ];
     
     const settingsToUpdate = {};
-    const notificationTypes = ['bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates', 'blightCallNotifications', 'debuffEndNotifications', 'dailyWeatherNotifications'];
-    const notificationsEnabled = [];
     
     for (const key of validSettings) {
       if (key in settings) {
         // Type conversion based on field
-        if (['highContrast', 'bloodMoonAlerts', 'dailyResetReminders', 'weatherNotifications', 'characterWeekUpdates', 'blightCallNotifications', 'debuffEndNotifications', 'dailyWeatherNotifications', 'activityLogging'].includes(key)) {
+        if (['highContrast', 'activityLogging'].includes(key)) {
           settingsToUpdate[`settings.${key}`] = Boolean(settings[key]);
-          
-          // Check if notification was just enabled (changed from false to true)
-          if (notificationTypes.includes(key)) {
-            const wasEnabled = oldSettings[key] === true;
-            const isNowEnabled = Boolean(settings[key]) === true;
-            
-            if (!wasEnabled && isNowEnabled) {
-              notificationsEnabled.push(key);
-            }
-          }
         } else if (['itemsPerPage', 'dataRetention'].includes(key)) {
           settingsToUpdate[`settings.${key}`] = parseInt(settings[key]) || settings[key];
         } else {
@@ -10777,19 +10573,6 @@ app.put('/api/user/settings', async (req, res) => {
     }
     
     logger.success(`Updated settings for user ${user.username || user.discordId}`, 'server.js');
-    
-    // Send confirmation DMs for newly enabled notifications (don't await - send in background)
-    if (notificationsEnabled.length > 0) {
-      logger.info(`Sending confirmation DMs for: ${notificationsEnabled.join(', ')}`);
-      
-      // Send DMs in the background (don't wait for completion)
-      notificationsEnabled.forEach(notificationType => {
-        notificationService.sendNotificationEnabledConfirmation(req.user.discordId, notificationType)
-          .catch(err => {
-            console.error(`[server.js]: Error sending confirmation for ${notificationType}:`, err);
-          });
-      });
-    }
     
     res.json({ 
       success: true,
@@ -11111,186 +10894,6 @@ app.get('/api/blupee/status', async (req, res) => {
 // ------------------- Section: Notification API Routes -------------------
 
 const notificationService = require('@/shared/utils/notificationService');
-
-// Send Blood Moon alerts
-app.post('/api/notifications/blood-moon', async (req, res) => {
-  try {
-    // Check if user is admin
-    const guildId = process.env.PROD_GUILD_ID;
-    let isAdmin = false;
-    
-    if (guildId) {
-      const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
-        headers: {
-          'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const memberData = await response.json();
-        const roles = memberData.roles || [];
-        const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
-        isAdmin = ADMIN_ROLE_ID && roles.includes(ADMIN_ROLE_ID);
-      }
-    }
-    
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const { description, fields } = req.body;
-    
-    const stats = await notificationService.sendBloodMoonAlerts({
-      description,
-      fields
-    });
-    
-    res.json({
-      success: true,
-      message: 'Blood Moon alerts sent',
-      stats
-    });
-  } catch (error) {
-    console.error('[server.js]: Error sending Blood Moon alerts:', error);
-    res.status(500).json({ error: 'Failed to send Blood Moon alerts' });
-  }
-});
-
-// Send Daily Reset reminders
-app.post('/api/notifications/daily-reset', async (req, res) => {
-  try {
-    // Check if user is admin
-    const guildId = process.env.PROD_GUILD_ID;
-    let isAdmin = false;
-    
-    if (guildId) {
-      const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
-        headers: {
-          'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const memberData = await response.json();
-        const roles = memberData.roles || [];
-        const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
-        isAdmin = ADMIN_ROLE_ID && roles.includes(ADMIN_ROLE_ID);
-      }
-    }
-    
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const stats = await notificationService.sendDailyResetReminders();
-    
-    res.json({
-      success: true,
-      message: 'Daily Reset reminders sent',
-      stats
-    });
-  } catch (error) {
-    console.error('[server.js]: Error sending Daily Reset reminders:', error);
-    res.status(500).json({ error: 'Failed to send Daily Reset reminders' });
-  }
-});
-
-// Send Weather notifications
-app.post('/api/notifications/weather', async (req, res) => {
-  try {
-    // Check if user is admin
-    const guildId = process.env.PROD_GUILD_ID;
-    let isAdmin = false;
-    
-    if (guildId) {
-      const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
-        headers: {
-          'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const memberData = await response.json();
-        const roles = memberData.roles || [];
-        const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
-        isAdmin = ADMIN_ROLE_ID && roles.includes(ADMIN_ROLE_ID);
-      }
-    }
-    
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const { type, description, village, duration, fields } = req.body;
-    
-    const stats = await notificationService.sendWeatherNotifications({
-      type,
-      description,
-      village,
-      duration,
-      fields
-    });
-    
-    res.json({
-      success: true,
-      message: 'Weather notifications sent',
-      stats
-    });
-  } catch (error) {
-    console.error('[server.js]: Error sending Weather notifications:', error);
-    res.status(500).json({ error: 'Failed to send Weather notifications' });
-  }
-});
-
-// Send Character of Week notifications
-app.post('/api/notifications/character-of-week', async (req, res) => {
-  try {
-    // Check if user is admin
-    const guildId = process.env.PROD_GUILD_ID;
-    let isAdmin = false;
-    
-    if (guildId) {
-      const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${req.user.discordId}`, {
-        headers: {
-          'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const memberData = await response.json();
-        const roles = memberData.roles || [];
-        const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
-        isAdmin = ADMIN_ROLE_ID && roles.includes(ADMIN_ROLE_ID);
-      }
-    }
-    
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const { name, description, icon, fields } = req.body;
-    
-    const stats = await notificationService.sendCharacterOfWeekNotifications({
-      name,
-      description,
-      icon,
-      fields
-    });
-    
-    res.json({
-      success: true,
-      message: 'Character of Week notifications sent',
-      stats
-    });
-  } catch (error) {
-    console.error('[server.js]: Error sending Character of Week notifications:', error);
-    res.status(500).json({ error: 'Failed to send Character of Week notifications' });
-  }
-});
 
 // ------------------- Section: Data Export API Routes -------------------
 
@@ -14246,10 +13849,7 @@ const startServer = async () => {
   
   // Initialize background tasks (non-blocking, failures are non-fatal)
   Promise.all([
-    setupWeeklyCharacterRotation(),
-    Promise.resolve(setupDailyResetReminders()),
-    Promise.resolve(setupBloodMoonAlerts()),
-    Promise.resolve(setupBlightCallNotifications())
+    setupWeeklyCharacterRotation()
   ]).then(() => {
     logger.divider('SCHEDULERS INITIALIZED');
   }).catch(err => {
@@ -14394,64 +13994,6 @@ app.get('/api/test-sunday-midnight', async (req, res) => {
   }
 });
 
-// ------------------- Function: testDailyResetSchedule -------------------
-// Test endpoint to verify next 8am reminder schedule (for debugging)
-app.get('/api/test-daily-reset', async (req, res) => {
-  try {
-    const now = new Date();
-    const next8am = getNext8amEST(now);
-    const timeUntilNext = next8am.getTime() - now.getTime();
-    
-    const result = {
-      currentTime: now.toISOString(),
-      currentTimeEST: now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
-      next8amEST: next8am.toISOString(),
-      next8amESTLocal: next8am.toLocaleString('en-US', { timeZone: 'America/New_York' }),
-      timeUntilNext: {
-        milliseconds: timeUntilNext,
-        hours: Math.floor(timeUntilNext / (1000 * 60 * 60)),
-        minutes: Math.floor((timeUntilNext % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((timeUntilNext % (1000 * 60)) / 1000)
-      }
-    };
-    
-    res.json(result);
-  } catch (error) {
-    console.error('[server.js]: ❌ Error in test endpoint:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ------------------- Function: testBloodMoonSchedule -------------------
-// Test endpoint to verify blood moon alert schedule (for debugging)
-app.get('/api/test-blood-moon', async (req, res) => {
-  try {
-    const now = new Date();
-    const nextMidnight = getNextMidnightEST(now);
-    const timeUntilNext = nextMidnight.getTime() - now.getTime();
-    const isTodayBeforeBloodMoon = checkIfTodayIsBeforeBloodMoon();
-    
-    const result = {
-      currentTime: now.toISOString(),
-      currentTimeEST: now.toLocaleString('en-US', { timeZone: 'America/New_York' }),
-      nextMidnightEST: nextMidnight.toISOString(),
-      nextMidnightESTLocal: nextMidnight.toLocaleString('en-US', { timeZone: 'America/New_York' }),
-      isTodayDayBeforeBloodMoon: isTodayBeforeBloodMoon,
-      willAlertAtNextMidnight: isTodayBeforeBloodMoon,
-      timeUntilNext: {
-        milliseconds: timeUntilNext,
-        hours: Math.floor(timeUntilNext / (1000 * 60 * 60)),
-        minutes: Math.floor((timeUntilNext % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((timeUntilNext % (1000 * 60)) / 1000)
-      }
-    };
-    
-    res.json(result);
-  } catch (error) {
-    console.error('[server.js]: ❌ Error in test endpoint:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // ============================================================================
 // ------------------- Section: Admin Database Management -------------------

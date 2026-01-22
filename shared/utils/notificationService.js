@@ -155,72 +155,6 @@ async function sendBloodMoonAlerts(bloodMoonData = {}) {
 }
 
 /**
- * Sends Daily Reset reminders to users who have enabled this notification
- * @returns {Promise<object>} - Stats about notifications sent
- */
-async function sendDailyResetReminders() {
-  try {
-    logger.custom('⏰', 'Sending Daily Reset reminders...', '\x1b[36m', 'notificationService');
-    
-    // Find all users who have Daily Reset reminders enabled
-    const users = await User.find({ 'settings.dailyResetReminders': true });
-    
-    logger.info(`Found ${users.length} users with Daily Reset reminders enabled`, 'notificationService');
-    
-    const embed = {
-      title: '⏰ Daily Reset Reminder!',
-      description: 'Your daily stamina has been restored! Time to roll and explore the world of Hyrule!',
-      color: 0x00A3DA, // Tinglebot blue
-      fields: [
-        {
-          name: '🎲 Daily Roll',
-          value: 'Use `/roll` to see what the day brings!',
-          inline: false
-        },
-        {
-          name: '⚡ Stamina Restored',
-          value: 'Your stamina is back to full - adventure awaits!',
-          inline: false
-        }
-      ],
-      timestamp: new Date().toISOString(),
-      image: {
-        url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-      },
-      footer: {
-        text: 'Roots of the Wild • Daily Reset'
-      }
-    };
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const user of users) {
-      const success = await sendDiscordDM(user.discordId, embed);
-      if (success) {
-        successCount++;
-      } else {
-        failCount++;
-      }
-      
-      // Add a small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    logger.success(`Daily Reset reminders sent: ${successCount} successful, ${failCount} failed`, 'notificationService');
-    
-    return {
-      total: users.length,
-      success: successCount,
-      failed: failCount
-    };
-  } catch (error) {
-    logger.error('Error sending Daily Reset reminders', error, 'notificationService');
-    throw error;
-  }
-}
-
-/**
  * Sends Weather notifications to users who have enabled this notification
  * @param {object} weatherData - Information about the weather event
  * @returns {Promise<object>} - Stats about notifications sent
@@ -662,12 +596,6 @@ async function sendNotificationEnabledConfirmation(userId, notificationType) {
         description: 'You will now receive notifications about upcoming Blood Moon events.',
         details: 'Get ready for the Blood Moon and plan your adventures accordingly!'
       },
-      dailyResetReminders: {
-        emoji: '⏰',
-        title: 'Daily Reset Reminders Enabled!',
-        description: 'You will now receive reminders about daily resets and stamina recovery.',
-        details: 'Never miss your daily roll or stamina refresh again!'
-      },
       weatherNotifications: {
         emoji: '🌦️',
         title: 'Weather Notifications Enabled!',
@@ -748,7 +676,6 @@ async function sendNotificationEnabledConfirmation(userId, notificationType) {
 module.exports = {
   sendDiscordDM,
   sendBloodMoonAlerts,
-  sendDailyResetReminders,
   sendWeatherNotifications,
   sendCharacterOfWeekNotifications,
   sendBlightCallNotifications,
