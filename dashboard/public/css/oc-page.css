@@ -640,11 +640,21 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.gear-item i {
+.gear-item i,
+.gear-item-icon {
   font-size: 1.5rem;
   color: var(--primary-color, #00A3DA);
   width: 30px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gear-item-icon img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 .gear-info {
@@ -800,6 +810,33 @@
 .stat-detail-value {
   font-weight: 600;
   color: var(--text-primary, #ffffff);
+}
+
+.stat-detail-value a {
+  color: var(--primary-color, #00A3DA);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.stat-detail-value a:hover {
+  color: var(--primary-hover, #0088b8);
+}
+
+.stats-category-header {
+  grid-column: 1 / -1;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stats-category-header:first-child {
+  margin-top: 0;
 }
 
 /* ============================================================================

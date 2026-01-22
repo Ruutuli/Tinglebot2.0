@@ -65,6 +65,11 @@ async function loadCharacter(nameSlug) {
   try {
     showLoading();
     
+    // Check if page is being served correctly (not via file://)
+    if (window.location.protocol === 'file:') {
+      throw new Error('This page must be accessed through the web server. Please use http://localhost:5001/ocs/[character-name] instead of opening the HTML file directly.');
+    }
+    
     const response = await fetch(`/api/characters/by-name/${encodeURIComponent(nameSlug)}`, {
       credentials: 'include'
     });
@@ -83,18 +88,29 @@ async function loadCharacter(nameSlug) {
     character = await response.json();
     
     // Display character
-    displayCharacter();
+    await displayCharacter();
     
   } catch (error) {
     console.error('Error loading character:', error);
-    showError(error.message || 'Failed to load character');
+    
+    // Provide helpful error messages for network errors
+    let errorMessage = error.message || 'Failed to load character';
+    
+    // Check for network/connection errors
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      errorMessage = 'Unable to connect to the server. Please make sure the dashboard server is running on port 5001.';
+    } else if (error.name === 'NetworkError' || error.message.includes('ERR_CONNECTION_REFUSED')) {
+      errorMessage = 'Connection refused. Please make sure the dashboard server is running on port 5001.';
+    }
+    
+    showError(errorMessage);
   }
 }
 
 // ============================================================================
 // ------------------- Character Display -------------------
 // ============================================================================
-function displayCharacter() {
+async function displayCharacter() {
   hideLoading();
   
   // Update breadcrumb
@@ -355,7 +371,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Vending Points',
       value: character.vendingPoints,
-      icon: 'fa-coins'
+      icon: 'fa-coins',
+      category: 'economy'
     });
   }
   
@@ -364,7 +381,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Vendor Type',
       value: character.vendorType,
-      icon: 'fa-store'
+      icon: 'fa-store',
+      category: 'economy'
     });
   }
   
@@ -373,7 +391,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Shop Pouch',
       value: character.shopPouch,
-      icon: 'fa-shopping-bag'
+      icon: 'fa-shopping-bag',
+      category: 'economy'
     });
   }
   
@@ -382,7 +401,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Pouch Size',
       value: character.pouchSize,
-      icon: 'fa-bag'
+      icon: 'fa-bag',
+      category: 'economy'
     });
   }
   
@@ -392,7 +412,8 @@ function displayAdditionalStats(character) {
       label: 'Shop Link',
       value: character.shopLink,
       icon: 'fa-link',
-      isLink: true
+      isLink: true,
+      category: 'economy'
     });
   }
   
@@ -402,7 +423,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Job Changed',
       value: date.toLocaleDateString(),
-      icon: 'fa-calendar-alt'
+      icon: 'fa-calendar-alt',
+      category: 'activities'
     });
   }
   
@@ -411,16 +433,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Job Voucher',
       value: character.jobVoucherJob || 'Active',
-      icon: 'fa-ticket-alt'
-    });
-  }
-  
-  // Inventory synced status
-  if (character.inventorySynced !== undefined) {
-    additionalStats.push({
-      label: 'Inventory Synced',
-      value: character.inventorySynced ? 'Yes' : 'No',
-      icon: character.inventorySynced ? 'fa-check-circle' : 'fa-times-circle'
+      icon: 'fa-ticket-alt',
+      category: 'activities'
     });
   }
   
@@ -430,7 +444,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Last Stamina Use',
       value: date.toLocaleString(),
-      icon: 'fa-clock'
+      icon: 'fa-clock',
+      category: 'activities'
     });
   }
   
@@ -440,7 +455,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Last Weather Gather',
       value: date.toLocaleString(),
-      icon: 'fa-cloud-sun'
+      icon: 'fa-cloud-sun',
+      category: 'activities'
     });
   }
   
@@ -450,7 +466,8 @@ function displayAdditionalStats(character) {
       label: 'Blighted',
       value: 'Yes',
       icon: 'fa-skull',
-      warning: true
+      warning: true,
+      category: 'status'
     });
     
     if (character.blightStage && character.blightStage > 0) {
@@ -458,7 +475,8 @@ function displayAdditionalStats(character) {
         label: 'Blight Stage',
         value: character.blightStage,
         icon: 'fa-exclamation-triangle',
-        warning: true
+        warning: true,
+        category: 'status'
       });
     }
     
@@ -468,7 +486,8 @@ function displayAdditionalStats(character) {
         label: 'Blighted Since',
         value: date.toLocaleDateString(),
         icon: 'fa-calendar-times',
-        warning: true
+        warning: true,
+        category: 'status'
       });
     }
     
@@ -478,7 +497,8 @@ function displayAdditionalStats(character) {
         label: 'Death Deadline',
         value: date.toLocaleString(),
         icon: 'fa-hourglass-end',
-        warning: true
+        warning: true,
+        category: 'status'
       });
     }
     
@@ -486,7 +506,8 @@ function displayAdditionalStats(character) {
       additionalStats.push({
         label: 'Blight Paused',
         value: character.blightPauseInfo?.reason || 'Yes',
-        icon: 'fa-pause-circle'
+        icon: 'fa-pause-circle',
+        category: 'status'
       });
     }
   }
@@ -504,7 +525,8 @@ function displayAdditionalStats(character) {
         label: 'Blight Effects',
         value: effects.join(', '),
         icon: 'fa-vial',
-        warning: true
+        warning: true,
+        category: 'status'
       });
     }
   }
@@ -515,7 +537,8 @@ function displayAdditionalStats(character) {
       label: 'In Jail',
       value: character.jailReleaseTime ? new Date(character.jailReleaseTime).toLocaleString() : 'Yes',
       icon: 'fa-lock',
-      warning: true
+      warning: true,
+      category: 'status'
     });
     
     if (character.jailStartTime) {
@@ -524,7 +547,8 @@ function displayAdditionalStats(character) {
         label: 'Jail Start',
         value: date.toLocaleString(),
         icon: 'fa-calendar-check',
-        warning: true
+        warning: true,
+        category: 'status'
       });
     }
     
@@ -534,7 +558,8 @@ function displayAdditionalStats(character) {
         label: 'Jail Duration',
         value: `${hours} hours`,
         icon: 'fa-hourglass',
-        warning: true
+        warning: true,
+        category: 'status'
       });
     }
     
@@ -542,7 +567,8 @@ function displayAdditionalStats(character) {
       additionalStats.push({
         label: 'Jail Boost',
         value: character.jailBoostSource,
-        icon: 'fa-rocket'
+        icon: 'fa-rocket',
+        category: 'combat'
       });
     }
   }
@@ -553,7 +579,8 @@ function displayAdditionalStats(character) {
       label: 'KO Status',
       value: 'Knocked Out',
       icon: 'fa-heartbeat',
-      warning: true
+      warning: true,
+      category: 'combat'
     });
   }
   
@@ -562,7 +589,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Steal Protection',
       value: character.canBeStolenFrom ? 'Vulnerable' : 'Protected',
-      icon: character.canBeStolenFrom ? 'fa-unlock' : 'fa-shield-alt'
+      icon: character.canBeStolenFrom ? 'fa-unlock' : 'fa-shield-alt',
+      category: 'combat'
     });
   }
   
@@ -575,7 +603,8 @@ function displayAdditionalStats(character) {
       additionalStats.push({
         label: 'Protection Until',
         value: endTime,
-        icon: 'fa-shield-alt'
+        icon: 'fa-shield-alt',
+        category: 'combat'
       });
     }
   }
@@ -585,7 +614,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Failed Steals',
       value: character.failedStealAttempts,
-      icon: 'fa-hand-paper'
+      icon: 'fa-hand-paper',
+      category: 'combat'
     });
   }
   
@@ -594,7 +624,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Failed Flees',
       value: character.failedFleeAttempts,
-      icon: 'fa-running'
+      icon: 'fa-running',
+      category: 'combat'
     });
   }
   
@@ -614,7 +645,8 @@ function displayAdditionalStats(character) {
         label: 'Active Buff',
         value: character.buff.type || buffEffects.join(', '),
         icon: 'fa-arrow-up',
-        positive: true
+        positive: true,
+        category: 'combat'
       });
     }
   }
@@ -628,7 +660,8 @@ function displayAdditionalStats(character) {
       label: 'Active Debuff',
       value: `Until ${endTime}`,
       icon: 'fa-arrow-down',
-      warning: true
+      warning: true,
+      category: 'combat'
     });
   }
   
@@ -641,7 +674,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Weather Usage',
       value: weatherEntries.join('; '),
-      icon: 'fa-cloud-sun-rain'
+      icon: 'fa-cloud-sun-rain',
+      category: 'activities'
     });
   }
   
@@ -657,7 +691,8 @@ function displayAdditionalStats(character) {
       additionalStats.push({
         label: 'Daily Rolls',
         value: rollEntries.join('; '),
-        icon: 'fa-dice'
+        icon: 'fa-dice',
+        category: 'activities'
       });
     }
   }
@@ -668,7 +703,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Last Roll',
       value: date.toLocaleString(),
-      icon: 'fa-dice-d20'
+      icon: 'fa-dice-d20',
+      category: 'activities'
     });
   }
   
@@ -679,14 +715,16 @@ function displayAdditionalStats(character) {
       additionalStats.push({
         label: 'HWQ Cooldown',
         value: date.toLocaleString(),
-        icon: 'fa-hourglass-half'
+        icon: 'fa-hourglass-half',
+        category: 'activities'
       });
     }
     if (character.helpWanted.completions && character.helpWanted.completions.length > 0) {
       additionalStats.push({
         label: 'HWQ Completions',
         value: character.helpWanted.completions.length,
-        icon: 'fa-check-double'
+        icon: 'fa-check-double',
+        category: 'activities'
       });
     }
   }
@@ -696,7 +734,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Boosted By',
       value: character.boostedBy,
-      icon: 'fa-magic'
+      icon: 'fa-magic',
+      category: 'combat'
     });
   }
   
@@ -705,7 +744,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Travel History',
       value: `${character.travelLog.length} locations`,
-      icon: 'fa-map-marked-alt'
+      icon: 'fa-map-marked-alt',
+      category: 'activities'
     });
   }
   
@@ -714,7 +754,8 @@ function displayAdditionalStats(character) {
     additionalStats.push({
       label: 'Vending Sync',
       value: character.vendingSync ? 'Enabled' : 'Disabled',
-      icon: character.vendingSync ? 'fa-sync' : 'fa-sync-alt'
+      icon: character.vendingSync ? 'fa-sync' : 'fa-sync-alt',
+      category: 'economy'
     });
   }
   

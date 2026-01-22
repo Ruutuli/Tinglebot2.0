@@ -43,19 +43,19 @@
 
   <!-- Denial Reason Modal -->
   <div class="modal-overlay" id="denyReasonModal">
-    <div class="modal modal-large">
+    <div class="modal">
       <button class="modal-close" onclick="window.closeDenyReasonModal()">&times;</button>
       <div class="modal-header">
         <i class="fas fa-times-circle modal-icon error"></i>
         <h2 class="modal-title">Deny Character</h2>
       </div>
       <div class="modal-body">
-        <p>Please provide a reason for denying this character. This reason will be sent to the user.</p>
+        <p>Provide a reason (required; sent to the user):</p>
         <textarea 
           id="denyReasonTextarea" 
           class="deny-reason-input" 
-          placeholder="Enter the reason for denial (required)..."
-          rows="3"
+          placeholder="Enter reason for denial..."
+          rows="2"
         ></textarea>
       </div>
       <div class="modal-actions">
