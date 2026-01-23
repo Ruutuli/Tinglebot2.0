@@ -706,7 +706,7 @@ async function sendOCDecisionNotification(userId, decision, characterData, feedb
           },
           {
             name: '📝 Next Steps',
-            value: 'Approved! Please submit OC to <#814567241101475932> channel!',
+            value: 'Approved! Please submit OC to roster channel!',
             inline: false
           },
           {
@@ -722,7 +722,7 @@ async function sendOCDecisionNotification(userId, decision, characterData, feedb
       };
       notificationType = 'oc_approved';
       title = `Character Approved: ${characterData.name}`;
-      message = `Approved! Please submit OC to 814567241101475932 channel!`;
+      message = `Approved! Please submit OC to roster channel!`;
     } else {
       embed = {
         title: '⚠️ Character Needs Changes',

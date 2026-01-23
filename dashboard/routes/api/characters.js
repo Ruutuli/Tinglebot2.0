@@ -139,7 +139,7 @@ async function postCharacterStatusToDiscord(character, status, isModCharacter = 
     
     // Handle accepted status - post to character creation channel
     if (isAccepted(status)) {
-      const channelId = process.env.CHARACTER_CREATION_CHANNEL_ID || '964342870796537909';
+      const channelId = process.env.CHARACTER_CREATION_CHANNEL_ID || '641858948802150400';
       
       const embed = {
         title: `✅ Character Accepted: ${character.name}`,
@@ -150,6 +150,11 @@ async function postCharacterStatusToDiscord(character, status, isModCharacter = 
             name: '👤 Character Details',
             value: `**Name:** ${character.name}\n**Race:** ${character.race}\n**Village:** ${character.homeVillage}\n**Job:** ${character.job}`,
             inline: false
+          },
+          {
+            name: '📝 Next Steps',
+            value: `Approved! Please submit OC to ⁠Roots Of The Wild⁠🔔》roster channel!`,
+            inline: false
           }
         ],
         footer: {
@@ -158,7 +163,7 @@ async function postCharacterStatusToDiscord(character, status, isModCharacter = 
         timestamp: new Date().toISOString()
       };
       
-      // Post to Discord
+      // Post to Discord with user mention outside embed
       const discordResponse = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {
@@ -166,6 +171,7 @@ async function postCharacterStatusToDiscord(character, status, isModCharacter = 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          content: `<@${character.userId}>`,
           embeds: [embed]
         })
       });
