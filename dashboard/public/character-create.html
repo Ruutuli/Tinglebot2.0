@@ -76,7 +76,7 @@
       <div class="character-create-card">
         <div class="character-create-header">
           <h1><i class="fas fa-user-plus"></i> Create New Character</h1>
-          <p class="subtitle">Fill out the form below to create your character. All fields are required.</p>
+          <p class="subtitle">Fill out the form below to create your character. All fields are required. You can save as draft to review later, or submit immediately for review.</p>
         </div>
 
         <!-- Error/Success Messages -->
@@ -440,9 +440,13 @@
 
           <!-- Form Actions -->
           <div class="form-actions">
-            <button type="submit" id="submit-btn" class="btn btn-primary">
-              <i class="fas fa-check"></i>
-              <span>Create Character</span>
+            <button type="button" id="save-draft-btn" class="btn btn-primary">
+              <i class="fas fa-save"></i>
+              <span>Create and Save Character</span>
+            </button>
+            <button type="button" id="submit-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+              <i class="fas fa-paper-plane"></i>
+              <span>Submit Character</span>
             </button>
             <button type="reset" id="reset-btn" class="btn btn-secondary">
               <i class="fas fa-undo"></i>

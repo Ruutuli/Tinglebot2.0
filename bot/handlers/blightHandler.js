@@ -93,6 +93,21 @@ function get8PMUTC(date = new Date()) {
   return utcDate;
 }
 
+// ------------------- Function: get1AMUTC -------------------
+// Returns 1:00 AM UTC (01:00 UTC) for the given date
+// This corresponds to 8:00 PM EST (20:00 EST) the previous day
+function get1AMUTC(date = new Date()) {
+  // Get the date components in UTC
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  
+  // Create date at 1 AM UTC (01:00 UTC) - this is 8:00 PM EST the previous day
+  const utcDate = new Date(Date.UTC(year, month, day, 1, 0, 0));
+  
+  return utcDate;
+}
+
 // ============================================================================
 // ------------------- Database Connection -------------------
 // Use DatabaseConnectionManager for unified connection management
@@ -1908,35 +1923,35 @@ async function rollForBlightProgression(interaction, characterName) {
     // Get current hour in UTC
     const utcHour = getHourInUTC(now);
     
-    // Calculate 8:00 PM UTC today
-    const today8PMUTC = get8PMUTC(now);
+    // Calculate 1:00 AM UTC today (which is 8:00 PM EST the previous day)
+    const today1AMUTC = get1AMUTC(now);
     
     // Calculate current and next call windows
-    const currentCallStart = new Date(today8PMUTC);
+    const currentCallStart = new Date(today1AMUTC);
     const nextCallStart = new Date(currentCallStart);
-    if (utcHour >= 20) {
+    if (utcHour >= 1) {
       nextCallStart.setDate(currentCallStart.getDate() + 1);
     }
 
     const lastRollDate = character.lastRollDate || new Date(0);
     
-    // Determine which 8:00 PM UTC boundary to check against
-    // If we're before 8 PM today, check against yesterday's 8 PM
-    // If we're after 8 PM today, check against today's 8 PM
+    // Determine which 1:00 AM UTC boundary to check against (8:00 PM EST)
+    // If we're before 1 AM today, check against yesterday's 1 AM
+    // If we're after 1 AM today, check against today's 1 AM
     let rollBoundary;
-    if (utcHour < 20) {
-      // Before 8 PM today - check against yesterday's 8 PM
-      // Subtract one day from now and get 8 PM UTC for that date
+    if (utcHour < 1) {
+      // Before 1 AM today - check against yesterday's 1 AM
+      // Subtract one day from now and get 1 AM UTC for that date
       const yesterday = new Date(now);
       yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      rollBoundary = get8PMUTC(yesterday);
+      rollBoundary = get1AMUTC(yesterday);
     } else {
-      // After 8 PM today - check against today's 8 PM
-      rollBoundary = today8PMUTC;
+      // After 1 AM today - check against today's 1 AM
+      rollBoundary = today1AMUTC;
     }
     
     // Check if character has already rolled since the roll boundary
-    // A character can only roll once per "day" (8 PM to 8 PM window)
+    // A character can only roll once per "day" (1 AM UTC to 1 AM UTC window, which is 8 PM EST to 8 PM EST)
     if (character.lastRollDate && character.lastRollDate > rollBoundary) {
       // Debug logging
       console.log(`[blightHandler]: ${characterName} already rolled - Last roll: ${character.lastRollDate.toISOString()}, Roll boundary: ${rollBoundary.toISOString()}, Current time: ${now.toISOString()}`);
@@ -1950,7 +1965,7 @@ async function rollForBlightProgression(interaction, characterName) {
         .setTitle('⏰ Already Rolled for Blight')
         .setDescription(
           `**${characterName}** has already rolled today.\n\n` +
-          `🎯 **Rolls reset at 8:00 PM UTC every day!**\n\n` +
+          `🎯 **Rolls reset at 8:00 PM EST (1:00 AM UTC) every day!**\n\n` +
           `You can roll again in **${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes**.\n\n` +
           `*Remember to roll daily to prevent automatic blight progression!*`
         )
@@ -2171,15 +2186,16 @@ async function postBlightRollCall(client) {
 
 async function checkAndPostMissedBlightPing(client) {
   try {
-    // Skip this check at exactly 8:00 PM UTC - the main scheduled job handles it
+    // Skip this check at exactly 1:00 AM UTC - the main scheduled job handles it
     // This prevents race condition where both jobs run simultaneously
+    // Note: 1:00 AM UTC = 8:00 PM EST (the previous day)
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
     
-    // Skip if we're at exactly 8:00 PM UTC
-    if (utcHour === 20 && utcMinute === 0) {
-      logger.info('BLIGHT', 'Skipping missed blight ping check at 8:00 PM UTC - main scheduled job handles it');
+    // Skip if we're at exactly 1:00 AM UTC (when the main job runs)
+    if (utcHour === 1 && utcMinute === 0) {
+      logger.info('BLIGHT', 'Skipping missed blight ping check at 1:00 AM UTC - main scheduled job handles it');
       return;
     }
     
@@ -2211,27 +2227,30 @@ async function checkAndPostMissedBlightPing(client) {
       return;
     }
     
-    // Calculate the last 8:00 PM UTC boundary
-    // Calculate today's 8:00 PM UTC
-    const today8PMUTC = get8PMUTC(now);
+    // Calculate today's 1:00 AM UTC boundary (which is 8:00 PM EST the previous day)
+    // The backup check runs at 1:30 AM UTC, so we should check if a message was posted
+    // after today's 1:00 AM UTC (which is when the main job should have run at 8:00 PM EST)
+    const today1AMUTC = get1AMUTC(now);
     
-    // Determine the last 8:00 PM UTC boundary
-    let last8PMBoundary;
-    if (utcHour < 20 || (utcHour === 20 && utcMinute < 30)) {
-      // Before 8:30 PM UTC today - check against yesterday's 8:00 PM UTC
-      const yesterday = new Date(now);
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      last8PMBoundary = get8PMUTC(yesterday);
-    } else {
-      // After 8:30 PM UTC today - check against today's 8:00 PM UTC
-      last8PMBoundary = today8PMUTC;
-    }
+    // The boundary we're checking against is today's 1:00 AM UTC
+    // (the main job should have run at this time, 30 minutes ago)
+    const last1AMBoundary = today1AMUTC;
     
-    // Only proceed if we're past the last 8:00 PM UTC boundary
-    if (now < last8PMBoundary) {
-      logger.info('BLIGHT', 'Not yet past last 8:00 PM UTC boundary - skipping check');
+    // Only proceed if we're past today's 1:00 AM UTC boundary
+    // (i.e., it's at least 1:00 AM UTC today, so the main job should have already run)
+    if (now < last1AMBoundary) {
+      logger.info('BLIGHT', 'Not yet past today\'s 1:00 AM UTC boundary (8:00 PM EST) - skipping check');
       return;
     }
+    
+    // Additional safety check: if we're before 1:30 AM UTC, the main job might still be running
+    // (though this shouldn't happen since the backup job is scheduled for 1:30 AM UTC)
+    if (utcHour < 1 || (utcHour === 1 && utcMinute < 30)) {
+      logger.info('BLIGHT', 'Before 1:30 AM UTC - main job may still be running, skipping backup check');
+      return;
+    }
+    
+    logger.info('BLIGHT', `Backup check running at ${utcHour}:${utcMinute.toString().padStart(2, '0')} UTC - checking if main job posted at 1:00 AM UTC (8:00 PM EST)`);
     
       // Fetch recent messages from the channel (last 50 messages should be enough)
       // We'll look for messages from the bot that contain the blight ping
@@ -2258,17 +2277,18 @@ async function checkAndPostMissedBlightPing(client) {
           return false;
         });
         
-        // Check if any blight ping message was sent after the last 8pm boundary
+        // Check if any blight ping message was sent after the last 1:00 AM UTC boundary (8:00 PM EST)
         const pingSentAfterBoundary = blightPingMessages.some(msg => 
-          msg.createdTimestamp >= last8PMBoundary.getTime()
+          msg.createdTimestamp >= last1AMBoundary.getTime()
         );
         
         if (pingSentAfterBoundary) {
+          logger.info('BLIGHT', 'Blight ping already sent since last 1:00 AM UTC boundary (8:00 PM EST) - skipping');
           return;
         }
         
-        // Blight ping was not sent since the last 8pm boundary - send it now
-        logger.info('BLIGHT', 'Posting missed blight ping (fallback)');
+        // Blight ping was not sent since the last 1:00 AM UTC boundary (8:00 PM EST) - send it now
+        logger.info('BLIGHT', 'Posting missed blight ping (fallback) - no ping found since last 1:00 AM UTC boundary');
         await postBlightRollCall(client);
       
     } catch (fetchError) {
@@ -2440,17 +2460,16 @@ async function viewBlightStatus(interaction, characterName) {
 
     // Add next roll reminder
     const nextRollTime = new Date();
-    // Calculate next 8:00 PM UTC
-    const next8PMUTC = get8PMUTC(new Date());
-    if (next8PMUTC <= new Date()) {
-      // If it's already past 8 PM today, get tomorrow's 8 PM
+    // Calculate next 1:00 AM UTC (8:00 PM EST)
+    const next1AMUTC = get1AMUTC(new Date());
+    if (next1AMUTC <= new Date()) {
+      // If it's already past 1 AM today, get tomorrow's 1 AM
       const tomorrow = new Date();
       tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      nextRollTime = get8PMUTC(tomorrow);
+      nextRollTime = get1AMUTC(tomorrow);
     } else {
-      nextRollTime = next8PMUTC;
+      nextRollTime = next1AMUTC;
     }
-    nextRollTime.setDate(nextRollTime.getDate() + 1); // Tomorrow
     
     embed.addFields({
       name: '⏰ Next Roll Call',
@@ -3279,38 +3298,38 @@ async function checkMissedRolls(client) {
       // Get current hour in UTC
       const utcHour = getHourInUTC(now);
       
-      // Calculate today's 8 PM UTC
-      const today8PMUTC = get8PMUTC(now);
+      // Calculate today's 1 AM UTC (which is 8:00 PM EST the previous day)
+      const today1AMUTC = get1AMUTC(now);
       
       // Determine the current roll boundary (same logic as rollForBlightProgression)
-      // If we're before 8 PM today, check against yesterday's 8 PM
-      // If we're after 8 PM today, check against today's 8 PM
+      // If we're before 1 AM today, check against yesterday's 1 AM
+      // If we're after 1 AM today, check against today's 1 AM
       let currentRollBoundary;
-      if (utcHour < 20) {
-        // Before 8 PM today - check against yesterday's 8 PM
+      if (utcHour < 1) {
+        // Before 1 AM today - check against yesterday's 1 AM
         const yesterday = new Date(now);
         yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        currentRollBoundary = get8PMUTC(yesterday);
+        currentRollBoundary = get1AMUTC(yesterday);
       } else {
-        // After 8 PM today - check against today's 8 PM
-        currentRollBoundary = today8PMUTC;
+        // After 1 AM today - check against today's 1 AM
+        currentRollBoundary = today1AMUTC;
       }
       
       // Calculate the previous blight call period (for missed roll detection)
       // This is the period that just ended (the one we're checking if they missed)
-      // If we're at or after 8 PM today, the previous period was yesterday's 8 PM to today's 8 PM
-      // If we're before 8 PM today, the previous period was the day before yesterday's 8 PM to yesterday's 8 PM
+      // If we're at or after 1 AM today, the previous period was yesterday's 1 AM to today's 1 AM
+      // If we're before 1 AM today, the previous period was the day before yesterday's 1 AM to yesterday's 1 AM
       let previousBlightCall;
-      if (utcHour >= 20) {
-        // At or after 8 PM today - previous period ended at today's 8 PM, started at yesterday's 8 PM
+      if (utcHour >= 1) {
+        // At or after 1 AM today - previous period ended at today's 1 AM, started at yesterday's 1 AM
         const yesterday = new Date(now);
         yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        previousBlightCall = get8PMUTC(yesterday); // Yesterday's 8 PM (start of the period we're checking)
+        previousBlightCall = get1AMUTC(yesterday); // Yesterday's 1 AM (start of the period we're checking)
       } else {
-        // Before 8 PM today - previous period ended at yesterday's 8 PM, started at day before yesterday's 8 PM
+        // Before 1 AM today - previous period ended at yesterday's 1 AM, started at day before yesterday's 1 AM
         const dayBeforeYesterday = new Date(now);
         dayBeforeYesterday.setUTCDate(dayBeforeYesterday.getUTCDate() - 2);
-        previousBlightCall = get8PMUTC(dayBeforeYesterday); // Day before yesterday's 8 PM
+        previousBlightCall = get1AMUTC(dayBeforeYesterday); // Day before yesterday's 1 AM
       }
       
       // Enhanced logging for debugging

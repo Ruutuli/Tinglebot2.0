@@ -387,7 +387,18 @@ function setupSentenceCounting() {
 
 function setupEventListeners() {
   const form = document.getElementById('character-create-form');
-  form.addEventListener('submit', handleFormSubmit);
+  // Prevent default form submission - we'll handle it with buttons
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+  });
+  
+  // Save as draft button
+  const saveDraftBtn = document.getElementById('save-draft-btn');
+  saveDraftBtn.addEventListener('click', () => handleFormSubmit(null, false));
+  
+  // Submit button (create and submit immediately)
+  const submitBtn = document.getElementById('submit-btn');
+  submitBtn.addEventListener('click', () => handleFormSubmit(null, true));
   
   setupErrorModalListeners();
   
@@ -422,16 +433,27 @@ function setupEventListeners() {
 // ============================================================================
 // ------------------- Form Submission -------------------
 // ============================================================================
-async function handleFormSubmit(event) {
-  event.preventDefault();
+async function handleFormSubmit(event, shouldSubmit = false) {
+  if (event) {
+    event.preventDefault();
+  }
   
-  const form = event.target;
+  const form = document.getElementById('character-create-form');
+  const saveDraftBtn = document.getElementById('save-draft-btn');
   const submitBtn = document.getElementById('submit-btn');
-  const originalText = submitBtn.innerHTML;
   
-  // Disable submit button
-  submitBtn.disabled = true;
-  submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Creating...</span>';
+  // Determine which button was clicked
+  const activeButton = shouldSubmit ? submitBtn : saveDraftBtn;
+  const otherButton = shouldSubmit ? saveDraftBtn : submitBtn;
+  
+  const originalText = activeButton.innerHTML;
+  
+  // Disable both buttons
+  activeButton.disabled = true;
+  otherButton.disabled = true;
+  activeButton.innerHTML = shouldSubmit 
+    ? '<i class="fas fa-spinner fa-spin"></i> <span>Creating & Submitting...</span>'
+    : '<i class="fas fa-spinner fa-spin"></i> <span>Saving...</span>';
   
   // Clear previous messages
   hideMessage();
@@ -439,15 +461,16 @@ async function handleFormSubmit(event) {
   try {
     // Validate form
     if (!validateForm()) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = originalText;
+      activeButton.disabled = false;
+      otherButton.disabled = false;
+      activeButton.innerHTML = originalText;
       return;
     }
     
     // Create FormData
     const formData = new FormData(form);
     
-    // Submit to API
+    // Submit to API to create character
     const response = await fetch('/api/characters/create', {
       method: 'POST',
       body: formData
@@ -459,20 +482,63 @@ async function handleFormSubmit(event) {
       throw new Error(data.error || 'Failed to create character');
     }
     
-    // Success - character created as DRAFT
-    showMessage('Character saved as draft! Redirecting to your OC page where you can review and submit for approval...', 'success');
-    
-    // Redirect to OC page if URL is provided, otherwise go to dashboard
-    const ocPageUrl = data.ocPageUrl || data.character?.publicSlug ? `/ocs/${data.character.publicSlug}` : '/';
-    setTimeout(() => {
-      window.location.href = ocPageUrl;
-    }, 3000);
+    // If shouldSubmit is true, immediately submit the character for review
+    if (shouldSubmit && data.character && data.character._id) {
+      activeButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Submitting for Review...</span>';
+      
+      try {
+        const submitResponse = await fetch(`/api/characters/${data.character._id}/submit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const submitData = await submitResponse.json();
+        
+        if (!submitResponse.ok) {
+          throw new Error(submitData.error || 'Failed to submit character for review');
+        }
+        
+        // Success - character created and submitted
+        showMessage('Character created and submitted for review! Redirecting to your OC page...', 'success');
+        
+        // Redirect to OC page
+        const ocPageUrl = data.ocPageUrl || data.character?.publicSlug ? `/ocs/${data.character.publicSlug}` : '/';
+        setTimeout(() => {
+          window.location.href = ocPageUrl;
+        }, 3000);
+      } catch (submitError) {
+        console.error('Error submitting character:', submitError);
+        // Character was created but submission failed - still show success for creation
+        showMessage(`Character created successfully, but failed to submit for review: ${submitError.message}. You can submit it manually from your OC page.`, 'error');
+        activeButton.disabled = false;
+        otherButton.disabled = false;
+        activeButton.innerHTML = originalText;
+        
+        // Still redirect to OC page so user can submit manually
+        const ocPageUrl = data.ocPageUrl || data.character?.publicSlug ? `/ocs/${data.character.publicSlug}` : '/';
+        setTimeout(() => {
+          window.location.href = ocPageUrl;
+        }, 5000);
+      }
+    } else {
+      // Success - character created as DRAFT
+      showMessage('Character saved as draft! Redirecting to your OC page where you can review and submit for approval...', 'success');
+      
+      // Redirect to OC page if URL is provided, otherwise go to dashboard
+      const ocPageUrl = data.ocPageUrl || data.character?.publicSlug ? `/ocs/${data.character.publicSlug}` : '/';
+      setTimeout(() => {
+        window.location.href = ocPageUrl;
+      }, 3000);
+    }
     
   } catch (error) {
     console.error('Error creating character:', error);
     showMessage(error.message || 'An error occurred while creating your character. Please try again.', 'error');
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = originalText;
+    activeButton.disabled = false;
+    otherButton.disabled = false;
+    activeButton.innerHTML = originalText;
   }
 }
 

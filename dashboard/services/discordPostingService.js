@@ -105,6 +105,9 @@ async function postApplicationToAdminChannel(character) {
       thumbnail: {
         url: character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
       },
+      image: character.appArt ? {
+        url: character.appArt
+      } : undefined,
       fields: [
         {
           name: '👤 Character Information',

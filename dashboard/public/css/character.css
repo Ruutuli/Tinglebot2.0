@@ -2875,7 +2875,8 @@
 }
 
 .character-moderation-page .moderation-container {
-  max-width: 1200px;
+  max-width: 95%;
+  width: 100%;
   margin: 0 auto;
   padding: calc(64px + 2rem) var(--main-padding) 2rem;
   min-height: calc(100vh - 64px);
