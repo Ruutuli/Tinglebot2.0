@@ -2763,9 +2763,9 @@ async function handleChestClaim(interaction) {
 
     // Validate user setup (similar to ruugame)
     const user = await User.findOne({ discordId: userId });
-    if (!user || !user.tokensSynced) {
+    if (!user) {
       return await interaction.reply({
-        content: '❌ You need to have a synced token tracker to claim items.',
+        content: '❌ User not found.',
         flags: 64,
         ephemeral: true
       });

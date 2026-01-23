@@ -10,7 +10,8 @@ const {
   getCurrentWeather,
   generateWeatherEmbed,
   markWeatherAsPosted,
-  getWeatherWithoutGeneration
+  getWeatherWithoutGeneration,
+  getCurrentPeriodBounds
 } = require('@/services/weatherService');
 const Character = require('@/models/CharacterModel');
 const User = require('@/models/UserModel');
@@ -104,6 +105,7 @@ async function weatherFallbackCheck(client, _data = {}) {
       
       // Check if weather was posted today (only posted weather)
       const weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
+      
       if (!weather) {
         logger.warn('SCHEDULED', `weather-fallback-check: No posted weather for ${village}, attempting to post`);
         // Try to get current weather (will generate if needed)
@@ -113,6 +115,60 @@ async function weatherFallbackCheck(client, _data = {}) {
           await channel.send({ embeds: [embed], files });
           await markWeatherAsPosted(village, currentWeather);
           logger.success('SCHEDULED', `weather-fallback-check: Posted missing weather for ${village}`);
+        }
+      } else {
+        // Weather exists with postedToDiscord: true, but verify it was actually posted
+        // Check if there's a recent message in the channel that looks like a weather embed
+        const now = new Date();
+        const { startUTC: periodStart } = getCurrentPeriodBounds(now);
+        const periodStartTime = periodStart.getTime();
+        const oneHourAgo = now.getTime() - (60 * 60 * 1000);
+        
+        // If period started more than an hour ago, check for recent weather messages
+        let foundRecentWeatherMessage = false;
+        if (periodStartTime < oneHourAgo) {
+          try {
+            // Fetch recent messages (last 20 messages should be enough)
+            const messages = await channel.messages.fetch({ limit: 20 });
+            
+            // Check if any message has embeds and was sent after the period started
+            for (const [_, message] of messages) {
+              if (message.embeds && message.embeds.length > 0) {
+                const messageTime = message.createdTimestamp;
+                // Check if message was sent after period started and has weather-like content
+                if (messageTime >= periodStartTime) {
+                  const embed = message.embeds[0];
+                  // Weather embeds typically have temperature, wind, precipitation fields
+                  if (embed && embed.fields && embed.fields.some(f => 
+                    f.name === 'Temperature' || f.name === 'Wind' || f.name === 'Precipitation'
+                  )) {
+                    foundRecentWeatherMessage = true;
+                    logger.info('SCHEDULED', `weather-fallback-check: Found recent weather message for ${village} (message ID: ${message.id})`);
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (msgError) {
+            logger.warn('SCHEDULED', `weather-fallback-check: Error checking messages for ${village}: ${msgError.message}`);
+          }
+        } else {
+          // Period started less than an hour ago, assume it's fine if marked as posted
+          foundRecentWeatherMessage = true;
+        }
+        
+        // If no recent weather message found, post it anyway
+        if (!foundRecentWeatherMessage) {
+          logger.warn('SCHEDULED', `weather-fallback-check: Weather marked as posted for ${village} but no recent message found, reposting`);
+          const currentWeather = await getCurrentWeather(village);
+          if (currentWeather) {
+            const { embed, files } = await generateWeatherEmbed(village, currentWeather);
+            await channel.send({ embeds: [embed], files });
+            await markWeatherAsPosted(village, currentWeather);
+            logger.success('SCHEDULED', `weather-fallback-check: Reposted weather for ${village}`);
+          }
+        } else {
+          logger.info('SCHEDULED', `weather-fallback-check: Weather already posted for ${village}, skipping`);
         }
       }
     } catch (err) {

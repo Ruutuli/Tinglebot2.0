@@ -2091,21 +2091,6 @@ async function handleVendingBarter(interaction) {
       const vendorDiscordUser = await interaction.client.users.fetch(shopOwner.userId);
       const vendorUsername = vendorDiscordUser?.username || 'Unknown User';
 
-      if (!buyerUser.tokensSynced || !vendorUser.tokensSynced) {
-        const unsyncedUsers = [];
-        if (!buyerUser.tokensSynced) unsyncedUsers.push(buyerName);
-        if (!vendorUser.tokensSynced) unsyncedUsers.push(vendorUsername);
-        
-        const embed = createErrorEmbed(
-          '❌ Token Tracker Not Synced',
-          'Cannot proceed with barter. Token trackers need to be synced.',
-          [
-            { name: '👥 Users Needing Sync', value: unsyncedUsers.map(name => `• ${name}`).join('\n'), inline: false },
-            { name: '💡 Solution', value: 'Please use `/token sync` to sync your token tracker first.', inline: false }
-          ]
-        );
-        return interaction.editReply({ embeds: [embed] });
-      }
   
       // Use VendingModel to check shop inventory
       const VendingInventory = await getVendingModel(targetShopName);

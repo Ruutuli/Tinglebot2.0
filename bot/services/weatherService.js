@@ -61,7 +61,7 @@ try {
 // ------------------- Path Helpers ------------------
 // Get asset path helper -
 function getAssetPath(subpath) {
-  return path.join(__dirname, '..', '..', 'bot', 'assets', subpath);
+  return path.join(__dirname, '..', 'assets', subpath);
 }
 
 const VILLAGE_COLORS = {

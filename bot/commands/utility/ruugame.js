@@ -125,10 +125,10 @@ module.exports = {
   async validateUserSetup(interaction) {
     const userId = interaction.user.id;
     
-    // Check if user exists and has synced token tracker
+    // Check if user exists
     const user = await User.findOne({ discordId: userId });
-    if (!user || !user.tokensSynced) {
-      return { valid: false, message: '❌ You need to have a synced token tracker to play RuuGame.' };
+    if (!user) {
+      return { valid: false, message: '❌ User not found.' };
     }
     
     // Check if user has at least one character with synced inventory

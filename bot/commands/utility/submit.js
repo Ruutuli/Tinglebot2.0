@@ -368,13 +368,6 @@ module.exports = {
       return;
     }
 
-    if (!userData.tokensSynced) {
-      await interaction.reply({
-        content: '❌ **You cannot use this command until your tokens are synced. Please sync your token tracker first.**',
-        ephemeral: true,
-      });
-      return;
-    }
 
     // ------------------- Handle Art Submission -------------------
     if (subcommand === 'art') {

@@ -805,15 +805,6 @@ async function handleChangeJob(interaction) {
     return;
   }
 
-  // Add check for token synchronization
-  if (!userTokens.tokensSynced) {
-    console.log('[handleChangeJob] Tokens not synced');
-    await interaction.followUp({
-      content: "❌ Your Token Tracker is not synced. Please use `/tokens sync` to sync your tokens before changing jobs.",
-      ephemeral: true
-    });
-    return;
-  }
 
   if (userTokens.tokens < 500) {
     console.log(`[handleChangeJob] Insufficient tokens: ${userTokens.tokens}`);
@@ -1169,15 +1160,6 @@ async function handleChangeVillage(interaction) {
     return;
   }
 
-  // Add check for token synchronization
-  if (!userTokens.tokensSynced) {
-    console.log('[handleChangeVillage] Tokens not synced');
-    await interaction.followUp({
-      content: "❌ Your Token Tracker is not synced. Please use `/tokens sync` to sync your tokens before changing villages.",
-      ephemeral: true
-    });
-    return;
-  }
 
   if (userTokens.tokens < 500) {
     console.log(`[handleChangeVillage] Insufficient tokens: ${userTokens.tokens}`);

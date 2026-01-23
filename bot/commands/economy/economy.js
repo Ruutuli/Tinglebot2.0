@@ -1097,22 +1097,6 @@ async function handleShopBuy(interaction) {
     await interaction.deferReply();
 
     const user = await getOrCreateToken(interaction.user.id);
-    if (!user.tokensSynced) {
-      return interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Tokens Not Synced',
-          description: 'Your tokens are not synced. Please sync your tokens to use this command.',
-          image: {
-            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-          },
-          footer: {
-            text: 'Token Sync Required'
-          }
-        }],
-        flags: [MessageFlags.Ephemeral]
-      });
-    }
 
     const characterName = interaction.options.getString("charactername");
     const itemName = interaction.options.getString("itemname");
@@ -1532,7 +1516,7 @@ async function handleShopSell(interaction) {
     .trim();
 
   const user = await User.findOne({ discordId: interaction.user.id });
-  if (!user || !user.tokensSynced) {
+  if (!user) {
     const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
     return interaction.editReply({
       content: fullMessage,
