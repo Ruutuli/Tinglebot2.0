@@ -10,7 +10,7 @@ const { connectToTinglebot } = require('../database/db');
 const { STATUS, canSubmit, isPending, isNeedsChanges } = require('../utils/statusConstants');
 
 // Constants
-const APPROVAL_THRESHOLD = 4; // Number of approve votes required
+const APPROVAL_THRESHOLD = 1; // Number of approve votes required
 
 /**
  * Submit character for review (move from DRAFT to PENDING)
