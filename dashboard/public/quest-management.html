@@ -1,23 +1,22 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>OC List - Tinglebot 2.0 Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Quest Management - Tinglebot Dashboard</title>
   
   <!-- SEO & Social Meta -->
-  <meta name="description" content="Browse all OC characters in Tinglebot 2.0" />
-  <meta property="og:title" content="OC List - Tinglebot 2.0 Dashboard" />
-  <meta property="og:description" content="Browse all OC characters in Tinglebot 2.0" />
+  <meta name="description" content="Manage quests for Tinglebot." />
+  <meta property="og:title" content="Quest Management - Tinglebot Dashboard" />
+  <meta property="og:description" content="Manage quests for Tinglebot." />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://tinglebot.xyz/oc-list" />
+  <meta property="og:url" content="https://tinglebot.xyz/quest-management" />
   <meta property="og:image" content="https://tinglebot.xyz/images/tingleicon.png" />
   <link rel="icon" type="image/png" href="/images/tingleicon.png" />
-  <link rel="preload" href="js/auth.js" as="script" crossorigin="anonymous">
   <meta name="theme-color" content="#00A3DA" />
   
   <!-- Canonical URL -->
-  <link rel="canonical" href="https://tinglebot.xyz/oc-list" />
+  <link rel="canonical" href="https://tinglebot.xyz/quest-management" />
   
   <!-- JSON-LD Organization schema -->
   <script type="application/ld+json">
@@ -27,38 +26,40 @@
     "name":"Tinglebot Dashboard",
     "url":"https://tinglebot.xyz/",
     "logo":"https://tinglebot.xyz/images/tingleicon.png",
-    "description":"Browse all OC characters in Tinglebot 2.0"
+    "description":"Manage quests for Tinglebot."
   }
   </script>
   
   <!-- Resource Preloading for Critical Assets -->
   <link rel="preload" href="/css/styles.css" as="style">
-  <link rel="preload" href="/js/oc-list.js" as="script" crossorigin="anonymous">
   <link rel="dns-prefetch" href="https://kit.fontawesome.com">
   
-  <!-- Critical CSS - Load immediately -->
-  <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="stylesheet" href="/css/users.css" />
-  <link rel="stylesheet" href="/css/buttons.css" />
-  <link rel="stylesheet" href="/css/oc-list.css" />
-  
-  <!-- External Scripts -->
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/quest-management.css">
+  <link rel="stylesheet" href="/css/buttons.css">
   <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
 </head>
-<body class="oc-list-page">
+<body class="quest-management-page">
   <!-- Skip Links for Accessibility -->
   <a href="#main-content" class="skip-link">Skip to main content</a>
   <a href="#sidebar-navigation" class="skip-link">Skip to navigation</a>
   
-  <!-- Header -->
   <header class="topbar" role="banner">
     <div class="topbar-left">
       <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
         <i class="fas fa-bars" aria-hidden="true"></i>
       </button>
-      <div class="breadcrumb">OC List</div>
+      <div class="breadcrumb">Quest Management</div>
     </div>
     <div class="topbar-right">
+      <a href="/quest-create.html" class="btn btn-primary">
+        <i class="fas fa-plus" aria-hidden="true"></i>
+        <span>Create Quest</span>
+      </a>
+      <button class="btn btn-secondary" onclick="loadQuests()" aria-label="Refresh quests">
+        <i class="fas fa-sync-alt" aria-hidden="true"></i>
+        <span>Refresh</span>
+      </button>
       <div class="bot-status online">
         <span class="status-dot"></span>
         <span class="status-text">Online</span>
@@ -66,48 +67,8 @@
       <!-- Notification Container -->
       <div id="notification-container" class="notification-container"></div>
       <div class="user-menu" id="user-menu">
-        <img src="/images/ankleicon.png" alt="Profile picture of the user" class="user-avatar" id="user-avatar">
+        <img src="/images/ankleicon.png" alt="Profile picture" class="user-avatar" id="user-avatar">
         <span class="username" id="username">Loading...</span>
-        <i class="fas fa-chevron-down" aria-hidden="true"></i>
-        <div class="user-dropdown" id="user-dropdown">
-          <div class="user-dropdown-content">
-            <div class="user-info" id="user-info" style="display: none;">
-              <div class="user-details">
-                <img src="/images/ankleicon.png" alt="Profile picture" class="user-dropdown-avatar" id="user-dropdown-avatar">
-                <div class="user-text">
-                  <span class="user-name" id="user-name">Username</span>
-                  <span class="user-discriminator" id="user-discriminator">#0000</span>
-                </div>
-              </div>
-              <div class="user-actions">
-                <a href="#profile-section" class="profile-button" id="profile-link">
-                  <i class="fas fa-user" aria-hidden="true"></i>
-                  Profile
-                </a>
-                <a href="#settings" class="profile-button" id="settings-link">
-                  <i class="fas fa-cog" aria-hidden="true"></i>
-                  Settings
-                </a>
-                <a href="/auth/logout" class="logout-button">
-                  <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-                  Logout
-                </a>
-              </div>
-            </div>
-            <div class="guest-info" id="guest-info" style="display: none;">
-              <div class="guest-message">
-                <i class="fas fa-user-circle" aria-hidden="true"></i>
-                <span>Guest User</span>
-              </div>
-              <div class="guest-actions">
-                <a href="#" onclick="redirectToLogin(); return false;" class="login-button">
-                  <i class="fab fa-discord" aria-hidden="true"></i>
-                  Login with Discord
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </header>
@@ -131,7 +92,7 @@
             </a>
             <ul class="nav-dropdown-menu">
               <li><a href="/character-create.html"><i class="fas fa-user-plus"></i><span>Create Character</span></a></li>
-              <li class="active"><a href="/oc-list.html"><i class="fas fa-th"></i><span>OC List</span></a></li>
+              <li><a href="/oc-list.html"><i class="fas fa-th"></i><span>OC List</span></a></li>
             </ul>
           </li>
           
@@ -207,6 +168,8 @@
             <ul class="nav-dropdown-menu">
               <li><a href="/#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a></li>
               <li><a href="/character-moderation.html"><i class="fas fa-gavel"></i><span>Character Moderation</span></a></li>
+              <li class="active"><a href="/quest-management.html"><i class="fas fa-tasks"></i><span>Quest Management</span></a></li>
+              <li><a href="/quest-create.html"><i class="fas fa-plus"></i><span>Create Quest</span></a></li>
             </ul>
           </li>
         </ul>
@@ -215,125 +178,54 @@
 
     <!-- Main Content -->
     <main id="main-content" class="main-content">
-      <div class="oc-list-container">
-        <div class="oc-list-header">
-          <h1><i class="fas fa-th"></i> OC List</h1>
-          <p class="subtitle">Browse all OC characters</p>
-          <p class="description">
-            This is a list of OCs! If you want to find more details or sort by OCs, go to the <a href="/#character">Characters page</a>. Click on an OC and it'll take you to the OC page!
-          </p>
+      <div class="quest-management-container">
+        <div class="quest-management-header">
+          <h1><i class="fas fa-tasks"></i> Quest Management</h1>
+          <p class="quest-management-subtitle">View and manage all quests. Click "Create Quest" to add a new quest.</p>
         </div>
 
-        <!-- Loading State -->
-        <div id="loading-state" class="oc-list-loading">
-          <div class="spinner"></div>
-          <p>Loading characters...</p>
-        </div>
-
-        <!-- Error State -->
-        <div id="error-state" class="oc-list-error" style="display: none;">
-          <div class="error-content">
-            <i class="fas fa-exclamation-triangle"></i>
-            <h2>Error Loading Characters</h2>
-            <p id="error-message">Failed to load characters. Please try again later.</p>
-            <button type="button" class="btn btn-primary" onclick="window.location.reload()">
-              <i class="fas fa-redo"></i>
-              <span>Retry</span>
-            </button>
+        <!-- Search and Filter Bar -->
+        <div class="quest-management-filters">
+          <div class="quest-search-box">
+            <i class="fas fa-search"></i>
+            <input 
+              type="text" 
+              id="quest-search-input" 
+              placeholder="Search quests by title, quest ID, or location..."
+              autocomplete="off"
+            />
+          </div>
+          <div class="quest-filter-group">
+            <label for="quest-status-filter">Status:</label>
+            <select id="quest-status-filter">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="quest-filter-group">
+            <label for="quest-type-filter">Type:</label>
+            <select id="quest-type-filter">
+              <option value="">All Types</option>
+              <option value="Art">Art</option>
+              <option value="Writing">Writing</option>
+              <option value="Interactive">Interactive</option>
+              <option value="RP">RP</option>
+              <option value="Art / Writing">Art / Writing</option>
+            </select>
           </div>
         </div>
 
-        <!-- Triangle Grid Container -->
-        <div id="triangle-grid-container" class="triangle-grid-container" style="display: none;">
-          <div id="triangle-grid" class="triangle-grid" role="grid" aria-label="OC Characters Grid"></div>
+        <!-- Quest List -->
+        <div id="quests-list" class="quests-list">
+          <div class="loading">
+            <i class="fas fa-spinner fa-spin"></i> Loading quests...
+          </div>
         </div>
       </div>
     </main>
   </div>
 
-  <!-- Scripts -->
-  <script src="/js/notifications.js"></script>
-  <script type="module" src="/js/auth.js"></script>
-  <script type="module" src="/js/oc-list.js"></script>
-  <script type="module" src="/js/modules/navigation.js"></script>
-  <script type="module">
-    import { setupSidebarNavigation } from '/js/modules/navigation.js';
-    
-    // Initialize sidebar navigation
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setupSidebarNavigation();
-        initializeDropdownToggles();
-      });
-    } else {
-      setupSidebarNavigation();
-      initializeDropdownToggles();
-    }
-    
-    // Initialize dropdown toggles
-    function initializeDropdownToggles() {
-      const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
-      
-      if (dropdownToggles.length === 0) {
-        // Retry if elements aren't ready yet
-        setTimeout(initializeDropdownToggles, 100);
-        return;
-      }
-      
-      dropdownToggles.forEach(toggle => {
-        // Use once option to avoid duplicate listeners, or check if already has listener
-        if (toggle.dataset.listenerAttached) {
-          return;
-        }
-        toggle.dataset.listenerAttached = 'true';
-        
-        toggle.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          const dropdown = toggle.closest('.nav-dropdown');
-          if (!dropdown) return;
-          
-          const isActive = dropdown.classList.contains('active');
-          
-          // Close all other dropdowns
-          document.querySelectorAll('.nav-dropdown').forEach(item => {
-            if (item !== dropdown) {
-              item.classList.remove('active');
-              const otherToggle = item.querySelector('.nav-dropdown-toggle');
-              if (otherToggle) {
-                otherToggle.setAttribute('aria-expanded', 'false');
-              }
-            }
-          });
-          
-          // Toggle current dropdown
-          if (isActive) {
-            dropdown.classList.remove('active');
-            toggle.setAttribute('aria-expanded', 'false');
-          } else {
-            dropdown.classList.add('active');
-            toggle.setAttribute('aria-expanded', 'true');
-          }
-        });
-      });
-      
-      // Close dropdowns when clicking outside (only attach once)
-      if (!document.dropdownOutsideClickHandler) {
-        document.dropdownOutsideClickHandler = (e) => {
-          if (!e.target.closest('.nav-dropdown')) {
-            document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
-              dropdown.classList.remove('active');
-              const toggle = dropdown.querySelector('.nav-dropdown-toggle');
-              if (toggle) {
-                toggle.setAttribute('aria-expanded', 'false');
-              }
-            });
-          }
-        };
-        document.addEventListener('click', document.dropdownOutsideClickHandler);
-      }
-    }
-  </script>
+  <script type="module" src="/js/quest-management.js"></script>
 </body>
 </html>

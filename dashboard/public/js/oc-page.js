@@ -70,14 +70,47 @@ async function handleResubmitCharacter() {
     return;
   }
   
-  if (!confirm('Are you sure you want to resubmit this character? This will create a new version and reset all votes.')) {
+  // Show resubmit confirmation modal
+  const modal = document.getElementById('resubmitCharacterModal');
+  if (!modal) {
+    console.error('Resubmit modal not found');
     return;
   }
   
+  modal.showModal();
+}
+
+// Handle resubmit modal form submission
+document.getElementById('resubmitCharacterModal')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const modal = this;
+  const fromEditForm = modal.dataset.fromEditForm === 'true';
+  modal.close();
+  delete modal.dataset.fromEditForm;
+  
+  if (!character || !character._id) {
+    showError('Character data not loaded');
+    return;
+  }
+  
+  // If called from edit form, set flag and submit form
+  if (fromEditForm) {
+    const resubmitBtn = document.getElementById('resubmit-btn');
+    if (resubmitBtn) {
+      resubmitBtn.setAttribute('data-resubmit', 'true');
+      document.getElementById('character-edit-form').dispatchEvent(new Event('submit'));
+    }
+    return;
+  }
+  
+  // Otherwise, handle standalone resubmit
   const resubmitBtn = document.getElementById('resubmit-character-btn');
-  const originalText = resubmitBtn.innerHTML;
-  resubmitBtn.disabled = true;
-  resubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resubmitting...';
+  const originalText = resubmitBtn ? resubmitBtn.innerHTML : '';
+  
+  if (resubmitBtn) {
+    resubmitBtn.disabled = true;
+    resubmitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resubmitting...';
+  }
   
   try {
     const response = await fetch(`/api/characters/${character._id}/resubmit`, {
@@ -104,10 +137,12 @@ async function handleResubmitCharacter() {
   } catch (error) {
     console.error('Error resubmitting character:', error);
     showError(error.message || 'An error occurred while resubmitting your character');
-    resubmitBtn.disabled = false;
-    resubmitBtn.innerHTML = originalText;
+    if (resubmitBtn) {
+      resubmitBtn.disabled = false;
+      resubmitBtn.innerHTML = originalText;
+    }
   }
-}
+});
 
 import { getVillageCrestUrl } from './utils.js';
 
@@ -1479,9 +1514,18 @@ function setupEventListeners() {
   // Resubmit button
   const resubmitBtn = document.getElementById('resubmit-btn');
   if (resubmitBtn) {
-    resubmitBtn.addEventListener('click', () => {
-      document.getElementById('resubmit-btn').setAttribute('data-resubmit', 'true');
-      document.getElementById('character-edit-form').dispatchEvent(new Event('submit'));
+    resubmitBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Show resubmit confirmation modal
+      const modal = document.getElementById('resubmitCharacterModal');
+      if (modal) {
+        modal.showModal();
+        
+        // Store that this is from the edit form
+        modal.dataset.fromEditForm = 'true';
+      }
     });
   }
   

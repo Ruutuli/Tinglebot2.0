@@ -104,34 +104,49 @@ export function updateUserMenu() {
 }
 
 // Initialize user menu dropdown click handler
+let userMenuInitialized = false;
+let userMenuClickHandler = null;
+let userDropdownClickHandler = null;
+let documentClickHandler = null;
+
 export function initUserMenu() {
   const userMenu = document.getElementById('user-menu');
   const userDropdown = document.getElementById('user-dropdown');
   
   if (!userMenu || !userDropdown) return;
   
+  // Prevent duplicate initialization
+  if (userMenuInitialized) {
+    return;
+  }
+  
+  userMenuInitialized = true;
+  
   // Toggle dropdown on click
-  userMenu.addEventListener('click', (e) => {
+  userMenuClickHandler = (e) => {
     e.stopPropagation();
     userDropdown.classList.toggle('show');
-  });
+  };
+  userMenu.addEventListener('click', userMenuClickHandler);
   
   // Close dropdown when clicking outside
-  document.addEventListener('click', (e) => {
+  documentClickHandler = (e) => {
     if (!userMenu.contains(e.target) && !userDropdown.contains(e.target)) {
       userDropdown.classList.remove('show');
     }
-  });
+  };
+  document.addEventListener('click', documentClickHandler);
   
   // Close dropdown when clicking inside the dropdown (for links)
-  userDropdown.addEventListener('click', (e) => {
+  userDropdownClickHandler = (e) => {
     // Only close if clicking on a link/button, not on the dropdown container itself
     if (e.target.closest('a, button')) {
       setTimeout(() => {
         userDropdown.classList.remove('show');
       }, 100);
     }
-  });
+  };
+  userDropdown.addEventListener('click', userDropdownClickHandler);
   
   // Handle profile button
   const profileButton = userDropdown.querySelector('.profile-button');
@@ -211,7 +226,7 @@ export async function checkUserAuthStatus() {
     });
   }
   
-  return { isAuthenticated, currentUser };
+  return { isAuthenticated, currentUser, isAdmin };
 }
 
 // Redirect to Discord OAuth login

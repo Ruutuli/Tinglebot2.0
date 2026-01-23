@@ -103,7 +103,7 @@ const characterUploads = multer({
 // Helper function to post character creation to Discord
 async function postCharacterCreationToDiscord(character, user, reqUser, req = null) {
   try {
-    const CHARACTER_CREATION_CHANNEL_ID = '964342870796537909';
+    const CHARACTER_CREATION_CHANNEL_ID = process.env.ADMIN_REVIEW_CHANNEL_ID || process.env.CHARACTER_CREATION_CHANNEL_ID || '964342870796537909';
     const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
     
     if (!DISCORD_TOKEN) {
@@ -213,6 +213,9 @@ async function postCharacterCreationToDiscord(character, user, reqUser, req = nu
       timestamp: new Date().toISOString()
     };
 
+    // Get user mention (reusing userDiscordId from line 166)
+    const userMention = userDiscordId ? `<@${userDiscordId}>` : '';
+
     // Post to Discord
     const discordResponse = await fetch(`https://discord.com/api/v10/channels/${CHARACTER_CREATION_CHANNEL_ID}/messages`, {
       method: 'POST',
@@ -221,6 +224,7 @@ async function postCharacterCreationToDiscord(character, user, reqUser, req = nu
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
+        content: userMention || undefined,
         embeds: [embed]
       })
     });
@@ -476,14 +480,14 @@ async function postCharacterStatusToDiscord(character, status, denialReason, isM
     const color = status === 'accepted' ? 0x4caf50 : 0xf44336;
     const title = status === 'accepted' 
       ? `✅ Character Accepted: ${character.name}`
-      : `❌ Character Denied: ${character.name}`;
+      : `⚠️ Character Needs Changes: ${character.name}`;
     
     const embed = {
       title: title,
       color: color,
       description: status === 'accepted' 
         ? `Your character **${character.name}** has been accepted and is now active!`
-        : `Your character **${character.name}** has been denied. Please review the feedback below.`,
+        : `Your character **${character.name}** needs changes. Please review the feedback below.`,
       fields: [
         {
           name: '👤 Character Details',
@@ -577,8 +581,8 @@ async function sendDenialDM(character, denialReason) {
     
     // Create DM embed
     const embed = {
-      title: `❌ Character Denied: ${character.name}`,
-      description: `Your character **${character.name}** has been denied. Please review the feedback below.`,
+      title: `⚠️ Character Needs Changes: ${character.name}`,
+      description: `Your character **${character.name}** needs changes. Please review the feedback below.`,
       color: 0xf44336,
       fields: [
         {
@@ -664,7 +668,7 @@ async function createDenialNotification(character, denialReason) {
     const notification = new Notification({
       userId: character.userId,
       type: 'character_denied',
-      title: `Character Denied: ${character.name}`,
+      title: `Character Needs Changes: ${character.name}`,
       message: denialReason,
       characterId: character._id.toString(),
       characterName: character.name,
@@ -1899,7 +1903,7 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
   moderationVotes.forEach(vote => {
     const charId = vote.characterId.toString();
     if (!votesByCharacter[charId]) {
-      votesByCharacter[charId] = { approves: [], denies: [], needsChanges: [] };
+      votesByCharacter[charId] = { approves: [], needsChanges: [] };
     }
     if (vote.vote === 'approve') {
       votesByCharacter[charId].approves.push({
@@ -1916,14 +1920,6 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
         note: vote.note,
         createdAt: vote.createdAt
       });
-    } else {
-      votesByCharacter[charId].denies.push({
-        modId: vote.modId,
-        modUsername: vote.modUsername,
-        reason: vote.reason,
-        note: vote.note,
-        createdAt: vote.createdAt
-      });
     }
   });
   
@@ -1931,26 +1927,24 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
   const charactersWithVotes = [
     ...pendingCharacters.map(char => {
       const charId = char._id.toString();
-      const votes = votesByCharacter[charId] || { approves: [], denies: [], needsChanges: [] };
+      const votes = votesByCharacter[charId] || { approves: [], needsChanges: [] };
       return {
         ...char,
         isModCharacter: false,
         votes: votes,
         approveCount: votes.approves.length,
-        needsChangesCount: votes.needsChanges.length,
-        denyCount: votes.denies.length
+        needsChangesCount: votes.needsChanges.length
       };
     }),
     ...pendingModCharacters.map(char => {
       const charId = char._id.toString();
-      const votes = votesByCharacter[charId] || { approves: [], denies: [], needsChanges: [] };
+      const votes = votesByCharacter[charId] || { approves: [], needsChanges: [] };
       return {
         ...char,
         isModCharacter: true,
         votes: votes,
         approveCount: votes.approves.length,
-        needsChangesCount: votes.needsChanges.length,
-        denyCount: votes.denies.length
+        needsChangesCount: votes.needsChanges.length
       };
     })
   ];
@@ -1967,14 +1961,14 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
   
   const { characterId, vote, reason, note, isModCharacter } = req.body;
   
-  // Support 'needs_changes' in addition to 'approve' and 'deny'
-  if (!characterId || !vote || !['approve', 'deny', 'needs_changes'].includes(vote)) {
-    return res.status(400).json({ error: 'Invalid request. characterId and vote (approve/deny/needs_changes) are required.' });
+  // Support 'needs_changes' in addition to 'approve'
+  if (!characterId || !vote || !['approve', 'needs_changes'].includes(vote)) {
+    return res.status(400).json({ error: 'Invalid request. characterId and vote (approve/needs_changes) are required.' });
   }
   
-  // Reason required for deny and needs_changes
-  if ((vote === 'deny' || vote === 'needs_changes') && !reason && !note) {
-    return res.status(400).json({ error: 'Reason or note is required for deny/needs_changes votes.' });
+  // Reason required for needs_changes
+  if (vote === 'needs_changes' && !reason && !note) {
+    return res.status(400).json({ error: 'Reason or note is required for needs_changes votes.' });
   }
   
   await connectToTinglebot();
@@ -2236,8 +2230,16 @@ router.post('/:id/submit', validateObjectId('id'), asyncHandler(async (req, res)
 
     // Post to Discord admin channel/thread
     const discordPostingService = require('../../services/discordPostingService');
+    logger.info('CHARACTERS', `Attempting to post character ${character.name} to Discord...`);
     await discordPostingService.postApplicationToAdminChannel(character).catch(err => {
-      logger.error('SERVER', 'Failed to post character submission to Discord', err);
+      logger.error('CHARACTERS', 'Failed to post character submission to Discord', err);
+      console.error('[CHARACTERS] Discord posting error details:', {
+        error: err.message,
+        stack: err.stack,
+        characterId: character._id,
+        characterName: character.name,
+        userId: character.userId
+      });
     });
 
     logger.info('CHARACTERS', `Character ${character.name} submitted for review by user ${userId}`);
@@ -2380,12 +2382,6 @@ router.get('/:id/application', validateObjectId('id'), asyncHandler(async (req, 
     applicationVersion: applicationVersion,
     vote: 'needs_changes'
   });
-  
-  const denyCount = await CharacterModeration.countDocuments({
-    characterId: characterId,
-    applicationVersion: applicationVersion,
-    vote: 'deny'
-  });
 
   // Get all votes
   const votes = await CharacterModeration.find({
@@ -2402,8 +2398,7 @@ router.get('/:id/application', validateObjectId('id'), asyncHandler(async (req, 
     applicationFeedback: character.applicationFeedback || [],
     voteCounts: {
       approves: approveCount,
-      needsChanges: needsChangesCount,
-      denies: denyCount
+      needsChanges: needsChangesCount
     },
     votes: votes,
     discordMessageId: character.discordMessageId,

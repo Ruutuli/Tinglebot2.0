@@ -88,7 +88,7 @@ async function recordVote(characterId, modId, modUsername, decision, note = null
       // Update existing vote
       const oldDecision = existingVote.vote;
       existingVote.vote = decision;
-      existingVote.reason = (decision === 'deny' || decision === 'needs_changes') ? note : null;
+      existingVote.reason = (decision === 'needs_changes') ? note : null;
       existingVote.note = note;
       existingVote.updatedAt = new Date();
       await existingVote.save();
@@ -103,7 +103,7 @@ async function recordVote(characterId, modId, modUsername, decision, note = null
         modId: modId,
         modUsername: modUsername,
         vote: decision,
-        reason: (decision === 'deny' || decision === 'needs_changes') ? note : null,
+        reason: (decision === 'needs_changes') ? note : null,
         note: note,
         applicationVersion: applicationVersion
       });
@@ -125,12 +125,6 @@ async function recordVote(characterId, modId, modUsername, decision, note = null
       vote: 'needs_changes'
     });
     
-    const denyCount = await CharacterModeration.countDocuments({
-      characterId: characterId,
-      applicationVersion: applicationVersion,
-      vote: 'deny'
-    });
-    
     return {
       vote: existingVote || await CharacterModeration.findOne({
         characterId: characterId,
@@ -139,8 +133,7 @@ async function recordVote(characterId, modId, modUsername, decision, note = null
       }),
       counts: {
         approves: approveCount,
-        needsChanges: needsChangesCount,
-        denies: denyCount
+        needsChanges: needsChangesCount
       }
     };
   } catch (error) {

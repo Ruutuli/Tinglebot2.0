@@ -13,6 +13,7 @@
   <meta property="og:url" content="https://tinglebot.xyz/character-create" />
   <meta property="og:image" content="https://tinglebot.xyz/images/tingleicon.png" />
   <link rel="icon" type="image/png" href="/images/tingleicon.png" />
+  <link rel="preload" href="js/auth.js" as="script" crossorigin="anonymous">
   <meta name="theme-color" content="#00A3DA" />
   
   <!-- Canonical URL -->
@@ -37,6 +38,7 @@
   
   <!-- Critical CSS - Load immediately -->
   <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="stylesheet" href="/css/users.css" />
   <link rel="stylesheet" href="/css/buttons.css" />
   <link rel="stylesheet" href="/css/character.css" />
   
@@ -64,8 +66,48 @@
       <!-- Notification Container -->
       <div id="notification-container" class="notification-container"></div>
       <div class="user-menu" id="user-menu">
-        <img src="/images/ankleicon.png" alt="Profile picture" class="user-avatar" id="user-avatar" />
+        <img src="/images/ankleicon.png" alt="Profile picture of the user" class="user-avatar" id="user-avatar">
         <span class="username" id="username">Loading...</span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+        <div class="user-dropdown" id="user-dropdown">
+          <div class="user-dropdown-content">
+            <div class="user-info" id="user-info" style="display: none;">
+              <div class="user-details">
+                <img src="/images/ankleicon.png" alt="Profile picture" class="user-dropdown-avatar" id="user-dropdown-avatar">
+                <div class="user-text">
+                  <span class="user-name" id="user-name">Username</span>
+                  <span class="user-discriminator" id="user-discriminator">#0000</span>
+                </div>
+              </div>
+              <div class="user-actions">
+                <a href="#profile-section" class="profile-button" id="profile-link">
+                  <i class="fas fa-user" aria-hidden="true"></i>
+                  Profile
+                </a>
+                <a href="#settings" class="profile-button" id="settings-link">
+                  <i class="fas fa-cog" aria-hidden="true"></i>
+                  Settings
+                </a>
+                <a href="/auth/logout" class="logout-button">
+                  <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+                  Logout
+                </a>
+              </div>
+            </div>
+            <div class="guest-info" id="guest-info" style="display: none;">
+              <div class="guest-message">
+                <i class="fas fa-user-circle" aria-hidden="true"></i>
+                <span>Guest User</span>
+              </div>
+              <div class="guest-actions">
+                <a href="#" onclick="redirectToLogin(); return false;" class="login-button">
+                  <i class="fab fa-discord" aria-hidden="true"></i>
+                  Login with Discord
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -479,6 +521,7 @@
 
   <!-- Scripts -->
   <script src="/js/notifications.js"></script>
+  <script type="module" src="/js/auth.js"></script>
   <script type="module" src="/js/characterCreate.js"></script>
 </body>
 </html>

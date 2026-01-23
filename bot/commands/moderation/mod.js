@@ -1509,7 +1509,7 @@ async function handleOCAppApprove(interaction) {
     const remaining = APPROVAL_THRESHOLD - voteResult.counts.approves;
 
     return interaction.editReply({
-      content: `✅ **Vote Recorded**\n\n**${character.name}**\n✅ Approves: ${voteResult.counts.approves}/${APPROVAL_THRESHOLD}\n⚠️ Needs Changes: ${voteResult.counts.needsChanges}\n❌ Denies: ${voteResult.counts.denies}\n\n**${remaining} more approval(s) needed.**`
+      content: `✅ **Vote Recorded**\n\n**${character.name}**\n✅ Approves: ${voteResult.counts.approves}/${APPROVAL_THRESHOLD}\n⚠️ Needs Changes: ${voteResult.counts.needsChanges}\n\n**${remaining} more approval(s) needed.**`
     });
   } catch (error) {
     logger.error('MOD_OCAPP', 'Error in handleOCAppApprove', error);
@@ -1673,12 +1673,6 @@ async function handleOCAppView(interaction) {
       applicationVersion: applicationVersion,
       vote: 'needs_changes'
     });
-    
-    const denyCount = await CharacterModeration.countDocuments({
-      characterId: character._id,
-      applicationVersion: applicationVersion,
-      vote: 'deny'
-    });
 
     const votes = await CharacterModeration.find({
       characterId: character._id,
@@ -1696,12 +1690,12 @@ async function handleOCAppView(interaction) {
     const statusText = statusMap[character.status] || character.status || 'DRAFT';
 
     let description = `**Status:** ${statusText}\n**Version:** ${applicationVersion}\n\n`;
-    description += `**Votes:**\n✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}\n❌ Denies: ${denyCount}\n\n`;
+    description += `**Votes:**\n✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}\n\n`;
 
     if (votes.length > 0) {
       description += '**Mod Votes:**\n';
       votes.forEach(vote => {
-        const emoji = vote.vote === 'approve' ? '✅' : vote.vote === 'needs_changes' ? '⚠️' : '❌';
+        const emoji = vote.vote === 'approve' ? '✅' : '⚠️';
         description += `${emoji} ${vote.modUsername}: ${vote.vote}`;
         if (vote.note || vote.reason) {
           description += ` - ${vote.note || vote.reason}`;

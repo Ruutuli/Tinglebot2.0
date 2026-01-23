@@ -81,12 +81,6 @@ async function sendReminder(character) {
       applicationVersion: applicationVersion,
       vote: 'needs_changes'
     });
-    
-    const denyCount = await CharacterModeration.countDocuments({
-      characterId: character._id,
-      applicationVersion: applicationVersion,
-      vote: 'deny'
-    });
 
     const ocPageSlug = character.publicSlug || character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const dashboardUrl = (process.env.DASHBOARD_URL || 'https://tinglebot.xyz').replace(/\/+$/, '');
@@ -97,7 +91,7 @@ async function sendReminder(character) {
       content += `<@&${MOD_ROLE_ID}> `;
     }
     content += `**${character.name}** (v${applicationVersion}) has been pending for **${hoursPending} hours**.\n\n`;
-    content += `**Vote Status:**\n✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}\n❌ Denies: ${denyCount}\n\n`;
+    content += `**Vote Status:**\n✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}\n\n`;
     content += `[Review in Moderation Panel](${moderationUrl})`;
 
     const embed = {
@@ -107,7 +101,7 @@ async function sendReminder(character) {
       fields: [
         {
           name: '📊 Current Votes',
-          value: `✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}\n❌ Denies: ${denyCount}`,
+          value: `✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}`,
           inline: false
         },
         {

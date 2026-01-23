@@ -28,10 +28,10 @@ const characterModerationSchema = new Schema({
   // Vote information
   vote: { 
     type: String, 
-    enum: ['approve', 'deny', 'needs_changes'], 
+    enum: ['approve', 'needs_changes'], 
     required: true 
   },
-  reason: { type: String, default: null }, // Required for deny/needs_changes votes
+  reason: { type: String, default: null }, // Required for needs_changes votes
   note: { type: String, default: null }, // Optional feedback/note from mod
   
   // Application versioning

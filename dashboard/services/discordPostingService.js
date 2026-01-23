@@ -19,10 +19,41 @@ const ADMIN_REVIEW_THREAD_ID = process.env.ADMIN_REVIEW_THREAD_ID; // Optional
  */
 async function postApplicationToAdminChannel(character) {
   try {
+    console.log('[DISCORD_POSTING] Starting postApplicationToAdminChannel');
+    console.log('[DISCORD_POSTING] Character:', {
+      name: character?.name,
+      id: character?._id?.toString(),
+      userId: character?.userId,
+      status: character?.status
+    });
+    console.log('[DISCORD_POSTING] Channel config:', {
+      ADMIN_REVIEW_CHANNEL_ID,
+      ADMIN_REVIEW_THREAD_ID,
+      DISCORD_TOKEN: DISCORD_TOKEN ? 'SET' : 'NOT SET'
+    });
+    
+    logger.info('DISCORD_POSTING', `Attempting to post character application: ${character?.name || 'Unknown'} (ID: ${character?._id || 'Unknown'})`);
+    
     if (!DISCORD_TOKEN) {
       logger.warn('DISCORD_POSTING', 'DISCORD_TOKEN not configured, skipping Discord post');
+      console.error('[DISCORD_POSTING] ERROR: DISCORD_TOKEN not configured');
       return null;
     }
+    
+    if (!character) {
+      logger.error('DISCORD_POSTING', 'Character object is null or undefined');
+      console.error('[DISCORD_POSTING] ERROR: Character object is null or undefined');
+      return null;
+    }
+    
+    if (!character._id) {
+      logger.error('DISCORD_POSTING', 'Character ID is missing');
+      console.error('[DISCORD_POSTING] ERROR: Character ID is missing');
+      return null;
+    }
+    
+    logger.info('DISCORD_POSTING', `Using channel ID: ${ADMIN_REVIEW_CHANNEL_ID}, thread ID: ${ADMIN_REVIEW_THREAD_ID || 'none'}`);
+    console.log('[DISCORD_POSTING] Using channel ID:', ADMIN_REVIEW_CHANNEL_ID);
 
     // Get vote counts
     const applicationVersion = character.applicationVersion || 1;
@@ -36,12 +67,6 @@ async function postApplicationToAdminChannel(character) {
       characterId: character._id,
       applicationVersion: applicationVersion,
       vote: 'needs_changes'
-    });
-    
-    const denyCount = await CharacterModeration.countDocuments({
-      characterId: character._id,
-      applicationVersion: applicationVersion,
-      vote: 'deny'
     });
 
     // Helper functions for formatting
@@ -131,7 +156,7 @@ async function postApplicationToAdminChannel(character) {
         },
         {
           name: '📊 Vote Status',
-          value: `✅ **Approves:** ${approveCount}/4\n⚠️ **Needs Changes:** ${needsChangesCount}\n❌ **Denies:** ${denyCount}`,
+          value: `✅ **Approves:** ${approveCount}/4\n⚠️ **Needs Changes:** ${needsChangesCount}`,
           inline: false
         },
         {
@@ -149,8 +174,13 @@ async function postApplicationToAdminChannel(character) {
     // Post to channel or thread
     let targetChannelId = ADMIN_REVIEW_CHANNEL_ID;
     let messageResponse;
+    
+    // Get user mention
+    const userMention = character.userId ? `<@${character.userId}>` : '';
+    console.log('[DISCORD_POSTING] User mention:', userMention || 'NONE (userId missing)');
 
     if (ADMIN_REVIEW_THREAD_ID) {
+      console.log('[DISCORD_POSTING] Posting to thread:', ADMIN_REVIEW_THREAD_ID);
       // Post to thread
       messageResponse = await fetch(`https://discord.com/api/v10/channels/${ADMIN_REVIEW_THREAD_ID}/messages`, {
         method: 'POST',
@@ -159,12 +189,14 @@ async function postApplicationToAdminChannel(character) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          content: userMention || undefined,
           embeds: [embed]
         })
       });
       targetChannelId = ADMIN_REVIEW_THREAD_ID;
     } else {
       // Post to channel
+      console.log('[DISCORD_POSTING] Posting to channel:', ADMIN_REVIEW_CHANNEL_ID);
       messageResponse = await fetch(`https://discord.com/api/v10/channels/${ADMIN_REVIEW_CHANNEL_ID}/messages`, {
         method: 'POST',
         headers: {
@@ -172,27 +204,56 @@ async function postApplicationToAdminChannel(character) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          content: userMention || undefined,
           embeds: [embed]
         })
       });
     }
 
+    console.log('[DISCORD_POSTING] Response status:', messageResponse.status, messageResponse.statusText);
+    
     if (!messageResponse.ok) {
       const errorText = await messageResponse.text();
       logger.error('DISCORD_POSTING', `Failed to post application to Discord: ${messageResponse.status} - ${errorText}`);
+      logger.error('DISCORD_POSTING', `Channel ID used: ${targetChannelId}, User ID: ${character.userId || 'missing'}`);
+      console.error('[DISCORD_POSTING] Full error details:', {
+        status: messageResponse.status,
+        statusText: messageResponse.statusText,
+        error: errorText,
+        channelId: targetChannelId,
+        userId: character.userId,
+        characterName: character.name
+      });
       return null;
     }
 
     const messageData = await messageResponse.json();
+    console.log('[DISCORD_POSTING] Success! Message ID:', messageData.id);
     
     // Update character with Discord message/thread IDs
-    character.discordMessageId = messageData.id;
-    if (ADMIN_REVIEW_THREAD_ID) {
-      character.discordThreadId = ADMIN_REVIEW_THREAD_ID;
+    // Check if character is a Mongoose document or plain object
+    if (character.save && typeof character.save === 'function') {
+      character.discordMessageId = messageData.id;
+      if (ADMIN_REVIEW_THREAD_ID) {
+        character.discordThreadId = ADMIN_REVIEW_THREAD_ID;
+      }
+      await character.save();
+    } else {
+      // If it's a plain object, update via model
+      const Character = require('../models/CharacterModel');
+      await Character.updateOne(
+        { _id: character._id },
+        { 
+          $set: { 
+            discordMessageId: messageData.id,
+            ...(ADMIN_REVIEW_THREAD_ID && { discordThreadId: ADMIN_REVIEW_THREAD_ID })
+          }
+        }
+      );
     }
-    await character.save();
 
     logger.success('DISCORD_POSTING', `Application posted to Discord: ${character.name} (v${applicationVersion})`);
+    console.log('[DISCORD_POSTING] Successfully posted to Discord');
     
     return {
       messageId: messageData.id,
@@ -201,6 +262,8 @@ async function postApplicationToAdminChannel(character) {
     };
   } catch (error) {
     logger.error('DISCORD_POSTING', 'Error posting application to Discord', error);
+    console.error('[DISCORD_POSTING] Exception caught:', error);
+    console.error('[DISCORD_POSTING] Error stack:', error.stack);
     return null;
   }
 }
@@ -229,12 +292,6 @@ async function updateApplicationEmbed(messageId, character) {
       characterId: character._id,
       applicationVersion: applicationVersion,
       vote: 'needs_changes'
-    });
-    
-    const denyCount = await CharacterModeration.countDocuments({
-      characterId: character._id,
-      applicationVersion: applicationVersion,
-      vote: 'deny'
     });
 
     // Determine channel ID (thread or channel)
@@ -267,7 +324,7 @@ async function updateApplicationEmbed(messageId, character) {
       if (field.name === '📊 Vote Status') {
         return {
           name: '📊 Vote Status',
-          value: `✅ **Approves:** ${approveCount}/4\n⚠️ **Needs Changes:** ${needsChangesCount}\n❌ **Denies:** ${denyCount}`,
+          value: `✅ **Approves:** ${approveCount}/4\n⚠️ **Needs Changes:** ${needsChangesCount}`,
           inline: false
         };
       }
