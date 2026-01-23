@@ -880,7 +880,27 @@ async function setupWeatherScheduler(client) {
 }
 
 async function postWeatherReminder(client) {
- return await processWeatherForAllVillages(client, true, 'reminder');
+ try {
+  const villages = ['Rudania', 'Inariko', 'Vhintl'];
+  let postedCount = 0;
+  
+  for (const village of villages) {
+   try {
+    // Post reminder (isReminder = true) - this reposts the existing weather
+    const posted = await postWeatherForVillage(client, village, true);
+    if (posted) postedCount++;
+   } catch (error) {
+    logger.error('WEATHER', `[scheduler.js]❌ Failed to post weather reminder for ${village}: ${error.message}`);
+   }
+  }
+  
+  logger.info('WEATHER', `Weather reminder posted for ${postedCount} village(s)`);
+  return postedCount;
+ } catch (error) {
+  logger.error('WEATHER', `[scheduler.js]❌ Error in postWeatherReminder: ${error.message}`);
+  handleError(error, "scheduler.js", { commandName: 'postWeatherReminder' });
+  return 0;
+ }
 }
 
 // ============================================================================
