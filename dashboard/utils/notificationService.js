@@ -705,6 +705,11 @@ async function sendOCDecisionNotification(userId, decision, characterData, feedb
             inline: false
           },
           {
+            name: '📝 Next Steps',
+            value: 'Approved! Please submit OC to <#814567241101475932> channel!',
+            inline: false
+          },
+          {
             name: '🔗 View Your Character',
             value: `[Open OC Page](${ocPageUrl})`,
             inline: false
@@ -717,7 +722,7 @@ async function sendOCDecisionNotification(userId, decision, characterData, feedb
       };
       notificationType = 'oc_approved';
       title = `Character Approved: ${characterData.name}`;
-      message = `Your character "${characterData.name}" has been approved!`;
+      message = `Approved! Please submit OC to 814567241101475932 channel!`;
     } else {
       embed = {
         title: '⚠️ Character Needs Changes',

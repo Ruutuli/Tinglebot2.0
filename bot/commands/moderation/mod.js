@@ -1683,7 +1683,6 @@ async function handleOCAppView(interaction) {
       null: 'DRAFT',
       undefined: 'DRAFT',
       'pending': 'PENDING',
-      'denied': 'NEEDS_CHANGES',
       'accepted': 'APPROVED'
     };
 
@@ -1707,7 +1706,7 @@ async function handleOCAppView(interaction) {
     const embed = new EmbedBuilder()
       .setTitle(`📋 OC Application: ${character.name}`)
       .setDescription(description)
-      .setColor(character.status === 'accepted' ? 0x4caf50 : character.status === 'denied' ? 0xf44336 : 0xFFA500)
+      .setColor(character.status === 'accepted' ? 0x4caf50 : 0xFFA500)
       .setThumbnail(character.icon || null)
       .setFooter({ text: `Character ID: ${character._id}` })
       .setTimestamp();

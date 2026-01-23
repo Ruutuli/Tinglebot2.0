@@ -7,10 +7,10 @@ const Character = require('../models/CharacterModel');
 const CharacterModeration = require('../models/CharacterModerationModel');
 const logger = require('../utils/logger');
 const { connectToTinglebot } = require('../database/db');
+const { STATUS, canSubmit, isPending, isNeedsChanges } = require('../utils/statusConstants');
 
 // Constants
 const APPROVAL_THRESHOLD = 4; // Number of approve votes required
-const NEEDS_CHANGES_THRESHOLD = 1; // Fast fail: 1 needs_changes vote triggers denial
 
 /**
  * Submit character for review (move from DRAFT to PENDING)
@@ -26,20 +26,24 @@ async function submitCharacter(characterId) {
       throw new Error(`Character not found: ${characterId}`);
     }
     
-    // Check if already submitted
-    if (character.status === 'pending') {
+    // Check if already submitted (but allow resubmission from needs_changes)
+    if (isPending(character.status)) {
       throw new Error('Character is already pending review');
     }
     
-    // Can only submit from DRAFT state (status: null)
-    if (character.status !== null && character.status !== undefined) {
-      throw new Error(`Cannot submit character with status: ${character.status}`);
+    // Can submit from DRAFT (null) or resubmit from NEEDS_CHANGES
+    // Note: votes/comments should be cleared before calling this function for resubmissions
+    if (!canSubmit(character.status)) {
+      throw new Error(`Cannot submit character with status: ${character.status || 'DRAFT'}`);
     }
     
     // Set to PENDING
-    character.status = 'pending';
+    character.status = STATUS.PENDING;
     character.submittedAt = new Date();
-    character.applicationVersion = character.applicationVersion || 1;
+    // Preserve existing applicationVersion if set (for resubmissions), otherwise default to 1
+    if (!character.applicationVersion) {
+      character.applicationVersion = 1;
+    }
     
     await character.save();
     
@@ -70,9 +74,14 @@ async function recordVote(characterId, modId, modUsername, decision, note = null
       throw new Error(`Character not found: ${characterId}`);
     }
     
-    // Can only vote on pending characters
-    if (character.status !== 'pending') {
-      throw new Error(`Cannot vote on character with status: ${character.status}`);
+    // Can only vote on pending or needs_changes characters (allow continued voting on needs_changes)
+    if (!isPending(character.status) && !isNeedsChanges(character.status)) {
+      throw new Error(`Cannot vote on character with status: ${character.status || 'DRAFT'}`);
+    }
+    
+    // Validate decision value
+    if (decision !== 'approve' && decision !== STATUS.NEEDS_CHANGES) {
+      throw new Error(`Invalid decision: ${decision}. Must be 'approve' or '${STATUS.NEEDS_CHANGES}'`);
     }
     
     const applicationVersion = character.applicationVersion || 1;
@@ -88,7 +97,7 @@ async function recordVote(characterId, modId, modUsername, decision, note = null
       // Update existing vote
       const oldDecision = existingVote.vote;
       existingVote.vote = decision;
-      existingVote.reason = (decision === 'needs_changes') ? note : null;
+      existingVote.reason = (decision === STATUS.NEEDS_CHANGES) ? note : null;
       existingVote.note = note;
       existingVote.updatedAt = new Date();
       await existingVote.save();
@@ -103,7 +112,7 @@ async function recordVote(characterId, modId, modUsername, decision, note = null
         modId: modId,
         modUsername: modUsername,
         vote: decision,
-        reason: (decision === 'needs_changes') ? note : null,
+        reason: (decision === STATUS.NEEDS_CHANGES) ? note : null,
         note: note,
         applicationVersion: applicationVersion
       });
@@ -156,7 +165,7 @@ async function checkDecision(characterId) {
       throw new Error(`Character not found: ${characterId}`);
     }
     
-    if (character.status !== 'pending') {
+    if (!isPending(character.status)) {
       return null; // Already decided
     }
     
@@ -167,20 +176,6 @@ async function checkDecision(characterId) {
       applicationVersion: applicationVersion,
       vote: 'approve'
     });
-    
-    const needsChangesCount = await CharacterModeration.countDocuments({
-      characterId: characterId,
-      applicationVersion: applicationVersion,
-      vote: 'needs_changes'
-    });
-    
-    // Fast fail: 1 needs_changes triggers immediate denial
-    if (needsChangesCount >= NEEDS_CHANGES_THRESHOLD) {
-      return {
-        decision: 'needs_changes',
-        reason: 'Fast fail: One or more moderators requested changes'
-      };
-    }
     
     // Approval: 4 approves required
     if (approveCount >= APPROVAL_THRESHOLD) {
@@ -211,7 +206,7 @@ async function processApproval(characterId) {
       throw new Error(`Character not found: ${characterId}`);
     }
     
-    character.status = 'accepted';
+    character.status = STATUS.ACCEPTED;
     character.decidedAt = new Date();
     character.approvedAt = new Date();
     
@@ -226,103 +221,11 @@ async function processApproval(characterId) {
   }
 }
 
-/**
- * Process needs changes decision
- * @param {string} characterId - Character ID
- * @param {string} feedback - Feedback text
- * @returns {Promise<Object>} - Updated character with feedback
- */
-async function processNeedsChanges(characterId, feedback) {
-  try {
-    await connectToTinglebot();
-    
-    const character = await Character.findById(characterId);
-    if (!character) {
-      throw new Error(`Character not found: ${characterId}`);
-    }
-    
-    // Get all needs_changes votes for feedback
-    const applicationVersion = character.applicationVersion || 1;
-    const needsChangesVotes = await CharacterModeration.find({
-      characterId: characterId,
-      applicationVersion: applicationVersion,
-      vote: 'needs_changes'
-    }).lean();
-    
-    // Aggregate feedback from all mods who voted needs_changes
-    const feedbackArray = needsChangesVotes.map(vote => ({
-      modId: vote.modId,
-      modUsername: vote.modUsername,
-      text: vote.note || vote.reason || 'Changes requested',
-      createdAt: vote.createdAt || new Date()
-    }));
-    
-    character.status = 'denied';
-    character.decidedAt = new Date();
-    character.applicationFeedback = feedbackArray;
-    character.denialReason = feedback || needsChangesVotes.map(v => v.note || v.reason).join('\n\n');
-    
-    await character.save();
-    
-    logger.info('OC_APPLICATION', `Character ${character.name} marked as needs changes (v${character.applicationVersion})`);
-    
-    return character;
-  } catch (error) {
-    logger.error('OC_APPLICATION', 'Error processing needs changes', error);
-    throw error;
-  }
-}
-
-/**
- * Resubmit character after needs changes (increment version, reset votes)
- * @param {string} characterId - Character ID
- * @returns {Promise<Object>} - Updated character
- */
-async function resubmitCharacter(characterId) {
-  try {
-    await connectToTinglebot();
-    
-    const character = await Character.findById(characterId);
-    if (!character) {
-      throw new Error(`Character not found: ${characterId}`);
-    }
-    
-    // Can only resubmit if status is 'denied' (needs changes)
-    if (character.status !== 'denied') {
-      throw new Error(`Cannot resubmit character with status: ${character.status}`);
-    }
-    
-    // Increment version
-    character.applicationVersion = (character.applicationVersion || 1) + 1;
-    
-    // Delete all old votes for this character (they're tied to old version)
-    await CharacterModeration.deleteMany({ characterId: characterId });
-    
-    // Reset to PENDING
-    character.status = 'pending';
-    character.submittedAt = new Date();
-    character.decidedAt = null;
-    character.applicationFeedback = [];
-    character.denialReason = null;
-    
-    await character.save();
-    
-    logger.info('OC_APPLICATION', `Character ${character.name} resubmitted (v${character.applicationVersion})`);
-    
-    return character;
-  } catch (error) {
-    logger.error('OC_APPLICATION', 'Error resubmitting character', error);
-    throw error;
-  }
-}
 
 module.exports = {
   submitCharacter,
   recordVote,
   checkDecision,
   processApproval,
-  processNeedsChanges,
-  resubmitCharacter,
-  APPROVAL_THRESHOLD,
-  NEEDS_CHANGES_THRESHOLD
+  APPROVAL_THRESHOLD
 };

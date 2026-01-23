@@ -141,14 +141,16 @@ const modCharacterSchema = new Schema({
   },
 
   // ------------------- Character Status -------------------
-  // Status: 'pending', 'accepted', 'denied'
+  // Status values:
+  // - null/undefined = DRAFT (saved, not submitted)
+  // - 'pending' = PENDING (submitted, needs votes)
+  // - 'needs_changes' = NEEDS_CHANGES (mod says something needs to be changed)
+  // - 'accepted' = ACCEPTED (approved)
   status: { 
     type: String, 
-    enum: ['pending', 'accepted', 'denied'], 
-    default: 'pending' 
-  },
-  // Denial reason (only set when status is 'denied')
-  denialReason: { type: String, default: null }
+    enum: ['pending', 'accepted', 'needs_changes'], 
+    default: null  // DRAFT state (saved, not submitted)
+  }
 
 }, { collection: 'modcharacters' });
 

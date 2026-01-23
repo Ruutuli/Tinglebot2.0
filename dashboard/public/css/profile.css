@@ -491,6 +491,48 @@
 }
 
 /* ============================================================================
+   Character Actions
+============================================================================ */
+
+.profile-character-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.profile-character-edit-btn {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: 500;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.profile-character-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--totk-light-green);
+  color: var(--totk-light-green);
+  transform: translateY(-1px);
+}
+
+.profile-character-edit-btn:active {
+  transform: translateY(0);
+}
+
+.profile-character-edit-btn i {
+  font-size: 0.8rem;
+}
+
+/* ============================================================================
    Character Modal
 ============================================================================ */
 

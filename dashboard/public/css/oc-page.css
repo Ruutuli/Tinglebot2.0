@@ -105,6 +105,7 @@
 
 .character-header {
   display: flex;
+  flex-wrap: wrap;
   gap: 2.5rem;
   margin-bottom: 2.5rem;
   padding: 2.5rem;
@@ -199,10 +200,11 @@
   color: #fff;
 }
 
-.status-badge.status-denied {
-  background: #f44336;
+.status-badge.status-needs-changes {
+  background: #FF6B6B;
   color: #fff;
 }
+
 
 .character-info {
   flex: 1;
@@ -267,31 +269,51 @@
 }
 
 /* ============================================================================
-   Denial Reason
+   Application Feedback
 ============================================================================ */
-.denial-reason-container {
-  margin-bottom: 2.5rem;
+.application-feedback-container {
+  margin: 2.5rem 0;
   padding: 2rem;
-  background: linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(244, 67, 54, 0.08) 100%);
-  border-left: 5px solid #f44336;
+  background: linear-gradient(135deg, rgba(255, 165, 0, 0.15) 0%, rgba(255, 165, 0, 0.08) 100%);
+  border-left: 5px solid #FFA500;
   border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(244, 67, 54, 0.2);
+  box-shadow: 0 4px 16px rgba(255, 165, 0, 0.2);
   backdrop-filter: blur(10px);
 }
 
-.denial-reason-content h3 {
+.application-feedback-container h3 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  color: #f44336;
+  color: #FFA500;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
-.denial-reason-content p {
+.application-feedback-container ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.application-feedback-container li {
+  padding: 0.75rem 0;
   color: var(--text-primary, #ffffff);
   line-height: 1.6;
-  white-space: pre-wrap;
+  border-bottom: 1px solid rgba(255, 165, 0, 0.2);
 }
+
+.application-feedback-container li:last-child {
+  border-bottom: none;
+}
+
+.application-feedback-container li strong {
+  color: #FFA500;
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
 
 /* ============================================================================
    Character Stats
@@ -370,12 +392,27 @@
 }
 
 /* ============================================================================
+   Character Header Buttons Container
+============================================================================ */
+.character-header-buttons {
+  flex-basis: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================================
    Action Buttons
 ============================================================================ */
 .action-buttons {
-  margin-top: 1.5rem;
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 1rem;
 }
 
@@ -435,6 +472,15 @@
 
 .action-buttons .btn:hover i {
   transform: scale(1.1);
+}
+
+/* ============================================================================
+   Submit Buttons
+============================================================================ */
+.submit-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
 }
 
 /* ============================================================================
@@ -673,6 +719,143 @@
 .info-section p {
   color: var(--text-secondary, rgba(255, 255, 255, 0.7));
   margin: 0;
+}
+
+/* ============================================================================
+   Application Art Section
+============================================================================ */
+.app-art-container {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.app-art-image {
+  max-width: 100%;
+  max-height: 600px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .app-art-image {
+    max-height: 400px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-art-image {
+    max-height: 300px;
+  }
+}
+
+/* ============================================================================
+   Biography Section
+============================================================================ */
+.biography-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.biography-item {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 1.75rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.biography-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--primary-color, #00A3DA), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.biography-item:hover {
+  transform: translateX(4px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.biography-item:hover::before {
+  opacity: 1;
+}
+
+.biography-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.biography-item-header i {
+  font-size: 1.5rem;
+  color: var(--primary-color, #00A3DA);
+  filter: drop-shadow(0 2px 4px rgba(0, 163, 218, 0.3));
+  transition: transform 0.3s ease;
+  width: 32px;
+  text-align: center;
+}
+
+.biography-item:hover .biography-item-header i {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.biography-item-header h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  letter-spacing: 0.3px;
+}
+
+.biography-item-body {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.8));
+  line-height: 1.8;
+  font-size: 1rem;
+}
+
+.biography-item-body p {
+  margin: 0;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.8));
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.biography-item:first-child {
+  animation-delay: 0.1s;
+}
+
+.biography-item:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.biography-item:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 /* ============================================================================
@@ -1031,7 +1214,8 @@
 .info-section,
 .stat-card,
 .gear-item,
-.additional-stat-item {
+.additional-stat-item,
+.biography-item {
   animation: fadeInUp 0.5s ease-out;
 }
 
@@ -1082,6 +1266,11 @@
     font-size: 1.75rem;
   }
   
+  .character-header-buttons {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+  }
+  
   .character-stats {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -1130,5 +1319,32 @@
   
   .edit-form-card {
     padding: 1.5rem;
+  }
+  
+  .biography-content {
+    gap: 1.25rem;
+  }
+  
+  .biography-item {
+    padding: 1.25rem;
+  }
+  
+  .biography-item-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
+  
+  .biography-item-header h4 {
+    font-size: 1.1rem;
+  }
+  
+  .biography-item-header i {
+    font-size: 1.25rem;
+    width: 28px;
+  }
+  
+  .biography-item-body {
+    font-size: 0.95rem;
+    line-height: 1.7;
   }
 }

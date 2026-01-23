@@ -195,14 +195,16 @@ const characterSchema = new Schema({
   boostedBy: { type: String, default: null },
 
   // ------------------- Character Status -------------------
-  // Status: 'pending', 'accepted', 'denied'
+  // Status values:
+  // - null/undefined = DRAFT (saved, not submitted)
+  // - 'pending' = PENDING (submitted, needs votes)
+  // - 'needs_changes' = NEEDS_CHANGES (mod says something needs to be changed)
+  // - 'accepted' = ACCEPTED (approved)
   status: { 
     type: String, 
-    enum: ['pending', 'accepted', 'denied'], 
-    default: 'pending' 
+    enum: ['pending', 'accepted', 'needs_changes'], 
+    default: null  // DRAFT state (saved, not submitted)
   },
-  // Denial reason (only set when status is 'denied')
-  denialReason: { type: String, default: null },
 
   // ------------------- Biography Information -------------------
   gender: { type: String, default: '' }, // Includes pronouns, e.g., "Female | she/her"
@@ -230,7 +232,7 @@ characterSchema.pre('save', function (next) {
   // If this is an existing character (not new) and doesn't have a status, set it to 'accepted'
   // This handles backward compatibility for characters created before the moderation system
   if (!this.isNew && !this.status) {
-    this.status = 'accepted';
+    this.status = 'accepted'; // Use lowercase string constant
   }
   
   next();

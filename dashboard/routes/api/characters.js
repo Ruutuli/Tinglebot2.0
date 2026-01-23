@@ -24,33 +24,31 @@ const {
   getCharacterInventoryCollection,
   fetchItemByName
 } = require('../../database/db');
-const { 
-  isUniqueCharacterName,
-  isValidRace
-} = require('../../utils/validation');
-// Import job data and create validation functions
-const { jobPerks, villageJobs, allJobs } = require('../../data/jobData');
-
-// Simple validation functions using dashboard's jobData
-function isValidJob(job) {
-  if (!job || typeof job !== 'string') return false;
-  const normalizedJob = job.toLowerCase().trim();
-  return allJobs.some(j => j.toLowerCase() === normalizedJob);
-}
-
-function isVillageExclusiveJob(job) {
-  if (!job || typeof job !== 'string') return null;
-  const normalizedJob = job.toLowerCase();
-  for (const [village, jobs] of Object.entries(villageJobs)) {
-    if (jobs.map(j => j.toLowerCase()).includes(normalizedJob)) {
-      return village;
-    }
-  }
-  return null;
-}
+const { isValidRace } = require('../../utils/validation');
 const { isValidVillage } = require('../../modules/locationsModule');
-const { getJobPerk } = require('../../modules/jobsModule');
 const bucket = require('../../config/gcsService');
+
+// Import shared utilities
+const { STATUS, isPending, isAccepted, isNeedsChanges, isDraft } = require('../../utils/statusConstants');
+const {
+  validateCharacterData,
+  validateAge,
+  validateHeight,
+  validateRace,
+  validateVillage,
+  validateJob,
+  validateJobVillageCompatibility,
+  validateBiography
+} = require('../../utils/characterValidation');
+const {
+  setupGearFromItems,
+  updateGearFromItems,
+  calculateGearStats
+} = require('../../utils/gearUtils');
+const { updateCharacterStats } = require('../../utils/characterStats');
+const { createCharacterSlug, normalizeSlug } = require('../../utils/slugUtils');
+const { assignCharacterRoles } = require('../../services/discordRoleService');
+const { postCharacterCreationToDiscord } = require('../../services/discordPostingService');
 
 // Multer configuration for character icon and appArt uploads to Google Cloud Storage
 const characterIconUpload = multer({
@@ -100,372 +98,28 @@ const characterUploads = multer({
   { name: 'appArt', maxCount: 1 }
 ]);
 
-// Helper function to post character creation to Discord
-async function postCharacterCreationToDiscord(character, user, reqUser, req = null) {
-  try {
-    const CHARACTER_CREATION_CHANNEL_ID = process.env.ADMIN_REVIEW_CHANNEL_ID || process.env.CHARACTER_CREATION_CHANNEL_ID || '964342870796537909';
-    const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-    
-    if (!DISCORD_TOKEN) {
-      logger.warn('SERVER', 'DISCORD_TOKEN not configured, skipping Discord post');
-      return;
-    }
-
-    // Helper functions for formatting
-    const capitalize = (str) => {
-      if (!str) return '';
-      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-    };
-
-    const capitalizeFirstLetter = (str) => {
-      if (!str) return '';
-      return str.charAt(0).toUpperCase() + str.slice(1);
-    };
-
-    const convertCmToFeetInches = (heightInCm) => {
-      const totalInches = heightInCm / 2.54;
-      const feet = Math.floor(totalInches / 12);
-      const inches = Math.round(totalInches % 12);
-      return `${feet}' ${inches}"`;
-    };
-
-    // Get village emoji (simple mapping)
-    const getVillageEmoji = (village) => {
-      const emojiMap = {
-        'inariko': '🌊',
-        'rudania': '🔥',
-        'vhintl': '🌿'
-      };
-      return emojiMap[village?.toLowerCase()] || '';
-    };
-
-    const heightInFeetInches = character.height ? convertCmToFeetInches(character.height) : 'N/A';
-    const homeVillageEmoji = getVillageEmoji(character.homeVillage);
-    const currentVillageEmoji = getVillageEmoji(character.currentVillage);
-
-    // Build gear info
-    const gearInfo = [];
-    if (character.gearWeapon?.name) {
-      gearInfo.push(`🗡️ **Weapon:** ${character.gearWeapon.name}`);
-    }
-    if (character.gearShield?.name) {
-      gearInfo.push(`🛡️ **Shield:** ${character.gearShield.name}`);
-    }
-    if (character.gearArmor?.chest?.name) {
-      gearInfo.push(`👕 **Chest:** ${character.gearArmor.chest.name}`);
-    }
-    if (character.gearArmor?.legs?.name) {
-      gearInfo.push(`👖 **Legs:** ${character.gearArmor.legs.name}`);
-    }
-    const gearText = gearInfo.length > 0 ? gearInfo.join('\n') : 'None selected';
-
-    // Get base URL for moderation link - use tinglebot.xyz
-    const moderationUrl = 'https://tinglebot.xyz/character-moderation';
-
-    // Get user's Discord avatar URL
-    const userDiscordId = reqUser?.discordId || user?.discordId || character.userId;
-    const userAvatar = reqUser?.avatar || user?.avatar;
-    const userAvatarUrl = userAvatar 
-      ? `https://cdn.discordapp.com/avatars/${userDiscordId}/${userAvatar}.png?size=256`
-      : `https://cdn.discordapp.com/embed/avatars/${(parseInt(userDiscordId) || 0) % 5}.png`;
-
-    // Create embed with improved styling - cleaner layout
-    const embed = {
-      title: `✨ New Character Created: ${character.name}`,
-      description: `A new character has been submitted and is awaiting moderation review.`,
-      color: 0xFFA500, // Orange for pending status
-      thumbnail: {
-        url: userAvatarUrl
-      },
-      image: {
-        url: character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-      },
-      fields: [
-        {
-          name: '👤 Character Information',
-          value: `**Name:** ${character.name}\n**Pronouns:** ${character.pronouns}\n**Age:** ${character.age}\n**Height:** ${character.height} cm (${heightInFeetInches})`,
-          inline: false
-        },
-        {
-          name: '🏘️ Location & Job',
-          value: `**Race:** ${capitalize(character.race)}\n**Home Village:** ${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}\n**Job:** ${capitalizeFirstLetter(character.job)}`,
-          inline: false
-        },
-        {
-          name: '❤️ Stats',
-          value: `**Hearts:** ${character.currentHearts}/${character.maxHearts}\n**Stamina:** ${character.currentStamina}/${character.maxStamina}\n**Attack:** ${character.attack || 0}\n**Defense:** ${character.defense || 0}`,
-          inline: false
-        },
-        {
-          name: '⚔️ Starting Gear',
-          value: gearText || 'None selected',
-          inline: false
-        },
-        {
-          name: '🔗 Links',
-          value: `[📋 View Application](${character.appLink})\n[⚖️ Review in Moderation Panel](${moderationUrl})`,
-          inline: false
-        }
-      ],
-      footer: {
-        text: `Created by ${reqUser?.username || user?.username || 'Unknown'} • Status: Pending Review`
-      },
-      timestamp: new Date().toISOString()
-    };
-
-    // Get user mention (reusing userDiscordId from line 166)
-    const userMention = userDiscordId ? `<@${userDiscordId}>` : '';
-
-    // Post to Discord
-    const discordResponse = await fetch(`https://discord.com/api/v10/channels/${CHARACTER_CREATION_CHANNEL_ID}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bot ${DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        content: userMention || undefined,
-        embeds: [embed]
-      })
+// Helper function to find character with ownership check
+async function findCharacterWithOwnership(characterId, userId) {
+  // Try both string and original type for userId (Discord IDs can be stored as strings or numbers)
+  let character = await Character.findOne({ 
+    _id: characterId, 
+    userId: String(userId) 
+  });
+  
+  // If not found, try with the userId as-is in case it's already the right type
+  if (!character) {
+    character = await Character.findOne({ 
+      _id: characterId, 
+      userId: userId 
     });
-
-    if (!discordResponse.ok) {
-      const errorText = await discordResponse.text();
-      logger.error('SERVER', `Failed to post character creation to Discord: ${discordResponse.status} - ${errorText}`);
-      return;
-    }
-
-    logger.success('SERVER', `Character creation posted to Discord: ${character.name}`);
-  } catch (error) {
-    logger.error('SERVER', 'Error posting character creation to Discord', error);
-    // Don't throw - Discord posting failure shouldn't break character creation
   }
+  
+  return character;
 }
 
-// Assign Discord roles to user when character is accepted
-async function assignCharacterRoles(character) {
+// Post character status update (accepted) to Discord
+async function postCharacterStatusToDiscord(character, status, isModCharacter = false) {
   try {
-    const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-    const GUILD_ID = process.env.PROD_GUILD_ID;
-    
-    if (!DISCORD_TOKEN || !GUILD_ID) {
-      logger.warn('CHARACTERS', 'DISCORD_TOKEN or PROD_GUILD_ID not configured, skipping role assignment');
-      return;
-    }
-    
-    // Village resident role IDs
-    const VILLAGE_RESIDENT_ROLES = {
-      'Rudania': '907344585238409236',
-      'Inariko': '907344454854266890',
-      'Vhintl': '907344092491554906'
-    };
-    
-    // Map job names to their role IDs (from environment variables)
-    const jobRoleIdMap = {
-      'Adventurer': process.env.JOB_ADVENTURER,
-      'Artist': process.env.JOB_ARTIST,
-      'Bandit': process.env.JOB_BANDIT,
-      'Beekeeper': process.env.JOB_BEEKEEPER,
-      'Blacksmith': process.env.JOB_BLACKSMITH,
-      'Cook': process.env.JOB_COOK,
-      'Courier': process.env.JOB_COURIER,
-      'Craftsman': process.env.JOB_CRAFTSMAN,
-      'Farmer': process.env.JOB_FARMER,
-      'Fisherman': process.env.JOB_FISHERMAN,
-      'Forager': process.env.JOB_FORAGER,
-      'Fortune Teller': process.env.JOB_FORTUNE_TELLER,
-      'Graveskeeper': process.env.JOB_GRAVESKEEPER,
-      'Guard': process.env.JOB_GUARD,
-      'Healer': process.env.JOB_HEALER,
-      'Herbalist': process.env.JOB_HERBALIST,
-      'Hunter': process.env.JOB_HUNTER,
-      'Mask Maker': process.env.JOB_MASK_MAKER,
-      'Merchant': process.env.JOB_MERCHANT,
-      'Mercenary': process.env.JOB_MERCENARY,
-      'Miner': process.env.JOB_MINER,
-      'Oracle': process.env.JOB_ORACLE,
-      'Priest': process.env.JOB_PRIEST,
-      'Rancher': process.env.JOB_RANCHER,
-      'Researcher': process.env.JOB_RESEARCHER,
-      'Scout': process.env.JOB_SCOUT,
-      'Scholar': process.env.JOB_SCHOLAR,
-      'Shopkeeper': process.env.JOB_SHOPKEEPER,
-      'Stablehand': process.env.JOB_STABLEHAND,
-      'Teacher': process.env.JOB_TEACHER,
-      'Villager': process.env.JOB_VILLAGER,
-      'Weaver': process.env.JOB_WEAVER,
-      'Witch': process.env.JOB_WITCH,
-      'Entertainer': process.env.JOB_ENTERTAINER
-    };
-    
-    // Map job perks to their IDs
-    const jobPerkIdMap = {
-      'LOOTING': process.env.JOB_PERK_LOOTING,
-      'STEALING': process.env.JOB_PERK_STEALING,
-      'ENTERTAINING': process.env.JOB_PERK_ENTERTAINING,
-      'DELIVERING': process.env.JOB_PERK_DELIVERING,
-      'HEALING': process.env.JOB_PERK_HEALING,
-      'GATHERING': process.env.JOB_PERK_GATHERING,
-      'CRAFTING': process.env.JOB_PERK_CRAFTING,
-      'BOOST': process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING,
-      'VENDING': process.env.JOB_PERK_VENDING
-    };
-    
-    // Race role name mapping (we'll find these by name from the guild)
-    const raceRoleNames = {
-      'Gerudo': 'Race: Gerudo',
-      'Goron': 'Race: Goron',
-      'Hylian': 'Race: Hylian',
-      'Keaton': 'Race: Keaton',
-      'Korok/Kokiri': 'Race: Korok/Kokiri',
-      'Kokiri': 'Race: Korok/Kokiri',
-      'Mixed': 'Race: Mixed',
-      'Mogma': 'Race: Mogma',
-      'Rito': 'Race: Rito',
-      'Sheikah': 'Race: Sheikah',
-      'Twili': 'Race: Twili',
-      'Zora': 'Race: Zora'
-    };
-    
-    // Get all guild roles to find race roles by name
-    const rolesResponse = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/roles`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bot ${DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (!rolesResponse.ok) {
-      logger.error('CHARACTERS', `Failed to fetch guild roles: ${rolesResponse.status}`);
-      return;
-    }
-    
-    const guildRoles = await rolesResponse.json();
-    
-    // Get member to check current roles
-    const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${character.userId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bot ${DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (!memberResponse.ok) {
-      logger.warn('CHARACTERS', `Member not found in guild: ${character.userId}`);
-      return;
-    }
-    
-    const member = await memberResponse.json();
-    const currentRoleIds = member.roles || [];
-    const rolesToAdd = [];
-    
-    // Add village resident role
-    // Village names are stored lowercase, so we need to capitalize properly
-    let villageName = null;
-    if (character.homeVillage) {
-      const lowerVillage = character.homeVillage.toLowerCase();
-      // Map lowercase to proper case
-      if (lowerVillage === 'inariko') villageName = 'Inariko';
-      else if (lowerVillage === 'rudania') villageName = 'Rudania';
-      else if (lowerVillage === 'vhintl') villageName = 'Vhintl';
-      else villageName = character.homeVillage.charAt(0).toUpperCase() + character.homeVillage.slice(1).toLowerCase();
-    }
-    const villageRoleId = villageName ? VILLAGE_RESIDENT_ROLES[villageName] : null;
-    if (villageRoleId && !currentRoleIds.includes(villageRoleId)) {
-      rolesToAdd.push(villageRoleId);
-      logger.info('CHARACTERS', `Adding village role for ${villageName}: ${villageRoleId}`);
-    } else if (villageRoleId) {
-      logger.info('CHARACTERS', `User already has village role for ${villageName}`);
-    } else if (character.homeVillage) {
-      logger.warn('CHARACTERS', `No village role ID found for village: ${villageName || character.homeVillage}`);
-    }
-    
-    // Add race role (find by name)
-    // Handle race case-insensitively
-    const characterRace = character.race ? character.race.charAt(0).toUpperCase() + character.race.slice(1).toLowerCase() : null;
-    const raceRoleName = characterRace ? (raceRoleNames[characterRace] || `Race: ${characterRace}`) : null;
-    if (raceRoleName) {
-      const raceRole = guildRoles.find(r => r.name === raceRoleName);
-      if (raceRole && !currentRoleIds.includes(raceRole.id)) {
-        rolesToAdd.push(raceRole.id);
-        logger.info('CHARACTERS', `Adding race role: ${raceRoleName} (${raceRole.id})`);
-      } else if (raceRole) {
-        logger.info('CHARACTERS', `User already has race role: ${raceRoleName}`);
-      } else {
-        logger.warn('CHARACTERS', `Race role not found in guild: ${raceRoleName}`);
-      }
-    } else {
-      logger.warn('CHARACTERS', `No race role name determined for race: ${character.race}`);
-    }
-    
-    // Add job role
-    const jobRoleId = character.job ? jobRoleIdMap[character.job] : null;
-    if (jobRoleId && !currentRoleIds.includes(jobRoleId)) {
-      rolesToAdd.push(jobRoleId);
-      logger.info('CHARACTERS', `Adding job role for ${character.job}: ${jobRoleId}`);
-    } else if (jobRoleId) {
-      logger.info('CHARACTERS', `User already has job role for ${character.job}`);
-    } else if (character.job) {
-      logger.warn('CHARACTERS', `No job role ID found for job: ${character.job}`);
-    }
-    
-    // Add job perk roles
-    const jobPerkInfo = character.job ? getJobPerk(character.job) : null;
-    if (jobPerkInfo && jobPerkInfo.perks) {
-      for (const perk of jobPerkInfo.perks) {
-        if (perk === 'NONE' || perk === 'N/A' || perk === 'ALL') continue;
-        
-        const perkRoleId = jobPerkIdMap[perk];
-        if (perkRoleId && !currentRoleIds.includes(perkRoleId)) {
-          rolesToAdd.push(perkRoleId);
-          logger.info('CHARACTERS', `Adding job perk role: ${perk} (${perkRoleId})`);
-        } else if (perkRoleId) {
-          logger.info('CHARACTERS', `User already has job perk role: ${perk}`);
-        } else {
-          logger.warn('CHARACTERS', `No job perk role ID found for perk: ${perk}`);
-        }
-      }
-    }
-    
-    // Assign all roles at once
-    if (rolesToAdd.length > 0) {
-      const newRoles = [...currentRoleIds, ...rolesToAdd];
-      
-      logger.info('CHARACTERS', `Attempting to assign ${rolesToAdd.length} role(s) to user ${character.userId} for character ${character.name}. Roles: ${rolesToAdd.join(', ')}`);
-      
-      const updateResponse = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${character.userId}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bot ${DISCORD_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          roles: newRoles
-        })
-      });
-      
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        logger.error('CHARACTERS', `Failed to assign roles: ${updateResponse.status} - ${errorText}. Character: ${character.name}, User: ${character.userId}, Roles attempted: ${rolesToAdd.join(', ')}`);
-        throw new Error(`Discord API error: ${updateResponse.status} - ${errorText}`);
-      }
-      
-      logger.success('CHARACTERS', `Successfully assigned ${rolesToAdd.length} role(s) to user ${character.userId} for character ${character.name}`);
-    } else {
-      logger.info('CHARACTERS', `No new roles to assign for character ${character.name} (user may already have all required roles)`);
-    }
-  } catch (error) {
-    logger.error('CHARACTERS', 'Error assigning character roles', error);
-    // Don't throw - role assignment failure shouldn't break the approval flow
-  }
-}
-
-// Post character status update (accepted/denied) to Discord
-async function postCharacterStatusToDiscord(character, status, denialReason, isModCharacter = false) {
-  try {
-    const CHARACTER_CREATION_CHANNEL_ID = process.env.CHARACTER_CREATION_CHANNEL_ID || '964342870796537909';
     const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
     
     if (!DISCORD_TOKEN) {
@@ -477,211 +131,59 @@ async function postCharacterStatusToDiscord(character, status, denialReason, isM
     const user = await User.findOne({ discordId: character.userId }).lean();
     const userName = user?.username || user?.discordId || 'Unknown';
     
-    const color = status === 'accepted' ? 0x4caf50 : 0xf44336;
-    const title = status === 'accepted' 
-      ? `✅ Character Accepted: ${character.name}`
-      : `⚠️ Character Needs Changes: ${character.name}`;
+    // Generate OC page URL using shared utility
+    const ocPageSlug = createCharacterSlug(character.name);
+    const dashboardUrl = (process.env.DASHBOARD_URL || 'https://tinglebot.xyz').replace(/\/+$/, '');
+    const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
     
-    const embed = {
-      title: title,
-      color: color,
-      description: status === 'accepted' 
-        ? `Your character **${character.name}** has been accepted and is now active!`
-        : `Your character **${character.name}** needs changes. Please review the feedback below.`,
-      fields: [
-        {
-          name: '👤 Character Details',
-          value: `**Name:** ${character.name}\n**Race:** ${character.race}\n**Village:** ${character.homeVillage}\n**Job:** ${character.job}`,
-          inline: false
-        }
-      ],
-      footer: {
-        text: `User: ${userName} • Character ID: ${character._id}`
-      },
-      timestamp: new Date().toISOString()
-    };
     
-    if (status === 'denied' && denialReason) {
-      // Format denial reasons - make it more prominent
-      const reasonsText = denialReason.length > 1500 ? denialReason.substring(0, 1500) + '...' : denialReason;
+    // Handle accepted status - post to character creation channel
+    if (isAccepted(status)) {
+      const channelId = process.env.CHARACTER_CREATION_CHANNEL_ID || '964342870796537909';
       
-      embed.fields.push({
-        name: '❌ **DENIAL REASONS**',
-        value: `\`\`\`\n${reasonsText}\n\`\`\``,
-        inline: false
+      const embed = {
+        title: `✅ Character Accepted: ${character.name}`,
+        color: 0x4caf50,
+        description: `Your character **${character.name}** has been accepted and is now active!`,
+        fields: [
+          {
+            name: '👤 Character Details',
+            value: `**Name:** ${character.name}\n**Race:** ${character.race}\n**Village:** ${character.homeVillage}\n**Job:** ${character.job}`,
+            inline: false
+          }
+        ],
+        footer: {
+          text: `User: ${userName} • Character ID: ${character._id}`
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      // Post to Discord
+      const discordResponse = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bot ${DISCORD_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          embeds: [embed]
+        })
       });
       
-      // Generate OC page URL
-      const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const dashboardUrl = (process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com').replace(/\/+$/, '');
-      const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
+      if (!discordResponse.ok) {
+        const errorText = await discordResponse.text();
+        logger.error('CHARACTERS', `Failed to post character status to Discord: ${discordResponse.status} - ${errorText}`);
+        return;
+      }
       
-      embed.fields.push({
-        name: '✏️ Edit & Resubmit',
-        value: `You can edit your character and resubmit it for review.\n\n🔗 **[Go to OC Page](${ocPageUrl})**`,
-        inline: false
-      });
-      
-      // Admin account mention
-      const adminMention = `<@668281042414600212> (roots.admin)`;
-      
-      embed.fields.push({
-        name: '💬 Need Help?',
-        value: `If you have any questions about this decision, please DM ${adminMention}.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
-        inline: false
-      });
+      logger.success('CHARACTERS', `Character ${status} notification posted to Discord: ${character.name}`);
     }
-    
-    // Post to Discord
-    const discordResponse = await fetch(`https://discord.com/api/v10/channels/${CHARACTER_CREATION_CHANNEL_ID}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bot ${DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        content: status === 'denied' ? `<@${character.userId}>` : undefined, // Ping user on denial
-        embeds: [embed]
-      })
-    });
-    
-    if (!discordResponse.ok) {
-      const errorText = await discordResponse.text();
-      logger.error('CHARACTERS', `Failed to post character status to Discord: ${discordResponse.status} - ${errorText}`);
-      return;
-    }
-    
-    logger.success('CHARACTERS', `Character ${status} notification posted to Discord: ${character.name}`);
   } catch (error) {
     logger.error('CHARACTERS', 'Error posting character status to Discord', error);
     // Don't throw - Discord posting failure shouldn't break the moderation flow
   }
 }
 
-// Helper function to send DM to user when character is denied
-async function sendDenialDM(character, denialReason) {
-  try {
-    const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-    
-    if (!DISCORD_TOKEN) {
-      logger.warn('CHARACTERS', 'DISCORD_TOKEN not configured, skipping DM');
-      return;
-    }
-    
-    // Admin account mention
-    const adminMention = `<@668281042414600212> (roots.admin)`;
-    
-    // Generate OC page URL
-    const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    const dashboardUrl = (process.env.DASHBOARD_URL || 'https://dashboard.tinglebot.com').replace(/\/+$/, '');
-    const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
-    
-    // Format denial reasons - make it more prominent
-    const reasonsText = denialReason.length > 1500 ? denialReason.substring(0, 1500) + '...' : denialReason;
-    
-    // Create DM embed
-    const embed = {
-      title: `⚠️ Character Needs Changes: ${character.name}`,
-      description: `Your character **${character.name}** needs changes. Please review the feedback below.`,
-      color: 0xf44336,
-      fields: [
-        {
-          name: '❌ **DENIAL REASONS**',
-          value: `\`\`\`\n${reasonsText}\n\`\`\``,
-          inline: false
-        },
-        {
-          name: '✏️ Edit & Resubmit',
-          value: `You can edit your character and resubmit it for review.\n\n🔗 **[Go to OC Page](${ocPageUrl})**`,
-          inline: false
-        },
-        {
-          name: '💬 Need Help?',
-          value: `If you have any questions about this decision, please DM ${adminMention}.\n\n⚠️ **Note:** Tinglebot cannot reply to or see your messages. Please contact the admin account if you need assistance.`,
-          inline: false
-        }
-      ],
-      timestamp: new Date().toISOString()
-    };
-    
-    // Try to create DM channel and send message
-    // First, create the DM channel
-    const createDMResponse = await fetch(`https://discord.com/api/v10/users/@me/channels`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bot ${DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        recipient_id: character.userId
-      })
-    });
-    
-    if (!createDMResponse.ok) {
-      const errorText = await createDMResponse.text();
-      // If DM fails (user has DMs disabled, blocked bot, etc.), create notification instead
-      logger.warn('CHARACTERS', `Cannot create DM channel for user ${character.userId}: ${createDMResponse.status} - ${errorText}`);
-      await createDenialNotification(character, denialReason);
-      return;
-    }
-    
-    const dmChannel = await createDMResponse.json();
-    
-    // Send message to DM channel
-    const sendMessageResponse = await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bot ${DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        embeds: [embed]
-      })
-    });
-    
-    if (!sendMessageResponse.ok) {
-      const errorText = await sendMessageResponse.text();
-      logger.warn('CHARACTERS', `Cannot send DM to user ${character.userId}: ${sendMessageResponse.status} - ${errorText}`);
-      // Fallback to notification
-      await createDenialNotification(character, denialReason);
-      return;
-    }
-    
-    logger.success('CHARACTERS', `Denial DM sent to user ${character.userId} for character ${character.name}`);
-  } catch (error) {
-    logger.error('CHARACTERS', 'Error sending denial DM', error);
-    // Fallback to notification
-    await createDenialNotification(character, denialReason).catch(err => {
-      logger.error('CHARACTERS', 'Failed to create denial notification', err);
-    });
-  }
-}
-
-// Helper function to create a notification in the database for the user
-async function createDenialNotification(character, denialReason) {
-  try {
-    await connectToTinglebot();
-    
-    const Notification = require('../../models/NotificationModel');
-    
-    // Create notification
-    const notification = new Notification({
-      userId: character.userId,
-      type: 'character_denied',
-      title: `Character Needs Changes: ${character.name}`,
-      message: denialReason,
-      characterId: character._id.toString(),
-      characterName: character.name,
-      read: false
-    });
-    
-    await notification.save();
-    logger.success('CHARACTERS', `Created denial notification for user ${character.userId}`);
-  } catch (error) {
-    logger.error('CHARACTERS', 'Error creating denial notification', error);
-    throw error;
-  }
-}
 
 // Helper function to upload character icon to Google Cloud Storage
 async function uploadCharacterIconToGCS(file) {
@@ -999,7 +501,7 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'User ID not found' });
   }
 
-  // Extract and validate form data
+  // Extract form data
   const {
     name,
     age,
@@ -1022,26 +524,6 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
     extras
   } = req.body;
 
-  // Validate required fields (appLink is now optional)
-  const missingFields = [];
-  if (!name) missingFields.push('name');
-  if (!age) missingFields.push('age');
-  if (!height) missingFields.push('height');
-  if (!hearts) missingFields.push('hearts');
-  if (!stamina) missingFields.push('stamina');
-  if (!pronouns) missingFields.push('pronouns');
-  if (!race) missingFields.push('race');
-  if (!village) missingFields.push('village');
-  if (!job) missingFields.push('job');
-  
-  if (missingFields.length > 0) {
-    return res.status(400).json({ 
-      error: `Missing required fields: ${missingFields.join(', ')}`,
-      missingFields: missingFields,
-      required: ['name', 'age', 'height', 'hearts', 'stamina', 'pronouns', 'race', 'village', 'job']
-    });
-  }
-
   // Validate icon file
   const iconFile = req.files?.icon?.[0];
   if (!iconFile) {
@@ -1054,73 +536,29 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Application art is required' });
   }
 
-  // Validate biography fields
-  if (!gender || gender.trim().length === 0) {
-    return res.status(400).json({ error: 'Gender (with pronouns) is required' });
-  }
-
-  if (!virtue || !['power', 'wisdom', 'courage', 'tba'].includes(virtue.toLowerCase())) {
-    return res.status(400).json({ error: 'Virtue must be one of: power, wisdom, courage, or TBA' });
-  }
-
-  if (!personality || personality.trim().length === 0) {
-    return res.status(400).json({ error: 'Personality description is required' });
-  }
-
-  if (!history || history.trim().length === 0) {
-    return res.status(400).json({ error: 'History description is required' });
-  }
-
-  // Validate numeric fields
-  const ageNum = parseInt(age, 10);
-  const heightNum = parseFloat(height);
-  const heartsNum = parseInt(hearts, 10);
-  const staminaNum = parseInt(stamina, 10);
-
-  if (isNaN(ageNum) || ageNum < 1) {
-    return res.status(400).json({ error: 'Age must be a positive number (minimum 1)' });
-  }
-
-  if (isNaN(heightNum) || heightNum <= 0) {
-    return res.status(400).json({ error: 'Height must be a positive number' });
-  }
-
-  if (isNaN(heartsNum) || heartsNum < 1) {
-    return res.status(400).json({ error: 'Hearts must be a positive number (minimum 1)' });
-  }
-
-  if (isNaN(staminaNum) || staminaNum < 1) {
-    return res.status(400).json({ error: 'Stamina must be a positive number (minimum 1)' });
-  }
-
-  // Validate race
-  if (!isValidRace(race)) {
-    return res.status(400).json({ error: `"${race}" is not a valid race` });
-  }
-
-  // Validate village
-  if (!isValidVillage(village)) {
-    return res.status(400).json({ error: `"${village}" is not a valid village` });
-  }
-
-  // Validate job
-  if (!isValidJob(job)) {
-    return res.status(400).json({ error: `"${job}" is not a valid job` });
-  }
-
-  // Check job/village compatibility
-  const jobVillage = isVillageExclusiveJob(job);
-  if (jobVillage && jobVillage.toLowerCase() !== village.toLowerCase()) {
-    return res.status(400).json({ 
-      error: `Job "${job}" is exclusive to ${jobVillage} village, but character is in ${village} village` 
-    });
-  }
-
-  // Check character name uniqueness
+  // Validate all character data using shared validation utility
   await connectToTinglebot();
-  const isUnique = await isUniqueCharacterName(userId, name);
-  if (!isUnique) {
-    return res.status(400).json({ error: `A character with the name "${name}" already exists` });
+  const validationResult = await validateCharacterData({
+    name,
+    age,
+    height,
+    hearts,
+    stamina,
+    pronouns,
+    race,
+    village,
+    job,
+    gender,
+    virtue,
+    personality,
+    history
+  }, userId);
+
+  if (!validationResult.valid) {
+    return res.status(400).json({ 
+      error: validationResult.errors.join('; '),
+      errors: validationResult.errors
+    });
   }
 
   // Check user's character slot availability
@@ -1152,73 +590,30 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
       return res.status(500).json({ error: 'Failed to upload application art' });
     }
 
-    // Handle starting gear if selected (before creating character)
-    let gearWeapon = null;
-    let gearShield = null;
-    let gearArmor = {
-      head: null,
-      chest: null,
-      legs: null
-    };
-    
-    if (starterWeapon) {
-      const weaponItem = await fetchItemByName(starterWeapon);
-      if (weaponItem) {
-        gearWeapon = {
-          name: weaponItem.itemName,
-          stats: { modifierHearts: weaponItem.modifierHearts || 0 },
-          type: Array.isArray(weaponItem.type) ? weaponItem.type[0] : weaponItem.type || null
-        };
-      }
-    }
-    
-    if (starterShield) {
-      const shieldItem = await fetchItemByName(starterShield);
-      if (shieldItem) {
-        gearShield = {
-          name: shieldItem.itemName,
-          stats: { modifierHearts: shieldItem.modifierHearts || 0 },
-          subtype: Array.isArray(shieldItem.subtype) ? shieldItem.subtype[0] : shieldItem.subtype || null
-        };
-      }
-    }
-    
-    if (starterArmorChest) {
-      const chestItem = await fetchItemByName(starterArmorChest);
-      if (chestItem) {
-        gearArmor.chest = {
-          name: chestItem.itemName,
-          stats: { modifierHearts: chestItem.modifierHearts || 0 }
-        };
-      }
-    }
-    
-    if (starterArmorLegs) {
-      const legsItem = await fetchItemByName(starterArmorLegs);
-      if (legsItem) {
-        gearArmor.legs = {
-          name: legsItem.itemName,
-          stats: { modifierHearts: legsItem.modifierHearts || 0 }
-        };
-      }
-    }
+    // Setup gear from starter items using shared utility
+    const gear = await setupGearFromItems({
+      starterWeapon,
+      starterShield,
+      starterArmorChest,
+      starterArmorLegs
+    });
 
     // Create character
     character = new Character({
       userId: userId,
       name: name.trim(),
-      age: ageNum,
-      height: heightNum,
-      maxHearts: heartsNum,
-      currentHearts: heartsNum,
-      maxStamina: staminaNum,
-      currentStamina: staminaNum,
+      age: validationResult.values.age,
+      height: validationResult.values.height,
+      maxHearts: validationResult.values.hearts,
+      currentHearts: validationResult.values.hearts,
+      maxStamina: validationResult.values.stamina,
+      currentStamina: validationResult.values.stamina,
       pronouns: pronouns.trim(),
       race: race.toLowerCase(),
       homeVillage: village.toLowerCase(),
       currentVillage: village.toLowerCase(),
       job: job,
-      inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(name)}`,
+      inventory: `https://tinglebot.xyz/character-inventory?character=${encodeURIComponent(name)}`,
       appLink: appLink ? appLink.trim() : '',
       icon: iconUrl,
       appArt: appArtUrl,
@@ -1226,10 +621,10 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
       spiritOrbs: 0,
       birthday: '',
       inventorySynced: false,
-      gearWeapon: gearWeapon,
-      gearShield: gearShield,
-      gearArmor: gearArmor,
-      status: null, // New characters start as DRAFT (null) - must be submitted
+      gearWeapon: gear.gearWeapon,
+      gearShield: gear.gearShield,
+      gearArmor: gear.gearArmor,
+      status: STATUS.DRAFT, // New characters start as DRAFT (null) - must be submitted
       applicationVersion: 1, // Start at version 1
       submittedAt: null, // Not submitted yet
       gender: gender.trim(),
@@ -1241,40 +636,9 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
 
     await character.save();
 
-    // Update character stats if gear was equipped
-    if (gearWeapon || gearShield || gearArmor.chest || gearArmor.legs) {
-      // Helper function to get modifierHearts from stats (handles both Map and plain object)
-      const getModifierHearts = (stats) => {
-        if (!stats) return 0;
-        // Handle Map
-        if (stats instanceof Map) {
-          return stats.get('modifierHearts') || 0;
-        }
-        // Handle plain object
-        if (typeof stats === 'object') {
-          return stats.modifierHearts || 0;
-        }
-        return 0;
-      };
-
-      // Calculate defense from armor and shield
-      let totalDefense = 0;
-      if (character.gearArmor) {
-        totalDefense += getModifierHearts(character.gearArmor.head?.stats);
-        totalDefense += getModifierHearts(character.gearArmor.chest?.stats);
-        totalDefense += getModifierHearts(character.gearArmor.legs?.stats);
-      }
-      if (character.gearShield?.stats) {
-        totalDefense += getModifierHearts(character.gearShield.stats);
-      }
-
-      // Calculate attack from weapon
-      const totalAttack = getModifierHearts(character.gearWeapon?.stats);
-
-      // Update character stats directly
-      character.defense = totalDefense;
-      character.attack = totalAttack;
-      await character.save();
+    // Update character stats if gear was equipped using shared utility
+    if (gear.gearWeapon || gear.gearShield || gear.gearArmor.chest || gear.gearArmor.legs) {
+      await updateCharacterStats(character);
     }
 
     // Create inventory collection
@@ -1308,8 +672,8 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
     // Don't post to Discord yet - wait for submission
     // postCharacterCreationToDiscord will be called when character is submitted
 
-    // Generate OC page URL slug from character name
-    const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    // Generate OC page URL slug from character name using shared utility
+    const ocPageSlug = createCharacterSlug(character.name);
     const ocPageUrl = `/ocs/${ocPageSlug}`;
 
     // Return created character
@@ -1357,16 +721,8 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   
   const userId = req.user.discordId;
   
-  // Helper function to create slug from character name
-  const createSlug = (name) => {
-    if (!name || typeof name !== 'string') return '';
-    return name
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-  };
-  
-  const normalizedSlug = nameSlug.toLowerCase();
+  // Normalize slug for comparison using shared utility
+  const normalizedSlug = normalizeSlug(nameSlug);
   
   // First, search all characters to see if the character exists
   // This helps provide better error messages
@@ -1385,7 +741,7 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
     character = allCharacters.find(char => {
       if (!char || !char.name) return false;
       try {
-        const charSlug = createSlug(char.name);
+        const charSlug = createCharacterSlug(char.name);
         return charSlug === normalizedSlug;
       } catch (error) {
         logger.warn(`[characters.js] Error creating slug for character: ${char._id}, name: ${char.name}, error: ${error.message}`);
@@ -1431,7 +787,7 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   if (!isOwner) {
     // Character exists but user doesn't own it
     // Only allow viewing if character is approved (status: 'accepted')
-    if (character.status !== 'accepted') {
+    if (!isAccepted(character.status)) {
       logger.info(`[characters.js] Blocked access to non-approved character "${character?.name || nameSlug}" by user ${requestUserId}`);
       throw new NotFoundError('Character not found or not yet approved for public viewing');
     }
@@ -1458,9 +814,8 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
 }));
 
 // ------------------- Function: editCharacter -------------------
-// Updates a character (for denied/accepted characters)
-// Allows resubmission if status is 'denied'
-router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id'), asyncHandler(async (req, res) => {
+// Updates a character (for accepted characters)
+router.put('/edit/:id', characterUploads, validateObjectId('id'), asyncHandler(async (req, res) => {
   // Check authentication
   if (!req.isAuthenticated() || !req.user) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -1468,22 +823,11 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
 
   const userId = req.user.discordId;
   const characterId = req.params.id;
-  const { resubmit } = req.body; // Flag to resubmit denied character
+  const { resubmit } = req.body; // Flag to resubmit character
+  const shouldResubmit = resubmit === true || resubmit === 'true';
 
-  // Find character and verify ownership
-  // Try both string and original type for userId (Discord IDs can be stored as strings or numbers)
-  let character = await Character.findOne({ 
-    _id: characterId, 
-    userId: String(userId) 
-  });
-  
-  // If not found, try with the userId as-is in case it's already the right type
-  if (!character) {
-    character = await Character.findOne({ 
-      _id: characterId, 
-      userId: userId 
-    });
-  }
+  // Find character and verify ownership using shared helper
+  const character = await findCharacterWithOwnership(characterId, userId);
   
   if (!character) {
     return res.status(404).json({ error: 'Character not found or access denied' });
@@ -1493,12 +837,11 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   const { isFieldEditable } = require('../../utils/fieldEditability');
 
   // Check if character can be edited based on status
-  if (character.status === 'pending') {
+  if (isPending(character.status)) {
     return res.status(400).json({ error: 'Character is pending moderation and cannot be edited. Please wait for moderation to complete.' });
   }
 
   // Don't auto-resubmit on edit - resubmit should be explicit via resubmit endpoint
-  // But allow editing of denied characters
 
   // Extract form data
   const {
@@ -1525,7 +868,7 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   } = req.body;
 
   // Check field editability for each field being updated
-  const status = character.status; // null=DRAFT, 'pending', 'denied', 'accepted'
+  const status = character.status; // null/undefined=DRAFT, 'pending'=PENDING, 'accepted'=ACCEPTED, 'needs_changes'=NEEDS_CHANGES
   const lockedFields = [];
 
   // Check each field
@@ -1544,6 +887,7 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   if (job !== undefined && job !== character.job && !isFieldEditable('job', status)) {
     lockedFields.push('job');
   }
+  // Hearts and stamina can NEVER be edited by users (only mods/admins)
   if (hearts !== undefined && !isFieldEditable('maxHearts', status)) {
     lockedFields.push('hearts');
   }
@@ -1571,7 +915,7 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
   }
 
   // If status is 'accepted', only allow editing approved-editable fields
-  if (character.status === 'accepted') {
+  if (isAccepted(character.status)) {
     // Only update allowed profile fields
     if (height !== undefined && height !== '' && isFieldEditable('height', status)) {
       character.height = parseFloat(height) || null;
@@ -1600,10 +944,19 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
     if (birthday !== undefined && isFieldEditable('birthday', status)) {
       character.birthday = birthday.trim();
     }
-    if (req.file && isFieldEditable('icon', status)) {
-      const iconUrl = await uploadCharacterIconToGCS(req.file);
+    const iconFile = req.files?.icon?.[0];
+    if (iconFile && isFieldEditable('icon', status)) {
+      const iconUrl = await uploadCharacterIconToGCS(iconFile);
       if (iconUrl) {
         character.icon = iconUrl;
+      }
+    }
+    
+    const appArtFile = req.files?.appArt?.[0];
+    if (appArtFile && isFieldEditable('appArt', status)) {
+      const appArtUrl = await uploadCharacterAppArtToGCS(appArtFile);
+      if (appArtUrl) {
+        character.appArt = appArtUrl;
       }
     }
     
@@ -1615,200 +968,169 @@ router.put('/edit/:id', characterIconUpload.single('icon'), validateObjectId('id
     });
   }
 
-  // For denied characters (needs changes) or DRAFT, allow full editing except locked fields
-  // Age cannot be edited - reject if age is being changed
-  if (age !== undefined && age !== '' && parseInt(age, 10) !== character.age) {
-    return res.status(400).json({ error: 'Age cannot be edited' });
-  }
-  
-  // Validate required fields (age is still required but must match current value)
-  if (!name || !age || !height || !hearts || !stamina || !pronouns || !race || !village || !job || !appLink) {
-    return res.status(400).json({ 
-      error: 'Missing required fields',
-      required: ['name', 'age', 'height', 'hearts', 'stamina', 'pronouns', 'race', 'village', 'job', 'appLink']
-    });
-  }
-
-  // Validate numeric fields
-  const ageNum = parseInt(age, 10);
-  const heightNum = parseFloat(height);
-  const heartsNum = parseInt(hearts, 10);
-  const staminaNum = parseInt(stamina, 10);
-
-  // Age validation - must match current age (already checked above, but validate format)
-  if (isNaN(ageNum) || ageNum < 1) {
-    return res.status(400).json({ error: 'Age must be a positive number (minimum 1)' });
-  }
-  
-  // Ensure age hasn't changed (double check)
-  if (ageNum !== character.age) {
-    return res.status(400).json({ error: 'Age cannot be edited' });
-  }
-
-  if (isNaN(heightNum) || heightNum <= 0) {
-    return res.status(400).json({ error: 'Height must be a positive number' });
-  }
-
-  if (isNaN(heartsNum) || heartsNum < 1) {
-    return res.status(400).json({ error: 'Hearts must be a positive number (minimum 1)' });
-  }
-
-  if (isNaN(staminaNum) || staminaNum < 1) {
-    return res.status(400).json({ error: 'Stamina must be a positive number (minimum 1)' });
-  }
-
-  // Validate race
-  if (!isValidRace(race)) {
-    return res.status(400).json({ error: `"${race}" is not a valid race` });
-  }
-
-  // Validate village
-  if (!isValidVillage(village)) {
-    return res.status(400).json({ error: `"${village}" is not a valid village` });
-  }
-
-  // Validate job
-  if (!isValidJob(job)) {
-    return res.status(400).json({ error: `"${job}" is not a valid job` });
-  }
-
-  // Check job/village compatibility
-  const jobVillage = isVillageExclusiveJob(job);
-  if (jobVillage && jobVillage.toLowerCase() !== village.toLowerCase()) {
-    return res.status(400).json({ 
-      error: `Job "${job}" is exclusive to ${jobVillage} village, but character is in ${village} village` 
-    });
-  }
-
-  // Check character name uniqueness (only if name changed)
-  if (name.trim() !== character.name) {
-    await connectToTinglebot();
-    const isUnique = await isUniqueCharacterName(userId, name);
-    if (!isUnique) {
-      return res.status(400).json({ error: `A character with the name "${name}" already exists` });
+  // For DRAFT status (null/undefined) or NEEDS_CHANGES status, allow partial updates - only validate and update fields that are provided
+  // Validate and update age if provided
+  if (age !== undefined && age !== '') {
+    const ageResult = validateAge(age);
+    if (!ageResult.valid) {
+      return res.status(400).json({ error: ageResult.error });
     }
+    character.age = ageResult.value;
+  }
+
+  // Validate and update height if provided
+  if (height !== undefined && height !== '') {
+    const heightResult = validateHeight(height);
+    if (!heightResult.valid) {
+      return res.status(400).json({ error: heightResult.error });
+    }
+    character.height = heightResult.value;
+  }
+
+  // Validate and update hearts if provided
+  if (hearts !== undefined && hearts !== '') {
+    const heartsResult = validateHearts(hearts);
+    if (!heartsResult.valid) {
+      return res.status(400).json({ error: heartsResult.error });
+    }
+    character.maxHearts = heartsResult.value;
+    character.currentHearts = heartsResult.value;
+  }
+
+  // Validate and update stamina if provided
+  if (stamina !== undefined && stamina !== '') {
+    const staminaResult = validateStamina(stamina);
+    if (!staminaResult.valid) {
+      return res.status(400).json({ error: staminaResult.error });
+    }
+    character.maxStamina = staminaResult.value;
+    character.currentStamina = staminaResult.value;
+  }
+
+  // Validate and update race if provided
+  if (race !== undefined && race !== '') {
+    const raceResult = validateRace(race);
+    if (!raceResult.valid) {
+      return res.status(400).json({ error: raceResult.error });
+    }
+    character.race = race.toLowerCase();
+  }
+
+  // Validate and update village if provided
+  if (village !== undefined && village !== '') {
+    const villageResult = validateVillage(village);
+    if (!villageResult.valid) {
+      return res.status(400).json({ error: villageResult.error });
+    }
+    character.homeVillage = village.toLowerCase();
+    character.currentVillage = village.toLowerCase();
+  }
+
+  // Validate and update job if provided
+  if (job !== undefined && job !== '') {
+    const jobResult = validateJob(job);
+    if (!jobResult.valid) {
+      return res.status(400).json({ error: jobResult.error });
+    }
+    
+    // Check job/village compatibility (use current village if village not being updated)
+    const villageToCheck = village !== undefined ? village : character.homeVillage;
+    const compatibilityResult = validateJobVillageCompatibility(job, villageToCheck);
+    if (!compatibilityResult.valid) {
+      return res.status(400).json({ error: compatibilityResult.error });
+    }
+    character.job = job;
+  }
+
+  // Name can NEVER be edited by users (only mods/admins) - this should have been caught by the earlier check, but adding guard here too
+  if (name !== undefined && name.trim() !== '' && name.trim() !== character.name) {
+    return res.status(400).json({ error: 'Name cannot be edited' });
+  }
+
+  // Update pronouns if provided
+  if (pronouns !== undefined) {
+    character.pronouns = pronouns.trim();
+  }
+
+  // Update appLink if provided
+  if (appLink !== undefined) {
+    character.appLink = appLink ? appLink.trim() : '';
   }
 
   // Handle icon upload
-  if (req.file) {
-    const iconUrl = await uploadCharacterIconToGCS(req.file);
+  const iconFile = req.files?.icon?.[0];
+  if (iconFile && isFieldEditable('icon', status)) {
+    const iconUrl = await uploadCharacterIconToGCS(iconFile);
     if (iconUrl) {
       character.icon = iconUrl;
     }
   }
-
-  // Handle starting gear updates
-  let gearWeapon = null;
-  let gearShield = null;
-  let gearArmor = {
-    head: null,
-    chest: null,
-    legs: null
-  };
   
-  if (starterWeapon) {
-    const weaponItem = await fetchItemByName(starterWeapon);
-    if (weaponItem) {
-      gearWeapon = {
-        name: weaponItem.itemName,
-        stats: { modifierHearts: weaponItem.modifierHearts || 0 },
-        type: Array.isArray(weaponItem.type) ? weaponItem.type[0] : weaponItem.type || null
-      };
-    }
-  }
-  
-  if (starterShield) {
-    const shieldItem = await fetchItemByName(starterShield);
-    if (shieldItem) {
-      gearShield = {
-        name: shieldItem.itemName,
-        stats: { modifierHearts: shieldItem.modifierHearts || 0 },
-        subtype: Array.isArray(shieldItem.subtype) ? shieldItem.subtype[0] : shieldItem.subtype || null
-      };
-    }
-  }
-  
-  if (starterArmorChest) {
-    const chestItem = await fetchItemByName(starterArmorChest);
-    if (chestItem) {
-      gearArmor.chest = {
-        name: chestItem.itemName,
-        stats: { modifierHearts: chestItem.modifierHearts || 0 }
-      };
-    }
-  }
-  
-  if (starterArmorLegs) {
-    const legsItem = await fetchItemByName(starterArmorLegs);
-    if (legsItem) {
-      gearArmor.legs = {
-        name: legsItem.itemName,
-        stats: { modifierHearts: legsItem.modifierHearts || 0 }
-      };
+  // Handle appArt upload
+  const appArtFile = req.files?.appArt?.[0];
+  if (appArtFile && isFieldEditable('appArt', status)) {
+    const appArtUrl = await uploadCharacterAppArtToGCS(appArtFile);
+    if (appArtUrl) {
+      character.appArt = appArtUrl;
     }
   }
 
-  // Update character fields
-  character.name = name.trim();
-  character.age = ageNum;
-  character.height = heightNum;
-  character.maxHearts = heartsNum;
-  character.currentHearts = heartsNum;
-  character.maxStamina = staminaNum;
-  character.currentStamina = staminaNum;
-  character.pronouns = pronouns.trim();
-  character.race = race.toLowerCase();
-  character.homeVillage = village.toLowerCase();
-  character.currentVillage = village.toLowerCase();
-  character.job = job;
-  character.appLink = appLink.trim();
-  character.inventory = `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(character.name)}`;
-  character.gearWeapon = gearWeapon;
-  character.gearShield = gearShield;
-  character.gearArmor = gearArmor;
+  // Handle starting gear updates if provided using shared utility
+  const gearWasUpdated = starterWeapon !== undefined || starterShield !== undefined || 
+                         starterArmorChest !== undefined || starterArmorLegs !== undefined;
+  
+  if (gearWasUpdated) {
+    const updatedGear = await updateGearFromItems({
+      gearWeapon: character.gearWeapon,
+      gearShield: character.gearShield,
+      gearArmor: character.gearArmor
+    }, {
+      starterWeapon,
+      starterShield,
+      starterArmorChest,
+      starterArmorLegs
+    });
+    
+    character.gearWeapon = updatedGear.gearWeapon;
+    character.gearShield = updatedGear.gearShield;
+    character.gearArmor = updatedGear.gearArmor;
+  }
+  
+  // Update biography fields if provided
+  if (personality !== undefined) {
+    character.personality = personality.trim();
+  }
+  if (history !== undefined) {
+    character.history = history.trim();
+  }
+  if (extras !== undefined) {
+    character.extras = extras ? extras.trim() : '';
+  }
+  if (gender !== undefined) {
+    character.gender = gender.trim();
+  }
+  if (virtue !== undefined) {
+    character.virtue = virtue.toLowerCase();
+  }
 
-  // Update character stats if gear was equipped
-  if (gearWeapon || gearShield || gearArmor.chest || gearArmor.legs) {
-    const getModifierHearts = (stats) => {
-      if (!stats) return 0;
-      if (stats instanceof Map) {
-        return stats.get('modifierHearts') || 0;
-      }
-      if (typeof stats === 'object') {
-        return stats.modifierHearts || 0;
-      }
-      return 0;
-    };
-
-    let totalDefense = 0;
-    if (character.gearArmor) {
-      totalDefense += getModifierHearts(character.gearArmor.head?.stats);
-      totalDefense += getModifierHearts(character.gearArmor.chest?.stats);
-      totalDefense += getModifierHearts(character.gearArmor.legs?.stats);
-    }
-    if (character.gearShield?.stats) {
-      totalDefense += getModifierHearts(character.gearShield.stats);
-    }
-
-    const totalAttack = getModifierHearts(character.gearWeapon?.stats);
-
-    character.defense = totalDefense;
-    character.attack = totalAttack;
+  // Update character stats if gear was updated using shared utility
+  if (gearWasUpdated) {
+    await updateCharacterStats(character);
   }
 
   await character.save();
 
   logger.info('CHARACTERS', `Character updated: ${character.name} by user ${userId}${shouldResubmit ? ' (resubmitted)' : ''}`);
 
-  // If resubmitted (either explicitly or automatically for denied characters), post to Discord
+  // If resubmitted, post to Discord
   if (shouldResubmit) {
     postCharacterCreationToDiscord(character, await User.findOne({ discordId: userId }), req.user, req).catch(err => {
       logger.error('SERVER', 'Failed to post character resubmission to Discord', err);
     });
   }
 
-  // Generate OC page URL slug
-  const ocPageSlug = character.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  // Generate OC page URL slug using shared utility
+  const ocPageSlug = createCharacterSlug(character.name);
   const ocPageUrl = `/ocs/${ocPageSlug}`;
 
   res.json({
@@ -1879,13 +1201,18 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
   
   await connectToTinglebot();
   
-  // Get all pending characters (both regular and mod)
-  const pendingCharacters = await Character.find({ status: 'pending' })
-    .select('name userId age height pronouns race homeVillage job icon appLink createdAt applicationVersion discordMessageId discordThreadId submittedAt')
+  // Get all pending and needs_changes characters (both regular and mod)
+  // needs_changes characters should still show so mods can add more feedback
+  const pendingCharacters = await Character.find({ 
+    status: { $in: [STATUS.PENDING, STATUS.NEEDS_CHANGES] } 
+  })
+    .select('name userId age height pronouns race homeVillage job icon appLink createdAt applicationVersion discordMessageId discordThreadId submittedAt status')
     .lean();
   
-  const pendingModCharacters = await ModCharacter.find({ status: 'pending' })
-    .select('name userId age height pronouns race homeVillage job icon appLink createdAt modTitle modType applicationVersion discordMessageId discordThreadId submittedAt')
+  const pendingModCharacters = await ModCharacter.find({ 
+    status: { $in: [STATUS.PENDING, STATUS.NEEDS_CHANGES] } 
+  })
+    .select('name userId age height pronouns race homeVillage job icon appLink createdAt modTitle modType applicationVersion discordMessageId discordThreadId submittedAt status')
     .lean();
   
   // Get moderation votes for each character
@@ -1898,10 +1225,24 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
     characterId: { $in: allCharacterIds }
   }).lean();
   
-  // Group votes by character ID
+  // Create a map of character IDs to their current applicationVersion for quick lookup
+  const characterVersionMap = {};
+  [...pendingCharacters, ...pendingModCharacters].forEach(char => {
+    const charId = char._id.toString();
+    characterVersionMap[charId] = char.applicationVersion || 1;
+  });
+  
+  // Group votes by character ID and application version
+  // Only include votes that match the character's current applicationVersion
   const votesByCharacter = {};
   moderationVotes.forEach(vote => {
     const charId = vote.characterId.toString();
+    const voteVersion = vote.applicationVersion || 1;
+    const currentVersion = characterVersionMap[charId];
+    
+    // Skip if character not found or vote is for a different version
+    if (currentVersion === undefined || voteVersion !== currentVersion) return;
+    
     if (!votesByCharacter[charId]) {
       votesByCharacter[charId] = { approves: [], needsChanges: [] };
     }
@@ -1912,7 +1253,7 @@ router.get('/moderation/pending', asyncHandler(async (req, res) => {
         note: vote.note,
         createdAt: vote.createdAt
       });
-    } else if (vote.vote === 'needs_changes') {
+    } else if (vote.vote === STATUS.NEEDS_CHANGES) {
       votesByCharacter[charId].needsChanges.push({
         modId: vote.modId,
         modUsername: vote.modUsername,
@@ -1962,12 +1303,12 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
   const { characterId, vote, reason, note, isModCharacter } = req.body;
   
   // Support 'needs_changes' in addition to 'approve'
-  if (!characterId || !vote || !['approve', 'needs_changes'].includes(vote)) {
+  if (!characterId || !vote || !['approve', STATUS.NEEDS_CHANGES].includes(vote)) {
     return res.status(400).json({ error: 'Invalid request. characterId and vote (approve/needs_changes) are required.' });
   }
   
   // Reason required for needs_changes
-  if (vote === 'needs_changes' && !reason && !note) {
+  if (vote === STATUS.NEEDS_CHANGES && !reason && !note) {
     return res.status(400).json({ error: 'Reason or note is required for needs_changes votes.' });
   }
   
@@ -1981,7 +1322,8 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Character not found' });
   }
   
-  if (character.status !== 'pending') {
+  // Allow voting on pending or needs_changes status (mods can continue voting on needs_changes)
+  if (!isPending(character.status) && !isNeedsChanges(character.status)) {
     return res.status(400).json({ error: 'Character is not pending moderation' });
   }
   
@@ -2013,6 +1355,54 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
       feedback
     );
     
+    // If this is a needs_changes vote and character is still pending, immediately change status
+    // This triggers on the FIRST needs_changes vote (only one vote needed)
+    if (vote === STATUS.NEEDS_CHANGES && isPending(character.status)) {
+      character.status = STATUS.NEEDS_CHANGES;
+      await character.save();
+      
+      // Send DM and dashboard notification (sendOCDecisionNotification creates both)
+      await notificationService.sendOCDecisionNotification(
+        character.userId,
+        STATUS.NEEDS_CHANGES,
+        character.toObject(),
+        feedback
+      ).catch(err => {
+        logger.error('CHARACTERS', 'Failed to send needs_changes notification', err);
+      });
+      
+      // Post to Discord channel 641858948802150400
+      const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+      if (DISCORD_TOKEN) {
+        const dashboardUrl = (process.env.DASHBOARD_URL || 'https://tinglebot.xyz').replace(/\/+$/, '');
+        const notificationsUrl = `${dashboardUrl}/notifications`;
+        
+        const embed = {
+          title: `⚠️ OC Decision Update`,
+          color: 0xFFA500, // Orange
+          description: `There has been a decision made on your OC. Go to [notifications on dashboard](${notificationsUrl}) or see DMs for more info.`,
+          timestamp: new Date().toISOString()
+        };
+        
+        try {
+          await fetch(`https://discord.com/api/v10/channels/641858948802150400/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bot ${DISCORD_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              content: `<@${character.userId}>`,
+              embeds: [embed]
+            })
+          });
+          logger.success('CHARACTERS', `Needs changes notification posted to Discord channel for ${character.name}`);
+        } catch (discordError) {
+          logger.error('CHARACTERS', 'Failed to post needs_changes to Discord channel', discordError);
+        }
+      }
+    }
+    
     // Log vote (or vote change)
     if (existingVote && existingVote.vote !== vote) {
       await auditService.logVoteChange(
@@ -2042,128 +1432,92 @@ router.post('/moderation/vote', asyncHandler(async (req, res) => {
       });
     }
     
-    // Check if decision has been reached
-    const decision = await ocApplicationService.checkDecision(characterId);
-    
-    if (decision) {
-      if (decision.decision === 'approved') {
-        // Process approval
-        await ocApplicationService.processApproval(characterId);
-        
-        // Log decision
-        await auditService.logDecision(
-          characterId,
-          applicationVersion,
-          'approved',
-          modId,
-          { modUsername, voteCounts: voteResult.counts }
-        );
-        
-        // Refresh character
-        const refreshedCharacter = await CharacterModel.findById(characterId);
-        
-        // Assign Discord roles
-        try {
-          await assignCharacterRoles(refreshedCharacter);
-        } catch (err) {
-          logger.error('CHARACTERS', 'Failed to assign character roles', err);
-          // Log role assignment failure to mod channel if configured
-          const LOGGING_CHANNEL_ID = process.env.LOGGING_CHANNEL_ID;
-          if (LOGGING_CHANNEL_ID && process.env.DISCORD_TOKEN) {
-            const failedRoles = err.message || 'Unknown error';
-            await fetch(`https://discord.com/api/v10/channels/${LOGGING_CHANNEL_ID}/messages`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                content: `⚠️ **Role Assignment Failed**\n\nUser: <@${refreshedCharacter.userId}>\nCharacter: ${refreshedCharacter.name}\nOC Link: ${process.env.DASHBOARD_URL || 'https://tinglebot.xyz'}/ocs/${refreshedCharacter.publicSlug || refreshedCharacter.name.toLowerCase().replace(/\s+/g, '-')}\n\n**Error:** ${failedRoles}\n\nPlease assign roles manually.`
-              })
-            }).catch(() => {});
+    // Check if decision has been reached (only for pending characters)
+    if (isPending(character.status)) {
+      const decision = await ocApplicationService.checkDecision(characterId);
+      
+      if (decision) {
+        if (decision.decision === 'approved') {
+          // Process approval
+          await ocApplicationService.processApproval(characterId);
+          
+          // Log decision
+          await auditService.logDecision(
+            characterId,
+            applicationVersion,
+            'approved',
+            modId,
+            { modUsername, voteCounts: voteResult.counts }
+          );
+          
+          // Refresh character
+          const refreshedCharacter = await CharacterModel.findById(characterId);
+          
+          // Assign Discord roles
+          try {
+            await assignCharacterRoles(refreshedCharacter);
+          } catch (err) {
+            logger.error('CHARACTERS', 'Failed to assign character roles', err);
+            // Log role assignment failure to mod channel if configured
+            const LOGGING_CHANNEL_ID = process.env.LOGGING_CHANNEL_ID;
+            if (LOGGING_CHANNEL_ID && process.env.DISCORD_TOKEN) {
+              const failedRoles = err.message || 'Unknown error';
+              await fetch(`https://discord.com/api/v10/channels/${LOGGING_CHANNEL_ID}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  content: `⚠️ **Role Assignment Failed**\n\nUser: <@${refreshedCharacter.userId}>\nCharacter: ${refreshedCharacter.name}\nOC Link: ${process.env.DASHBOARD_URL || 'https://tinglebot.xyz'}/ocs/${refreshedCharacter.publicSlug || refreshedCharacter.name.toLowerCase().replace(/\s+/g, '-')}\n\n**Error:** ${failedRoles}\n\nPlease assign roles manually.`
+                })
+              }).catch(() => {});
+            }
           }
+          
+          // Send notification via notificationService
+          await notificationService.sendOCDecisionNotification(
+            refreshedCharacter.userId,
+            'approved',
+            refreshedCharacter.toObject(),
+            null
+          ).catch(err => {
+            logger.error('CHARACTERS', 'Failed to send approval notification', err);
+          });
+          
+          // Also post to Discord channel
+          postCharacterStatusToDiscord(refreshedCharacter, STATUS.ACCEPTED, isModCharacter).catch(err => {
+            logger.error('CHARACTERS', 'Failed to post character acceptance to Discord', err);
+          });
+          
+          return res.json({
+            success: true,
+            message: 'Character approved',
+            character: refreshedCharacter.toObject(),
+            voteCounts: voteResult.counts
+          });
         }
-        
-        // Send notification via notificationService
-        await notificationService.sendOCDecisionNotification(
-          refreshedCharacter.userId,
-          'approved',
-          refreshedCharacter.toObject(),
-          null
-        ).catch(err => {
-          logger.error('CHARACTERS', 'Failed to send approval notification', err);
-        });
-        
-        // Also post to Discord channel
-        postCharacterStatusToDiscord(refreshedCharacter, 'accepted', null, isModCharacter).catch(err => {
-          logger.error('CHARACTERS', 'Failed to post character acceptance to Discord', err);
-        });
-        
-        return res.json({
-          success: true,
-          message: 'Character approved',
-          character: refreshedCharacter.toObject(),
-          voteCounts: voteResult.counts
-        });
-      } else if (decision.decision === 'needs_changes') {
-        // Process needs changes (fast fail)
-        const feedbackText = feedback || 'Changes requested by moderator';
-        await ocApplicationService.processNeedsChanges(characterId, feedbackText);
-        
-        // Log decision
-        await auditService.logDecision(
-          characterId,
-          applicationVersion,
-          'needs_changes',
-          modId,
-          { modUsername, feedback: feedbackText }
-        );
-        
-        // Log feedback sent
-        await auditService.logFeedbackSent(
-          characterId,
-          applicationVersion,
-          modId,
-          feedbackText
-        );
-        
-        // Refresh character
-        const refreshedCharacter = await CharacterModel.findById(characterId);
-        
-        // Send notification via notificationService
-        await notificationService.sendOCDecisionNotification(
-          refreshedCharacter.userId,
-          'needs_changes',
-          refreshedCharacter.toObject(),
-          feedbackText
-        ).catch(err => {
-          logger.error('CHARACTERS', 'Failed to send needs changes notification', err);
-        });
-        
-        // Also post to Discord channel
-        postCharacterStatusToDiscord(refreshedCharacter, 'denied', feedbackText, isModCharacter).catch(err => {
-          logger.error('CHARACTERS', 'Failed to post character needs changes to Discord', err);
-        });
-        
-        return res.json({
-          success: true,
-          message: 'Character marked as needs changes',
-          character: refreshedCharacter.toObject(),
-          voteCounts: voteResult.counts,
-          feedback: feedbackText
-        });
       }
     }
     
-    // No decision yet - return vote counts
+    // Refresh character to get updated status
+    const refreshedCharacter = await CharacterModel.findById(characterId);
+    
+    // Return vote counts and status
     const { APPROVAL_THRESHOLD } = ocApplicationService;
+    let responseMessage = 'Vote recorded';
+    
+    if (vote === STATUS.NEEDS_CHANGES && isNeedsChanges(refreshedCharacter.status)) {
+      responseMessage = 'Character marked as needs changes. DM sent and notification posted.';
+    }
+    
     return res.json({
       success: true,
-      message: 'Vote recorded',
+      message: responseMessage,
       voteCounts: voteResult.counts,
+      characterStatus: refreshedCharacter.status,
       remaining: {
-        approvesNeeded: APPROVAL_THRESHOLD - voteResult.counts.approves,
-        needsChangesNeeded: 0 // Fast fail - already checked above
+        approvesNeeded: APPROVAL_THRESHOLD - voteResult.counts.approves
       }
     });
   } catch (error) {
@@ -2186,25 +1540,18 @@ router.post('/:id/submit', validateObjectId('id'), asyncHandler(async (req, res)
   const userId = req.user.discordId;
   const characterId = req.params.id;
 
-  // Find character and verify ownership
-  let character = await Character.findOne({ 
-    _id: characterId, 
-    userId: String(userId) 
-  });
-  
-  if (!character) {
-    character = await Character.findOne({ 
-      _id: characterId, 
-      userId: userId 
-    });
-  }
+  // Find character and verify ownership using shared helper
+  let character = await findCharacterWithOwnership(characterId, userId);
   
   if (!character) {
     return res.status(404).json({ error: 'Character not found or access denied' });
   }
 
-  // Check if character is in DRAFT state
-  if (character.status !== null && character.status !== undefined) {
+  // Check if character is in DRAFT or NEEDS_CHANGES state (can submit/resubmit from either)
+  const isResubmission = isNeedsChanges(character.status);
+  
+  const { canSubmit } = require('../../utils/statusConstants');
+  if (!canSubmit(character.status)) {
     return res.status(400).json({ 
       error: `Character cannot be submitted. Current status: ${character.status || 'DRAFT'}` 
     });
@@ -2213,6 +1560,34 @@ router.post('/:id/submit', validateObjectId('id'), asyncHandler(async (req, res)
     try {
     const ocApplicationService = require('../../services/ocApplicationService');
     const auditService = require('../../services/auditService');
+    
+    // If resubmitting from needs_changes, clear all votes/comments and increment version
+    if (isResubmission) {
+      const currentVersion = character.applicationVersion || 1;
+      const newVersion = currentVersion + 1;
+      
+      // Delete ALL moderation votes/comments for this character (regardless of version)
+      // This ensures a clean slate for the new application version
+      const deleteResult = await CharacterModeration.deleteMany({ characterId: characterId });
+      
+      logger.info('CHARACTERS', `Clearing votes/comments for ${character.name} resubmission (v${currentVersion} → v${newVersion}). Deleted ${deleteResult.deletedCount} vote(s)`);
+      
+      // Clear application feedback
+      character.applicationFeedback = [];
+      
+      // Increment application version (set before submitCharacter so it's preserved)
+      character.applicationVersion = newVersion;
+      await character.save(); // Save version increment
+      
+      // Verify deletion worked by checking if any votes remain
+      const remainingVotes = await CharacterModeration.countDocuments({ characterId: characterId });
+      if (remainingVotes > 0) {
+        logger.warn('CHARACTERS', `Warning: ${remainingVotes} vote(s) still exist for ${character.name} after deletion attempt. Attempting force delete.`);
+        // Force delete any remaining votes
+        await CharacterModeration.deleteMany({ characterId: characterId });
+      }
+    }
+    
     await ocApplicationService.submitCharacter(characterId);
 
     // Refresh character
@@ -2258,88 +1633,6 @@ router.post('/:id/submit', validateObjectId('id'), asyncHandler(async (req, res)
   }
 }));
 
-// ------------------- Function: resubmitCharacter -------------------
-// Resubmit character after needs changes (increment version, reset votes)
-router.post('/:id/resubmit', validateObjectId('id'), asyncHandler(async (req, res) => {
-  // Check authentication
-  if (!req.isAuthenticated() || !req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const userId = req.user.discordId;
-  const characterId = req.params.id;
-
-  // Find character and verify ownership
-  let character = await Character.findOne({ 
-    _id: characterId, 
-    userId: String(userId) 
-  });
-  
-  if (!character) {
-    character = await Character.findOne({ 
-      _id: characterId, 
-      userId: userId 
-    });
-  }
-  
-  if (!character) {
-    return res.status(404).json({ error: 'Character not found or access denied' });
-  }
-
-  // Check if character is in NEEDS_CHANGES state (denied)
-  if (character.status !== 'denied') {
-    return res.status(400).json({ 
-      error: `Character cannot be resubmitted. Current status: ${character.status || 'DRAFT'}` 
-    });
-  }
-
-  try {
-    const ocApplicationService = require('../../services/ocApplicationService');
-    const auditService = require('../../services/auditService');
-    
-    const oldVersion = character.applicationVersion || 1;
-    await ocApplicationService.resubmitCharacter(characterId);
-
-    // Refresh character
-    character = await Character.findById(characterId);
-    
-    // Log resubmission
-    await auditService.logResubmission(
-      characterId,
-      oldVersion,
-      character.applicationVersion,
-      userId
-    );
-
-    // Post update to Discord thread if thread exists
-    if (character.discordThreadId) {
-      const discordPostingService = require('../../services/discordPostingService');
-      discordPostingService.postResubmissionUpdate(character).catch(err => {
-        logger.error('CHARACTERS', 'Failed to post resubmission update to Discord', err);
-      });
-    } else {
-      // Post new submission to Discord
-      const user = await User.findOne({ discordId: userId });
-      postCharacterCreationToDiscord(character, user, req.user, req).catch(err => {
-        logger.error('SERVER', 'Failed to post character resubmission to Discord', err);
-      });
-    }
-
-    logger.info('CHARACTERS', `Character ${character.name} resubmitted (v${character.applicationVersion}) by user ${userId}`);
-
-    res.json({
-      success: true,
-      message: `Character resubmitted successfully (v${character.applicationVersion})`,
-      character: character.toObject()
-    });
-  } catch (error) {
-    logger.error('CHARACTERS', 'Error resubmitting character', error);
-    res.status(500).json({ 
-      error: 'An error occurred while resubmitting your character',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-}));
 
 // ------------------- Function: getApplicationStatus -------------------
 // Get current application status for a character
@@ -2352,18 +1645,8 @@ router.get('/:id/application', validateObjectId('id'), asyncHandler(async (req, 
   const userId = req.user.discordId;
   const characterId = req.params.id;
 
-  // Find character
-  let character = await Character.findOne({ 
-    _id: characterId, 
-    userId: String(userId) 
-  });
-  
-  if (!character) {
-    character = await Character.findOne({ 
-      _id: characterId, 
-      userId: userId 
-    });
-  }
+  // Find character using shared helper
+  const character = await findCharacterWithOwnership(characterId, userId);
   
   if (!character) {
     return res.status(404).json({ error: 'Character not found or access denied' });
@@ -2390,7 +1673,7 @@ router.get('/:id/application', validateObjectId('id'), asyncHandler(async (req, 
   }).sort({ createdAt: -1 }).lean();
 
   res.json({
-    status: character.status, // null=DRAFT, 'pending'=PENDING, 'denied'=NEEDS_CHANGES, 'accepted'=APPROVED
+    status: character.status, // null/undefined=DRAFT, 'pending'=PENDING, 'accepted'=ACCEPTED, 'needs_changes'=NEEDS_CHANGES
     applicationVersion: character.applicationVersion,
     submittedAt: character.submittedAt,
     decidedAt: character.decidedAt,

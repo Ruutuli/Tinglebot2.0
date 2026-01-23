@@ -30,7 +30,7 @@ function initializeNotificationSystem() {
     <div class="notification-header">
       <h3>Notifications</h3>
       <div>
-        <a href="/notifications.html" class="notification-view-all" style="margin-right: 0.5rem; color: var(--text-secondary); text-decoration: none; font-size: 0.85rem;" onclick="event.stopPropagation();">View All</a>
+        <a href="/notifications" class="notification-view-all" style="margin-right: 0.5rem; color: var(--text-secondary); text-decoration: none; font-size: 0.85rem;" onclick="event.stopPropagation();">View All</a>
         <button class="notification-clear" onclick="clearAllNotifications()">Clear All</button>
       </div>
     </div>
@@ -169,7 +169,7 @@ function renderNotifications() {
     const viewAll = document.createElement('div');
     viewAll.className = 'notification-view-all-link';
     viewAll.style.cssText = 'padding: 0.5rem; text-align: center; border-top: 1px solid rgba(255,255,255,0.1);';
-    viewAll.innerHTML = `<a href="/notifications.html" style="color: var(--primary-color); text-decoration: none;">View all ${notifications.length} notifications</a>`;
+    viewAll.innerHTML = `<a href="/notifications" style="color: var(--primary-color); text-decoration: none;">View all ${notifications.length} notifications</a>`;
     list.appendChild(viewAll);
   }
 }
@@ -182,7 +182,6 @@ function getNotificationIcon(type) {
     'oc_approved': 'fa-check-circle',
     'oc_needs_changes': 'fa-exclamation-triangle',
     'oc_resubmitted': 'fa-redo',
-    'character_denied': 'fa-times-circle',
     'character_accepted': 'fa-check-circle',
     'system': 'fa-info-circle'
   };

@@ -255,7 +255,7 @@ function renderCharacterCard(char) {
     : '/images/ankleicon.png';
   
   const characterNameEscaped = escapeHtml(char.characterName || 'Unknown');
-  const fullInventoryUrl = `/character-inventory.html?character=${encodeURIComponent(char.characterName)}`;
+  const fullInventoryUrl = `/character-inventory?character=${encodeURIComponent(char.characterName)}`;
   const hasCachedItems = characterItemsCache.has(char.characterName);
   const cachedItems = hasCachedItems ? characterItemsCache.get(char.characterName) : [];
 

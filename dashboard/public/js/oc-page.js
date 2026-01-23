@@ -16,7 +16,7 @@ async function handleSubmitCharacter() {
     return;
   }
   
-  if (character.status !== null && character.status !== undefined) {
+  if (!isDraft(character.status)) {
     showError('Character is already submitted or cannot be submitted');
     return;
   }
@@ -65,8 +65,9 @@ async function handleResubmitCharacter() {
     return;
   }
   
-  if (character.status !== 'denied') {
-    showError('Character cannot be resubmitted');
+  // Resubmit is only available for characters that need changes
+  if (!isNeedsChanges(character.status)) {
+    showError('Character cannot be resubmitted. Only characters that need changes can be resubmitted.');
     return;
   }
   
@@ -113,7 +114,7 @@ document.getElementById('resubmitCharacterModal')?.addEventListener('submit', as
   }
   
   try {
-    const response = await fetch(`/api/characters/${character._id}/resubmit`, {
+    const response = await fetch(`/api/characters/${character._id}/submit`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -145,6 +146,40 @@ document.getElementById('resubmitCharacterModal')?.addEventListener('submit', as
 });
 
 import { getVillageCrestUrl } from './utils.js';
+
+// ============================================================================
+// ------------------- Status Constants -------------------
+// Must match dashboard/utils/statusConstants.js
+// ============================================================================
+const STATUS = {
+  DRAFT: null,
+  PENDING: 'pending',
+  NEEDS_CHANGES: 'needs_changes',
+  ACCEPTED: 'accepted'
+};
+
+const STATUS_DISPLAY = {
+  [STATUS.DRAFT]: { class: 'status-draft', text: 'Draft', color: '#9CA3AF' },
+  [STATUS.PENDING]: { class: 'status-pending', text: 'Pending Review', color: '#FFA500' },
+  [STATUS.NEEDS_CHANGES]: { class: 'status-needs-changes', text: 'Needs Changes', color: '#FF6B6B' },
+  [STATUS.ACCEPTED]: { class: 'status-accepted', text: 'Approved', color: '#4CAF50' }
+};
+
+function isDraft(status) {
+  return status === null || status === undefined;
+}
+
+function isPending(status) {
+  return status === STATUS.PENDING;
+}
+
+function isNeedsChanges(status) {
+  return status === STATUS.NEEDS_CHANGES;
+}
+
+function isAccepted(status) {
+  return status === STATUS.ACCEPTED;
+}
 
 // ============================================================================
 // ------------------- Global Variables -------------------
@@ -326,6 +361,23 @@ async function displayCharacter() {
   document.getElementById('character-village').textContent = character.homeVillage ? character.homeVillage.charAt(0).toUpperCase() + character.homeVillage.slice(1) : 'N/A';
   document.getElementById('character-job').textContent = character.job ? character.job : 'N/A';
   
+  // Display gender
+  if (character.gender && character.gender.trim() !== '') {
+    document.getElementById('character-gender').textContent = character.gender;
+    document.getElementById('character-gender-item').style.display = 'flex';
+  } else {
+    document.getElementById('character-gender-item').style.display = 'none';
+  }
+  
+  // Display virtue
+  if (character.virtue && character.virtue.trim() !== '') {
+    const virtueText = character.virtue.charAt(0).toUpperCase() + character.virtue.slice(1);
+    document.getElementById('character-virtue').textContent = virtueText;
+    document.getElementById('character-virtue-item').style.display = 'flex';
+  } else {
+    document.getElementById('character-virtue-item').style.display = 'none';
+  }
+  
   // Display stats
   document.getElementById('stat-hearts').textContent = `${character.currentHearts || 0}/${character.maxHearts || 0}`;
   document.getElementById('stat-stamina').textContent = `${character.currentStamina || 0}/${character.maxStamina || 0}`;
@@ -357,6 +409,12 @@ async function displayCharacter() {
   // Display gear
   await displayGear(character);
   
+  // Display application art
+  displayApplicationArt(character);
+  
+  // Display biography
+  displayBiography(character);
+  
   // Display links
   displayLinks(character);
   
@@ -374,17 +432,8 @@ async function displayCharacter() {
   const statusText = document.getElementById('status-text');
   statusBadge.className = 'status-badge';
   
-  // Map status to display text
-  // null/undefined = DRAFT, 'pending' = PENDING, 'denied' = NEEDS_CHANGES, 'accepted' = APPROVED
-  const statusDisplay = {
-    null: { class: 'status-draft', text: 'Draft', color: '#9CA3AF' },
-    undefined: { class: 'status-draft', text: 'Draft', color: '#9CA3AF' },
-    'pending': { class: 'status-pending', text: 'Pending Review', color: '#FFA500' },
-    'denied': { class: 'status-denied', text: 'Needs Changes', color: '#F44336' },
-    'accepted': { class: 'status-accepted', text: 'Approved', color: '#4CAF50' }
-  };
-  
-  const statusInfo = statusDisplay[character.status] || statusDisplay.null;
+  // Get status display info using centralized mapping
+  const statusInfo = STATUS_DISPLAY[character.status] || STATUS_DISPLAY[STATUS.DRAFT];
   statusBadge.classList.add(statusInfo.class);
   statusText.textContent = statusInfo.text;
   
@@ -397,8 +446,8 @@ async function displayCharacter() {
     }
   }
   
-  // Display application feedback if needs changes
-  if (character.status === 'denied' && character.applicationFeedback && character.applicationFeedback.length > 0) {
+  // Display application feedback if available
+  if (character.applicationFeedback && character.applicationFeedback.length > 0) {
     const feedbackContainer = document.getElementById('application-feedback-container');
     if (feedbackContainer) {
       let feedbackHTML = '<h3>Feedback from Moderators:</h3><ul>';
@@ -416,21 +465,6 @@ async function displayCharacter() {
     }
   }
   
-  // Display denial reason if denied (legacy support)
-  if (character.status === 'denied' && character.denialReason) {
-    const denialContainer = document.getElementById('denial-reason-container');
-    const denialText = document.getElementById('denial-reason-text');
-    if (denialContainer && denialText) {
-      denialText.textContent = character.denialReason;
-      denialContainer.style.display = 'block';
-    }
-  } else {
-    const denialContainer = document.getElementById('denial-reason-container');
-    if (denialContainer) {
-      denialContainer.style.display = 'none';
-    }
-  }
-  
   // Show/hide action buttons based on status and ownership
   const actionButtons = document.getElementById('action-buttons');
   const isOwner = character.isOwner !== false;
@@ -443,7 +477,7 @@ async function displayCharacter() {
     // Show submit button for DRAFT status
     const submitButton = document.getElementById('submit-character-btn');
     if (submitButton) {
-      if (character.status === null || character.status === undefined) {
+      if (isDraft(character.status)) {
         submitButton.style.display = 'inline-block';
         submitButton.onclick = handleSubmitCharacter;
       } else {
@@ -451,10 +485,10 @@ async function displayCharacter() {
       }
     }
     
-    // Show resubmit button for NEEDS_CHANGES (denied) status
+    // Show resubmit button for needs_changes status
     const resubmitButton = document.getElementById('resubmit-character-btn');
     if (resubmitButton) {
-      if (character.status === 'denied') {
+      if (isNeedsChanges(character.status)) {
         resubmitButton.style.display = 'inline-block';
         resubmitButton.onclick = handleResubmitCharacter;
       } else {
@@ -463,8 +497,8 @@ async function displayCharacter() {
     }
   }
   
-  // Show edit button for accepted/denied (existing logic)
-  if (isOwner && (character.status === 'denied' || character.status === 'accepted')) {
+  // Show edit button for accepted characters, DRAFT status, and needs_changes status
+  if (isOwner && (isAccepted(character.status) || isDraft(character.status) || isNeedsChanges(character.status))) {
     if (actionButtons) {
       actionButtons.style.display = 'block';
     }
@@ -579,6 +613,63 @@ async function displayGear(character) {
   // Show empty message if no gear
   if (!hasGear) {
     document.getElementById('gear-empty').style.display = 'block';
+  }
+}
+
+// ============================================================================
+// ------------------- Application Art Display -------------------
+// ============================================================================
+function displayApplicationArt(character) {
+  const section = document.getElementById('app-art-section');
+  const image = document.getElementById('app-art-image');
+  
+  if (character.appArt && character.appArt.trim() !== '') {
+    image.src = character.appArt;
+    image.alt = `${character.name}'s application art`;
+    section.style.display = 'block';
+  } else {
+    section.style.display = 'none';
+  }
+}
+
+// ============================================================================
+// ------------------- Biography Display -------------------
+// ============================================================================
+function displayBiography(character) {
+  const section = document.getElementById('biography-section');
+  let hasContent = false;
+  
+  // Display personality
+  if (character.personality && character.personality.trim() !== '') {
+    document.getElementById('personality-text').textContent = character.personality;
+    document.getElementById('personality-item').style.display = 'block';
+    hasContent = true;
+  } else {
+    document.getElementById('personality-item').style.display = 'none';
+  }
+  
+  // Display history
+  if (character.history && character.history.trim() !== '') {
+    document.getElementById('history-text').textContent = character.history;
+    document.getElementById('history-item').style.display = 'block';
+    hasContent = true;
+  } else {
+    document.getElementById('history-item').style.display = 'none';
+  }
+  
+  // Display extras
+  if (character.extras && character.extras.trim() !== '') {
+    document.getElementById('extras-text').textContent = character.extras;
+    document.getElementById('extras-item').style.display = 'block';
+    hasContent = true;
+  } else {
+    document.getElementById('extras-item').style.display = 'none';
+  }
+  
+  if (hasContent) {
+    section.style.display = 'block';
+  } else {
+    section.style.display = 'none';
   }
 }
 
@@ -1544,6 +1635,9 @@ function setupEventListeners() {
   // Icon preview
   setupIconPreview();
   
+  // Application art preview
+  setupAppArtPreview();
+  
   // Setup sidebar navigation
   setupSidebarNavigation();
 }
@@ -1568,37 +1662,8 @@ function showEditForm() {
   // Populate form with character data
   populateEditForm();
   
-  // Always make Age field readonly (never editable, but still submitted)
-  const ageField = document.getElementById('edit-character-age');
-  if (ageField) {
-    ageField.readOnly = true;
-    ageField.disabled = false; // Use readonly instead of disabled so value is submitted
-    ageField.title = 'Age cannot be edited';
-  }
-  
   // Show/hide and enable/disable fields based on status
-  if (character.status === 'denied') {
-    // Show all fields for denied characters and enable them
-    document.getElementById('name-field-group').style.display = 'block';
-    document.getElementById('stats-section').style.display = 'block';
-    document.getElementById('details-section').style.display = 'block';
-    document.getElementById('gear-section').style.display = 'block';
-    document.getElementById('resubmit-btn').style.display = 'inline-block';
-    document.getElementById('save-btn-text').textContent = 'Save Changes';
-    document.getElementById('icon-required').style.display = 'none';
-    
-    // Enable all fields for denied characters (except age, which is always disabled)
-    document.getElementById('edit-character-name').disabled = false;
-    document.getElementById('edit-character-hearts').disabled = false;
-    document.getElementById('edit-character-stamina').disabled = false;
-    document.getElementById('edit-character-race').disabled = false;
-    document.getElementById('edit-character-village').disabled = false;
-    document.getElementById('edit-character-job').disabled = false;
-    document.getElementById('edit-starter-weapon').disabled = false;
-    document.getElementById('edit-starter-shield').disabled = false;
-    document.getElementById('edit-starter-armor-chest').disabled = false;
-    document.getElementById('edit-starter-armor-legs').disabled = false;
-  } else if (character.status === 'accepted') {
+  if (isAccepted(character.status)) {
     // Show all sections but disable restricted fields for accepted characters
     document.getElementById('name-field-group').style.display = 'block';
     document.getElementById('stats-section').style.display = 'block';
@@ -1633,6 +1698,145 @@ function showEditForm() {
     // Keep allowed fields enabled for accepted characters
     document.getElementById('edit-character-height').disabled = false;
     document.getElementById('edit-character-pronouns').disabled = false;
+    document.getElementById('edit-character-gender').disabled = false;
+    document.getElementById('edit-character-virtue').disabled = false;
+    document.getElementById('edit-character-personality').disabled = false;
+    document.getElementById('edit-character-history').disabled = false;
+    document.getElementById('edit-character-extras').disabled = false;
+  } else if (isNeedsChanges(character.status)) {
+    // For NEEDS_CHANGES status, allow editing all fields (like DRAFT) so users can fix issues
+    // Show all sections
+    document.getElementById('name-field-group').style.display = 'block';
+    document.getElementById('stats-section').style.display = 'block';
+    document.getElementById('details-section').style.display = 'block';
+    document.getElementById('gear-section').style.display = 'block';
+    document.getElementById('resubmit-btn').style.display = 'inline-block';
+    document.getElementById('save-btn-text').textContent = 'Save Changes';
+    document.getElementById('icon-required').style.display = 'none';
+    
+    // Enable all fields for needs_changes status (same as DRAFT)
+    const ageField = document.getElementById('edit-character-age');
+    if (ageField) {
+      ageField.removeAttribute('readonly');
+      ageField.disabled = false;
+      ageField.title = '';
+    }
+    
+    // Name can NEVER be edited by users (only mods/admins)
+    document.getElementById('edit-character-name').disabled = true;
+    document.getElementById('edit-character-name').title = 'Name cannot be edited';
+    document.getElementById('edit-character-height').disabled = false;
+    document.getElementById('edit-character-height').title = '';
+    document.getElementById('edit-character-pronouns').disabled = false;
+    document.getElementById('edit-character-pronouns').title = '';
+    document.getElementById('edit-character-gender').disabled = false;
+    document.getElementById('edit-character-gender').title = '';
+    // Hearts and stamina can NEVER be edited by users
+    document.getElementById('edit-character-hearts').disabled = true;
+    document.getElementById('edit-character-hearts').title = 'Hearts cannot be edited';
+    document.getElementById('edit-character-stamina').disabled = true;
+    document.getElementById('edit-character-stamina').title = 'Stamina cannot be edited';
+    document.getElementById('edit-character-race').disabled = false;
+    document.getElementById('edit-character-race').title = '';
+    document.getElementById('edit-character-village').disabled = false;
+    document.getElementById('edit-character-village').title = '';
+    document.getElementById('edit-character-job').disabled = false;
+    document.getElementById('edit-character-job').title = '';
+    document.getElementById('edit-character-virtue').disabled = false;
+    document.getElementById('edit-character-virtue').title = '';
+    document.getElementById('edit-character-personality').disabled = false;
+    document.getElementById('edit-character-personality').title = '';
+    document.getElementById('edit-character-history').disabled = false;
+    document.getElementById('edit-character-history').title = '';
+    document.getElementById('edit-character-extras').disabled = false;
+    document.getElementById('edit-character-extras').title = '';
+    
+    // Enable gear fields for needs_changes
+    document.getElementById('edit-starter-weapon').disabled = false;
+    document.getElementById('edit-starter-weapon').title = '';
+    document.getElementById('edit-starter-shield').disabled = false;
+    document.getElementById('edit-starter-shield').title = '';
+    document.getElementById('edit-starter-armor-chest').disabled = false;
+    document.getElementById('edit-starter-armor-chest').title = '';
+    document.getElementById('edit-starter-armor-legs').disabled = false;
+    document.getElementById('edit-starter-armor-legs').title = '';
+    
+    // Enable file uploads
+    document.getElementById('edit-character-icon').disabled = false;
+    document.getElementById('edit-character-app-art').disabled = false;
+    
+    // Ensure job dropdown is properly populated and enabled if village is already selected
+    const villageSelect = document.getElementById('edit-character-village');
+    if (villageSelect && villageSelect.value) {
+      populateJobDropdown(villageSelect.value);
+    }
+  } else {
+    // For DRAFT status, all editable fields can be edited (age, height, gender, village, job, virtue, pronouns, personality, extras, history, gear, appArt, icon)
+    // Show all sections
+    document.getElementById('name-field-group').style.display = 'block';
+    document.getElementById('stats-section').style.display = 'block';
+    document.getElementById('details-section').style.display = 'block';
+    document.getElementById('gear-section').style.display = 'block';
+    document.getElementById('resubmit-btn').style.display = 'none';
+    document.getElementById('save-btn-text').textContent = 'Save Changes';
+    document.getElementById('icon-required').style.display = 'none';
+    
+    // Enable all fields for DRAFT status
+    const ageField = document.getElementById('edit-character-age');
+    if (ageField) {
+      ageField.removeAttribute('readonly');
+      ageField.disabled = false;
+      ageField.title = '';
+    }
+    
+    // Name can NEVER be edited by users (only mods/admins)
+    document.getElementById('edit-character-name').disabled = true;
+    document.getElementById('edit-character-name').title = 'Name cannot be edited';
+    document.getElementById('edit-character-height').disabled = false;
+    document.getElementById('edit-character-height').title = '';
+    document.getElementById('edit-character-pronouns').disabled = false;
+    document.getElementById('edit-character-pronouns').title = '';
+    document.getElementById('edit-character-gender').disabled = false;
+    document.getElementById('edit-character-gender').title = '';
+    // Hearts and stamina can NEVER be edited by users
+    document.getElementById('edit-character-hearts').disabled = true;
+    document.getElementById('edit-character-hearts').title = 'Hearts cannot be edited';
+    document.getElementById('edit-character-stamina').disabled = true;
+    document.getElementById('edit-character-stamina').title = 'Stamina cannot be edited';
+    document.getElementById('edit-character-race').disabled = false;
+    document.getElementById('edit-character-race').title = '';
+    document.getElementById('edit-character-village').disabled = false;
+    document.getElementById('edit-character-village').title = '';
+    document.getElementById('edit-character-job').disabled = false;
+    document.getElementById('edit-character-job').title = '';
+    document.getElementById('edit-character-virtue').disabled = false;
+    document.getElementById('edit-character-virtue').title = '';
+    document.getElementById('edit-character-personality').disabled = false;
+    document.getElementById('edit-character-personality').title = '';
+    document.getElementById('edit-character-history').disabled = false;
+    document.getElementById('edit-character-history').title = '';
+    document.getElementById('edit-character-extras').disabled = false;
+    document.getElementById('edit-character-extras').title = '';
+    
+    // Enable gear fields
+    document.getElementById('edit-starter-weapon').disabled = false;
+    document.getElementById('edit-starter-weapon').title = '';
+    document.getElementById('edit-starter-shield').disabled = false;
+    document.getElementById('edit-starter-shield').title = '';
+    document.getElementById('edit-starter-armor-chest').disabled = false;
+    document.getElementById('edit-starter-armor-chest').title = '';
+    document.getElementById('edit-starter-armor-legs').disabled = false;
+    document.getElementById('edit-starter-armor-legs').title = '';
+    
+    // Enable file uploads
+    document.getElementById('edit-character-icon').disabled = false;
+    document.getElementById('edit-character-app-art').disabled = false;
+    
+    // Ensure job dropdown is properly populated and enabled if village is already selected
+    const villageSelect = document.getElementById('edit-character-village');
+    if (villageSelect && villageSelect.value) {
+      populateJobDropdown(villageSelect.value);
+    }
   }
   
   // Scroll to form
@@ -1658,19 +1862,13 @@ function populateEditForm() {
   document.getElementById('edit-character-age').value = character.age || '';
   document.getElementById('edit-character-height').value = character.height || '';
   document.getElementById('edit-character-pronouns').value = character.pronouns || '';
+  document.getElementById('edit-character-gender').value = character.gender || '';
   
-  // Always ensure Age field is readonly (not disabled, so value is submitted)
-  const ageField = document.getElementById('edit-character-age');
-  if (ageField) {
-    ageField.readOnly = true;
-    ageField.disabled = false; // Use readonly instead of disabled so value is submitted
-  }
-  
-  // Stats - populate for both denied and accepted (accepted will be disabled)
+  // Stats - populate (accepted will be disabled)
   document.getElementById('edit-character-hearts').value = character.maxHearts || 3;
-  document.getElementById('edit-character-stamina').value = character.maxStamina || 3;
+  document.getElementById('edit-character-stamina').value = character.maxStamina || 5;
   
-  // Details - populate for both denied and accepted (accepted will be disabled)
+  // Details - populate (accepted will be disabled)
   // Populate race dropdown
   const raceSelect = document.getElementById('edit-character-race');
   raceSelect.innerHTML = '<option value="">Select a race...</option>';
@@ -1687,16 +1885,51 @@ function populateEditForm() {
   // Set village
   const villageSelect = document.getElementById('edit-character-village');
   villageSelect.value = character.homeVillage || '';
+  
+  // Store the job value before populating dropdown
+  const jobValueToSet = character.job || '';
+  
+  // Populate job dropdown
   populateJobDropdown(character.homeVillage);
   
-  // Set job
+  // Set job value after dropdown is populated
   const jobSelect = document.getElementById('edit-character-job');
-  if (character.job) {
-    jobSelect.value = character.job;
+  if (jobValueToSet) {
+    // Try to set the job value - it will only work if the value exists in the dropdown
+    jobSelect.value = jobValueToSet;
+    
+    // If the value wasn't set (doesn't match any option), log a warning
+    if (jobSelect.value !== jobValueToSet) {
+      console.warn(`Job value "${jobValueToSet}" not found in dropdown options. Available options:`, 
+        Array.from(jobSelect.options).map(opt => opt.value));
+      // Try to find a case-insensitive match
+      const matchingOption = Array.from(jobSelect.options).find(opt => 
+        opt.value.toLowerCase() === jobValueToSet.toLowerCase()
+      );
+      if (matchingOption) {
+        jobSelect.value = matchingOption.value;
+        console.log(`Found case-insensitive match: "${matchingOption.value}"`);
+      }
+    }
+  }
+  
+  // Set virtue
+  const virtueSelect = document.getElementById('edit-character-virtue');
+  if (character.virtue) {
+    virtueSelect.value = character.virtue.toLowerCase();
   }
   
   // Set app link
   document.getElementById('edit-character-app-link').value = character.appLink || '';
+  
+  // Biography fields
+  document.getElementById('edit-character-personality').value = character.personality || '';
+  document.getElementById('edit-character-history').value = character.history || '';
+  document.getElementById('edit-character-extras').value = character.extras || '';
+  
+  // Update sentence counts
+  updateSentenceCount('edit-character-personality', 'edit-personality-sentence-count');
+  updateSentenceCount('edit-character-history', 'edit-history-sentence-count');
   
   // Populate starter gear
   populateStarterGearDropdowns();
@@ -1714,6 +1947,35 @@ function populateEditForm() {
   if (character.gearArmor?.legs?.name) {
     document.getElementById('edit-starter-armor-legs').value = character.gearArmor.legs.name;
   }
+  
+  // Show application art preview if exists
+  if (character.appArt) {
+    const previewContainer = document.getElementById('edit-appart-preview-container');
+    const previewImg = document.getElementById('edit-appart-preview');
+    if (previewContainer && previewImg) {
+      previewImg.src = character.appArt;
+      previewContainer.style.display = 'block';
+    }
+  }
+}
+
+// Helper function to count sentences
+function updateSentenceCount(textareaId, countId) {
+  const textarea = document.getElementById(textareaId);
+  const countElement = document.getElementById(countId);
+  if (!textarea || !countElement) return;
+  
+  const text = textarea.value.trim();
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  countElement.textContent = `${sentences.length} sentences`;
+  
+  // Add event listener if not already added
+  if (!textarea.dataset.sentenceCountListener) {
+    textarea.addEventListener('input', () => {
+      updateSentenceCount(textareaId, countId);
+    });
+    textarea.dataset.sentenceCountListener = 'true';
+  }
 }
 
 // ============================================================================
@@ -1721,6 +1983,11 @@ function populateEditForm() {
 // ============================================================================
 function populateJobDropdown(village) {
   const jobSelect = document.getElementById('edit-character-job');
+  if (!jobSelect) return;
+  
+  // Store the current value before clearing
+  const currentValue = jobSelect.value;
+  
   jobSelect.innerHTML = '<option value="">Select a job...</option>';
   
   if (!village) {
@@ -1729,6 +1996,11 @@ function populateJobDropdown(village) {
   }
   
   const jobs = villageJobsMap[village.toLowerCase()] || allJobs;
+  if (!jobs || jobs.length === 0) {
+    // If jobs aren't loaded yet, try to load them
+    console.warn(`Jobs not loaded for village ${village}, using allJobs`);
+  }
+  
   jobs.sort().forEach(job => {
     const option = document.createElement('option');
     option.value = job;
@@ -1737,6 +2009,16 @@ function populateJobDropdown(village) {
   });
   
   jobSelect.disabled = false;
+  
+  // Try to restore the previous value if it exists in the new options
+  if (currentValue) {
+    const matchingOption = Array.from(jobSelect.options).find(opt => 
+      opt.value === currentValue || opt.value.toLowerCase() === currentValue.toLowerCase()
+    );
+    if (matchingOption) {
+      jobSelect.value = matchingOption.value;
+    }
+  }
 }
 
 function populateStarterGearDropdowns() {
@@ -1845,6 +2127,56 @@ function setupIconPreview() {
 }
 
 // ============================================================================
+// ------------------- Application Art Preview -------------------
+// ============================================================================
+function setupAppArtPreview() {
+  const appArtInput = document.getElementById('edit-character-app-art');
+  const previewContainer = document.getElementById('edit-appart-preview-container');
+  const previewImg = document.getElementById('edit-appart-preview');
+  const removeBtn = document.getElementById('remove-edit-appart-preview');
+  
+  if (!appArtInput || !previewContainer || !previewImg) return;
+  
+  appArtInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        showMessage('Invalid file type. Please select a JPEG, PNG, GIF, or WebP image.', 'error');
+        appArtInput.value = '';
+        return;
+      }
+      
+      // Validate file size (7MB)
+      if (file.size > 7 * 1024 * 1024) {
+        showMessage('Image file is too large. Maximum size is 7MB.', 'error');
+        appArtInput.value = '';
+        return;
+      }
+      
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewImg.src = e.target.result;
+        previewContainer.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    } else {
+      previewContainer.style.display = 'none';
+    }
+  });
+  
+  if (removeBtn) {
+    removeBtn.addEventListener('click', () => {
+      appArtInput.value = '';
+      previewContainer.style.display = 'none';
+      previewImg.src = '';
+    });
+  }
+}
+
+// ============================================================================
 // ------------------- Form Submission -------------------
 // ============================================================================
 async function handleFormSubmit(event) {
@@ -1855,9 +2187,8 @@ async function handleFormSubmit(event) {
   const originalText = submitBtn.innerHTML;
   const resubmit = document.getElementById('resubmit-btn')?.getAttribute('data-resubmit') === 'true';
   
-  // Automatically set resubmit flag for denied characters
-  const isDenied = character.status === 'denied';
-  const shouldResubmit = resubmit || isDenied;
+  // Resubmit flag
+  const shouldResubmit = resubmit;
   
   // Disable submit button
   submitBtn.disabled = true;
@@ -1870,7 +2201,18 @@ async function handleFormSubmit(event) {
     // Create FormData
     const formData = new FormData(form);
     
-    // Add resubmit flag if resubmitting or if character is denied (automatic resubmission)
+    // Ensure job value is included if it exists in the character
+    // This handles cases where the dropdown value might not be set correctly
+    const jobSelect = document.getElementById('edit-character-job');
+    if (jobSelect && jobSelect.value) {
+      // Job value is already in FormData from the form, but ensure it's set
+      formData.set('job', jobSelect.value);
+    } else if (character && character.job) {
+      // Fallback: if dropdown doesn't have a value but character has a job, use character's job
+      formData.set('job', character.job);
+    }
+    
+    // Add resubmit flag if resubmitting
     if (shouldResubmit) {
       formData.append('resubmit', 'true');
     }
@@ -1986,7 +2328,7 @@ function setupSidebarNavigation() {
         return;
       }
       
-      // Handle external links (like /map, /inventories, /character-create.html, /oc-list.html)
+      // Handle external links (like /map, /inventories, /character-create, /oc-list)
       // Let them work normally, but close mobile sidebar
       if (href && (href.startsWith('/') || href.startsWith('http'))) {
         const sidebar = document.querySelector('.sidebar');

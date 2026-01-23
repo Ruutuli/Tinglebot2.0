@@ -543,6 +543,10 @@ app.get('/inventories.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'inventories.html'));
 });
 
+app.get('/character-inventory', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'character-inventory.html'));
+});
+
 app.get('/character-inventory.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'character-inventory.html'));
 });
@@ -578,6 +582,33 @@ app.get('/oc-list.html', (req, res) => {
 // Serves the OC page for viewing/editing a character
 app.get('/ocs/:name', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'oc-page.html'));
+});
+
+// ------------------- Function: serveQuestManagementPage -------------------
+app.get('/quest-management', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'quest-management.html'));
+});
+
+app.get('/quest-management.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'quest-management.html'));
+});
+
+// ------------------- Function: serveQuestCreatePage -------------------
+app.get('/quest-create', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'quest-create.html'));
+});
+
+app.get('/quest-create.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'quest-create.html'));
+});
+
+// ------------------- Function: serveNotificationsPage -------------------
+app.get('/notifications', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'notifications.html'));
+});
+
+app.get('/notifications.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'notifications.html'));
 });
 
 // ------------------- Section: Request Logging -------------------
@@ -1155,7 +1186,7 @@ app.get('/api/users/:discordId', async (req, res) => {
     }
 
     // Get user's characters
-    // For user's own characters, show all statuses so they can see pending/denied
+    // For user's own characters, show all statuses so they can see pending
     // But for general queries, we filter by status elsewhere
     const characters = await Character.find({ 
       userId: discordId,
@@ -1233,7 +1264,7 @@ app.get('/api/tinglebot/stats', async (req, res) => {
 app.get('/api/stats/characters', async (req, res) => {
   try {
     // Get both regular and mod characters for total count
-    // Only get accepted characters (exclude pending and denied)
+    // Only get accepted characters (exclude pending)
     const statusFilter = {
       $or: [
         { status: 'accepted' },
@@ -1548,7 +1579,7 @@ app.get('/api/stats/characters', async (req, res) => {
     }
 
     // Get special character counts (mod characters are immune to negative effects)
-    // Only count accepted characters (exclude pending and denied)
+    // Only count accepted characters (exclude pending)
     const [kodCount, blightedCount, debuffedCount, jailedCount] = await Promise.all([
       Character.countDocuments({ ko: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter }),
       Character.countDocuments({ blighted: true, name: { $nin: ['Tingle', 'Tingle test', 'John'] }, ...statusFilter }),

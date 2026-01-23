@@ -197,7 +197,7 @@ window.loadQuests = async function() {
         <div class="empty-state">
           <i class="fas fa-inbox"></i>
           <h3>No Quests Found</h3>
-          <p>No quests have been created yet. <a href="/quest-create.html">Create your first quest</a>!</p>
+          <p>No quests have been created yet. <a href="/quest-create">Create your first quest</a>!</p>
         </div>
       `;
       return;

@@ -201,7 +201,7 @@ const fetchAllCharacters = async () => {
  try {
   await connectToTinglebot();
   trackDbOperation('queries');
-  // Only return accepted characters (exclude pending and denied)
+  // Only return accepted characters (exclude pending)
   return await Character.find({ 
     $or: [
       { status: 'accepted' },
@@ -360,7 +360,7 @@ const fetchAnyCharacterByNameAndUserId = async (characterName, userId) => {
 const fetchAllCharactersExceptUser = async (userId) => {
  try {
   await connectToTinglebot();
-  // Only return accepted characters (exclude pending and denied)
+  // Only return accepted characters (exclude pending)
   return await Character.find({ 
     userId: { $ne: userId },
     $or: [
@@ -668,7 +668,7 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
 const fetchAllModCharacters = async () => {
  try {
   await connectToTinglebot();
-  // Only return accepted mod characters (exclude pending and denied)
+  // Only return accepted mod characters (exclude pending)
   const modCharacters = await ModCharacter.find({
     $or: [
       { status: 'accepted' },

@@ -97,10 +97,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupModelCards();
     initializeNotificationSystem();
     
-    // Check for denied applications after a short delay to ensure auth is ready
-    setTimeout(() => {
-      checkForDeniedApplications();
-    }, 1000);
     
     // Check for login success and refresh suggestion box if needed
     if (urlParams.get('login') === 'success') {
@@ -3794,7 +3790,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ============================================================================
 // ------------------- Notification System -------------------
-// Handles notifications for denied applications and other alerts
+// Handles notifications and other alerts
 // ============================================================================
 
 let notifications = [];
@@ -3839,48 +3835,6 @@ function initializeNotificationSystem() {
   });
 }
 
-/**
- * Check for denied applications and show notifications
- */
-async function checkForDeniedApplications() {
-  try {
-    const response = await fetch('/api/user/characters', {
-      credentials: 'include'
-    });
-
-    if (!response.ok) return;
-
-    const { data: characters } = await response.json();
-    const deniedCharacters = characters.filter(char => char.status === 'denied');
-
-    // Clear existing denied notifications
-    notifications = notifications.filter(n => n.type !== 'denied');
-
-    // Add new denied notifications
-    deniedCharacters.forEach(character => {
-      const existingNotification = notifications.find(
-        n => n.type === 'denied' && n.characterId === character._id
-      );
-
-      if (!existingNotification) {
-        notifications.push({
-          type: 'denied',
-          title: `Application Denied: ${character.name}`,
-          characterId: character._id,
-          characterName: character.name,
-          message: character.denialReason || 'Your application has been denied.',
-          timestamp: new Date(),
-          id: `denied-${character._id}`
-        });
-      }
-    });
-
-    updateNotificationBadge();
-    renderNotifications();
-  } catch (error) {
-    console.error('[index.js]: Error checking for denied applications:', error);
-  }
-}
 
 /**
  * Add a notification
@@ -3936,7 +3890,7 @@ function renderNotifications() {
 
   list.innerHTML = notifications.map(notification => {
     const timeAgo = getTimeAgo(notification.timestamp);
-    const icon = notification.type === 'denied' ? 'fa-exclamation-circle' : 'fa-info-circle';
+    const icon = 'fa-info-circle';
     const characterLink = notification.characterId 
       ? `/ocs/${encodeURIComponent(notification.characterName)}`
       : '#';
@@ -3948,7 +3902,7 @@ function renderNotifications() {
           <span>${notification.title || 'Notification'}</span>
         </div>
         <div class="notification-item-message">${notification.message}</div>
-        ${notification.type === 'denied' ? `<div class="notification-item-time"><a href="${characterLink}" style="color: var(--primary-color);">View Character</a> • ${timeAgo}</div>` : `<div class="notification-item-time">${timeAgo}</div>`}
+        <div class="notification-item-time">${timeAgo}</div>
       </div>
     `;
   }).join('');
@@ -3968,10 +3922,6 @@ function toggleNotificationDropdown() {
 function handleNotificationClick(notificationId) {
   const notification = notifications.find(n => n.id === notificationId);
   if (!notification) return;
-
-  if (notification.type === 'denied' && notification.characterId) {
-    window.location.href = `/ocs/${encodeURIComponent(notification.characterName)}`;
-  }
 
   // Remove notification after clicking
   removeNotification(notificationId);
@@ -4010,7 +3960,6 @@ function getTimeAgo(date) {
 
 // Make notification functions available globally
 window.addNotification = addNotification;
-window.checkForDeniedApplications = checkForDeniedApplications;
 
 // ============================================================================
 // ------------------- Exports -------------------

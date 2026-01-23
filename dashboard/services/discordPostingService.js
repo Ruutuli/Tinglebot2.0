@@ -66,7 +66,7 @@ async function postApplicationToAdminChannel(character) {
     const needsChangesCount = await CharacterModeration.countDocuments({
       characterId: character._id,
       applicationVersion: applicationVersion,
-      vote: 'needs_changes'
+      vote: STATUS.NEEDS_CHANGES
     });
 
     // Helper functions for formatting
@@ -122,6 +122,30 @@ async function postApplicationToAdminChannel(character) {
     const ocPageUrl = `${dashboardUrl}/ocs/${ocPageSlug}`;
     const moderationUrl = `${dashboardUrl}/character-moderation`;
 
+    // Fetch Discord user to get username
+    let ownerField = '';
+    if (character.userId) {
+      try {
+        const userResponse = await fetch(`https://discord.com/api/v10/users/${character.userId}`, {
+          headers: {
+            'Authorization': `Bot ${DISCORD_TOKEN}`
+          }
+        });
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          const username = userData.username || 'Unknown';
+          ownerField = `\n**Owner:** @${username}`;
+        } else {
+          // Fallback to user ID mention if fetch fails
+          ownerField = `\n**Owner:** <@${character.userId}>`;
+        }
+      } catch (error) {
+        console.error('[DISCORD_POSTING] Error fetching user:', error);
+        // Fallback to user ID mention if fetch fails
+        ownerField = `\n**Owner:** <@${character.userId}>`;
+      }
+    }
+
     // Create embed
     const embed = {
       title: `✨ OC Application Review: ${character.name} (v${applicationVersion})`,
@@ -136,7 +160,7 @@ async function postApplicationToAdminChannel(character) {
       fields: [
         {
           name: '👤 Character Information',
-          value: `**Name:** ${character.name}\n**Pronouns:** ${character.pronouns}\n**Age:** ${character.age}\n**Height:** ${character.height} cm (${heightInFeetInches})`,
+          value: `**Name:** ${character.name}\n**Pronouns:** ${character.pronouns}\n**Age:** ${character.age}\n**Height:** ${character.height} cm (${heightInFeetInches})${ownerField}`,
           inline: false
         },
         {
@@ -174,14 +198,10 @@ async function postApplicationToAdminChannel(character) {
     // Post to channel or thread
     let targetChannelId = ADMIN_REVIEW_CHANNEL_ID;
     let messageResponse;
-    
-    // Get user mention
-    const userMention = character.userId ? `<@${character.userId}>` : '';
-    console.log('[DISCORD_POSTING] User mention:', userMention || 'NONE (userId missing)');
 
     if (ADMIN_REVIEW_THREAD_ID) {
       console.log('[DISCORD_POSTING] Posting to thread:', ADMIN_REVIEW_THREAD_ID);
-      // Post to thread
+      // Post to thread (no user mention in content to avoid pinging)
       messageResponse = await fetch(`https://discord.com/api/v10/channels/${ADMIN_REVIEW_THREAD_ID}/messages`, {
         method: 'POST',
         headers: {
@@ -189,13 +209,12 @@ async function postApplicationToAdminChannel(character) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          content: userMention || undefined,
           embeds: [embed]
         })
       });
       targetChannelId = ADMIN_REVIEW_THREAD_ID;
     } else {
-      // Post to channel
+      // Post to channel (no user mention in content to avoid pinging)
       console.log('[DISCORD_POSTING] Posting to channel:', ADMIN_REVIEW_CHANNEL_ID);
       messageResponse = await fetch(`https://discord.com/api/v10/channels/${ADMIN_REVIEW_CHANNEL_ID}/messages`, {
         method: 'POST',
@@ -204,7 +223,6 @@ async function postApplicationToAdminChannel(character) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          content: userMention || undefined,
           embeds: [embed]
         })
       });
@@ -291,7 +309,7 @@ async function updateApplicationEmbed(messageId, character) {
     const needsChangesCount = await CharacterModeration.countDocuments({
       characterId: character._id,
       applicationVersion: applicationVersion,
-      vote: 'needs_changes'
+      vote: STATUS.NEEDS_CHANGES
     });
 
     // Determine channel ID (thread or channel)
@@ -415,8 +433,156 @@ async function postResubmissionUpdate(character) {
   }
 }
 
+/**
+ * Post character creation notification to Discord (legacy function for resubmissions)
+ * @param {Object} character - Character document
+ * @param {Object} user - User document
+ * @param {Object} reqUser - Request user object
+ * @param {Object} req - Express request object (optional)
+ * @returns {Promise<void>}
+ */
+async function postCharacterCreationToDiscord(character, user, reqUser, req = null) {
+  try {
+    const CHARACTER_CREATION_CHANNEL_ID = ADMIN_REVIEW_CHANNEL_ID;
+    
+    if (!DISCORD_TOKEN) {
+      logger.warn('DISCORD_POSTING', 'DISCORD_TOKEN not configured, skipping Discord post');
+      return;
+    }
+
+    // Helper functions for formatting
+    const capitalize = (str) => {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    };
+
+    const capitalizeFirstLetter = (str) => {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    };
+
+    const convertCmToFeetInches = (heightInCm) => {
+      const totalInches = heightInCm / 2.54;
+      const feet = Math.floor(totalInches / 12);
+      const inches = Math.round(totalInches % 12);
+      return `${feet}' ${inches}"`;
+    };
+
+    // Get village emoji (simple mapping)
+    const getVillageEmoji = (village) => {
+      const emojiMap = {
+        'inariko': '🌊',
+        'rudania': '🔥',
+        'vhintl': '🌿'
+      };
+      return emojiMap[village?.toLowerCase()] || '';
+    };
+
+    const heightInFeetInches = character.height ? convertCmToFeetInches(character.height) : 'N/A';
+    const homeVillageEmoji = getVillageEmoji(character.homeVillage);
+    const currentVillageEmoji = getVillageEmoji(character.currentVillage);
+
+    // Build gear info
+    const gearInfo = [];
+    if (character.gearWeapon?.name) {
+      gearInfo.push(`🗡️ **Weapon:** ${character.gearWeapon.name}`);
+    }
+    if (character.gearShield?.name) {
+      gearInfo.push(`🛡️ **Shield:** ${character.gearShield.name}`);
+    }
+    if (character.gearArmor?.chest?.name) {
+      gearInfo.push(`👕 **Chest:** ${character.gearArmor.chest.name}`);
+    }
+    if (character.gearArmor?.legs?.name) {
+      gearInfo.push(`👖 **Legs:** ${character.gearArmor.legs.name}`);
+    }
+    const gearText = gearInfo.length > 0 ? gearInfo.join('\n') : 'None selected';
+
+    // Get base URL for moderation link - use tinglebot.xyz
+    const moderationUrl = 'https://tinglebot.xyz/character-moderation';
+
+    // Get user's Discord avatar URL (for mention)
+    const userDiscordId = reqUser?.discordId || user?.discordId || character.userId;
+    const userAvatar = reqUser?.avatar || user?.avatar;
+    const userAvatarUrl = userAvatar 
+      ? `https://cdn.discordapp.com/avatars/${userDiscordId}/${userAvatar}.png?size=256`
+      : `https://cdn.discordapp.com/embed/avatars/${(parseInt(userDiscordId) || 0) % 5}.png`;
+
+    // Get character page URL
+    const characterPageUrl = `https://tinglebot.xyz/ocs/${encodeURIComponent(character.name)}`;
+
+    // Create embed with improved styling - cleaner layout
+    const embed = {
+      title: `✨ New Character Created: ${character.name}`,
+      description: `A new character has been submitted and is awaiting moderation review.`,
+      color: 0xFFA500, // Orange for pending status
+      thumbnail: {
+        url: character.icon || userAvatarUrl || 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      image: {
+        url: character.appArt || character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+      },
+      fields: [
+        {
+          name: '👤 Character Information',
+          value: `**Name:** ${character.name}\n**Pronouns:** ${character.pronouns}\n**Age:** ${character.age}\n**Height:** ${character.height} cm (${heightInFeetInches})`,
+          inline: false
+        },
+        {
+          name: '🏘️ Location & Job',
+          value: `**Race:** ${capitalize(character.race)}\n**Home Village:** ${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}\n**Job:** ${capitalizeFirstLetter(character.job)}`,
+          inline: false
+        },
+        {
+          name: '❤️ Stats',
+          value: `**Hearts:** ${character.currentHearts}/${character.maxHearts}\n**Stamina:** ${character.currentStamina}/${character.maxStamina}\n**Attack:** ${character.attack || 0}\n**Defense:** ${character.defense || 0}`,
+          inline: false
+        },
+        {
+          name: '⚔️ Starting Gear',
+          value: gearText || 'None selected',
+          inline: false
+        },
+        {
+          name: '🔗 Links',
+          value: `[📋 View Application](${characterPageUrl})\n[⚖️ Review in Moderation Panel](${moderationUrl})`,
+          inline: false
+        }
+      ],
+      footer: {
+        text: `Created by ${reqUser?.username || user?.username || 'Unknown'} • Status: Pending Review`
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    // Post to Discord
+    const discordResponse = await fetch(`https://discord.com/api/v10/channels/${CHARACTER_CREATION_CHANNEL_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        embeds: [embed]
+      })
+    });
+
+    if (!discordResponse.ok) {
+      const errorText = await discordResponse.text();
+      logger.error('DISCORD_POSTING', `Failed to post character creation to Discord: ${discordResponse.status} - ${errorText}`);
+      return;
+    }
+
+    logger.success('DISCORD_POSTING', `Character creation posted to Discord: ${character.name}`);
+  } catch (error) {
+    logger.error('DISCORD_POSTING', 'Error posting character creation to Discord', error);
+    // Don't throw - Discord posting failure shouldn't break character creation
+  }
+}
+
 module.exports = {
   postApplicationToAdminChannel,
   updateApplicationEmbed,
-  postResubmissionUpdate
+  postResubmissionUpdate,
+  postCharacterCreationToDiscord
 };

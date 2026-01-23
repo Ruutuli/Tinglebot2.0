@@ -856,7 +856,7 @@ function renderCharactersList() {
             <p>${character.job || 'No job'} • ${character.currentVillage || 'Unknown village'}</p>
           </div>
         </div>
-        <a href="/character-inventory.html?character=${encodeURIComponent(character.name)}" class="character-list-link">
+        <a href="/character-inventory?character=${encodeURIComponent(character.name)}" class="character-list-link">
           <i class="fas fa-external-link-alt" aria-hidden="true"></i>
           View Full Inventory
         </a>

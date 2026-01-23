@@ -87,6 +87,7 @@ async function loadCharacters() {
     characters = result.data || [];
     
     // Filter to only show accepted characters
+    // Filter to only show accepted characters (status: 'accepted')
     characters = characters.filter(char => char.status === 'accepted');
     
     // Sort characters alphabetically by name

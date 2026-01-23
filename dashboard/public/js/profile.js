@@ -1289,7 +1289,11 @@ function createProfileCharacterCard(character) {
     ${rollStatus}
   `;
   
-  // Character modal removed - edit functionality is only available on OC pages
+  // Add click handler to navigate to OC page
+  const characterName = character.name;
+  card.addEventListener('click', () => {
+    window.location.href = `/ocs/${encodeURIComponent(characterName)}`;
+  });
   
   return card;
 }

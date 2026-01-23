@@ -1,6 +1,6 @@
 // ============================================================================
 // ------------------- Notification Model -------------------
-// Stores notifications for users (e.g., character denial notifications)
+// Stores notifications for users
 // ============================================================================
 
 const mongoose = require('mongoose');
@@ -15,7 +15,7 @@ const notificationSchema = new Schema({
   type: { 
     type: String, 
     required: true,
-    enum: ['character_denied', 'character_accepted', 'oc_approved', 'oc_needs_changes', 'oc_resubmitted', 'system'],
+    enum: ['character_accepted', 'oc_approved', 'oc_needs_changes', 'oc_resubmitted', 'system'],
     default: 'system'
   },
   title: { 
