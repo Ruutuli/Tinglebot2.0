@@ -8371,46 +8371,46 @@ function getESTTime() {
   return new Date(utcTime - estOffsetMs);
 }
 
-// ------------------- Function: get8AMUTC -------------------
-// Gets 8:00 AM UTC on a given date
-function get8AMUTC(year, month, day) {
-  const utcDate = new Date(Date.UTC(year, month - 1, day, 8, 0, 0));
+// ------------------- Function: get1PMUTC -------------------
+// Gets 1:00 PM UTC on a given date
+function get1PMUTC(year, month, day) {
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
   return utcDate;
 }
 
 // ------------------- Function: getWeatherDayBounds -------------------
-// Calculates the start and end of the current weather day (8am to 8am UTC)
+// Calculates the start and end of the current weather day (1pm to 12:59pm UTC)
 function getWeatherDayBounds() {
   // Get current time in UTC
   const now = new Date();
   const currentHour = now.getUTCHours();
+  const currentMinute = now.getUTCMinutes();
   const currentYear = now.getUTCFullYear();
   const currentMonth = now.getUTCMonth() + 1;
   const currentDay = now.getUTCDate();
   
   let weatherDayStart, weatherDayEnd;
   
-  if (currentHour >= 8) {
-    // If it's 8:00 UTC or later, the weather day started at 8:00 UTC today
-    weatherDayStart = get8AMUTC(currentYear, currentMonth, currentDay);
+  if (currentHour > 13 || (currentHour === 13 && currentMinute >= 0)) {
+    // If it's 1:00pm UTC or later, the weather day started at 1:00pm UTC today
+    weatherDayStart = get1PMUTC(currentYear, currentMonth, currentDay);
     
-    // End is 8:00 UTC tomorrow
-    const tomorrow = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay + 1, 8, 0, 0));
-    weatherDayEnd = tomorrow;
+    // End is 12:59:59pm UTC tomorrow
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay + 1, 12, 59, 59, 999));
   } else {
-    // If it's before 8:00 UTC, the weather day started at 8:00 UTC yesterday
-    const yesterday = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay - 1, 8, 0, 0));
+    // If it's before 1:00pm UTC, the weather day started at 1:00pm UTC yesterday
+    const yesterday = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay - 1, 13, 0, 0));
     weatherDayStart = yesterday;
     
-    // End is 8:00 UTC today
-    weatherDayEnd = get8AMUTC(currentYear, currentMonth, currentDay);
+    // End is 12:59:59pm UTC today
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth - 1, currentDay, 12, 59, 59, 999));
   }
   
   return { weatherDayStart, weatherDayEnd };
 }
 
 // ------------------- Function: getTodayWeather -------------------
-// Returns today's weather for all villages (using 8am-8am weather day)
+// Returns today's weather for all villages (using 1pm-12:59pm UTC weather day)
 app.get('/api/weather/today', async (req, res) => {
   try {
     

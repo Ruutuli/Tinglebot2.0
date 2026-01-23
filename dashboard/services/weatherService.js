@@ -218,24 +218,25 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
     referenceDate = new Date(); // Fallback to now
   }
 
-  // Weather day is 8am UTC to 8am UTC
+  // Weather day is 1pm UTC (13:00) to 12:59pm UTC (12:59:59) the next day
   const currentHour = referenceDate.getUTCHours();
+  const currentMinute = referenceDate.getUTCMinutes();
   const currentYear = referenceDate.getUTCFullYear();
   const currentMonth = referenceDate.getUTCMonth();
   const currentDay = referenceDate.getUTCDate();
 
   let startUTC, endUTC;
 
-  if (currentHour >= 8) {
-    // If it's 8:00 UTC or later, period started at 8:00 UTC today
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
-    // End is 8:00 UTC tomorrow
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 8, 0, 0, 0));
+  if (currentHour > 13 || (currentHour === 13 && currentMinute >= 0)) {
+    // If it's 1:00pm UTC or later, period started at 1:00pm UTC today
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
+    // End is 12:59:59pm UTC tomorrow
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 12, 59, 59, 999));
   } else {
-    // If it's before 8:00 UTC, period started at 8:00 UTC yesterday
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 8, 0, 0, 0));
-    // End is 8:00 UTC today
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
+    // If it's before 1:00pm UTC, period started at 1:00pm UTC yesterday
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
+    // End is 12:59:59pm UTC today
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 12, 59, 59, 999));
   }
 
   // Validate calculated bounds

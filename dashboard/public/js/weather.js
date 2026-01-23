@@ -530,34 +530,30 @@ initWeather();
 // ============================================================================
 
 /**
- * Calculates the current weather day bounds (8am to 8am EST)
+ * Calculates the current weather day bounds (1pm to 12:59pm UTC)
  */
 function calculateWeatherDayBounds() {
   const now = new Date();
   
-  // Get current time in EST
-  const estString = now.toLocaleString("en-US", { timeZone: "America/New_York" });
-  const estNow = new Date(estString);
-  const currentHour = estNow.getHours();
+  // Get current time in UTC
+  const currentHour = now.getUTCHours();
+  const currentMinute = now.getUTCMinutes();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
+  const currentDay = now.getUTCDate();
   
   let weatherDayStart, weatherDayEnd;
   
-  if (currentHour >= 8) {
-    // If it's 8am or later EST, the weather day started at 8am EST today
-    weatherDayStart = new Date(estNow);
-    weatherDayStart.setHours(8, 0, 0, 0);
+  if (currentHour > 13 || (currentHour === 13 && currentMinute >= 0)) {
+    // If it's 1:00pm UTC or later, the weather day started at 1:00pm UTC today
+    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
     
-    weatherDayEnd = new Date(estNow);
-    weatherDayEnd.setDate(weatherDayEnd.getDate() + 1);
-    weatherDayEnd.setHours(8, 0, 0, 0);
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 12, 59, 59, 999));
   } else {
-    // If it's before 8am EST, the weather day started at 8am EST yesterday
-    weatherDayStart = new Date(estNow);
-    weatherDayStart.setDate(weatherDayStart.getDate() - 1);
-    weatherDayStart.setHours(8, 0, 0, 0);
+    // If it's before 1:00pm UTC, the weather day started at 1:00pm UTC yesterday
+    weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
     
-    weatherDayEnd = new Date(estNow);
-    weatherDayEnd.setHours(8, 0, 0, 0);
+    weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay, 12, 59, 59, 999));
   }
   
   return { weatherDayStart, weatherDayEnd };
@@ -570,17 +566,16 @@ function formatWeatherDayDisplay(weatherDayStart, weatherDayEnd) {
   const startDate = new Date(weatherDayStart);
   const endDate = new Date(weatherDayEnd);
   
-  // Format the dates to show 8am-8am regardless of timezone
-  // We'll use a more explicit format to ensure 8am is displayed as 8am
+  // Format the dates to show 1pm-12:59pm UTC
   const startFormatted = startDate.toLocaleDateString('en-US', { 
     month: 'short', 
     day: 'numeric'
-  }) + ' 8:00 AM';
+  }) + ' 1:00 PM UTC';
   
   const endFormatted = endDate.toLocaleDateString('en-US', { 
     month: 'short', 
     day: 'numeric'
-  }) + ' 8:00 AM';
+  }) + ' 12:59 PM UTC';
   
   return `${startFormatted} - ${endFormatted}`;
 }

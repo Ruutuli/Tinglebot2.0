@@ -1777,35 +1777,33 @@ async function handleSaveNickname() {
 
 // ------------------- Function: checkIfCharacterRolledToday -------------------
 // Checks if a character has rolled today based on their dailyRoll data
-// Uses 8am-8am rolling window logic
+// Uses 1pm-12:59pm UTC rolling window logic
 function checkIfCharacterRolledToday(character) {
   try {
     if (!character.dailyRoll || typeof character.dailyRoll !== 'object') {
       return false;
     }
     
-    // Calculate the current 8am-8am rolling window
+    // Calculate the current 1pm-12:59pm UTC rolling window
     const now = new Date();
-    const currentHour = now.getHours();
+    const currentHour = now.getUTCHours();
+    const currentMinute = now.getUTCMinutes();
+    const currentYear = now.getUTCFullYear();
+    const currentMonth = now.getUTCMonth();
+    const currentDay = now.getUTCDate();
     
     let weatherDayStart, weatherDayEnd;
     
-    if (currentHour >= 8) {
-      // If it's 8am or later, the weather day started at 8am today
-      weatherDayStart = new Date(now);
-      weatherDayStart.setHours(8, 0, 0, 0);
+    if (currentHour > 13 || (currentHour === 13 && currentMinute >= 0)) {
+      // If it's 1:00pm UTC or later, the weather day started at 1:00pm UTC today
+      weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
       
-      weatherDayEnd = new Date(now);
-      weatherDayEnd.setDate(weatherDayEnd.getDate() + 1);
-      weatherDayEnd.setHours(8, 0, 0, 0);
+      weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 12, 59, 59, 999));
     } else {
-      // If it's before 8am, the weather day started at 8am yesterday
-      weatherDayStart = new Date(now);
-      weatherDayStart.setDate(weatherDayStart.getDate() - 1);
-      weatherDayStart.setHours(8, 0, 0, 0);
+      // If it's before 1:00pm UTC, the weather day started at 1:00pm UTC yesterday
+      weatherDayStart = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
       
-      weatherDayEnd = new Date(now);
-      weatherDayEnd.setHours(8, 0, 0, 0);
+      weatherDayEnd = new Date(Date.UTC(currentYear, currentMonth, currentDay, 12, 59, 59, 999));
     }
     
     // Check if any of the dailyRoll entries fall within the current rolling window

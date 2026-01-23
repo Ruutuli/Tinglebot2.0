@@ -49,7 +49,7 @@ const VILLAGE_CHANNELS = {
 // ------------------- Weather Tasks -------------------
 // ============================================================================
 
-// ------------------- daily-weather (8am EST = 13:00 UTC) -------------------
+// ------------------- daily-weather (1pm UTC = 13:00 UTC) -------------------
 async function dailyWeather(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'daily-weather: Discord client not available');
@@ -84,7 +84,7 @@ async function dailyWeather(client, _data = {}) {
   logger.success('SCHEDULED', 'daily-weather: done');
 }
 
-// ------------------- weather-fallback-check (8:15am EST = 13:15 UTC) -------------------
+// ------------------- weather-fallback-check (1:15pm UTC = 13:15 UTC) -------------------
 async function weatherFallbackCheck(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'weather-fallback-check: Discord client not available');
@@ -1132,7 +1132,7 @@ async function blightExpirationWarnings(client, _data = {}) {
 // All tasks with their cron expressions (UTC times)
 const TASKS = [
   // Weather Tasks
-  { name: 'daily-weather', cron: '0 13 * * *', handler: dailyWeather }, // 8am EST = 13:00 UTC
+  { name: 'daily-weather', cron: '0 13 * * *', handler: dailyWeather }, // 1pm UTC = 13:00 UTC
   { name: 'weather-fallback-check', cron: '15 13 * * *', handler: weatherFallbackCheck }, // 8:15am EST = 13:15 UTC
   { name: 'weather-reminder', cron: '0 1 * * *', handler: weatherReminder }, // 8pm EST = 01:00 UTC
   

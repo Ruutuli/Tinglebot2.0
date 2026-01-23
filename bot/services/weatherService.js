@@ -177,7 +177,7 @@ function normalizeSeason(season) {
   return s;
 }
 
-// Get current period bounds (8am UTC to 8am UTC) -
+// Get current period bounds (1pm UTC to 12:59pm UTC next day) -
 function getCurrentPeriodBounds(referenceDate = new Date()) {
   // Validate input
   if (!(referenceDate instanceof Date) || isNaN(referenceDate.getTime())) {
@@ -185,24 +185,25 @@ function getCurrentPeriodBounds(referenceDate = new Date()) {
     referenceDate = new Date(); // Fallback to now
   }
 
-  // Weather day is 8am UTC to 8am UTC
+  // Weather day is 1pm UTC (13:00) to 12:59pm UTC (12:59:59) the next day
   const currentHour = referenceDate.getUTCHours();
+  const currentMinute = referenceDate.getUTCMinutes();
   const currentYear = referenceDate.getUTCFullYear();
   const currentMonth = referenceDate.getUTCMonth();
   const currentDay = referenceDate.getUTCDate();
 
   let startUTC, endUTC;
 
-  if (currentHour >= 8) {
-    // If it's 8:00 UTC or later, period started at 8:00 UTC today
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
-    // End is 8:00 UTC tomorrow
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 8, 0, 0, 0));
+  if (currentHour > 13 || (currentHour === 13 && currentMinute >= 0)) {
+    // If it's 1:00pm UTC or later, period started at 1:00pm UTC today
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 13, 0, 0, 0));
+    // End is 12:59:59pm UTC tomorrow
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay + 1, 12, 59, 59, 999));
   } else {
-    // If it's before 8:00 UTC, period started at 8:00 UTC yesterday
-    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 8, 0, 0, 0));
-    // End is 8:00 UTC today
-    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 8, 0, 0, 0));
+    // If it's before 1:00pm UTC, period started at 1:00pm UTC yesterday
+    startUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay - 1, 13, 0, 0, 0));
+    // End is 12:59:59pm UTC today
+    endUTC = new Date(Date.UTC(currentYear, currentMonth, currentDay, 12, 59, 59, 999));
   }
 
   // Validate calculated bounds
@@ -301,7 +302,9 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
     };
   }
 
-  const weather = await Weather.findOne(baseQuery).sort({ date: 1 });
+  // Sort by date descending (newest first) to get the most recent weather in the range
+  // This ensures we get today's weather instead of yesterday's when the range includes both
+  const weather = await Weather.findOne(baseQuery).sort({ date: -1 });
   
   // Add debug logging to help troubleshoot
   if (!weather && onlyPosted) {
@@ -310,7 +313,7 @@ async function findWeatherForPeriod(village, startUTC, endUTC, options = {}) {
     const anyWeather = await Weather.findOne({
       village: normalizedVillage,
       date: dateRange
-    }).sort({ date: 1 });
+    }).sort({ date: -1 });
     if (anyWeather) {
       console.log(`[weatherService.js]: Found weather but postedToDiscord=${anyWeather.postedToDiscord}, ID=${anyWeather._id}`);
     } else {
@@ -789,7 +792,19 @@ async function getWeatherWithoutGeneration(village, options = {}) {
       onlyPosted: options.onlyPosted
     });
 
+    // Validate that the found weather is actually for the current period (not from the lookback window)
+    // This ensures we don't return yesterday's weather when today's should be active
     if (weather) {
+      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+      // Check if weather date is actually within the current period bounds (not just in the wide search range)
+      if (weatherDate < startOfPeriodUTC) {
+        // Weather is from before the current period started, it's old weather
+        console.log(`[weatherService.js]⚠️ Found weather for ${normalizedVillage} but it's from before current period (weather date: ${weatherDate.toISOString()}, period start: ${startOfPeriodUTC.toISOString()}), ignoring`);
+        if (options.onlyPosted) {
+          console.log(`[weatherService.js]⚠️ No posted weather found for ${normalizedVillage} in current period`);
+        }
+        return null;
+      }
       console.log(`[weatherService.js]✅ Found weather for ${normalizedVillage}: ID=${weather._id}, date=${weather.date?.toISOString()}, postedToDiscord=${weather.postedToDiscord}`);
     } else if (options.onlyPosted) {
       console.log(`[weatherService.js]⚠️ No posted weather found for ${normalizedVillage}`);
