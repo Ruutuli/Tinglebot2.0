@@ -5,7 +5,7 @@
 // - Provides connection pooling, health monitoring, and automatic reconnection
 // - Optimized for Railway deployment with sequential connection strategy
 // - Handles both Mongoose and native MongoClient connections
-// Used by: index.js, agenda.js, autocompleteHandler.js, blightHandler.js, vendingHandler.js
+// Used by: index.js, autocompleteHandler.js, blightHandler.js, vendingHandler.js
 // Dependencies: retryStrategy.js, healthMonitor.js, config/database.js
 // ============================================================================
 
@@ -213,7 +213,7 @@ class DatabaseConnectionManager {
   }
 
   /**
-   * Get Tinglebot Mongoose connection instance (for Agenda)
+   * Get Tinglebot Mongoose connection instance
    * @returns {mongoose.Connection}
    */
   static getTinglebotConnection() {

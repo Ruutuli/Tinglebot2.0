@@ -2,18 +2,18 @@
 // Discord.js EmbedBuilder for creating rich embeds
 const { EmbedBuilder } = require('discord.js');
 
-const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { handleError } = require('@/utils/globalErrorHandler');
 // Module imports for random number generation and inventory management
 const { createWeightedItemList, calculateFinalValue } = require('../modules/rngModule');
-const { fetchItemsByMonster, fetchCharacterByName } = require('@/shared/database/db');
-const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+const { fetchItemsByMonster, fetchCharacterByName } = require('@/database/db');
+const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 // Google Sheets functionality removed
 
 // Additional utilities and services
 const { v4: uuidv4 } = require('uuid');
 
 // Monster data for reference
-const { monsterMapping } = require('@/shared/models/MonsterModel');
+const { monsterMapping } = require('@/models/MonsterModel');
 
 // ------------------- Fetch all characters in the battle -------------------
 // Retrieves character data for all characters involved in the battle

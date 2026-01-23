@@ -742,6 +742,27 @@ async function generateAndSaveWeather(normalizedVillage, normalizedDate, season,
   return await saveWeatherWithDuplicateHandling(normalizedVillage, normalizedDate, newWeather, periodSearchStart, startOfNextPeriodUTC);
 }
 
+// ------------------- Mark Weather As Posted ------------------
+// Updates weather document after posting to Discord (postedToDiscord, postedAt).
+async function markWeatherAsPosted(village, weather) {
+  const normalizedVillage = normalizeVillageName(village);
+  const id = weather?._id;
+  if (!id) {
+    console.warn('[weatherService.js]⚠️ markWeatherAsPosted: no _id on weather, skipping update');
+    return null;
+  }
+  const now = new Date();
+  const updated = await Weather.findByIdAndUpdate(
+    id,
+    { $set: { postedToDiscord: true, postedAt: now } },
+    { new: true }
+  );
+  if (updated) {
+    console.log(`[weatherService.js]✅ Marked weather as posted for ${normalizedVillage} (ID: ${id})`);
+  }
+  return updated;
+}
+
 // ------------------- Get Weather Without Generation ------------------
 // Get weather without generating new if missing -
 async function getWeatherWithoutGeneration(village, options = {}) {
@@ -1212,19 +1233,6 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 
     const savedWeather = await weatherDoc.save();
 
-    // Schedule Agenda job to post weather at period start
-    try {
-      const { getAgenda } = require('../scheduler/agenda');
-      const agenda = getAgenda();
-      if (agenda) {
-        await agenda.schedule(startOfNextPeriodUTC, 'postScheduledSpecialWeather', {
-          village: normalizedVillage
-        });
-      }
-    } catch (agendaError) {
-      // Agenda scheduling is optional - weather will still be posted by cron job
-      console.warn('[weatherService.js]⚠️ Could not schedule Agenda job for special weather posting:', agendaError.message);
-    }
 
     const serializedWeather =
       typeof savedWeather.toObject === 'function' ? savedWeather.toObject() : savedWeather;
@@ -1337,12 +1345,13 @@ module.exports = {
   getCurrentWeather,
   getWeatherWithoutGeneration,
   simulateWeightedWeather,
-  
+  markWeatherAsPosted,
+
   // Banner and embed generation
   generateBanner,
   generateWeatherEmbed,
   specialWeatherFlavorText,
-  
+
   // Utility functions
   getCurrentSeason,
   getCurrentPeriodBounds,

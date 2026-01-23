@@ -46,7 +46,7 @@
 // ------------------- Standard Libraries -------------------
 const fs = require('fs');
 const path = require('path');
-const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { handleError } = require('@/utils/globalErrorHandler');
 
 // ------------------- Modules -------------------
 const { handleKO, useHearts } = require('../modules/characterStatsModule');
@@ -54,7 +54,7 @@ const { getGearModLevel } = require('../modules/gearModule');
 const { calculateAttackBuff, calculateDefenseBuff, getDamageResistance } = require('./buffModule');
 
 // ------------------- Utility Functions -------------------
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 
 // ------------------- Configuration Constants -------------------
 const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'pvpBattleProgress.json');
@@ -64,7 +64,7 @@ const {
   saveBattleProgressToStorage, 
   retrieveBattleProgressFromStorage, 
   deleteBattleProgressFromStorage 
-} = require('@/shared/utils/storage.js');
+} = require('@/utils/storage.js');
 
 // ============================================================================
 // File Initialization Functions

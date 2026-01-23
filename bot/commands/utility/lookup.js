@@ -1,14 +1,14 @@
 // ------------------- Import necessary modules and functions -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
-const { connectToTinglebot, getIngredientItems, getCharacterInventoryCollection, fetchCharacterByNameAndUserId } = require('@/shared/database/db.js');
-const { escapeRegExp } = require('@/shared/utils/inventoryUtils.js');
-const ItemModel = require('@/shared/models/ItemModel.js');
-const Character = require('@/shared/models/CharacterModel.js');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
+const { connectToTinglebot, getIngredientItems, getCharacterInventoryCollection, fetchCharacterByNameAndUserId } = require('@/database/db.js');
+const { escapeRegExp } = require('@/utils/inventoryUtils.js');
+const ItemModel = require('@/models/ItemModel.js');
+const Character = require('@/models/CharacterModel.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { getCategoryColor } = require('../../modules/formattingModule.js');
 const { formatItemDetails } = require('../../embeds/embeds.js');
-const generalCategories = require('@/shared/models/GeneralItemCategories.js');
+const generalCategories = require('@/models/GeneralItemCategories.js');
 
 // ------------------- Constants -------------------
 const ITEMS_PER_PAGE = 25;

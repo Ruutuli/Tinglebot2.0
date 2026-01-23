@@ -6,11 +6,11 @@ const {
  EmbedBuilder,
  MessageFlags,
 } = require("discord.js");
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
-const { trackDatabaseError, isDatabaseError } = require('@/shared/utils/globalErrorHandler.js');
-const { handleTokenError } = require('@/shared/utils/tokenUtils.js');
-const { enforceJail } = require('@/shared/utils/jailCheck');
-const logger = require('@/shared/utils/logger');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
+const { trackDatabaseError, isDatabaseError } = require('@/utils/globalErrorHandler.js');
+const { handleTokenError } = require('@/utils/tokenUtils.js');
+const { enforceJail } = require('@/utils/jailCheck');
+const logger = require('@/utils/logger');
 const { v4: uuidv4 } = require("uuid");
 const {
  fetchCharacterByNameAndUserId,
@@ -23,7 +23,7 @@ const {
  getOrCreateToken,
  updateTokenBalance,
  fetchItemByName
-} = require('@/shared/database/db.js');
+} = require('@/database/db.js');
 const {
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
@@ -31,13 +31,13 @@ const {
  escapeRegExp,
  logItemAcquisitionToDatabase,
  logItemRemovalToDatabase,
-} = require('@/shared/utils/inventoryUtils.js');
+} = require('@/utils/inventoryUtils.js');
 // Google Sheets functionality removed
-const { checkInventorySync } = require('@/shared/utils/characterUtils.js');
-const ItemModel = require('@/shared/models/ItemModel.js');
-const ShopStock = require('@/shared/models/VillageShopsModel');
-const User = require('@/shared/models/UserModel');
-const CharacterModel = require('@/shared/models/CharacterModel.js');
+const { checkInventorySync } = require('@/utils/characterUtils.js');
+const ItemModel = require('@/models/ItemModel.js');
+const ShopStock = require('@/models/VillageShopsModel');
+const User = require('@/models/UserModel');
+const CharacterModel = require('@/models/CharacterModel.js');
 const {
  createGiftEmbed,
  createTradeEmbed,
@@ -46,8 +46,8 @@ const {
  createEquippedItemErrorEmbed
 } = require("../../embeds/embeds.js");
 const { hasPerk } = require("../../modules/jobsModule");
-const TempData = require('@/shared/models/TempDataModel');
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
+const TempData = require('@/models/TempDataModel');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const { applyPriestTokensBoost, applyFortuneTellerTokensBoost } = require("../../modules/boostingModule");
 const { applyTokenBoost, getCharacterBoostStatus } = require("../../modules/boostIntegration");
 const {
@@ -1304,7 +1304,7 @@ async function handleShopBuy(interaction) {
       // Boost was applied - get booster info for flavor text
       const boostStatus = await getCharacterBoostStatus(characterName);
       if (boostStatus && boostStatus.category === 'Tokens') {
-        const { fetchCharacterByName } = require('@/shared/database/db');
+        const { fetchCharacterByName } = require('@/database/db');
         const boosterChar = await fetchCharacterByName(boostStatus.boosterName);
         
         if (boosterChar && boostStatus.boosterJob === 'Priest') {
@@ -1825,7 +1825,7 @@ if (quantity <= 0) {
     // Boost was applied - get booster info for flavor text
     const boostStatus = await getCharacterBoostStatus(characterName);
     if (boostStatus && boostStatus.category === 'Tokens') {
-      const { fetchCharacterByName } = require('@/shared/database/db');
+      const { fetchCharacterByName } = require('@/database/db');
       const boosterChar = await fetchCharacterByName(boostStatus.boosterName);
       
       if (boosterChar) {

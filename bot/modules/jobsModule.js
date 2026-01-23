@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules and functions -------------------
-const { fetchCharacterById, fetchModCharacterById, updateCharacterById, updateModCharacterById } = require('@/shared/database/db');
-const { handleError } = require('@/shared/utils/globalErrorHandler');
-const { jobPages, villageJobs, generalJobs, modCharacterJobs, allJobs, jobPerks } = require('@/shared/data/jobData');
+const { fetchCharacterById, fetchModCharacterById, updateCharacterById, updateModCharacterById } = require('@/database/db');
+const { handleError } = require('@/utils/globalErrorHandler');
+const { jobPages, villageJobs, generalJobs, modCharacterJobs, allJobs, jobPerks } = require('@/data/jobData');
 
 // Helper function for capitalization
 const capitalize = (str) => {

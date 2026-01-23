@@ -1,9 +1,6 @@
 const TempData = require('../models/TempDataModel');
 const { handleError } = require('./globalErrorHandler');
 
-// Import Agenda for scheduled expiration checks
-let agenda = null;
-let agendaJob = null;
 
 // Function to check for expired requests and notify users
 async function checkExpiredRequests(client) {
@@ -88,7 +85,7 @@ async function checkExpiredRequests(client) {
 }
 
 // Track expiration check state to prevent duplicate initialization
-let expirationCheckTimer = null; // Fallback timer if Agenda is not available
+let expirationCheckTimer = null;
 let isExpirationChecksRunning = false;
 let isCheckInProgress = false;
 let expirationClient = null;
@@ -126,17 +123,7 @@ function stopExpirationChecks() {
   // Clear the running flag first to prevent new schedules
   isExpirationChecksRunning = false;
   
-  // Clear any existing Agenda job
-  if (agendaJob) {
-    try {
-      agendaJob.remove();
-      agendaJob = null;
-    } catch (error) {
-      console.log('[expirationHandler.js]: Error removing Agenda job during stop:', error);
-    }
-  }
-  
-  // Clear any existing timer (fallback)
+  // Clear any existing timer
   if (expirationCheckTimer !== null) {
     try {
       clearTimeout(expirationCheckTimer);
@@ -160,30 +147,7 @@ function startExpirationChecks(client) {
     return;
   }
 
-  // Try to import Agenda (from bot's scheduler)
-  try {
-    if (!agenda) {
-      const { getAgenda } = require('../../bot/scheduler/agenda');
-      agenda = getAgenda();
-    }
-  } catch (error) {
-    console.error('[expirationHandler.js]: Failed to import Agenda, falling back to setTimeout:', error);
-    // Fallback to setTimeout if Agenda is not available
-    agenda = null;
-  }
-
-  // Clear any existing Agenda job (safety check for edge cases)
-  if (agendaJob) {
-    console.log('[expirationHandler.js]: Found existing Agenda job during initialization - removing it');
-    try {
-      agendaJob.remove();
-    } catch (error) {
-      console.log('[expirationHandler.js]: Error removing existing Agenda job during initialization:', error);
-    }
-    agendaJob = null;
-  }
-  
-  // Clear any existing timer (fallback)
+  // Clear any existing timer
   if (expirationCheckTimer !== null) {
     console.log('[expirationHandler.js]: Found existing timer during initialization - clearing it');
     try {
@@ -198,41 +162,8 @@ function startExpirationChecks(client) {
   isExpirationChecksRunning = true;
   expirationClient = client;
 
-  // Use Agenda if available (runs daily at 8 AM EST = 13:00 UTC)
-  if (agenda) {
-    try {
-      // Define the job handler
-      agenda.define('check-expired-requests', async (job) => {
-        // Prevent overlap if the work takes longer than expected
-        if (isCheckInProgress) {
-          console.log('[expirationHandler.js]: Check already in progress - skipping this run');
-          return;
-        }
-
-        // Set flag to prevent concurrent execution
-        isCheckInProgress = true;
-
-        try {
-          await checkExpiredRequests(expirationClient);
-        } catch (error) {
-          console.error('[expirationHandler.js]: Error in expiration check:', error);
-        } finally {
-          // Clear the flag
-          isCheckInProgress = false;
-        }
-      });
-
-      // Schedule the job to run daily at 8 AM EST (13:00 UTC)
-      agendaJob = await agenda.every('0 13 * * *', 'check-expired-requests');
-      console.log('[expirationHandler.js]: Scheduled expiration checks using Agenda (daily at 8 AM EST = 13:00 UTC)');
-    } catch (error) {
-      console.error('[expirationHandler.js]: Failed to create Agenda job, falling back to setTimeout:', error);
-      agenda = null;
-    }
-  }
-  
-  // Fallback to setTimeout if Agenda is not available
-  if (!agenda && expirationCheckTimer === null) {
+  // Use setTimeout for expiration checks
+  if (expirationCheckTimer === null) {
     console.log('[expirationHandler.js]: Using setTimeout fallback for expiration checks');
     const scheduleNextCheck = () => {
       if (!isExpirationChecksRunning || !expirationClient) {

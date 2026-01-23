@@ -1284,19 +1284,6 @@ async function scheduleSpecialWeather(village, specialLabel, options = {}) {
 
     const savedWeather = await weatherDoc.save();
 
-    // Schedule Agenda job to post weather at period start
-    try {
-      const { getAgenda } = require('../../bot/scheduler/agenda');
-      const agenda = getAgenda();
-      if (agenda) {
-        await agenda.schedule(startOfNextPeriodUTC, 'postScheduledSpecialWeather', {
-          village: normalizedVillage
-        });
-      }
-    } catch (agendaError) {
-      // Agenda scheduling is optional - weather will still be posted by scheduled job
-      console.warn('[weatherService.js]: Could not schedule Agenda job for special weather posting:', agendaError.message);
-    }
 
     const serializedWeather =
       typeof savedWeather.toObject === 'function' ? savedWeather.toObject() : savedWeather;

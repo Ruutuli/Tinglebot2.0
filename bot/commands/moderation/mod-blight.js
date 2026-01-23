@@ -19,16 +19,16 @@ const {
 const {
   connectToInventories,
   connectToTinglebot
-} = require('@/shared/database/db');
+} = require('@/database/db');
 
 // ------------------- Database Services -------------------
 const {
   fetchCharacterByName,
   fetchAllCharacters
-} = require('@/shared/database/db');
+} = require('@/database/db');
 
 // ------------------- Utility Functions -------------------
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
+const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
 // ============================================================================
 // ------------------- Command Definition -------------------

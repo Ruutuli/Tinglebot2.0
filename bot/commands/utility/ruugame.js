@@ -15,13 +15,13 @@ const {
 // ------------------- Import database models and utilities -------------------
 // Models for game sessions and character management
 // ============================================================================
-const RuuGame = require('@/shared/models/RuuGameModel');
-const Character = require('@/shared/models/CharacterModel');
-const User = require('@/shared/models/UserModel');
-const TempData = require('@/shared/models/TempDataModel');
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
+const RuuGame = require('@/models/RuuGameModel');
+const Character = require('@/models/CharacterModel');
+const User = require('@/models/UserModel');
+const TempData = require('@/models/TempDataModel');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const { syncInventory } = require('../../handlers/syncHandler');
-const { fetchAllItems } = require('@/shared/database/db');
+const { fetchAllItems } = require('@/database/db');
 
 // ============================================================================
 // ------------------- Import RuuGame configuration -------------------
@@ -712,7 +712,7 @@ async function awardRuuGamePityPrize(session, userId, interaction) {
       const itemEmoji = itemDetails?.emoji || '🧚‍♀️'; // Fallback emoji if not found
 
       // Add Mock Fairy to random character's inventory using inventory utilities
-      const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+      const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
       await addItemInventoryDatabase(
         randomCharacter._id,
         'Mock Fairy',

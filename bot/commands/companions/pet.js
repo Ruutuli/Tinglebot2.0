@@ -17,7 +17,7 @@ const {
  fetchAllItems,
  getTokenBalance,
  updateTokenBalance,
-} = require('@/shared/database/db');
+} = require('@/database/db');
 
 // ------------------- Modules -------------------
 // Modules used for random item rolls, pet formatting, and retrieving pet-related data.
@@ -38,21 +38,21 @@ const {
 
 // ------------------- Utility Functions -------------------
 // Helper utilities for inventory management, Google Sheets API interaction, and image uploads.
-const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 // Google Sheets functionality removed
-const { uploadPetImage } = require('@/shared/utils/uploadUtils');
-const { checkInventorySync } = require('@/shared/utils/characterUtils');
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
-const { enforceJail } = require('@/shared/utils/jailCheck');
-const { characterExistsNotOwned } = require('@/shared/utils/validation');
-const logger = require('@/shared/utils/logger');
+const { uploadPetImage } = require('@/utils/uploadUtils');
+const { checkInventorySync } = require('@/utils/characterUtils');
+const { handleInteractionError } = require('@/utils/globalErrorHandler');
+const { enforceJail } = require('@/utils/jailCheck');
+const { characterExistsNotOwned } = require('@/utils/validation');
+const logger = require('@/utils/logger');
 
 
 // ------------------- Database Models -------------------
 // Data schemas for pet and character documents.
-const Pet = require('@/shared/models/PetModel');
-const Character = require('@/shared/models/CharacterModel');
-const ItemModel = require('@/shared/models/ItemModel');
+const Pet = require('@/models/PetModel');
+const Character = require('@/models/CharacterModel');
+const ItemModel = require('@/models/ItemModel');
 
 // ------------------- Helper Functions -------------------
 // Calculates the upgrade cost based on the pet's new level.
@@ -1113,7 +1113,7 @@ module.exports = {
      // The upgradePetLevel function already sets rollsRemaining to the new level
 
      // Log to token tracker sheet if available
-     const User = require('@/shared/models/UserModel');
+     const User = require('@/models/UserModel');
      // Google Sheets functionality removed
      const user = await User.findOne({ discordId: userId });
      if (user && user.tokenTracker) {

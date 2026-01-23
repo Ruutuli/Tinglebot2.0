@@ -17,15 +17,15 @@ const { ChannelType } = require('discord.js');
 // ============================================================================
 // ------------------- Shared Utilities -------------------
 // ============================================================================
-const { handleError } = require('@/shared/utils/globalErrorHandler');
-const logger = require('@/shared/utils/logger');
-const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
+const { handleError } = require('@/utils/globalErrorHandler');
+const logger = require('@/utils/logger');
+const { capitalizeVillageName } = require('@/utils/stringUtils');
 
 // ============================================================================
 // ------------------- Database Models -------------------
 // ============================================================================
-const TempData = require('@/shared/models/TempDataModel');
-const { Village } = require('@/shared/models/VillageModel');
+const TempData = require('@/models/TempDataModel');
+const { Village } = require('@/models/VillageModel');
 
 // ============================================================================
 // ------------------- Local Modules -------------------
@@ -413,7 +413,7 @@ async function rollbackQuotaReservation(villageDisplayName) {
 
 // ------------------- Select Monster For Raid -------------------
 async function selectMonsterForRaid(villageRegion, villageDisplayName, channel) {
-  const Monster = require('@/shared/models/MonsterModel');
+  const Monster = require('@/models/MonsterModel');
   const monsters = await Monster.find({
     tier: { $gte: 5 },
     [villageRegion.toLowerCase()]: true,

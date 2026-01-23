@@ -3,7 +3,7 @@
 // // ============================================================================
 // // ------------------- File system and path modules -------------------
 // const fs = require('fs');
-// const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
+// const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 // const path = require('path');
 
 // // ============================================================================
@@ -20,7 +20,7 @@
 //   fetchRelicById, 
 //   archiveRelic, 
 //   appraiseRelic
-// } = require('@/shared/database/db.js');
+// } = require('@/database/db.js');
 
 
 // // ============================================================================
@@ -34,10 +34,10 @@
 // // Utility Functions
 // // ============================================================================
 // // ------------------- Import unique ID generator -------------------
-// const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils.js');
+// const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
 // // ------------------- Import submission storage operations -------------------
-// const { saveSubmissionToStorage, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('@/shared/utils/storage.js');
-// const { checkInventorySync } = require('@/shared/utils/characterUtils');
+// const { saveSubmissionToStorage, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('@/utils/storage.js');
+// const { checkInventorySync } = require('@/utils/characterUtils');
 
 // // ============================================================================
 // // Configuration and Paths

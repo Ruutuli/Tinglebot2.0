@@ -3,14 +3,14 @@
 // // Core logic for Roots-themed Secret Santa art gift exchange
 // // ============================================================================
 
-// const { connectToTinglebot } = require('@/shared/database/db');
+// const { connectToTinglebot } = require('@/database/db');
 // const {
 //   SecretSantaParticipant,
 //   SecretSantaMatch,
 //   TempSignupData,
 //   SecretSantaSettings
-// } = require('@/shared/models/SecretSantaModel');
-// const logger = require('@/shared/utils/logger');
+// } = require('@/models/SecretSantaModel');
+// const logger = require('@/utils/logger');
 
 // // ============================================================================
 // // ------------------- Storage Utilities -------------------

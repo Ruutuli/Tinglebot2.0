@@ -1,13 +1,13 @@
 // ------------------- Import necessary modules -------------------
 // Group imports into standard libraries, third-party, and local modules
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { 
   fetchCharacterByName, 
   fetchCharacterByNameAndUserId,
   fetchModCharacterByNameAndUserId,
   fetchModCharacterByName
-} = require('@/shared/database/db.js');
+} = require('@/database/db.js');
 const { capitalizeFirstLetter } = require('../../modules/formattingModule.js');
 const { useStamina, recoverHearts } = require('../../modules/characterStatsModule.js');
 const { 
@@ -15,12 +15,12 @@ const {
   retrieveHealingRequestFromStorage, 
   deleteHealingRequestFromStorage,
   cleanupExpiredHealingRequests
-} = require('@/shared/utils/storage.js');
+} = require('@/utils/storage.js');
 const { createHealEmbed } = require('../../embeds/embeds.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
-const { checkInventorySync } = require('@/shared/utils/characterUtils');
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils.js');
+const { checkInventorySync } = require('@/utils/characterUtils');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
 const { 
   applyHealingBoost, 
   applyHealingStaminaBoost, 
@@ -33,7 +33,7 @@ const {
   retrieveBoostingRequestFromTempDataByCharacter,
   isBoostActive
 } = require('./boosting');
-const logger = require('@/shared/utils/logger');
+const logger = require('@/utils/logger');
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -197,7 +197,7 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
     // Check if healer has Teacher boost (which can give temporary hearts beyond max)
     // Must check BOTH the character's boostedBy field AND TempData to ensure boost is truly active
     const { isBoostActive, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
-    const { fetchCharacterByName } = require('@/shared/database/db');
+    const { fetchCharacterByName } = require('@/database/db');
     
     // First check if character has boostedBy set (required for boost to be active)
     if (!healerCharacter.boostedBy) {

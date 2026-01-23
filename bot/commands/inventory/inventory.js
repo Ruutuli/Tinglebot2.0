@@ -23,16 +23,16 @@ const {
   fetchCharacterByNameAndUserId,
   fetchCharactersByUserId,
   getCharacterInventoryCollection
-} = require('@/shared/database/db.js');
+} = require('@/database/db.js');
 
 // ------------------- Project Utilities -------------------
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 // Google Sheets functionality removed
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
-const { checkInventorySync } = require('@/shared/utils/characterUtils.js');
+const { checkInventorySync } = require('@/utils/characterUtils.js');
 
 // ------------------- Database Models -------------------
-const ItemModel = require('@/shared/models/ItemModel.js');
+const ItemModel = require('@/models/ItemModel.js');
 
 // ------------------- Project Embeds -------------------
 const { formatItemDetails } = require('../../embeds/embeds.js');
@@ -140,7 +140,7 @@ module.exports = {
       
       // If not found as regular character, try as mod character
       if (!character) {
-        const { fetchModCharacterByNameAndUserId } = require('@/shared/database/db');
+        const { fetchModCharacterByNameAndUserId } = require('@/database/db');
         character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
       }
       

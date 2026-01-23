@@ -4,7 +4,7 @@
 // New file boostIntegration.js will be for applying effects to commands
 
 const { applyBoostEffect } = require('./boostingModule');
-const logger = require('@/shared/utils/logger');
+const logger = require('@/utils/logger');
 
 // ------------------- applyBoostToAction -------------------
 /**
@@ -118,7 +118,7 @@ async function applyHealingBoost(characterName, baseHealing, wasKO = false) {
 
 // Apply stamina cost boost (Fortune Teller: 50% less stamina)
 async function applyHealingStaminaBoost(characterName, baseStaminaCost) {
-  const logger = require('@/shared/utils/logger');
+  const logger = require('@/utils/logger');
   
   const hasBoost = await checkBoostActive(characterName, 'Healers');
   
@@ -148,8 +148,8 @@ async function applyHealingStaminaBoost(characterName, baseStaminaCost) {
 
 // Apply post-healing effects (debuff removal, Scholar, Teacher, etc.)
 async function applyPostHealingBoosts(healerName, patientName) {
-  const { fetchCharacterByName } = require('@/shared/database/db');
-  const logger = require('@/shared/utils/logger');
+  const { fetchCharacterByName } = require('@/database/db');
+  const logger = require('@/utils/logger');
   const patient = await fetchCharacterByName(patientName);
   
   if (!patient) {
@@ -169,7 +169,7 @@ async function applyPostHealingBoosts(healerName, patientName) {
   if (booster) {
     // Check if patient has an active debuff that needs to be removed
     if (patient.debuff?.active) {
-      // Check if debuff has expired (edge case: expired but not yet cleaned up by scheduler)
+      // Check if debuff has expired
       const debuffEndDate = patient.debuff.endDate ? new Date(patient.debuff.endDate) : null;
       const now = new Date();
       const isExpired = debuffEndDate ? debuffEndDate <= now : false;
@@ -221,7 +221,7 @@ async function applyScholarHealingBoost(healerName, recipientName) {
   const booster = await getBoosterInfo(healerName);
   if (!booster || booster.job !== 'Scholar') return null;
   
-  const { fetchCharacterByName } = require('@/shared/database/db');
+  const { fetchCharacterByName } = require('@/database/db');
   const healer = await fetchCharacterByName(healerName);
   const recipient = await fetchCharacterByName(recipientName);
   
@@ -241,7 +241,7 @@ async function applyScholarHealingBoost(healerName, recipientName) {
 
 // Apply Teacher temp hearts boost
 async function applyTeacherHealingBoost(patientName) {
-  const { fetchCharacterByName } = require('@/shared/database/db');
+  const { fetchCharacterByName } = require('@/database/db');
   const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
   
   // Find who is healing this patient (we need to check the healer's boost, not patient's)
@@ -252,7 +252,7 @@ async function applyTeacherHealingBoost(patientName) {
 
 // Helper function to check if boost is active
 async function checkBoostActive(characterName, category) {
-  const logger = require('@/shared/utils/logger');
+  const logger = require('@/utils/logger');
   try {
     const { isBoostActive } = require('../commands/jobs/boosting');
     
@@ -266,10 +266,10 @@ async function checkBoostActive(characterName, category) {
 
 // Helper function to get booster info
 async function getBoosterInfo(characterName) {
-  const logger = require('@/shared/utils/logger');
+  const logger = require('@/utils/logger');
   try {
     const { retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
-    const { fetchCharacterByName } = require('@/shared/database/db');
+    const { fetchCharacterByName } = require('@/database/db');
     
     const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
     if (!activeBoost) {

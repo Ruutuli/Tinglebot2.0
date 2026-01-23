@@ -320,14 +320,6 @@ async function sendToJail(character) {
         character.failedStealAttempts = 0; // Reset counter
         await character.save();
 
-        // Schedule Agenda job for jail release
-        try {
-            const { scheduleJailRelease } = require('../scheduler/scheduler');
-            await scheduleJailRelease(character);
-        } catch (agendaError) {
-            // Log but don't fail - the daily cron check will still catch it as fallback
-            logger.warn('JAIL', `Failed to schedule Agenda job for ${character.name}, will use fallback: ${agendaError.message}`);
-        }
 
         logger.info('JAIL', `Sent ${character.name} to jail until ${releaseDateEST.toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
 

@@ -18,10 +18,10 @@ if (fs.existsSync(rootEnvPath)) {
 }
 
 // ------------------- Path Aliases ------------------
-// Setup module aliases for shared code
+// Alias @/ to bot root for clean imports
 require('module-alias/register');
 const moduleAlias = require('module-alias');
-moduleAlias.addAlias('@/shared', path.resolve(__dirname));
+moduleAlias.addAlias('@', path.resolve(__dirname));
 
 const port = process.env.PORT || 5001;
 
@@ -66,13 +66,13 @@ const { convertToHyruleanDate } = require("./modules/calendarModule");
 // ============================================================================
 // ------------------- Utils -------------------
 // ============================================================================
-const logger = require('@/shared/utils/logger');
-const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
+const logger = require('@/utils/logger');
+const { getMemoryMonitor } = require('@/utils/memoryMonitor');
 const {
   handleError,
   initializeErrorHandler,
   initializeErrorTracking,
-} = require('@/shared/utils/globalErrorHandler');
+} = require('@/utils/globalErrorHandler');
 
 
 // ============================================================================
@@ -182,7 +182,7 @@ async function initializeDatabases() {
     
     // Fix questBonus type issues (convert numeric questBonus to string)
     try {
-      const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
+      const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
       
       // Fix ApprovedSubmission records with numeric questBonus
       const approvedSubmissionsWithNumericBonus = await ApprovedSubmission.find({
@@ -257,34 +257,22 @@ process.on('SIGTERM', async () => {
 // Handles graceful shutdown of all services
 async function performGracefulShutdown() {
   try {
-    // Expiration checks are now handled by Agenda - no need to stop separately
-    
-    // 2. Stop Agenda worker (one-time scheduled jobs)
+    // 1. Stop Agenda scheduler (unlocks running jobs)
     try {
-      const { stopAgenda } = require('./scheduler/agenda');
-      await stopAgenda();
-      logger.info('SYSTEM', 'Agenda stopped');
+      const scheduler = require('@/utils/scheduler');
+      await scheduler.stopAllTasks();
+      logger.info('SYSTEM', 'Scheduler stopped');
     } catch (error) {
-      logger.warn('SYSTEM', `Error stopping Agenda: ${error.message}`);
+      logger.warn('SYSTEM', `Error stopping scheduler: ${error.message}`);
     }
     
-    // 3. Destroy all cron jobs (prevents new timers from being created)
-    // SCHEDULER DISABLED FOR TESTING - Commented out to diagnose memory/timer issues
-    // try {
-    // Croner removed - using Agenda for all scheduling
-    //   logger.info('SYSTEM', 'All cron jobs stopped');
-    // } catch (error) {
-    //   logger.error('SYSTEM', 'Error stopping cron jobs:', error.message);
-    // }
-    // Note: Scheduler is disabled, so no cron jobs to stop
-    
-    // 3. Destroy Discord client
+    // 2. Destroy Discord client
     if (client) {
       logger.info('SYSTEM', 'Destroying Discord client...');
       await client.destroy();
     }
     
-    // 5. Close all database connections gracefully
+    // 3. Close all database connections gracefully
     logger.info('SYSTEM', 'Closing database connections...');
     try {
       await DatabaseConnectionManager.closeAll();
@@ -292,9 +280,9 @@ async function performGracefulShutdown() {
       logger.warn('SYSTEM', `Error closing database connections: ${error.message}`);
     }
     
-    // 5. Stop memory monitor
+    // 4. Stop memory monitor
     try {
-      const { getMemoryMonitor } = require('@/shared/utils/memoryMonitor');
+      const { getMemoryMonitor } = require('@/utils/memoryMonitor');
       const memoryMonitor = getMemoryMonitor();
       if (memoryMonitor) {
         memoryMonitor.stop();
@@ -332,14 +320,14 @@ async function initializeClient() {
     
     // Apply Railway-specific optimizations
     try {
-      const { configureRailwayOptimizations, setupRailwayMemoryMonitoring } = require('@/shared/utils/railwayOptimizations');
+      const { configureRailwayOptimizations, setupRailwayMemoryMonitoring } = require('@/utils/railwayOptimizations');
       configureRailwayOptimizations();
       setupRailwayMemoryMonitoring();
     } catch (error) {
       logger.warn('RAILWAY', `Could not apply Railway optimizations: ${error.message}`);
     }
     
-    // Initialize memory monitoring (will log hourly via agenda)
+    // Initialize memory monitoring
     const memoryMonitor = getMemoryMonitor({
       enabled: true,
       warningThreshold: 500 * 1024 * 1024, // 500MB
@@ -509,43 +497,16 @@ async function initializeClient() {
         const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
         initializeRandomEncounterBot(client);
         
+        // Initialize universal scheduler (Agenda) and register tasks
+        const scheduler = require('@/utils/scheduler');
+        const { registerScheduledTasks } = require('./tasks/tasks');
+        registerScheduledTasks(scheduler);
+        await scheduler.initializeScheduler(client);
+        logger.info('SYSTEM', 'Scheduler initialized (daily weather at 8am EST)');
+        
         // Check blood moon status
         logBloodMoonStatus();
         
-        // Initialize Agenda for all scheduled jobs (recurring + one-time)
-        logger.section('Scheduler Initialization');
-        logger.divider();
-        try {
-          const { initAgenda, defineAgendaJobs, startAgenda } = require('./scheduler/agenda');
-          logger.info('SCHEDULER', 'Initializing Agenda...');
-          await initAgenda();
-          logger.info('SCHEDULER', 'Defining Agenda jobs...');
-          defineAgendaJobs({ client }); // Defines all job types (recurring + one-time)
-          logger.info('SCHEDULER', 'Starting Agenda worker...');
-          // Start Agenda in the background - it will initialize asynchronously
-          // Jobs can be created immediately and Agenda will pick them up when ready
-          startAgenda().catch((error) => {
-            logger.warn('SCHEDULER', `Agenda start encountered an issue: ${error.message}`);
-            logger.warn('SCHEDULER', 'Continuing with scheduler setup - Agenda may start later');
-            // Don't throw - allow initialization to continue
-          });
-          
-          // Initialize scheduler (schedules recurring jobs using Agenda)
-          // Jobs can be created even if Agenda is still initializing
-          // Agenda will pick them up when it's ready (the "ready" event will log when that happens)
-          logger.info('SCHEDULER', 'Initializing scheduler (creating recurring jobs)...');
-          const { initializeScheduler } = require('./scheduler/scheduler');
-          await initializeScheduler(client);
-          logger.success('SCHEDULER', 'Scheduler initialization complete');
-        } catch (schedulerError) {
-          logger.error('SCHEDULER', 'Error initializing scheduler:', schedulerError);
-          handleError(schedulerError, "index.js", {
-            operation: 'scheduler_initialization',
-            context: 'agenda_setup'
-          });
-          // Don't throw - allow bot to continue even if scheduler fails
-        }
-        logger.divider();
         
         logger.divider();
         
@@ -555,8 +516,7 @@ async function initializeClient() {
         logger.success('SYSTEM', 'Bot is online and ready');
       } catch (error) {
         handleError(error, "index.js", {
-          operation: 'initialization',
-          context: 'scheduler_and_encounters'
+          operation: 'initialization'
         });
       }
     });
@@ -769,7 +729,7 @@ async function initializeClient() {
       try {
         const { handleXP } = require('./modules/levelingModule');
         await handleXP(message);
-        const { trackLastMessage } = require('@/shared/utils/messageUtils');
+        const { trackLastMessage } = require('@/utils/messageUtils');
         await trackLastMessage(message);
       } catch (error) {
         logger.error('XP_TRACKING', `[index.js]❌ Error handling XP tracking: ${error.message}`);
@@ -1008,7 +968,7 @@ async function initializeClient() {
         }
         
         // Track intro post in database
-        const User = require('@/shared/models/UserModel');
+        const User = require('@/models/UserModel');
         const userDoc = await User.getOrCreateUser(message.author.id);
         userDoc.introPostedAt = new Date();
         await userDoc.save();
@@ -1068,22 +1028,22 @@ async function initializeClient() {
         logger.info('CLEANUP', `User ${username} (${discordId}) left the server. Starting data cleanup...`);
         
         // Import necessary models
-        const User = require('@/shared/models/UserModel');
-        const Character = require('@/shared/models/CharacterModel');
-        const ModCharacter = require('@/shared/models/ModCharacterModel');
-        const Pet = require('@/shared/models/PetModel');
-        const Mount = require('@/shared/models/MountModel');
-        const Quest = require('@/shared/models/QuestModel');
-        const Party = require('@/shared/models/PartyModel');
-        const MinigameModel = require('@/shared/models/MinigameModel');
-        const RuuGame = require('@/shared/models/RuuGameModel');
-        const StealStats = require('@/shared/models/StealStatsModel');
-        const BlightRollHistory = require('@/shared/models/BlightRollHistoryModel');
-        const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
-        const Raid = require('@/shared/models/RaidModel');
+        const User = require('@/models/UserModel');
+        const Character = require('@/models/CharacterModel');
+        const ModCharacter = require('@/models/ModCharacterModel');
+        const Pet = require('@/models/PetModel');
+        const Mount = require('@/models/MountModel');
+        const Quest = require('@/models/QuestModel');
+        const Party = require('@/models/PartyModel');
+        const MinigameModel = require('@/models/MinigameModel');
+        const RuuGame = require('@/models/RuuGameModel');
+        const StealStats = require('@/models/StealStatsModel');
+        const BlightRollHistory = require('@/models/BlightRollHistoryModel');
+        const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
+        const Raid = require('@/models/RaidModel');
         
         // For vending cleanup, we'll use the vending connection directly
-        const { connectToVending } = require('@/shared/database/db');
+        const { connectToVending } = require('@/database/db');
         const vendingConnection = await connectToVending();
         
         // Get all characters for this user (needed for cascading deletes)
@@ -1117,7 +1077,7 @@ async function initializeClient() {
         
         // 4. Delete inventories (for all characters)
         // Import deleteCharacterInventoryCollection function
-        const { deleteCharacterInventoryCollection } = require('@/shared/database/db');
+        const { deleteCharacterInventoryCollection } = require('@/database/db');
         let inventoryCollectionsDeleted = 0;
         if (allCharacterNames.length > 0) {
           for (const characterName of allCharacterNames) {
@@ -1469,10 +1429,9 @@ function logBloodMoonStatus() {
       logger.info('BLOODMOON', `Blood Moon Active (${hyruleanDate})`);
     }
   } catch (error) {
-    handleError(error, "index.js", {
-      operation: 'blood_moon_check',
-      context: 'scheduler_and_encounters'
-    });
+      handleError(error, "index.js", {
+        operation: 'blood_moon_check'
+      });
   }
 }
 

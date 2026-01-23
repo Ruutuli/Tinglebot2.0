@@ -7,7 +7,7 @@
 const path = require('path');
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } = require('discord.js');
-const { connectToTinglebot } = require('@/shared/database/db');
+const { connectToTinglebot } = require('@/database/db');
 const {
   loadSecretSantaData,
   saveParticipant,
@@ -24,19 +24,19 @@ const {
 } = require('../../modules/secretSantaModule');
 
 // Utility Imports
-const { uploadSubmissionImage } = require('@/shared/utils/uploadUtils.js');
+const { uploadSubmissionImage } = require('@/utils/uploadUtils.js');
 const { createArtSubmissionEmbed } = require('../../embeds/embeds.js');
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils.js');
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 
 // Model Imports
-const ApprovedSubmission = require('@/shared/models/ApprovedSubmissionModel');
-const User = require('@/shared/models/UserModel');
+const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
+const User = require('@/models/UserModel');
 
 // Admin role ID from questAnnouncements.js
 const MOD_ROLE_ID = '606128760655183882';
-const { SecretSantaParticipant } = require('@/shared/models/SecretSantaModel');
-const logger = require('@/shared/utils/logger');
+const { SecretSantaParticipant } = require('@/models/SecretSantaModel');
+const logger = require('@/utils/logger');
 
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
@@ -912,7 +912,7 @@ async function handleEditMatch(interaction) {
   const santaUser = interaction.options.getUser('santa');
   const gifteeUser = interaction.options.getUser('giftee');
   
-  const { SecretSantaMatch } = require('@/shared/models/SecretSantaModel');
+  const { SecretSantaMatch } = require('@/models/SecretSantaModel');
   await connectToTinglebot();
   
   // Remove existing matches for this santa

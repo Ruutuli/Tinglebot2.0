@@ -1,12 +1,12 @@
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
-const { handleTokenError } = require('@/shared/utils/tokenUtils.js');
-const logger = require('@/shared/utils/logger.js');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
+const { handleTokenError } = require('@/utils/tokenUtils.js');
+const logger = require('@/utils/logger.js');
 
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder } = require('@discordjs/builders');
 const { ButtonStyle, MessageFlags } = require('discord.js');
-const User = require('@/shared/models/UserModel.js');
-const { getOrCreateToken, syncTokenTracker } = require('@/shared/database/db.js');
+const User = require('@/models/UserModel.js');
+const { getOrCreateToken, syncTokenTracker } = require('@/database/db.js');
 // Google Sheets functionality removed
 const { createTokenTrackerSetupEmbed } = require('../../embeds/embeds.js');
 

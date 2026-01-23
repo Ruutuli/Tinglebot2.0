@@ -19,8 +19,8 @@ if (require('fs').existsSync(envSpecificPath)) {
   dotenv.config({ path: rootEnvPath });
 }
 
-const { handleError } = require('@/shared/utils/globalErrorHandler');
-const logger = require('@/shared/utils/logger');
+const { handleError } = require('@/utils/globalErrorHandler');
+const logger = require('@/utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -30,7 +30,7 @@ const { EmbedBuilder } = require('discord.js');
 // Local Modules
 // ------------------- Importing custom modules -------------------
 const { convertToHyruleanDate, bloodmoonDates, isBloodmoon } = require('../modules/calendarModule');
-const BloodMoonTracking = require('@/shared/models/BloodMoonTrackingModel');
+const BloodMoonTracking = require('@/models/BloodMoonTrackingModel');
 
 // ============================================================================
 // Blood Moon Tracking State
@@ -112,7 +112,7 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     }
 
     // Determine the correct date for the Blood Moon announcement
-    // Use EST-equivalent date (UTC-5) to match the scheduler
+    // Use EST-equivalent date (UTC-5)
     const now = new Date();
     // EST is UTC-5, subtract 5 hours
     const estTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);

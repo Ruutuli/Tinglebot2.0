@@ -7,19 +7,19 @@
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
-const { fetchCharacterByNameAndUserId, fetchAllItems } = require('@/shared/database/db.js');
-const ItemModel = require('@/shared/models/ItemModel');
-const Weather = require('@/shared/models/WeatherModel');
+const { fetchCharacterByNameAndUserId, fetchAllItems } = require('@/database/db.js');
+const ItemModel = require('@/models/ItemModel');
+const Weather = require('@/models/WeatherModel');
 
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../../modules/rngModule.js');
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler.js');
-const { syncToInventoryDatabase } = require('@/shared/utils/inventoryUtils.js');
-const weatherService = require('@/shared/services/weatherService');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
+const { syncToInventoryDatabase } = require('@/utils/inventoryUtils.js');
+const weatherService = require('@/services/weatherService');
 const { getWeatherWithoutGeneration, getCurrentPeriodBounds, getNextPeriodBounds, PERIOD_VALIDATION_TOLERANCE_MS } = weatherService;
-const { canUseSpecialWeather, normalizeVillageName } = require('@/shared/utils/specialWeatherUtils');
-const { enforceJail } = require('@/shared/utils/jailCheck.js');
-const { checkInventorySync } = require('@/shared/utils/characterUtils.js');
+const { canUseSpecialWeather, normalizeVillageName } = require('@/utils/specialWeatherUtils');
+const { enforceJail } = require('@/utils/jailCheck.js');
+const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Constants -------------------
@@ -278,7 +278,7 @@ async function validateCharacter(characterName, userId) {
   let character = await fetchCharacterByNameAndUserId(characterName, userId);
   
   if (!character) {
-    const { fetchModCharacterByNameAndUserId } = require('@/shared/database/db');
+    const { fetchModCharacterByNameAndUserId } = require('@/database/db');
     character = await fetchModCharacterByNameAndUserId(characterName, userId);
   }
 

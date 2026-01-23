@@ -13,11 +13,11 @@ const {
   validateCharacterOwnership,
   loadBlightSubmissions
 } = require('../../handlers/blightHandler');
-const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('@/shared/database/db.js');
+const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('@/database/db.js');
 const { getModCharacterByName } = require('../../modules/modCharacters');
-const { retrieveBlightRequestFromStorage } = require('@/shared/utils/storage');
-const Character = require('@/shared/models/CharacterModel');
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
+const { retrieveBlightRequestFromStorage } = require('@/utils/storage');
+const Character = require('@/models/CharacterModel');
+const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
 // ------------------- Helper function to safely respond to interactions -------------------
 async function safeInteractionResponse(interaction, content, options = {}) {

@@ -16,7 +16,7 @@ const {
   getCharacterInventoryCollection,
   updateCharacterById,
   updateModCharacterById
-} = require('@/shared/database/db');
+} = require('@/database/db');
 
 // ------------------- Custom Modules -------------------
 // Application-specific modules: character stats, job perks, formatting helpers, location emojis.
@@ -31,14 +31,14 @@ const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = r
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
-const { handleInteractionError, ERROR_RESPONSE_TYPES } = require('@/shared/utils/globalErrorHandler');
-const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { checkInventorySync } = require('@/shared/utils/characterUtils');
-const { enforceJail } = require('@/shared/utils/jailCheck');
+const { handleInteractionError, ERROR_RESPONSE_TYPES } = require('@/utils/globalErrorHandler');
+const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { checkInventorySync } = require('@/utils/characterUtils');
+const { enforceJail } = require('@/utils/jailCheck');
 
 // ------------------- Database Models -------------------
-const User = require('@/shared/models/UserModel');
-const Pet = require('@/shared/models/PetModel');
+const User = require('@/models/UserModel');
+const Pet = require('@/models/PetModel');
 
 // ------------------- Command Definition -------------------
 // Defines the /item command schema and its execution logic.

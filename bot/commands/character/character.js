@@ -15,7 +15,7 @@ const {
 const mongoose = require("mongoose");
 const { MongoClient } = require("mongodb");
 
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
+const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const {
  getOrCreateToken,
  updateTokenBalance,
@@ -27,8 +27,8 @@ const {
  deleteCharacterById,
  deleteCharacterInventoryCollection,
  getCharacterInventoryCollection,
-} = require('@/shared/database/db');
-const dbConfig = require('@/shared/config/database');
+} = require('@/database/db');
+const dbConfig = require('@/config/database');
 const {
  getVillageColorByName,
  getVillageEmojiByName,
@@ -46,7 +46,7 @@ const {
  canChangeVillage,
  isUniqueCharacterName,
   convertCmToFeetInches,
-} = require('@/shared/utils/validation');
+} = require('@/utils/validation');
 // Google Sheets functionality removed
 const {
  getJobPerk,
@@ -78,11 +78,11 @@ const {
  getMountThumbnail,
 } = require("../../modules/mountModule");
 
-const Character = require('@/shared/models/CharacterModel');
-const User = require('@/shared/models/UserModel');
-const ItemModel = require('@/shared/models/ItemModel');
-const Mount = require('@/shared/models/MountModel');
-const { capitalizeVillageName } = require('@/shared/utils/stringUtils');
+const Character = require('@/models/CharacterModel');
+const User = require('@/models/UserModel');
+const ItemModel = require('@/models/ItemModel');
+const Mount = require('@/models/MountModel');
+const { capitalizeVillageName } = require('@/utils/stringUtils');
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
 // Defining constant values such as default images, channel IDs, and emoji lists.

@@ -4,6 +4,7 @@
 // ============================================================================
 
 const { handleError } = require("./globalErrorHandler");
+const logger = require("./logger");
 // Google Sheets functionality removed
 const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
@@ -121,7 +122,7 @@ function shouldLogError(error) {
 // ============================================================================
 
 // ---- Function: syncToInventoryDatabase ----
-// Syncs item changes to both database and Google Sheets
+// Syncs item changes to database
 async function syncToInventoryDatabase(character, item, interaction) {
   try {
     if (!dbFunctions.connectToInventories) {
@@ -131,7 +132,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    logger.info('INVENTORY', `📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -148,7 +149,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
     const date = item.date || new Date();
     const obtain = item.obtain !== undefined ? item.obtain : "Manual Sync";
     const synced = item.synced || "";
-    const characterName = character.name;
 
     const dbDoc = {
       characterId: character._id,
@@ -167,118 +167,25 @@ async function syncToInventoryDatabase(character, item, interaction) {
       synced
     };
 
-    // First, update the database
     const existingItem = await inventoryCollection.findOne({
       characterId: character._id,
       itemName: dbDoc.itemName
     });
 
     if (existingItem) {
-      // Update existing item by incrementing quantity
       await inventoryCollection.updateOne(
         { characterId: character._id, itemName: dbDoc.itemName },
         { $inc: { quantity: dbDoc.quantity } }
       );
-      console.log(`[inventoryUtils.js]: ✅ Updated item ${dbDoc.itemName} in database (incremented quantity)`);
+      logger.success('INVENTORY', `Updated item ${dbDoc.itemName} in database (incremented quantity)`);
     } else {
-      // Insert new item
       await inventoryCollection.insertOne(dbDoc);
-      console.log(`[inventoryUtils.js]: ✅ Added new item ${dbDoc.itemName} to database`);
-    }
-
-    // Google Sheets Sync
-    try {
-      // Get existing row data if it exists
-      const auth = await authorizeSheets();
-      const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
-      
-      // Find all matching rows (to handle duplicates)
-      const matchingRows = sheetData.filter(row => {
-        const sheetChar = (row[0] || '').trim().toLowerCase();
-        const sheetItem = (row[1] || '').trim().toLowerCase();
-        const sheetSync = (row[12] || '').trim(); // Check Confirmed Sync field
-        const dbChar = characterName.trim().toLowerCase();
-        const dbItem = dbDoc.itemName.trim().toLowerCase();
-        
-        // Skip rows that are already synced
-        if (sheetSync) {
-          return false;
-        }
-        
-        return sheetChar === dbChar && sheetItem === dbItem;
-      });
-
-      if (matchingRows.length > 0) {
-        // Fetch item details to fill empty fields
-        const itemDetails = await dbFunctions.fetchItemByName(dbDoc.itemName);
-        if (itemDetails) {
-          dbDoc.category = Array.isArray(itemDetails.category) ? itemDetails.category.join(", ") : (itemDetails.category || "");
-          dbDoc.type = Array.isArray(itemDetails.type) ? itemDetails.type.join(", ") : (itemDetails.type || "");
-          dbDoc.subtype = Array.isArray(itemDetails.subtype) ? itemDetails.subtype.join(", ") : (itemDetails.subtype || "");
-        }
-
-        // Helper function to check if a value is empty or undefined
-        const isEmptyOrUndefined = (val) => val === undefined || val === null || val === '';
-
-        // Update each matching row
-        for (const existingRow of matchingRows) {
-          const rowIndex = sheetData.indexOf(existingRow);
-
-          const values = [[
-            characterName,
-            dbDoc.itemName,
-            dbDoc.quantity,
-            isEmptyOrUndefined(existingRow[3]) ? dbDoc.category : existingRow[3], // Category
-            isEmptyOrUndefined(existingRow[4]) ? dbDoc.type : existingRow[4], // Type
-            isEmptyOrUndefined(existingRow[5]) ? (Array.isArray(dbDoc.subtype) ? dbDoc.subtype.join(", ") : (dbDoc.subtype || '')) : existingRow[5], // Subtype
-            existingRow[6] || dbDoc.obtain || '', // Obtain (preserve existing)
-            isEmptyOrUndefined(existingRow[7]) ? dbDoc.job : existingRow[7], // Job
-            isEmptyOrUndefined(existingRow[8]) ? dbDoc.perk : existingRow[8], // Perk
-            isEmptyOrUndefined(existingRow[9]) ? dbDoc.location : existingRow[9], // Location
-            isEmptyOrUndefined(existingRow[10]) ? dbDoc.link : existingRow[10], // Link
-            formatDateTime(dbDoc.date), // Date/Time
-            uuidv4() // Confirmed Sync
-          ]];
-
-          // Update existing row with all fields
-          await writeSheetData(
-            auth,
-            spreadsheetId,
-            `loggedInventory!A${rowIndex + 2}:M${rowIndex + 2}`,
-            values
-          );
-          console.log(`[inventoryUtils.js]: ✅ Updated row for ${dbDoc.itemName} (${existingRow[6] || dbDoc.obtain}) in sheet with all fields`);
-        }
-      } else {
-        // No matching rows found, append a new row
-        const newRow = [
-          characterName,
-          dbDoc.itemName,
-          dbDoc.quantity,
-          dbDoc.category,
-          dbDoc.type,
-          Array.isArray(dbDoc.subtype) ? dbDoc.subtype.join(", ") : (dbDoc.subtype || ''),
-          dbDoc.obtain,
-          dbDoc.job,
-          dbDoc.perk,
-          dbDoc.location,
-          dbDoc.link,
-          formatDateTime(dbDoc.date),
-          uuidv4() // Generate new sync ID
-        ];
-
-        // Append the new row to the sheet
-        await appendSheetData(auth, spreadsheetId, 'loggedInventory!A:M', [newRow]);
-        console.log(`[inventoryUtils.js]: ✅ Added new row for ${dbDoc.itemName} to sheet`);
-      }
-    } catch (sheetError) {
-      console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
+      logger.success('INVENTORY', `Added new item ${dbDoc.itemName} to database`);
     }
   } catch (error) {
-    if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
+    if (shouldLogError(error)) {
       handleError(error, "inventoryUtils.js");
-      console.error(`[inventoryUtils.js]: ❌ Sync failed for ${character?.name || 'Unknown'} | ${item?.itemName || 'Unknown'}`);
+      logger.error('INVENTORY', `Sync failed for ${character?.name || 'Unknown'} | ${item?.itemName || 'Unknown'}`);
     }
     throw error;
   }
@@ -304,7 +211,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
-    console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
+    logger.info('INVENTORY', `📦 Processing inventory for ${character.name}`);
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
@@ -316,7 +223,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     } else {
       collectionName = character.name.toLowerCase();
     }
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    logger.info('INVENTORY', `📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -338,17 +245,17 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
     if (inventoryItem) {
       // Item exists with same name AND same obtain method - increment quantity
-      console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} (obtain: "${obtainValue}") in ${character.name}'s inventory`);
-      console.log(`[inventoryUtils.js]: ➕ Adding ${quantity} ${itemName}`);
+      logger.info('INVENTORY', `📊 Found ${inventoryItem.quantity} ${itemName} (obtain: "${obtainValue}") in ${character.name}'s inventory`);
+      logger.info('INVENTORY', `➕ Adding ${quantity} ${itemName}`);
       await inventoryCollection.updateOne(
         { characterId, itemName: inventoryItem.itemName, obtain: obtainValue },
         { $inc: { quantity: quantity } }
       );
-      console.log(`[inventoryUtils.js]: ✅ Updated ${itemName} quantity (incremented by ${quantity})`);
+      logger.success('INVENTORY', `Updated ${itemName} quantity (incremented by ${quantity})`);
     } else {
       // Item doesn't exist with this obtain method - create new entry
       // This allows items with different obtain methods (crafting, trading, etc.) to be tracked separately
-      console.log(`[inventoryUtils.js]: ➕ Adding new item ${itemName} (${quantity}) with obtain method "${obtainValue}" to ${character.name}'s inventory`);
+      logger.info('INVENTORY', `➕ Adding new item ${itemName} (${quantity}) with obtain method "${obtainValue}" to ${character.name}'s inventory`);
       const newItem = {
         characterId,
         itemName: item.itemName,
@@ -362,7 +269,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         obtain: obtainValue,
       };
       await inventoryCollection.insertOne(newItem);
-      console.log(`[inventoryUtils.js]: ✅ Created new inventory entry for ${itemName} with obtain method "${obtainValue}"`);
+      logger.success('INVENTORY', `Created new inventory entry for ${itemName} with obtain method "${obtainValue}"`);
     }
     
     // Log to InventoryLog database collection
@@ -379,13 +286,13 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       });
     } catch (logError) {
       // Don't fail the main operation if logging fails
-      console.error(`[inventoryUtils.js]: ⚠️ Failed to log to InventoryLog:`, logError.message);
+      logger.warn('INVENTORY', `Failed to log to InventoryLog: ${logError.message}`);
     }
     
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error(`[inventoryUtils.js]: ❌ Error adding item to inventory:`, error.message);
+    logger.error('INVENTORY', `Error adding item to inventory: ${error.message}`);
     throw error;
   }
 }
@@ -397,7 +304,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     // Validate quantity parameter to prevent NaN corruption
     if (typeof quantity !== 'number' || isNaN(quantity) || quantity <= 0) {
       const errorMsg = `Invalid quantity parameter for removeItemInventoryDatabase: ${quantity} (type: ${typeof quantity})`;
-      console.error(`[inventoryUtils.js]: ❌ ${errorMsg}`);
+      logger.error('INVENTORY', errorMsg);
       throw new Error(`${errorMsg}. This is a bug that would corrupt inventory.`);
     }
 
@@ -414,11 +321,11 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error(`Character with ID ${characterId} not found`);
     }
 
-    console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
+    logger.info('INVENTORY', `📦 Processing inventory for ${character.name}`);
     const collectionName = character.name.toLowerCase();
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    logger.info('INVENTORY', `📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -443,7 +350,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     }
 
     if (!inventoryEntries || inventoryEntries.length === 0) {
-      console.log(`[inventoryUtils.js]: ❌ Item "${itemName}" not found in ${character.name}'s inventory`);
+      logger.error('INVENTORY', `Item "${itemName}" not found in ${character.name}'s inventory`);
       return false;
     }
 
@@ -468,8 +375,8 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error(`Not enough ${itemName} in inventory`);
     }
 
-    console.log(`[inventoryUtils.js]: 📊 Found ${totalQuantity} ${itemName} across ${inventoryEntries.length} entry/entries in ${character.name}'s inventory`);
-    console.log(`[inventoryUtils.js]: ➖ Removing ${quantity} ${itemName}`);
+    logger.info('INVENTORY', `📊 Found ${totalQuantity} ${itemName} across ${inventoryEntries.length} entry/entries in ${character.name}'s inventory`);
+    logger.info('INVENTORY', `➖ Removing ${quantity} ${itemName}`);
     
     // Remove quantity from entries, starting with the first entry
     let remainingToRemove = quantity;
@@ -488,10 +395,10 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         });
         
         if (deleteResult.deletedCount === 0) {
-          console.error(`[inventoryUtils.js]: ❌ Failed to delete item ${itemName} from inventory`);
+          logger.error('INVENTORY', `Failed to delete item ${itemName} from inventory`);
           return false;
         }
-        console.log(`[inventoryUtils.js]: 🗑️ Deleted entry for ${entry.itemName} (quantity was ${entry.quantity})`);
+        logger.info('INVENTORY', `🗑️ Deleted entry for ${entry.itemName} (quantity was ${entry.quantity})`);
       } else {
         // Update entry with remaining quantity
         const updateResult = await inventoryCollection.updateOne(
@@ -500,17 +407,17 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         );
         
         if (updateResult.modifiedCount === 0) {
-          console.error(`[inventoryUtils.js]: ❌ Failed to update quantity for item ${itemName}`);
+          logger.error('INVENTORY', `Failed to update quantity for item ${itemName}`);
           return false;
         }
-        console.log(`[inventoryUtils.js]: 🔄 Updated ${entry.itemName} quantity: ${entry.quantity} → ${newQuantity}`);
+        logger.info('INVENTORY', `🔄 Updated ${entry.itemName} quantity: ${entry.quantity} → ${newQuantity}`);
       }
       
       remainingToRemove -= quantityFromThisEntry;
     }
     
     if (remainingToRemove > 0) {
-      console.error(`[inventoryUtils.js]: ❌ Failed to remove all requested quantity. Remaining: ${remainingToRemove}`);
+      logger.error('INVENTORY', `Failed to remove all requested quantity. Remaining: ${remainingToRemove}`);
       return false;
     }
 
@@ -534,13 +441,13 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       });
     } catch (logError) {
       // Don't fail the main operation if logging fails
-      console.error(`[inventoryUtils.js]: ⚠️ Failed to log to InventoryLog:`, logError.message);
+      logger.warn('INVENTORY', `Failed to log to InventoryLog: ${logError.message}`);
     }
 
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error("[inventoryUtils.js]: ❌ Error removing item from inventory database:", error);
+    logger.error('INVENTORY', 'Error removing item from inventory database:', error);
     throw error;
   }
 }
@@ -617,7 +524,7 @@ const addItemsToDatabase = async (character, items, interaction) => {
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    logger.info('INVENTORY', `📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -641,21 +548,9 @@ const addItemsToDatabase = async (character, items, interaction) => {
         });
       }
     }
-
-    const spreadsheetId = getSheetIdByTitle(character.inventory);
-    if (interaction) {
-      const sheetRows = items.map((item) => [
-        character.name,
-        item.itemName,
-        item.quantity,
-        new Date().toISOString(),
-        `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-      ]);
-      await appendSheetData(spreadsheetId, "Inventory", sheetRows);
-    }
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error("[inventoryUtils.js]: ❌ Error adding multiple items to database:", error);
+    logger.error('INVENTORY', 'Error adding multiple items to database:', error);
     throw error;
   }
 };
@@ -664,92 +559,6 @@ const addItemsToDatabase = async (character, items, interaction) => {
 // ---- Crafting Operations ----
 // Functions for handling item crafting and material processing
 // ============================================================================
-
-// ---- Function: combineMaterials ----
-// Combines duplicate materials from the crafting process to avoid redundancy in logging.
-function combineMaterials(materialsUsed) {
-  const materialMap = new Map();
-
-  for (const material of materialsUsed) {
-    if (materialMap.has(material.itemName)) {
-      materialMap.get(material.itemName).quantity += material.quantity;
-    } else {
-      materialMap.set(material.itemName, { ...material });
-    }
-  }
-
-  return Array.from(materialMap.values());
-}
-
-// ---- Function: logMaterialsToGoogleSheets ----
-// Logs materials used in crafting to Google Sheets
-async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
-  try {
-    const combinedMaterials = combineMaterials(materialsUsed);
-    const usedMaterialsValues = await Promise.all(combinedMaterials.map(async material => {
-      try {
-        const materialObjectId = new mongoose.Types.ObjectId(material._id);
-        let materialItem = await ItemModel.findById(materialObjectId);
-        if (!materialItem) {
-          materialItem = await ItemModel.findOne({ itemName: material.itemName });
-        }
-        if (!materialItem) {
-          return [
-            character.name,
-            material.itemName,
-            `-${material.quantity}`,
-            'Unknown',
-            'Unknown',
-            'Unknown',
-            `Used for ${craftedItem.itemName}`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            uuidv4()
-          ];
-        }
-        return [
-          character.name,
-          material.itemName,
-          `-${material.quantity}`,
-          materialItem.category.join(', '),
-          materialItem.type.join(', '),
-          materialItem.subtype.join(', '),
-          `Used for ${craftedItem.itemName}`,
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uuidv4()
-        ];
-      } catch (error) {
-        handleError(error, 'inventoryUtils.js');
-        return [
-          character.name,
-          material.itemName,
-          `-${material.quantity}`,
-          'Unknown',
-          'Unknown',
-          'Unknown',
-          `Used for ${craftedItem.itemName}`,
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uuidv4()
-        ];
-      }
-    }));
-    await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
-  } catch (error) {
-    handleError(error, 'inventoryUtils.js');
-    console.error(`[inventoryUtils.js]: Error logging materials to Google Sheets: ${error.message}`);
-  }
-}
 
 // ---- Function: createMaterialSelectionMenu ----
 // Creates a Discord select menu for sequential material selection
@@ -1439,114 +1248,25 @@ async function removeInitialItemIfSynced(characterId) {
 
 
 // ---- Function: refundJobVoucher ----
-// Handles refunding a job voucher to a character's inventory and logs it to Google Sheets
+// Handles refunding a job voucher to a character's inventory
 async function refundJobVoucher(character, interaction) {
     try {
         if (!character || !interaction) {
             throw new Error("Character and interaction objects are required");
         }
 
-        console.log(`[inventoryUtils.js]: 🎫 Processing job voucher refund for ${character.name}`);
+        logger.info('INVENTORY', `🎫 Processing job voucher refund for ${character.name}`);
 
-        // Add the job voucher to inventory
         await addItemInventoryDatabase(character._id, "Job Voucher", 1, interaction, "Voucher Refund");
-        console.log(`[inventoryUtils.js]: ✅ Successfully refunded job voucher to ${character.name}'s inventory`);
-
-        // Log the refund to Google Sheets if character has an inventory sheet
-        if (character.inventory) {
-            const values = [[
-                character.name,
-                "Job Voucher",
-                1,
-                "Voucher",
-                "Job",
-                "Refund",
-                "Voucher Refund",
-                character.job || "",
-                character.perk || "",
-                character.currentLocation || character.homeVillage || "",
-                `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-                new Date().toISOString(),
-                uuidv4()
-            ]];
-
-            await safeAppendDataToSheet(
-                character.inventory,
-                character,
-                'loggedInventory!A2:M',
-                values,
-                interaction.client
-            );
-            console.log(`[inventoryUtils.js]: ✅ Successfully logged job voucher refund to Google Sheets for ${character.name}`);
-        }
+        logger.success('INVENTORY', `Successfully refunded job voucher to ${character.name}'s inventory`);
 
         return true;
     } catch (error) {
         handleError(error, "inventoryUtils.js");
-        console.error(`[inventoryUtils.js]: ❌ Error refunding job voucher:`, error.message);
+        logger.error('INVENTORY', `Error refunding job voucher: ${error.message}`);
         throw error;
     }
 }
-
-// ---- Function: syncSheetDataToDatabase ----
-// Syncs data from a sheet directly to the database
-const syncSheetDataToDatabase = async (character, sheetData) => {
-    try {
-        if (!dbFunctions.connectToInventories) {
-            throw new Error("Required database functions not initialized");
-        }
-
-        const inventoriesConnection = await dbFunctions.connectToInventories();
-        const db = inventoriesConnection.useDb('inventories');
-        const collectionName = character.name.toLowerCase();
-        console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
-        
-        const inventoryCollection = db.collection(collectionName);
-
-        // Process the sheet data
-        const processedItems = sheetData.map(row => {
-            const [_, itemName, quantity, category, type, subtype, obtain, job, perk, location, link, date, syncId] = row;
-            return {
-                characterId: character._id,
-                characterName: character.name,
-                itemName: itemName.trim().toLowerCase(),
-                quantity: parseInt(quantity) || 0,
-                category: category || '',
-                type: type || '',
-                subtype: subtype || '',
-                job: job || '',
-                perk: perk || '',
-                location: location || '',
-                link: link || '',
-                date: date || new Date().toISOString(),
-                obtain: obtain || 'Manual Sync',
-                syncId: syncId || ''
-            };
-        });
-
-        // Add each item to the database
-        for (const item of processedItems) {
-            const existingItem = await inventoryCollection.findOne({
-                characterId: character._id,
-                itemName: item.itemName,
-                syncId: item.syncId // Check for existing sync ID to prevent duplicates
-            });
-
-            if (!existingItem) {
-                console.log(`[inventoryUtils.js]: ➕ Adding new item ${item.itemName} (${item.quantity}) to ${character.name}'s inventory`);
-                await inventoryCollection.insertOne(item);
-            } else {
-                console.log(`[inventoryUtils.js]: ⚠️ Item ${item.itemName} with sync ID ${item.syncId} already exists in database`);
-            }
-        }
-
-        return true;
-    } catch (error) {
-        handleError(error, "inventoryUtils.js");
-        console.error(`[inventoryUtils.js]: ❌ Error syncing sheet data to database:`, error.message);
-        throw error;
-    }
-};
 
 // ============================================================================
 // ---- Function: logItemAcquisitionToDatabase ----
@@ -1600,12 +1320,12 @@ async function logItemAcquisitionToDatabase(character, itemData, acquisitionData
     // Save to InventoryLog collection
     await InventoryLog.create(logEntry);
     
-    console.log(`[inventoryUtils.js] 📝 Logged item acquisition: ${quantity}x ${itemName} for ${character.name} (${obtain})`);
+    logger.info('INVENTORY', `📝 Logged item acquisition: ${quantity}x ${itemName} for ${character.name} (${obtain})`);
     
     return logEntry;
   } catch (error) {
     // Don't fail the main operation if logging fails
-    console.error(`[inventoryUtils.js] ⚠️ Failed to log item acquisition to database:`, error.message);
+    logger.warn('INVENTORY', `Failed to log item acquisition to database: ${error.message}`);
     return null;
   }
 }
@@ -1665,12 +1385,12 @@ async function logItemRemovalToDatabase(character, itemData, removalData) {
     // Save to InventoryLog collection
     await InventoryLog.create(logEntry);
     
-    console.log(`[inventoryUtils.js] 📝 Logged item removal: ${negativeQuantity}x ${itemName} for ${character.name} (${obtain})`);
+    logger.info('INVENTORY', `📝 Logged item removal: ${negativeQuantity}x ${itemName} for ${character.name} (${obtain})`);
     
     return logEntry;
   } catch (error) {
     // Don't fail the main operation if logging fails
-    console.error(`[inventoryUtils.js] ⚠️ Failed to log item removal to database:`, error.message);
+    logger.warn('INVENTORY', `Failed to log item removal to database: ${error.message}`);
     return null;
   }
 }
@@ -1693,10 +1413,8 @@ module.exports = {
   createRemovedItemDatabase,
   addItemsToDatabase,
   removeInitialItemIfSynced,
-  logMaterialsToGoogleSheets,
   refundJobVoucher,
   SOURCE_TYPES,
-  syncSheetDataToDatabase,
   escapeRegExp,
   logItemAcquisitionToDatabase,
   logItemRemovalToDatabase

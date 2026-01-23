@@ -4,18 +4,18 @@
 // ============================================================================
 
 const mongoose = require('mongoose');
-const HelpWantedQuest = require('@/shared/models/HelpWantedQuestModel');
-const Item = require('@/shared/models/ItemModel');
-const Monster = require('@/shared/models/MonsterModel');
-const VillageShopItem = require('@/shared/models/VillageShopsModel');
-const { Village } = require('@/shared/models/VillageModel');
+const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
+const Item = require('@/models/ItemModel');
+const Monster = require('@/models/MonsterModel');
+const VillageShopItem = require('@/models/VillageShopsModel');
+const { Village } = require('@/models/VillageModel');
 const { getAllVillages, locations } = require('./locationsModule');
 const moment = require('moment');
 const { EmbedBuilder } = require('discord.js');
 const { NPCs, getNPCQuestFlavor } = require('./NPCsModule');
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
-const { getWeatherWithoutGeneration } = require('@/shared/services/weatherService');
-const logger = require('@/shared/utils/logger');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils');
+const { getWeatherWithoutGeneration } = require('@/services/weatherService');
+const logger = require('@/utils/logger');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -2316,7 +2316,7 @@ async function formatQuestsAsEmbedsByVillage() {
       // Add character completion info if quest is completed
       if (quest.completed && quest.completedBy?.characterId) {
         try {
-          const Character = require('@/shared/models/CharacterModel');
+          const Character = require('@/models/CharacterModel');
           const character = await Character.findById(quest.completedBy.characterId);
           if (character) {
             embed.setThumbnail(character.icon || 'https://via.placeholder.com/128');
@@ -2408,7 +2408,7 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
       // Add character completion info if quest is completed
       if (quest.completed && quest.completedBy?.characterId) {
         try {
-          const Character = require('@/shared/models/CharacterModel');
+          const Character = require('@/models/CharacterModel');
           const character = await Character.findById(quest.completedBy.characterId);
           if (character) {
             embed.setThumbnail(character.icon || 'https://via.placeholder.com/128');
@@ -2467,7 +2467,7 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
 // Checks if a user has completed a quest today
 async function hasUserCompletedQuestToday(userId) {
   try {
-    const user = await require('@/shared/models/UserModel').findOne({ discordId: userId });
+    const user = await require('@/models/UserModel').findOne({ discordId: userId });
     if (!user) {
       return false;
     }
@@ -2488,7 +2488,7 @@ async function hasUserCompletedQuestToday(userId) {
 // Checks if a user has reached the weekly quest limit
 async function hasUserReachedWeeklyQuestLimit(userId) {
   try {
-    const user = await require('@/shared/models/UserModel').findOne({ discordId: userId });
+    const user = await require('@/models/UserModel').findOne({ discordId: userId });
     if (!user || !user.helpWanted.completions) return false;
     
     // Use EST-equivalent for weekly reset (UTC-5)
@@ -2576,7 +2576,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     // Add character completion info if quest is completed
     if (quest.completed && quest.completedBy?.characterId) {
       try {
-        const Character = require('@/shared/models/CharacterModel');
+        const Character = require('@/models/CharacterModel');
         const character = await Character.findById(quest.completedBy.characterId);
         if (character) {
           updatedEmbed.setThumbnail(character.icon || 'https://via.placeholder.com/128');
@@ -2736,7 +2736,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
     if (!isQuestExpired(quest)) {
       logger.info('QUEST', `Quest ${quest.questId} submission approved, but quest period has not ended yet. Completion will be processed when period expires.`);
       // Update user tracking to mark they completed the quest (even though quest isn't completed yet)
-      const User = require('@/shared/models/UserModel');
+      const User = require('@/models/UserModel');
       const user = await User.findOne({ discordId: submissionData.userId });
       if (user) {
         await updateUserTracking(user, quest, submissionData.userId);
@@ -2761,7 +2761,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
     await quest.save();
 
     // Update user tracking
-    const User = require('@/shared/models/UserModel');
+    const User = require('@/models/UserModel');
     const user = await User.findOne({ discordId: submissionData.userId });
     if (user) {
       await updateUserTracking(user, quest, submissionData.userId);

@@ -65,7 +65,6 @@ const getContextColor = (context) => {
   if (ctx.includes('DB') || ctx.includes('DATABASE')) return colors.cyan;
   if (ctx.includes('SYS') || ctx.includes('SYSTEM')) return colors.blue;
   if (ctx.includes('CLEN') || ctx.includes('CLEANUP')) return colors.dim;
-  if (ctx.includes('SCHD') || ctx.includes('SCHEDULER')) return colors.blue;
   if (ctx.includes('MOON') || ctx.includes('BLOODMOON')) return colors.red;
   if (ctx.includes('WTHR') || ctx.includes('WEATHER')) return colors.cyan;
   if (ctx.includes('QUST') || ctx.includes('QUEST')) return colors.green;
@@ -221,7 +220,6 @@ const logger = {
   },
 
   // ------------------- schedule ------------------
-  // Logs scheduler/timer message
   schedule: (message, context = 'SCHD') => {
     console.log(
       `⏰ ${formatContext(context)} ` +

@@ -1,7 +1,7 @@
 // exploreModule.js
-const Character = require('@/shared/models/CharacterModel');
+const Character = require('@/models/CharacterModel');
 
-const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { handleError } = require('@/utils/globalErrorHandler');
 // Fetch character's items from the party data
 async function getCharacterItems(party, characterName) {
     const character = party.characters.find(char => char.name === characterName);

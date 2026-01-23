@@ -230,7 +230,7 @@ class DatabaseConnectionManager {
   }
 
   /**
-   * Get Tinglebot Mongoose connection instance (for Agenda)
+   * Get Tinglebot Mongoose connection instance
    * @returns {mongoose.Connection}
    */
   static getTinglebotConnection() {

@@ -4,7 +4,7 @@
 // ============================================================================
 
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
-const { connectToTinglebot } = require('@/shared/database/db');
+const { connectToTinglebot } = require('@/database/db');
 const {
   setTempSignupData,
   getTempSignupData,
@@ -13,7 +13,7 @@ const {
   loadSecretSantaData,
   isBlacklisted
 } = require('../modules/secretSantaModule');
-const logger = require('@/shared/utils/logger');
+const logger = require('@/utils/logger');
 
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
@@ -158,7 +158,7 @@ async function handleSignupModalSubmit(interaction) {
     }
     
     // Clean up temp data
-    const { TempSignupData } = require('@/shared/models/SecretSantaModel');
+    const { TempSignupData } = require('@/models/SecretSantaModel');
     await connectToTinglebot();
     await TempSignupData.deleteOne({ userId });
     

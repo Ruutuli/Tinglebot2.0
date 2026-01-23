@@ -1,6 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-const Item = require('@/shared/models/ItemModel');
+const Item = require('@/models/ItemModel');
 
 // ------------------- Constants -------------------
 const ITEMS_PER_PAGE = 25;

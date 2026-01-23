@@ -3,9 +3,9 @@
 // Organized and grouped per 2025 coding standards.
 // ============================================================================
 
-const { connectToInventories, connectToTinglebot } = require('@/shared/database/db');
+const { connectToInventories, connectToTinglebot } = require('@/database/db');
 
-const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { handleError } = require('@/utils/globalErrorHandler');
 
 const { handleAutocomplete } = require('../handlers/autocompleteHandler');
 const { handleComponentInteraction } = require('../handlers/componentHandler');
@@ -89,7 +89,7 @@ const initializeReactionHandler = (client) => {
       // Healing request cancellation logic
       if (reaction.emoji.name === '❌') {
         // Try to fetch healing request by message ID
-        const { retrieveHealingRequestFromStorage, saveHealingRequestToStorage } = require('@/shared/utils/storage');
+        const { retrieveHealingRequestFromStorage, saveHealingRequestToStorage } = require('@/utils/storage');
         const { createHealEmbed } = require('../embeds/embeds.js');
         const healingRequest = await retrieveHealingRequestFromStorage(reaction.message.id);
         if (healingRequest && healingRequest.status === 'pending') {
@@ -114,7 +114,7 @@ const initializeReactionHandler = (client) => {
             const messageUrl = `https://discord.com/channels/${reaction.message.guildId}/${reaction.message.channelId}/${reaction.message.id}`;
             
             // Try to find submission data by message URL
-            const { retrieveSubmissionFromStorage } = require('@/shared/utils/storage');
+            const { retrieveSubmissionFromStorage } = require('@/utils/storage');
             const { checkAndCompleteQuestFromSubmission } = require('../modules/helpWantedModule');
             
             // We need to find the submission data - let's check if we can get it from the embed

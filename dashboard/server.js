@@ -16,12 +16,6 @@ if (require('fs').existsSync(dashboardEnvPath)) {
   dotenv.config({ path: rootEnvPath });
 }
 
-// ------------------- Setup Path Aliases -------------------
-require('module-alias/register');
-const moduleAlias = require('module-alias');
-// Configure @/shared alias to point to dashboard directory (all shared files are in dashboard)
-moduleAlias.addAlias('@/shared', path.resolve(__dirname));
-
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -13855,23 +13849,18 @@ const startServer = async () => {
     logger.warn('SERVER', 'Cache cleanup initialization failed');
   }
   
-  // Setup reminder service for 24-hour pending application reminders using Agenda
+  // Setup reminder service for 24-hour pending application reminders
   const reminderService = require('./services/reminderService');
   
-  // Initialize Agenda job for reminders (runs every hour)
-  // Wait a bit for Agenda to be ready if it's being initialized
+  // Run initial reminder check
   setTimeout(async () => {
     try {
-      logger.info('SERVER', 'Initializing OC reminder service with Agenda...');
-      await reminderService.initializeAgendaJob();
-      
-      // Also run immediately after scheduling (one-time check)
       logger.info('SERVER', 'Running initial reminder check...');
       await reminderService.processReminders();
     } catch (error) {
-      logger.error('SERVER', 'Error initializing reminder service', error);
+      logger.error('SERVER', 'Error running reminder check', error);
     }
-  }, 5000); // 5 seconds after startup to let Agenda initialize
+  }, 5000);
   
   // Start server FIRST so health checks pass immediately
   // Bind to 0.0.0.0 for Railway/Docker deployments
@@ -13914,13 +13903,6 @@ const startServer = async () => {
 // ------------------- Function: gracefulShutdown -------------------
 // Handles graceful shutdown of the server and database connections
 const gracefulShutdown = async () => {
-  try {
-    // Stop reminder service Agenda job
-    const reminderService = require('./services/reminderService');
-    await reminderService.stopAgendaJob();
-  } catch (error) {
-    logger.error('SERVER', 'Error stopping reminder service during shutdown', error);
-  }
   
   // Close all database connections using DatabaseConnectionManager
   await DatabaseConnectionManager.closeAll();

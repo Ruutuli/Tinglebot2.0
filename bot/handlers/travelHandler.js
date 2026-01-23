@@ -18,7 +18,7 @@ const VILLAGE_VISITING_ROLES = {
 const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
-const { fetchAllItems, fetchItemsByMonster } = require('@/shared/database/db');
+const { fetchAllItems, fetchItemsByMonster } = require('@/database/db');
 
 // ------------------- Embeds -------------------
 const { 
@@ -52,13 +52,13 @@ const {
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 
 // ------------------- Utility Functions -------------------
-const { addItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
-const { syncToInventoryDatabase, SOURCE_TYPES } = require('@/shared/utils/inventoryUtils');
+const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { syncToInventoryDatabase, SOURCE_TYPES } = require('@/utils/inventoryUtils');
 // Google Sheets functionality removed
-const { handleError } = require('@/shared/utils/globalErrorHandler');
-const { info, success, warn, error, debug } = require('@/shared/utils/logger');
+const { handleError } = require('@/utils/globalErrorHandler');
+const { info, success, warn, error, debug } = require('@/utils/logger');
 
-const Character = require('@/shared/models/CharacterModel');
+const Character = require('@/models/CharacterModel');
 
 // ============================================================================
 // ------------------- Daily Roll Functions -------------------
@@ -674,7 +674,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           
           // Fetch the correct emoji from the database for the jelly type
           try {
-            const ItemModel = require('@/shared/models/ItemModel');
+            const ItemModel = require('@/models/ItemModel');
             const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select('emoji');
             if (jellyItem && jellyItem.emoji) {
               item.emoji = jellyItem.emoji;

@@ -1,8 +1,8 @@
 // ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const User = require('@/shared/models/UserModel');
+const User = require('@/models/UserModel');
 const { getUserLevelInfo, createProgressBar, getLeaderboard } = require('../../modules/levelingModule');
-const { connectToTinglebot } = require('@/shared/database/db');
+const { connectToTinglebot } = require('@/database/db');
 
 module.exports = {
   data: new SlashCommandBuilder()

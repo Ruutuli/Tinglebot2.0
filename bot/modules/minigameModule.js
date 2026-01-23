@@ -4,10 +4,10 @@
 // ============================================================================
 
 // ------------------- Standard Libraries -------------------
-const { generateUniqueId } = require('@/shared/utils/uniqueIdUtils');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const Jimp = require('jimp');
 const { AttachmentBuilder } = require('discord.js');
-const logger = require('@/shared/utils/logger');
+const logger = require('@/utils/logger');
 
 // ============================================================================
 // ------------------- Game Configuration -------------------

@@ -6,20 +6,20 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 // ============================================================================
 // ---- Database Services ----
 // ============================================================================
-const { fetchCharacterByName, fetchCharacterById, getOrCreateToken, updateTokenBalance } = require('@/shared/database/db');
+const { fetchCharacterByName, fetchCharacterById, getOrCreateToken, updateTokenBalance } = require('@/database/db');
 
 // ============================================================================
 // ---- Utility Functions ----
 // ============================================================================
-const { handleInteractionError } = require('@/shared/utils/globalErrorHandler');
-const { removeItemInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+const { handleInteractionError } = require('@/utils/globalErrorHandler');
+const { removeItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { recoverHearts, recoverStamina } = require('../../modules/characterStatsModule');
 
 // ============================================================================
 // ---- Database Models ----
 // ============================================================================
-const ItemModel = require('@/shared/models/ItemModel');
-const { Village } = require('@/shared/models/VillageModel');
+const ItemModel = require('@/models/ItemModel');
+const { Village } = require('@/models/VillageModel');
 const { initializeVillages, updateVillageStatus } = require('../../modules/villageModule');
 
 // ============================================================================

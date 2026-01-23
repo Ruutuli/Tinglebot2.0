@@ -2,11 +2,11 @@
 // ------------------- Import necessary modules -------------------
 // ============================================================================
 const { SlashCommandBuilder, EmbedBuilder } = require('@discordjs/builders');
-const Character = require('@/shared/models/CharacterModel');
-const Mount = require('@/shared/models/MountModel');
-const Pet = require('@/shared/models/PetModel');
-const { Stable, ForSaleMount, ForSalePet } = require('@/shared/models/StableModel');
-const { handleError } = require('@/shared/utils/globalErrorHandler');
+const Character = require('@/models/CharacterModel');
+const Mount = require('@/models/MountModel');
+const Pet = require('@/models/PetModel');
+const { Stable, ForSaleMount, ForSalePet } = require('@/models/StableModel');
+const { handleError } = require('@/utils/globalErrorHandler');
 const { getPetEmoji, getPetThumbnail } = require('../../modules/petModule');
 const { getMountEmoji, calculateMountPrice, getMountThumbnail } = require('../../modules/mountModule');
 const { calculatePetPrice } = require('../../modules/petModule');

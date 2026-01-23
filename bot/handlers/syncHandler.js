@@ -16,13 +16,13 @@ const path = require('path');
 // Database Connections
 // ============================================================================
 
-const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('@/shared/database/db');
+const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('@/database/db');
 
 // ============================================================================
 // Database Models
 // ============================================================================
 
-const ItemModel = require('@/shared/models/ItemModel');
+const ItemModel = require('@/models/ItemModel');
 
 // ============================================================================
 // Utility Functions
@@ -33,9 +33,9 @@ function escapeRegExp(string) {
     return string.replace(/[.*?^${}()|[\]\\]/g, '\\$&');
 }
 
-const { handleError } = require('@/shared/utils/globalErrorHandler');
+const { handleError } = require('@/utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds.js');
-const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('@/shared/utils/inventoryUtils');
+const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('@/utils/inventoryUtils');
 // Google Sheets functionality removed
 
 // ============================================================================

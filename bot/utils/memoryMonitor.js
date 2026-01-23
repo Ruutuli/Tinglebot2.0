@@ -1,6 +1,6 @@
 // ============================================================================
 // ------------------- Memory Monitor Utility -------------------
-// Simplified memory monitoring - logs basic stats hourly via agenda
+// Simplified memory monitoring - logs basic stats
 // ============================================================================
 
 const logger = require('./logger');
@@ -21,7 +21,7 @@ class MemoryMonitor {
     this.resourceCounts = new Map(); // Track various resource counts
     
     if (this.enabled) {
-      logger.info('MEM', 'Memory monitoring initialized (will log hourly via agenda)');
+      logger.info('MEM', 'Memory monitoring initialized');
     }
   }
 
@@ -121,7 +121,7 @@ class MemoryMonitor {
 
   // ------------------- Stop Monitoring (no-op, kept for compatibility) -------------------
   stop() {
-    // No-op - memory logging is now handled by agenda, nothing to stop
+    // No-op - nothing to stop
   }
 }
 
