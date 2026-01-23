@@ -2308,6 +2308,70 @@ app.get('/api/models/vendingShops', async (req, res) => {
   }
 });
 
+// ------------------- Function: getOCList -------------------
+// Optimized endpoint for OC list page - only fetches name, village, and icon
+app.get('/api/oc-list', asyncHandler(async (req, res) => {
+  try {
+    // Ensure database connection is available
+    if (mongoose.connection.readyState !== 1) {
+      console.error(`[server.js]: ❌ Database not connected. State: ${mongoose.connection.readyState}`);
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    // Fetch only the minimal fields needed: name, homeVillage, currentVillage, icon, and status
+    const [regularCharacters, modCharacters] = await Promise.all([
+      Character.find({
+        $or: [
+          { status: 'accepted' },
+          { status: { $exists: false } } // Include characters created before status field was added
+        ]
+      })
+        .select('name homeVillage currentVillage icon status')
+        .lean(),
+      ModCharacter.find({
+        $or: [
+          { status: 'accepted' },
+          { status: { $exists: false } } // Include mod characters created before status field was added
+        ]
+      })
+        .select('name homeVillage currentVillage icon status')
+        .lean()
+    ]);
+
+    // Combine both character types
+    let allCharacters = [...regularCharacters, ...modCharacters];
+
+    // List of characters to exclude from dashboard
+    const excludedCharacters = ['Tingle', 'Tingle test', 'John'];
+    allCharacters = allCharacters.filter(character => 
+      !excludedCharacters.includes(character.name)
+    );
+
+    // Transform to only include the fields we need
+    const optimizedData = allCharacters.map(character => ({
+      name: character.name,
+      village: character.homeVillage || character.currentVillage,
+      icon: character.icon
+    }));
+
+    res.json({
+      data: optimizedData,
+      pagination: {
+        page: 1,
+        pages: 1,
+        total: optimizedData.length,
+        limit: optimizedData.length
+      }
+    });
+  } catch (error) {
+    console.error('[server.js]: ❌ Error fetching OC list:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch OC list', 
+      details: error.message 
+    });
+  }
+}));
+
 // ------------------- Function: getModelData -------------------
 // Returns paginated data for any model type with filtering support
 app.get('/api/models/:modelType', asyncHandler(async (req, res) => {

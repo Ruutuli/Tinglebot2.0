@@ -6,6 +6,7 @@
 const logger = require('../utils/logger');
 const Character = require('../models/CharacterModel');
 const CharacterModeration = require('../models/CharacterModerationModel');
+const { STATUS } = require('../utils/statusConstants');
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 // Use the specific channel ID for OC application reviews (964342870796537909)
@@ -55,8 +56,18 @@ async function postApplicationToAdminChannel(character) {
     logger.info('DISCORD_POSTING', `Using channel ID: ${ADMIN_REVIEW_CHANNEL_ID}, thread ID: ${ADMIN_REVIEW_THREAD_ID || 'none'}`);
     console.log('[DISCORD_POSTING] Using channel ID:', ADMIN_REVIEW_CHANNEL_ID);
 
-    // Get vote counts
+    // Check if this is a resubmission (has existing Discord message)
+    const isResubmission = !!character.discordMessageId;
     const applicationVersion = character.applicationVersion || 1;
+    
+    console.log('[DISCORD_POSTING] Resubmission check:', {
+      isResubmission,
+      discordMessageId: character.discordMessageId,
+      discordThreadId: character.discordThreadId,
+      applicationVersion
+    });
+
+    // Get vote counts
     const approveCount = await CharacterModeration.countDocuments({
       characterId: character._id,
       applicationVersion: applicationVersion,
@@ -149,7 +160,7 @@ async function postApplicationToAdminChannel(character) {
     // Create embed
     const embed = {
       title: `✨ OC Application Review: ${character.name} (v${applicationVersion})`,
-      description: `A new character application is pending review.`,
+      description: isResubmission ? `Application has been updated and is pending review.` : `A new character application is pending review.`,
       color: 0xFFA500, // Orange for pending
       thumbnail: {
         url: character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
@@ -195,10 +206,137 @@ async function postApplicationToAdminChannel(character) {
       timestamp: new Date().toISOString()
     };
 
-    // Post to channel or thread
-    let targetChannelId = ADMIN_REVIEW_CHANNEL_ID;
+    // Determine target channel (use existing thread if resubmission, otherwise use configured thread/channel)
+    let targetChannelId = isResubmission 
+      ? (character.discordThreadId || ADMIN_REVIEW_CHANNEL_ID)
+      : (ADMIN_REVIEW_THREAD_ID || ADMIN_REVIEW_CHANNEL_ID);
+    
     let messageResponse;
+    let messageData;
 
+    // If resubmission, update existing embed and post notification
+    if (isResubmission && character.discordMessageId) {
+      console.log('[DISCORD_POSTING] Updating existing embed for resubmission. Message ID:', character.discordMessageId);
+      logger.info('DISCORD_POSTING', `Updating existing embed for ${character.name} (v${applicationVersion})`);
+      
+      // If we have a thread ID, use it; otherwise try to get the channel from the message
+      // First, try to fetch the message to determine its channel
+      let actualChannelId = targetChannelId;
+      if (character.discordThreadId) {
+        actualChannelId = character.discordThreadId;
+        console.log('[DISCORD_POSTING] Using stored thread ID:', actualChannelId);
+      } else {
+        // Try to get the channel from the message
+        try {
+          const getMessageResponse = await fetch(`https://discord.com/api/v10/channels/${ADMIN_REVIEW_CHANNEL_ID}/messages/${character.discordMessageId}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bot ${DISCORD_TOKEN}`
+            }
+          });
+          
+          if (getMessageResponse.ok) {
+            const msgData = await getMessageResponse.json();
+            // The message response doesn't include channel_id, but we know it's in ADMIN_REVIEW_CHANNEL_ID
+            actualChannelId = ADMIN_REVIEW_CHANNEL_ID;
+            console.log('[DISCORD_POSTING] Message found in channel:', actualChannelId);
+          } else {
+            // If message not found in channel, it might be in a thread
+            console.log('[DISCORD_POSTING] Message not found in main channel, using stored channel ID');
+            actualChannelId = ADMIN_REVIEW_CHANNEL_ID;
+          }
+        } catch (err) {
+          console.error('[DISCORD_POSTING] Error fetching message:', err);
+          actualChannelId = ADMIN_REVIEW_CHANNEL_ID;
+        }
+      }
+      
+      targetChannelId = actualChannelId;
+      console.log('[DISCORD_POSTING] Final target channel ID for update:', targetChannelId);
+      
+      // Update the existing embed
+      messageResponse = await fetch(`https://discord.com/api/v10/channels/${targetChannelId}/messages/${character.discordMessageId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bot ${DISCORD_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          embeds: [embed]
+        })
+      });
+
+      console.log('[DISCORD_POSTING] Update response status:', messageResponse.status, messageResponse.statusText);
+      
+      if (!messageResponse.ok) {
+        const errorText = await messageResponse.text();
+        logger.error('DISCORD_POSTING', `Failed to update application embed: ${messageResponse.status} - ${errorText}`);
+        console.error('[DISCORD_POSTING] Full error details:', {
+          status: messageResponse.status,
+          statusText: messageResponse.statusText,
+          error: errorText,
+          channelId: targetChannelId,
+          messageId: character.discordMessageId,
+          characterName: character.name
+        });
+        return null;
+      }
+
+      messageData = await messageResponse.json();
+      console.log('[DISCORD_POSTING] Successfully updated embed!');
+      
+      // Post a simple notification message - ALWAYS post this for resubmissions
+      const notificationMessage = `🔄 **${character.name}** app has an update! (v${applicationVersion})`;
+      console.log('[DISCORD_POSTING] Attempting to post notification message to channel:', targetChannelId);
+      console.log('[DISCORD_POSTING] Notification message content:', notificationMessage);
+      
+      try {
+        const notificationResponse = await fetch(`https://discord.com/api/v10/channels/${targetChannelId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bot ${DISCORD_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            content: notificationMessage
+          })
+        });
+
+        console.log('[DISCORD_POSTING] Notification response status:', notificationResponse.status, notificationResponse.statusText);
+
+        if (notificationResponse.ok) {
+          const notificationData = await notificationResponse.json();
+          logger.info('DISCORD_POSTING', `Posted update notification for ${character.name}`);
+          console.log('[DISCORD_POSTING] ✅ Posted update notification successfully. Message ID:', notificationData.id);
+        } else {
+          const errorText = await notificationResponse.text();
+          logger.error('DISCORD_POSTING', `Failed to post update notification: ${notificationResponse.status} - ${errorText}`);
+          console.error('[DISCORD_POSTING] ❌ Failed to post notification. Error details:', {
+            status: notificationResponse.status,
+            statusText: notificationResponse.statusText,
+            error: errorText,
+            channelId: targetChannelId,
+            characterName: character.name
+          });
+          // Don't throw - we still updated the embed successfully
+        }
+      } catch (notificationError) {
+        logger.error('DISCORD_POSTING', `Exception while posting notification: ${notificationError.message}`);
+        console.error('[DISCORD_POSTING] Exception posting notification:', notificationError);
+        // Don't throw - we still updated the embed successfully
+      }
+
+      logger.success('DISCORD_POSTING', `Application embed updated on Discord: ${character.name} (v${applicationVersion})`);
+      console.log('[DISCORD_POSTING] Resubmission handling complete');
+      
+      return {
+        messageId: character.discordMessageId,
+        threadId: character.discordThreadId || null,
+        channelId: targetChannelId
+      };
+    }
+
+    // New submission - post new embed
     if (ADMIN_REVIEW_THREAD_ID) {
       console.log('[DISCORD_POSTING] Posting to thread:', ADMIN_REVIEW_THREAD_ID);
       // Post to thread (no user mention in content to avoid pinging)
@@ -245,7 +383,7 @@ async function postApplicationToAdminChannel(character) {
       return null;
     }
 
-    const messageData = await messageResponse.json();
+    messageData = await messageResponse.json();
     console.log('[DISCORD_POSTING] Success! Message ID:', messageData.id);
     
     // Update character with Discord message/thread IDs

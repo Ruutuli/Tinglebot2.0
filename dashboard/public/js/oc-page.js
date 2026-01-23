@@ -1895,22 +1895,40 @@ function populateEditForm() {
   // Set job value after dropdown is populated
   const jobSelect = document.getElementById('edit-character-job');
   if (jobValueToSet) {
-    // Try to set the job value - it will only work if the value exists in the dropdown
-    jobSelect.value = jobValueToSet;
-    
-    // If the value wasn't set (doesn't match any option), log a warning
-    if (jobSelect.value !== jobValueToSet) {
-      console.warn(`Job value "${jobValueToSet}" not found in dropdown options. Available options:`, 
-        Array.from(jobSelect.options).map(opt => opt.value));
+    // Function to set job value with retry logic
+    const setJobValue = (retryCount = 0) => {
+      // Try to set the job value - it will only work if the value exists in the dropdown
+      jobSelect.value = jobValueToSet;
+      
+      // If the value was set successfully, we're done
+      if (jobSelect.value === jobValueToSet) {
+        return;
+      }
+      
       // Try to find a case-insensitive match
       const matchingOption = Array.from(jobSelect.options).find(opt => 
         opt.value.toLowerCase() === jobValueToSet.toLowerCase()
       );
       if (matchingOption) {
         jobSelect.value = matchingOption.value;
-        console.log(`Found case-insensitive match: "${matchingOption.value}"`);
+        return;
       }
-    }
+      
+      // If value still not set and we haven't retried too many times, try again
+      // This handles the case where village-specific jobs haven't loaded yet
+      if (retryCount < 3 && character.homeVillage) {
+        // Repopulate dropdown in case jobs have loaded
+        populateJobDropdown(character.homeVillage);
+        // Retry after a short delay
+        setTimeout(() => setJobValue(retryCount + 1), 100 * (retryCount + 1));
+      } else if (retryCount === 0) {
+        // Log warning only on first attempt
+        console.warn(`Job value "${jobValueToSet}" not found in dropdown options for village "${character.homeVillage}". Available options:`, 
+          Array.from(jobSelect.options).map(opt => opt.value));
+      }
+    };
+    
+    setJobValue();
   }
   
   // Set virtue

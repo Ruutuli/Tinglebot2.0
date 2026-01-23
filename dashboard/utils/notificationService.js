@@ -726,17 +726,12 @@ async function sendOCDecisionNotification(userId, decision, characterData, feedb
     } else {
       embed = {
         title: '⚠️ Character Needs Changes',
-        description: `Your character **${characterData.name}** needs some changes before it can be approved.`,
+        description: `Your character **${characterData.name}** needs some changes before it can be approved.\n\n**📝 MODERATOR FEEDBACK:**\n\`\`\`\n${feedback || 'Changes requested by moderators'}\n\`\`\``,
         color: 0xFFA500, // Orange
         fields: [
           {
-            name: '📝 Feedback',
-            value: feedback || 'Changes requested by moderators',
-            inline: false
-          },
-          {
-            name: '✏️ Edit & Resubmit',
-            value: `You can edit your character and resubmit it for review.\n\n[Edit Character](${ocPageUrl})`,
+            name: '✏️ Next Steps',
+            value: `Please review the feedback above and make the necessary changes.\n\n[Edit Character](${ocPageUrl})\n\nOnce you've made the changes, you can resubmit your character for review.`,
             inline: false
           }
         ],

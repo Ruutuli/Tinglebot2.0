@@ -75,7 +75,8 @@ async function loadCharacters() {
   try {
     showLoading();
     
-    const response = await fetch('/api/models/character?all=true', {
+    // Use optimized endpoint that only fetches name, village, and icon
+    const response = await fetch('/api/oc-list', {
       credentials: 'include'
     });
     
@@ -85,10 +86,6 @@ async function loadCharacters() {
     
     const result = await response.json();
     characters = result.data || [];
-    
-    // Filter to only show accepted characters
-    // Filter to only show accepted characters (status: 'accepted')
-    characters = characters.filter(char => char.status === 'accepted');
     
     // Sort characters alphabetically by name
     characters.sort((a, b) => {
@@ -150,11 +147,12 @@ function displayTriangleGrid() {
     // Get character icon or use default
     const iconUrl = character.icon || '/images/ankleicon.png';
     
-    // Get village color
-    const villageColor = getVillageColor(character.homeVillage || character.currentVillage);
+    // Get village color (village field is already set from the optimized endpoint)
+    const villageColor = getVillageColor(character.village);
     
-    // Check if this is a mod character
-    const isModCharacter = character.isModCharacter || character.modTitle || character.modType;
+    // Note: We don't check for mod characters in the optimized endpoint
+    // If needed, we can add isModCharacter to the optimized endpoint later
+    const isModCharacter = false;
     
     // Create card element
     const card = document.createElement('a');
