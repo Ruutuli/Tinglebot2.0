@@ -44,6 +44,7 @@ async function getCommandFiles() {
 
 async function loadCommands() {
     const commands = [];
+    const commandFileMap = []; // Track which file each command came from
     const commandFiles = await getCommandFiles();
     console.log(`[deploy-commands.js]: Found ${commandFiles.length} potential command files`);
 
@@ -67,6 +68,7 @@ async function loadCommands() {
                     
                     if (commandData && commandData.name) {
                         commands.push(commandData);
+                        commandFileMap.push(file); // Store the file path for this command
                         console.log(`✅ Loaded command: ${commandData.name} from ${file}`);
                     } else {
                         console.warn(`⚠️ The command at ${file} is missing a required "name" property.`);
@@ -89,6 +91,38 @@ async function loadCommands() {
     }
 
     console.log(`[deploy-commands.js]: Successfully loaded ${commands.length} commands`);
+    
+    // Check for duplicate command names
+    const commandNames = new Map(); // Maps command name to first occurrence index
+    const duplicates = [];
+    
+    commands.forEach((cmd, index) => {
+        const name = cmd.name;
+        if (commandNames.has(name)) {
+            const firstIndex = commandNames.get(name);
+            duplicates.push({
+                name: name,
+                firstIndex: firstIndex,
+                secondIndex: index,
+                firstFile: commandFileMap[firstIndex],
+                secondFile: commandFileMap[index]
+            });
+        } else {
+            commandNames.set(name, index);
+        }
+    });
+    
+    if (duplicates.length > 0) {
+        console.error('\n❌ DUPLICATE COMMAND NAMES DETECTED:');
+        duplicates.forEach(dup => {
+            console.error(`   Command "${dup.name}" is defined in:`);
+            console.error(`     1. ${dup.firstFile}`);
+            console.error(`     2. ${dup.secondFile}`);
+        });
+        console.error('\n⚠️  Please fix duplicate command names before deploying.\n');
+        throw new Error(`Found ${duplicates.length} duplicate command name(s). See above for details.`);
+    }
+    
     return commands;
 }
 

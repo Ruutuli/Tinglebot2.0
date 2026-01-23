@@ -193,7 +193,8 @@ function ensureAgendaInitialized(context) {
 // Check if a recurring job already exists before creating it
 // This prevents duplicate jobs on restart
 // Returns: { job, created: boolean } - created is true if job was newly created, false if it already existed
-async function ensureRecurringJob(schedule, jobName, silent = false) {
+// Options can include: { timezone: 'America/New_York' } for timezone-aware scheduling
+async function ensureRecurringJob(schedule, jobName, silent = false, options = {}) {
  const agenda = ensureAgendaInitialized('ensure recurring job');
  if (!agenda) return { job: null, created: false };
  
@@ -202,7 +203,7 @@ async function ensureRecurringJob(schedule, jobName, silent = false) {
   const mongooseConnection = require('../database/connectionManager').getTinglebotConnection();
   if (!mongooseConnection || mongooseConnection.readyState !== 1) {
    if (!silent) logger.warn('SCHEDULER', `Database not ready, creating job ${jobName} anyway`);
-   const job = await agenda.every(schedule, jobName);
+   const job = await agenda.every(schedule, jobName, {}, options);
    return { job, created: true };
   }
   
@@ -210,12 +211,23 @@ async function ensureRecurringJob(schedule, jobName, silent = false) {
   
   // Check if job with same name and schedule already exists
   // Agenda stores name in either 'name' or 'attrs.name', and schedule in 'repeatInterval'
-  const existingJob = await agendaJobsCollection.findOne({
+  // Check if job with same name and schedule already exists
+  // Also check timezone if provided
+  const query = {
    $or: [
     { name: jobName, repeatInterval: schedule },
     { 'attrs.name': jobName, repeatInterval: schedule }
    ]
-  });
+  };
+  
+  // If timezone is specified, also match on timezone
+  if (options.timezone) {
+   query.$or.forEach(condition => {
+    condition.repeatTimezone = options.timezone;
+   });
+  }
+  
+  const existingJob = await agendaJobsCollection.findOne(query);
   
   if (existingJob) {
    // Return a mock job object for consistency
@@ -229,7 +241,7 @@ async function ensureRecurringJob(schedule, jobName, silent = false) {
   logger.error('SCHEDULER', `Error ensuring recurring job ${jobName}:`, error.message);
   // Fallback: try to create anyway
   try {
-   const job = await agenda.every(schedule, jobName);
+   const job = await agenda.every(schedule, jobName, {}, options);
    return { job, created: true };
   } catch (fallbackError) {
    logger.error('SCHEDULER', `Failed to create job ${jobName} even as fallback:`, fallbackError.message);
@@ -829,10 +841,18 @@ async function resetPetLastRollDates(client) {
 // ============================================================================
 
 async function setupBlightScheduler(client) {
+ // 8:00 PM EST/EDT - use timezone-aware scheduling
+ // This will automatically handle EST (UTC-5) and EDT (UTC-4) transitions
  // 8:00 PM EST = 01:00 UTC next day
- const result = await ensureRecurringJob("0 1 * * *", "Blight Roll Call", true);
+ // 8:00 PM EDT = 00:00 UTC next day (midnight)
+ const result = await ensureRecurringJob(
+  "0 20 * * *", // 8:00 PM in the specified timezone
+  "Blight Roll Call", 
+  true,
+  { timezone: 'America/New_York' } // Automatically handles EST/EDT
+ );
  if (result.created) {
-  logger.info('SCHEDULER', 'Blight scheduler job created');
+  logger.info('SCHEDULER', 'Blight scheduler job created with timezone-aware scheduling (8:00 PM EST/EDT)');
  }
 }
 

@@ -11,6 +11,9 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const ADMIN_REVIEW_CHANNEL_ID = process.env.ADMIN_REVIEW_CHANNEL_ID || process.env.CHARACTER_CREATION_CHANNEL_ID;
 const MOD_ROLE_ID = process.env.MOD_ROLE_ID; // Optional role to mention
 
+// Agenda job reference (set when job is scheduled)
+let agendaJob = null;
+
 /**
  * Check for pending characters that need reminders (>24h without decision)
  * @returns {Promise<Array>} - Array of characters that need reminders
@@ -188,8 +191,79 @@ async function processReminders() {
   }
 }
 
+/**
+ * Initialize Agenda job for processing reminders
+ * This should be called from server.js after Agenda is initialized
+ * @returns {Promise<void>}
+ */
+async function initializeAgendaJob() {
+  try {
+    // Try to import Agenda (from bot's scheduler)
+    let agenda;
+    try {
+      const { getAgenda } = require('../../bot/scheduler/agenda');
+      agenda = getAgenda();
+      
+      if (!agenda) {
+        logger.warn('REMINDER', 'Agenda not available, reminders will not be scheduled');
+        return;
+      }
+    } catch (error) {
+      logger.warn('REMINDER', `Failed to import Agenda, reminders will not be scheduled: ${error.message}`);
+      return;
+    }
+
+    // Clear any existing job (safety check)
+    if (agendaJob) {
+      try {
+        await agendaJob.remove();
+        agendaJob = null;
+        logger.info('REMINDER', 'Removed existing Agenda job before creating new one');
+      } catch (error) {
+        logger.warn('REMINDER', 'Error removing existing Agenda job', error);
+      }
+    }
+
+    // Define the job
+    agenda.define('process-oc-reminders', { concurrency: 1 }, async (job) => {
+      try {
+        logger.info('REMINDER', 'Agenda job triggered: processing OC application reminders');
+        await processReminders();
+      } catch (error) {
+        logger.error('REMINDER', 'Error in Agenda job for processing reminders', error);
+        throw error; // Re-throw so Agenda can retry if configured
+      }
+    });
+
+    // Schedule the job to run every hour
+    agendaJob = await agenda.every('0 * * * *', 'process-oc-reminders');
+    logger.success('REMINDER', 'Scheduled OC reminder processing using Agenda (runs every hour)');
+  } catch (error) {
+    logger.error('REMINDER', 'Failed to create Agenda job for reminders', error);
+    agendaJob = null;
+  }
+}
+
+/**
+ * Stop the Agenda job (cleanup)
+ * @returns {Promise<void>}
+ */
+async function stopAgendaJob() {
+  if (agendaJob) {
+    try {
+      await agendaJob.remove();
+      agendaJob = null;
+      logger.info('REMINDER', 'Removed Agenda job for reminders');
+    } catch (error) {
+      logger.error('REMINDER', 'Error removing Agenda job during stop', error);
+    }
+  }
+}
+
 module.exports = {
   checkPendingCharacters,
   sendReminder,
-  processReminders
+  processReminders,
+  initializeAgendaJob,
+  stopAgendaJob
 };

@@ -52,6 +52,7 @@ const {
 
 // ------------------- Database Models -------------------
 const Character = require('@/shared/models/CharacterModel');
+const CharacterModeration = require('@/shared/models/CharacterModerationModel');
 const Minigame = require('@/shared/models/MinigameModel');
 const NPC = require('@/shared/models/NPCModel');
 
@@ -655,57 +656,122 @@ const modCommand = new SlashCommandBuilder()
   .setDescription('🛠️ Moderator utilities: manage items, pets, encounters, status, tables, and submissions')
   .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
 
-// ------------------- Subcommand: give -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('give')
-    .setDescription('🎁 Give an item to a character')
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the target character')
-        .setRequired(true)
-        .setAutocomplete(true)
+// ------------------- Subcommand Group: character -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('character')
+    .setDescription('👤 Character management commands')
+    .addSubcommand(sub =>
+      sub
+        .setName('give')
+        .setDescription('🎁 Give an item to a character')
+        .addStringOption(opt =>
+          opt
+            .setName('character')
+            .setDescription('Name of the target character')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('item')
+            .setDescription('Name of the item to give')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('quantity')
+            .setDescription('Amount of the item to give')
+            .setRequired(true)
+        )
     )
-    .addStringOption(opt =>
-      opt
-        .setName('item')
-        .setDescription('Name of the item to give')
-        .setRequired(true)
-        .setAutocomplete(true)
+    .addSubcommand(sub =>
+      sub
+        .setName('petlevel')
+        .setDescription("🐾 Override a pet's level for a character")
+        .addStringOption(opt =>
+          opt
+            .setName('character')
+            .setDescription('Name of the character owner')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('petname')
+            .setDescription("Name of the pet to override")
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('level')
+            .setDescription('New level value for the pet')
+            .setRequired(true)
+        )
     )
-    .addIntegerOption(opt =>
-      opt
-        .setName('quantity')
-        .setDescription('Amount of the item to give')
-        .setRequired(true)
+    .addSubcommand(sub =>
+      sub
+        .setName('debuff')
+        .setDescription('⚠️ Apply or remove a debuff from a character')
+        .addStringOption(opt =>
+          opt
+            .setName('character')
+            .setDescription('Name of the target character')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('action')
+            .setDescription('Apply or remove the debuff')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Apply Debuff', value: 'apply' },
+              { name: 'Remove Debuff', value: 'remove' }
+            )
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('days')
+            .setDescription('Number of days for the debuff (default: 7)')
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(30)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('reason')
+            .setDescription('Reason for applying the debuff')
+            .setRequired(false)
+        )
     )
-)
-
-// ------------------- Subcommand: petlevel -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('petlevel')
-    .setDescription("🐾 Override a pet's level for a character")
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the character owner')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName('petname')
-        .setDescription("Name of the pet to override")
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addIntegerOption(opt =>
-      opt
-        .setName('level')
-        .setDescription('New level value for the pet')
-        .setRequired(true)
+    .addSubcommand(sub =>
+      sub
+        .setName('blight')
+        .setDescription('👁️ Set or unset blight for a character')
+        .addStringOption(option =>
+          option
+            .setName('character')
+            .setDescription('Name of the character to modify')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addBooleanOption(option =>
+          option
+            .setName('status')
+            .setDescription('True to set blight, false to unset blight')
+            .setRequired(true)
+        )
+        .addIntegerOption(option =>
+          option
+            .setName('stage')
+            .setDescription('Blight stage/level (0-5, only used when status is true)')
+            .setRequired(false)
+            .setMinValue(0)
+            .setMaxValue(5)
+        )
     )
 )
 
@@ -757,116 +823,138 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: approve -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('approve')
-    .setDescription('✅ Approve or deny a submission')
-    .addStringOption(opt =>
-      opt
-        .setName('submission_id')
-        .setDescription('The ID of the submission to approve/deny.')
-        .setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName('action')
-        .setDescription('Approve or deny the submission.')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Approve', value: 'approve' },
-          { name: 'Deny', value: 'deny' }
-        )
-    )
-    .addStringOption(opt =>
-      opt
-        .setName('reason')
-        .setDescription('Provide a reason for denying the submission (optional).')
-        .setRequired(false)
-    )
-)
-
-// ------------------- Subcommand: approveedit -------------------
-.addSubcommand(subcommand =>
-  subcommand
-    .setName('approveedit')
-    .setDescription('Approve or reject a pending character edit')
-    .addStringOption(option =>
-      option
-        .setName('requestid')
-        .setDescription('The ID of the pending edit request')
-        .setRequired(true)
-    )
-    .addBooleanOption(option =>
-      option
+// ------------------- Subcommand Group: submission -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('submission')
+    .setDescription('📝 Submission moderation commands')
+    .addSubcommand(sub =>
+      sub
         .setName('approve')
-        .setDescription('Whether to approve (true) or reject (false) the edit')
-        .setRequired(true)
-    )
-)
-
-// ------------------- Subcommand: inactivityreport -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('inactivityreport')
-    .setDescription("📋 View members inactive for 3+ months")
-)
-
-
-// ------------------- Subcommand: tokens -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('tokens')
-    .setDescription('💠 Give tokens to a user')
-    .addUserOption(opt =>
-      opt
-        .setName('user')
-        .setDescription('The user to give tokens to')
-        .setRequired(true)
-    )
-    .addIntegerOption(opt =>
-      opt
-        .setName('amount')
-        .setDescription('Number of tokens to give')
-        .setRequired(true)
-    )
-)
-
-// ------------------- Subcommand: debuff -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('debuff')
-    .setDescription('⚠️ Apply or remove a debuff from a character')
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the target character')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName('action')
-        .setDescription('Apply or remove the debuff')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Apply Debuff', value: 'apply' },
-          { name: 'Remove Debuff', value: 'remove' }
+        .setDescription('✅ Approve or deny a submission')
+        .addStringOption(opt =>
+          opt
+            .setName('submission_id')
+            .setDescription('The ID of the submission to approve/deny.')
+            .setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('action')
+            .setDescription('Approve or deny the submission.')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Approve', value: 'approve' },
+              { name: 'Deny', value: 'deny' }
+            )
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('reason')
+            .setDescription('Provide a reason for denying the submission (optional).')
+            .setRequired(false)
         )
     )
-    .addIntegerOption(opt =>
-      opt
-        .setName('days')
-        .setDescription('Number of days for the debuff (default: 7)')
-        .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(30)
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('approveedit')
+        .setDescription('Approve or reject a pending character edit')
+        .addStringOption(option =>
+          option
+            .setName('requestid')
+            .setDescription('The ID of the pending edit request')
+            .setRequired(true)
+        )
+        .addBooleanOption(option =>
+          option
+            .setName('approve')
+            .setDescription('Whether to approve (true) or reject (false) the edit')
+            .setRequired(true)
+        )
     )
-    .addStringOption(opt =>
-      opt
-        .setName('reason')
-        .setDescription('Reason for applying the debuff')
-        .setRequired(false)
+)
+
+
+// ------------------- Subcommand Group: user -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('user')
+    .setDescription('👥 User management commands')
+    .addSubcommand(sub =>
+      sub
+        .setName('tokens')
+        .setDescription('💠 Give tokens to a user')
+        .addUserOption(opt =>
+          opt
+            .setName('user')
+            .setDescription('The user to give tokens to')
+            .setRequired(true)
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('amount')
+            .setDescription('Number of tokens to give')
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('slots')
+        .setDescription('🎯 Update a user\'s character slots')
+        .addUserOption(opt =>
+          opt
+            .setName('user')
+            .setDescription('The user to update slots for')
+            .setRequired(true)
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('slots')
+            .setDescription('Number of character slots to set')
+            .setRequired(true)
+            .setMinValue(0)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('level')
+        .setDescription('📈 Give XP or set level for a user')
+        .addUserOption(option =>
+          option
+            .setName('user')
+            .setDescription('User to modify level/XP for')
+            .setRequired(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('action')
+            .setDescription('Action to perform')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Add XP', value: 'add_xp' },
+              { name: 'Set XP', value: 'set_xp' },
+              { name: 'Set Level', value: 'set_level' },
+              { name: 'Reset Level', value: 'reset_level' }
+            )
+        )
+        .addIntegerOption(option =>
+          option
+            .setName('amount')
+            .setDescription('Amount of XP to add/set or level to set')
+            .setRequired(true)
+            .setMinValue(1)
+        )
+        .addStringOption(option =>
+          option
+            .setName('reason')
+            .setDescription('Reason for the level/XP modification')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('inactivityreport')
+        .setDescription("📋 View members inactive for 3+ months")
     )
 )
 
@@ -888,25 +976,6 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: slots -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('slots')
-    .setDescription('🎯 Update a user\'s character slots')
-    .addUserOption(opt =>
-      opt
-        .setName('user')
-        .setDescription('The user to update slots for')
-        .setRequired(true)
-    )
-    .addIntegerOption(opt =>
-      opt
-        .setName('slots')
-        .setDescription('Number of character slots to set')
-        .setRequired(true)
-        .setMinValue(0)
-    )
-)
 
 // ------------------- Subcommand Group: weather -------------------
 .addSubcommandGroup(group =>
@@ -947,415 +1016,716 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: vendingreset -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('vendingreset')
-    .setDescription('🧹 Reset all vending-related fields for a character (mod only)')
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the character to reset vending fields for')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-)
-
-// ------------------- Subcommand: stealreset -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('stealreset')
-    .setDescription('🗝️ Reset steal cooldown/state for a character (daily use, jail, NPC lockouts)')
-    .addStringOption(opt =>
-      opt
-        .setName('character')
-        .setDescription('Name of the character whose steal state to reset')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-)
-
-// ------------------- Subcommand: petrolls -------------------
-.addSubcommand(subcommand =>
-  subcommand
-    .setName('petrolls')
-    .setDescription('🔄 Reset pet rolls for all characters or a specific pet')
-    .addStringOption(option =>
-      option
-        .setName('action')
-        .setDescription('Reset all pets or a specific pet')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Reset All Pet Rolls', value: 'all' },
-          { name: 'Reset Specific Pet', value: 'specific' }
+// ------------------- Subcommand Group: reset -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('reset')
+    .setDescription('🔄 Reset commands for characters and systems')
+    .addSubcommand(sub =>
+      sub
+        .setName('vending')
+        .setDescription('🧹 Reset all vending-related fields for a character (mod only)')
+        .addStringOption(opt =>
+          opt
+            .setName('character')
+            .setDescription('Name of the character to reset vending fields for')
+            .setRequired(true)
+            .setAutocomplete(true)
         )
     )
-    .addStringOption(option =>
-      option
-        .setName('character')
-        .setDescription('The character name (required for specific pet reset)')
-        .setRequired(false)
-        .setAutocomplete(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName('petname')
-        .setDescription('The pet name (required for specific pet reset)')
-        .setRequired(false)
-        .setAutocomplete(true)
-    )
-)
-
-// ------------------- Subcommand: resetrolls -------------------
-.addSubcommand(subcommand =>
-  subcommand
-    .setName('resetrolls')
-    .setDescription('🔄 Reset daily rolls for a specific character')
-    .addStringOption(option =>
-      option
-        .setName('character')
-        .setDescription('Name of the character to reset rolls for')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-)
-
-
-
-// ------------------- Subcommand: shopadd -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('shopadd')
-    .setDescription('🛒 Add an item to the village shop')
-    .addStringOption(option =>
-      option
-        .setName('itemname')
-        .setDescription('Name of the item to add to the shop')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('stock')
-        .setDescription('Quantity of the item to add to shop stock')
-        .setRequired(true)
-        .setMinValue(1)
-    )
-)
-
-// ------------------- Subcommand: trigger-raid -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('trigger-raid')
-    .setDescription('🐉 Manually trigger a raid for testing or RP purposes')
-    .addStringOption(option =>
-      option
-        .setName('village')
-        .setDescription('The village where the raid will take place')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'rudania' },
-          { name: 'Inariko', value: 'inariko' },
-          { name: 'Vhintl', value: 'vhintl' }
+    .addSubcommand(sub =>
+      sub
+        .setName('steal')
+        .setDescription('🗝️ Reset steal cooldown/state for a character (daily use, jail, NPC lockouts)')
+        .addStringOption(opt =>
+          opt
+            .setName('character')
+            .setDescription('Name of the character whose steal state to reset')
+            .setRequired(true)
+            .setAutocomplete(true)
         )
     )
-    .addStringOption(option =>
-      option
-        .setName('monster')
-        .setDescription('The monster to raid (optional - random if not specified)')
-        .setRequired(false)
-        .setAutocomplete(true)
-    )
-)
-// ------------------- Subcommand: wavestart -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('wavestart')
-    .setDescription('🌊 Start a new monster wave')
-    .addStringOption(opt =>
-      opt
-        .setName('village')
-        .setDescription('Village for the wave')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'rudania' },
-          { name: 'Inariko', value: 'inariko' },
-          { name: 'Vhintl', value: 'vhintl' }
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('petrolls')
+        .setDescription('🔄 Reset pet rolls for all characters or a specific pet')
+        .addStringOption(option =>
+          option
+            .setName('action')
+            .setDescription('Reset all pets or a specific pet')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Reset All Pet Rolls', value: 'all' },
+              { name: 'Reset Specific Pet', value: 'specific' }
+            )
+        )
+        .addStringOption(option =>
+          option
+            .setName('character')
+            .setDescription('The character name (required for specific pet reset)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('petname')
+            .setDescription('The pet name (required for specific pet reset)')
+            .setRequired(false)
+            .setAutocomplete(true)
         )
     )
-    .addIntegerOption(opt =>
-      opt
-        .setName('monstercount')
-        .setDescription('Number of monsters (5-15)')
-        .setRequired(true)
-        .setMinValue(5)
-        .setMaxValue(15)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName('difficulty')
-        .setDescription('Difficulty group')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Beginner (Tiers 1-4)', value: 'beginner' },
-          { name: 'Beginner+ (Tiers 1-5)', value: 'beginner+' },
-          { name: 'Easy (Tiers 2-5)', value: 'easy' },
-          { name: 'Easy+ (Tiers 2-6)', value: 'easy+' },
-          { name: 'Mixed (Low) (Tiers 2-7)', value: 'mixed-low' },
-          { name: 'Mixed (Medium) (Tiers 2-10)', value: 'mixed-medium' },
-          { name: 'Intermediate (Tiers 3-6)', value: 'intermediate' },
-          { name: 'Intermediate+ (Tiers 3-8)', value: 'intermediate+' },
-          { name: 'Advanced (Tiers 4-7)', value: 'advanced' },
-          { name: 'Advanced+ (Tiers 4-9)', value: 'advanced+' },
-          { name: 'Tier 5 Boss (1 T5 + rest T1-4)', value: 'tier5-boss' },
-          { name: 'Tier 6 Boss (1 T6 + rest T1-4)', value: 'tier6-boss' },
-          { name: 'Tier 7 Boss (1 T7 + rest T1-4)', value: 'tier7-boss' },
-          { name: 'Tier 8 Boss (1 T8 + rest T1-4)', value: 'tier8-boss' },
-          { name: 'Tier 9 Boss (1 T9 + rest T1-4)', value: 'tier9-boss' },
-          { name: 'Tier 10 Boss (1 T10 + rest T1-4)', value: 'tier10-boss' },
-          { name: 'Yiga', value: 'yiga' }
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('rolls')
+        .setDescription('🔄 Reset daily rolls for a specific character')
+        .addStringOption(option =>
+          option
+            .setName('character')
+            .setDescription('Name of the character to reset rolls for')
+            .setRequired(true)
+            .setAutocomplete(true)
         )
     )
 )
-// ------------------- Subcommand: blight -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('blight')
-    .setDescription('👁️ Set or unset blight for a character')
-    .addStringOption(option =>
-      option
-        .setName('character')
-        .setDescription('Name of the character to modify')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addBooleanOption(option =>
-      option
-        .setName('status')
-        .setDescription('True to set blight, false to unset blight')
-        .setRequired(true)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('stage')
-        .setDescription('Blight stage/level (0-5, only used when status is true)')
-        .setRequired(false)
-        .setMinValue(0)
-        .setMaxValue(5)
-    )
-)
 
-// ------------------- Subcommand: rpposts -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('rpposts')
-    .setDescription('📝 Update RP post count for a quest participant')
-    .addStringOption(option =>
-      option
-        .setName('questid')
-        .setDescription('ID of the RP quest')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('User to update post count for')
-        .setRequired(true)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('count')
-        .setDescription('New post count')
-        .setRequired(true)
-        .setMinValue(0)
-    )
-)
 
-// ------------------- Subcommand: minigame -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('minigame')
-    .setDescription('🎮 Manage minigames')
-    .addStringOption(option =>
-      option
-        .setName('minigame_name')
-        .setDescription('Name of the minigame to manage')
-        .setRequired(true)
-        .addChoices(
-          { name: 'They Came for the Cows', value: 'theycame' }
+
+// ------------------- Subcommand Group: village -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('village')
+    .setDescription('🏘️ Village management commands')
+    .addSubcommand(sub =>
+      sub
+        .setName('shopadd')
+        .setDescription('🛒 Add an item to the village shop')
+        .addStringOption(option =>
+          option
+            .setName('itemname')
+            .setDescription('Name of the item to add to the shop')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addIntegerOption(option =>
+          option
+            .setName('stock')
+            .setDescription('Quantity of the item to add to shop stock')
+            .setRequired(true)
+            .setMinValue(1)
         )
     )
-    .addStringOption(option =>
-      option
-        .setName('village')
-        .setDescription('Village where the minigame takes place')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'rudania' },
-          { name: 'Inariko', value: 'inariko' },
-          { name: 'Vhintl', value: 'vhintl' }
+    .addSubcommand(sub =>
+      sub
+        .setName('trigger-raid')
+        .setDescription('🐉 Manually trigger a raid for testing or RP purposes')
+        .addStringOption(option =>
+          option
+            .setName('village')
+            .setDescription('The village where the raid will take place')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Rudania', value: 'rudania' },
+              { name: 'Inariko', value: 'inariko' },
+              { name: 'Vhintl', value: 'vhintl' }
+            )
+        )
+        .addStringOption(option =>
+          option
+            .setName('monster')
+            .setDescription('The monster to raid (optional - random if not specified)')
+            .setRequired(false)
+            .setAutocomplete(true)
         )
     )
-    .addStringOption(option =>
-      option
-        .setName('action')
-        .setDescription('Action to perform')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Create Game', value: 'create' },
-          { name: 'Start Game', value: 'start' },
-          { name: 'Advance Round', value: 'advance' },
-          { name: 'Skip Turn', value: 'skip' },
-          { name: 'End Game', value: 'end' }
+    .addSubcommand(sub =>
+      sub
+        .setName('wavestart')
+        .setDescription('🌊 Start a new monster wave')
+        .addStringOption(opt =>
+          opt
+            .setName('village')
+            .setDescription('Village for the wave')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Rudania', value: 'rudania' },
+              { name: 'Inariko', value: 'inariko' },
+              { name: 'Vhintl', value: 'vhintl' }
+            )
+        )
+        .addIntegerOption(opt =>
+          opt
+            .setName('monstercount')
+            .setDescription('Number of monsters (5-15)')
+            .setRequired(true)
+            .setMinValue(5)
+            .setMaxValue(15)
+        )
+        .addStringOption(opt =>
+          opt
+            .setName('difficulty')
+            .setDescription('Difficulty group')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Beginner (Tiers 1-4)', value: 'beginner' },
+              { name: 'Beginner+ (Tiers 1-5)', value: 'beginner+' },
+              { name: 'Easy (Tiers 2-5)', value: 'easy' },
+              { name: 'Easy+ (Tiers 2-6)', value: 'easy+' },
+              { name: 'Mixed (Low) (Tiers 2-7)', value: 'mixed-low' },
+              { name: 'Mixed (Medium) (Tiers 2-10)', value: 'mixed-medium' },
+              { name: 'Intermediate (Tiers 3-6)', value: 'intermediate' },
+              { name: 'Intermediate+ (Tiers 3-8)', value: 'intermediate+' },
+              { name: 'Advanced (Tiers 4-7)', value: 'advanced' },
+              { name: 'Advanced+ (Tiers 4-9)', value: 'advanced+' },
+              { name: 'Tier 5 Boss (1 T5 + rest T1-4)', value: 'tier5-boss' },
+              { name: 'Tier 6 Boss (1 T6 + rest T1-4)', value: 'tier6-boss' },
+              { name: 'Tier 7 Boss (1 T7 + rest T1-4)', value: 'tier7-boss' },
+              { name: 'Tier 8 Boss (1 T8 + rest T1-4)', value: 'tier8-boss' },
+              { name: 'Tier 9 Boss (1 T9 + rest T1-4)', value: 'tier9-boss' },
+              { name: 'Tier 10 Boss (1 T10 + rest T1-4)', value: 'tier10-boss' },
+              { name: 'Yiga', value: 'yiga' }
+            )
         )
     )
-    .addStringOption(option =>
-      option
-        .setName('session_id')
-        .setDescription('Game session ID (required for advance/skip/end)')
-        .setRequired(false)
-        .setAutocomplete(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName('skip_character')
-        .setDescription('Character name to skip (required for skip action)')
-        .setRequired(false)
-        .setAutocomplete(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName('quest_id')
-        .setDescription('Quest ID to tie to the minigame (optional for testing)')
-        .setRequired(false)
-        .setAutocomplete(true)
-    )
-)
-
-// ------------------- Subcommand: level -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('level')
-    .setDescription('📈 Give XP or set level for a user')
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('User to modify level/XP for')
-        .setRequired(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName('action')
-        .setDescription('Action to perform')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Add XP', value: 'add_xp' },
-          { name: 'Set XP', value: 'set_xp' },
-          { name: 'Set Level', value: 'set_level' },
-          { name: 'Reset Level', value: 'reset_level' }
-        )
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('amount')
-        .setDescription('Amount of XP to add/set or level to set')
-        .setRequired(true)
-        .setMinValue(1)
-    )
-    .addStringOption(option =>
-      option
-        .setName('reason')
-        .setDescription('Reason for the level/XP modification')
-        .setRequired(false)
-    )
-)
-
-// ------------------- Subcommand: villagecheck -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('villagecheck')
-    .setDescription('🏘️ Check village locations for all participants in an RP quest')
-    .addStringOption(option =>
-      option
-        .setName('questid')
-        .setDescription('ID of the RP quest to check village locations for')
-        .setRequired(true)
-        .setAutocomplete(true)
-    )
-)
-
-// ------------------- Subcommand: villagedamage -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('villagedamage')
-    .setDescription('⚔️ Apply damage to a village (for testing and events)')
-    .addStringOption(option =>
-      option
-        .setName('village')
-        .setDescription('Name of the village to damage')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'Rudania' },
-          { name: 'Inariko', value: 'Inariko' },
-          { name: 'Vhintl', value: 'Vhintl' }
-        )
-    )
-    .addIntegerOption(option =>
-      option
+    .addSubcommand(sub =>
+      sub
         .setName('damage')
-        .setDescription('Amount of damage to apply')
-        .setRequired(true)
-        .setMinValue(1)
-    )
-    .addStringOption(option =>
-      option
-        .setName('reason')
-        .setDescription('Reason for the damage (optional)')
-        .setRequired(false)
-    )
-)
-// ------------------- Subcommand: villageresources -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('villageresources')
-    .setDescription('📦 Add materials or tokens to a village (for testing)')
-    .addStringOption(option =>
-      option
-        .setName('village')
-        .setDescription('Name of the village')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'Rudania' },
-          { name: 'Inariko', value: 'Inariko' },
-          { name: 'Vhintl', value: 'Vhintl' }
+        .setDescription('⚔️ Apply damage to a village (for testing and events)')
+        .addStringOption(option =>
+          option
+            .setName('village')
+            .setDescription('Name of the village to damage')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Rudania', value: 'Rudania' },
+              { name: 'Inariko', value: 'Inariko' },
+              { name: 'Vhintl', value: 'Vhintl' }
+            )
+        )
+        .addIntegerOption(option =>
+          option
+            .setName('damage')
+            .setDescription('Amount of damage to apply')
+            .setRequired(true)
+            .setMinValue(1)
+        )
+        .addStringOption(option =>
+          option
+            .setName('reason')
+            .setDescription('Reason for the damage (optional)')
+            .setRequired(false)
         )
     )
-    .addStringOption(option =>
-      option
-        .setName('type')
-        .setDescription('Type of resource to add')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Tokens', value: 'tokens' },
-          { name: 'Material', value: 'material' }
+    .addSubcommand(sub =>
+      sub
+        .setName('resources')
+        .setDescription('📦 Add materials or tokens to a village (for testing)')
+        .addStringOption(option =>
+          option
+            .setName('village')
+            .setDescription('Name of the village')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Rudania', value: 'Rudania' },
+              { name: 'Inariko', value: 'Inariko' },
+              { name: 'Vhintl', value: 'Vhintl' }
+            )
+        )
+        .addStringOption(option =>
+          option
+            .setName('type')
+            .setDescription('Type of resource to add')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Tokens', value: 'tokens' },
+              { name: 'Material', value: 'material' }
+            )
+        )
+        .addIntegerOption(option =>
+          option
+            .setName('amount')
+            .setDescription('Amount to add')
+            .setRequired(true)
+            .setMinValue(1)
+        )
+        .addStringOption(option =>
+          option
+            .setName('material')
+            .setDescription('Material name (required if type is material)')
+            .setRequired(false)
+            .setAutocomplete(true)
         )
     )
-    .addIntegerOption(option =>
-      option
-        .setName('amount')
-        .setDescription('Amount to add')
-        .setRequired(true)
-        .setMinValue(1)
-    )
-    .addStringOption(option =>
-      option
-        .setName('material')
-        .setDescription('Material name (required if type is material)')
-        .setRequired(false)
-        .setAutocomplete(true)
+    .addSubcommand(sub =>
+      sub
+        .setName('check')
+        .setDescription('🏘️ Check village locations for all participants in an RP quest')
+        .addStringOption(option =>
+          option
+            .setName('questid')
+            .setDescription('ID of the RP quest to check village locations for')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
     )
 )
+
+// ------------------- Subcommand Group: system -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('system')
+    .setDescription('⚙️ System management commands')
+    .addSubcommand(sub =>
+      sub
+        .setName('rpposts')
+        .setDescription('📝 Update RP post count for a quest participant')
+        .addStringOption(option =>
+          option
+            .setName('questid')
+            .setDescription('ID of the RP quest')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addUserOption(option =>
+          option
+            .setName('user')
+            .setDescription('User to update post count for')
+            .setRequired(true)
+        )
+        .addIntegerOption(option =>
+          option
+            .setName('count')
+            .setDescription('New post count')
+            .setRequired(true)
+            .setMinValue(0)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('minigame')
+        .setDescription('🎮 Manage minigames')
+        .addStringOption(option =>
+          option
+            .setName('minigame_name')
+            .setDescription('Name of the minigame to manage')
+            .setRequired(true)
+            .addChoices(
+              { name: 'They Came for the Cows', value: 'theycame' }
+            )
+        )
+        .addStringOption(option =>
+          option
+            .setName('village')
+            .setDescription('Village where the minigame takes place')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Rudania', value: 'rudania' },
+              { name: 'Inariko', value: 'inariko' },
+              { name: 'Vhintl', value: 'vhintl' }
+            )
+        )
+        .addStringOption(option =>
+          option
+            .setName('action')
+            .setDescription('Action to perform')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Create Game', value: 'create' },
+              { name: 'Start Game', value: 'start' },
+              { name: 'Advance Round', value: 'advance' },
+              { name: 'Skip Turn', value: 'skip' },
+              { name: 'End Game', value: 'end' }
+            )
+        )
+        .addStringOption(option =>
+          option
+            .setName('session_id')
+            .setDescription('Game session ID (required for advance/skip/end)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('skip_character')
+            .setDescription('Character name to skip (required for skip action)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('quest_id')
+            .setDescription('Quest ID to tie to the minigame (optional for testing)')
+            .setRequired(false)
+            .setAutocomplete(true)
+        )
+    )
+)
+
+// ------------------- Subcommand Group: ocapp -------------------
+.addSubcommandGroup(subcommandGroup =>
+  subcommandGroup
+    .setName('ocapp')
+    .setDescription('OC application moderation commands')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('approve')
+        .setDescription('Approve an OC application')
+        .addStringOption(option =>
+          option
+            .setName('id')
+            .setDescription('Character ID or name')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('note')
+            .setDescription('Optional note/feedback')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('needschanges')
+        .setDescription('Mark an OC application as needs changes')
+        .addStringOption(option =>
+          option
+            .setName('id')
+            .setDescription('Character ID or name')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option
+            .setName('note')
+            .setDescription('Required feedback explaining what needs to be changed')
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('view')
+        .setDescription('View an OC application status')
+        .addStringOption(option =>
+          option
+            .setName('id')
+            .setDescription('Character ID or name')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+    )
+)
+
+// ============================================================================
+// ------------------- OC Application Handler Functions -------------------
+// ============================================================================
+
+async function handleOCAppApprove(interaction) {
+  try {
+    await connectToTinglebot();
+
+    // Check if user has mod permissions
+    const member = interaction.member;
+    const hasModRole = member.roles.cache.some(role => 
+      role.name.toLowerCase().includes('mod') || 
+      role.name.toLowerCase().includes('admin') ||
+      role.name.toLowerCase().includes('oracle') ||
+      role.name.toLowerCase().includes('dragon') ||
+      role.name.toLowerCase().includes('sage')
+    );
+
+    if (!hasModRole) {
+      return interaction.editReply({
+        content: '❌ You do not have permission to use this command. Only moderators can moderate OC applications.',
+        ephemeral: true
+      });
+    }
+
+    const characterIdOrName = interaction.options.getString('id');
+    const note = interaction.options.getString('note');
+
+    // Find character by ID or name
+    let character;
+    try {
+      // Try as ObjectId first
+      if (characterIdOrName.match(/^[0-9a-fA-F]{24}$/)) {
+        character = await Character.findById(characterIdOrName);
+      } else {
+        // Search by name
+        character = await Character.findOne({ name: { $regex: new RegExp(`^${characterIdOrName}$`, 'i') } });
+      }
+    } catch (e) {
+      // If not valid ObjectId, search by name
+      character = await Character.findOne({ name: { $regex: new RegExp(`^${characterIdOrName}$`, 'i') } });
+    }
+
+    if (!character) {
+      return interaction.editReply({
+        content: `❌ Character not found: ${characterIdOrName}`
+      });
+    }
+
+    if (character.status !== 'pending') {
+      return interaction.editReply({
+        content: `❌ Character "${character.name}" is not pending review. Current status: ${character.status || 'DRAFT'}`
+      });
+    }
+
+    const modId = interaction.user.id;
+    const modUsername = interaction.user.username;
+
+    // Import service - use path relative to bot directory
+    const ocApplicationServicePath = path.join(__dirname, '../../../dashboard/services/ocApplicationService.js');
+    let ocApplicationService;
+    try {
+      ocApplicationService = require(ocApplicationServicePath);
+    } catch (e) {
+      logger.error('MOD_OCAPP', `Failed to load ocApplicationService: ${e.message}`);
+      return interaction.editReply({
+        content: '❌ Error: Could not load application service. Please use the dashboard moderation panel.'
+      });
+    }
+    const voteResult = await ocApplicationService.recordVote(
+      character._id.toString(),
+      modId,
+      modUsername,
+      'approve',
+      note
+    );
+
+    // Check decision
+    const decision = await ocApplicationService.checkDecision(character._id.toString());
+
+    if (decision && decision.decision === 'approved') {
+      await ocApplicationService.processApproval(character._id.toString());
+      
+      character = await Character.findById(character._id);
+
+      return interaction.editReply({
+        content: `✅ **Character Approved!**\n\n**${character.name}** has been approved and roles have been assigned.`
+      });
+    }
+
+    const { APPROVAL_THRESHOLD } = ocApplicationService;
+    const remaining = APPROVAL_THRESHOLD - voteResult.counts.approves;
+
+    return interaction.editReply({
+      content: `✅ **Vote Recorded**\n\n**${character.name}**\n✅ Approves: ${voteResult.counts.approves}/${APPROVAL_THRESHOLD}\n⚠️ Needs Changes: ${voteResult.counts.needsChanges}\n❌ Denies: ${voteResult.counts.denies}\n\n**${remaining} more approval(s) needed.**`
+    });
+  } catch (error) {
+    logger.error('MOD_OCAPP', 'Error in handleOCAppApprove', error);
+    throw error;
+  }
+}
+
+async function handleOCAppNeedsChanges(interaction) {
+  try {
+    await connectToTinglebot();
+
+    // Check if user has mod permissions
+    const member = interaction.member;
+    const hasModRole = member.roles.cache.some(role => 
+      role.name.toLowerCase().includes('mod') || 
+      role.name.toLowerCase().includes('admin') ||
+      role.name.toLowerCase().includes('oracle') ||
+      role.name.toLowerCase().includes('dragon') ||
+      role.name.toLowerCase().includes('sage')
+    );
+
+    if (!hasModRole) {
+      return interaction.editReply({
+        content: '❌ You do not have permission to use this command. Only moderators can moderate OC applications.',
+        ephemeral: true
+      });
+    }
+
+    const characterIdOrName = interaction.options.getString('id');
+    const note = interaction.options.getString('note');
+
+    if (!note) {
+      return interaction.editReply({
+        content: '❌ Note is required for needs changes votes.'
+      });
+    }
+
+    // Find character by ID or name
+    let character;
+    try {
+      // Try as ObjectId first
+      if (characterIdOrName.match(/^[0-9a-fA-F]{24}$/)) {
+        character = await Character.findById(characterIdOrName);
+      } else {
+        // Search by name
+        character = await Character.findOne({ name: { $regex: new RegExp(`^${characterIdOrName}$`, 'i') } });
+      }
+    } catch (e) {
+      // If not valid ObjectId, search by name
+      character = await Character.findOne({ name: { $regex: new RegExp(`^${characterIdOrName}$`, 'i') } });
+    }
+
+    if (!character) {
+      return interaction.editReply({
+        content: `❌ Character not found: ${characterIdOrName}`
+      });
+    }
+
+    if (character.status !== 'pending') {
+      return interaction.editReply({
+        content: `❌ Character "${character.name}" is not pending review. Current status: ${character.status || 'DRAFT'}`
+      });
+    }
+
+    const modId = interaction.user.id;
+    const modUsername = interaction.user.username;
+
+    // Import service
+    const ocApplicationServicePath = path.join(__dirname, '../../../dashboard/services/ocApplicationService.js');
+    let ocApplicationService;
+    try {
+      ocApplicationService = require(ocApplicationServicePath);
+    } catch (e) {
+      logger.error('MOD_OCAPP', `Failed to load ocApplicationService: ${e.message}`);
+      return interaction.editReply({
+        content: '❌ Error: Could not load application service. Please use the dashboard moderation panel.'
+      });
+    }
+    await ocApplicationService.recordVote(
+      character._id.toString(),
+      modId,
+      modUsername,
+      'needs_changes',
+      note
+    );
+
+    // Check decision (should immediately trigger needs_changes)
+    const decision = await ocApplicationService.checkDecision(character._id.toString());
+
+    if (decision && decision.decision === 'needs_changes') {
+      await ocApplicationService.processNeedsChanges(character._id.toString(), note);
+
+      return interaction.editReply({
+        content: `⚠️ **Needs Changes**\n\n**${character.name}** has been marked as needs changes.\n\n**Feedback:**\n${note}\n\nThe user has been notified and can edit and resubmit.`
+      });
+    }
+
+    return interaction.editReply({
+      content: `⚠️ **Vote Recorded**\n\n**${character.name}** marked as needs changes.\n\n**Feedback:**\n${note}`
+    });
+  } catch (error) {
+    logger.error('MOD_OCAPP', 'Error in handleOCAppNeedsChanges', error);
+    throw error;
+  }
+}
+
+async function handleOCAppView(interaction) {
+  try {
+    await connectToTinglebot();
+
+    // Check if user has mod permissions
+    const member = interaction.member;
+    const hasModRole = member.roles.cache.some(role => 
+      role.name.toLowerCase().includes('mod') || 
+      role.name.toLowerCase().includes('admin') ||
+      role.name.toLowerCase().includes('oracle') ||
+      role.name.toLowerCase().includes('dragon') ||
+      role.name.toLowerCase().includes('sage')
+    );
+
+    if (!hasModRole) {
+      return interaction.editReply({
+        content: '❌ You do not have permission to use this command. Only moderators can moderate OC applications.',
+        ephemeral: true
+      });
+    }
+
+    const characterIdOrName = interaction.options.getString('id');
+
+    // Find character by ID or name
+    let character;
+    try {
+      // Try as ObjectId first
+      if (characterIdOrName.match(/^[0-9a-fA-F]{24}$/)) {
+        character = await Character.findById(characterIdOrName);
+      } else {
+        // Search by name
+        character = await Character.findOne({ name: { $regex: new RegExp(`^${characterIdOrName}$`, 'i') } });
+      }
+    } catch (e) {
+      // If not valid ObjectId, search by name
+      character = await Character.findOne({ name: { $regex: new RegExp(`^${characterIdOrName}$`, 'i') } });
+    }
+
+    if (!character) {
+      return interaction.editReply({
+        content: `❌ Character not found: ${characterIdOrName}`
+      });
+    }
+
+    const applicationVersion = character.applicationVersion || 1;
+    
+    const approveCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'approve'
+    });
+    
+    const needsChangesCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'needs_changes'
+    });
+    
+    const denyCount = await CharacterModeration.countDocuments({
+      characterId: character._id,
+      applicationVersion: applicationVersion,
+      vote: 'deny'
+    });
+
+    const votes = await CharacterModeration.find({
+      characterId: character._id,
+      applicationVersion: applicationVersion
+    }).sort({ createdAt: -1 }).lean();
+
+    const statusMap = {
+      null: 'DRAFT',
+      undefined: 'DRAFT',
+      'pending': 'PENDING',
+      'denied': 'NEEDS_CHANGES',
+      'accepted': 'APPROVED'
+    };
+
+    const statusText = statusMap[character.status] || character.status || 'DRAFT';
+
+    let description = `**Status:** ${statusText}\n**Version:** ${applicationVersion}\n\n`;
+    description += `**Votes:**\n✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}\n❌ Denies: ${denyCount}\n\n`;
+
+    if (votes.length > 0) {
+      description += '**Mod Votes:**\n';
+      votes.forEach(vote => {
+        const emoji = vote.vote === 'approve' ? '✅' : vote.vote === 'needs_changes' ? '⚠️' : '❌';
+        description += `${emoji} ${vote.modUsername}: ${vote.vote}`;
+        if (vote.note || vote.reason) {
+          description += ` - ${vote.note || vote.reason}`;
+        }
+        description += '\n';
+      });
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle(`📋 OC Application: ${character.name}`)
+      .setDescription(description)
+      .setColor(character.status === 'accepted' ? 0x4caf50 : character.status === 'denied' ? 0xf44336 : 0xFFA500)
+      .setThumbnail(character.icon || null)
+      .setFooter({ text: `Character ID: ${character._id}` })
+      .setTimestamp();
+
+    return interaction.editReply({
+      embeds: [embed]
+    });
+  } catch (error) {
+    logger.error('MOD_OCAPP', 'Error in handleOCAppView', error);
+    throw error;
+  }
+}
 
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -1380,19 +1750,27 @@ async function execute(interaction) {
       return;
     }
 
-    if (subcommand === 'give') {
-        return await handleGive(interaction);      
-    } else if (subcommand === 'petlevel') {
+    // Handle subcommand groups
+    if (subcommandGroup === 'ocapp') {
+      if (subcommand === 'approve') {
+        return await handleOCAppApprove(interaction);
+      } else if (subcommand === 'needschanges') {
+        return await handleOCAppNeedsChanges(interaction);
+      } else if (subcommand === 'view') {
+        return await handleOCAppView(interaction);
+      }
+    } else if (subcommandGroup === 'character') {
+      if (subcommand === 'give') {
+        return await handleGive(interaction);
+      } else if (subcommand === 'petlevel') {
         return await handlePetLevel(interaction);
-    } else if (subcommand === 'mount') {
-        return await handleMount(interaction);      
-    } else if (subcommand === 'approve') {
-        return await handleApprove(interaction);      
-    } else if (subcommand === 'approveedit') {
-        return await handleApproveEdit(interaction);
-    } else if (subcommand === 'inactivityreport') {
-        return await handleInactivityReport(interaction);      
-    } else if (subcommand === 'tokens') {
+      } else if (subcommand === 'debuff') {
+        return await handleDebuff(interaction);
+      } else if (subcommand === 'blight') {
+        return await handleBlight(interaction);
+      }
+    } else if (subcommandGroup === 'user') {
+      if (subcommand === 'tokens') {
         const user = interaction.options.getUser('user');
         const amount = interaction.options.getInteger('amount');
       
@@ -1440,47 +1818,62 @@ async function execute(interaction) {
             content: `❌ Failed to give tokens to <@${user.id}>.`,
             ephemeral: true
           });
-        }      
-    } else if (subcommand === 'slots') {
-        return await handleSlots(interaction);
-    } else if (subcommandGroup === 'weather') {
-        if (subcommand === 'generate') {
-            return await handleWeather(interaction);
-        } else if (subcommand === 'forecast') {
-            return await handleWeatherForecast(interaction);
         }
-    } else if (subcommand === 'vendingreset') {
-        return await handleVendingReset(interaction);
-    } else if (subcommand === 'stealreset') {
-        return await handleStealReset(interaction);
-    } else if (subcommand === 'petrolls') {
-        return await handlePetRolls(interaction);
-    } else if (subcommand === 'resetrolls') {
-        return await handleResetRolls(interaction);
-    } else if (subcommand === 'shopadd') {
-        return await handleShopAdd(interaction);
-    } else if (subcommand === 'trigger-raid') {
-        return await handleTriggerRaid(interaction);
-    } else if (subcommand === 'wavestart') {
-        return await handleWaveStart(interaction);
-    } else if (subcommand === 'blight') {
-        return await handleBlight(interaction);
-    } else if (subcommand === 'debuff') {
-        return await handleDebuff(interaction);
-    } else if (subcommand === 'rpposts') {
-        return await handleRPPosts(interaction);
-    } else if (subcommand === 'minigame') {
-        return await handleMinigame(interaction);
-    } else if (subcommand === 'level') {
+      } else if (subcommand === 'slots') {
+        return await handleSlots(interaction);
+      } else if (subcommand === 'level') {
         return await handleLevel(interaction);
-    } else if (subcommand === 'villagecheck') {
-        return await handleVillageCheck(interaction);
-    } else if (subcommand === 'villagedamage') {
+      } else if (subcommand === 'inactivityreport') {
+        return await handleInactivityReport(interaction);
+      }
+    } else if (subcommandGroup === 'submission') {
+      if (subcommand === 'approve') {
+        return await handleApprove(interaction);
+      } else if (subcommand === 'approveedit') {
+        return await handleApproveEdit(interaction);
+      }
+    } else if (subcommandGroup === 'reset') {
+      if (subcommand === 'vending') {
+        return await handleVendingReset(interaction);
+      } else if (subcommand === 'steal') {
+        return await handleStealReset(interaction);
+      } else if (subcommand === 'petrolls') {
+        return await handlePetRolls(interaction);
+      } else if (subcommand === 'rolls') {
+        return await handleResetRolls(interaction);
+      }
+    } else if (subcommandGroup === 'village') {
+      if (subcommand === 'shopadd') {
+        return await handleShopAdd(interaction);
+      } else if (subcommand === 'trigger-raid') {
+        return await handleTriggerRaid(interaction);
+      } else if (subcommand === 'wavestart') {
+        return await handleWaveStart(interaction);
+      } else if (subcommand === 'damage') {
         return await handleVillageDamage(interaction);
-    } else if (subcommand === 'villageresources') {
+      } else if (subcommand === 'resources') {
         return await handleVillageResources(interaction);
+      } else if (subcommand === 'check') {
+        return await handleVillageCheck(interaction);
+      }
+    } else if (subcommandGroup === 'system') {
+      if (subcommand === 'rpposts') {
+        return await handleRPPosts(interaction);
+      } else if (subcommand === 'minigame') {
+        return await handleMinigame(interaction);
+      }
+    } else if (subcommandGroup === 'weather') {
+      if (subcommand === 'generate') {
+        return await handleWeather(interaction);
+      } else if (subcommand === 'forecast') {
+        return await handleWeatherForecast(interaction);
+      }
+    } else if (subcommand === 'mount') {
+      return await handleMount(interaction);
+    } else if (subcommand === 'sheets') {
+      return await handleSheets(interaction);
     } else {
-        return await safeReply(interaction, '❌ Unknown subcommand.');
+      return await safeReply(interaction, '❌ Unknown subcommand.');
     }
 
   } catch (error) {

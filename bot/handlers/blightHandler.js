@@ -73,29 +73,98 @@ const { sendUserDM } = require('@/shared/utils/messageUtils');
 // Functions for consistent timezone handling (using UTC with fixed offset)
 // ============================================================================
 
-// ------------------- Function: getHourInEST -------------------
-// Gets the hour in EST from a UTC date (EST is UTC-5)
-function getHourInEST(date = new Date()) {
-  const utcHour = date.getUTCHours();
-  // EST is UTC-5, so subtract 5 hours and handle wrap-around
-  const estHour = (utcHour - 5 + 24) % 24;
-  return estHour;
+// ------------------- Function: getHourInEasternTime -------------------
+// Gets the hour in America/New_York timezone (EST/EDT) from a UTC date
+// Automatically handles EST (UTC-5) and EDT (UTC-4) transitions
+function getHourInEasternTime(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: '2-digit',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(date);
+  return parseInt(parts.find(p => p.type === 'hour').value);
 }
 
-// ------------------- Function: get8PMESTInUTC -------------------
-// Converts 8:00 PM EST to UTC for consistent time comparisons
-// Uses fixed UTC-5 offset (EST) for simplicity
-function get8PMESTInUTC(date = new Date()) {
-  // Get the date components in UTC
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
-  const day = date.getUTCDate();
+// ------------------- Function: get8PMEasternInUTC -------------------
+// Converts 8:00 PM America/New_York timezone to UTC
+// Automatically handles EST (UTC-5) and EDT (UTC-4) transitions
+function get8PMEasternInUTC(date = new Date()) {
+  // Get the date components in America/New_York timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
   
-  // EST is UTC-5, so 8 PM EST = 01:00 UTC next day (20 + 5 = 25 = 1 AM next day)
-  // Create date at 8 PM EST by adding 5 hours to get UTC time
-  const utcDate = new Date(Date.UTC(year, month, day, 20, 0, 0));
-  // Add 5 hours to get UTC equivalent of 8 PM EST
-  utcDate.setUTCHours(utcDate.getUTCHours() + 5);
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === 'year').value);
+  const month = parseInt(parts.find(p => p.type === 'month').value) - 1; // 0-indexed
+  const day = parseInt(parts.find(p => p.type === 'day').value);
+  
+  // Create a date string for 8:00 PM in America/New_York timezone
+  const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T20:00:00`;
+  
+  // Use Intl.DateTimeFormat to convert this time to UTC
+  // Create a date object and format it in UTC to get the equivalent
+  const tempDate = new Date(dateString);
+  const utcFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  // Get the UTC equivalent by creating a date in America/New_York and converting
+  // We'll use a more direct approach: create the date and let JavaScript handle timezone
+  const easternDate = new Date(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T20:00:00-05:00`); // EST offset
+  const easternDateEDT = new Date(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T20:00:00-04:00`); // EDT offset
+  
+  // Determine which offset to use based on the date (DST check)
+  // DST in US: 2nd Sunday in March to 1st Sunday in November
+  const dstStart = new Date(Date.UTC(year, 2, 14 - new Date(Date.UTC(year, 2, 1)).getUTCDay(), 7, 0, 0));
+  const dstEnd = new Date(Date.UTC(year, 10, 7 - new Date(Date.UTC(year, 10, 1)).getUTCDay(), 6, 0, 0));
+  const checkDate = new Date(Date.UTC(year, month, day, 20, 0, 0));
+  const isDST = checkDate >= dstStart && checkDate < dstEnd;
+  
+  // Use the correct offset
+  const utcDate = isDST ? easternDateEDT : easternDate;
+  
+  return utcDate;
+}
+
+// ------------------- Function: get830PMEasternInUTC -------------------
+// Converts 8:30 PM America/New_York timezone to UTC
+// Automatically handles EST (UTC-5) and EDT (UTC-4) transitions
+function get830PMEasternInUTC(date = new Date()) {
+  // Get the date components in America/New_York timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const year = parseInt(parts.find(p => p.type === 'year').value);
+  const month = parseInt(parts.find(p => p.type === 'month').value) - 1; // 0-indexed
+  const day = parseInt(parts.find(p => p.type === 'day').value);
+  
+  // Determine which offset to use based on the date (DST check)
+  // DST in US: 2nd Sunday in March to 1st Sunday in November
+  const dstStart = new Date(Date.UTC(year, 2, 14 - new Date(Date.UTC(year, 2, 1)).getUTCDay(), 7, 0, 0));
+  const dstEnd = new Date(Date.UTC(year, 10, 7 - new Date(Date.UTC(year, 10, 1)).getUTCDay(), 6, 0, 0));
+  const checkDate = new Date(Date.UTC(year, month, day, 20, 30, 0));
+  const isDST = checkDate >= dstStart && checkDate < dstEnd;
+  
+  // Create date with correct offset: EST = UTC-5, EDT = UTC-4
+  const offset = isDST ? '-04:00' : '-05:00';
+  const utcDate = new Date(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T20:30:00${offset}`);
   
   return utcDate;
 }

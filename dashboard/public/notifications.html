@@ -10,10 +10,13 @@
   <link rel="stylesheet" href="css/users.css" />
   <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
   <style>
+    body.notifications-page {
+      overflow-x: hidden;
+    }
+
     .notifications-page {
-      padding: 2rem;
-      max-width: 1200px;
-      margin: 0 auto;
+      width: 100%;
+      padding: 0;
     }
 
     .notifications-header {
@@ -23,6 +26,8 @@
       margin-bottom: 2rem;
       padding-bottom: 1rem;
       border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+      flex-wrap: wrap;
+      gap: 1rem;
     }
 
     .notifications-header h1 {
@@ -58,6 +63,7 @@
       padding: 1rem;
       background: rgba(255, 255, 255, 0.05);
       border-radius: 8px;
+      flex-wrap: wrap;
     }
 
     .stat-item {
@@ -133,6 +139,8 @@
       justify-content: space-between;
       align-items: flex-start;
       margin-bottom: 0.5rem;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
 
     .notification-card-title {
@@ -140,6 +148,15 @@
       align-items: center;
       gap: 0.75rem;
       flex: 1;
+      min-width: 0;
+    }
+
+    .notification-card-title h3 {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
     }
 
     .notification-icon {
@@ -147,12 +164,6 @@
       color: var(--primary-color, #00A3DA);
     }
 
-    .notification-card-title h3 {
-      margin: 0;
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--text-primary, #ffffff);
-    }
 
     .notification-card-actions {
       display: flex;
@@ -188,6 +199,8 @@
       margin-top: 1rem;
       padding-top: 1rem;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
+      flex-wrap: wrap;
+      gap: 1rem;
     }
 
     .notification-card-time {
@@ -237,6 +250,7 @@
       font-weight: 600;
       text-transform: uppercase;
       margin-left: 0.5rem;
+      white-space: nowrap;
     }
 
     .notification-type-oc_approved {
@@ -262,6 +276,57 @@
     .notification-type-system {
       background: rgba(0, 163, 218, 0.2);
       color: #00a3da;
+    }
+
+    /* Fix overflow and scrollbar issues */
+    .main-content {
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .notifications-list {
+      min-height: 0;
+    }
+
+    .notification-card-message {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      max-width: 100%;
+    }
+
+    /* Responsive improvements */
+    @media (max-width: 768px) {
+      .notifications-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .notifications-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .notifications-stats {
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .stat-item {
+        width: 100%;
+      }
+
+      .notification-card-header {
+        flex-direction: column;
+      }
+
+      .notification-card-title {
+        width: 100%;
+      }
+
+      .notification-card-footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
@@ -355,6 +420,81 @@
               <li><a href="/oc-list.html"><i class="fas fa-th"></i><span>OC List</span></a></li>
             </ul>
           </li>
+          
+          <!-- Community Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-users"></i><span>Community</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Discord</span></a></li>
+              <li><a href="/#gallery-section" data-section="gallery-section"><i class="fas fa-images"></i><span>Gallery</span></a></li>
+              <li><a href="/#member-lore-section" data-section="member-lore-section"><i class="fas fa-scroll"></i><span>Member Lore</span></a></li>
+              <li><a href="/#relationships-section" data-section="relationships-section"><i class="fas fa-heart"></i><span>Relationships</span></a></li>
+              <li><a href="/#suggestion-box-section" data-section="suggestion-box-section"><i class="fas fa-lightbulb"></i><span>Suggestion Box</span></a></li>
+              <li><a href="/#users" data-section="users-section"><i class="fas fa-users"></i><span>Users</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- Game Features Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-gamepad"></i><span>Game Features</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#calendar" data-section="calendar-section"><i class="fas fa-calendar-alt"></i><span>Calendar</span></a></li>
+              <li><a href="/#levels" data-section="levels-section"><i class="fas fa-level-up-alt"></i><span>Levels</span></a></li>
+              <li><a href="/map"><i class="fas fa-map"></i><span>Map</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- Models Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-database"></i><span>Models</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#character"><i class="fas fa-user"></i><span>Characters</span></a></li>
+              <li><a href="/#helpwantedquest"><i class="fas fa-clipboard-list"></i><span>Help Wanted Quests</span></a></li>
+              <li id="inventories-nav-item-models" style="display: none;"><a href="/#inventory"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li><a href="/#item"><i class="fas fa-gem"></i><span>Items</span></a></li>
+              <li><a href="/#monster"><i class="fas fa-dragon"></i><span>Monsters</span></a></li>
+              <li><a href="/#mount"><i class="fas fa-horse"></i><span>Mounts</span></a></li>
+              <li><a href="/#pet"><i class="fas fa-paw"></i><span>Pets</span></a></li>
+              <li><a href="/#quest"><i class="fas fa-tasks"></i><span>Quests</span></a></li>
+              <li><a href="/#relic"><i class="fas fa-scroll"></i><span>Relics</span></a></li>
+              <li><a href="/#starterGear"><i class="fas fa-tshirt"></i><span>Starter Gear</span></a></li>
+              <li><a href="/#vendingShops"><i class="fas fa-shopping-cart"></i><span>Vending Shops</span></a></li>
+              <li><a href="/#vending"><i class="fas fa-store"></i><span>Vending Stock</span></a></li>
+              <li><a href="/#villageShops"><i class="fas fa-shop"></i><span>Village Shops</span></a></li>
+              <li><a href="/#village"><i class="fas fa-map-marker-alt"></i><span>Villages</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- User Area Dropdown -->
+          <li class="nav-dropdown">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-user-circle"></i><span>User Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li id="inventories-nav-item" style="display: none;"><a href="/inventories"><i class="fas fa-boxes"></i><span>Inventories</span></a></li>
+              <li><a href="/#profile-section" data-section="profile-section"><i class="fas fa-user"></i><span>Profile</span></a></li>
+              <li><a href="/#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+              <li><a href="/#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a></li>
+              <li><a href="/#tokens-section" data-section="tokens-section"><i class="fas fa-coins"></i><span>Tokens</span></a></li>
+            </ul>
+          </li>
+          
+          <!-- Admin Area (Conditional) -->
+          <li id="admin-area-nav-item" class="nav-dropdown" style="display: none;">
+            <a href="#" class="nav-dropdown-toggle" aria-expanded="false">
+              <i class="fas fa-shield-alt"></i><span>Admin Area</span><i class="fas fa-chevron-down nav-chevron"></i>
+            </a>
+            <ul class="nav-dropdown-menu">
+              <li><a href="/#admin-area" data-section="admin-area-section"><i class="fas fa-shield-alt"></i><span>Admin Area</span></a></li>
+              <li><a href="/character-moderation.html"><i class="fas fa-gavel"></i><span>Character Moderation</span></a></li>
+            </ul>
+          </li>
 
           <li>
             <a href="/inventories.html"><i class="fas fa-box"></i><span>Inventories</span></a>
@@ -417,8 +557,89 @@
     </main>
   </div>
 
+  <!-- Scripts -->
+  <script type="module" src="/js/modules/navigation.js"></script>
   <script type="module" src="js/auth.js"></script>
   <script src="js/notifications.js"></script>
+  <script type="module">
+    import { setupSidebarNavigation } from '/js/modules/navigation.js';
+    
+    // Initialize sidebar navigation
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setupSidebarNavigation();
+        initializeDropdownToggles();
+      });
+    } else {
+      setupSidebarNavigation();
+      initializeDropdownToggles();
+    }
+    
+    // Initialize dropdown toggles
+    function initializeDropdownToggles() {
+      const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
+      
+      if (dropdownToggles.length === 0) {
+        // Retry if elements aren't ready yet
+        setTimeout(initializeDropdownToggles, 100);
+        return;
+      }
+      
+      dropdownToggles.forEach(toggle => {
+        // Use once option to avoid duplicate listeners, or check if already has listener
+        if (toggle.dataset.listenerAttached) {
+          return;
+        }
+        toggle.dataset.listenerAttached = 'true';
+        
+        toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const dropdown = toggle.closest('.nav-dropdown');
+          if (!dropdown) return;
+          
+          const isActive = dropdown.classList.contains('active');
+          
+          // Close all other dropdowns
+          document.querySelectorAll('.nav-dropdown').forEach(item => {
+            if (item !== dropdown) {
+              item.classList.remove('active');
+              const otherToggle = item.querySelector('.nav-dropdown-toggle');
+              if (otherToggle) {
+                otherToggle.setAttribute('aria-expanded', 'false');
+              }
+            }
+          });
+          
+          // Toggle current dropdown
+          if (isActive) {
+            dropdown.classList.remove('active');
+            toggle.setAttribute('aria-expanded', 'false');
+          } else {
+            dropdown.classList.add('active');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        });
+      });
+      
+      // Close dropdowns when clicking outside (only attach once)
+      if (!document.dropdownOutsideClickHandler) {
+        document.dropdownOutsideClickHandler = (e) => {
+          if (!e.target.closest('.nav-dropdown')) {
+            document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+              dropdown.classList.remove('active');
+              const toggle = dropdown.querySelector('.nav-dropdown-toggle');
+              if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+              }
+            });
+          }
+        };
+        document.addEventListener('click', document.dropdownOutsideClickHandler);
+      }
+    }
+  </script>
   <script>
     let allNotifications = [];
     let currentFilter = 'all';

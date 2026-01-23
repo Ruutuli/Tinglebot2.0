@@ -1499,6 +1499,9 @@ function setupEventListeners() {
   
   // Icon preview
   setupIconPreview();
+  
+  // Setup sidebar navigation
+  setupSidebarNavigation();
 }
 
 // ============================================================================
@@ -1866,6 +1869,125 @@ async function handleFormSubmit(event) {
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = originalText;
+  }
+}
+
+// ============================================================================
+// ------------------- Sidebar Navigation -------------------
+// ============================================================================
+function setupSidebarNavigation() {
+  // Handle dropdown toggles
+  const dropdownToggles = document.querySelectorAll('.nav-dropdown-toggle');
+  
+  dropdownToggles.forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const dropdown = toggle.closest('.nav-dropdown');
+      const isActive = dropdown.classList.contains('active');
+      
+      // Close all other dropdowns
+      document.querySelectorAll('.nav-dropdown').forEach(item => {
+        if (item !== dropdown) {
+          item.classList.remove('active');
+          const toggleBtn = item.querySelector('.nav-dropdown-toggle');
+          if (toggleBtn) {
+            toggleBtn.setAttribute('aria-expanded', 'false');
+          }
+        }
+      });
+      
+      // Toggle current dropdown
+      if (isActive) {
+        dropdown.classList.remove('active');
+        toggle.setAttribute('aria-expanded', 'false');
+      } else {
+        dropdown.classList.add('active');
+        toggle.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+  
+  // Handle sidebar navigation links
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a:not(.nav-dropdown-toggle)');
+  
+  sidebarLinks.forEach(link => {
+    const sectionId = link.getAttribute('data-section');
+    const href = link.getAttribute('href');
+    
+    link.addEventListener('click', (e) => {
+      // Skip if this is a dropdown toggle (handled separately above)
+      if (link.classList.contains('nav-dropdown-toggle')) {
+        return;
+      }
+      
+      // Handle links with data-section (dashboard sections)
+      if (sectionId) {
+        e.preventDefault();
+        
+        // Close mobile sidebar if open
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar && window.innerWidth <= 768) {
+          sidebar.classList.remove('active', 'mobile-open');
+          document.body.style.overflow = '';
+        }
+        
+        // Navigate to main page with hash
+        if (sectionId === 'dashboard-section') {
+          window.location.href = '/';
+        } else {
+          window.location.href = `/#${sectionId}`;
+        }
+        return;
+      }
+      
+      // Handle external links (like /map, /inventories, /character-create.html, /oc-list.html)
+      // Let them work normally, but close mobile sidebar
+      if (href && (href.startsWith('/') || href.startsWith('http'))) {
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar && window.innerWidth <= 768) {
+          sidebar.classList.remove('active', 'mobile-open');
+          document.body.style.overflow = '';
+        }
+        // Don't prevent default - let the link navigate normally
+        return;
+      }
+    });
+  });
+  
+  // Close dropdowns when clicking outside (but not on mobile when sidebar is open)
+  document.addEventListener('click', (e) => {
+    // Don't close dropdowns if clicking inside the sidebar on mobile
+    const sidebar = document.querySelector('.sidebar');
+    if (window.innerWidth <= 768 && sidebar && e.target.closest('.sidebar')) {
+      return;
+    }
+    
+    if (!e.target.closest('.nav-dropdown')) {
+      document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+        dropdown.classList.remove('active');
+        const toggle = dropdown.querySelector('.nav-dropdown-toggle');
+        if (toggle) {
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+  });
+  
+  // Handle sidebar toggle button
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.querySelector('.sidebar');
+  
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      sidebar.classList.toggle('active');
+      if (window.innerWidth <= 768) {
+        sidebar.classList.toggle('mobile-open');
+      }
+      document.body.style.overflow = sidebar.classList.contains('active') ? 'hidden' : '';
+    });
   }
 }
 
