@@ -45,7 +45,7 @@ All character creation, editing, and submission is done through the Tinglebot we
 
 **You must fill out ALL of these before you can submit:**
 
-- **Name** - Your character's name (must be unique, cannot be changed later)
+- **Name** - Your character's name (must be unique, **cannot be changed after creation**)
 - **Icon** - Upload a picture of your character (required)
 - **Age** - Enter a number (e.g., 18, 27)
 - **Height** - Enter in centimeters (e.g., 160, 172.5) - it will convert to feet/inches automatically
@@ -53,10 +53,12 @@ All character creation, editing, and submission is done through the Tinglebot we
 - **Race** - Start typing and pick from the list (Hylian, Zora, Goron, etc.)
 - **Home Village** - Pick one: Inariko, Rudania, or Vhintl
 - **Job** - Pick from the dropdown menu
-- **Max Hearts** - All characters start with 3
-- **Max Stamina** - All characters start with 5
+- **Max Hearts** - All characters start with 3 (**cannot be changed after creation**)
+- **Max Stamina** - All characters start with 5 (**cannot be changed after creation**)
 - **Attack** - Enter your attack stat
 - **Defense** - Enter your defense stat
+
+**⚠️ Important:** Name, Hearts, and Stamina cannot be changed after you create your character. Make sure these are correct before submitting!
 
 ### Optional Fields (Recommended)
 
@@ -112,10 +114,11 @@ Your character can be in one of four statuses:
 ### 🟦 Draft
 - **What it means:** Your character is saved but not submitted
 - **What you can do:**
-  - Edit all fields
+  - Edit most fields (see exceptions below)
   - Save changes
   - Submit for review
-- **What you see:** "Save" or "Save Changes" button, "Submit for Review" button
+- **What you see:** "Save Changes" button, "Submit for Review" button
+- **Cannot edit:** Name, Hearts, Stamina (these are set when you create the character)
 
 ### 🟧 Pending Review
 - **What it means:** Your character is submitted and waiting for moderator votes
@@ -128,10 +131,11 @@ Your character can be in one of four statuses:
 ### 🟥 Needs Changes
 - **What it means:** A moderator requested changes to your character
 - **What you can do:**
-  - Edit your character to fix the issues
+  - Edit most fields to fix the issues (see exceptions below)
   - Read moderator feedback
   - Resubmit after making changes
 - **What you see:** "Edit Character" button, "Resubmit" button, feedback section
+- **Cannot edit:** Name, Hearts, Stamina (these cannot be changed)
 - **Note:** Only **1 needs_changes vote** is required to trigger this status
 
 ### 🟩 Approved
@@ -277,10 +281,10 @@ After approval, you need to:
 - Try refreshing the page
 
 **"I can't edit my character"**
-- **Draft:** You can edit everything
+- **Draft:** You can edit most fields (Name, Hearts, and Stamina cannot be edited)
 - **Pending Review:** Can't edit (waiting for moderators)
-- **Needs Changes:** You can edit everything
-- **Approved:** Limited editing (some fields are locked)
+- **Needs Changes:** You can edit most fields (Name, Hearts, and Stamina cannot be edited)
+- **Approved:** Limited editing (Name, Stats, Race, Village, Job, and Gear are locked)
 
 **"I didn't get a notification"**
 - Check your Discord DMs (make sure server members can DM you)

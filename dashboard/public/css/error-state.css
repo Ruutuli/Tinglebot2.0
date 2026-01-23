@@ -1,0 +1,348 @@
+/* ============================================================================
+   Error State Component - Modular & Reusable
+   Purpose: Provides consistent error state styling across the application
+============================================================================ */
+
+/* ============================================================================
+   Base Error State Container
+============================================================================ */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 3rem 2rem;
+  text-align: center;
+  animation: errorFadeIn 0.4s ease-out;
+}
+
+@keyframes errorFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================================
+   Error Content Wrapper
+============================================================================ */
+.error-content {
+  max-width: 500px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2.5rem;
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.08) 0%, rgba(244, 67, 54, 0.03) 100%);
+  backdrop-filter: blur(10px);
+  border-radius: var(--card-radius, 16px);
+  border: 1px solid rgba(244, 67, 54, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 
+              0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+              0 0 40px rgba(244, 67, 54, 0.1);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.error-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, 
+    rgba(244, 67, 54, 0.8) 0%, 
+    rgba(244, 67, 54, 0.4) 50%, 
+    transparent 100%);
+  animation: errorPulse 2s ease-in-out infinite;
+}
+
+@keyframes errorPulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   Error Icon
+============================================================================ */
+.error-content i {
+  font-size: 4rem;
+  color: var(--error-color, #f44336);
+  margin-bottom: 0.5rem;
+  filter: drop-shadow(0 4px 12px rgba(244, 67, 54, 0.4));
+  animation: errorIconShake 0.5s ease-out;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes errorIconShake {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  25% {
+    transform: translateX(-5px) rotate(-5deg);
+  }
+  75% {
+    transform: translateX(5px) rotate(5deg);
+  }
+}
+
+/* ============================================================================
+   Error Heading
+============================================================================ */
+.error-content h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  letter-spacing: -0.5px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
+   Error Message
+============================================================================ */
+.error-content p {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.8));
+  position: relative;
+  z-index: 1;
+}
+
+#error-message {
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+/* ============================================================================
+   Error Action Button
+============================================================================ */
+.error-content .btn,
+.error-content .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, var(--primary-color, #00A3DA) 0%, var(--primary-hover, #0088b8) 100%);
+  color: #ffffff;
+  text-decoration: none;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(0, 163, 218, 0.3);
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  margin-top: 0.5rem;
+}
+
+.error-content .btn::before,
+.error-content .btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.error-content .btn:hover::before,
+.error-content .btn-primary:hover::before {
+  left: 100%;
+}
+
+.error-content .btn:hover,
+.error-content .btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-hover, #0088b8) 0%, #006d96 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 163, 218, 0.4);
+  text-decoration: none;
+  color: #ffffff;
+}
+
+.error-content .btn:active,
+.error-content .btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 12px rgba(0, 163, 218, 0.3);
+}
+
+.error-content .btn i,
+.error-content .btn-primary i {
+  font-size: 1.1rem;
+  transition: transform 0.3s ease;
+}
+
+.error-content .btn:hover i,
+.error-content .btn-primary:hover i {
+  transform: scale(1.1);
+}
+
+/* ============================================================================
+   Variants
+============================================================================ */
+
+/* Compact variant for smaller spaces */
+.error-state.error-state--compact {
+  min-height: 300px;
+  padding: 2rem 1.5rem;
+}
+
+.error-state.error-state--compact .error-content {
+  padding: 2rem;
+  gap: 1rem;
+}
+
+.error-state.error-state--compact .error-content i {
+  font-size: 3rem;
+}
+
+.error-state.error-state--compact .error-content h2 {
+  font-size: 1.5rem;
+}
+
+.error-state.error-state--compact .error-content p {
+  font-size: 1rem;
+}
+
+/* Minimal variant without background card */
+.error-state.error-state--minimal .error-content {
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  padding: 1.5rem;
+}
+
+.error-state.error-state--minimal .error-content::before {
+  display: none;
+}
+
+/* ============================================================================
+   Responsive Design
+============================================================================ */
+@media (max-width: 768px) {
+  .error-state {
+    min-height: 350px;
+    padding: 2rem 1rem;
+  }
+
+  .error-content {
+    padding: 2rem 1.5rem;
+    gap: 1.25rem;
+  }
+
+  .error-content i {
+    font-size: 3.5rem;
+  }
+
+  .error-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .error-content p {
+    font-size: 1rem;
+  }
+
+  .error-content .btn,
+  .error-content .btn-primary {
+    padding: 0.875rem 1.75rem;
+    font-size: 0.95rem;
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .error-state {
+    min-height: 300px;
+    padding: 1.5rem 1rem;
+  }
+
+  .error-content {
+    padding: 1.5rem 1rem;
+    gap: 1rem;
+  }
+
+  .error-content i {
+    font-size: 3rem;
+  }
+
+  .error-content h2 {
+    font-size: 1.25rem;
+  }
+
+  .error-content p {
+    font-size: 0.95rem;
+  }
+
+  .error-content .btn,
+  .error-content .btn-primary {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* ============================================================================
+   Accessibility
+============================================================================ */
+.error-state [aria-hidden="true"] {
+  /* Ensure screen readers skip decorative icons */
+  pointer-events: none;
+}
+
+.error-content:focus-within {
+  outline: 2px solid var(--primary-color, #00A3DA);
+  outline-offset: 4px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .error-content {
+    border-width: 2px;
+    border-color: var(--error-color, #f44336);
+  }
+
+  .error-content i {
+    filter: none;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .error-state,
+  .error-content i,
+  .error-content::before {
+    animation: none;
+  }
+
+  .error-content .btn,
+  .error-content .btn-primary {
+    transition: background-color 0.2s ease;
+  }
+
+  .error-content .btn:hover,
+  .error-content .btn-primary:hover {
+    transform: none;
+  }
+}

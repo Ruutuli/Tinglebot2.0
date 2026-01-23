@@ -6,6 +6,7 @@
   "scripts": {
     "dev:bot": "cd bot && npm run dev",
     "dev:dashboard": "cd dashboard && npm run dev",
+    "dev:dashboardNEW": "cd dashboardNEW && npm run dev",
     "dev": "concurrently \"npm run dev:bot\" \"npm run dev:dashboard\"",
     "deploy:commands": "node bot/scripts/deploy-commands.js"
   },

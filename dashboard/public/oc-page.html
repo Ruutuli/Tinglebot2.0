@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="/css/users.css" />
   <link rel="stylesheet" href="/css/buttons.css" />
   <link rel="stylesheet" href="/css/character.css" />
+  <link rel="stylesheet" href="/css/error-state.css" />
   <link rel="stylesheet" href="/css/oc-page.css" />
   
   <!-- External Scripts -->
@@ -222,11 +223,11 @@
       <!-- Error State -->
       <div id="error-state" class="error-state" style="display: none;">
         <div class="error-content">
-          <i class="fas fa-exclamation-triangle"></i>
+          <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
           <h2>Character Not Found</h2>
-          <p id="error-message">The character you're looking for doesn't exist or you don't have permission to view it.</p>
+          <p id="error-message">Character not found or you do not have permission to view it</p>
           <a href="/" class="btn btn-primary">
-            <i class="fas fa-home"></i>
+            <i class="fas fa-home" aria-hidden="true"></i>
             <span>Return to Dashboard</span>
           </a>
         </div>

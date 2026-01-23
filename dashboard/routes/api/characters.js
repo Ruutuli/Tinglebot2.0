@@ -714,6 +714,44 @@ router.post('/create', characterUploads, asyncHandler(async (req, res) => {
   }
 }));
 
+// Middleware to check if user is a mod/admin
+async function checkModAccess(req) {
+  // Check if user is authenticated
+  const user = req.session?.user || req.user;
+  if (!user || !user.discordId) {
+    return false;
+  }
+  
+  // Use the same checkAdminAccess function from server.js
+  // For now, we'll check the ADMIN_ROLE_ID
+  const guildId = process.env.PROD_GUILD_ID;
+  const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
+  
+  if (!guildId || !ADMIN_ROLE_ID) {
+    return false;
+  }
+  
+  try {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${user.discordId}`, {
+      headers: {
+        'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const memberData = await response.json();
+      const roles = memberData.roles || [];
+      const adminRoleIdStr = String(ADMIN_ROLE_ID);
+      return roles.some(roleId => String(roleId) === adminRoleIdStr);
+    }
+    return false;
+  } catch (error) {
+    logger.error('CHARACTERS', `Error checking mod access: ${error.message}`);
+    return false;
+  }
+}
+
 // ------------------- Function: getCharacterByName -------------------
 // Returns character data by character name (for OC page URL lookup)
 // Verifies ownership - only the character owner can access
@@ -789,17 +827,21 @@ router.get('/by-name/:name', asyncHandler(async (req, res) => {
   const requestUserId = String(userId || '');
   const isOwner = characterUserId === requestUserId;
   
-  // Public visibility: Only show approved characters to non-owners
+  // Check if user is admin/mod (for viewing pending characters)
+  const isMod = await checkModAccess(req);
+  
+  // Public visibility: Only show approved characters to non-owners (unless they're admins/mods)
   if (!isOwner) {
     // Character exists but user doesn't own it
-    // Only allow viewing if character is approved (status: 'accepted')
-    if (!isAccepted(character.status)) {
+    // Allow viewing if character is approved (status: 'accepted') OR if user is admin/mod
+    if (!isAccepted(character.status) && !isMod) {
       logger.info(`[characters.js] Blocked access to non-approved character "${character?.name || nameSlug}" by user ${requestUserId}`);
       throw new NotFoundError('Character not found or not yet approved for public viewing');
     }
     
     const charName = character?.name || 'Unknown';
-    logger.info(`[characters.js] Character "${charName}" viewed by non-owner - userId: ${requestUserId}, ownerId: ${characterUserId}`);
+    const viewerType = isMod ? 'admin/mod' : 'non-owner';
+    logger.info(`[characters.js] Character "${charName}" viewed by ${viewerType} - userId: ${requestUserId}, ownerId: ${characterUserId}`);
   }
   
   // Return character data with ownership flag
@@ -1159,44 +1201,6 @@ router.get('/:id', validateObjectId('id'), asyncHandler(async (req, res) => {
 }));
 
 // ------------------- Section: Character Moderation Routes -------------------
-
-// Middleware to check if user is a mod/admin
-async function checkModAccess(req) {
-  // Check if user is authenticated
-  const user = req.session?.user || req.user;
-  if (!user || !user.discordId) {
-    return false;
-  }
-  
-  // Use the same checkAdminAccess function from server.js
-  // For now, we'll check the ADMIN_ROLE_ID
-  const guildId = process.env.PROD_GUILD_ID;
-  const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
-  
-  if (!guildId || !ADMIN_ROLE_ID) {
-    return false;
-  }
-  
-  try {
-    const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/members/${user.discordId}`, {
-      headers: {
-        'Authorization': `Bot ${process.env.DISCORD_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.ok) {
-      const memberData = await response.json();
-      const roles = memberData.roles || [];
-      const adminRoleIdStr = String(ADMIN_ROLE_ID);
-      return roles.some(roleId => String(roleId) === adminRoleIdStr);
-    }
-    return false;
-  } catch (error) {
-    logger.error('CHARACTERS', `Error checking mod access: ${error.message}`);
-    return false;
-  }
-}
 
 // Get all pending characters for moderation review
 router.get('/moderation/pending', asyncHandler(async (req, res) => {
