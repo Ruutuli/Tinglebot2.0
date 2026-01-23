@@ -3308,9 +3308,9 @@
   bottom: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.4);
   z-index: 10000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px) saturate(180%);
   align-items: center;
   justify-content: center;
   opacity: 0;
@@ -3329,6 +3329,8 @@
   padding: 1.5rem 2rem;
   max-width: 500px;
   width: 90%;
+  height: auto;
+  min-height: auto;
   max-height: 85vh;
   box-shadow: var(--section-glow);
   backdrop-filter: blur(var(--frost-blur));
@@ -3338,6 +3340,8 @@
   transform: scale(0.9) translateY(20px);
   transition: transform 0.3s ease, opacity 0.3s ease;
   opacity: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .character-moderation-page .modal-overlay.show .modal {
@@ -3349,36 +3353,194 @@
   max-width: 600px;
 }
 
-/* Deny-reason modal: compact, no overflow/centering bugs */
+/* Deny-reason modal: complete redesign - light, spacious, modern */
 .character-moderation-page .deny-reason-modal {
-  max-width: 480px;
-  max-height: 60vh;
-  padding: 1.5rem 2rem;
+  max-width: 720px;
+  width: 90%;
+  height: auto;
+  min-height: auto;
+  max-height: 80vh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(45, 50, 60, 0.95);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
 }
 
 .character-moderation-page .deny-reason-modal .modal-header {
-  margin-bottom: 0.5rem;
+  margin: 0;
+  padding: 2rem 2.5rem 1.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.character-moderation-page .deny-reason-modal .modal-header .modal-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 163, 218, 0.15);
+  color: var(--accent, #00A3DA);
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.character-moderation-page .deny-reason-modal .modal-header .modal-icon.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error-color, #EF4444);
+}
+
+.character-moderation-page .deny-reason-modal .modal-header .modal-title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .character-moderation-page .deny-reason-modal .modal-body {
-  margin-bottom: 0.5rem;
+  padding: 2rem 2.5rem;
+  margin: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-height: 200px;
 }
 
 .character-moderation-page .deny-reason-modal .modal-body p {
-  margin-bottom: 0.35rem;
-  font-size: 0.875rem;
+  margin: 0;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  font-weight: 500;
 }
 
 .character-moderation-page .deny-reason-modal .deny-reason-input {
-  min-height: 48px;
-  max-height: 80px;
-  margin-top: 0.25rem;
+  width: 100%;
+  min-height: 160px;
+  max-height: 300px;
+  padding: 1.25rem 1.5rem;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  color: var(--text-primary, #ffffff);
+  font-size: 1rem;
+  font-family: inherit;
+  line-height: 1.6;
   resize: vertical;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.character-moderation-page .deny-reason-modal .deny-reason-input:focus {
+  outline: none;
+  border-color: var(--accent, #00A3DA);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 4px rgba(0, 163, 218, 0.2), 0 4px 12px rgba(0, 163, 218, 0.15);
+}
+
+.character-moderation-page .deny-reason-modal .deny-reason-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .character-moderation-page .deny-reason-modal .modal-actions {
-  margin-top: 0.5rem;
+  margin: 0;
+  padding: 1.75rem 2.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
   flex-wrap: nowrap;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.character-moderation-page .deny-reason-modal .modal-actions .btn {
+  padding: 1rem 2rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 0.875rem;
+  transition: all 0.2s ease;
+  min-width: 140px;
+}
+
+.character-moderation-page .deny-reason-modal .modal-actions .btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-primary, #ffffff);
+}
+
+.character-moderation-page .deny-reason-modal .modal-actions .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.character-moderation-page .deny-reason-modal .modal-actions .btn-danger {
+  background: rgba(239, 68, 68, 0.2);
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  color: #ff6b6b;
+}
+
+.character-moderation-page .deny-reason-modal .modal-actions .btn-danger:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95) 0%, rgba(220, 38, 38, 0.95) 100%);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.4);
+}
+
+/* For needs_changes action, use accent color instead of danger */
+.character-moderation-page .deny-reason-modal .modal-actions .btn:has(i.fa-exclamation-triangle):not(.btn-secondary) {
+  background: rgba(0, 163, 218, 0.2);
+  border: 2px solid rgba(0, 163, 218, 0.4);
+  color: var(--accent, #00A3DA);
+}
+
+.character-moderation-page .deny-reason-modal .modal-actions .btn:has(i.fa-exclamation-triangle):not(.btn-secondary):hover {
+  background: linear-gradient(135deg, var(--accent, #00A3DA) 0%, #0088b8 100%);
+  border-color: rgba(0, 163, 218, 0.6);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 163, 218, 0.4);
+}
+
+.character-moderation-page .deny-reason-modal .modal-close {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.75rem;
+  color: rgba(255, 255, 255, 0.8) !important;
+  font-size: 1.375rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 1002;
+}
+
+.character-moderation-page .deny-reason-modal .modal-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--text-primary, #ffffff) !important;
+  transform: scale(1.08);
 }
 
 /* Modal animations are handled via transitions on .modal-overlay.show and .modal */

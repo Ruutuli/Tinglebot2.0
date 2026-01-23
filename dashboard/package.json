@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",
+    "agenda": "^5.0.0",
     "axios": "^1.7.9",
     "bottleneck": "^2.19.5",
     "compression": "^1.7.4",

@@ -91,6 +91,10 @@ const calendarModule = require('./modules/calendarModule');
 const logger = require('./utils/logger');
 const { getMemoryMonitor } = require('./utils/memoryMonitor');
 
+// Import scheduler
+const scheduler = require('./utils/scheduler');
+const { registerScheduledTasks, rotateCharacterOfWeek } = require('./tasks/tasks');
+
 
 // Google Sheets utilities removed
 // const googleSheets = require('./utils/googleSheetsUtils');
@@ -4233,7 +4237,7 @@ app.get('/api/characters', async (req, res) => {
 });
 
 // ------------------- Function: setupWeeklyCharacterRotation -------------------
-// Initializes character of the week on server start (manual rotation only)
+// Initializes character of the week on server start (checks if rotation needed, scheduler handles recurring)
 const setupWeeklyCharacterRotation = async () => {
   logger.info('SERVER', 'Setting up weekly character rotation');
   
@@ -4247,7 +4251,7 @@ const setupWeeklyCharacterRotation = async () => {
     const shouldRotate = checkIfShouldRotate(existingCharacter.startDate);
     
     if (shouldRotate) {
-      logger.event('Rotating character of the week...');
+      logger.event('Rotating character of the week on startup...');
       await rotateCharacterOfWeek();
     }
   } else {
@@ -4472,107 +4476,7 @@ app.delete('/api/map/user-pins/:pinId', async (req, res) => {
 // ============================================================================
 
 
-// ------------------- Function: rotateCharacterOfWeek -------------------
-// Helper function to rotate the character of the week
-const rotateCharacterOfWeek = async () => {
-  try {
-    // Get all active characters
-    const characters = await Character.find({}).lean();
-    
-    if (characters.length === 0) {
-      console.log('[server.js]: No characters found for rotation');
-      return;
-    }
-    
-    // Get all characters that have ever been featured
-    const allFeaturedCharacters = await CharacterOfWeek.find({}).distinct('characterId');
-    
-    // Find characters that have never been featured
-    const neverFeaturedCharacters = characters.filter(char => 
-      !allFeaturedCharacters.includes(char._id.toString())
-    );
-    
-    // If there are characters that have never been featured, prioritize them
-    if (neverFeaturedCharacters.length > 0) {
-      const randomCharacter = neverFeaturedCharacters[Math.floor(Math.random() * neverFeaturedCharacters.length)];
-      await createNewCharacterOfWeek(randomCharacter);
-      return;
-    }
-    
-    // If all characters have been featured at least once, find the one featured longest ago
-    const characterLastFeaturedDates = {};
-    
-    // Initialize all characters with a very old date (in case they've never been featured)
-    characters.forEach(char => {
-      characterLastFeaturedDates[char._id.toString()] = new Date(0);
-    });
-    
-    // Get the most recent featured date for each character
-    const featuredHistory = await CharacterOfWeek.find({}).sort({ startDate: -1 });
-    featuredHistory.forEach(entry => {
-      const charId = entry.characterId.toString();
-      if (characterLastFeaturedDates[charId] && entry.startDate > characterLastFeaturedDates[charId]) {
-        characterLastFeaturedDates[charId] = entry.startDate;
-      }
-    });
-    
-    // Find the character featured longest ago
-    let oldestFeaturedCharacter = null;
-    let oldestDate = new Date();
-    
-    for (const [charId, lastFeaturedDate] of Object.entries(characterLastFeaturedDates)) {
-      if (lastFeaturedDate < oldestDate) {
-        oldestDate = lastFeaturedDate;
-        oldestFeaturedCharacter = characters.find(char => char._id.toString() === charId);
-      }
-    }
-    
-    if (oldestFeaturedCharacter) {
-      await createNewCharacterOfWeek(oldestFeaturedCharacter);
-    } else {
-      console.log('[server.js]: Could not determine character to feature');
-    }
-    
-  } catch (error) {
-    console.error('[server.js]: Error in rotateCharacterOfWeek:', error);
-    throw error;
-  }
-};
-
-// ------------------- Function: createNewCharacterOfWeek -------------------
-// Helper function to create a new character of the week entry
-const createNewCharacterOfWeek = async (character) => {
-  try {
-    // Deactivate current character of the week
-    await CharacterOfWeek.updateMany(
-      { isActive: true },
-      { isActive: false }
-    );
-    
-    // Calculate start and end dates based on Sunday midnight schedule
-    const startDate = new Date();
-    const endDate = getNextSundayMidnight(startDate);
-    
-    // Create new character of the week
-    const newCharacterOfWeek = new CharacterOfWeek({
-      characterId: character._id,
-      characterName: character.name,
-      userId: character.userId,
-      startDate,
-      endDate,
-      isActive: true,
-      featuredReason: 'Weekly rotation'
-    });
-    
-    await newCharacterOfWeek.save();
-    
-    console.log(`[server.js]: Successfully rotated to new character of the week: ${character.name}`);
-    
-  } catch (error) {
-    console.error('[server.js]: ❌ Error in createNewCharacterOfWeek:', error);
-    throw error;
-  }
-};
+// Note: rotateCharacterOfWeek and createNewCharacterOfWeek are now imported from ./tasks/tasks.js
 
 // ------------------- Function: triggerFirstCharacterOfWeekSimple -------------------
 // Simple trigger for first character of the week (no auth required for testing)
@@ -13882,7 +13786,18 @@ const startServer = async () => {
   }
   
   // Initialize databases in background (non-blocking, failures are non-fatal)
-  initializeDatabases().catch(err => {
+  initializeDatabases().then(async () => {
+    // Register scheduled tasks
+    registerScheduledTasks(scheduler);
+    
+    // Initialize scheduler (after database is connected)
+    try {
+      await scheduler.initializeScheduler();
+      logger.success('SERVER', 'Scheduler initialized');
+    } catch (err) {
+      logger.error('SERVER', `Failed to initialize scheduler: ${err.message}`);
+    }
+  }).catch(err => {
     logger.error('SERVER', 'Database initialization failed - some features will be limited', err);
   });
   
@@ -13903,6 +13818,14 @@ const startServer = async () => {
 // ------------------- Function: gracefulShutdown -------------------
 // Handles graceful shutdown of the server and database connections
 const gracefulShutdown = async () => {
+  logger.info('SERVER', 'Initiating graceful shutdown...');
+  
+  // Stop scheduler
+  try {
+    await scheduler.stopAllTasks();
+  } catch (err) {
+    logger.warn('SERVER', `Error stopping scheduler: ${err.message}`);
+  }
   
   // Close all database connections using DatabaseConnectionManager
   await DatabaseConnectionManager.closeAll();

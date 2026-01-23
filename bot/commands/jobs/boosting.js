@@ -58,6 +58,7 @@ const BOOST_CATEGORIES = [
   { name: "Traveling", value: "Traveling" }
 ];
 
+const SONG_OF_STORMS_ENABLED = false; // Set to true to enable Song of Storms
 const SONG_OF_STORMS_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 // Lightning Storm excluded by design (in weatherData.specials but not choosable for Song of Storms).
 const SONG_OF_STORMS_SPECIAL_WEATHER = [
@@ -1412,6 +1413,21 @@ async function handleBoostOther(interaction) {
 
  if (hasAcceptedBoost && !activeOtherBoost) {
   if (isEntertainer && (!requestedEffectJob || requestedEffectJob === "Entertainer")) {
+   if (!SONG_OF_STORMS_ENABLED) {
+    const embed = createOtherBoostErrorEmbed({
+     title: "🎵 Song of Storms Unavailable",
+     description: "Ruu needs to make sure everything works properly, so don't use this until she says so.",
+     suggestions: [
+      "Please wait until Song of Storms is re-enabled.",
+      "Contact Ruu if you have questions.",
+     ],
+    });
+    await interaction.reply({
+     embeds: [embed],
+     ephemeral: true,
+    });
+    return;
+   }
    await executeSongOfStorms(interaction, {
     entertainer: character,
     viaBoost: false,
@@ -1784,6 +1800,22 @@ if (!shouldDeferFortunePrediction) {
  }
 
  if (effectJob === "Entertainer") {
+  if (!SONG_OF_STORMS_ENABLED) {
+   const embed = createOtherBoostErrorEmbed({
+    title: "🎵 Song of Storms Unavailable",
+    description: "Ruu needs to make sure everything works properly, so don't use this until she says so.",
+    suggestions: [
+     "Please wait until Song of Storms is re-enabled.",
+     "Contact Ruu if you have questions.",
+    ],
+   });
+   await interaction.reply({
+    embeds: [embed],
+    ephemeral: true,
+   });
+   return;
+  }
+  
   const entertainer = viaBoost
    ? boosterCharacter || { name: activeBoost.boostingCharacter, job: boostSourceJob || "Entertainer" }
    : character;
@@ -2350,6 +2382,26 @@ logger.info(
 }
 
 async function executeSongOfStorms(interaction, options) {
+ if (!SONG_OF_STORMS_ENABLED) {
+  const embed = createOtherBoostErrorEmbed({
+   title: "🎵 Song of Storms Unavailable",
+   description: "Ruu needs to make sure everything works properly, so don't use this until she says so.",
+   suggestions: [
+    "Please wait until Song of Storms is re-enabled.",
+    "Contact Ruu if you have questions.",
+   ],
+  });
+  
+  if (interaction.replied) {
+   await interaction.followUp({ embeds: [embed], ephemeral: true });
+  } else if (interaction.deferred) {
+   await interaction.editReply({ embeds: [embed] });
+  } else {
+   await interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+  return;
+ }
+
  const {
   entertainer,
   recipient = null,

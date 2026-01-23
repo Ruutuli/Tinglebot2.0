@@ -570,18 +570,50 @@
       const textarea = document.getElementById('denyReasonTextarea');
       const confirmBtn = document.getElementById('confirmDenyBtn');
       const modalTitle = modal?.querySelector('.modal-title');
-      if (!modal || !textarea || !confirmBtn) return;
+      const modalContent = modal?.querySelector('.modal');
+      
+      if (!modal || !textarea || !confirmBtn) {
+        console.error('Modal elements not found:', { modal: !!modal, textarea: !!textarea, confirmBtn: !!confirmBtn });
+        return;
+      }
 
       textarea.value = '';
       modal.classList.add('show');
+      // Explicitly set display to ensure visibility - use setProperty with important
+      modal.style.setProperty('display', 'flex', 'important');
+      modal.style.setProperty('opacity', '1', 'important');
+      modal.style.setProperty('visibility', 'visible', 'important');
+      modal.style.setProperty('pointer-events', 'auto', 'important');
+      modal.style.setProperty('z-index', '10000', 'important');
       
-      // Update modal title and button text based on action
+      // Make sure the inner modal content is visible
+      if (modalContent) {
+        modalContent.style.setProperty('opacity', '1', 'important');
+        modalContent.style.setProperty('transform', 'scale(1) translateY(0)', 'important');
+        modalContent.style.setProperty('visibility', 'visible', 'important');
+        modalContent.style.setProperty('display', 'flex', 'important');
+        modalContent.style.setProperty('position', 'relative', 'important');
+        modalContent.style.setProperty('z-index', '10001', 'important');
+      } else {
+        console.error('[showDenyReasonModal] Modal content not found!');
+      }
+      
+      // Update modal title, icon, and button text based on action
+      const modalIcon = modal?.querySelector('.modal-icon');
       if (action === 'needs_changes') {
         if (modalTitle) modalTitle.textContent = 'Needs Changes';
+        if (modalIcon) {
+          modalIcon.className = 'fas fa-exclamation-triangle modal-icon';
+          modalIcon.style.color = 'var(--accent, #00A3DA)';
+        }
         confirmBtn.innerHTML = '<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Confirm Needs Changes';
         textarea.placeholder = 'Enter feedback explaining what needs to be changed...';
       } else {
         if (modalTitle) modalTitle.textContent = 'Deny Character';
+        if (modalIcon) {
+          modalIcon.className = 'fas fa-times-circle modal-icon error';
+          modalIcon.style.color = '';
+        }
         confirmBtn.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i> Confirm Denial';
         textarea.placeholder = 'Enter reason for denial...';
       }
@@ -597,9 +629,15 @@
       const modal = document.getElementById('denyReasonModal');
       if (modal) {
         modal.classList.remove('show');
-        modal.removeAttribute('style');
-        const inner = modal.querySelector('.deny-reason-modal');
-        if (inner) inner.removeAttribute('style');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        const inner = modal.querySelector('.modal');
+        if (inner) {
+          inner.style.opacity = '0';
+          inner.style.transform = 'scale(0.9) translateY(20px)';
+          // Reset display to let CSS handle it
+          inner.style.removeProperty('display');
+        }
       }
       currentVoteContext = { characterId: null, isModCharacter: false, card: null };
     };
@@ -745,6 +783,12 @@
       const modalIcon = document.getElementById('modalIcon');
       const modalTitle = document.getElementById('modalTitle');
       const modalBody = document.getElementById('modalBody');
+      const modalContent = modal?.querySelector('.modal');
+      
+      if (!modal) {
+        console.error('Vote modal not found');
+        return;
+      }
       
       // Set icon based on type
       modalIcon.className = 'fas modal-icon';
@@ -760,11 +804,29 @@
       modalBody.innerHTML = body;
       
       modal.classList.add('show');
+      // Explicitly set display to ensure visibility
+      modal.style.display = 'flex';
+      modal.style.opacity = '1';
+      
+      // Make sure the inner modal content is visible
+      if (modalContent) {
+        modalContent.style.opacity = '1';
+        modalContent.style.transform = 'scale(1) translateY(0)';
+      }
     }
     
     function closeVoteModal() {
       const modal = document.getElementById('voteModal');
-      if (modal) modal.classList.remove('show');
+      if (modal) {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+        const modalContent = modal.querySelector('.modal');
+        if (modalContent) {
+          modalContent.style.opacity = '0';
+          modalContent.style.transform = 'scale(0.9) translateY(20px)';
+        }
+      }
     }
     window.closeVoteModal = closeVoteModal;
     
