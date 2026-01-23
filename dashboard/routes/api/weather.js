@@ -93,12 +93,23 @@ router.get('/today', asyncHandler(async (req, res) => {
       }
       
       if (!weather) {
-        // FIFTH: Use weather service function (range query as fallback)
+        // FIFTH: Try wider range (24 hours before period start) to catch timezone mismatches
+        const wideRangeStart = new Date(weatherDayStart);
+        wideRangeStart.setUTCHours(wideRangeStart.getUTCHours() - 24);
+        weather = await Weather.findOne({
+          village: village,
+          date: { $gte: wideRangeStart, $lte: weatherDayEnd },
+          postedToDiscord: true
+        });
+      }
+      
+      if (!weather) {
+        // SIXTH: Use weather service function (range query as fallback)
         weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
       }
       
       if (!weather) {
-        // SIXTH: Try without onlyPosted filter
+        // SEVENTH: Try without onlyPosted filter
         logger.warn('WEATHER', `No posted weather found for ${village}, trying without onlyPosted filter`);
         weather = await getWeatherWithoutGeneration(village, { onlyPosted: false });
         if (weather) {

@@ -816,10 +816,10 @@ async function getWeatherWithoutGeneration(village, options = {}) {
     const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
     const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
 
-    // Use a range that starts slightly before the period start to catch weather saved with different period calculations
-    // This ensures we find weather even if the period calculation varies slightly
+    // Use a range that starts 24 hours before the period start to catch weather saved with different timezone/date calculations
+    // This handles cases where weather was saved with EST dates but we're now using UTC
     const periodSearchStart = new Date(startOfPeriodUTC);
-    periodSearchStart.setSeconds(periodSearchStart.getSeconds() - 1); // Include 1 second before period start
+    periodSearchStart.setUTCHours(periodSearchStart.getUTCHours() - 24); // Look back 24 hours to catch timezone mismatches
 
     // Add debug logging
     if (options.onlyPosted) {
@@ -861,9 +861,10 @@ async function getCurrentWeather(village) {
 
     // FIRST: Check for existing weather using date range (covers entire period)
     // This is more reliable than exact match because period calculation may vary slightly
-    // Use a range that starts slightly before the period start to catch weather saved with different period calculations
+    // Use a range that starts 24 hours before the period start to catch weather saved with different timezone/date calculations
+    // This handles cases where weather was saved with EST dates but we're now using UTC
     const periodSearchStart = new Date(startOfPeriodUTC);
-    periodSearchStart.setSeconds(periodSearchStart.getSeconds() - 1); // Include 1 second before period start
+    periodSearchStart.setUTCHours(periodSearchStart.getUTCHours() - 24); // Look back 24 hours to catch timezone mismatches
     
     let weather = await findWeatherForPeriod(normalizedVillage, periodSearchStart, startOfNextPeriodUTC, {
       exclusiveEnd: true,
