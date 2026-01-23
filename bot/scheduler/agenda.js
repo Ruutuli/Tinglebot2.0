@@ -562,6 +562,15 @@ function defineAgendaJobs({ client }) {
     }
   });
 
+  agenda.define("Blight Roll Call Check", { concurrency: 1 }, async (job) => {
+    try {
+      await checkAndPostMissedBlightPing(clientRef);
+    } catch (error) {
+      logger.error('BLIGHT', 'Blight roll call check failed', error.message);
+      handleError(error, "agenda.js", { jobName: "Blight Roll Call Check" });
+    }
+  });
+
   // Boost Tasks
   agenda.define("Boost Cleanup", { concurrency: 1 }, async (job) => {
     try {
