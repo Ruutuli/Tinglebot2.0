@@ -141,7 +141,7 @@ const {
   handleModGiveItemAutocomplete
 } = require('../../handlers/autocompleteHandler');
 
-const { simulateWeightedWeather, getCurrentWeather } = require('@/services/weatherService');
+const { simulateWeightedWeather, getCurrentWeather, getCurrentPeriodBounds, getNextPeriodBounds, normalizeVillageName, markWeatherAsPosted } = require('@/services/weatherService');
 
 // ------------------- Database Models -------------------
 const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
@@ -150,6 +150,7 @@ const Pet = require('@/models/PetModel');
 const TempData = require('@/models/TempDataModel');
 const User = require('@/models/UserModel');
 const VillageShopsModel = require('@/models/VillageShopsModel');
+const Weather = require('@/models/WeatherModel');
 
 // ------------------- External API Integrations -------------------
 const bucket = require('@/config/gcsService');
@@ -985,7 +986,7 @@ const modCommand = new SlashCommandBuilder()
     .addSubcommand(sub =>
       sub
         .setName('generate')
-        .setDescription('🌤️ Generate weather and post in channel (does not save to database)')
+        .setDescription('🌤️ Generate weather and post in channel (saves to database)')
         .addStringOption(opt =>
           opt
             .setName('village')
@@ -3244,11 +3245,25 @@ async function handleSlots(interaction) {
 async function handleWeather(interaction) {
   try {
     const village = interaction.options.getString('village');
+    const normalizedVillage = normalizeVillageName(village);
+    const now = new Date();
     const currentSeason = WeatherService.getCurrentSeason();
+    
+    // Get current period bounds for saving weather
+    const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
+    const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
+    
+    // Normalize date to exact start of period (same as how weather is saved)
+    const normalizedDate = new Date(startOfPeriodUTC);
+    normalizedDate.setMilliseconds(0);
+    
+    // Use a range that starts 24 hours before the period start to catch weather saved with different timezone/date calculations
+    const periodSearchStart = new Date(startOfPeriodUTC);
+    periodSearchStart.setUTCHours(periodSearchStart.getUTCHours() - 24);
     
     // Use the unified weather service for moderation commands
     const weather = await WeatherService.simulateWeightedWeather(village, currentSeason, { 
-      useDatabaseHistory: false, // Use memory-based for moderation
+      useDatabaseHistory: true, // Use database history for consistency
       validateResult: true 
     });
     
@@ -3257,10 +3272,50 @@ async function handleWeather(interaction) {
       return;
     }
     
-    weather.season = currentSeason; // Add season to weather object for embed
+    weather.season = currentSeason; // Add season to weather object
+    weather.date = normalizedDate;
+    weather.postedToDiscord = false;
+    
+    // Save weather to database with duplicate handling
+    let savedWeather;
+    try {
+      savedWeather = await Weather.findOneAndUpdate(
+        {
+          village: normalizedVillage,
+          date: normalizedDate
+        },
+        weather,
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      );
+      console.log(`[mod.js]: ✅ Saved weather for ${village} to database (ID: ${savedWeather._id})`);
+    } catch (saveError) {
+      // If save failed (e.g., duplicate key error), try to find the existing weather
+      if (saveError.code === 11000 || saveError.name === 'MongoServerError') {
+        console.warn(`[mod.js]: ⚠️ Duplicate weather detected for ${village}, fetching existing record`);
+        const existingWeather = await Weather.findOne({
+          village: normalizedVillage,
+          date: normalizedDate
+        });
+        if (existingWeather) {
+          savedWeather = existingWeather;
+          // Update with new weather data
+          Object.assign(existingWeather, weather);
+          await existingWeather.save();
+          console.log(`[mod.js]: ✅ Updated existing weather for ${village} (ID: ${existingWeather._id})`);
+        } else {
+          throw saveError;
+        }
+      } else {
+        throw saveError;
+      }
+    }
     
     // Generate the weather embed
-    const { embed, files } = await generateWeatherEmbed(village, weather);
+    const { embed, files } = await generateWeatherEmbed(village, savedWeather);
     
     // Send processing message as ephemeral
     await interaction.editReply({ content: '✅ Generating weather...', ephemeral: true });
@@ -3272,7 +3327,10 @@ async function handleWeather(interaction) {
       content: `🌤️ **${village} Weather Generated** - Posted by ${interaction.user.tag}`
     });
     
-    console.log(`[mod.js]: Generated weather for ${village} and posted in channel (not saved to database)`);
+    // Mark weather as posted
+    await markWeatherAsPosted(village, savedWeather);
+    
+    console.log(`[mod.js]: ✅ Generated and saved weather for ${village} to database (ID: ${savedWeather._id})`);
   } catch (error) {
     console.error('[mod.js]: Error handling weather command:', error);
     await interaction.editReply({ content: '❌ An error occurred while generating the weather report.' });
