@@ -574,7 +574,7 @@ async function displayGear(character) {
     document.getElementById('gear-armor-head-name').textContent = character.gearArmor.head.name;
     const headStats = [];
     if (character.gearArmor.head.stats?.modifierHearts) {
-      headStats.push(`+${character.gearArmor.head.stats.modifierHearts} Hearts`);
+      headStats.push(`+${character.gearArmor.head.stats.modifierHearts} DEF`);
     }
     document.getElementById('gear-armor-head-stats').textContent = headStats.join(' • ') || 'No stats';
     await setGearIcon(character.gearArmor.head.name, 'gear-armor-head-icon');
@@ -588,7 +588,7 @@ async function displayGear(character) {
     document.getElementById('gear-armor-chest-name').textContent = character.gearArmor.chest.name;
     const chestStats = [];
     if (character.gearArmor.chest.stats?.modifierHearts) {
-      chestStats.push(`+${character.gearArmor.chest.stats.modifierHearts} Hearts`);
+      chestStats.push(`+${character.gearArmor.chest.stats.modifierHearts} DEF`);
     }
     document.getElementById('gear-armor-chest-stats').textContent = chestStats.join(' • ') || 'No stats';
     await setGearIcon(character.gearArmor.chest.name, 'gear-armor-chest-icon');
@@ -602,7 +602,7 @@ async function displayGear(character) {
     document.getElementById('gear-armor-legs-name').textContent = character.gearArmor.legs.name;
     const legsStats = [];
     if (character.gearArmor.legs.stats?.modifierHearts) {
-      legsStats.push(`+${character.gearArmor.legs.stats.modifierHearts} Hearts`);
+      legsStats.push(`+${character.gearArmor.legs.stats.modifierHearts} DEF`);
     }
     document.getElementById('gear-armor-legs-stats').textContent = legsStats.join(' • ') || 'No stats';
     await setGearIcon(character.gearArmor.legs.name, 'gear-armor-legs-icon');

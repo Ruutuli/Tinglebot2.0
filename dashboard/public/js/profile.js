@@ -1302,7 +1302,7 @@ function createProfileCharacterCard(character) {
 // Edit functionality is only available on OC pages
 
 // ------------------- Function: getGearStat -------------------
-// Returns a stat string with + prefix if positive and appropriate label (ATK/DEF/Hearts)
+// Returns a stat string with + prefix if positive and appropriate label (ATK/DEF)
 function getGearStat(gear, statName, gearType = 'armor') {
   if (!gear) return '';
   // Check both gear.stats.modifierHearts and gear.modifierHearts for compatibility
@@ -1310,11 +1310,9 @@ function getGearStat(gear, statName, gearType = 'armor') {
   if (!value || value === 0) return '';
   
   // Determine label based on gear type
-  let label = 'Hearts';
+  let label = 'DEF'; // Default to DEF for armor, shield, etc.
   if (gearType === 'weapon') {
     label = 'ATK';
-  } else if (gearType === 'shield') {
-    label = 'DEF';
   }
   
   return value > 0 ? `+${value} ${label}` : `${value} ${label}`;
