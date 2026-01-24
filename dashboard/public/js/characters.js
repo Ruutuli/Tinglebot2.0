@@ -443,11 +443,11 @@ function renderCharacterCards(characters, page = 1, enableModals = true, isFromF
             <div class="character-section">
               <h4 class="character-section-title">Gear</h4>
               <div class="character-detail-list">
-                ${renderDetail('Weapon', character.gearWeapon?.name ? `${character.gearWeapon.name} | ${getGearStat(character.gearWeapon, 'modifierHearts')}` : 'None')}
-                ${renderDetail('Shield', character.gearShield?.name ? `${character.gearShield.name} | ${getGearStat(character.gearShield, 'modifierHearts')}` : 'None')}
-                ${renderDetail('Head', character.gearArmor?.head?.name ? `${character.gearArmor.head.name} | ${getGearStat(character.gearArmor.head, 'modifierHearts')}` : 'None')}
-                ${renderDetail('Chest', character.gearArmor?.chest?.name ? `${character.gearArmor.chest.name} | ${getGearStat(character.gearArmor.chest, 'modifierHearts')}` : 'None')}
-                ${renderDetail('Legs', character.gearArmor?.legs?.name ? `${character.gearArmor.legs.name} | ${getGearStat(character.gearArmor.legs, 'modifierHearts')}` : 'None')}
+                ${renderDetail('Weapon', character.gearWeapon?.name ? `${character.gearWeapon.name} | ${getGearStat(character.gearWeapon, 'modifierHearts', 'weapon')}` : 'None')}
+                ${renderDetail('Shield', character.gearShield?.name ? `${character.gearShield.name} | ${getGearStat(character.gearShield, 'modifierHearts', 'shield')}` : 'None')}
+                ${renderDetail('Head', character.gearArmor?.head?.name ? `${character.gearArmor.head.name} | ${getGearStat(character.gearArmor.head, 'modifierHearts', 'armor')}` : 'None')}
+                ${renderDetail('Chest', character.gearArmor?.chest?.name ? `${character.gearArmor.chest.name} | ${getGearStat(character.gearArmor.chest, 'modifierHearts', 'armor')}` : 'None')}
+                ${renderDetail('Legs', character.gearArmor?.legs?.name ? `${character.gearArmor.legs.name} | ${getGearStat(character.gearArmor.legs, 'modifierHearts', 'armor')}` : 'None')}
               </div>
             </div>
           </div>
@@ -537,11 +537,22 @@ function renderStatRow(label, value, barClass, percent) {
   }
   
   // ------------------- Function: getGearStat -------------------
-  // Returns a stat string with + prefix if positive
-  function getGearStat(gear, statName) {
-    if (!gear || !gear[statName]) return '';
-    const value = gear[statName];
-    return value > 0 ? `+${value}` : value;
+  // Returns a stat string with + prefix if positive and appropriate label (ATK/DEF/Hearts)
+  function getGearStat(gear, statName, gearType = 'armor') {
+    if (!gear) return '';
+    // Check both gear.stats.modifierHearts and gear.modifierHearts for compatibility
+    const value = gear.stats?.[statName] || gear[statName];
+    if (!value || value === 0) return '';
+    
+    // Determine label based on gear type
+    let label = 'Hearts';
+    if (gearType === 'weapon') {
+      label = 'ATK';
+    } else if (gearType === 'shield') {
+      label = 'DEF';
+    }
+    
+    return value > 0 ? `+${value} ${label}` : `${value} ${label}`;
   }
   
   // ------------------- Function: formatPrettyDate -------------------
@@ -621,11 +632,11 @@ function renderStatRow(label, value, barClass, percent) {
           <div class="character-modal-section">
             <h3>Gear</h3>
             <div class="character-modal-grid">
-              <div class="character-modal-item"><span class="label">Weapon:</span><span class="value">${character.gearWeapon?.name ? `${character.gearWeapon.name} | ${getGearStat(character.gearWeapon, 'modifierHearts')}` : 'None'}</span></div>
-              <div class="character-modal-item"><span class="label">Shield:</span><span class="value">${character.gearShield?.name ? `${character.gearShield.name} | ${getGearStat(character.gearShield, 'modifierHearts')}` : 'None'}</span></div>
-              <div class="character-modal-item"><span class="label">Head:</span><span class="value">${character.gearArmor?.head?.name ? `${character.gearArmor.head.name} | ${getGearStat(character.gearArmor.head, 'modifierHearts')}` : 'None'}</span></div>
-              <div class="character-modal-item"><span class="label">Chest:</span><span class="value">${character.gearArmor?.chest?.name ? `${character.gearArmor.chest.name} | ${getGearStat(character.gearArmor.chest, 'modifierHearts')}` : 'None'}</span></div>
-              <div class="character-modal-item"><span class="label">Legs:</span><span class="value">${character.gearArmor?.legs?.name ? `${character.gearArmor.legs.name} | ${getGearStat(character.gearArmor.legs, 'modifierHearts')}` : 'None'}</span></div>
+              <div class="character-modal-item"><span class="label">Weapon:</span><span class="value">${character.gearWeapon?.name ? `${character.gearWeapon.name} | ${getGearStat(character.gearWeapon, 'modifierHearts', 'weapon')}` : 'None'}</span></div>
+              <div class="character-modal-item"><span class="label">Shield:</span><span class="value">${character.gearShield?.name ? `${character.gearShield.name} | ${getGearStat(character.gearShield, 'modifierHearts', 'shield')}` : 'None'}</span></div>
+              <div class="character-modal-item"><span class="label">Head:</span><span class="value">${character.gearArmor?.head?.name ? `${character.gearArmor.head.name} | ${getGearStat(character.gearArmor.head, 'modifierHearts', 'armor')}` : 'None'}</span></div>
+              <div class="character-modal-item"><span class="label">Chest:</span><span class="value">${character.gearArmor?.chest?.name ? `${character.gearArmor.chest.name} | ${getGearStat(character.gearArmor.chest, 'modifierHearts', 'armor')}` : 'None'}</span></div>
+              <div class="character-modal-item"><span class="label">Legs:</span><span class="value">${character.gearArmor?.legs?.name ? `${character.gearArmor.legs.name} | ${getGearStat(character.gearArmor.legs, 'modifierHearts', 'armor')}` : 'None'}</span></div>
             </div>
           </div>
   

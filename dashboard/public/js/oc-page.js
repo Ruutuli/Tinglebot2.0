@@ -543,7 +543,7 @@ async function displayGear(character) {
     document.getElementById('gear-weapon-name').textContent = character.gearWeapon.name;
     const weaponStats = [];
     if (character.gearWeapon.stats?.modifierHearts) {
-      weaponStats.push(`+${character.gearWeapon.stats.modifierHearts} Hearts`);
+      weaponStats.push(`+${character.gearWeapon.stats.modifierHearts} ATK`);
     }
     if (character.gearWeapon.stats?.staminaToCraft) {
       weaponStats.push(`${character.gearWeapon.stats.staminaToCraft} Stamina`);
@@ -560,7 +560,7 @@ async function displayGear(character) {
     document.getElementById('gear-shield-name').textContent = character.gearShield.name;
     const shieldStats = [];
     if (character.gearShield.stats?.modifierHearts) {
-      shieldStats.push(`+${character.gearShield.stats.modifierHearts} Hearts`);
+      shieldStats.push(`+${character.gearShield.stats.modifierHearts} DEF`);
     }
     document.getElementById('gear-shield-stats').textContent = shieldStats.join(' • ') || 'No stats';
     await setGearIcon(character.gearShield.name, 'gear-shield-icon');
