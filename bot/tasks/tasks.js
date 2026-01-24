@@ -37,6 +37,7 @@ const {
   sendBloodMoonEndAnnouncement,
   cleanupOldTrackingData
 } = require('@/scripts/bloodmoon');
+const { generateDailyQuests: runHelpWantedGeneration } = require('@/modules/helpWantedModule');
 
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const VILLAGE_CHANNELS = {
@@ -581,16 +582,12 @@ async function recoverDailyStaminaTask(_client, _data = {}) {
   }
 }
 
-// ------------------- generate-daily-quests -------------------
+// ------------------- generate-daily-quests (midnight EST = 05:00 UTC) -------------------
 async function generateDailyQuests(_client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'generate-daily-quests: starting');
-    
-    // Daily quest generation logic would go here
-    // For now, just log that it ran
-    // This can be expanded when daily quest system is implemented
-    
-    logger.info('SCHEDULED', 'generate-daily-quests: done (no daily quest system yet)');
+    await runHelpWantedGeneration();
+    logger.success('SCHEDULED', 'generate-daily-quests: done');
   } catch (err) {
     logger.error('SCHEDULED', `generate-daily-quests: ${err.message}`);
   }
@@ -1153,7 +1150,7 @@ const TASKS = [
   // Daily Reset Tasks (all at 12am EST = 05:00 UTC)
   { name: 'reset-daily-rolls', cron: '0 5 * * *', handler: resetDailyRolls },
   { name: 'reset-pet-roll-dates', cron: '0 5 * * *', handler: resetPetRollDates },
-  { name: 'recover-daily-stamina', cron: '0 5 * * *', handler: recoverDailyStaminaTask },
+  { name: 'recover-daily-stamina', cron: '0 13 * * *', handler: recoverDailyStaminaTask }, // 8am EST = 13:00 UTC
   { name: 'generate-daily-quests', cron: '0 5 * * *', handler: generateDailyQuests },
   { name: 'reset-global-steal-protections', cron: '0 5 * * *', handler: resetGlobalStealProtections },
   { name: 'boost-cleanup', cron: '0 5 * * *', handler: boostCleanup },
