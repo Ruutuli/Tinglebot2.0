@@ -364,13 +364,18 @@ router.get('/starter-gear', asyncHandler(async (req, res) => {
     const types = Array.isArray(item.type) ? item.type : (item.type ? [item.type] : []);
     const subtypes = Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []);
     
-    // Check if it's a weapon
-    if (categories.includes('Weapon') || types.includes('1H') || types.includes('2H')) {
-      categorized.weapons.push(item);
-    }
-    // Check if it's a shield
-    else if (subtypes.includes('Shield') || item.itemName?.toLowerCase().includes('shield')) {
+    // Check if it's a shield (check category, type, AND subtype)
+    const isShield = categories.includes('Shield') 
+      || types.includes('Shield') 
+      || subtypes.includes('Shield') 
+      || item.itemName?.toLowerCase().includes('shield');
+    
+    if (isShield) {
       categorized.shields.push(item);
+    }
+    // Check if it's a weapon
+    else if (categories.includes('Weapon') || types.includes('1H') || types.includes('2H')) {
+      categorized.weapons.push(item);
     }
     // Check if it's armor
     else if (categories.includes('Armor') || types.includes('Chest') || types.includes('Legs')) {
