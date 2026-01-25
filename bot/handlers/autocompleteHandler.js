@@ -427,6 +427,22 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             }
             break;
 
+          // ------------------- Mod-Blight Command -------------------
+          case "mod-blight":
+            if (interaction.options._subcommand) {
+              const modBlightSubcommand = interaction.options.getSubcommand();
+              if (modBlightSubcommand === "pause" || modBlightSubcommand === "unpause" || modBlightSubcommand === "status") {
+                if (focusedOption.name === "character") {
+                  await handleModBlightedCharacterAutocomplete(interaction, focusedOption);
+                }
+              } else if (modBlightSubcommand === "override") {
+                if (focusedOption.name === "target") {
+                  await handleBlightOverrideTargetAutocomplete(interaction, focusedOption);
+                }
+              }
+            }
+            break;
+
           // ------------------- Blight Command -------------------
           case "blight":
             if (interaction.options._subcommand) {

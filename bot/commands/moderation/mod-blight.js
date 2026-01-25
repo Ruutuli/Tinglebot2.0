@@ -184,22 +184,25 @@ async function handleBlightPause(interaction) {
     }
 
     // Check if character already has blight pause
-    const pauseInfo = character.blightPause;
-    if (pauseInfo && pauseInfo.isPaused) {
-      const pauseDate = new Date(pauseInfo.pausedAt).toLocaleDateString();
+    if (character.blightPaused) {
+      const pauseInfo = character.blightPauseInfo || {};
+      const pauseDate = pauseInfo.pausedAt
+        ? new Date(pauseInfo.pausedAt).toLocaleDateString()
+        : 'unknown';
       return await interaction.reply({
         content: `⚠️ Character "${charName}" is already paused since ${pauseDate}.`,
         ephemeral: true
       });
     }
 
-    // Update character with blight pause
+    // Update character with blight pause (schema: blightPaused + blightPauseInfo)
     await Character.findByIdAndUpdate(character._id, {
       $set: {
-        blightPause: {
-          isPaused: true,
+        blightPaused: true,
+        blightPauseInfo: {
           pausedAt: new Date(),
           pausedBy: interaction.user.id,
+          pausedByUsername: interaction.user.username,
           reason: reason
         }
       }
@@ -244,17 +247,19 @@ async function handleBlightUnpause(interaction) {
     }
 
     // Check if character is actually paused
-    const pauseInfo = character.blightPause;
-    if (!pauseInfo || !pauseInfo.isPaused) {
+    if (!character.blightPaused) {
       return await interaction.reply({
         content: `⚠️ Character "${charName}" is not currently paused.`,
         ephemeral: true
       });
     }
 
-    // Update character to remove blight pause
+    const pauseInfo = character.blightPauseInfo || {};
+
+    // Update character to remove blight pause (schema: blightPaused + blightPauseInfo)
     await Character.findByIdAndUpdate(character._id, {
-      $unset: { blightPause: 1 }
+      $set: { blightPaused: false },
+      $unset: { blightPauseInfo: 1 }
     });
 
     const embed = new EmbedBuilder()
@@ -264,7 +269,7 @@ async function handleBlightUnpause(interaction) {
       .addFields(
         { name: '👤 Character', value: character.name, inline: true },
         { name: '👨‍💼 Moderator', value: interaction.user.tag, inline: true },
-        { name: '⏱️ Previously Paused', value: `Since ${new Date(pauseInfo.pausedAt).toLocaleDateString()}`, inline: true },
+        { name: '⏱️ Previously Paused', value: pauseInfo.pausedAt ? `Since ${new Date(pauseInfo.pausedAt).toLocaleDateString()}` : 'Unknown', inline: true },
         { name: '📝 Previous Reason', value: pauseInfo.reason || 'No reason provided', inline: false },
         { name: '💡 To Pause Again', value: `Use \`/mod-blight pause character:${character.name} reason:your_reason\``, inline: false }
       )
@@ -296,25 +301,28 @@ async function handleBlightStatus(interaction) {
       });
     }
 
-    const pauseInfo = character.blightPause;
+    const pauseInfo = character.blightPauseInfo || {};
+    const village = character.currentVillage || character.village || 'Unknown';
     const embed = new EmbedBuilder()
       .setColor('#ffd43b')
       .setTitle('📊 Blight Status Report')
       .setDescription(`Blight status for **${character.name}**`)
       .addFields(
         { name: '👤 Character', value: character.name, inline: true },
-        { name: '🏘️ Village', value: character.village || 'Unknown', inline: true },
+        { name: '🏘️ Village', value: village, inline: true },
         { name: '👨‍💼 Checked by', value: interaction.user.tag, inline: true }
       )
       .setThumbnail(character.icon || 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png')
       .setTimestamp();
 
-    if (pauseInfo && pauseInfo.isPaused) {
-      const pauseDate = new Date(pauseInfo.pausedAt).toLocaleDateString();
+    if (character.blightPaused) {
+      const pauseDate = pauseInfo.pausedAt
+        ? new Date(pauseInfo.pausedAt).toLocaleDateString()
+        : 'Unknown';
       embed.addFields(
         { name: '⏸️ Status', value: '**PAUSED** - Blight progression is currently paused.', inline: false },
         { name: '📅 Paused Since', value: pauseDate, inline: true },
-        { name: '👨‍💼 Paused by', value: `<@${pauseInfo.pausedBy}>`, inline: true },
+        { name: '👨‍💼 Paused by', value: pauseInfo.pausedBy ? `<@${pauseInfo.pausedBy}>` : (pauseInfo.pausedByUsername || 'Unknown'), inline: true },
         { name: '📝 Reason', value: pauseInfo.reason || 'No reason provided', inline: false },
         { name: '💡 To Unpause', value: `Use \`/mod-blight unpause character:${character.name}\``, inline: false }
       );
@@ -354,7 +362,10 @@ async function handleBlightOverride(interaction) {
       case 'wipe_all':
         // Wipe blight from all characters
         const allCharacters = await Character.find({ blight: { $exists: true } });
-        await Character.updateMany({}, { $unset: { blight: 1, blightPause: 1 } });
+        await Character.updateMany({}, {
+          $set: { blightPaused: false },
+          $unset: { blight: 1, blightPauseInfo: 1 }
+        });
         affectedCount = allCharacters.length;
         result = `Wiped blight from all ${affectedCount} characters`;
         break;
@@ -372,7 +383,7 @@ async function handleBlightOverride(interaction) {
         });
         await Character.updateMany(
           { village: { $regex: new RegExp(`^${target}$`, 'i') } },
-          { $unset: { blight: 1, blightPause: 1 } }
+          { $set: { blightPaused: false }, $unset: { blight: 1, blightPauseInfo: 1 } }
         );
         affectedCount = villageCharacters.length;
         result = `Wiped blight from ${affectedCount} characters in ${target}`;
@@ -393,7 +404,8 @@ async function handleBlightOverride(interaction) {
           });
         }
         await Character.findByIdAndUpdate(character._id, {
-          $unset: { blight: 1, blightPause: 1 }
+          $set: { blightPaused: false },
+          $unset: { blight: 1, blightPauseInfo: 1 }
         });
         affectedCount = 1;
         result = `Wiped blight from character ${target}`;
@@ -407,8 +419,8 @@ async function handleBlightOverride(interaction) {
           });
         }
         await Character.updateMany({}, {
-          $set: { blight: { level: level, timestamp: new Date() } },
-          $unset: { blightPause: 1 }
+          $set: { blight: { level: level, timestamp: new Date() }, blightPaused: false },
+          $unset: { blightPauseInfo: 1 }
         });
         const allChars = await Character.countDocuments({});
         affectedCount = allChars;
@@ -431,8 +443,8 @@ async function handleBlightOverride(interaction) {
         await Character.updateMany(
           { village: { $regex: new RegExp(`^${target}$`, 'i') } },
           {
-            $set: { blight: { level: level, timestamp: new Date() } },
-            $unset: { blightPause: 1 }
+            $set: { blight: { level: level, timestamp: new Date() }, blightPaused: false },
+            $unset: { blightPauseInfo: 1 }
           }
         );
         const villageChars = await Character.countDocuments({ 
@@ -463,8 +475,8 @@ async function handleBlightOverride(interaction) {
           });
         }
         await Character.findByIdAndUpdate(targetChar._id, {
-          $set: { blight: { level: level, timestamp: new Date() } },
-          $unset: { blightPause: 1 }
+          $set: { blight: { level: level, timestamp: new Date() }, blightPaused: false },
+          $unset: { blightPauseInfo: 1 }
         });
         affectedCount = 1;
         result = `Set blight level ${level} for character ${target}`;

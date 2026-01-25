@@ -1917,6 +1917,29 @@ async function rollForBlightProgression(interaction, characterName) {
       return;
     }
 
+    // Skip roll and stage progression when blight is paused
+    if (character.blightPaused) {
+      const pausedEmbed = new EmbedBuilder()
+        .setColor('#FFA500')
+        .setTitle('⏸️ Blight Progression Paused')
+        .setDescription(
+          `**${characterName}**'s blight progression is currently **paused**.\n\n` +
+          `No roll is required. Blight stage will not advance until a moderator unpauses.`
+        )
+        .setThumbnail(character.icon)
+        .setAuthor({ name: `${characterName}'s Blight Status`, iconURL: interaction.user.displayAvatarURL() })
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setFooter({ text: 'Blight Roll Call', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
+
+      await interaction.editReply({
+        content: `<@${interaction.user.id}>`,
+        embeds: [pausedEmbed],
+        flags: [4096],
+      });
+      return;
+    }
+
     // ------------------- Enhanced Blight Call Timing Logic -------------------
     const now = new Date();
     
