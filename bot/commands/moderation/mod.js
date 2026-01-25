@@ -1638,6 +1638,15 @@ async function handleOCAppView(interaction) {
       });
     }
 
+    // Load ocApplicationService
+    const ocApplicationServicePath = path.join(__dirname, '../../../dashboard/services/ocApplicationService.js');
+    let ocApplicationService;
+    try {
+      ocApplicationService = require(ocApplicationServicePath);
+    } catch (e) {
+      logger.error('MOD_OCAPP', `Failed to load ocApplicationService: ${e.message}`);
+    }
+
     const characterIdOrName = interaction.options.getString('id');
 
     // Find character by ID or name
@@ -1689,8 +1698,9 @@ async function handleOCAppView(interaction) {
 
     const statusText = statusMap[character.status] || character.status || 'DRAFT';
 
+    const { APPROVAL_THRESHOLD } = ocApplicationService;
     let description = `**Status:** ${statusText}\n**Version:** ${applicationVersion}\n\n`;
-    description += `**Votes:**\n✅ Approves: ${approveCount}/4\n⚠️ Needs Changes: ${needsChangesCount}\n\n`;
+    description += `**Votes:**\n✅ Approves: ${approveCount}/${APPROVAL_THRESHOLD}\n⚠️ Needs Changes: ${needsChangesCount}\n\n`;
 
     if (votes.length > 0) {
       description += '**Mod Votes:**\n';
