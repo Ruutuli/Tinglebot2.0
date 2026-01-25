@@ -475,6 +475,11 @@
       }
     };
     
+    function characterNameToSlug(name) {
+      if (!name) return '';
+      return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    }
+
     function createCharacterCard(character) {
       // Get current user ID from auth
       const authStatus = window.currentAuthStatus || {};
@@ -485,56 +490,63 @@
       const hasVoted = (character.votes?.approves || []).some(v => v.modId === currentUserId) || 
                       (character.votes?.needsChanges || []).some(v => v.modId === currentUserId);
       
+      const profileSlug = characterNameToSlug(character.name);
+      const profileUrl = profileSlug ? `/ocs/${profileSlug}` : '#';
+
       return `
         <div class="character-card pending" data-character-id="${String(character._id)}" data-is-mod="${character.isModCharacter || false}">
-          <div class="character-header">
-            <img src="${character.icon || '/assets/default-character.png'}" alt="${character.name}" class="character-icon">
-            <div class="character-info">
-              <div class="character-name">
-                ${character.name}
-                ${character.isModCharacter ? '<span class="status-badge" style="margin-left: 8px; background: rgba(0, 163, 218, 0.2); color: var(--accent); border: 1px solid rgba(0, 163, 218, 0.3);">Mod Character</span>' : ''}
-              </div>
-              <div class="character-details">
-                <div class="detail-item">
-                  <i class="fas fa-user" aria-hidden="true"></i>
-                  <span class="detail-label">Age</span>
-                  <span class="detail-value">${character.age || 'N/A'}</span>
+          <a href="${profileUrl}" class="character-card-profile-link" ${profileSlug ? 'target="_blank" rel="noopener"' : ''} aria-label="View ${character.name} profile">
+            <div class="character-header">
+              <img src="${character.icon || '/assets/default-character.png'}" alt="${character.name}" class="character-icon">
+              <div class="character-info">
+                <div class="character-name">
+                  ${character.name}
+                  ${character.isModCharacter ? '<span class="status-badge" style="margin-left: 8px; background: rgba(0, 163, 218, 0.2); color: var(--accent); border: 1px solid rgba(0, 163, 218, 0.3);">Mod Character</span>' : ''}
                 </div>
-                <div class="detail-item">
-                  <i class="fas fa-ruler" aria-hidden="true"></i>
-                  <span class="detail-label">Height</span>
-                  <span class="detail-value">${character.height || 'N/A'}</span>
+                <div class="character-details">
+                  <div class="detail-item">
+                    <i class="fas fa-user" aria-hidden="true"></i>
+                    <span class="detail-label">Age</span>
+                    <span class="detail-value">${character.age || 'N/A'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <i class="fas fa-ruler" aria-hidden="true"></i>
+                    <span class="detail-label">Height</span>
+                    <span class="detail-value">${character.height || 'N/A'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <i class="fas fa-info" aria-hidden="true"></i>
+                    <span class="detail-label">Pronouns</span>
+                    <span class="detail-value">${character.pronouns || 'N/A'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <i class="fas fa-dragon" aria-hidden="true"></i>
+                    <span class="detail-label">Race</span>
+                    <span class="detail-value">${character.race || 'N/A'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <i class="fas fa-home" aria-hidden="true"></i>
+                    <span class="detail-label">Village</span>
+                    <span class="detail-value">${character.homeVillage || 'N/A'}</span>
+                  </div>
+                  <div class="detail-item">
+                    <i class="fas fa-briefcase" aria-hidden="true"></i>
+                    <span class="detail-label">Job</span>
+                    <span class="detail-value">${character.job || 'N/A'}</span>
+                  </div>
                 </div>
-                <div class="detail-item">
-                  <i class="fas fa-info" aria-hidden="true"></i>
-                  <span class="detail-label">Pronouns</span>
-                  <span class="detail-value">${character.pronouns || 'N/A'}</span>
-                </div>
-                <div class="detail-item">
-                  <i class="fas fa-dragon" aria-hidden="true"></i>
-                  <span class="detail-label">Race</span>
-                  <span class="detail-value">${character.race || 'N/A'}</span>
-                </div>
-                <div class="detail-item">
-                  <i class="fas fa-home" aria-hidden="true"></i>
-                  <span class="detail-label">Village</span>
-                  <span class="detail-value">${character.homeVillage || 'N/A'}</span>
-                </div>
-                <div class="detail-item">
-                  <i class="fas fa-briefcase" aria-hidden="true"></i>
-                  <span class="detail-label">Job</span>
-                  <span class="detail-value">${character.job || 'N/A'}</span>
-                </div>
-                ${character.appLink ? `
-                <div class="detail-item">
-                  <i class="fas fa-link" aria-hidden="true"></i>
-                  <span class="detail-label">App Link</span>
-                  <span class="detail-value"><a href="${character.appLink}" target="_blank">View</a></span>
-                </div>
-                ` : ''}
               </div>
             </div>
+          </a>
+          ${character.appLink ? `
+          <div class="character-details character-details-standalone" style="margin-top: 0.5rem;">
+            <div class="detail-item">
+              <i class="fas fa-link" aria-hidden="true"></i>
+              <span class="detail-label">App Link</span>
+              <span class="detail-value"><a href="${character.appLink}" target="_blank" rel="noopener">View</a></span>
+            </div>
           </div>
+          ` : ''}
           
           <div class="vote-section">
             <div class="vote-counts">

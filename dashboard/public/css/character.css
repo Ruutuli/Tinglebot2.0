@@ -2890,6 +2890,17 @@
   border-color: rgba(73, 213, 156, 0.3);
 }
 
+.character-moderation-page .character-card-profile-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 12px;
+  transition: background 0.2s ease;
+}
+
+.character-moderation-page .character-card-profile-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
 
 .character-moderation-page .character-header {
   display: flex;
