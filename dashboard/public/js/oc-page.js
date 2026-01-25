@@ -2219,15 +2219,22 @@ async function handleFormSubmit(event) {
     // Create FormData
     const formData = new FormData(form);
     
-    // Ensure job value is included if it exists in the character
-    // This handles cases where the dropdown value might not be set correctly
+    // Remove disabled fields from FormData to prevent validation errors
+    // Disabled fields should not be sent to the server
+    const fieldsToCheck = ['name', 'hearts', 'stamina', 'race', 'village', 'job', 
+                           'starterWeapon', 'starterShield', 'starterArmorChest', 'starterArmorLegs'];
+    fieldsToCheck.forEach(fieldName => {
+      const field = form.querySelector(`[name="${fieldName}"]`);
+      if (field && field.disabled) {
+        // Remove disabled fields from FormData
+        formData.delete(fieldName);
+      }
+    });
+    
+    // Only include job if the field is enabled and has a value (for cases where job might not be in form)
     const jobSelect = document.getElementById('edit-character-job');
-    if (jobSelect && jobSelect.value) {
-      // Job value is already in FormData from the form, but ensure it's set
+    if (jobSelect && !jobSelect.disabled && jobSelect.value && !formData.has('job')) {
       formData.set('job', jobSelect.value);
-    } else if (character && character.job) {
-      // Fallback: if dropdown doesn't have a value but character has a job, use character's job
-      formData.set('job', character.job);
     }
     
     // Add resubmit flag if resubmitting

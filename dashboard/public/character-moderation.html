@@ -538,6 +538,12 @@
               </div>
             </div>
           </a>
+          ${profileSlug ? `
+          <a href="${profileUrl}" class="oc-profile-link" target="_blank" rel="noopener">
+            <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+            OC Profile →
+          </a>
+          ` : ''}
           ${character.appLink ? `
           <div class="character-details character-details-standalone" style="margin-top: 0.5rem;">
             <div class="detail-item">

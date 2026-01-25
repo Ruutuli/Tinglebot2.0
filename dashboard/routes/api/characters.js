@@ -931,13 +931,16 @@ router.put('/edit/:id', characterUploads, validateObjectId('id'), asyncHandler(a
   if (age !== undefined && age !== '' && parseInt(age, 10) !== character.age && !isFieldEditable('age', status)) {
     lockedFields.push('age');
   }
-  if (race !== undefined && race.toLowerCase() !== character.race?.toLowerCase() && !isFieldEditable('race', status)) {
+  // Only check race if it's provided, not empty, and actually different from current value
+  if (race !== undefined && race !== '' && race.toLowerCase() !== character.race?.toLowerCase() && !isFieldEditable('race', status)) {
     lockedFields.push('race');
   }
-  if (village !== undefined && village.toLowerCase() !== character.homeVillage?.toLowerCase() && !isFieldEditable('homeVillage', status)) {
+  // Only check village if it's provided, not empty, and actually different from current value
+  if (village !== undefined && village !== '' && village.toLowerCase() !== character.homeVillage?.toLowerCase() && !isFieldEditable('homeVillage', status)) {
     lockedFields.push('homeVillage');
   }
-  if (job !== undefined && job !== character.job && !isFieldEditable('job', status)) {
+  // Only check job if it's provided and actually different from current value
+  if (job !== undefined && job !== '' && job !== character.job && !isFieldEditable('job', status)) {
     lockedFields.push('job');
   }
   // Hearts and stamina can NEVER be edited by users (only mods/admins)

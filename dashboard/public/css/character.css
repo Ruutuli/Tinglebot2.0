@@ -2902,6 +2902,27 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.character-moderation-page .oc-profile-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 163, 218, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(0, 163, 218, 0.4);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.character-moderation-page .oc-profile-link:hover {
+  background: rgba(0, 163, 218, 0.25);
+  border-color: rgba(0, 163, 218, 0.6);
+}
+
 .character-moderation-page .character-header {
   display: flex;
   gap: 1.5rem;
