@@ -27,6 +27,9 @@ const {
   fetchAllCharacters
 } = require('@/database/db');
 
+// ------------------- Models -------------------
+const Character = require('@/models/CharacterModel');
+
 // ------------------- Utility Functions -------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 
