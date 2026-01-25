@@ -3320,8 +3320,9 @@ async function checkMissedRolls(client) {
       // This uses the same logic as rollForBlightProgression to ensure consistency
       const now = new Date();
       
-      // Get current hour in UTC
+      // Get current hour and minute in UTC (check runs at 00:59, 1 min before 01:00 call)
       const utcHour = getHourInUTC(now);
+      const utcMinute = now.getUTCMinutes();
       
       // Calculate today's 1 AM UTC (which is 8:00 PM EST the previous day)
       const today1AMUTC = get1AMUTC(now);
@@ -3606,15 +3607,14 @@ async function checkMissedRolls(client) {
       // ========================================================================
       // ------------------- Missed Roll → Auto Progression -------------------
       // ========================================================================
-      // Only progress if they actually missed the previous blight call period
+      // Check if someone missed their roll; if so, auto-advance their blight stage.
       // A character has missed a roll if:
-      // 1. They're at or past 8 PM UTC (so the period has ended)
+      // 1. We're at or past 12:59 AM UTC (check runs 1 min before 1 AM call = 8 PM EST)
       // 2. Their last roll was BEFORE the previous blight call boundary (they didn't roll in the period)
       // 3. They're not at stage 5 yet
-      // 
-      // We've already checked above that they didn't roll after the previous call or current boundary,
-      // so if we get here, they genuinely missed the roll period
-      const isPastBlightCallTime = utcHour >= 20;
+      //
+      // We've already skipped above: rolled in period, paused, or stage 5.
+      const isPastBlightCallTime = (utcHour === 0 && utcMinute >= 59) || utcHour >= 1;
       const lastRollBeforePreviousCall = !character.lastRollDate || character.lastRollDate <= previousBlightCall;
       const shouldProgress = isPastBlightCallTime && lastRollBeforePreviousCall && character.blightStage < 5;
       

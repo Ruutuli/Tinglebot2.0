@@ -280,7 +280,7 @@ async function blightRollCall(client, _data = {}) {
   }
 }
 
-// ------------------- blight-roll-call-check (8:30pm EST = 01:30 UTC) -------------------
+// ------------------- blight-roll-call-check (7:59pm EST = 00:59 UTC, 1 min before call) -------------------
 async function blightRollCallCheck(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'blight-roll-call-check: Discord client not available');
@@ -1140,7 +1140,7 @@ const TASKS = [
   
   // Blight Tasks
   { name: 'blight-roll-call', cron: '0 1 * * *', handler: blightRollCall }, // 8pm EST = 01:00 UTC
-  { name: 'blight-roll-call-check', cron: '30 1 * * *', handler: blightRollCallCheck }, // 8:30pm EST = 01:30 UTC
+  { name: 'blight-roll-call-check', cron: '59 0 * * *', handler: blightRollCallCheck }, // 7:59pm EST = 00:59 UTC, 1 min before call
   
   // Birthday Tasks (all at 12am EST = 05:00 UTC)
   { name: 'birthday-assign-role', cron: '0 5 * * *', handler: birthdayAssignRole },
