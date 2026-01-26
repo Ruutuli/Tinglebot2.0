@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const memberLoreSchema = new mongoose.Schema({
   // Member information
   memberName: {
@@ -179,7 +183,7 @@ memberLoreSchema.statics.getApprovedLore = function(limit = 50, skip = 0) {
 memberLoreSchema.statics.getLoreByTopic = function(topic, limit = 20) {
   return this.find({ 
     status: 'approved',
-    topic: new RegExp(topic, 'i')
+    topic: new RegExp(escapeRegExp(topic), 'i')
   })
     .sort({ timestamp: -1 })
     .limit(limit)

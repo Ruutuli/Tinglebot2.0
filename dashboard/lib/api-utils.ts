@@ -67,11 +67,15 @@ export function buildListResponse<T>(payload: {
   };
 }
 
+export function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function buildSearchRegex(search: string): RegExp | null {
   const s = search.trim();
   if (!s) return null;
   try {
-    return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    return new RegExp(escapeRegExp(s), "i");
   } catch {
     return null;
   }

@@ -5,6 +5,10 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ============================================================================
 // ------------------- Define the inventory log schema -------------------
 // Tracks all item inventory changes (additions and removals)
@@ -138,7 +142,7 @@ inventoryLogSchema.statics.getCharacterLogs = async function(characterName, filt
   // Exact case-insensitive match for itemName (escape special regex characters)
   if (itemName && typeof itemName === 'string' && itemName.trim().length > 0) {
     const trimmedItemName = itemName.trim();
-    const escapedItemName = trimmedItemName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedItemName = escapeRegExp(trimmedItemName);
     const regexPattern = `^${escapedItemName}$`;
     query.itemName = { $regex: new RegExp(regexPattern, 'i') };
     // Debug: Log the query being built
@@ -146,10 +150,20 @@ inventoryLogSchema.statics.getCharacterLogs = async function(characterName, filt
   } else if (itemName !== undefined && itemName !== null) {
     console.log(`[InventoryLog] itemName filter was provided but invalid:`, itemName, typeof itemName);
   }
-  if (obtain) query.obtain = { $regex: new RegExp(obtain, 'i') };
+  if (obtain != null) {
+    const s = String(obtain).trim();
+    if (s.length > 0) {
+      query.obtain = { $regex: new RegExp(escapeRegExp(s), 'i') };
+    }
+  }
   if (category) query.category = category;
   if (type) query.type = type;
-  if (location) query.location = { $regex: new RegExp(location, 'i') };
+  if (location != null) {
+    const s = String(location).trim();
+    if (s.length > 0) {
+      query.location = { $regex: new RegExp(escapeRegExp(s), 'i') };
+    }
+  }
   if (startDate || endDate) {
     query.dateTime = {};
     if (startDate) query.dateTime.$gte = new Date(startDate);

@@ -40,8 +40,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: "/tingle_icon.png",
-        width: 512,
-        height: 512,
+        width: 123,
+        height: 128,
         alt: "Tinglebot Logo",
       },
     ],
@@ -55,10 +55,10 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/tingle_icon.png", sizes: "any" },
-      { url: "/tingle_icon.png", sizes: "512x512", type: "image/png" },
+      { url: "/tingle_icon.png", sizes: "123x128", type: "image/png" },
     ],
     apple: [
-      { url: "/tingle_icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/tingle_icon.png", sizes: "123x128", type: "image/png" },
     ],
     shortcut: "/tingle_icon.png",
   },

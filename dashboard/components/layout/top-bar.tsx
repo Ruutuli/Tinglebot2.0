@@ -490,7 +490,7 @@ export function TopBar() {
             >
               {user.global_name?.trim() || user.username}
             </span>
-            <Link
+            <a
               href="/api/auth/logout"
               className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 md:px-4 py-2 text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-[1.02] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)] min-h-[44px]"
               style={{
@@ -500,10 +500,10 @@ export function TopBar() {
             >
               <i aria-hidden className="fa-solid fa-right-from-bracket text-sm sm:text-base" />
               <span className="hidden sm:inline">Logout</span>
-            </Link>
+            </a>
           </div>
         ) : (
-          <Link
+          <a
             href="/api/auth/discord"
             title="Login with Discord. If it fails, open this site in Chrome, Firefox, or Edge (not in Discord's app)."
             className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 md:px-4 py-2 text-xs sm:text-sm font-medium transition-all duration-200 hover:scale-[1.02] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)] min-h-[44px]"
@@ -515,7 +515,7 @@ export function TopBar() {
             <i aria-hidden className="fa-brands fa-discord text-sm sm:text-base" />
             <span className="hidden sm:inline">Login with Discord</span>
             <span className="sm:hidden">Login</span>
-          </Link>
+          </a>
         )}
       </div>
       </header>

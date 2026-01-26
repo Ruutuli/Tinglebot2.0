@@ -565,13 +565,9 @@ raidSchema.methods.failRaid = async function(client = null) {
       // Webpack IgnorePlugin is configured in next.config.ts to ignore this module
       let villageModule;
       try {
-        // Construct path dynamically to prevent static analysis
-        // Webpack IgnorePlugin will prevent bundling attempts
-        const pathSegments = ['..', 'modules', 'villageModule'];
-        const modulePath = pathSegments.join('/');
-        // Use Function constructor to make require completely dynamic
-        const dynamicRequire = new Function('p', 'return require(p)');
-        villageModule = dynamicRequire(modulePath);
+        // NOTE: The module may not exist in the dashboard codebase.
+        // Webpack IgnorePlugin is configured in next.config.ts to ignore this module during bundling.
+        villageModule = require('../modules/villageModule');
       } catch (requireError) {
         // Module doesn't exist - skip village damage (this is expected in dashboard)
         console.warn(`[RaidModel.js]: ⚠️ villageModule not available, skipping village damage for raid ${this.raidId}`);

@@ -10,6 +10,7 @@ import {
 import { fetchDiscordUsernames } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 import { RACES, ALL_JOBS, MOD_JOBS } from "@/data/characterData";
+import type { PipelineStage } from "mongoose";
 
 type SortConfig = {
   field: string;
@@ -32,16 +33,26 @@ const SORT_MAP: Record<string, SortConfig> = {
   "age-desc": { field: "age", order: -1, useSecondarySort: true },
 };
 
-function buildSort(sortBy: string): Record<string, 1 | -1> {
-  const config = SORT_MAP[sortBy] || SORT_MAP.name;
-  const sort: Record<string, 1 | -1> = {
-    [config.field]: config.order,
-  };
-  // Add secondary sort by name for non-name sorts
-  if (config.useSecondarySort) {
-    sort.name = 1;
-  }
-  return sort;
+type CharacterListItem = {
+  isModCharacter: boolean;
+  name?: string;
+  userId?: string;
+  username?: string;
+  [k: string]: unknown;
+};
+
+type CharactersFacetResult = {
+  data: CharacterListItem[];
+  total: Array<{ count: number }>;
+};
+
+function getIsModConstraint(values: string[]): boolean | null {
+  if (values.length === 0) return null;
+  const parsed = values.map((v) => String(v).toLowerCase() === "true");
+  const wantsMod = parsed.includes(true);
+  const wantsNonMod = parsed.includes(false);
+  if (wantsMod && wantsNonMod) return null;
+  return wantsMod;
 }
 
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
@@ -101,8 +112,10 @@ export async function GET(req: NextRequest) {
     if (villages.length) modFilter.currentVillage = { $in: villages };
     if (jobs.length) modFilter.job = { $in: jobs };
 
-    // Build sort object - MongoDB handles nulls automatically (nulls sort last)
-    const sort = buildSort(sortBy);
+    const sortConfig = SORT_MAP[sortBy] || SORT_MAP.name;
+    const sortField = sortConfig.field;
+    const sortOrder = sortConfig.order;
+    const isModConstraint = getIsModConstraint(isModCharacterParam);
 
     // Static filter options from data files
     const VILLAGES = ["Rudania", "Inariko", "Vhintl"] as const;
@@ -112,87 +125,105 @@ export async function GET(req: NextRequest) {
     // Combine regular jobs and mod jobs
     const jobOpts = [...ALL_JOBS, ...MOD_JOBS];
 
-    // Fetch both regular and mod characters (fetch all, then combine, sort, and paginate)
-    const [regularChars, modChars, regularTotal, modTotal] = await Promise.all([
-      Character.find(filter).sort(sort).lean(),
-      ModCharacter.find(modFilter).sort(sort).lean(),
-      Character.countDocuments(filter),
-      ModCharacter.countDocuments(modFilter),
-    ]);
+    const skip = (page - 1) * limit;
 
-    // Combine results and add isModCharacter flag, then sort and paginate
-    let combined: Array<Record<string, unknown> & { isModCharacter: boolean; name?: string }> = [
-      ...regularChars.map((c) => ({ ...c, isModCharacter: false })),
-      ...modChars.map((c) => ({ ...c, isModCharacter: true, status: "accepted" })),
-    ];
-    
-    // Filter by isModCharacter if specified
-    if (isModCharacterParam.length > 0) {
-      const modValues = isModCharacterParam.map(v => {
-        const str = String(v).toLowerCase();
-        return str === "true";
-      });
-      console.log('[API] isModCharacter filter:', { isModCharacterParam, modValues, combinedLengthBefore: combined.length });
-      combined = combined.filter((c) => {
-        const isMod = c.isModCharacter === true;
-        const shouldInclude = modValues.includes(isMod);
-        return shouldInclude;
-      });
-      console.log('[API] Filtered combined length:', combined.length);
-    }
-    
-    // Sort combined results (simple sort by the sort field)
-    const sortField = buildSort(sortBy);
-    const sortKey = Object.keys(sortField)[0];
-    const sortOrder = sortField[sortKey];
-    combined.sort((a, b) => {
-      const aVal = (a as Record<string, unknown>)[sortKey];
-      const bVal = (b as Record<string, unknown>)[sortKey];
-      if (aVal == null && bVal == null) return 0;
-      if (aVal == null) return 1;
-      if (bVal == null) return -1;
-      
-      // Compare values
-      let comparison = 0;
-      if (typeof aVal === "string" && typeof bVal === "string") {
-        comparison = aVal.localeCompare(bVal);
-      } else if (typeof aVal === "number" && typeof bVal === "number") {
-        comparison = aVal - bVal;
+    // Preserve previous behavior where null/undefined values sort last for non-name sorts.
+    const addSortNullFlag: PipelineStage.AddFields = {
+      $addFields: {
+        __sortIsNull: {
+          $cond: [{ $eq: [`$${sortField}`, null] }, 1, 0],
+        },
+      },
+    };
+    const sortStage: PipelineStage.Sort = {
+      $sort: {
+        __sortIsNull: 1,
+        [sortField]: sortOrder,
+        ...(sortConfig.useSecondarySort && sortField !== "name" ? { name: 1 } : {}),
+      },
+    };
+
+    const facetStage: PipelineStage.Facet = {
+      $facet: {
+        data: [sortStage, { $skip: skip }, { $limit: limit }],
+        total: [{ $count: "count" }],
+      },
+    };
+
+    let pageData: CharacterListItem[] = [];
+    let total = 0;
+
+    if (isModConstraint === true) {
+      if (!ModCharacter?.collection?.name) {
+        pageData = [];
+        total = 0;
       } else {
-        comparison = String(aVal).localeCompare(String(bVal));
+        const pipeline: PipelineStage[] = [
+          { $match: modFilter },
+          { $addFields: { isModCharacter: true, status: "accepted" } },
+          addSortNullFlag,
+          facetStage,
+        ];
+        const out = await ModCharacter.aggregate<CharactersFacetResult>(pipeline);
+        const first = out?.[0];
+        pageData = first?.data ?? [];
+        total = first?.total?.[0]?.count ?? 0;
       }
-      
-      // Apply sort order
-      const result = comparison * sortOrder;
-      if (result !== 0) return result;
-      
-      // Secondary sort by name if useSecondarySort
-      if (sortKey !== "name") {
-        const nameA = ((a.name as string) || "").toLowerCase();
-        const nameB = ((b.name as string) || "").toLowerCase();
-        return nameA.localeCompare(nameB);
-      }
-      return 0;
-    });
+    } else if (isModConstraint === false) {
+      const pipeline: PipelineStage[] = [
+        { $match: filter },
+        { $addFields: { isModCharacter: false } },
+        addSortNullFlag,
+        facetStage,
+      ];
+      const out = await Character.aggregate<CharactersFacetResult>(pipeline);
+      const first = out?.[0];
+      pageData = first?.data ?? [];
+      total = first?.total?.[0]?.count ?? 0;
+    } else if (!ModCharacter?.collection?.name) {
+      // If mod characters aren't available in this environment, fall back to regular only.
+      const pipeline: PipelineStage[] = [
+        { $match: filter },
+        { $addFields: { isModCharacter: false } },
+        addSortNullFlag,
+        facetStage,
+      ];
+      const out = await Character.aggregate<CharactersFacetResult>(pipeline);
+      const first = out?.[0];
+      pageData = first?.data ?? [];
+      total = first?.total?.[0]?.count ?? 0;
+    } else {
+      const modColl = ModCharacter.collection.name;
+      const unionPipeline: PipelineStage[] = [
+        { $match: filter },
+        { $addFields: { isModCharacter: false } },
+        {
+          $unionWith: {
+            coll: modColl,
+            pipeline: [
+              { $match: modFilter },
+              { $addFields: { isModCharacter: true, status: "accepted" } },
+            ],
+          },
+        },
+        addSortNullFlag,
+        facetStage,
+      ];
 
-    // Calculate total based on filtered results
-    const total = isModCharacterParam.length > 0 
-      ? combined.length 
-      : regularTotal + modTotal;
-    const rawData = combined.slice((page - 1) * limit, page * limit);
+      const out = await Character.aggregate<CharactersFacetResult>(unionPipeline);
+      const first = out?.[0];
+      pageData = first?.data ?? [];
+      total = first?.total?.[0]?.count ?? 0;
+    }
 
-    const data = rawData as Array<{ userId?: string; modOwner?: string; isModCharacter?: boolean; [k: string]: unknown }>;
-    // Get userIds from both regular and mod chars (mod chars also have userId field)
     const userIds = [
-      ...new Set(
-        data.map((c) => c.userId).filter(Boolean)
-      ),
-    ] as string[];
+      ...new Set(pageData.map((c) => c.userId).filter((v): v is string => typeof v === "string" && v.length > 0)),
+    ];
     const usernames = await fetchDiscordUsernames(userIds);
 
-    const dataWithUsernames = data.map((c) => ({
+    const dataWithUsernames: CharacterListItem[] = pageData.map((c) => ({
       ...c,
-      username: (c.userId && usernames[c.userId]) || undefined,
+      username: c.userId ? usernames[c.userId] : undefined,
     }));
 
     const filterOptions: Record<string, (string | number)[]> = {

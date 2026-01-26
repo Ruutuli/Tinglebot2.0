@@ -25,7 +25,10 @@ export function useSession(): SessionState & { refetch: () => Promise<void> } {
   const fetchSession = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/session");
+      const res = await fetch("/api/auth/session", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
       const data = (await res.json()) as { user: SessionUser | null; isAdmin: boolean; isModerator?: boolean };
       setUser(data.user ?? null);
       setIsAdmin(data.isAdmin ?? false);

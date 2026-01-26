@@ -10,15 +10,26 @@ import { NextResponse } from "next/server";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
 
+// This endpoint must never be cached (it varies per-user via cookies).
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   const session = await getSession();
   const user = session.user ?? null;
   const isAdmin = user ? await isAdminUser(user.id) : false;
   const isModerator = user ? await isModeratorUser(user.id) : false;
 
-  return NextResponse.json({
-    user,
-    isAdmin,
-    isModerator,
-  });
+  return NextResponse.json(
+    {
+      user,
+      isAdmin,
+      isModerator,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    }
+  );
 }

@@ -6,7 +6,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useSession } from "@/hooks/use-session";
 import { Loading } from "@/components/ui";
 import { capitalize } from "@/lib/string-utils";
@@ -387,12 +386,12 @@ export default function MyCompanionsPage() {
             <p className="text-base text-[var(--botw-pale)] mb-6">
               You must be logged in to view your companions.
             </p>
-            <Link 
-              href="/api/auth/discord" 
+            <a
+              href="/api/auth/discord"
               className="inline-block rounded-md bg-[#5865F2] px-6 py-3 text-base font-bold text-white transition-colors hover:bg-[#4752C4]"
             >
               Login with Discord
-            </Link>
+            </a>
           </div>
         </div>
       </div>

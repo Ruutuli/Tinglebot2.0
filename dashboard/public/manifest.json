@@ -10,7 +10,7 @@
   "icons": [
     {
       "src": "/tingle_icon.png",
-      "sizes": "512x512",
+      "sizes": "123x128",
       "type": "image/png",
       "purpose": "any maskable"
     }

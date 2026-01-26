@@ -782,12 +782,12 @@ export default function CharacterInventoryPage() {
             <p className="text-base text-[var(--botw-pale)] mb-6">
               You must be logged in to view inventories.
             </p>
-            <Link
+            <a
               href="/api/auth/discord"
               className="inline-block rounded-md bg-[#5865F2] px-6 py-3 text-base font-bold text-white transition-colors hover:bg-[#4752C4]"
             >
               Login with Discord
-            </Link>
+            </a>
           </div>
         </div>
       </div>

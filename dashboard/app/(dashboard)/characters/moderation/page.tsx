@@ -36,12 +36,12 @@ export default function CharacterModerationPage() {
             <p className="text-sm sm:text-base text-[var(--botw-pale)] mb-4 sm:mb-6">
               You must be logged in to access the moderation dashboard.
             </p>
-            <Link
+            <a
               href="/api/auth/discord"
               className="inline-block rounded-md bg-[#5865F2] px-5 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base font-bold text-white transition-colors hover:bg-[#4752C4]"
             >
               Login with Discord
-            </Link>
+            </a>
           </div>
         </div>
       </div>

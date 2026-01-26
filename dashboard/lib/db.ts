@@ -6,6 +6,7 @@
 // MongoDB connection management with connection pooling and caching -
 
 import mongoose from "mongoose";
+import { logger } from "@/utils/logger";
 
 // ============================================================================
 // ------------------- Constants & Configuration -------------------
@@ -136,14 +137,14 @@ export async function getInventoriesConnection(): Promise<mongoose.Connection> {
           errorMessage.includes("ECONNRESET") ||
           errorMessage.includes("connection")
         ) {
-          console.error("[db.ts]❌ Connection error detected, resetting cache:", errorMessage);
+          logger.error("lib/db", `Connection error detected, resetting cache: ${errorMessage}`);
           cachedInventories.conn = null;
           cachedInventories.promise = null;
         }
       });
 
       connection.on("disconnected", () => {
-        console.error("[db.ts]⚠️ Connection disconnected, resetting cache");
+        logger.warn("lib/db", "Connection disconnected, resetting cache");
         cachedInventories.conn = null;
         cachedInventories.promise = null;
       });
@@ -163,7 +164,7 @@ export async function getInventoriesConnection(): Promise<mongoose.Connection> {
     cachedInventories.promise = null;
     cachedInventories.conn = null;
     
-    console.error("[db.ts]❌ Failed to get inventories connection:", error.message);
+    logger.error("lib/db", `Failed to get inventories connection: ${error.message}`);
     throw error;
   }
 }
@@ -193,7 +194,7 @@ export async function getInventoriesDb() {
       errorMessage.includes("tlsv1") ||
       errorMessage.includes("ECONNRESET")
     ) {
-      console.error("[db.ts]⚠️ SSL/connection error detected, retrying:", errorMessage);
+      logger.warn("lib/db", `SSL/connection error detected, retrying: ${errorMessage}`);
       
       // Reset the cached connection
       cachedInventories.conn = null;
@@ -211,7 +212,7 @@ export async function getInventoriesDb() {
       return db;
     }
     
-    console.error("[db.ts]❌ Failed to get inventories database:", errorMessage);
+    logger.error("lib/db", `Failed to get inventories database: ${errorMessage}`);
     throw error;
   }
 }
@@ -259,14 +260,14 @@ export async function connectToVending(): Promise<mongoose.Connection> {
           errorMessage.includes("ECONNRESET") ||
           errorMessage.includes("connection")
         ) {
-          console.error("[db.ts]❌ Vending connection error detected, resetting cache:", errorMessage);
+          logger.error("lib/db", `Vending connection error detected, resetting cache: ${errorMessage}`);
           cachedVending.conn = null;
           cachedVending.promise = null;
         }
       });
 
       connection.on("disconnected", () => {
-        console.error("[db.ts]⚠️ Vending connection disconnected, resetting cache");
+        logger.warn("lib/db", "Vending connection disconnected, resetting cache");
         cachedVending.conn = null;
         cachedVending.promise = null;
       });
@@ -286,7 +287,7 @@ export async function connectToVending(): Promise<mongoose.Connection> {
     cachedVending.promise = null;
     cachedVending.conn = null;
     
-    console.error("[db.ts]❌ Failed to get vending connection:", error.message);
+    logger.error("lib/db", `Failed to get vending connection: ${error.message}`);
     throw error;
   }
 }

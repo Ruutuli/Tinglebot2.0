@@ -598,7 +598,7 @@ function AuthErrorBanner({
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <Link
+        <a
           href="/api/auth/discord"
           title="If login fails, open this site in Chrome, Firefox, or Edge (not in Discord's app)."
           className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)] sm:px-4"
@@ -609,7 +609,7 @@ function AuthErrorBanner({
         >
           <i aria-hidden className="fa-brands fa-discord" />
           Login with Discord
-        </Link>
+        </a>
         <button
           type="button"
           onClick={onDismiss}
@@ -679,6 +679,7 @@ function CountdownCard({
             <Image
               alt=""
               aria-hidden
+              unoptimized
               className="relative z-10 h-full w-auto animate-sheikah-pulse opacity-70 transition-all duration-500 group-hover:opacity-100"
               height={156}
               src="/Side=Left, Type=Shekiah.svg"
@@ -695,6 +696,7 @@ function CountdownCard({
             <Image
               alt=""
               aria-hidden
+              unoptimized
               className="relative z-10 h-full w-auto animate-sheikah-pulse opacity-70 transition-all duration-500 group-hover:opacity-100"
               height={156}
               src="/Side=Right, Type=Shekiah.svg"
@@ -731,6 +733,7 @@ function CountdownCard({
               <Image
                 alt=""
                 aria-hidden
+                unoptimized
                 className="object-contain transition-transform duration-300 group-hover:scale-110"
                 height={40}
                 src={iconImage}
@@ -899,6 +902,7 @@ function WeatherCard(v: VillageWeatherItem) {
                 <Image
                   key={type}
                   alt={`${type} weather icon`}
+                  unoptimized
                   className={isActive ? "opacity-100" : "opacity-50"}
                   height={80}
                   src={iconPath}

@@ -1095,53 +1095,22 @@ export default function OCDetailPage() {
   }, [character, fetchGearImages]);
 
   useLayoutEffect(() => {
-    console.log(
-      "[OCDetailPage] Pathname changed, scrolling to top:",
-      pathname
-    );
     const mainElement = document.querySelector("main");
-    console.log(
-      "[OCDetailPage] Current scroll - Window:",
-      window.scrollY,
-      "Main:",
-      mainElement?.scrollTop
-    );
 
     window.scrollTo({ top: 0, behavior: "instant" });
     mainElement?.scrollTo({ top: 0, behavior: "instant" });
     document.documentElement.scrollTo({ top: 0, behavior: "instant" });
-
-    console.log("[OCDetailPage] Scroll command executed on all elements");
   }, [pathname]);
 
   useEffect(() => {
-    console.log(
-      "[page.tsx]✨ Loading/Character changed - loading:",
-      loading,
-      "character:",
-      character?.name || "null"
-    );
     if (!loading && character) {
-      console.log("[page.tsx]✨ Content loaded, scrolling to top");
       const mainElement = document.querySelector("main");
-      console.log(
-        "[page.tsx]✨ Current scroll before scroll - Window:",
-        window.scrollY,
-        "Main:",
-        mainElement?.scrollTop
-      );
 
       requestAnimationFrame(() => {
         const mainEl = document.querySelector("main");
         window.scrollTo({ top: 0, behavior: "instant" });
         mainEl?.scrollTo({ top: 0, behavior: "instant" });
         document.documentElement.scrollTo({ top: 0, behavior: "instant" });
-        console.log(
-          "[page.tsx]✨ Scroll executed after RAF - Window:",
-          window.scrollY,
-          "Main:",
-          mainEl?.scrollTop
-        );
       });
     }
   }, [loading, character]);
