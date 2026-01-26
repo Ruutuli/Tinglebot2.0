@@ -105,14 +105,14 @@ export async function GET(
 
       // Only fetch items that are owned or commonly needed (optimization)
       // If you want to show ALL items, remove the $in filter, but it will be slower
-      const allItems = ownedItemNames.size > 0
-        ? await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
+      const allItems: ItemDocument[] = ownedItemNames.size > 0
+        ? (await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
             .select("itemName category type subtype image")
-            .lean()
+            .lean()) as unknown as ItemDocument[]
         : [];
 
       // Merge all items with owned status
-      const completeInventory = allItems.map((item: any) => {
+      const completeInventory = allItems.map((item: ItemDocument) => {
         const owned = ownedItemsMap.get(item.itemName.toLowerCase());
         return {
           itemName: item.itemName,
@@ -182,10 +182,10 @@ export async function GET(
 
     // Only fetch items that are owned or commonly needed (optimization)
     // If you want to show ALL items, remove the $in filter, but it will be slower
-    const allItems = ownedItemNames.size > 0
-      ? await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
+    const allItems: ItemDocument[] = ownedItemNames.size > 0
+      ? (await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
           .select("itemName category type subtype image")
-          .lean()
+          .lean()) as unknown as ItemDocument[]
       : [];
 
     // Merge all items with owned status
