@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { logger } from "@/utils/logger";
 
 /**
  * GET /api/images/[...path] - Serve images from public directory or proxy from GCS
@@ -31,7 +32,10 @@ export async function GET(
           },
         });
       } catch (error) {
-        console.error("Error fetching external image:", error);
+        logger.debug(
+          "api/images/[...path] GET",
+          `Error fetching external image: ${error instanceof Error ? error.message : String(error)}`
+        );
         return new NextResponse("Error fetching image", { status: 500 });
       }
     }
@@ -75,7 +79,10 @@ export async function GET(
           });
         }
       } catch (error) {
-        console.error(`Error fetching image from GCS (${gcsUrl}):`, error);
+        logger.debug(
+          "api/images/[...path] GET",
+          `Error fetching image from GCS (${gcsUrl}): ${error instanceof Error ? error.message : String(error)}`
+        );
         // Fall through to 404
       }
       
@@ -94,7 +101,10 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Error serving image:", error);
+    logger.error(
+      "api/images/[...path] GET",
+      `Error serving image: ${error instanceof Error ? error.message : String(error)}`
+    );
     return new NextResponse("Internal server error", { status: 500 });
   }
 }

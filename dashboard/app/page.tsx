@@ -833,12 +833,11 @@ function WeatherCard(v: VillageWeatherItem) {
           <div className="flex min-w-0 shrink items-center">
             {villageCrestPath ? (
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--botw-warm-black)]">
-                <Image
+                <img
                   alt=""
                   aria-hidden
                   className="h-9 w-9 object-contain"
                   height={36}
-                  unoptimized
                   src={villageCrestPath}
                   width={36}
                 />

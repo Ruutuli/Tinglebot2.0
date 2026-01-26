@@ -168,18 +168,18 @@ export async function GET(
       // Convert string ID to ObjectId for proper MongoDB query
       const charObjectId = new mongoose.Types.ObjectId(charId);
       
-      logger.info("api/characters/[id] GET", `Fetching help wanted quests for character ID: ${charId} (ObjectId: ${charObjectId.toString()})`);
+      logger.debug("api/characters/[id] GET", `Fetching help wanted quests for character ID: ${charId} (ObjectId: ${charObjectId.toString()})`);
       
       try {
         // Check if model already exists to avoid recompilation error
         let HelpWantedQuest: unknown;
         if (mongoose.models.HelpWantedQuest) {
           HelpWantedQuest = mongoose.models.HelpWantedQuest;
-          logger.info("api/characters/[id] GET", `Using existing HelpWantedQuest model`);
+          logger.debug("api/characters/[id] GET", `Using existing HelpWantedQuest model`);
         } else {
           const module = await import("@/models/HelpWantedQuestModel.js");
           HelpWantedQuest = module.default;
-          logger.info("api/characters/[id] GET", `HelpWantedQuest model imported successfully`);
+          logger.debug("api/characters/[id] GET", `HelpWantedQuest model imported successfully`);
         }
         
         type QuestDoc = {
@@ -193,7 +193,7 @@ export async function GET(
           completed: true,
           "completedBy.characterId": charObjectId
         };
-        logger.info("api/characters/[id] GET", `Querying help wanted quests with filter: {"completed":true,"completedBy.characterId":ObjectId("${charObjectId.toString()}")}`);
+        logger.debug("api/characters/[id] GET", `Querying help wanted quests with filter: {"completed":true,"completedBy.characterId":ObjectId("${charObjectId.toString()}")}`);
         
         const questQuery = (HelpWantedQuest as unknown as {
           find: (filter: Record<string, unknown>) => {
@@ -202,9 +202,9 @@ export async function GET(
         }).find(queryFilter);
         const completedQuests = await questQuery.sort({ date: -1 }).limit(50); // Get most recent 50 completions
 
-        logger.info("api/characters/[id] GET", `Found ${completedQuests.length} completed quests`);
+        logger.debug("api/characters/[id] GET", `Found ${completedQuests.length} completed quests`);
         if (completedQuests.length > 0) {
-          logger.info("api/characters/[id] GET", `Sample quest: ${JSON.stringify(completedQuests[0])}`);
+          logger.debug("api/characters/[id] GET", `Sample quest: ${JSON.stringify(completedQuests[0])}`);
         }
 
         // Build completions array from quest data
@@ -222,7 +222,7 @@ export async function GET(
             questType: quest.type!
           }));
 
-        logger.info("api/characters/[id] GET", `Built ${questCompletions.length} quest completions`);
+        logger.debug("api/characters/[id] GET", `Built ${questCompletions.length} quest completions`);
 
         // Get the most recent completion date
         const lastCompletion = questCompletions.length > 0 ? questCompletions[0].date : null;
@@ -232,11 +232,11 @@ export async function GET(
           const charObj = char as { helpWanted?: { completions?: unknown[]; lastCompletion?: string | null } };
           if (!charObj.helpWanted) {
             charObj.helpWanted = { completions: [], lastCompletion: null };
-            logger.info("api/characters/[id] GET", `Initialized helpWanted object`);
+            logger.debug("api/characters/[id] GET", `Initialized helpWanted object`);
           }
           // Merge with existing completions, avoiding duplicates
           const existingCompletions = (charObj.helpWanted.completions || []) as Array<{ date?: string; village?: string; questType?: string }>;
-          logger.info("api/characters/[id] GET", `Existing completions: ${existingCompletions.length}`);
+          logger.debug("api/characters/[id] GET", `Existing completions: ${existingCompletions.length}`);
           
           const existingKeys = new Set(
             existingCompletions.map((c) => `${c.date}-${c.village}-${c.questType}`)
@@ -244,15 +244,15 @@ export async function GET(
           const newCompletions = questCompletions.filter(
             (c: { date: string; village: string; questType: string }) => !existingKeys.has(`${c.date}-${c.village}-${c.questType}`)
           );
-          logger.info("api/characters/[id] GET", `New completions to add: ${newCompletions.length}`);
+          logger.debug("api/characters/[id] GET", `New completions to add: ${newCompletions.length}`);
           
           charObj.helpWanted.completions = [...existingCompletions, ...newCompletions];
           if (lastCompletion && (!charObj.helpWanted.lastCompletion || lastCompletion > charObj.helpWanted.lastCompletion)) {
             charObj.helpWanted.lastCompletion = lastCompletion;
           }
-          logger.info("api/characters/[id] GET", `Updated helpWanted with ${charObj.helpWanted.completions.length} total completions, lastCompletion: ${charObj.helpWanted.lastCompletion}`);
+          logger.debug("api/characters/[id] GET", `Updated helpWanted with ${charObj.helpWanted.completions.length} total completions, lastCompletion: ${charObj.helpWanted.lastCompletion}`);
         } else {
-          logger.info("api/characters/[id] GET", `No quest completions found, helpWanted remains unchanged`);
+          logger.debug("api/characters/[id] GET", `No quest completions found, helpWanted remains unchanged`);
         }
       } catch (err) {
         // If HelpWantedQuest model doesn't exist or query fails, just continue without it
