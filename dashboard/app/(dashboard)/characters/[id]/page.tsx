@@ -5,7 +5,7 @@
 // ============================================================================
 // [page.tsx]✨ External dependencies and internal imports -
 
-import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -951,6 +951,7 @@ export default function OCDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const submitSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const characterId = typeof params.id === "string" ? params.id : null;
 
@@ -1115,6 +1116,15 @@ export default function OCDetailPage() {
     }
   }, [loading, character]);
 
+  useEffect(() => {
+    return () => {
+      if (submitSuccessTimeoutRef.current) {
+        clearTimeout(submitSuccessTimeoutRef.current);
+        submitSuccessTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (!characterId || !character) return;
 
@@ -1123,6 +1133,11 @@ export default function OCDetailPage() {
     setSubmitSuccess(false);
 
     try {
+      if (submitSuccessTimeoutRef.current) {
+        clearTimeout(submitSuccessTimeoutRef.current);
+        submitSuccessTimeoutRef.current = null;
+      }
+
       const res = await fetch(`/api/characters/${characterId}/submit`, {
         method: "POST",
       });
@@ -1137,7 +1152,10 @@ export default function OCDetailPage() {
       setSubmitSuccess(true);
       await fetchCharacter();
 
-      setTimeout(() => setSubmitSuccess(false), 3000);
+      submitSuccessTimeoutRef.current = setTimeout(() => {
+        setSubmitSuccess(false);
+        submitSuccessTimeoutRef.current = null;
+      }, 3000);
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       setSubmitError(error.message);

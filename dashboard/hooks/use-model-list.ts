@@ -465,6 +465,7 @@ export function useModelList<T>(
       : DEFAULT_LIMIT
   );
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -481,11 +482,18 @@ export function useModelList<T>(
   const fetchList = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    // Abort any in-flight request to prevent updates after unmount / stale responses.
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     try {
       const qs = buildQueryParams(currentPage, itemsPerPage, debouncedSearch, filters, sortBy);
       const base = apiPath ?? `/api/models/${resource}`;
       const url = `${base}?${qs}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal });
+      if (signal.aborted) return;
       if (!res.ok) {
         let errorMessage = `Request failed with status ${res.status}`;
         try {
@@ -498,6 +506,7 @@ export function useModelList<T>(
         throw new Error(errorMessage);
       }
       const json: PaginatedResponse<T> = await res.json();
+      if (signal.aborted) return;
       setData(json.data);
       setTotal(json.total);
       setTotalPages(json.totalPages);
@@ -505,6 +514,7 @@ export function useModelList<T>(
         setFilterOptions(json.filterOptions);
       }
     } catch (e) {
+      if (signal.aborted) return;
       const errorMessage = e instanceof Error ? e.message : String(e);
       // Provide more context for network errors
       if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {
@@ -517,13 +527,21 @@ export function useModelList<T>(
       setTotal(0);
       setTotalPages(0);
     } finally {
-      setLoading(false);
+      if (!signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [resource, apiPath, currentPage, itemsPerPage, debouncedSearch, filters, sortBy]);
 
   useEffect(() => {
     fetchList();
   }, [fetchList]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const filterGroups = useMemo(
     () => buildFilterGroups(filterOptions, filters, resource, sortBy, itemsPerPage),

@@ -1165,36 +1165,48 @@ export default function HomePage() {
 
   // Fetch Character of the Week data
   useEffect(() => {
+    const abortController = new AbortController();
+    const signal = abortController.signal;
     async function fetchCharacterOfWeek() {
       try {
         setIsLoadingCharacter(true);
         setCharacterError(null);
-        const response = await fetch("/api/character-of-week");
+        const response = await fetch("/api/character-of-week", { signal });
+        if (signal.aborted) return;
         if (!response.ok) {
           throw new Error("Failed to fetch Character of the Week");
         }
         const data: CharacterOfWeekResponse = await response.json();
+        if (signal.aborted) return;
         setCharacterOfWeek(data.characterOfWeek);
         setRotationInfo(data.rotationInfo);
         setCharacterImageError(false);
       } catch (error) {
+        if (signal.aborted) return;
         setCharacterError(error instanceof Error ? error.message : "Failed to load Character of the Week");
         console.error("Error fetching Character of the Week:", error);
       } finally {
-        setIsLoadingCharacter(false);
+        if (!signal.aborted) {
+          setIsLoadingCharacter(false);
+        }
       }
     }
     fetchCharacterOfWeek();
+    return () => abortController.abort();
   }, []);
 
   useEffect(() => {
+    const abortController = new AbortController();
+    const signal = abortController.signal;
     async function fetchWeather() {
       try {
         setIsLoadingWeather(true);
         setWeatherError(null);
-        const res = await fetch("/api/weather");
+        const res = await fetch("/api/weather", { signal });
+        if (signal.aborted) return;
         if (!res.ok) throw new Error("Failed to fetch weather");
         const data: { weather: WeatherApiDoc[] } = await res.json();
+        if (signal.aborted) return;
         const byVillage = new Map<string, WeatherApiDoc>();
         for (const w of data.weather ?? []) byVillage.set(w.village, w);
         const ordered = WEATHER_VILLAGES_ORDER.map((name) =>
@@ -1202,60 +1214,80 @@ export default function HomePage() {
         );
         setWeatherItems(ordered);
       } catch (e) {
+        if (signal.aborted) return;
         setWeatherError(e instanceof Error ? e.message : "Failed to load weather");
         setWeatherItems(
           WEATHER_VILLAGES_ORDER.map((name) => mapWeatherDocToItem(null, name))
         );
       } finally {
-        setIsLoadingWeather(false);
+        if (!signal.aborted) {
+          setIsLoadingWeather(false);
+        }
       }
     }
     fetchWeather();
+    return () => abortController.abort();
   }, []);
 
   useEffect(() => {
+    const abortController = new AbortController();
+    const signal = abortController.signal;
     async function fetchVillageLevels() {
       try {
         setIsLoadingVillageLevels(true);
         setVillageLevelsError(null);
-        const res = await fetch("/api/village-levels");
+        const res = await fetch("/api/village-levels", { signal });
+        if (signal.aborted) return;
         if (!res.ok) throw new Error("Failed to fetch village levels");
         const data: { villages: (VillageLevelsApiDoc | null)[] } = await res.json();
+        if (signal.aborted) return;
         const raw = data.villages ?? [];
         const ordered = VILLAGE_LEVELS_ORDER.map((name, i) =>
           mapVillageDocToItem(raw[i] ?? null, name)
         );
         setVillageLevelItems(ordered);
       } catch (e) {
+        if (signal.aborted) return;
         setVillageLevelsError(e instanceof Error ? e.message : "Failed to load village levels");
         setVillageLevelItems(
           VILLAGE_LEVELS_ORDER.map((name) => mapVillageDocToItem(null, name))
         );
       } finally {
-        setIsLoadingVillageLevels(false);
+        if (!signal.aborted) {
+          setIsLoadingVillageLevels(false);
+        }
       }
     }
     fetchVillageLevels();
+    return () => abortController.abort();
   }, []);
 
   useEffect(() => {
+    const abortController = new AbortController();
+    const signal = abortController.signal;
     async function fetchMonthlyQuests() {
       try {
         setIsLoadingQuests(true);
         setQuestsError(null);
-        const res = await fetch("/api/quests/monthly");
+        const res = await fetch("/api/quests/monthly", { signal });
+        if (signal.aborted) return;
         if (!res.ok) throw new Error("Failed to fetch monthly quests");
         const data: { quests: QuestApiDoc[]; month: string | null } = await res.json();
+        if (signal.aborted) return;
         const items = (data.quests ?? []).map(mapQuestToMonthlyItem);
         setMonthlyQuestItems(items);
       } catch (e) {
+        if (signal.aborted) return;
         setQuestsError(e instanceof Error ? e.message : "Failed to load monthly quests");
         setMonthlyQuestItems([]);
       } finally {
-        setIsLoadingQuests(false);
+        if (!signal.aborted) {
+          setIsLoadingQuests(false);
+        }
       }
     }
     fetchMonthlyQuests();
+    return () => abortController.abort();
   }, []);
 
   return (

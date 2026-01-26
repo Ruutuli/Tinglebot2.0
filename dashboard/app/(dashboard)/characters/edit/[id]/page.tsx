@@ -5,7 +5,7 @@
 /* ============================================================================ */
 
 /* [edit/[id]/page.tsx]✨ Core dependencies - */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { Loading } from "@/components/ui";
@@ -115,6 +115,9 @@ export default function EditCharacterPage() {
   const [submittingForReview, setSubmittingForReview] = useState(false);
   const [submitReviewError, setSubmitReviewError] = useState<string | null>(null);
   const [submitReviewSuccess, setSubmitReviewSuccess] = useState(false);
+  const submitReviewSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const characterFetchAbortControllerRef = useRef<AbortController | null>(null);
+  const metadataFetchAbortControllerRef = useRef<AbortController | null>(null);
 
   const characterId = typeof params.id === "string" ? params.id : null;
 
@@ -128,7 +131,12 @@ export default function EditCharacterPage() {
     setCharLoading(true);
     setCharError(null);
     try {
-      const res = await fetch(`/api/characters/${characterId}`);
+      characterFetchAbortControllerRef.current?.abort();
+      characterFetchAbortControllerRef.current = new AbortController();
+      const signal = characterFetchAbortControllerRef.current.signal;
+
+      const res = await fetch(`/api/characters/${characterId}`, { signal });
+      if (signal.aborted) return;
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
         throw new Error(
@@ -136,15 +144,19 @@ export default function EditCharacterPage() {
         );
       }
       const data = (await res.json()) as { character?: CharacterData };
+      if (signal.aborted) return;
       if (!data.character) {
         throw new Error("Character not found");
       }
       setCharacter(data.character);
     } catch (e) {
+      if (characterFetchAbortControllerRef.current?.signal.aborted) return;
       setCharError(e instanceof Error ? e.message : String(e));
       setCharacter(null);
     } finally {
-      setCharLoading(false);
+      if (!characterFetchAbortControllerRef.current?.signal.aborted) {
+        setCharLoading(false);
+      }
     }
   }, [characterId]);
 
@@ -152,7 +164,11 @@ export default function EditCharacterPage() {
     setMetaLoading(true);
     setMetaError(null);
     try {
-      const res = await fetch("/api/characters/create-metadata");
+      metadataFetchAbortControllerRef.current?.abort();
+      metadataFetchAbortControllerRef.current = new AbortController();
+      const signal = metadataFetchAbortControllerRef.current.signal;
+      const res = await fetch("/api/characters/create-metadata", { signal });
+      if (signal.aborted) return;
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
         throw new Error(
@@ -160,18 +176,30 @@ export default function EditCharacterPage() {
         );
       }
       const data = (await res.json()) as CreateMetadata;
+      if (signal.aborted) return;
       setMetadata(data);
     } catch (e) {
+      if (metadataFetchAbortControllerRef.current?.signal.aborted) return;
       setMetaError(e instanceof Error ? e.message : String(e));
       setMetadata(null);
     } finally {
-      setMetaLoading(false);
+      if (!metadataFetchAbortControllerRef.current?.signal.aborted) {
+        setMetaLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     fetchCharacter();
     fetchMetadata();
+    return () => {
+      characterFetchAbortControllerRef.current?.abort();
+      metadataFetchAbortControllerRef.current?.abort();
+      if (submitReviewSuccessTimeoutRef.current) {
+        clearTimeout(submitReviewSuccessTimeoutRef.current);
+        submitReviewSuccessTimeoutRef.current = null;
+      }
+    };
   }, [fetchCharacter, fetchMetadata]);
 
   const handleSubmitForReview = useCallback(async () => {
@@ -196,7 +224,13 @@ export default function EditCharacterPage() {
       await fetchCharacter();
       
       // Clear success message after 3 seconds
-      setTimeout(() => setSubmitReviewSuccess(false), 3000);
+      if (submitReviewSuccessTimeoutRef.current) {
+        clearTimeout(submitReviewSuccessTimeoutRef.current);
+      }
+      submitReviewSuccessTimeoutRef.current = setTimeout(() => {
+        setSubmitReviewSuccess(false);
+        submitReviewSuccessTimeoutRef.current = null;
+      }, 3000);
     } catch (e) {
       setSubmitReviewError(e instanceof Error ? e.message : String(e));
     } finally {
