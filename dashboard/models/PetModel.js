@@ -41,6 +41,8 @@ PetSchema.index({ name: 1, owner: 1 }, { unique: true });
 PetSchema.index({ discordId: 1 });
 
 // ------------------- Export the Pet Model -------------------
-const Pet = mongoose.model('Pet', PetSchema);
+const Pet =
+  mongoose.models.Pet ||
+  mongoose.model('Pet', PetSchema);
 module.exports = Pet;
 module.exports.PetSchema = PetSchema;

@@ -212,6 +212,8 @@ modCharacterSchema.pre('save', function (next) {
 // ============================================================================
 // ------------------- Define and export model -------------------
 // ============================================================================
-const ModCharacter = mongoose.model('ModCharacter', modCharacterSchema);
+// Check if model already exists to prevent "Cannot overwrite model" errors
+const ModCharacter = mongoose.models.ModCharacter ||
+  mongoose.model('ModCharacter', modCharacterSchema);
 
 module.exports = ModCharacter; 

@@ -1,0 +1,814 @@
+// ============================================================================
+// ------------------- Character get and update -------------------
+// GET /api/characters/:id - Get a single character
+// PUT /api/characters/:id - Update a character
+// ============================================================================
+
+import { NextRequest, NextResponse } from "next/server";
+import { connect } from "@/lib/db";
+import mongoose from "mongoose";
+import { getSession, isAdminUser } from "@/lib/session";
+import { MOD_JOBS, ALL_JOBS } from "@/data/characterData";
+import { recalculateStats } from "@/lib/gear-equip";
+import { fetchDiscordUsernames } from "@/lib/discord";
+import {
+  DEFAULT_HEARTS,
+  DEFAULT_STAMINA,
+  VILLAGES,
+  validateRequired,
+  validateAge,
+  validateHeight,
+  validateHearts,
+  validateStamina,
+  validateAppLink,
+  validateFileTypes,
+  validateFileSizes,
+  validateRace,
+  validateVillage,
+  validateJob,
+  validateVirtue,
+  ALLOWED_IMAGE_TYPES,
+  MAX_FILE_BYTES,
+} from "@/lib/character-validation";
+import { logger } from "@/utils/logger";
+import { isFieldEditable, type CharacterStatus } from "@/lib/character-field-editability";
+import { gcsUploadService } from "@/lib/services/gcsUploadService";
+
+// ------------------- Placeholder URLs (fallback if GCS not configured) -------------------
+const PLACEHOLDER_ICON = "/placeholder-icon.png";
+const PLACEHOLDER_APPART = "/placeholder-appart.png";
+
+type CharDoc = {
+  _id: unknown;
+  userId: string;
+  name: string;
+  status?: string | null;
+  age?: number | null;
+  height?: number | null;
+  pronouns: string;
+  gender: string;
+  race: string;
+  homeVillage: string;
+  job: string;
+  virtue: string;
+  personality: string;
+  history: string;
+  extras?: string;
+  appLink?: string;
+  icon?: string;
+  appArt?: string;
+  maxHearts: number;
+  currentHearts: number;
+  maxStamina: number;
+  currentStamina: number;
+  gearWeapon?: { name: string; stats: Map<string, number> };
+  gearShield?: { name: string; stats: Map<string, number> };
+  gearArmor?: {
+    head?: { name: string; stats: Map<string, number> };
+    chest?: { name: string; stats: Map<string, number> };
+    legs?: { name: string; stats: Map<string, number> };
+  };
+  set: (o: Record<string, unknown>) => void;
+  save: () => Promise<unknown>;
+  toObject: () => Record<string, unknown>;
+};
+
+// ------------------- Route Segment Config (Caching) -------------------
+// Cache character data for 2 minutes - characters change more frequently than models
+export const revalidate = 120;
+
+// ------------------- GET handler -------------------
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // GET requests are public - no authentication required
+    const { id: slugOrId } = await params;
+    const skipHelpWanted = req.nextUrl.searchParams.get("skipHelpWanted") === "true";
+    if (!slugOrId?.trim()) {
+      return NextResponse.json({ error: "Character identifier required" }, { status: 400 });
+    }
+
+    await connect();
+    const { default: Character } = await import("@/models/CharacterModel.js");
+    const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
+    // Import Pet and Mount models to register schemas for population
+    await import("@/models/PetModel.js");
+    await import("@/models/MountModel.js");
+    
+    // Helper function to create slug from name
+    const createSlug = (name: string): string => {
+      return name
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    };
+    
+    // Try to find by slug (name) first, then by ID
+    let char: CharDoc | null = null;
+    let isModCharacter = false;
+    
+    // Check if it looks like an ObjectId (24 hex characters)
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(slugOrId);
+    
+    if (isObjectId) {
+      // Try by ID first (for backward compatibility)
+      char = (await (Character as { findById: (id: string) => Promise<CharDoc | null> }).findById(slugOrId)) as CharDoc | null;
+      if (!char) {
+        char = (await (ModCharacter as { findById: (id: string) => Promise<CharDoc | null> }).findById(slugOrId)) as CharDoc | null;
+        if (char) {
+          isModCharacter = true;
+        }
+      }
+    } else {
+      // Try by slug (name) - use case-insensitive regex
+      const slugRegex = new RegExp(`^${slugOrId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const regularChars = await (Character as { find: (filter: Record<string, unknown>) => Promise<CharDoc[]> }).find({}) as CharDoc[];
+      char = regularChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) ?? null;
+      
+      if (!char) {
+        const modChars = await (ModCharacter as { find: (filter: Record<string, unknown>) => Promise<CharDoc[]> }).find({}) as CharDoc[];
+        char = modChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) ?? null;
+        if (char) {
+          isModCharacter = true;
+        }
+      }
+    }
+    
+    if (!char) {
+      return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    }
+    
+    // For GET requests, don't check ownership (public character pages)
+    // Ownership check is only needed for PUT requests
+
+    // Populate pet and mount references if they exist
+    if ((char as { currentActivePet?: unknown }).currentActivePet) {
+      await (char as unknown as { populate: (path: string) => Promise<unknown> }).populate("currentActivePet");
+    }
+    if ((char as { currentActiveMount?: unknown }).currentActiveMount) {
+      await (char as unknown as { populate: (path: string) => Promise<unknown> }).populate("currentActiveMount");
+    }
+
+    // Fetch help wanted quests completed by this character (unless skipped)
+    if (!skipHelpWanted) {
+      const charId = typeof (char as { _id?: unknown })._id === "object" && (char as { _id?: { toString: () => string } })._id
+        ? (char as { _id: { toString: () => string } })._id.toString()
+        : String((char as { _id?: unknown })._id);
+    
+      // Convert string ID to ObjectId for proper MongoDB query
+      const charObjectId = new mongoose.Types.ObjectId(charId);
+      
+      logger.info("api/characters/[id] GET", `Fetching help wanted quests for character ID: ${charId} (ObjectId: ${charObjectId.toString()})`);
+      
+      try {
+        // Check if model already exists to avoid recompilation error
+        let HelpWantedQuest: unknown;
+        if (mongoose.models.HelpWantedQuest) {
+          HelpWantedQuest = mongoose.models.HelpWantedQuest;
+          logger.info("api/characters/[id] GET", `Using existing HelpWantedQuest model`);
+        } else {
+          const module = await import("@/models/HelpWantedQuestModel.js");
+          HelpWantedQuest = module.default;
+          logger.info("api/characters/[id] GET", `HelpWantedQuest model imported successfully`);
+        }
+        
+        type QuestDoc = {
+          date?: string;
+          village?: string;
+          type?: string;
+          completedBy?: { characterId?: unknown };
+        };
+        
+        const queryFilter = {
+          completed: true,
+          "completedBy.characterId": charObjectId
+        };
+        logger.info("api/characters/[id] GET", `Querying help wanted quests with filter: {"completed":true,"completedBy.characterId":ObjectId("${charObjectId.toString()}")}`);
+        
+        const questQuery = (HelpWantedQuest as unknown as {
+          find: (filter: Record<string, unknown>) => {
+            sort: (sort: Record<string, number>) => { limit: (limit: number) => Promise<QuestDoc[]> };
+          };
+        }).find(queryFilter);
+        const completedQuests = await questQuery.sort({ date: -1 }).limit(50); // Get most recent 50 completions
+
+        logger.info("api/characters/[id] GET", `Found ${completedQuests.length} completed quests`);
+        if (completedQuests.length > 0) {
+          logger.info("api/characters/[id] GET", `Sample quest: ${JSON.stringify(completedQuests[0])}`);
+        }
+
+        // Build completions array from quest data
+        const questCompletions = completedQuests
+          .filter((quest: QuestDoc) => {
+            const hasRequiredFields = quest.date && quest.village && quest.type;
+            if (!hasRequiredFields) {
+              logger.warn("api/characters/[id] GET", `Quest missing required fields: ${JSON.stringify(quest)}`);
+            }
+            return hasRequiredFields;
+          })
+          .map((quest: QuestDoc) => ({
+            date: quest.date!,
+            village: quest.village!,
+            questType: quest.type!
+          }));
+
+        logger.info("api/characters/[id] GET", `Built ${questCompletions.length} quest completions`);
+
+        // Get the most recent completion date
+        const lastCompletion = questCompletions.length > 0 ? questCompletions[0].date : null;
+
+        // Update the character's helpWanted data if we found quests
+        if (questCompletions.length > 0) {
+          const charObj = char as { helpWanted?: { completions?: unknown[]; lastCompletion?: string | null } };
+          if (!charObj.helpWanted) {
+            charObj.helpWanted = { completions: [], lastCompletion: null };
+            logger.info("api/characters/[id] GET", `Initialized helpWanted object`);
+          }
+          // Merge with existing completions, avoiding duplicates
+          const existingCompletions = (charObj.helpWanted.completions || []) as Array<{ date?: string; village?: string; questType?: string }>;
+          logger.info("api/characters/[id] GET", `Existing completions: ${existingCompletions.length}`);
+          
+          const existingKeys = new Set(
+            existingCompletions.map((c) => `${c.date}-${c.village}-${c.questType}`)
+          );
+          const newCompletions = questCompletions.filter(
+            (c: { date: string; village: string; questType: string }) => !existingKeys.has(`${c.date}-${c.village}-${c.questType}`)
+          );
+          logger.info("api/characters/[id] GET", `New completions to add: ${newCompletions.length}`);
+          
+          charObj.helpWanted.completions = [...existingCompletions, ...newCompletions];
+          if (lastCompletion && (!charObj.helpWanted.lastCompletion || lastCompletion > charObj.helpWanted.lastCompletion)) {
+            charObj.helpWanted.lastCompletion = lastCompletion;
+          }
+          logger.info("api/characters/[id] GET", `Updated helpWanted with ${charObj.helpWanted.completions.length} total completions, lastCompletion: ${charObj.helpWanted.lastCompletion}`);
+        } else {
+          logger.info("api/characters/[id] GET", `No quest completions found, helpWanted remains unchanged`);
+        }
+      } catch (err) {
+        // If HelpWantedQuest model doesn't exist or query fails, just continue without it
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
+        logger.error("api/characters/[id] GET", `Failed to fetch help wanted quests: ${errorMessage}${errorStack ? `\n${errorStack}` : ""}`);
+      }
+    }
+
+    const out = typeof char.toObject === "function" ? char.toObject() : (char as unknown as Record<string, unknown>);
+    // Ensure isModCharacter flag is set correctly
+    out.isModCharacter = isModCharacter;
+    
+    // Fetch Discord username for the character owner
+    if (char.userId) {
+      const usernames = await fetchDiscordUsernames([char.userId]);
+      if (usernames[char.userId]) {
+        out.username = usernames[char.userId];
+      }
+    }
+    
+    const response = NextResponse.json({ character: out });
+    
+    // Add cache headers for browser/CDN caching
+    // Character data changes more frequently, so shorter cache time
+    response.headers.set(
+      "Cache-Control",
+      "public, s-maxage=120, stale-while-revalidate=300"
+    );
+    
+    return response;
+  } catch (e) {
+    logger.error(
+      "api/characters/[id] GET",
+      e instanceof Error ? e.message : String(e)
+    );
+    return NextResponse.json(
+      { error: "Failed to fetch character" },
+      { status: 500 }
+    );
+  }
+}
+
+// ------------------- PUT handler -------------------
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    const user = session.user ?? null;
+    if (!user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id: slugOrId } = await params;
+    if (!slugOrId?.trim()) {
+      return NextResponse.json({ error: "Character ID required" }, { status: 400 });
+    }
+
+    await connect();
+    const { default: Character } = await import("@/models/CharacterModel.js");
+    const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
+    
+    // Helper function to create slug from name
+    const createSlug = (name: string): string => {
+      return name
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    };
+    
+    // Try to find by slug (name) first, then by ID
+    let char: CharDoc | null = null;
+    let isModCharacter = false;
+    
+    // Check if it looks like an ObjectId (24 hex characters)
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(slugOrId);
+    
+    if (isObjectId) {
+      // Try by ID first (for backward compatibility)
+      char = (await (Character as { findById: (id: string) => Promise<CharDoc | null> }).findById(slugOrId)) as CharDoc | null;
+      if (!char) {
+        char = (await (ModCharacter as { findById: (id: string) => Promise<CharDoc | null> }).findById(slugOrId)) as CharDoc | null;
+        if (char) {
+          isModCharacter = true;
+        }
+      }
+    } else {
+      // Try by name - use case-insensitive regex
+      const nameRegex = new RegExp(`^${slugOrId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      char = (await (Character as { findOne: (filter: Record<string, unknown>) => Promise<CharDoc | null> }).findOne({ name: nameRegex })) as CharDoc | null;
+      
+      if (!char) {
+        char = (await (ModCharacter as { findOne: (filter: Record<string, unknown>) => Promise<CharDoc | null> }).findOne({ name: nameRegex })) as CharDoc | null;
+        if (char) {
+          isModCharacter = true;
+        }
+      }
+    }
+    
+    if (!char) {
+      return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    }
+    
+    // Check ownership
+    if (char.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Get character status for field editability checks
+    const characterStatus = char.status ?? null;
+    
+    // Check if user is admin/moderator (they can edit any field)
+    const isAdmin = await isAdminUser(user.id);
+    const { isModeratorUser } = await import("@/lib/moderator");
+    const isModerator = await isModeratorUser(user.id);
+    const canBypassRestrictions = isAdmin || isModerator;
+
+    // Handle both JSON and FormData requests
+    const contentType = req.headers.get("content-type") || "";
+    let form: FormData | null = null;
+    let jsonData: Record<string, unknown> | null = null;
+    
+    if (contentType.includes("application/json")) {
+      jsonData = await req.json();
+    } else {
+      form = await req.formData();
+    }
+    
+    const get = (k: string) => {
+      if (jsonData) {
+        const v = jsonData[k];
+        return v == null ? undefined : (typeof v === "string" || v instanceof File ? v : String(v));
+      }
+      if (form) {
+        const v = form.get(k);
+        return v == null ? undefined : (v as string | File);
+      }
+      return undefined;
+    };
+    const name = get("name") as string | undefined;
+    const age = get("age") as string | undefined;
+    const height = get("height") as string | undefined;
+    const pronouns = get("pronouns") as string | undefined;
+    const gender = get("gender") as string | undefined;
+    const race = get("race") as string | undefined;
+    const village = get("village") as string | undefined;
+    const job = get("job") as string | undefined;
+    const virtue = get("virtue") as string | undefined;
+    const personality = get("personality") as string | undefined;
+    const history = get("history") as string | undefined;
+    const extras = get("extras") as string | undefined;
+    const appLink = get("appLink") as string | undefined;
+    const birthday = get("birthday") as string | undefined;
+    const iconFile = form ? (form.get("icon") as File | null) : null;
+    const appArtFile = form ? (form.get("appArt") as File | null) : null;
+    const equippedGearRaw = get("equippedGear") as string | undefined;
+
+    // Check if this is a gear-only update (only equippedGear is provided)
+    const isGearOnlyUpdate = equippedGearRaw && 
+      !name && !age && !height && !pronouns && !gender && !race && !village && 
+      !job && !virtue && !personality && !history && !extras && !appLink && 
+      !birthday && !iconFile && !appArtFile && !get("hearts") && !get("stamina");
+    
+    // Only validate required fields if this is NOT a gear-only update
+    if (!isGearOnlyUpdate) {
+      const obj: Record<string, unknown> = {
+        name,
+        pronouns,
+        gender,
+        race,
+        village,
+        job,
+        virtue,
+        personality,
+        history,
+      };
+      let res = validateRequired(obj, ["name", "pronouns", "gender", "race", "village", "job", "virtue", "personality", "history"]);
+      if (!res.ok) {
+        return NextResponse.json({ error: res.error }, { status: 400 });
+      }
+
+      // Files are optional for updates - only validate if provided
+      if (iconFile && iconFile instanceof File && iconFile.size > 0) {
+        res = validateFileTypes([iconFile], [...ALLOWED_IMAGE_TYPES]);
+        if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+        res = validateFileSizes([iconFile], MAX_FILE_BYTES);
+        if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      }
+      
+      if (appArtFile && appArtFile instanceof File && appArtFile.size > 0) {
+        res = validateFileTypes([appArtFile], [...ALLOWED_IMAGE_TYPES]);
+        if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+        res = validateFileSizes([appArtFile], MAX_FILE_BYTES);
+        if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      }
+
+      res = validateAge(age);
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      res = validateHeight(height);
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      res = validateHearts(get("hearts"));
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      res = validateStamina(get("stamina"));
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      res = validateAppLink(appLink);
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+    }
+
+    // Only run additional validations if this is NOT a gear-only update
+    if (!isGearOnlyUpdate) {
+      const [raceOpts] = await Promise.all([
+        (Character as { distinct: (f: string) => Promise<string[]> }).distinct("race"),
+      ]);
+      const races = (raceOpts ?? []).filter(Boolean).sort();
+      // Use ALL_JOBS from static data instead of database distinct jobs
+      // This ensures validation matches what the form shows
+      const jobs = [...ALL_JOBS].sort();
+      const villages = [...VILLAGES] as string[];
+
+      let res = validateRace(race, races);
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      res = validateVillage(village, villages);
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      res = validateJob(job, jobs);
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+      
+      // Check if non-admin is trying to use a mod job
+      if (job && MOD_JOBS.includes(job as typeof MOD_JOBS[number])) {
+        const isAdmin = await isAdminUser(user.id);
+        if (!isAdmin) {
+          return NextResponse.json(
+            { error: "Mod jobs are restricted to admins only" },
+            { status: 403 }
+          );
+        }
+      }
+      
+      res = validateVirtue(virtue ?? "");
+      if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+    }
+
+    // Validate field editability based on status (unless admin/moderator)
+    // Skip this for gear-only updates
+    if (!canBypassRestrictions && !isGearOnlyUpdate) {
+      const fieldsToCheck: Array<{ field: string; value: unknown; fieldName: string }> = [
+        { field: "name", value: name, fieldName: "name" },
+        { field: "age", value: age, fieldName: "age" },
+        { field: "height", value: height, fieldName: "height" },
+        { field: "pronouns", value: pronouns, fieldName: "pronouns" },
+        { field: "gender", value: gender, fieldName: "gender" },
+        { field: "race", value: race, fieldName: "race" },
+        { field: "homeVillage", value: village, fieldName: "homeVillage" },
+        { field: "job", value: job, fieldName: "job" },
+        { field: "virtue", value: virtue, fieldName: "virtue" },
+        { field: "personality", value: personality, fieldName: "personality" },
+        { field: "history", value: history, fieldName: "history" },
+        { field: "extras", value: extras, fieldName: "extras" },
+        { field: "appLink", value: appLink, fieldName: "appLink" },
+        { field: "birthday", value: birthday, fieldName: "birthday" },
+        { field: "icon", value: iconFile, fieldName: "icon" },
+        { field: "appArt", value: appArtFile, fieldName: "appArt" },
+      ];
+
+      // Check if any locked field is being modified
+      for (const { field, value, fieldName } of fieldsToCheck) {
+        // Only check if the field is being changed (value is provided)
+        if (value !== undefined && value !== null && value !== "") {
+          // For files, check if a new file is being uploaded
+          if (field === "icon" || field === "appArt") {
+            if (value instanceof File && value.size > 0) {
+              if (!isFieldEditable(fieldName, characterStatus as CharacterStatus)) {
+                return NextResponse.json(
+                  { error: `Field "${fieldName}" cannot be edited when character status is "${characterStatus ?? "draft"}"` },
+                  { status: 403 }
+                );
+              }
+            }
+          } else {
+            // For other fields, check if value differs from current value
+            const currentValue = (char as Record<string, unknown>)[field];
+            const newValue = typeof value === "string" ? value.trim() : value;
+            
+            // Only validate if the value is actually changing
+            if (String(currentValue) !== String(newValue)) {
+              if (!isFieldEditable(fieldName, characterStatus as CharacterStatus)) {
+                return NextResponse.json(
+                  { error: `Field "${fieldName}" cannot be edited when character status is "${characterStatus ?? "draft"}"` },
+                  { status: 403 }
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // Check gear fields if provided
+      if (typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
+        try {
+          const equippedGearData = JSON.parse(equippedGearRaw) as {
+            gearWeapon?: { name: string; stats: Record<string, number> };
+            gearShield?: { name: string; stats: Record<string, number> };
+            gearArmor?: {
+              head?: { name: string; stats: Record<string, number> };
+              chest?: { name: string; stats: Record<string, number> };
+              legs?: { name: string; stats: Record<string, number> };
+            };
+          };
+
+          // Check if gear is being changed
+          const hasGearChanges = 
+            (equippedGearData.gearWeapon && JSON.stringify(char.gearWeapon) !== JSON.stringify(equippedGearData.gearWeapon)) ||
+            (equippedGearData.gearShield && JSON.stringify(char.gearShield) !== JSON.stringify(equippedGearData.gearShield)) ||
+            (equippedGearData.gearArmor && JSON.stringify(char.gearArmor) !== JSON.stringify(equippedGearData.gearArmor));
+
+          if (hasGearChanges) {
+            if (!isFieldEditable("gearWeapon", characterStatus as CharacterStatus) || 
+                !isFieldEditable("gearShield", characterStatus as CharacterStatus) || 
+                !isFieldEditable("gearArmor", characterStatus as CharacterStatus)) {
+              return NextResponse.json(
+                { error: `Gear fields cannot be edited when character status is "${characterStatus ?? "draft"}"` },
+                { status: 403 }
+              );
+            }
+          }
+        } catch {
+          // Ignore invalid JSON, will be handled later
+        }
+      }
+    }
+
+    // Update equipped gear if provided
+    if (typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
+      try {
+        const equippedGearData = JSON.parse(equippedGearRaw) as {
+          gearWeapon?: { name: string; stats: Record<string, number> } | null;
+          gearShield?: { name: string; stats: Record<string, number> } | null;
+          gearArmor?: {
+            head?: { name: string; stats: Record<string, number> } | null;
+            chest?: { name: string; stats: Record<string, number> } | null;
+            legs?: { name: string; stats: Record<string, number> } | null;
+          } | null;
+        };
+        
+        // Convert equipped gear to the format expected by Character model
+        const gear: {
+          gearWeapon?: { name: string; stats: Map<string, number> } | null;
+          gearShield?: { name: string; stats: Map<string, number> } | null;
+          gearArmor?: {
+            head?: { name: string; stats: Map<string, number> } | null;
+            chest?: { name: string; stats: Map<string, number> } | null;
+            legs?: { name: string; stats: Map<string, number> } | null;
+          } | null;
+        } = {};
+        
+        // Handle weapon - set to null if explicitly undefined/null, otherwise convert
+        if (equippedGearData.gearWeapon !== undefined) {
+          if (equippedGearData.gearWeapon) {
+            gear.gearWeapon = {
+              name: equippedGearData.gearWeapon.name,
+              stats: new Map(Object.entries(equippedGearData.gearWeapon.stats)),
+            };
+          } else {
+            gear.gearWeapon = null;
+          }
+        }
+        
+        // Handle shield - set to null if explicitly undefined/null, otherwise convert
+        if (equippedGearData.gearShield !== undefined) {
+          if (equippedGearData.gearShield) {
+            gear.gearShield = {
+              name: equippedGearData.gearShield.name,
+              stats: new Map(Object.entries(equippedGearData.gearShield.stats)),
+            };
+          } else {
+            gear.gearShield = null;
+          }
+        }
+        
+        // Handle armor
+        if (equippedGearData.gearArmor !== undefined) {
+          if (equippedGearData.gearArmor) {
+            gear.gearArmor = {};
+            if (equippedGearData.gearArmor.head) {
+              gear.gearArmor.head = {
+                name: equippedGearData.gearArmor.head.name,
+                stats: new Map(Object.entries(equippedGearData.gearArmor.head.stats)),
+              };
+            }
+            if (equippedGearData.gearArmor.chest) {
+              gear.gearArmor.chest = {
+                name: equippedGearData.gearArmor.chest.name,
+                stats: new Map(Object.entries(equippedGearData.gearArmor.chest.stats)),
+              };
+            }
+            if (equippedGearData.gearArmor.legs) {
+              gear.gearArmor.legs = {
+                name: equippedGearData.gearArmor.legs.name,
+                stats: new Map(Object.entries(equippedGearData.gearArmor.legs.stats)),
+              };
+            }
+          } else {
+            gear.gearArmor = null;
+          }
+        }
+        
+        // Update gear on character (including clearing if null/undefined)
+        if (gear.gearWeapon !== undefined) {
+          char.gearWeapon = gear.gearWeapon || undefined;
+        }
+        if (gear.gearShield !== undefined) {
+          char.gearShield = gear.gearShield || undefined;
+        }
+        if (gear.gearArmor !== undefined) {
+          // Convert null values to empty object for Mongoose compatibility
+          if (gear.gearArmor === null) {
+            char.gearArmor = {};
+          } else {
+            // Convert null values within gearArmor to undefined
+            char.gearArmor = {
+              head: gear.gearArmor.head || undefined,
+              chest: gear.gearArmor.chest || undefined,
+              legs: gear.gearArmor.legs || undefined,
+            };
+          }
+        }
+      } catch {
+        /* ignore invalid JSON */
+      }
+    }
+
+    // Only validate hearts/stamina if this is NOT a gear-only update
+    if (!isGearOnlyUpdate) {
+      const hearts = (() => {
+        const v = get("hearts");
+        if (v == null || v === "") return char.maxHearts;
+        const n = parseInt(String(v), 10);
+        return Number.isNaN(n) ? char.maxHearts : Math.max(1, n);
+      })();
+      const stamina = (() => {
+        const v = get("stamina");
+        if (v == null || v === "") return char.maxStamina;
+        const n = parseInt(String(v), 10);
+        return Number.isNaN(n) ? char.maxStamina : Math.max(1, n);
+      })();
+
+      // Validate hearts/stamina changes (always locked unless admin/moderator)
+      if (!canBypassRestrictions) {
+        const heartsValue = get("hearts");
+        const staminaValue = get("stamina");
+        
+        if (heartsValue !== null && heartsValue !== undefined && heartsValue !== "") {
+          const newHearts = parseInt(String(heartsValue), 10);
+          if (!Number.isNaN(newHearts) && newHearts !== char.maxHearts) {
+            return NextResponse.json(
+              { error: "maxHearts cannot be edited by users" },
+              { status: 403 }
+            );
+          }
+        }
+        
+        if (staminaValue !== null && staminaValue !== undefined && staminaValue !== "") {
+          const newStamina = parseInt(String(staminaValue), 10);
+          if (!Number.isNaN(newStamina) && newStamina !== char.maxStamina) {
+            return NextResponse.json(
+              { error: "maxStamina cannot be edited by users" },
+              { status: 403 }
+            );
+          }
+        }
+      }
+
+      // Update character fields (only if not a gear-only update)
+      char.set({
+        name: (name as string).trim(),
+        age: age ? parseInt(String(age), 10) : null,
+        height: height ? parseFloat(String(height)) : null,
+        pronouns: (pronouns as string).trim(),
+        gender: typeof gender === "string" ? gender.trim() : "",
+        race: (race as string).trim(),
+        homeVillage: (village as string).trim(),
+        job: (job as string).trim(),
+        virtue: (virtue ?? "TBA").trim().toLowerCase(),
+        personality: typeof personality === "string" ? personality.trim() : "",
+        history: typeof history === "string" ? history.trim() : "",
+        extras: typeof extras === "string" ? extras.trim() : "",
+        appLink: typeof appLink === "string" ? appLink.trim() : "",
+        birthday: typeof birthday === "string" ? birthday.trim() : "",
+        maxHearts: hearts,
+        maxStamina: stamina,
+      });
+
+      // Upload files to GCS if provided, otherwise keep existing URLs
+      if (iconFile && iconFile instanceof File && iconFile.size > 0) {
+      if (gcsUploadService.isConfigured()) {
+        try {
+          const uploadResult = await gcsUploadService.uploadFile(
+            iconFile,
+            user.id,
+            String(char._id),
+            "icon"
+          );
+          char.set({ icon: uploadResult.url });
+        } catch (uploadError) {
+          logger.error(
+            "api/characters/[id] PUT",
+            `Failed to upload icon to GCS: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`
+          );
+          // Fall through to use placeholder if upload fails
+          char.set({ icon: PLACEHOLDER_ICON });
+        }
+      } else {
+        char.set({ icon: PLACEHOLDER_ICON });
+      }
+    }
+    
+    if (appArtFile && appArtFile instanceof File && appArtFile.size > 0) {
+      if (gcsUploadService.isConfigured()) {
+        try {
+          const uploadResult = await gcsUploadService.uploadFile(
+            appArtFile,
+            user.id,
+            String(char._id),
+            "appArt"
+          );
+          char.set({ appArt: uploadResult.url });
+        } catch (uploadError) {
+          logger.error(
+            "api/characters/[id] PUT",
+            `Failed to upload appArt to GCS: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`
+          );
+          // Fall through to use placeholder if upload fails
+          char.set({ appArt: PLACEHOLDER_APPART });
+        }
+      } else {
+        char.set({ appArt: PLACEHOLDER_APPART });
+      }
+    }
+    }
+    
+    // Recalculate attack/defense stats from equipped gear (always run, even for gear-only updates)
+    recalculateStats(char);
+    
+    await char.save();
+
+    const out = typeof char.toObject === "function" ? char.toObject() : (char as unknown as Record<string, unknown>);
+    return NextResponse.json({ character: out });
+  } catch (e) {
+    logger.error(
+      "api/characters/[id] PUT",
+      e instanceof Error ? e.message : String(e)
+    );
+    return NextResponse.json(
+      { error: "Failed to update character" },
+      { status: 500 }
+    );
+  }
+}

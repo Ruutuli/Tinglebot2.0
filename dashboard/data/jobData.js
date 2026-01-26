@@ -1,38 +1,4 @@
-// ------------------- Job Data Configuration -------------------
-// This file contains job-related data that can be imported without circular dependencies
-
-// Job categories with associated jobs
-const jobPages = [
-  { title: 'General Jobs (Page 1)', jobs: ['Adventurer', 'Artist', "Bandit", 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager', 'Graveskeeper', 'Guard', 'Healer', 'Entertainer'] },
-  { title: 'General Jobs (Page 2)', jobs: ['Herbalist', 'Hunter', 'Merchant', 'Mercenary', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'] },
-  { title: 'Inariko Exclusive Jobs', jobs: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'] },
-  { title: 'Rudania Exclusive Jobs', jobs: ['Rancher', 'Blacksmith', 'Miner'] },
-  { title: 'Vhintl Exclusive Jobs', jobs: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver'] },
-  { title: 'All Jobs', jobs: [] } // This will be populated dynamically
-];
-
-// Village-specific job assignments
-const villageJobs = {
-  inariko: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'],
-  rudania: ['Rancher', 'Blacksmith', 'Miner'],
-  vhintl: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver']
-};
-
-// General jobs available to all
-const generalJobs = [
-  'Adventurer', 'Artist', 'Bandit', 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager',
-  'Guard', 'Graveskeeper', 'Healer', 'Herbalist', 'Hunter', 'Merchant', 'Mercenary',
-  'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch', 'Entertainer'
-];
-
-// Mod character jobs (Oracle, Sage, Dragon)
-const modCharacterJobs = ['Oracle', 'Sage', 'Dragon'];
-
-// Combine all job categories into a single sorted array
-const allJobs = [...new Set([...Object.values(villageJobs).flat(), ...generalJobs, ...modCharacterJobs])].sort();
-jobPages.find(page => page.title === 'All Jobs').jobs = allJobs;
-
-// Job perks and metadata
+/** Job perks data for ItemModel and other uses. */
 const jobPerks = [
   { job: 'Fisherman', perk: 'GATHERING', village: 'Inariko' },
   { job: 'Researcher', perk: 'CRAFTING', village: 'Inariko' },
@@ -72,11 +38,4 @@ const jobPerks = [
   { job: 'Dragon', perk: 'ALL', village: null }
 ];
 
-module.exports = {
-  jobPages,
-  villageJobs,
-  generalJobs,
-  modCharacterJobs,
-  allJobs,
-  jobPerks
-};
+module.exports = { jobPerks };

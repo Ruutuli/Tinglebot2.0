@@ -69,6 +69,7 @@ const notificationSchema = new Schema({
 notificationSchema.index({ userId: 1, read: 1 });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 
-const Notification = mongoose.model('Notification', notificationSchema);
+// Prevent model redefinition during hot reloading in Next.js
+const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
 
 module.exports = Notification;

@@ -87,4 +87,7 @@ const MountSchema = new mongoose.Schema({
 }, { timestamps: true }); // Include timestamps for creation and updates
 
 // ------------------- Export the Mount Model -------------------
-module.exports = mongoose.model('Mount', MountSchema);
+const Mount =
+  mongoose.models.Mount ||
+  mongoose.model('Mount', MountSchema);
+module.exports = Mount;

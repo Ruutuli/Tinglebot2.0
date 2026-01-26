@@ -331,6 +331,8 @@ characterSchema.pre('save', function(next) {
 // ============================================================================
 // ------------------- Define and export model -------------------
 // ============================================================================
-const Character = mongoose.model('Character', characterSchema);
+const Character =
+  mongoose.models.Character ||
+  mongoose.model("Character", characterSchema);
 
 module.exports = Character;

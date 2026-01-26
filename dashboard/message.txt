@@ -1,0 +1,244 @@
+🎯 Goals
+
+Make TSX/HTML clean, organized, and DRY.
+
+Keep all visual and functional behavior identical.
+
+Never remove existing props/attributes/handlers unless they are duplicate, unused, or fully overridden elsewhere.
+
+Always verify you did not break:
+- DOM structure relied on by CSS selectors
+- event propagation (bubbling/capturing)
+- accessibility semantics
+- hydration/server-client boundaries (Next.js)
+
+🧩 File Structure & Commenting
+
+Use this exact comment style — no JSDoc, no banner images.
+
+/* ============================================================================ */
+/* ------------------- Section Name ------------------- */
+/* ============================================================================ */
+
+/* [Component.tsx]✨ Section purpose - */
+
+Recommended Section Order (TSX):
+
+Imports
+Types
+Constants
+Utils
+Hooks
+Subcomponents
+Main Component
+Render Helpers
+Styles / className Maps
+Exports
+
+Recommended Section Order (HTML templates):
+
+Document Meta
+Critical Layout
+Components/Partials
+Scripts
+Fallbacks
+
+💬 Comment Rules
+
+Keep comments short and clear.
+
+Include file name in key section headers.
+
+Use concise, emoji-based status indicators:
+
+✨ for setup/constants
+🧱 for structure/layout blocks
+🧠 for logic/conditions
+🧩 for extracted subcomponents
+🧼 for cleanup notes / deletions (only if safe)
+🧷 for typing/contracts
+♿ for accessibility
+⚙️ for responsive/layout concerns
+❌ TODO markers for suspect behavior
+
+⚠️ Error & Logging Analogy
+
+Since markup doesn’t log, use dev-friendly comment markers near risky code:
+
+/* [DashboardHeader.tsx]❌ TODO: Confirm focus order after refactor */
+/* [ProfileCard.tsx]❌ TODO: Ensure CSS selector `.card > .title` still matches */
+
+🧼 Clean Code Rules
+
+Keep render output identical:
+- same elements in the same order unless you are 100% sure CSS/tests don’t rely on it
+- preserve wrapper elements that CSS might target
+- preserve data-* attributes and aria-* attributes
+- preserve key props on lists (never change identity rules)
+
+Reduce duplication:
+- Extract repeated JSX blocks into small components
+- Extract repeated strings/className combos into constants (className maps)
+- Extract repeated conditional logic into variables or helper functions
+
+Prefer clarity over cleverness:
+- Avoid nested ternaries in JSX
+- Prefer early returns for guard clauses
+- Use descriptive boolean names: `isOpen`, `hasError`, `canEdit`
+
+Keep specificity low:
+- Prefer className composition over inline styles
+- Avoid new IDs unless absolutely necessary
+
+Always sort:
+- Imports: external first, then internal, then relative
+- Component props destructuring: alphabetical or logical grouping
+- JSX attributes: consistent order (see Formatting Rules)
+
+Do not change behavior:
+- Don’t change event handler signatures
+- Don’t change controlled/uncontrolled inputs behavior
+- Don’t change default values unless they were already implied
+
+📐 Formatting Rules
+
+2 spaces indentation.
+
+One prop per line when > 3 props or any prop value is multi-line.
+
+Blank line between unrelated blocks.
+
+Prefer explicit parentheses for multi-line JSX returns.
+
+JSX attribute order (recommended):
+1) key
+2) id
+3) className
+4) style
+5) data-*
+6) aria-*
+7) role
+8) name/type/value (form props)
+9) href/src/alt (media/links)
+10) onClick/onChange/etc (handlers)
+11) children (last)
+
+Example:
+
+<button
+  className={cn(styles.button, isActive && styles.active)}
+  data-state={isActive ? "active" : "inactive"}
+  aria-pressed={isActive}
+  type="button"
+  onClick={onToggle}
+>
+  {label}
+</button>
+
+🧠 React/Next.js Safety Rules
+
+Never move hooks into conditionals.
+
+Never change a Server Component into a Client Component (or vice versa) unless explicitly instructed.
+- Keep "use client" exactly as-is unless told otherwise.
+
+Avoid creating new re-renders:
+- Don’t inline object/array literals into props when easily avoidable
+- Memoize only when proven needed; otherwise keep it simple
+
+Keep keys stable:
+- Use ids, not indices, unless list is static and never reorders
+
+♿ Accessibility Rules
+
+Preserve semantics:
+- Don’t replace <button> with <div> (or vice versa)
+- Keep labels connected: `htmlFor` + `id`
+- Maintain keyboard behavior (tab order, focus)
+
+If you change structure, verify:
+- heading order (h1 → h2 → h3)
+- aria relationships (aria-controls, aria-labelledby)
+- interactive roles
+
+📦 Optimization Rules (Safe)
+
+Consolidate duplicate JSX blocks.
+
+Extract className maps:
+
+const styles = {
+  card: "rounded-lg border bg-background p-4",
+  title: "text-lg font-semibold",
+};
+
+Merge identical conditional rendering branches.
+
+Replace repeated fragments with a small component only if it does not change DOM structure (or CSS dependency is verified).
+
+🧭 Example Organized Structure
+
+/* ============================================================================ */
+/* ------------------- Imports ------------------- */
+/* ============================================================================ */
+
+/* [DashboardCard.tsx]✨ Core deps - */
+import React from "react";
+
+/* ============================================================================ */
+/* ------------------- Types ------------------- */
+/* ============================================================================ */
+
+/* [DashboardCard.tsx]🧷 Props contract - */
+type DashboardCardProps = {
+  title: string;
+  subtitle?: string;
+  isActive?: boolean;
+  onClick?: () => void;
+};
+
+/* ============================================================================ */
+/* ------------------- Constants ------------------- */
+/* ============================================================================ */
+
+/* [DashboardCard.tsx]✨ Class maps - */
+const styles = {
+  card: "rounded-lg border p-4",
+  title: "text-base font-semibold",
+  subtitle: "text-sm opacity-80",
+};
+
+/* ============================================================================ */
+/* ------------------- Main Component ------------------- */
+/* ============================================================================ */
+
+/* [DashboardCard.tsx]🧱 Presentational shell - */
+export function DashboardCard({
+  isActive = false,
+  onClick,
+  subtitle,
+  title,
+}: DashboardCardProps) {
+  return (
+    <div
+      className={cn(styles.card, isActive && "ring-2")}
+      data-active={isActive}
+    >
+      <div className="flex items-center justify-between">
+        <h3 className={styles.title}>{title}</h3>
+
+        {onClick && (
+          <button
+            className="text-sm underline"
+            type="button"
+            onClick={onClick}
+          >
+            Action
+          </button>
+        )}
+      </div>
+
+      {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
+    </div>
+  );
+}

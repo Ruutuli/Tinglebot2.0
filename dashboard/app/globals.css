@@ -1,0 +1,1456 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ============================================================================ */
+/* ------------------- Base & Variables ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]✨ CSS custom properties and theme configuration - */
+:root {
+  /* Layout */
+  --sidebar-width: 240px;
+
+  /* TOTK-Inspired Theme */
+  --totk-black: #000000;
+  --totk-brown: #2c2422;
+  --totk-dark-green: #18473d;
+  --totk-dark-ocher: #756950;
+  --totk-green: #1f5d50;
+  --totk-grey-100: #cccccc;
+  --totk-grey-200: #888888;
+  --totk-grey-300: #555555;
+  --totk-grey-400: #222222;
+  --totk-ivory: #faf7dc;
+  --totk-light-green: #49d59c;
+  --totk-light-ocher: #e5dcb7;
+  --totk-mid-ocher: #b99f65;
+  --totk-ocher: #cbb687;
+  --totk-white: #ffffff;
+
+  /* BOTW-Inspired Theme */
+  --botw-beige: #b99f65;
+  --botw-black: #170606;
+  --botw-blue: #00a3da;
+  --botw-dark-beige: #87733c;
+  --botw-dark-blue: #0169a0;
+  --botw-darkest-blue: #275880;
+  --botw-full-black: #000000;
+  --botw-icon-beige: #af966d;
+  --botw-pale: #d6cecd;
+  --botw-warm-black: #302826;
+  --botw-white: #ffffff;
+
+  /* Blight Theme */
+  --blight-bg-bottom: #242424;
+  --blight-bg-top: #1c1c1c;
+  --blight-border: #ad1457;
+  --blight-glow: #ad1457;
+  --blight-text: #ffb8dd;
+  /* Blight RGB values for rgba() usage */
+  --blight-border-rgb: 173, 20, 87;
+
+  /* Blood Moon Theme */
+  --blood-moon-red: #8B0000;
+  --blood-moon-red-rgb: 139, 0, 0;
+
+  /* Gold Theme */
+  --gold: #FFD700;
+  --gold-rgb: 255, 215, 0;
+  --gold-dark: #DAA520;
+  --gold-light: #FFE55C;
+
+  /* Village Colors */
+  --village-rudania: #C6000A;
+  --village-inariko: #004DC7;
+  --village-vhintl: #4AA144;
+  /* Village RGB values for rgba() usage */
+  --village-rudania-rgb: 198, 0, 10;
+  --village-inariko-rgb: 0, 77, 199;
+  --village-vhintl-rgb: 74, 161, 68;
+
+  /* Shared Utilities */
+  --gradient-card: linear-gradient(to bottom right, var(--totk-brown), var(--botw-warm-black));
+  --sheikah-glow: var(--botw-blue);
+  --sheikah-glow-soft: 0 0 12px rgba(0, 163, 218, 0.35);
+  --glass-bg: rgba(32, 36, 44, 0.72);
+
+  /* Page background – gradient only, no images */
+  --page-bg-gradient: linear-gradient(
+    165deg,
+    var(--totk-green) 0%,
+    var(--totk-dark-green) 45%,
+    var(--totk-brown) 100%
+  );
+}
+
+/* [globals.css]✨ Tailwind CSS v4 theme configuration - */
+/* stylelint-disable-next-line at-rule-no-unknown */
+@theme {
+  --color-blight-bg-bottom: var(--blight-bg-bottom);
+  --color-blight-bg-top: var(--blight-bg-top);
+  --color-blight-border: var(--blight-border);
+  --color-blight-glow: var(--blight-glow);
+  --color-blight-text: var(--blight-text);
+  --color-botw-beige: var(--botw-beige);
+  --color-botw-black: var(--botw-black);
+  --color-botw-blue: var(--botw-blue);
+  --color-botw-dark-beige: var(--botw-dark-beige);
+  --color-botw-dark-blue: var(--botw-dark-blue);
+  --color-botw-darkest-blue: var(--botw-darkest-blue);
+  --color-botw-icon-beige: var(--botw-icon-beige);
+  --color-botw-pale: var(--botw-pale);
+  --color-botw-warm-black: var(--botw-warm-black);
+  --color-botw-white: var(--botw-white);
+  --color-sheikah-glow: var(--sheikah-glow);
+  --color-totk-black: var(--totk-black);
+  --color-totk-brown: var(--totk-brown);
+  --color-totk-dark-green: var(--totk-dark-green);
+  --color-totk-dark-ocher: var(--totk-dark-ocher);
+  --color-totk-green: var(--totk-green);
+  --color-totk-grey-100: var(--totk-grey-100);
+  --color-totk-grey-200: var(--totk-grey-200);
+  --color-totk-grey-300: var(--totk-grey-300);
+  --color-totk-grey-400: var(--totk-grey-400);
+  --color-totk-ivory: var(--totk-ivory);
+  --color-totk-light-green: var(--totk-light-green);
+  --color-totk-light-ocher: var(--totk-light-ocher);
+  --color-totk-mid-ocher: var(--totk-mid-ocher);
+  --color-totk-ocher: var(--totk-ocher);
+  --color-totk-white: var(--totk-white);
+  --shadow-sheikah-glow-soft: var(--sheikah-glow-soft);
+}
+
+/* ============================================================================ */
+/* ------------------- Reset & Normalize ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]🧹 Base HTML and body styles - */
+html {
+  height: 100%;
+}
+
+body {
+  background: var(--page-bg-gradient);
+  background-attachment: fixed;
+  color: var(--totk-ivory);
+  min-height: 100%;
+}
+
+/* ============================================================================ */
+/* ------------------- Typography ------------------- */
+/* ============================================================================ */
+
+/* ============================================================================ */
+/* ------------------- Layout ------------------- */
+/* ============================================================================ */
+
+/* Create Character page: use scroll on mobile to avoid iOS fixed-bg jank */
+.create-character-page {
+  background: var(--page-bg-gradient);
+  background-attachment: fixed;
+}
+@media (max-width: 768px) {
+  .create-character-page {
+    background-attachment: scroll;
+  }
+}
+
+/* ============================================================================ */
+/* ------------------- Components ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]💬 Custom scrollbar styling - */
+*,
+html,
+body {
+  scrollbar-color: var(--totk-light-green) var(--totk-brown) !important;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+
+*::-webkit-scrollbar-corner,
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner {
+  background: var(--totk-brown) !important;
+}
+
+*::-webkit-scrollbar-track,
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: var(--totk-brown) !important;
+  border-radius: 6px;
+}
+
+*::-webkit-scrollbar-thumb,
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: var(--totk-light-green) !important;
+  border: 2px solid var(--botw-warm-black);
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+*::-webkit-scrollbar-thumb:active,
+html::-webkit-scrollbar-thumb:active,
+body::-webkit-scrollbar-thumb:active {
+  background: var(--totk-dark-green) !important;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: var(--totk-green) !important;
+}
+
+/* ============================================================================ */
+/* ------------------- Utilities ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]🎛️ Float animation utility - */
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* [globals.css]🔝 Scroll-to-top button - */
+/* [globals.css]🔝 Scroll-to-top button - always bottom-right corner */
+.scroll-to-top-btn {
+  position: fixed !important;
+  bottom: 16px !important;
+  right: 16px !important;
+  left: auto !important;
+  top: auto !important;
+  z-index: 2147483647 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
+}
+
+@media (max-width: 640px) {
+  .scroll-to-top-btn {
+    bottom: 12px !important;
+    right: 12px !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+}
+
+.scroll-to-top-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45), 0 0 16px rgba(73, 213, 156, 0.4);
+}
+
+.scroll-to-top-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================================================ */
+/* ------------------- Animations & Transitions ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]🎬 Float keyframe animation - */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* [globals.css]🎬 Navigation loading bar animation - */
+@keyframes navigation-loading-bar {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scaleX(0.7);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scaleX(1);
+    opacity: 0.8;
+  }
+}
+
+/* [globals.css]⭐ Spinning ring animation for Character of the Week - */
+@keyframes spin-ring {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* [globals.css]✨ Sheikah decoration pulse animation - */
+@keyframes sheikah-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    filter: drop-shadow(0 0 8px rgba(186, 239, 251, 0.4));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 16px rgba(186, 239, 251, 0.8));
+  }
+}
+
+/* [globals.css]✨ Sheikah tech glow animation - */
+@keyframes sheikah-tech-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(186, 239, 251, 0.4)) drop-shadow(0 0 16px rgba(0, 163, 218, 0.3));
+    opacity: 0.7;
+  }
+  25% {
+    filter: drop-shadow(0 0 12px rgba(186, 239, 251, 0.7)) drop-shadow(0 0 24px rgba(0, 163, 218, 0.5));
+    opacity: 0.9;
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(186, 239, 251, 1)) drop-shadow(0 0 32px rgba(0, 163, 218, 0.7));
+    opacity: 1;
+  }
+  75% {
+    filter: drop-shadow(0 0 12px rgba(186, 239, 251, 0.7)) drop-shadow(0 0 24px rgba(0, 163, 218, 0.5));
+    opacity: 0.9;
+  }
+}
+
+/* [globals.css]⭐ Spinning ring utility class - */
+.animate-spin-ring {
+  animation: spin-ring 20s linear infinite;
+  filter: brightness(1.5) saturate(2) hue-rotate(-25deg) drop-shadow(0 0 12px rgba(255, 215, 0, 0.8));
+}
+
+/* [globals.css]✨ Sheikah pulse utility class - */
+.animate-sheikah-pulse {
+  animation: sheikah-pulse 3s ease-in-out infinite, sheikah-tech-glow 4s ease-in-out infinite;
+}
+
+/* [globals.css]✨ Sheikah decoration wrapper - */
+.sheikah-decoration-wrapper {
+  position: relative;
+}
+
+
+/* ============================================================================ */
+/* ------------------- Media Queries ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]📱 Mobile optimizations - */
+@media (max-width: 640px) {
+  /* Reduce padding on mobile */
+  body {
+    font-size: 14px;
+  }
+  
+  /* Optimize scrollbar for mobile */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  /* Better touch targets - ensure minimum 44x44px for accessibility */
+  button:not(.no-min-touch-target), 
+  a:not(.no-min-touch-target) {
+    min-height: 44px;
+  }
+  
+  /* Prevent text size adjustment on iOS (16px prevents zoom) */
+  input:not([type="checkbox"]):not([type="radio"]), 
+  textarea, 
+  select {
+    font-size: 16px !important;
+  }
+  
+  /* Optimize card spacing on mobile */
+  .character-card,
+  .pet-card,
+  .item-card {
+    padding: 0.75rem !important;
+  }
+  
+  /* Better image sizing on mobile */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 641px) and (max-width: 1024px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 641px) and (max-width: 1024px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+/* ============================================================================ */
+/* ------------------- Character Card Styling (Scoped) ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]🎨 Character card container - Solid background */
+.character-card {
+  background: var(--botw-warm-black) !important;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.character-card:hover:not(.character-card-rudania):not(.character-card-inariko):not(.character-card-vhintl) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(73, 213, 156, 0.2), 0 0 16px rgba(73, 213, 156, 0.15);
+}
+
+/* [globals.css]🎨 Village-specific character card borders - High specificity to override Tailwind */
+div.character-card.character-card-rudania {
+  border: 2px solid rgba(var(--village-rudania-rgb), 0.8) !important;
+  border-color: rgba(var(--village-rudania-rgb), 0.8) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 12px rgba(var(--village-rudania-rgb), 0.6), inset 0 0 8px rgba(var(--village-rudania-rgb), 0.2) !important;
+}
+
+div.character-card.character-card-rudania:hover {
+  border: 2px solid rgba(var(--village-rudania-rgb), 1) !important;
+  border-color: rgba(var(--village-rudania-rgb), 1) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(var(--village-rudania-rgb), 0.4), 0 0 20px rgba(var(--village-rudania-rgb), 0.8), inset 0 0 12px rgba(var(--village-rudania-rgb), 0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Override any Tailwind hover utilities for Rudania */
+div.character-card.character-card-rudania[class*="hover:border"]:hover {
+  border-color: rgba(var(--village-rudania-rgb), 1) !important;
+}
+
+div.character-card.character-card-rudania[class*="hover:shadow"]:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(var(--village-rudania-rgb), 0.4), 0 0 20px rgba(var(--village-rudania-rgb), 0.8), inset 0 0 12px rgba(var(--village-rudania-rgb), 0.3) !important;
+}
+
+div.character-card.character-card-inariko {
+  border: 2px solid rgba(0, 163, 218, 0.8) !important;
+  border-color: rgba(0, 163, 218, 0.8) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 12px rgba(0, 163, 218, 0.6), inset 0 0 8px rgba(0, 163, 218, 0.2) !important;
+}
+
+div.character-card.character-card-inariko:hover {
+  border: 2px solid rgba(0, 163, 218, 1) !important;
+  border-color: rgba(0, 163, 218, 1) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 163, 218, 0.4), 0 0 20px rgba(0, 163, 218, 0.8), inset 0 0 12px rgba(0, 163, 218, 0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+div.character-card.character-card-inariko[class*="hover:border"]:hover {
+  border-color: rgba(0, 163, 218, 1) !important;
+}
+
+div.character-card.character-card-inariko[class*="hover:shadow"]:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 163, 218, 0.4), 0 0 20px rgba(0, 163, 218, 0.8), inset 0 0 12px rgba(0, 163, 218, 0.3) !important;
+}
+
+div.character-card.character-card-vhintl {
+  border: 2px solid rgba(var(--village-vhintl-rgb), 0.8) !important;
+  border-color: rgba(var(--village-vhintl-rgb), 0.8) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 12px rgba(var(--village-vhintl-rgb), 0.6), inset 0 0 8px rgba(var(--village-vhintl-rgb), 0.2) !important;
+}
+
+div.character-card.character-card-vhintl:hover {
+  border: 2px solid rgba(var(--village-vhintl-rgb), 1) !important;
+  border-color: rgba(var(--village-vhintl-rgb), 1) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(var(--village-vhintl-rgb), 0.4), 0 0 20px rgba(var(--village-vhintl-rgb), 0.8), inset 0 0 12px rgba(var(--village-vhintl-rgb), 0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+div.character-card.character-card-vhintl[class*="hover:border"]:hover {
+  border-color: rgba(var(--village-vhintl-rgb), 1) !important;
+}
+
+div.character-card.character-card-vhintl[class*="hover:shadow"]:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(var(--village-vhintl-rgb), 0.4), 0 0 20px rgba(var(--village-vhintl-rgb), 0.8), inset 0 0 12px rgba(var(--village-vhintl-rgb), 0.3) !important;
+}
+
+/* [globals.css]🎨 Character card sections - Subtle styling without distinct containers */
+.character-card-stats,
+.character-card-basic-info,
+.character-card-gear {
+  background: rgba(0, 0, 0, 0.15) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* [globals.css]🎨 Character card input field styling - Unique to character cards */
+.character-card-input {
+  background-color: #1a1615 !important;
+  color: #d6cecd !important;
+  border: 1px solid rgba(117, 105, 80, 0.5) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(229, 220, 183, 0.05);
+  transition: all 0.2s ease;
+}
+
+.character-card-input:hover {
+  border-color: rgba(229, 220, 183, 0.4) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(229, 220, 183, 0.1), 0 0 8px rgba(229, 220, 183, 0.1);
+}
+
+div.character-card-input {
+  background-color: #1a1615 !important;
+  color: #d6cecd !important;
+}
+
+div.character-card-input.rounded {
+  background-color: #1a1615 !important;
+  color: #d6cecd !important;
+}
+
+/* [globals.css]🎨 General input field styling - All inputs should be darker than containers */
+input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]),
+textarea,
+select {
+  background-color: #1a1615 !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]):focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]):active,
+textarea:focus,
+textarea:active,
+select:focus,
+select:active {
+  background-color: #1a1615 !important;
+}
+
+/* ============================================================================ */
+/* ------------------- Dashboard Card Hover Effects ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]🎨 Village-specific hover effects for dashboard cards - */
+.village-card-rudania {
+  transition: all 0.3s ease;
+}
+
+.village-card-rudania:hover {
+  border-color: var(--village-rudania) !important;
+  box-shadow: 0 0 20px rgba(var(--village-rudania-rgb), 0.4), 0 4px 12px rgba(var(--village-rudania-rgb), 0.2) !important;
+}
+
+.village-card-inariko {
+  transition: all 0.3s ease;
+}
+
+.village-card-inariko:hover {
+  border-color: var(--village-inariko) !important;
+  box-shadow: 0 0 20px rgba(var(--village-inariko-rgb), 0.4), 0 4px 12px rgba(var(--village-inariko-rgb), 0.2) !important;
+}
+
+.village-card-vhintl {
+  transition: all 0.3s ease;
+}
+
+.village-card-vhintl:hover {
+  border-color: var(--village-vhintl) !important;
+  box-shadow: 0 0 20px rgba(var(--village-vhintl-rgb), 0.4), 0 4px 12px rgba(var(--village-vhintl-rgb), 0.2) !important;
+}
+
+/* [globals.css]🎨 Countdown card hover effects - */
+.countdown-card-blood-moon:hover {
+  border-color: var(--blood-moon-red) !important;
+  border-bottom-color: var(--blood-moon-red) !important;
+  border-left-color: var(--blood-moon-red) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(var(--blood-moon-red-rgb), 0.4), 0 0 20px rgba(var(--blood-moon-red-rgb), 0.8), inset 0 0 12px rgba(var(--blood-moon-red-rgb), 0.3) !important;
+  transform: translateY(-2px) !important;
+  transition: all 0.3s ease !important;
+}
+
+.countdown-card-blight:hover {
+  border-color: var(--blight-border) !important;
+  border-bottom-color: var(--blight-border) !important;
+  border-left-color: var(--blight-border) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(var(--blight-border-rgb), 0.4), 0 0 20px rgba(var(--blight-border-rgb), 0.8), inset 0 0 12px rgba(var(--blight-border-rgb), 0.3) !important;
+  transform: translateY(-2px) !important;
+  transition: all 0.3s ease !important;
+}
+
+/* [globals.css]🐾 Pet card styling - */
+.pet-card {
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pet-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(73, 213, 156, 0.05) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.pet-card:hover::before {
+  opacity: 1;
+}
+
+.pet-card:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(73, 213, 156, 0.2), 0 0 24px rgba(73, 213, 156, 0.15);
+}
+
+/* [globals.css]🎨 Prevent autofill white background on inputs and textareas - */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #1a1615 inset !important;
+  -webkit-text-fill-color: var(--botw-pale) !important;
+  background-color: #1a1615 !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+}
+
+/* [globals.css]🎨 Force dark background on all input/textarea states - */
+input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]),
+textarea {
+  background-color: #1a1615 !important;
+  color: var(--botw-pale) !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]):hover,
+textarea:hover {
+  background-color: #1a1615 !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"])::placeholder,
+textarea::placeholder {
+  color: var(--totk-grey-300) !important;
+}
+
+/* [globals.css]🎨 Specific fix for create character form textareas - */
+.create-character-page textarea:not(.filled-textarea),
+.create-character-page textarea:not(.filled-textarea):focus,
+.create-character-page textarea:not(.filled-textarea):active,
+.create-character-page textarea:not(.filled-textarea):hover {
+  background-color: #1a1615 !important;
+  color: var(--botw-pale) !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+.create-character-page input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]),
+.create-character-page input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]):focus,
+.create-character-page input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]):active {
+  background-color: #1a1615 !important;
+  color: var(--botw-pale) !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+
+/* ============================================================================ */
+/* ------------------- Mobile Dropdown Improvements ------------------- */
+/* ============================================================================ */
+
+/* [globals.css]📱 Mobile dropdown/select improvements - */
+.create-character-page select,
+.create-character-page select:focus,
+.create-character-page select:active {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2349d59c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.75rem center !important;
+  background-size: 1.25rem 1.25rem !important;
+  padding-right: 2.5rem !important;
+  font-size: 1rem !important;
+  min-height: 48px !important;
+  touch-action: manipulation !important;
+}
+
+@media (min-width: 640px) {
+  .create-character-page select,
+  .create-character-page select:focus,
+  .create-character-page select:active {
+    background-position: right 0.875rem center !important;
+    background-size: 1rem 1rem !important;
+    padding-right: 3rem !important;
+    min-height: 44px !important;
+  }
+}
+
+.create-character-page select:disabled {
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+}
+
+/* Improve option styling for better mobile readability */
+.create-character-page select option {
+  padding: 0.75rem 0.5rem !important;
+  font-size: 1rem !important;
+  background-color: var(--botw-warm-black) !important;
+  color: var(--botw-pale) !important;
+  min-height: 44px !important;
+}
+
+/* Ensure select elements have proper touch targets on mobile */
+@media (max-width: 639px) {
+  .create-character-page select {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+}
+
+/* ============================================================================ */
+/* ------------------- Item Flip Card Styles ------------------- */
+/* ============================================================================ */
+
+/* Item card - now includes perspective and flip functionality */
+.item-card.modern-item-card {
+  position: relative;
+  perspective: 1200px;
+  cursor: pointer;
+  width: 100%;
+  height: auto;
+  min-height: auto;
+  display: flex;
+  flex-direction: column;
+  transform-style: preserve-3d;
+  transition: transform 0.2s ease;
+}
+
+.item-card.modern-item-card:active {
+  transform: scale(0.98);
+}
+
+/* Item card base styles - matches old implementation */
+.item-card {
+  background: var(--glass-bg);
+  border: 2px solid var(--totk-light-ocher);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 12px rgba(229, 220, 183, 0.2);
+  max-width: 450px;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.item-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 16px rgba(229, 220, 183, 0.3);
+}
+
+.item-card.modern-item-card.flip-card {
+  height: 1000px;
+  overflow: visible;
+  transform-style: preserve-3d;
+  transition: transform 0.8s cubic-bezier(0.4, 0.0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+/* Flipped state - apply directly to item-card */
+.item-card.modern-item-card.flipped {
+  transform: rotateY(180deg);
+}
+
+
+/* Front and back sides - both absolutely positioned for flip effect */
+.flip-card-front,
+.flip-card-back,
+.item-card-front,
+.item-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-sizing: border-box;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  margin: 0;
+}
+
+/* Front side styling */
+.flip-card-front,
+.item-card-front {
+  background: var(--glass-bg);
+  transform: rotateY(0deg);
+}
+
+/* Back side is rotated 180 degrees initially */
+.flip-card-back,
+.item-card-back {
+  transform: rotateY(180deg);
+  background: var(--glass-bg);
+}
+
+
+/* Item header row */
+.item-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  margin-bottom: 0.7em;
+  flex-shrink: 0;
+}
+
+.item-header-row.modern-item-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  margin-bottom: 0.7em;
+  flex-shrink: 0;
+}
+
+/* Item image card */
+.item-image-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #181e22;
+  border: 2px solid #222;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  width: 115px;
+  height: 115px;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.item-image-card .item-image {
+  border-radius: 12px;
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+}
+
+.item-emoji {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 1.2rem;
+  z-index: 1;
+}
+
+/* Item header info */
+.item-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  flex: 1;
+  min-width: 0;
+}
+
+.item-header-info.modern-item-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.item-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.item-name-big {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+}
+
+/* Item type bar */
+.item-type-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  padding: 0.18em 1.1em 0.18em 0.7em;
+  border-radius: 0.5em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.13);
+  color: #fff;
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.2em 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.item-type-bar-label {
+  font-size: 1.08em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.item-type-icon {
+  display: inline-block;
+  height: 1.5em;
+  width: 1.5em;
+  margin-right: 0.2em;
+  object-fit: contain;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Item slot row */
+.item-slot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+}
+
+.item-slot-label {
+  background: rgba(0, 163, 218, 0.13);
+  border-radius: 0.7em;
+  color: #00a3da;
+  padding: 0.13em 0.9em;
+  font-size: 1.08em;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.item-subtype-label {
+  background: rgba(200, 200, 200, 0.10);
+  border-radius: 0.7em;
+  color: #888888;
+  font-size: 0.98em;
+  font-weight: 500;
+  padding: 0.13em 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Item section */
+.item-section {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.item-section.modern-item-section {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.item-section.modern-item-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.item-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  border-bottom: 1px solid #cbb687;
+  margin-bottom: 0.5em;
+  padding-bottom: 0.2em;
+  color: var(--botw-pale);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.item-section-label.modern-item-section-label {
+  border-bottom: 1px solid #cbb687;
+  margin-bottom: 0.5em;
+  padding-bottom: 0.2em;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  color: var(--botw-pale);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.item-section-label i {
+  color: var(--totk-light-green);
+}
+
+/* Item detail list */
+.item-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  margin-top: 0.2em;
+}
+
+.item-detail-list.modern-item-detail-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6em 1em;
+  margin-top: 0.2em;
+}
+
+.item-detail-row {
+  color: var(--botw-pale);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex-wrap: wrap;
+  word-wrap: break-word;
+}
+
+.item-detail-row.modern-item-detail-row {
+  color: var(--botw-pale);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex-wrap: nowrap;
+  word-wrap: break-word;
+  min-width: 0;
+}
+
+.item-detail-row.modern-item-detail-row.full-width {
+  grid-column: 1 / -1;
+}
+
+.item-detail-row.modern-item-detail-row i {
+  color: var(--totk-light-green);
+  width: 1em;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.item-detail-row strong {
+  color: var(--botw-pale);
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: fit-content;
+}
+
+.item-detail-row span {
+  color: var(--totk-light-green);
+}
+
+/* Item tag list */
+.item-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin-top: 0.2em;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.item-tag-list.modern-item-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin-top: 0.2em;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.item-tag {
+  background: rgba(0, 163, 218, 0.18);
+  border: 1px solid var(--botw-dark-blue);
+  border-radius: 1em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.97em;
+  font-weight: 500;
+  padding: 0.25em 0.9em;
+  transition: background 0.2s;
+  white-space: nowrap;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  min-width: fit-content;
+  max-width: 100%;
+}
+
+.item-tag:hover {
+  background: var(--botw-blue);
+}
+
+/* Item crafting list */
+.item-crafting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  margin-top: 0.2em;
+}
+
+.item-crafting-list.modern-item-crafting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  margin-top: 0.2em;
+}
+
+.item-crafting-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  background: rgba(117, 105, 80, 0.13);
+  border-radius: 0.3rem;
+  color: var(--botw-pale);
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.18em 0.7em;
+  flex-wrap: wrap;
+  word-wrap: break-word;
+}
+
+.item-crafting-qty {
+  color: var(--totk-light-green);
+  font-weight: 600;
+}
+
+.item-crafting-row .item-tag {
+  background: var(--botw-blue);
+  border-radius: 1em;
+  color: #fff;
+  font-size: 0.97em;
+  margin-left: 0;
+  padding: 0.15em 0.7em;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================================ */
+/* Location Colors                                                              */
+/* ============================================================================ */
+
+.location-eldin {
+  background-color: #d9534f !important;
+  color: #ffffff !important;
+}
+.location-eldin:hover {
+  background-color: #f76d6a !important;
+}
+
+.location-faron {
+  background-color: #5cb85c !important;
+  color: #ffffff !important;
+}
+.location-faron:hover {
+  background-color: #76d276 !important;
+}
+
+.location-gerudo {
+  background-color: #f0ad4e !important;
+  color: #ffffff !important;
+}
+.location-gerudo:hover {
+  background-color: #ffc766 !important;
+}
+
+.location-hebra {
+  background-color: #b39ddb !important;
+  color: #ffffff !important;
+}
+.location-hebra:hover {
+  background-color: #c9b4ef !important;
+}
+
+.location-lanayru {
+  background-color: #337ab7 !important;
+  color: #ffffff !important;
+}
+.location-lanayru:hover {
+  background-color: #4f94d4 !important;
+}
+
+.location-leafdew {
+  background-color: #20cfcf !important;
+  color: #ffffff !important;
+}
+.location-leafdew:hover {
+  background-color: #45e5e5 !important;
+}
+
+.location-scarletleaves {
+  background-color: #a259e6 !important;
+  color: #ffffff !important;
+}
+.location-scarletleaves:hover {
+  background-color: #be78ff !important;
+}
+
+.location-central-hyrule {
+  background-color: #17a2b8 !important;
+  color: #ffffff !important;
+}
+.location-central-hyrule:hover {
+  background-color: #38bcd2 !important;
+}
+
+/* Item ownership list */
+.item-ownership-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.2em;
+}
+
+.item-ownership-total {
+  color: var(--botw-pale);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.5em 0;
+  border-bottom: 1px solid rgba(203, 182, 135, 0.3);
+}
+
+.item-ownership-total strong {
+  color: var(--botw-pale);
+  font-weight: 600;
+}
+
+.item-ownership-characters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  max-height: calc(1000px - 400px); /* Account for header and other content */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.item-ownership-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  background: rgba(117, 105, 80, 0.13);
+  border-radius: 0.3rem;
+  padding: 0.4em 0.7em;
+  flex-shrink: 0;
+}
+
+.item-ownership-character {
+  color: var(--botw-pale);
+  font-size: 0.95rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-ownership-quantity {
+  color: var(--totk-light-green);
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Responsive styles */
+@media (max-width: 1024px) {
+  .item-image-card {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .item-name-big {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .item-card.modern-item-card {
+    min-height: 400px;
+  }
+  
+  .item-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .item-image-card {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .item-name-big {
+    font-size: 0.95rem;
+  }
+  
+  .item-type-bar {
+    font-size: 0.9rem;
+    padding: 0.15rem 0.8rem;
+  }
+  
+  .item-section {
+    margin-bottom: 0.8rem;
+  }
+  
+  .item-section-label {
+    font-size: 0.85rem;
+  }
+  
+  .item-detail-list.modern-item-detail-list {
+    grid-template-columns: 1fr;
+    gap: 0.5em;
+  }
+  
+  .item-detail-row {
+    font-size: 0.9rem;
+  }
+  
+  .item-tag {
+    font-size: 0.85rem;
+    padding: 0.2em 0.7em;
+  }
+  
+  .item-tag-list {
+    gap: 0.4em;
+  }
+  
+  .item-slot-row {
+    gap: 0.5em;
+  }
+  
+  .item-crafting-row {
+    padding: 0.3em 0.6em;
+    gap: 0.4em;
+  }
+}
+
+@media (max-width: 640px) {
+  .item-card.modern-item-card {
+    min-height: auto;
+  }
+  
+  .item-card-front-content,
+  .item-card-back-content {
+    padding: 1rem;
+    gap: 1rem;
+  }
+  
+  .item-image-card {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .item-name-big {
+    font-size: 0.9rem;
+  }
+  
+  .item-type-bar {
+    font-size: 0.8rem;
+    padding: 0.1rem 0.6rem;
+  }
+  
+  .item-section {
+    margin-bottom: 0.6rem;
+  }
+  
+  .item-section-label {
+    font-size: 0.8rem;
+  }
+  
+  .item-detail-list.modern-item-detail-list {
+    grid-template-columns: 1fr;
+    gap: 0.4em;
+  }
+  
+  .item-detail-row {
+    font-size: 0.85rem;
+  }
+  
+  .item-tag {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.6rem;
+  }
+  
+  .item-tag-list {
+    gap: 0.35em;
+  }
+  
+  .item-slot-row {
+    gap: 0.4em;
+  }
+  
+  .item-slot-label,
+  .item-subtype-label {
+    font-size: 0.9em;
+    padding: 0.1em 0.7em;
+  }
+  
+  .item-crafting-row {
+    padding: 0.25em 0.5em;
+    gap: 0.35em;
+    font-size: 0.9rem;
+  }
+}
+
+/* Touch-friendly interactions */
+@media (hover: none) and (pointer: coarse) {
+  .item-card.modern-item-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+  }
+}

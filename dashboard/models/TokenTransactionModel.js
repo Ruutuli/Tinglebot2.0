@@ -209,5 +209,5 @@ tokenTransactionSchema.statics.createTransaction = async function({
   return await transaction.save();
 };
 
-module.exports = mongoose.model('TokenTransaction', tokenTransactionSchema);
+module.exports = mongoose.models.TokenTransaction || mongoose.model('TokenTransaction', tokenTransactionSchema);
 

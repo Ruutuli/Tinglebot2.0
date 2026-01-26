@@ -216,4 +216,4 @@ approvedSubmissionSchema.statics.findRecent = function(limit = 10) {
 };
 
 // ------------------- Export -------------------
-module.exports = mongoose.model('ApprovedSubmission', approvedSubmissionSchema); 
+module.exports = mongoose.models.ApprovedSubmission || mongoose.model('ApprovedSubmission', approvedSubmissionSchema); 

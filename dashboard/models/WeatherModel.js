@@ -145,6 +145,6 @@ WeatherSchema.statics.getRecentWeather = async function(village, n = 3) {
     .lean();
 };
 
-const Weather = mongoose.model('Weather', WeatherSchema);
+const Weather = mongoose.models.Weather || mongoose.model('Weather', WeatherSchema);
 
 module.exports = Weather; 

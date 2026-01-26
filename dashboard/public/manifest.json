@@ -1,0 +1,18 @@
+{
+  "name": "Tinglebot Dashboard",
+  "short_name": "Tinglebot",
+  "description": "Tingle, Tingle! Kooloo-Limpah! Welcome to the Tinglebot Dashboard - your comprehensive management interface for the Tinglebot Discord bot. Create and manage characters, track quests and tokens, browse models, and access all bot-related features. Companion dashboard for the Roots of the Wild Discord community. Visit https://rootsofthewild.com/ for more information.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2c2422",
+  "theme_color": "#1f5d50",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/tingle_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

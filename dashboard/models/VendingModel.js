@@ -1,7 +1,20 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-const { connectToVending } = require('../database/db');
+
+// Lazy import to avoid Next.js/Turbopack build-time resolution issues
+// The function will be imported when actually called at runtime
+// Using a dynamic path string prevents Next.js from statically analyzing the import
+let connectToVendingModule = null;
+async function getConnectToVending() {
+  if (!connectToVendingModule) {
+    // Use dynamic import with a constructed path to avoid static analysis
+    // This prevents Next.js/Turbopack from trying to resolve it at build time
+    const dbPath = '../lib' + '/db';
+    connectToVendingModule = await import(dbPath);
+  }
+  return connectToVendingModule.connectToVending();
+}
 
 // ------------------- Define the vending inventory schema -------------------
 const vendingInventorySchema = new Schema({
@@ -43,7 +56,7 @@ vendingInventorySchema.pre('save', function(next) {
 
 // ------------------- Initialize the vending inventory model -------------------
 const initializeVendingInventoryModel = async (characterName) => {
-  const vendingConnection = await connectToVending();
+  const vendingConnection = await getConnectToVending();
 
   if (!vendingConnection) {
     throw new Error(`[initializeVendingInventoryModel]: Failed to connect to the vending database.`);

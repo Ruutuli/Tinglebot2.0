@@ -43,4 +43,6 @@ const characterOfWeekSchema = new mongoose.Schema({
 characterOfWeekSchema.index({ isActive: 1, startDate: -1 });
 characterOfWeekSchema.index({ characterId: 1 });
 
-module.exports = mongoose.model('CharacterOfWeek', characterOfWeekSchema); 
+module.exports =
+  mongoose.models.CharacterOfWeek ||
+  mongoose.model("CharacterOfWeek", characterOfWeekSchema); 

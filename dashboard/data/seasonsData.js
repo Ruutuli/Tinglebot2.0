@@ -1,3 +1,13 @@
+// ============================================================================
+// ------------------- Seasons Data Configuration -------------------
+// Purpose: Village-specific seasonal weather options
+// - Defines available weather conditions (temperature, wind, precipitation, special events)
+//   for each village (Rudania, Inariko, Vhintl) across all seasons
+// - Used by weather simulation to determine valid weather options per season/village
+// Used by: weatherService.js
+// Related: weatherData.js (contains emoji mappings and probability weights)
+// ============================================================================
+
 module.exports = {
     Rudania: {
       village: "Rudania",

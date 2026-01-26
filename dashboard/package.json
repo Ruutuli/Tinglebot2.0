@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "description": "Tinglebot dashboard web application",
   "private": true,
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js --watch . --watch ../shared"
+    "dev": "next dev --webpack -p 3001",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",

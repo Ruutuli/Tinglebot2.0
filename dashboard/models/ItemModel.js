@@ -253,7 +253,7 @@ ItemSchema.index({ itemName: 1 });
 // ============================================================================
 
 // Import job data from jobData to categorize jobs properly
-const { jobPerks } = require('../data/jobData');
+const { jobPerks } = require('../data/jobData.js');
 
 /**
  * Get all jobs that have a specific perk type

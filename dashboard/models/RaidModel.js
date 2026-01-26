@@ -560,7 +560,29 @@ raidSchema.methods.failRaid = async function(client = null) {
   // Apply village damage (only for Tier 5-10 raids)
   if (this.monster && this.monster.tier >= 5 && this.monster.tier <= 10 && this.village) {
     try {
-      const { applyVillageDamage } = require('../modules/villageModule');
+      // Use dynamic require to avoid Next.js/Turbopack build-time resolution
+      // This module may not exist in the dashboard codebase
+      // Webpack IgnorePlugin is configured in next.config.ts to ignore this module
+      let villageModule;
+      try {
+        // Construct path dynamically to prevent static analysis
+        // Webpack IgnorePlugin will prevent bundling attempts
+        const pathSegments = ['..', 'modules', 'villageModule'];
+        const modulePath = pathSegments.join('/');
+        // Use Function constructor to make require completely dynamic
+        const dynamicRequire = new Function('p', 'return require(p)');
+        villageModule = dynamicRequire(modulePath);
+      } catch (requireError) {
+        // Module doesn't exist - skip village damage (this is expected in dashboard)
+        console.warn(`[RaidModel.js]: ⚠️ villageModule not available, skipping village damage for raid ${this.raidId}`);
+        return this.save();
+      }
+      
+      const { applyVillageDamage } = villageModule;
+      if (!applyVillageDamage) {
+        console.warn(`[RaidModel.js]: ⚠️ applyVillageDamage not found in villageModule`);
+        return this.save();
+      }
       
       // Try to get the thread if available
       let thread = null;

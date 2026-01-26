@@ -1,7 +1,11 @@
 // ============================================================================
-// 🌦️ Weather Data
-// Contains emoji mappings, probability weights, and weight modifiers for all weather categories.
-// This file supports all core simulation functionality.
+// ------------------- Weather Data Configuration -------------------
+// Purpose: Weather emoji mappings, probability weights, and weight modifiers
+// - Defines emoji representations for all weather types (temperature, wind, precipitation, special)
+// - Contains base probability weights for weather selection
+// - Provides village/season-specific weight modifiers for weather simulation
+// Used by: weatherService.js, weatherValidation.js
+// Related: seasonsData.js (contains valid weather options per season/village)
 // ============================================================================
 
 // ------------------- Emoji Mappings -------------------

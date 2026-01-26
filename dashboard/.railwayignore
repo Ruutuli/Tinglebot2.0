@@ -1,0 +1,36 @@
+# Railway ignore file
+# Files and directories to exclude from Railway deployment
+
+# Development files
+.vscode/
+*.md
+README.md
+message.txt
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Documentation
+docs/
+
+# Git
+.git/
+.gitignore
+
+# Environment files (Railway uses its own env vars)
+.env.local
+.env.development
+.env.test
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

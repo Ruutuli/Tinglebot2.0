@@ -71,4 +71,5 @@ const HelpWantedQuestSchema = new mongoose.Schema({
 
 // ------------------- Model Export -------------------
 // ============================================================================
-module.exports = mongoose.model('HelpWantedQuest', HelpWantedQuestSchema, 'helpwantedquests'); 
+// Check if model already exists to avoid overwrite errors during hot reloads
+module.exports = mongoose.models.HelpWantedQuest || mongoose.model('HelpWantedQuest', HelpWantedQuestSchema, 'helpwantedquests'); 

@@ -22,6 +22,18 @@ const inventorySchema = new Schema({
   fortuneTellerBoost: { type: Boolean, default: false } // Tag for items crafted with Fortune Teller boost (sell for 20% more)
 });
 
+// Lazy import to avoid Next.js/Turbopack build-time resolution issues
+let getInventoriesConnectionModule = null;
+async function getGetInventoriesConnection() {
+  if (!getInventoriesConnectionModule) {
+    // Use dynamic import with a constructed path to avoid static analysis
+    // This prevents Next.js/Turbopack from trying to resolve it at build time
+    const dbPath = '../lib' + '/db';
+    getInventoriesConnectionModule = await import(dbPath);
+  }
+  return getInventoriesConnectionModule.getInventoriesConnection();
+}
+
 // ------------------- Initialize the inventory model -------------------
 // Initialize the model using the inventories database connection
 // Accepts an optional connection parameter to work with both bot and dashboard
@@ -29,24 +41,9 @@ const initializeInventoryModel = async (inventoriesConnection = null) => {
   try {
     let connection = inventoriesConnection;
     
-    // If no connection provided, try to get one from available sources
+    // If no connection provided, get one from lib/db.ts
     if (!connection) {
-      // Try dashboard connection first (if running from dashboard)
-      try {
-        const path = require('path');
-        const dbDashboardPath = path.join(__dirname, '..', 'dashboard', 'database', 'db');
-        const dbDashboard = require(dbDashboardPath);
-        connection = await dbDashboard.connectToInventories();
-      } catch (dashboardError) {
-        // If dashboard import fails, try bot connection
-        try {
-          const dbBotPath = path.join(__dirname, '..', 'database', 'db-bot');
-          const dbBot = require(dbBotPath);
-          connection = await dbBot.connectToInventories();
-        } catch (botError) {
-          throw new Error(`Failed to connect to inventories database from either location: ${botError.message}`);
-        }
-      }
+      connection = await getGetInventoriesConnection();
     }
     
     if (!connection) {

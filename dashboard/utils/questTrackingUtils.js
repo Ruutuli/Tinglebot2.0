@@ -1,34 +1,40 @@
-// ============================================================================
-// ------------------- questTrackingUtils.js -------------------
-// Shared helpers for quest completion and turn-in tracking.
-// Used by UserModel and fix scripts (fixQuestPendingTurnIns, fixMissingQuestCompletions).
-// ============================================================================
+/**
+ * Quest tracking utility functions
+ * Used by UserModel for quest completion tracking
+ */
 
 /**
- * Count unique quest completions by questId.
- * Entries with empty/null questId count as 1 each (match legacy behavior).
- * @param {Array} completions - Array of completion objects with optional questId
- * @returns {number}
+ * Count unique quest completions from an array of completion objects.
+ * A completion is considered unique based on its questId.
+ * If questId is missing, it may be counted separately (handles legacy data).
+ * 
+ * @param {Array} completions - Array of quest completion objects
+ * @returns {number} - Number of unique quest completions
  */
 function countUniqueQuestCompletions(completions) {
   if (!Array.isArray(completions) || completions.length === 0) {
     return 0;
   }
 
+  // Track unique quest IDs
   const uniqueQuestIds = new Set();
-  let nullIdCount = 0;
+  let countWithoutId = 0;
 
   for (const completion of completions) {
     if (completion.questId && completion.questId.trim() !== '') {
+      // Count by unique questId
       uniqueQuestIds.add(completion.questId);
     } else {
-      nullIdCount++;
+      // If no questId, count separately (handles legacy or incomplete data)
+      // This ensures we don't lose track of completions without IDs
+      countWithoutId++;
     }
   }
 
-  return uniqueQuestIds.size + nullIdCount;
+  // Return count of unique questIds plus any completions without IDs
+  return uniqueQuestIds.size + countWithoutId;
 }
 
 module.exports = {
-  countUniqueQuestCompletions
+  countUniqueQuestCompletions,
 };

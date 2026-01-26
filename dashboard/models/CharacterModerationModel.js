@@ -57,6 +57,8 @@ characterModerationSchema.pre('save', function(next) {
 // ============================================================================
 // ------------------- Define and export model -------------------
 // ============================================================================
-const CharacterModeration = mongoose.model('CharacterModeration', characterModerationSchema);
+const CharacterModeration =
+  mongoose.models.CharacterModeration ||
+  mongoose.model('CharacterModeration', characterModerationSchema);
 
 module.exports = CharacterModeration;

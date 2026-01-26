@@ -1433,4 +1433,4 @@ questSchema.methods.getNormalizedTokenReward = function() {
 };
 
 // ------------------- Export Quest Model -------------------
-module.exports = mongoose.model('Quest', questSchema);
+module.exports = mongoose.models.Quest || mongoose.model('Quest', questSchema);

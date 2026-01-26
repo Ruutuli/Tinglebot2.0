@@ -137,4 +137,5 @@ MessageTrackingSchema.statics.cleanupOldMessages = function(daysToKeep = 30) {
   });
 };
 
-module.exports = mongoose.model('MessageTracking', MessageTrackingSchema);
+// Prevent model overwrite error during hot reloading
+module.exports = mongoose.models.MessageTracking || mongoose.model('MessageTracking', MessageTrackingSchema);

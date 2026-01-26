@@ -202,7 +202,7 @@ const VillageSchema = new mongoose.Schema({
 // ============================================================================
 // ---- Model Creation ----
 // ============================================================================
-const Village = mongoose.model('Village', VillageSchema);
+const Village = mongoose.models.Village || mongoose.model('Village', VillageSchema);
 
 // ============================================================================
 // ---- Exports ----
