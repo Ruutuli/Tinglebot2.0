@@ -5,7 +5,7 @@
 /* ============================================================================ */
 
 /* [edit/[id]/page.tsx]✨ Core dependencies - */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { Loading } from "@/components/ui";
@@ -241,6 +241,16 @@ export default function EditCharacterPage() {
   const loading = sessionLoading || charLoading || metaLoading;
   const error = charError || metaError;
 
+  // NOTE: This must be defined before any early returns; otherwise hook order
+  // differs between renders and React will throw "Rendered more hooks..." (#310).
+  const characterStatus = useMemo((): CharacterStatus | null => {
+    const status = character?.status;
+    if (status === "pending" || status === "needs_changes" || status === "accepted") {
+      return status as CharacterStatus;
+    }
+    return null;
+  }, [character?.status]);
+
   if (loading) {
     return (
       <div className="create-character-page min-h-full p-4 sm:p-6 md:p-8">
@@ -295,16 +305,6 @@ export default function EditCharacterPage() {
     );
   }
 
-  /* [edit/[id]/page.tsx]🧠 Character status helper - */
-  const getCharacterStatus = useCallback((): CharacterStatus | null => {
-    if (!character?.status) return null;
-    const status = character.status;
-    if (status === "pending" || status === "needs_changes" || status === "accepted") {
-      return status as CharacterStatus;
-    }
-    return null;
-  }, [character?.status]);
-
   return (
     <div className="create-character-page min-h-full p-4 sm:p-6 md:p-8">
       <div className="mx-auto max-w-[90rem]">
@@ -336,7 +336,7 @@ export default function EditCharacterPage() {
           initialCharacter={character}
           onSubmitForReview={handleSubmitForReview}
           submittingForReview={submittingForReview}
-          characterStatus={getCharacterStatus()}
+          characterStatus={characterStatus}
         />
       </div>
     </div>

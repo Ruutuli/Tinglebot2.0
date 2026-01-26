@@ -969,20 +969,42 @@ export default function OCDetailPage() {
     setLoading(true);
     setError(null);
     try {
+      console.log("[OCDetailPage] Fetching character (callback):", {
+        characterId,
+        params,
+        pathname,
+      });
       const res = await fetch(`/api/characters/${characterId}`);
+      console.log("[OCDetailPage] /api/characters response (callback):", {
+        characterId,
+        status: res.status,
+        ok: res.ok,
+      });
       if (!res.ok) {
-        const b = await res.json().catch(() => ({}));
+        const raw = await res.text().catch(() => "");
+        let b: unknown = {};
+        try {
+          b = raw ? JSON.parse(raw) : {};
+        } catch {
+          b = { raw };
+        }
+        console.error("[OCDetailPage] /api/characters non-OK body (callback):", b);
         throw new Error(
           (b as { error?: string }).error ?? `Request failed: ${res.status}`
         );
       }
       const data = (await res.json()) as { character?: CharacterDetail };
+      console.log("[OCDetailPage] /api/characters JSON (callback):", {
+        hasCharacter: Boolean(data.character),
+        characterKeys: data.character ? Object.keys(data.character).slice(0, 25) : [],
+      });
       if (!data.character) {
         throw new Error("Character not found");
       }
       setCharacter(data.character);
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
+      console.error("[OCDetailPage] Failed to fetch character (callback):", error);
       setError(error.message);
       setCharacter(null);
     } finally {
@@ -1058,17 +1080,40 @@ export default function OCDetailPage() {
       setLoading(true);
       setError(null);
       try {
+        console.log("[OCDetailPage] Fetching character:", {
+          characterId,
+          params,
+          pathname,
+          sessionLoading,
+          hasUser: Boolean(user?.id),
+        });
         const res = await fetch(`/api/characters/${characterId}`, { signal: abortController.signal });
         if (abortController.signal.aborted) return;
+        console.log("[OCDetailPage] /api/characters response:", {
+          characterId,
+          status: res.status,
+          ok: res.ok,
+        });
         
         if (!res.ok) {
-          const b = await res.json().catch(() => ({}));
+          const raw = await res.text().catch(() => "");
+          let b: unknown = {};
+          try {
+            b = raw ? JSON.parse(raw) : {};
+          } catch {
+            b = { raw };
+          }
+          console.error("[OCDetailPage] /api/characters non-OK body:", b);
           throw new Error(
             (b as { error?: string }).error ?? `Request failed: ${res.status}`
           );
         }
         const data = (await res.json()) as { character?: CharacterDetail };
         if (abortController.signal.aborted) return;
+        console.log("[OCDetailPage] /api/characters JSON:", {
+          hasCharacter: Boolean(data.character),
+          characterKeys: data.character ? Object.keys(data.character).slice(0, 25) : [],
+        });
         
         if (!data.character) {
           throw new Error("Character not found");
@@ -1077,6 +1122,7 @@ export default function OCDetailPage() {
       } catch (err: unknown) {
         if (abortController.signal.aborted) return;
         const error = err instanceof Error ? err : new Error(String(err));
+        console.error("[OCDetailPage] Failed to fetch character:", error);
         setError(error.message);
         setCharacter(null);
       } finally {

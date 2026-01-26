@@ -87,11 +87,17 @@ export async function GET(
     // GET requests are public - no authentication required
     const { id: slugOrId } = await params;
     const skipHelpWanted = req.nextUrl.searchParams.get("skipHelpWanted") === "true";
+    logger.info(
+      "api/characters/[id] GET",
+      `Incoming request: slugOrId="${slugOrId}", skipHelpWanted=${String(skipHelpWanted)}`
+    );
     if (!slugOrId?.trim()) {
+      logger.warn("api/characters/[id] GET", "Missing character identifier (empty slugOrId)");
       return NextResponse.json({ error: "Character identifier required" }, { status: 400 });
     }
 
     await connect();
+    logger.info("api/characters/[id] GET", "Connected to database");
     const { default: Character } = await import("@/models/CharacterModel.js");
     const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
     // Import Pet and Mount models to register schemas for population
@@ -115,38 +121,75 @@ export async function GET(
     
     // Check if it looks like an ObjectId (24 hex characters)
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(slugOrId);
+    logger.info("api/characters/[id] GET", `Identifier type: ${isObjectId ? "ObjectId" : "slug"}`);
     
+    const loadCharacterById = async (id: string, useModCharacter = false) => {
+      logger.info(
+        "api/characters/[id] GET",
+        `Loading character by id=${id} (collection=${useModCharacter ? "ModCharacter" : "Character"})`
+      );
+      if (useModCharacter) {
+        return (
+          (await (ModCharacter as { findById: (id: string) => Promise<CharDoc | null> }).findById(
+            id
+          )) as CharDoc | null
+        );
+      }
+      return (
+        (await (Character as { findById: (id: string) => Promise<CharDoc | null> }).findById(
+          id
+        )) as CharDoc | null
+      );
+    };
+
     if (isObjectId) {
-      // Try by ID first (for backward compatibility)
-      char = (await (Character as { findById: (id: string) => Promise<CharDoc | null> }).findById(slugOrId)) as CharDoc | null;
+      char = await loadCharacterById(slugOrId);
       if (!char) {
-        char = (await (ModCharacter as { findById: (id: string) => Promise<CharDoc | null> }).findById(slugOrId)) as CharDoc | null;
+        char = await loadCharacterById(slugOrId, true);
         if (char) {
           isModCharacter = true;
         }
       }
     } else {
-      // Try by slug (name) - use case-insensitive regex
-      const slugRegex = new RegExp(`^${slugOrId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const slug = slugOrId.toLowerCase();
+      logger.info("api/characters/[id] GET", `Slug lookup: "${slug}"`);
       const regularChars = await Character.find({})
         .select("name")
         .lean<Array<Pick<CharDoc, "_id" | "name">>>();
-      char = regularChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) as CharDoc | null;
-      
+      const slugMatch = regularChars.find((c) => createSlug(c.name) === slug);
+      if (slugMatch) {
+        logger.info(
+          "api/characters/[id] GET",
+          `Slug matched regular character name="${slugMatch.name}", id=${String(slugMatch._id)}`
+        );
+        char = await loadCharacterById(String(slugMatch._id));
+      }
+
       if (!char) {
         const modChars = await ModCharacter.find({})
           .select("name")
           .lean<Array<Pick<CharDoc, "_id" | "name">>>();
-        char = modChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) as CharDoc | null;
-        if (char) {
+        const modSlugMatch = modChars.find((c) => createSlug(c.name) === slug);
+        if (modSlugMatch) {
+          logger.info(
+            "api/characters/[id] GET",
+            `Slug matched mod character name="${modSlugMatch.name}", id=${String(modSlugMatch._id)}`
+          );
           isModCharacter = true;
+          char = await loadCharacterById(String(modSlugMatch._id), true);
         }
       }
     }
     
     if (!char) {
+      logger.warn("api/characters/[id] GET", `Character not found for slugOrId="${slugOrId}"`);
       return NextResponse.json({ error: "Character not found" }, { status: 404 });
     }
+
+    logger.info(
+      "api/characters/[id] GET",
+      `Character loaded: id=${String((char as { _id?: unknown })._id)}, name="${String((char as { name?: unknown }).name ?? "")}", isModCharacter=${String(isModCharacter)}`
+    );
     
     // For GET requests, don't check ownership (public character pages)
     // Ownership check is only needed for PUT requests
@@ -275,6 +318,10 @@ export async function GET(
     }
     
     const response = NextResponse.json({ character: out });
+    logger.info(
+      "api/characters/[id] GET",
+      `Responding with character keys: ${Object.keys(out).slice(0, 25).join(", ")}${Object.keys(out).length > 25 ? ", ..." : ""}`
+    );
     
     // Add cache headers for browser/CDN caching
     // Character data changes more frequently, so shorter cache time
@@ -287,7 +334,7 @@ export async function GET(
   } catch (e) {
     logger.error(
       "api/characters/[id] GET",
-      e instanceof Error ? e.message : String(e)
+      e instanceof Error ? `${e.message}${e.stack ? `\n${e.stack}` : ""}` : String(e)
     );
     return NextResponse.json(
       { error: "Failed to fetch character" },
