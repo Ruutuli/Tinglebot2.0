@@ -358,7 +358,7 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
 // ============================================================================
 // [page.tsx]🧠 Get village-specific color -
 function getVillageColor(villageName: string): { color: string; rgb: string } {
-  const normalized = villageName.toLowerCase();
+  const normalized = (villageName ?? "").toLowerCase();
   if (normalized === "rudania") {
     return { color: "var(--village-rudania)", rgb: "198, 0, 10" };
   }
@@ -805,7 +805,7 @@ function WeatherCard(v: VillageWeatherItem) {
   const windIcon = getWindLabelIcon(v.windLabel);
   const seasonImagePath = getSeasonImagePath(v.season);
   const villageCrestPath = getVillageCrestPath(v.name);
-  const villageName = v.name.toLowerCase();
+  const villageName = String(v.name ?? "").toLowerCase();
   const villageClass = villageName === "rudania" ? "village-card-rudania" : villageName === "inariko" ? "village-card-inariko" : villageName === "vhintl" ? "village-card-vhintl" : "";
 
   return (
@@ -941,7 +941,7 @@ function VillageLevelCard(v: VillageLevelItem) {
   const healthPercent = v.maxHealth > 0 ? (v.health / v.maxHealth) * 100 : 0;
   const tokensPercent = v.tokensNeeded > 0 ? (v.tokens / v.tokensNeeded) * 100 : 0;
   const isHealthy = v.status === "Healthy";
-  const villageName = v.name.toLowerCase();
+  const villageName = String(v.name ?? "").toLowerCase();
   const villageClass = villageName === "rudania" ? "village-card-rudania" : villageName === "inariko" ? "village-card-inariko" : villageName === "vhintl" ? "village-card-vhintl" : "";
 
   return (
@@ -1034,7 +1034,7 @@ function QuestCard(q: MonthlyQuestItem) {
   // Create a default detailed quest if fullDetails is not provided
   const defaultQuestDetails: DetailedQuestItem = {
     category: q.type,
-      description: `Join the ${q.name} quest in ${formatLocationsDisplay([q.village])} this ${q.month}. This ${q.type.toLowerCase()} quest${
+      description: `Join the ${q.name} quest in ${formatLocationsDisplay([q.village])} this ${q.month}. This ${String(q.type ?? "").toLowerCase()} quest${
         q.maxParticipants === Infinity ? " welcomes all participants." : ` has space for ${q.maxParticipants} participants.`
       }`,
     locations: [q.village],
@@ -1052,7 +1052,7 @@ function QuestCard(q: MonthlyQuestItem) {
   };
 
   const questDetails = q.fullDetails || defaultQuestDetails;
-  const villageName = q.village !== "Multiple" ? q.village.toLowerCase() : "";
+  const villageName = q.village !== "Multiple" ? String(q.village ?? "").toLowerCase() : "";
   const villageClass = villageName === "rudania" ? "village-card-rudania" : villageName === "inariko" ? "village-card-inariko" : villageName === "vhintl" ? "village-card-vhintl" : "";
 
   return (

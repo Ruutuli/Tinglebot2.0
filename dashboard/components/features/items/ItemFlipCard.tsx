@@ -127,8 +127,8 @@ export function ItemFlipCard({ item }: { item: ItemFlipCardProps }) {
   const shouldShowEmoji = isValidEmoji(item.emoji);
 
   // Map location names to CSS classes
-  const getLocationClass = (locationName: string): string => {
-    const normalized = locationName.toLowerCase().replace(/\s+/g, "-");
+  const getLocationClass = (locationName: string | null | undefined): string => {
+    const normalized = String(locationName ?? "").toLowerCase().replace(/\s+/g, "-");
     const locationMap: Record<string, string> = {
       "eldin": "location-eldin",
       "faron": "location-faron",
