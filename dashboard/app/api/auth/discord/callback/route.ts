@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, type SessionUser } from "@/lib/session";
+import { getAppUrl } from "@/lib/config";
 
 const TOKEN_URL = "https://discord.com/api/oauth2/token";
 const USER_URL = "https://discord.com/api/users/@me";
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
   const stateFromQuery = searchParams.get("state");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:6001";
+  const appUrl = getAppUrl();
   const stateFromCookie = request.cookies.get(STATE_COOKIE)?.value;
   const redirectPath = request.cookies.get(REDIRECT_COOKIE)?.value;
 

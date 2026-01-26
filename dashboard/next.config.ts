@@ -36,7 +36,7 @@ const nextConfig: NextConfig = {
     root: projectRoot,
   },
   // Explicitly set webpack context and resolve root to the project directory
-  webpack: (config, { defaultLoaders }) => {
+  webpack: (config, { isServer }) => {
     // Ensure webpack resolves modules from the project directory, not parent directories
     config.context = projectRoot;
     if (config.resolve) {
@@ -52,6 +52,7 @@ const nextConfig: NextConfig = {
         config.resolve.roots = [projectRoot];
       }
     }
+    
     // Ignore villageModule which may not exist in the dashboard codebase
     // This prevents webpack from trying to bundle it during build
     config.plugins = config.plugins || [];
@@ -59,6 +60,11 @@ const nextConfig: NextConfig = {
       new webpack.IgnorePlugin({
         resourceRegExp: /villageModule/,
         contextRegExp: /models/,
+      }),
+      // Ignore aws4 - it's an optional dependency of MongoDB that webpack tries to resolve
+      // but isn't needed for basic MongoDB operations
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^aws4$/,
       })
     );
     return config;

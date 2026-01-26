@@ -12,12 +12,13 @@ import {
 } from "./discordEmbeds";
 import { logger } from "@/utils/logger";
 import { connect } from "@/lib/db";
+import { getAppUrl } from "@/lib/config";
 
 const DECISION_CHANNEL_ID =
   process.env.DECISION_CHANNEL_ID || "641858948802150400";
 const CHARACTER_CREATION_CHANNEL_ID =
   process.env.CHARACTER_CREATION_CHANNEL_ID || "";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:6001";
+const APP_URL = getAppUrl();
 
 type CharacterDocument = {
   _id: unknown;

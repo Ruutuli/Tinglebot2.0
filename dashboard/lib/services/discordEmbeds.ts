@@ -3,6 +3,8 @@
 // Centralized embed builders for character review process
 // ============================================================================
 
+import { getAppUrl } from "@/lib/config";
+
 type CharacterData = {
   _id: unknown;
   userId: string;
@@ -43,7 +45,7 @@ type FeedbackEntry = {
   createdAt: Date;
 };
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:6001";
+const APP_URL = getAppUrl();
 
 /**
  * Format height from cm to cm and feet/inches

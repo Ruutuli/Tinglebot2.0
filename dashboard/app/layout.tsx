@@ -9,6 +9,7 @@ import "@/app/globals.css";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { TopBar, TOP_BAR_HEIGHT } from "@/components/layout/top-bar";
+import { getAppUrl } from "@/lib/config";
 
 /* [layout.tsx]✨ Page metadata - */
 export const metadata: Metadata = {
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Tinglebot" }],
   creator: "Tinglebot",
   publisher: "Tinglebot",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:6001"),
+  metadataBase: new URL(getAppUrl()),
   alternates: {
     canonical: "/",
   },

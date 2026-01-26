@@ -16,13 +16,13 @@ export async function register() {
       console.error("Failed to display startup banner:", error);
     }
 
-    // Initialize Agenda scheduler
-    try {
-      const { initializeAgenda } = await import("./lib/init-agenda");
-      await initializeAgenda();
-    } catch (error) {
-      console.error("Failed to initialize Agenda:", error);
-      // Don't throw - allow server to start even if Agenda init fails
-    }
+    // Initialize Agenda scheduler (non-blocking)
+    // Don't await - let it initialize in the background so server can start
+    import("./lib/init-agenda")
+      .then(({ initializeAgenda }) => initializeAgenda())
+      .catch((error) => {
+        console.error("Failed to initialize Agenda:", error);
+        // Don't throw - allow server to start even if Agenda init fails
+      });
   }
 }

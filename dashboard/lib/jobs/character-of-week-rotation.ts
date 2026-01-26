@@ -4,7 +4,7 @@
  */
 
 import type { Job } from "agenda";
-import { getAgenda } from "@/lib/agenda";
+import { getAgenda, waitForAgendaReady } from "@/lib/agenda";
 import { rotateCharacterOfWeek } from "@/lib/character-of-week";
 import { logger } from "@/utils/logger";
 
@@ -32,6 +32,9 @@ async function handleRotation(job: Job) {
  * Define and schedule the Character of the Week rotation job
  */
 export async function defineRotationJob(): Promise<void> {
+  // Wait for Agenda to be ready before scheduling jobs
+  await waitForAgendaReady();
+  
   const agenda = await getAgenda();
   
   // Define the job

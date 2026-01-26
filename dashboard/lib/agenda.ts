@@ -17,6 +17,7 @@ function getMongoUri(): string {
 
 // Create Agenda instance
 let agendaInstance: Agenda | null = null;
+let isAgendaReady = false;
 
 /**
  * Initialize and return Agenda instance
@@ -45,6 +46,7 @@ export async function getAgenda(): Promise<Agenda> {
   
   // Handle Agenda events
   agendaInstance.on("ready", () => {
+    isAgendaReady = true;
     logger.success("agenda", "Agenda scheduler is ready");
   });
   
@@ -71,12 +73,50 @@ export async function getAgenda(): Promise<Agenda> {
 }
 
 /**
- * Start Agenda scheduler
+ * Start Agenda scheduler and wait for it to be ready
+ * Returns a promise that resolves when Agenda is ready to use
  */
 export async function startAgenda(): Promise<void> {
   const agenda = await getAgenda();
-  await agenda.start();
-  logger.success("agenda", "Agenda scheduler started");
+  
+  // Check if already ready
+  if (isAgendaReady) {
+    logger.info("agenda", "Agenda scheduler already ready");
+    return;
+  }
+  
+  return new Promise<void>((resolve) => {
+    let resolved = false;
+    
+    // Set up timeout (don't fail, just log warning)
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        logger.warn("agenda", "Agenda ready event timed out after 15s, but continuing...");
+        resolve();
+      }
+    }, 15000);
+    
+    // Function to clean up and resolve
+    const onReady = () => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        isAgendaReady = true;
+        logger.success("agenda", "Agenda scheduler started and ready");
+        resolve();
+      }
+    };
+    
+    // Set up ready listener before starting
+    agenda.once("ready", onReady);
+    
+    // Start Agenda (this returns immediately, but we wait for "ready" event)
+    agenda.start().catch((err) => {
+      logger.warn("agenda", `Agenda start() error: ${err instanceof Error ? err.message : String(err)}`);
+      // Continue waiting for ready event
+    });
+  });
 }
 
 /**
@@ -95,4 +135,33 @@ export async function stopAgenda(): Promise<void> {
  */
 export function getAgendaInstance(): Agenda | null {
   return agendaInstance;
+}
+
+/**
+ * Wait for Agenda to be ready (useful before scheduling jobs)
+ */
+export async function waitForAgendaReady(): Promise<void> {
+  if (isAgendaReady) {
+    return;
+  }
+  
+  const agenda = await getAgenda();
+  
+  return new Promise<void>((resolve) => {
+    if (isAgendaReady) {
+      resolve();
+      return;
+    }
+    
+    const timeout = setTimeout(() => {
+      logger.warn("agenda", "Waiting for Agenda ready timed out, proceeding anyway...");
+      resolve();
+    }, 10000);
+    
+    agenda.once("ready", () => {
+      clearTimeout(timeout);
+      isAgendaReady = true;
+      resolve();
+    });
+  });
 }

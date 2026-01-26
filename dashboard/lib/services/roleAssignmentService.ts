@@ -5,10 +5,11 @@
 
 import { discordApiRequest } from "@/lib/discord";
 import { logger } from "@/utils/logger";
+import { getAppUrl } from "@/lib/config";
 
 const GUILD_ID = process.env.GUILD_ID || "";
 const LOGGING_CHANNEL_ID = process.env.LOGGING_CHANNEL_ID || "";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:6001";
+const APP_URL = getAppUrl();
 
 // Role mappings
 const RACE_ROLES: Record<string, string> = {

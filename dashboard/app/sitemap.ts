@@ -20,6 +20,8 @@ type SitemapEntryConfig = {
 // ------------------- Constants & Config -------------------
 // ============================================================================
 
+import { getAppUrl } from "@/lib/config";
+
 const DEFAULT_BASE_URL = "http://localhost:6001";
 
 const SITEMAP_ENTRIES: SitemapEntryConfig[] = [
@@ -62,7 +64,7 @@ const createEntry = (
 // ============================================================================
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || DEFAULT_BASE_URL;
+  const baseUrl = getAppUrl();
   
   return SITEMAP_ENTRIES.map((entry) => createEntry(baseUrl, entry));
 }
