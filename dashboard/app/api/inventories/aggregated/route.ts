@@ -84,8 +84,8 @@ async function loadCharacterModels(): Promise<{
   try {
     const CharacterModule = await import("@/models/CharacterModel.js");
     const ModCharacterModule = await import("@/models/ModCharacterModel.js");
-    const Character = (CharacterModule.default || CharacterModule) as CharacterModel;
-    const ModCharacter = (ModCharacterModule.default || ModCharacterModule) as CharacterModel;
+    const Character = (CharacterModule.default || CharacterModule) as unknown as CharacterModel;
+    const ModCharacter = (ModCharacterModule.default || ModCharacterModule) as unknown as CharacterModel;
     return { Character, ModCharacter };
   } catch (importError) {
     const error = normalizeError(importError);

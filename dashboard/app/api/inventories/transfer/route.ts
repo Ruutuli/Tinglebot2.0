@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
     // Log removal to InventoryLog
     try {
       const InventoryLogModule = await import("@/models/InventoryLogModel.js");
-      const InventoryLog = (InventoryLogModule.default || InventoryLogModule) as InventoryLogModel;
+      const InventoryLog = (InventoryLogModule.default || InventoryLogModule) as unknown as InventoryLogModel;
       await InventoryLog.create({
         characterName: sourceChar.name,
         characterId: sourceChar._id,
@@ -299,7 +299,7 @@ export async function POST(req: NextRequest) {
     // Log addition to InventoryLog
     try {
       const InventoryLogModule = await import("@/models/InventoryLogModel.js");
-      const InventoryLog = (InventoryLogModule.default || InventoryLogModule) as InventoryLogModel;
+      const InventoryLog = (InventoryLogModule.default || InventoryLogModule) as unknown as InventoryLogModel;
       await InventoryLog.create({
         characterName: destChar.name,
         characterId: destChar._id,

@@ -86,7 +86,7 @@ async function getUserId(): Promise<string | null> {
 async function getNotificationModel(): Promise<NotificationModel> {
   await connect();
   const Notification = (await import("@/models/NotificationModel.js")).default;
-  return Notification as NotificationModel;
+  return Notification as unknown as NotificationModel;
 }
 
 // ------------------- Normalize Error ------------------
