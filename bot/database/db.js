@@ -60,6 +60,41 @@ function getDbOperationCounts() {
   return { ...dbOperationCounts };
 }
 
+// ============================================================================
+// ------------------- Inventory Link Normalization -------------------
+// All inventory links should point to the dashboard route:
+//   /characters/inventories/<slug>
+// ============================================================================
+
+const WEB_BASE_URL = "https://tinglebot.xyz";
+
+function createSlug(name) {
+  if (!name) return "";
+  return String(name)
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildInventoryUrl(characterName) {
+  const slug = createSlug(characterName);
+  return `${WEB_BASE_URL}/characters/inventories/${slug}`;
+}
+
+function normalizeInventoryUrlForCharacter(characterDoc) {
+  if (!characterDoc || !characterDoc.name) return characterDoc;
+  const current = characterDoc.inventory;
+  const isNewFormat =
+    typeof current === "string" && current.includes("/characters/inventories/");
+  if (!isNewFormat) {
+    characterDoc.inventory = buildInventoryUrl(characterDoc.name);
+  }
+  return characterDoc;
+}
+
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
 const inventoryUtils = require("../utils/inventoryUtils");
 
@@ -230,7 +265,8 @@ const fetchAllCharacters = async () => {
  try {
   await connectToTinglebot();
   trackDbOperation('queries');
-  return await Character.find().lean().exec();
+  const characters = await Character.find().lean().exec();
+  return characters.map((c) => normalizeInventoryUrlForCharacter(c));
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -248,7 +284,7 @@ const fetchCharacterById = async (characterId) => {
   if (!character) {
    return null; // Return null instead of throwing error
   }
-  return character;
+  return normalizeInventoryUrlForCharacter(character);
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -281,7 +317,7 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
     const characters = await query.exec();
     const duration = Date.now() - startTime;
     characterQueryDetector.recordQuery(true, duration);
-    return characters;
+    return characters.map((c) => normalizeInventoryUrlForCharacter(c));
   } catch (error) {
     const duration = Date.now() - startTime;
     
@@ -296,7 +332,7 @@ const fetchCharactersByUserId = async (userId, fields = null) => {
         const retryResult = await retryQuery.exec();
         const retryDuration = Date.now() - startTime;
         characterQueryDetector.recordQuery(true, retryDuration);
-        return retryResult;
+        return retryResult.map((c) => normalizeInventoryUrlForCharacter(c));
       } catch (retryError) {
         const retryDuration = Date.now() - startTime;
         characterQueryDetector.recordQuery(false, retryDuration);
@@ -336,7 +372,7 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
     return null;
   }
 
-  return character;
+  return normalizeInventoryUrlForCharacter(character);
  } catch (error) {
   handleError(error, "db.js");
   const actualName = characterName ? characterName.split('|')[0].trim() : 'null/undefined';
@@ -606,7 +642,7 @@ const fetchModCharacterByNameAndUserId = async (characterName, userId) => {
     return null;
   }
 
-  return modCharacter;
+  return normalizeInventoryUrlForCharacter(modCharacter);
  } catch (error) {
   handleError(error, "db.js", {
    function: "fetchModCharacterByNameAndUserId",
@@ -635,7 +671,7 @@ const fetchModCharacterByName = async (characterName) => {
     return null;
   }
 
-  return modCharacter;
+  return normalizeInventoryUrlForCharacter(modCharacter);
  } catch (error) {
   handleError(error, "db.js", {
    function: "fetchModCharacterByName",
@@ -667,7 +703,7 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
     const modCharacters = await query.exec();
     const duration = Date.now() - startTime;
     modCharacterQueryDetector.recordQuery(true, duration);
-    return modCharacters;
+    return modCharacters.map((c) => normalizeInventoryUrlForCharacter(c));
   } catch (error) {
     const duration = Date.now() - startTime;
     
@@ -682,7 +718,7 @@ const fetchModCharactersByUserId = async (userId, fields = null) => {
         const retryResult = await retryQuery.exec();
         const retryDuration = Date.now() - startTime;
         modCharacterQueryDetector.recordQuery(true, retryDuration);
-        return retryResult;
+        return retryResult.map((c) => normalizeInventoryUrlForCharacter(c));
       } catch (retryError) {
         const retryDuration = Date.now() - startTime;
         modCharacterQueryDetector.recordQuery(false, retryDuration);
@@ -707,7 +743,7 @@ const fetchAllModCharacters = async () => {
  try {
   await connectToTinglebot();
   const modCharacters = await ModCharacter.find({});
-  return modCharacters;
+  return modCharacters.map((c) => normalizeInventoryUrlForCharacter(c));
  } catch (error) {
   handleError(error, "db.js", {
    function: "fetchAllModCharacters",
@@ -739,7 +775,7 @@ const updateModCharacterById = async (modCharacterId, updateData) => {
    updateData,
    { new: true }
   );
-  return updatedModCharacter;
+  return normalizeInventoryUrlForCharacter(updatedModCharacter);
  } catch (error) {
   handleError(error, "db.js", {
    function: "updateModCharacterById",

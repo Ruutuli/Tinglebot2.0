@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
+import { createSlug } from "@/lib/string-utils";
 import { logger } from "@/utils/logger";
 
 // ============================================================================
@@ -49,110 +50,58 @@ export async function GET(
       );
     }
 
-    // Find character (case-insensitive)
+    // Find character (case-insensitive). Supports both:
+    // - direct name lookups (e.g. "Aemu")
+    // - slug lookups (e.g. "aemu", "link-the-hero")
     type CharacterDoc = {
       _id: mongoose.Types.ObjectId;
       name: string;
       icon?: string;
     };
-    const character = await Character.findOne({
+    let foundCharacter = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedName}$`, "i") },
     })
       .select("_id name icon")
       .lean<CharacterDoc>();
 
-    if (!character) {
-      // Try mod characters
+    if (!foundCharacter) {
       const modCharacter = await ModCharacter.findOne({
         name: { $regex: new RegExp(`^${escapedName}$`, "i") },
       })
         .select("_id name icon")
         .lean<CharacterDoc>();
 
-      if (!modCharacter) {
-        return NextResponse.json({ error: "Character not found" }, { status: 404 });
+      if (modCharacter) {
+        foundCharacter = modCharacter;
       }
-
-      // Use mod character
-      const foundCharacter = modCharacter;
-      const collectionName = foundCharacter.name.toLowerCase();
-
-      // Connect to inventories database (using cached connection)
-      const db = await getInventoriesDb();
-
-      // Get character's inventory
-      const collection = db.collection(collectionName);
-      const inventoryItems = await collection.find().toArray();
-
-      // Create a map of owned items and collect unique item names
-      const ownedItemsMap = new Map<string, { quantity: number; category?: string; type?: string; subtype?: string; obtain?: string; location?: string; date?: Date }>();
-      const ownedItemNames = new Set<string>();
-      inventoryItems.forEach((item) => {
-        if (item.quantity > 0) {
-          ownedItemNames.add(item.itemName);
-          ownedItemsMap.set(item.itemName.toLowerCase(), {
-            quantity: item.quantity,
-            category: item.category,
-            type: item.type,
-            subtype: item.subtype,
-            obtain: item.obtain,
-            location: item.location,
-            date: item.date,
-          });
-        }
-      });
-
-      // Get all items from items collection (this route shows all items with owned flag)
-      // For optimization, we could limit this, but keeping it for now as it may be intentional
-      let Item: mongoose.Model<unknown>;
-      if (mongoose.models.Item) {
-        Item = mongoose.models.Item;
-      } else {
-        const { default: ItemModel } = await import("@/models/ItemModel.js");
-        Item = ItemModel as unknown as mongoose.Model<unknown>;
-      }
-
-      // Only fetch items that are owned or commonly needed (optimization)
-      // If you want to show ALL items, remove the $in filter, but it will be slower
-      const allItems = ownedItemNames.size > 0
-        ? await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
-            .select("itemName category type subtype image")
-            .lean<ItemDocument[]>()
-        : [];
-
-      // Merge all items with owned status
-      const completeInventory = allItems.map((item: ItemDocument) => {
-        const owned = ownedItemsMap.get(item.itemName.toLowerCase());
-        return {
-          itemName: item.itemName,
-          quantity: owned ? owned.quantity : 0,
-          category: Array.isArray(item.category) ? item.category : (item.category ? [item.category] : []),
-          type: Array.isArray(item.type) ? item.type : (item.type ? [item.type] : []),
-          subtype: Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []),
-          image: item.image,
-          owned: !!owned,
-          obtain: owned ? owned.obtain : null,
-          location: owned ? owned.location : null,
-        };
-      });
-
-      const totalItems = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-      const uniqueItems = inventoryItems.filter((item) => (item.quantity || 0) > 0).length;
-
-      return NextResponse.json({
-        data: {
-          characterName: foundCharacter.name,
-          characterId: foundCharacter._id,
-          icon: foundCharacter.icon,
-          totalItems,
-          uniqueItems,
-          inventory: completeInventory,
-        },
-      });
     }
 
-    // Use regular character
-    const collectionName = character.name.toLowerCase();
+    // If direct name lookup failed, try slug lookup (used in /characters routes)
+    if (!foundCharacter) {
+      const slug = createSlug(characterName);
+
+      const regularCandidates = await Character.find({})
+        .select("_id name icon")
+        .lean<CharacterDoc[]>();
+      const slugMatch = regularCandidates.find((c) => createSlug(c.name) === slug);
+      if (slugMatch) {
+        foundCharacter = slugMatch;
+      } else {
+        const modCandidates = await ModCharacter.find({})
+          .select("_id name icon")
+          .lean<CharacterDoc[]>();
+        const modSlugMatch = modCandidates.find((c) => createSlug(c.name) === slug);
+        if (modSlugMatch) {
+          foundCharacter = modSlugMatch;
+        }
+      }
+    }
+
+    if (!foundCharacter) {
+      return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    }
+
+    const collectionName = foundCharacter.name.toLowerCase();
 
     // Connect to inventories database (using cached connection)
     const db = await getInventoriesDb();
@@ -162,11 +111,24 @@ export async function GET(
     const inventoryItems = await collection.find().toArray();
 
     // Create a map of owned items and collect unique item names
-    const ownedItemsMap = new Map<string, { quantity: number; category?: string; type?: string; subtype?: string; obtain?: string; location?: string; date?: Date }>();
+    const ownedItemsMap = new Map<
+      string,
+      {
+        quantity: number;
+        category?: unknown;
+        type?: unknown;
+        subtype?: unknown;
+        obtain?: string;
+        location?: string;
+        date?: Date;
+      }
+    >();
+    const ownedItemsOriginalByLower = new Map<string, string>();
     const ownedItemNames = new Set<string>();
     inventoryItems.forEach((item) => {
       if (item.quantity > 0) {
         ownedItemNames.add(item.itemName);
+        ownedItemsOriginalByLower.set(String(item.itemName).toLowerCase(), String(item.itemName));
         ownedItemsMap.set(item.itemName.toLowerCase(), {
           quantity: item.quantity,
           category: item.category,
@@ -180,7 +142,6 @@ export async function GET(
     });
 
     // Get all items from items collection (this route shows all items with owned flag)
-    // For optimization, we could limit this, but keeping it for now as it may be intentional
     let Item: mongoose.Model<unknown>;
     if (mongoose.models.Item) {
       Item = mongoose.models.Item;
@@ -189,13 +150,12 @@ export async function GET(
       Item = ItemModel as unknown as mongoose.Model<unknown>;
     }
 
-    // Only fetch items that are owned or commonly needed (optimization)
-    // If you want to show ALL items, remove the $in filter, but it will be slower
-    const allItems = ownedItemNames.size > 0
-      ? await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
-          .select("itemName category type subtype image")
-          .lean<ItemDocument[]>()
-      : [];
+    // Fetch ALL items so the UI can show owned + not-owned items
+    const allItems = await (Item as unknown as mongoose.Model<ItemDocument>)
+      .find({})
+      .select("itemName category type subtype image")
+      .sort({ itemName: 1 })
+      .lean<ItemDocument[]>();
 
     // Merge all items with owned status
     const completeInventory = allItems.map((item: ItemDocument) => {
@@ -213,14 +173,35 @@ export async function GET(
       };
     });
 
+    // If inventories contain items not present in the global items collection,
+    // include them so the character's owned list is never missing entries.
+    const allItemNamesLower = new Set(
+      allItems.map((i) => String(i.itemName ?? "").toLowerCase()).filter(Boolean)
+    );
+    for (const [itemNameLower, owned] of ownedItemsMap.entries()) {
+      if (allItemNamesLower.has(itemNameLower)) continue;
+      const originalItemName = ownedItemsOriginalByLower.get(itemNameLower) || itemNameLower;
+      completeInventory.push({
+        itemName: originalItemName,
+        quantity: owned.quantity,
+        category: Array.isArray(owned.category) ? owned.category.map(String) : (owned.category ? [String(owned.category)] : []),
+        type: Array.isArray(owned.type) ? owned.type.map(String) : (owned.type ? [String(owned.type)] : []),
+        subtype: Array.isArray(owned.subtype) ? owned.subtype.map(String) : (owned.subtype ? [String(owned.subtype)] : []),
+        image: undefined,
+        owned: true,
+        obtain: owned.obtain ?? null,
+        location: owned.location ?? null,
+      });
+    }
+
     const totalItems = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
     const uniqueItems = inventoryItems.filter((item) => (item.quantity || 0) > 0).length;
 
     return NextResponse.json({
       data: {
-        characterName: character.name,
-        characterId: character._id,
-        icon: character.icon,
+        characterName: foundCharacter.name,
+        characterId: foundCharacter._id,
+        icon: foundCharacter.icon,
         totalItems,
         uniqueItems,
         inventory: completeInventory,

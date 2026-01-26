@@ -2675,7 +2675,13 @@ async function handleApproveEdit(interaction) {
           await Character.findByIdAndUpdate(pendingEdit.characterId, {
             $set: {
               name: updateValue,
-              inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(updateValue)}`
+              inventory: `https://tinglebot.xyz/characters/inventories/${String(updateValue)
+                .toLowerCase()
+                .trim()
+                .replace(/[^\w\s-]/g, "")
+                .replace(/\s+/g, "-")
+                .replace(/-+/g, "-")
+                .replace(/^-+|-+$/g, "")}`
             }
           });
         } else {

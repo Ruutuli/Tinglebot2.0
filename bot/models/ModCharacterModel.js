@@ -15,6 +15,29 @@ const GearSchema = new Schema({
 }, { _id: false });
 
 // ============================================================================
+// ------------------- Inventory Link Helpers -------------------
+// Inventory links should point to the Dashboard inventory route:
+//   https://tinglebot.xyz/characters/inventories/<slug>
+// ============================================================================
+
+const WEB_BASE_URL = 'https://tinglebot.xyz';
+
+function createSlug(name) {
+  if (!name) return '';
+  return String(name)
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function buildInventoryUrl(characterName) {
+  return `${WEB_BASE_URL}/characters/inventories/${createSlug(characterName)}`;
+}
+
+// ============================================================================
 // ------------------- Define the main mod character schema -------------------
 // Everything related to mod character data - unlimited hearts/stamina
 // ============================================================================
@@ -195,8 +218,12 @@ modCharacterSchema.pre('save', function (next) {
   
   // Ensure all mod characters use the dashboard inventory page
   // Note: This will be set dynamically when the character is saved, but we set a default here
-  if (!this.inventory || this.inventory.includes('docs.google.com')) {
-    this.inventory = `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(this.name)}`;
+  const currentInventory = this.inventory;
+  const isNewFormat =
+    typeof currentInventory === 'string' &&
+    currentInventory.includes('/characters/inventories/');
+  if (!isNewFormat) {
+    this.inventory = buildInventoryUrl(this.name);
   }
   
   // Ensure mod characters are always considered synced

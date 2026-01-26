@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { createSlug } from "@/lib/string-utils";
 import { logger } from "@/utils/logger";
 
 function escapeRegExp(string: string): string {
@@ -28,8 +29,8 @@ export async function GET(
     await connect();
 
     const { characterName: characterNameParam } = await params;
-    const characterNameFromParam = decodeURIComponent(characterNameParam);
-    const escapedName = escapeRegExp(characterNameFromParam);
+    const identifier = decodeURIComponent(characterNameParam);
+    const escapedName = escapeRegExp(identifier);
 
     // Import Character models
     let Character, ModCharacter;
@@ -47,7 +48,7 @@ export async function GET(
       );
     }
 
-    // Find character (case-insensitive) and verify ownership
+    // Find character (case-insensitive) and verify ownership. Supports slug fallback.
     let characterDoc = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedName}$`, "i") },
       userId: user.id,
@@ -58,6 +59,33 @@ export async function GET(
         name: { $regex: new RegExp(`^${escapedName}$`, "i") },
         userId: user.id,
       }).lean();
+    }
+
+    // Slug fallback (used by /characters routes)
+    if (!characterDoc) {
+      const slug = createSlug(identifier);
+
+      const regularCandidates = await Character.find({ userId: user.id })
+        .select("name")
+        .lean<Array<{ name: string }>>();
+      const slugMatch = regularCandidates.find((c) => createSlug(c.name) === slug);
+      if (slugMatch) {
+        characterDoc = await Character.findOne({
+          name: { $regex: new RegExp(`^${escapeRegExp(slugMatch.name)}$`, "i") },
+          userId: user.id,
+        }).lean();
+      } else {
+        const modCandidates = await ModCharacter.find({ userId: user.id })
+          .select("name")
+          .lean<Array<{ name: string }>>();
+        const modSlugMatch = modCandidates.find((c) => createSlug(c.name) === slug);
+        if (modSlugMatch) {
+          characterDoc = await ModCharacter.findOne({
+            name: { $regex: new RegExp(`^${escapeRegExp(modSlugMatch.name)}$`, "i") },
+            userId: user.id,
+          }).lean();
+        }
+      }
     }
 
     if (!characterDoc || Array.isArray(characterDoc) || !characterDoc.name || typeof characterDoc.name !== "string") {

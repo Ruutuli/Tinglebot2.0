@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
+import { createSlug } from "@/lib/string-utils";
 import { logger } from "@/utils/logger";
 
 function escapeRegExp(string: string): string {
@@ -27,8 +28,8 @@ export async function GET(
     await connect();
 
     const { characterName: characterNameParam } = await params;
-    const characterName = decodeURIComponent(characterNameParam);
-    const escapedName = escapeRegExp(characterName);
+    const identifier = decodeURIComponent(characterNameParam);
+    const escapedName = escapeRegExp(identifier);
 
     // Import Character models to verify character exists
     let Character, ModCharacter;
@@ -46,14 +47,15 @@ export async function GET(
       );
     }
 
-    // Find character (case-insensitive)
+    // Find character (case-insensitive). Supports both direct name and slug.
     type CharacterIdDoc = {
       _id: mongoose.Types.ObjectId;
+      name: string;
     };
     let foundCharacter = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedName}$`, "i") },
     })
-      .select("_id")
+      .select("_id name")
       .lean<CharacterIdDoc>();
 
     if (!foundCharacter) {
@@ -61,13 +63,36 @@ export async function GET(
       foundCharacter = await ModCharacter.findOne({
         name: { $regex: new RegExp(`^${escapedName}$`, "i") },
       })
-        .select("_id")
+        .select("_id name")
         .lean<CharacterIdDoc>();
+    }
 
-      if (!foundCharacter) {
-        return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    // Slug fallback (used by /characters routes)
+    if (!foundCharacter) {
+      const slug = createSlug(identifier);
+
+      const regularCandidates = await Character.find({})
+        .select("_id name")
+        .lean<CharacterIdDoc[]>();
+      const slugMatch = regularCandidates.find((c) => createSlug(c.name) === slug);
+      if (slugMatch) {
+        foundCharacter = slugMatch;
+      } else {
+        const modCandidates = await ModCharacter.find({})
+          .select("_id name")
+          .lean<CharacterIdDoc[]>();
+        const modSlugMatch = modCandidates.find((c) => createSlug(c.name) === slug);
+        if (modSlugMatch) {
+          foundCharacter = modSlugMatch;
+        }
       }
     }
+
+    if (!foundCharacter) {
+      return NextResponse.json({ error: "Character not found" }, { status: 404 });
+    }
+
+    const characterName = foundCharacter.name;
 
     // Import InventoryLog model
     let InventoryLog: InventoryLogModel;

@@ -1381,8 +1381,14 @@ async function handleShopBuy(interaction) {
 
     // ------------------- Log Transaction -------------------
     const inventoryLink = character.inventory || (character.name
-      ? `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(character.name)}`
-      : "https://tinglebot.xyz/inventories");
+      ? `https://tinglebot.xyz/characters/inventories/${String(character.name)
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/\s+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-+|-+$/g, "")}`
+      : "https://tinglebot.xyz/characters/inventories");
     const tokensDashboardLink = "https://tinglebot.xyz/profile?tab=tokens";
     const formattedDateTime = new Date().toLocaleString("en-US", {
       timeZone: "America/New_York",
@@ -1925,7 +1931,7 @@ if (quantity <= 0) {
     },
     {
      name: "📦 Quick Links",
-     value: `[Inventory](${character.inventory || "https://tinglebot.xyz/inventories"}) • [Tokens](https://tinglebot.xyz/profile?tab=tokens)`,
+     value: `[Inventory](${character.inventory || "https://tinglebot.xyz/characters/inventories"}) • [Tokens](https://tinglebot.xyz/profile?tab=tokens)`,
      inline: false,
     }
    );

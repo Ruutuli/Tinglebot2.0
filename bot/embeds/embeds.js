@@ -714,10 +714,25 @@ const editSyncMessage = async (
  characterInventoryLink
 ) => {
  try {
-  const validatedLink =
-   characterInventoryLink && characterInventoryLink.startsWith("http")
-    ? characterInventoryLink
-    : "https://docs.google.com/spreadsheets"; // Default fallback URL
+  const validatedLink = (() => {
+   if (typeof characterInventoryLink === "string") {
+    const trimmed = characterInventoryLink.trim();
+    if (trimmed.length > 0) {
+     if (trimmed.startsWith("http")) return trimmed;
+     if (trimmed.startsWith("/")) return `https://tinglebot.xyz${trimmed}`;
+    }
+   }
+
+   // Default to the dashboard inventory route
+   const slug = String(characterName || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+   return `https://tinglebot.xyz/characters/inventories/${slug}`;
+  })();
 
   let skippedLinesMessage = "";
   if (skippedLinesDetails.length > 0) {

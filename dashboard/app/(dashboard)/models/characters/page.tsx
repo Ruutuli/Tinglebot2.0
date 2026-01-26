@@ -356,16 +356,12 @@ export function CharacterCard({ character }: { character: Character }) {
               >
                 OC Page
               </Link>
-              {character.inventory && (
-                <a
-                  href={character.inventory}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto rounded-md bg-[var(--totk-grey-300)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-[var(--totk-grey-300)]/90 hover:shadow-md"
-                >
-                  Inventory
-                </a>
-              )}
+              <Link
+                href={`/characters/inventories/${createSlug(character.name)}`}
+                className="w-full sm:w-auto rounded-md bg-[var(--totk-grey-300)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-[var(--totk-grey-300)]/90 hover:shadow-md"
+              >
+                Inventory
+              </Link>
             </div>
           </div>
         </div>

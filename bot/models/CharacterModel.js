@@ -15,6 +15,29 @@ const GearSchema = new Schema({
 }, { _id: false });
 
 // ============================================================================
+// ------------------- Inventory Link Helpers -------------------
+// Inventory links should point to the Dashboard inventory route:
+//   https://tinglebot.xyz/characters/inventories/<slug>
+// ============================================================================
+
+const WEB_BASE_URL = 'https://tinglebot.xyz';
+
+function createSlug(name) {
+  if (!name) return '';
+  return String(name)
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function buildInventoryUrl(characterName) {
+  return `${WEB_BASE_URL}/characters/inventories/${createSlug(characterName)}`;
+}
+
+// ============================================================================
 // ------------------- Define the main character schema -------------------
 // Everything related to character data
 // ============================================================================
@@ -227,6 +250,15 @@ const characterSchema = new Schema({
 characterSchema.pre('save', function (next) {
   if (this.isNew || this.isModified('jobVoucher')) {
     this.jobVoucher = false;
+  }
+
+  // Ensure all characters use the dashboard inventory route
+  const currentInventory = this.inventory;
+  const isNewFormat =
+    typeof currentInventory === 'string' &&
+    currentInventory.includes('/characters/inventories/');
+  if (!isNewFormat) {
+    this.inventory = buildInventoryUrl(this.name);
   }
   
   // If this is an existing character (not new) and doesn't have a status, set it to 'accepted'

@@ -671,7 +671,13 @@ async function handleCreateModCharacter(interaction, subcommand) {
       currentVillage: characterData.village,
       job: characterData.job,
       icon: iconUrl,
-      inventory: `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(characterData.name)}`,
+      inventory: `https://tinglebot.xyz/characters/inventories/${String(characterData.name)
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "")}`,
       appLink: characterData.appLink,
       modTitle: characterData.modTitle,
       modType: characterData.modType,

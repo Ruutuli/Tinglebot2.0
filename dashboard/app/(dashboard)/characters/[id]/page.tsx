@@ -11,7 +11,7 @@ import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { Loading } from "@/components/ui";
 import { useSession } from "@/hooks/use-session";
-import { capitalize } from "@/lib/string-utils";
+import { capitalize, createSlug } from "@/lib/string-utils";
 import {
   type Character,
   type GearItem,
@@ -1428,17 +1428,13 @@ export default function OCDetailPage() {
                   Character Bio
                 </a>
               )}
-              {character.inventory && (
-                <a
-                  href={character.inventory}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-md bg-[var(--totk-grey-300)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-[var(--totk-grey-300)]/90 hover:shadow-md"
-                >
-                  <i className="fa-solid fa-box mr-2" aria-hidden="true" />
-                  Inventory
-                </a>
-              )}
+              <Link
+                href={`/characters/inventories/${createSlug(character.name)}`}
+                className="rounded-md bg-[var(--totk-grey-300)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-[var(--totk-grey-300)]/90 hover:shadow-md"
+              >
+                <i className="fa-solid fa-box mr-2" aria-hidden="true" />
+                Inventory
+              </Link>
               {user && character._id && character.userId === user.id && (
                 <>
                   <Link href={`/characters/edit/${character._id}`} className={BUTTON_SECONDARY_CLASSES}>
