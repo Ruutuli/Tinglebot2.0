@@ -35,12 +35,16 @@ export async function GET() {
     }
 
     // Fetch Character model for lookups
-    let Character: unknown;
+    type CharacterSelectDoc = {
+      _id: mongoose.Types.ObjectId;
+      name?: string;
+    };
+    let Character: mongoose.Model<CharacterSelectDoc>;
     if (mongoose.models.Character) {
-      Character = mongoose.models.Character;
+      Character = mongoose.models.Character as mongoose.Model<CharacterSelectDoc>;
     } else {
       const charModule = await import("@/models/CharacterModel.js");
-      Character = charModule.default;
+      Character = charModule.default as mongoose.Model<CharacterSelectDoc>;
     }
 
     // TEMPORARY: Add dummy data for user 211219306137124865 for preview
@@ -144,10 +148,6 @@ export async function GET() {
       characterMap.set("68436b06ce1cf9f45f17e99b", "Fiddle");
       characterMap.set("684184db7e58feb80a435bcb", "Test Character");
     } else if (characterIds.size > 0) {
-      type CharacterSelectDoc = {
-        _id: mongoose.Types.ObjectId;
-        name?: string;
-      };
       const characters = await Character.find({ 
         _id: { $in: Array.from(characterIds).map(id => new mongoose.Types.ObjectId(id)) } 
       })
