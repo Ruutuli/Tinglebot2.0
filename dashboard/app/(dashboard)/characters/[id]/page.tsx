@@ -1905,14 +1905,14 @@ export default function OCDetailPage() {
                         questTypeStats[questType] = (questTypeStats[questType] || 0) + 1;
                         
                         if (completion.village) {
-                          const village = completion.village.toLowerCase();
+                            const village = String(completion.village).toLowerCase();
                           villageStats[village] = (villageStats[village] || 0) + 1;
                         }
                       });
                       
                       // Helper function to get village color
                       const getVillageBadgeColor = (village: string): string => {
-                        const normalized = village.toLowerCase();
+                        const normalized = String(village).toLowerCase();
                         switch (normalized) {
                           case "rudania":
                             return "#C6000A";

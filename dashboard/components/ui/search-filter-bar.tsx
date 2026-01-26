@@ -230,7 +230,7 @@ export function SearchFilterBar({
 
                     {/* Dropdown Menu */}
                     {isOpen && (
-                      <div className="absolute left-0 top-full z-50 mt-2 min-w-[220px] max-w-[280px] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-2 shadow-xl" style={{ bottom: 'auto', top: '100%' }}>
+                      <div className="absolute left-0 top-full z-50 mt-2 min-w-[220px] max-w-[280px] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] p-2 shadow-xl" style={{ bottom: 'auto', top: '100%' }}>
                         {group.options.length > 0 ? (
                           <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
                             {group.options.map((option) => (

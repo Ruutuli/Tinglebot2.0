@@ -524,6 +524,14 @@ select {
   background-color: #1a1615 !important;
 }
 
+/* [globals.css]🎛️ Native select dropdown menu (options list) styling - */
+/* Note: exact rendering can still be OS/browser-controlled, but this darkens where supported. */
+select option,
+select optgroup {
+  background-color: var(--botw-black) !important;
+  color: var(--botw-pale) !important;
+}
+
 input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]):focus,
 input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="color"]):active,
 textarea:focus,
@@ -706,7 +714,7 @@ textarea::placeholder {
 .create-character-page select option {
   padding: 0.75rem 0.5rem !important;
   font-size: 1rem !important;
-  background-color: var(--botw-warm-black) !important;
+  background-color: var(--botw-black) !important;
   color: var(--botw-pale) !important;
   min-height: 44px !important;
 }

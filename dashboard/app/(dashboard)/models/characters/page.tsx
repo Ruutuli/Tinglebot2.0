@@ -187,9 +187,9 @@ export function getVillageCrestIcon(homeVillage: string): string | null {
   if (!homeVillage) return null;
   const village = homeVillage.toLowerCase().trim();
   const iconMap: Record<string, string> = {
-    rudania: "/assets/icons/[RotW] village crest_rudania_.png",
-    inariko: "/assets/icons/[RotW] village crest_inariko_.png",
-    vhintl: "/assets/icons/[RotW] village crest_vhintl_.png",
+    rudania: `/assets/icons/${encodeURIComponent("[RotW] village crest_rudania_.png")}`,
+    inariko: `/assets/icons/${encodeURIComponent("[RotW] village crest_inariko_.png")}`,
+    vhintl: `/assets/icons/${encodeURIComponent("[RotW] village crest_vhintl_.png")}`,
   };
   return iconMap[village] || null;
 }
@@ -197,8 +197,11 @@ export function getVillageCrestIcon(homeVillage: string): string | null {
 export function CharacterCard({ character }: { character: Character }) {
   const router = useRouter();
   const isModCharacter = character.isModCharacter === true;
-  const villageClass = isModCharacter ? null : getVillageBorderClass(character.homeVillage);
-  const villageStyle = isModCharacter ? null : getVillageBorderStyle(character.homeVillage);
+  // Defensive: some legacy records may have missing/null village fields.
+  const homeVillage = String(character.homeVillage ?? "");
+  const currentVillage = String(character.currentVillage ?? "");
+  const villageClass = isModCharacter ? null : getVillageBorderClass(homeVillage);
+  const villageStyle = isModCharacter ? null : getVillageBorderStyle(homeVillage);
   const goldStyle = isModCharacter ? getModCharacterGoldStyle() : null;
   
   const handleCardClick = () => {
@@ -224,7 +227,7 @@ export function CharacterCard({ character }: { character: Character }) {
     }, 100);
   };
   
-  const villageCrestIcon = getVillageCrestIcon(character.homeVillage);
+  const villageCrestIcon = getVillageCrestIcon(homeVillage);
   
   return (
     <div
@@ -243,7 +246,8 @@ export function CharacterCard({ character }: { character: Character }) {
           e.currentTarget.style.border = String(hoverGoldStyle.border || "");
           e.currentTarget.style.boxShadow = String(hoverGoldStyle.boxShadow || "");
         } else if (villageStyle) {
-          const village = character.homeVillage.toLowerCase().trim();
+          const village = homeVillage.toLowerCase().trim();
+          if (!village) return;
           const villageColor = VILLAGE_COLORS[village as keyof typeof VILLAGE_COLORS];
           if (villageColor) {
             e.currentTarget.style.border = `2px solid ${rgba(villageColor, 1)}`;
@@ -257,7 +261,8 @@ export function CharacterCard({ character }: { character: Character }) {
           e.currentTarget.style.border = String(normalGoldStyle.border || "");
           e.currentTarget.style.boxShadow = String(normalGoldStyle.boxShadow || "");
         } else if (villageStyle) {
-          const village = character.homeVillage.toLowerCase().trim();
+          const village = homeVillage.toLowerCase().trim();
+          if (!village) return;
           const villageColor = VILLAGE_COLORS[village as keyof typeof VILLAGE_COLORS];
           if (villageColor) {
             e.currentTarget.style.border = `2px solid ${rgba(villageColor, 0.8)}`;
@@ -270,7 +275,7 @@ export function CharacterCard({ character }: { character: Character }) {
         <div className="absolute right-3 top-3 z-20">
           <img
             src={villageCrestIcon}
-            alt={`${character.homeVillage} crest`}
+            alt={`${homeVillage || "Unknown"} crest`}
             className="h-16 w-16 object-contain opacity-80 drop-shadow-lg"
             onClick={(e) => e.stopPropagation()}
           />
@@ -411,18 +416,18 @@ export function CharacterCard({ character }: { character: Character }) {
               <span className="mb-1 block text-[var(--totk-grey-200)]">Home Village:</span>
               <div
                 className="character-card-input rounded border px-2.5 py-1.5"
-                style={getVillageTextStyle(character.homeVillage)}
+                style={getVillageTextStyle(homeVillage)}
               >
-                {capitalize(character.homeVillage)}
+                {homeVillage ? capitalize(homeVillage) : "Unknown"}
               </div>
             </div>
             <div>
               <span className="mb-1 block text-[var(--totk-grey-200)]">Current Village:</span>
               <div
                 className="character-card-input rounded border px-2.5 py-1.5"
-                style={getVillageTextStyle(character.currentVillage)}
+                style={getVillageTextStyle(currentVillage)}
               >
-                {capitalize(character.currentVillage)}
+                {currentVillage ? capitalize(currentVillage) : "Unknown"}
               </div>
             </div>
             <div>

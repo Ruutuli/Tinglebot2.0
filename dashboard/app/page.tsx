@@ -461,9 +461,21 @@ const styles = {
   },
 };
 
+const publicFile = (filename: string) => `/${encodeURIComponent(filename)}`;
+
 const SECTION_HEADER_IMAGES = {
-  section: { left: "/Side=Left, Type=Spoken.svg", right: "/Side=Right, Type=Spoken.svg", width: 10, height: 40 },
-  welcome: { left: "/Side=Left.svg", right: "/Side=Right.svg", width: 24, height: 10 },
+  section: {
+    left: publicFile("Side=Left, Type=Spoken.svg"),
+    right: publicFile("Side=Right, Type=Spoken.svg"),
+    width: 10,
+    height: 40,
+  },
+  welcome: {
+    left: publicFile("Side=Left.svg"),
+    right: publicFile("Side=Right.svg"),
+    width: 24,
+    height: 10,
+  },
 } as const;
 
 // ============================================================================
@@ -497,6 +509,7 @@ function SectionHeader({
             aria-hidden
             className={s.image}
             height={imgs.height}
+            unoptimized
             src={imgs.left}
             width={imgs.width}
           />
@@ -506,6 +519,7 @@ function SectionHeader({
             aria-hidden
             className={s.image}
             height={imgs.height}
+            unoptimized
             src={imgs.right}
             width={imgs.width}
           />
@@ -522,6 +536,7 @@ function SectionHeader({
         aria-hidden
         className={s.image}
         height={imgs.height}
+        unoptimized
         src={imgs.left}
         width={imgs.width}
       />
@@ -531,6 +546,7 @@ function SectionHeader({
         aria-hidden
         className={s.image}
         height={imgs.height}
+        unoptimized
         src={imgs.right}
         width={imgs.width}
       />
@@ -682,7 +698,7 @@ function CountdownCard({
               unoptimized
               className="relative z-10 h-full w-auto animate-sheikah-pulse opacity-70 transition-all duration-500 group-hover:opacity-100"
               height={156}
-              src="/Side=Left, Type=Shekiah.svg"
+              src={publicFile("Side=Left, Type=Shekiah.svg")}
               width={66}
             />
           </div>
@@ -699,7 +715,7 @@ function CountdownCard({
               unoptimized
               className="relative z-10 h-full w-auto animate-sheikah-pulse opacity-70 transition-all duration-500 group-hover:opacity-100"
               height={156}
-              src="/Side=Right, Type=Shekiah.svg"
+              src={publicFile("Side=Right, Type=Shekiah.svg")}
               width={66}
             />
           </div>
@@ -822,6 +838,7 @@ function WeatherCard(v: VillageWeatherItem) {
                   aria-hidden
                   className="h-9 w-9 object-contain"
                   height={36}
+                  unoptimized
                   src={villageCrestPath}
                   width={36}
                 />

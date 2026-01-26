@@ -560,7 +560,7 @@ export default function InventoriesPage() {
         (t) =>
           t.location &&
           activeLocations.some((al) =>
-            t.location!.toLowerCase().includes(al.toLowerCase())
+            String(t.location).toLowerCase().includes(al.toLowerCase())
           )
       );
     }

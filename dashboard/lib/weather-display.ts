@@ -4,6 +4,12 @@
  * Used for correct banner + overlay images and precip → icon (Clear/Cloudy/Rain/Storm) mapping.
  */
 
+function encodePublicFilename(filename: string): string {
+  // Defensive: some CDNs/proxies mishandle special characters in the raw path.
+  // Next/Node will still decode this back to the real filename in /public.
+  return `/${encodeURIComponent(filename)}`;
+}
+
 /** Precipitation/special condition → overlay filename (ROOTS-{name}.png). Special takes priority over precip. */
 export const OVERLAY_MAPPING: Record<string, string> = {
   Rain: "rain",
@@ -42,9 +48,9 @@ export const BANNER_MAP: Record<string, string> = {
 
 /** Village → crest icon in /assets/icons/. */
 export const VILLAGE_CREST_MAP: Record<string, string> = {
-  Rudania: "/assets/icons/[RotW] village crest_rudania_.png",
-  Inariko: "/assets/icons/[RotW] village crest_inariko_.png",
-  Vhintl: "/assets/icons/[RotW] village crest_vhintl_.png",
+  Rudania: `/assets/icons/${encodeURIComponent("[RotW] village crest_rudania_.png")}`,
+  Inariko: `/assets/icons/${encodeURIComponent("[RotW] village crest_inariko_.png")}`,
+  Vhintl: `/assets/icons/${encodeURIComponent("[RotW] village crest_vhintl_.png")}`,
 };
 
 export function getVillageCrestPath(village: string | null | undefined): string | null {
@@ -211,5 +217,5 @@ export function getActiveSvgTypesForPrecip(label: string | null | undefined): Pr
 
 /** Path for Weather={type}, Glowing={bool}.svg. */
 export function getWeatherSvgPath(type: PrecipIconType, glowing: boolean): string {
-  return `/Weather=${type}, Glowing=${glowing}.svg`;
+  return encodePublicFilename(`Weather=${type}, Glowing=${glowing}.svg`);
 }

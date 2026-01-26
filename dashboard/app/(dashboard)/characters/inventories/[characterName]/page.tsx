@@ -620,7 +620,7 @@ export default function CharacterInventoryPage() {
       filtered = filtered.filter((log) =>
         log.location &&
         activeLocations.some((al) =>
-          log.location!.toLowerCase().includes(al.toLowerCase())
+          String(log.location).toLowerCase().includes(al.toLowerCase())
         )
       );
     }
