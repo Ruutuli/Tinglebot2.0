@@ -78,16 +78,39 @@ export async function GET(_req: NextRequest) {
     );
 
     // Get votes for each character
-    const charactersWithVotes = await Promise.all(
-      pendingChars.map(async (char) => {
-        type Vote = {
+    type Vote = {
+      vote: "approve" | "needs_changes";
+      modId: string;
+      modUsername: string;
+      reason: string | null;
+      note: string | null;
+      createdAt: Date;
+    };
+
+    type CharacterWithVotes = Record<string, unknown> & {
+      userId: string;
+      voteSummary: {
+        approveCount: number;
+        needsChangesCount: number;
+        totalVotes: number;
+        currentUserVote: {
           vote: "approve" | "needs_changes";
+          reason: string | null;
+          note: string | null;
+        } | null;
+        votes: Array<{
           modId: string;
           modUsername: string;
+          vote: "approve" | "needs_changes";
           reason: string | null;
           note: string | null;
           createdAt: Date;
-        };
+        }>;
+      };
+    };
+
+    const charactersWithVotes: CharacterWithVotes[] = await Promise.all(
+      pendingChars.map(async (char) => {
         let votes: Vote[] = [];
         try {
           votes = await getVotesForCharacter(
@@ -128,7 +151,7 @@ export async function GET(_req: NextRequest) {
               createdAt: v.createdAt,
             })),
           },
-        };
+        } as CharacterWithVotes;
       })
     );
 
