@@ -2349,7 +2349,7 @@ function NotificationsTabContent() {
     <SectionCard title="Notifications" icon="fa-bell">
       <div className="space-y-5">
         {notifications.length > 0 && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-gradient-to-r from-[var(--botw-warm-black)]/60 to-[var(--totk-brown)]/30 p-3 shadow-sm backdrop-blur-sm">
+          <div className="flex flex-col gap-3 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-gradient-to-r from-[var(--botw-warm-black)]/60 to-[var(--totk-brown)]/30 p-3 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <i className="fa-solid fa-bars-staggered text-sm text-[var(--totk-light-ocher)]" />
               <span className="text-sm font-medium text-[var(--botw-pale)]">
@@ -2361,11 +2361,11 @@ function NotificationsTabContent() {
                 )}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <button
                 onClick={handleMarkAllAsRead}
                 disabled={markingAll || !hasUnreadNotifications}
-                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 sm:w-auto ${
                   markingAll || !hasUnreadNotifications
                     ? "cursor-not-allowed bg-[var(--totk-grey-400)]/30 text-[var(--totk-grey-200)] opacity-50"
                     : "bg-gradient-to-r from-[var(--totk-dark-green)] to-[var(--totk-green)] text-[var(--totk-ivory)] shadow-md shadow-[var(--totk-dark-green)]/20 hover:shadow-[var(--totk-dark-green)]/30 hover:scale-105"
@@ -2377,7 +2377,7 @@ function NotificationsTabContent() {
               <button
                 onClick={handleDeleteAll}
                 disabled={deletingAll}
-                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 sm:w-auto ${
                   deletingAll
                     ? "cursor-not-allowed bg-[var(--totk-grey-400)]/30 text-[var(--totk-grey-200)] opacity-50"
                     : "bg-gradient-to-r from-[#dc2626] to-[#ef4444] text-white shadow-md shadow-[#dc2626]/20 hover:shadow-[#dc2626]/30 hover:scale-105"
@@ -2443,7 +2443,7 @@ function NotificationsTabContent() {
                           )}
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <div className="flex shrink-0 items-center gap-1.5 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100">
                         {!n.read && (
                           <button
                             onClick={() => handleMarkAsRead(n.id)}

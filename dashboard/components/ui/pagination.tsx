@@ -36,14 +36,33 @@ export function Pagination({
 }: PaginationProps) {
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
+  // Make pagination denser on small screens to avoid wrapping.
+  const [isSmUp, setIsSmUp] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)"); // Tailwind 'sm'
+    const update = () => setIsSmUp(mq.matches);
+    update();
+
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", update);
+      return () => mq.removeEventListener("change", update);
+    }
+
+    // Fallback for older browsers.
+    mq.addListener(update);
+    return () => mq.removeListener(update);
+  }, []);
+
+  const effectiveMaxVisiblePages = isSmUp ? maxVisiblePages : Math.min(maxVisiblePages, 3);
+
   // Calculate visible page numbers
   const visiblePages = useMemo(() => {
-    if (totalPages <= maxVisiblePages) {
+    if (totalPages <= effectiveMaxVisiblePages) {
       return Array.from({ length: totalPages }, (_, i) => i + 1);
     }
 
     const pages: (number | string)[] = [];
-    const halfVisible = Math.floor(maxVisiblePages / 2);
+    const halfVisible = Math.floor(effectiveMaxVisiblePages / 2);
 
     // Always show first page
     pages.push(1);
@@ -54,12 +73,12 @@ export function Pagination({
 
     // Adjust if we're near the start
     if (currentPage <= halfVisible + 1) {
-      end = Math.min(totalPages - 1, maxVisiblePages);
+      end = Math.min(totalPages - 1, effectiveMaxVisiblePages);
     }
 
     // Adjust if we're near the end
     if (currentPage >= totalPages - halfVisible) {
-      start = Math.max(2, totalPages - maxVisiblePages + 1);
+      start = Math.max(2, totalPages - effectiveMaxVisiblePages + 1);
     }
 
     // Add ellipsis if needed
@@ -83,7 +102,7 @@ export function Pagination({
     }
 
     return pages;
-  }, [currentPage, totalPages, maxVisiblePages]);
+  }, [currentPage, totalPages, effectiveMaxVisiblePages]);
 
   if (totalPages <= 1) {
     return null;
@@ -150,7 +169,7 @@ export function Pagination({
           if (typeof page === "string") {
             const isEditing = jumpTarget === page;
             return (
-              <span key={page} className="flex min-w-[2.5rem] items-center justify-center">
+              <span key={page} className="flex min-w-[2.25rem] sm:min-w-[2.5rem] items-center justify-center">
                 {isEditing ? (
                   <input
                     ref={jumpInputRef}
@@ -162,13 +181,13 @@ export function Pagination({
                     onKeyDown={handleJumpKeyDown}
                     onBlur={submitJump}
                     placeholder={`1–${totalPages}`}
-                    className="w-16 rounded-lg border-2 border-[var(--totk-mid-ocher)] bg-[var(--totk-brown)] px-2.5 py-1.5 text-center text-base font-medium text-[var(--totk-ivory)] outline-none placeholder:font-normal placeholder:text-[var(--totk-grey-100)] focus:border-[var(--totk-light-green)] focus:ring-2 focus:ring-[var(--totk-light-green)]/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="w-14 sm:w-16 rounded-lg border-2 border-[var(--totk-mid-ocher)] bg-[var(--totk-brown)] px-2 py-1.5 sm:px-2.5 text-center text-sm sm:text-base font-medium text-[var(--totk-ivory)] outline-none placeholder:font-normal placeholder:text-[var(--totk-grey-100)] focus:border-[var(--totk-light-green)] focus:ring-2 focus:ring-[var(--totk-light-green)]/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 ) : (
                   <button
                     type="button"
                     onClick={() => setJumpTarget(page as "ellipsis-start" | "ellipsis-end")}
-                    className="min-w-[2.5rem] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-grey-200)] transition-all hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/30 hover:text-[var(--botw-pale)]"
+                    className="min-w-[2.25rem] sm:min-w-[2.5rem] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm text-[var(--totk-grey-200)] transition-all hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/30 hover:text-[var(--botw-pale)]"
                     title={`Jump to page (1–${totalPages})`}
                   >
                     ...
@@ -183,7 +202,7 @@ export function Pagination({
             <button
               key={page}
               onClick={() => handlePageChange(page)}
-              className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
+              className={`min-w-[2.25rem] sm:min-w-[2.5rem] rounded-lg border-2 px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium transition-all ${
                 isActive
                   ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
                   : "border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--botw-pale)] hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/30"

@@ -232,7 +232,7 @@ export function CharacterCard({ character }: { character: Character }) {
   return (
     <div
       onClick={handleCardClick}
-      className={`character-card group relative block rounded-lg p-5 shadow-lg transition-all cursor-pointer ${
+      className={`character-card group relative block rounded-lg p-4 sm:p-5 shadow-lg transition-all cursor-pointer ${
         isModCharacter
           ? "border-2"
           : villageClass
@@ -272,11 +272,11 @@ export function CharacterCard({ character }: { character: Character }) {
       }}
     >
       {villageCrestIcon && (
-        <div className="absolute right-3 top-3 z-20">
+        <div className="absolute right-2 top-2 sm:right-3 sm:top-3 z-20">
           <img
             src={villageCrestIcon}
             alt={`${homeVillage || "Unknown"} crest`}
-            className="h-16 w-16 object-contain opacity-80 drop-shadow-lg"
+            className="h-12 w-12 sm:h-16 sm:w-16 object-contain opacity-80 drop-shadow-lg"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
@@ -287,7 +287,7 @@ export function CharacterCard({ character }: { character: Character }) {
             <img
               src={character.icon}
               alt={character.name}
-              className={`h-28 w-28 rounded-lg border-2 object-cover ${
+              className={`h-24 w-24 sm:h-28 sm:w-28 rounded-lg border-2 object-cover ${
                 isModCharacter
                   ? "border-[#FFD700] shadow-[0_0_12px_rgba(255,215,0,0.6)]"
                   : "border-[var(--totk-light-green)] shadow-[0_0_12px_rgba(73,213,156,0.6)]"
@@ -300,7 +300,7 @@ export function CharacterCard({ character }: { character: Character }) {
             <img
               src="/ankle_icon.png"
               alt={character.name}
-              className={`h-28 w-28 rounded-lg border-2 object-cover ${
+              className={`h-24 w-24 sm:h-28 sm:w-28 rounded-lg border-2 object-cover ${
                 isModCharacter
                   ? "border-[#FFD700] shadow-[0_0_12px_rgba(255,215,0,0.6)]"
                   : "border-[var(--totk-light-green)] shadow-[0_0_12px_rgba(73,213,156,0.6)]"
@@ -338,13 +338,13 @@ export function CharacterCard({ character }: { character: Character }) {
                 </div>
               </div>
             </div>
-            <div className="mt-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row flex-wrap" onClick={(e) => e.stopPropagation()}>
               {character.appLink && (
                 <a
                   href={character.appLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded-md bg-[var(--totk-mid-ocher)] px-3 py-1.5 text-xs font-medium text-[var(--totk-ivory)] shadow-sm transition-all hover:bg-[var(--totk-dark-ocher)] hover:shadow-md"
+                  className="w-full sm:w-auto rounded-md bg-[var(--totk-mid-ocher)] px-3 py-1.5 text-xs font-medium text-[var(--totk-ivory)] shadow-sm transition-all hover:bg-[var(--totk-dark-ocher)] hover:shadow-md"
                 >
                   <i className="fa-solid fa-external-link mr-1.5" />
                   OC Bio
@@ -352,7 +352,7 @@ export function CharacterCard({ character }: { character: Character }) {
               )}
               <Link
                 href={`/characters/${createSlug(character.name)}`}
-                className="rounded-md bg-[var(--botw-blue)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-[var(--botw-blue)]/90 hover:shadow-md"
+                className="w-full sm:w-auto rounded-md bg-[var(--botw-blue)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-[var(--botw-blue)]/90 hover:shadow-md"
               >
                 OC Page
               </Link>
@@ -361,7 +361,7 @@ export function CharacterCard({ character }: { character: Character }) {
                   href={character.inventory}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded-md bg-[var(--totk-grey-300)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-[var(--totk-grey-300)]/90 hover:shadow-md"
+                  className="w-full sm:w-auto rounded-md bg-[var(--totk-grey-300)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-[var(--totk-grey-300)]/90 hover:shadow-md"
                 >
                   Inventory
                 </a>

@@ -1383,7 +1383,7 @@ async function handleShopBuy(interaction) {
     const inventoryLink = character.inventory || (character.name
       ? `https://tinglebot.xyz/character-inventory.html?character=${encodeURIComponent(character.name)}`
       : "https://tinglebot.xyz/inventories");
-    const tokenTrackerLink = user.tokenTracker || "https://example.com/tokens/default";
+    const tokensDashboardLink = "https://tinglebot.xyz/profile?tab=tokens";
     const formattedDateTime = new Date().toLocaleString("en-US", {
       timeZone: "America/New_York",
     });
@@ -1407,7 +1407,14 @@ async function handleShopBuy(interaction) {
     // Note: Google Sheets logging is handled automatically by addItemInventoryDatabase()
 
     // Update token balance
-    await updateTokenBalance(interaction.user.id, -totalPrice);
+    const purchaseDescriptionForLog = hasBirthdayDiscount 
+      ? `${characterName} - ${itemName} x${quantity} - Shop Purchase (🎂 ${discountPercentage}% Birthday Discount - Saved ${savedAmount} tokens)`
+      : `${characterName} - ${itemName} x${quantity} - Shop Purchase`;
+    await updateTokenBalance(interaction.user.id, -totalPrice, {
+      category: 'purchase',
+      description: purchaseDescriptionForLog,
+      link: interactionUrl
+    });
 
     // ------------------- Send Success Message -------------------
     const purchaseEmbed = new EmbedBuilder()
@@ -1428,8 +1435,8 @@ async function handleShopBuy(interaction) {
           inline: true,
         },
         {
-          name: "🪙 Token Tracker",
-          value: `[View Tracker](${tokenTrackerLink})`,
+          name: "🪙 Tokens",
+          value: `[View Tokens](${tokensDashboardLink})`,
           inline: true,
         }
       );
@@ -1830,14 +1837,18 @@ if (quantity <= 0) {
     }
   }
 
-  await updateTokenBalance(interaction.user.id, totalPrice);
+  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+  await updateTokenBalance(interaction.user.id, totalPrice, {
+    category: 'sale',
+    description: `${characterName} - Sold ${itemName} x${quantity}`,
+    link: interactionUrl
+  });
 
   logger.debug('ECONOMY', `Token update for ${interaction.user.tag}: ${user.tokens} + ${totalPrice} = ${user.tokens + totalPrice}`);
 
   // Log to token tracker
   let tokenTrackerLogged = false;
   if (user.tokenTracker) {
-   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
    const tokenRow = [
     `${characterName} - Sold ${itemName} x${quantity}`,
     interactionUrl,
@@ -1914,7 +1925,7 @@ if (quantity <= 0) {
     },
     {
      name: "📦 Quick Links",
-     value: `[Inventory](${character.inventory || "https://example.com/inventory"}) • [Token Tracker](${user?.tokenTracker || "https://example.com/tokens"})`,
+     value: `[Inventory](${character.inventory || "https://tinglebot.xyz/inventories"}) • [Tokens](https://tinglebot.xyz/profile?tab=tokens)`,
      inline: false,
     }
    );

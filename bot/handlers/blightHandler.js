@@ -1326,6 +1326,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       const userData = await getUserTokenData(userId);
       const currentTokenBalance = userData.tokens || 0;
       const tokenTrackerLink = userData.tokenTracker || '';
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
       if (currentTokenBalance <= 0) {
         await interaction.editReply({
@@ -1341,7 +1342,6 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
           const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
           const auth = await authorizeSheets();
           const formattedDateTime = new Date().toISOString();
-          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
           const tokenRow = [[
             'Blight Healing',
             interactionUrl,
@@ -1374,7 +1374,11 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         return;
       }
 
-      await updateTokenBalance(userId, -currentTokenBalance);
+      await updateTokenBalance(userId, -currentTokenBalance, {
+        category: 'blight',
+        description: `Blight healing token forfeit (${character.name})`,
+        link: interactionUrl
+      });
 
       submission.status = 'completed';
       submission.submittedAt = new Date().toISOString();

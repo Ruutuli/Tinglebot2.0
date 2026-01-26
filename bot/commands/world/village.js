@@ -203,6 +203,7 @@ async function processTokenContribution(village, interaction, qty, characterName
 
     const userId = interaction.user.id;
     const tokenRecord = await getOrCreateToken(userId);
+    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
     if (tokenRecord.tokens < qty) {
         return { success: false, message: `❌ **You do not have enough tokens to contribute.** Current Balance: ${tokenRecord.tokens}, Required: ${qty}` };
@@ -220,7 +221,11 @@ async function processTokenContribution(village, interaction, qty, characterName
 
     // Deduct tokens from user balance
     const balanceBefore = tokenRecord.tokens;
-    const newBalance = await updateTokenBalance(userId, -qty);
+    const newBalance = await updateTokenBalance(userId, -qty, {
+        category: 'village',
+        description: `Village contribution (${village.name}) Tokens x${qty} by ${characterName}`,
+        link: interactionUrl
+    });
     console.log(`[processTokenContribution] Deducted ${qty} tokens from user ${userId}. Balance: ${balanceBefore} → ${newBalance}`);
 
     // Update village tokens
@@ -313,7 +318,12 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                 
                 // Deduct full amount upfront from user balance
                 const balanceBefore = tokenRecord.tokens;
-                const newBalance = await updateTokenBalance(userId, -qty);
+                const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+                const newBalance = await updateTokenBalance(userId, -qty, {
+                    category: 'village',
+                    description: `Village repair/upgrade (${village.name}) Tokens x${qty} by ${characterName}`,
+                    link: interactionUrl
+                });
                 console.log(`[processImprove] Deducted ${qty} tokens from user ${userId} for repair. Balance: ${balanceBefore} → ${newBalance}`);
                 village.health = Math.min(maxHealth, village.health + actualHpRestored);
                 
@@ -352,7 +362,11 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                         
                         // Refund excess tokens
                         if (tokensRemaining > actualTokensToAdd) {
-                            await updateTokenBalance(interaction.user.id, tokensRemaining - actualTokensToAdd);
+                            await updateTokenBalance(interaction.user.id, tokensRemaining - actualTokensToAdd, {
+                                category: 'village',
+                                description: `Village refund (${village.name}) Excess tokens`,
+                                link: interactionUrl
+                            });
                         }
                     } else {
                         village.currentTokens = currentTokens + tokensRemaining;
@@ -395,7 +409,11 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                 
                 // If repair is complete but can't upgrade, refund remaining tokens
                 if (repairComplete && tokensRemaining > 0 && !canUpgradeNow) {
-                    await updateTokenBalance(interaction.user.id, tokensRemaining);
+                    await updateTokenBalance(interaction.user.id, tokensRemaining, {
+                        category: 'village',
+                        description: `Village refund (${village.name}) Max level`,
+                        link: interactionUrl
+                    });
                 }
                 
                 await village.save();
@@ -521,7 +539,12 @@ async function processRepair(village, interaction, qty, characterName) {
         const actualTokensUsed = actualHpRestored * tokensPerHP;
 
         // Deduct tokens
-        await updateTokenBalance(userId, -actualTokensUsed);
+        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+        await updateTokenBalance(userId, -actualTokensUsed, {
+            category: 'village',
+            description: `Village repair (${village.name}) Tokens x${actualTokensUsed} by ${characterName}`,
+            link: interactionUrl
+        });
 
         // Update village HP
         village.health = Math.min(maxHealth, village.health + actualHpRestored);

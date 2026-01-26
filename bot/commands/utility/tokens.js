@@ -29,31 +29,17 @@ module.exports = {
       // ------------------- Handle 'check' subcommand -------------------
       if (subcommand === 'check') {
         const tokenRecord = await getOrCreateToken(userId);
-        
-        if (!tokenRecord.tokenTracker) {
-          const { fullMessage } = handleTokenError(new Error('No token tracker configured'), interaction);
-          await interaction.editReply({
-            content: fullMessage,
-            flags: [MessageFlags.Ephemeral],
-          });
-          return;
-        }
-        
+
         // Prepare embed response
         const embed = new EmbedBuilder()
           .setTitle(`${interaction.user.username}'s Token Balance`)
           .addFields(
-            { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens}**`, inline: false },
-            {
-              name: '🔗 **Token Tracker Link**',
-              value: `> [📄 View your token tracker](${tokenRecord.tokenTracker})`,
-              inline: false,
-            }
+            { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens || 0}**`, inline: false }
           )
           .setColor(0xAA926A)
           .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-          .setFooter({ text: 'Token Tracker' })
+          .setFooter({ text: 'Tokens' })
           .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });

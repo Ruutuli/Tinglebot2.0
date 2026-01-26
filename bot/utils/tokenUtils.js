@@ -410,108 +410,46 @@ function calculateWritingTokensWithCollab(wordCount, collab = null, questBonus =
 // ------------------- Handle Token Errors -------------------
 // Provides consistent error handling and user guidance for token-related issues
 function handleTokenError(error, interaction) {
-    // Only log actual system errors, not user-facing errors
-    if (!error.message.includes('Invalid URL') && 
-        !error.message.includes('permission') && 
-        !error.message.includes('404') && 
-        !error.message.includes('headers') &&
-        !error.message.includes('Invalid sheet format') &&
-        !error.message.includes('contains spaces that will cause range parsing errors')) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Only log actual system errors, not common user-facing errors.
+    if (
+        !message.includes('Insufficient tokens') &&
+        !message.includes('Unknown interaction') &&
+        !message.includes('Invalid token change value') &&
+        !message.includes('Database queries temporarily blocked')
+    ) {
         console.error('[tokenUtils.js]: ❌ System error:', error);
     }
 
-    let errorEmbed = new EmbedBuilder()
+    const errorEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
         .setTimestamp();
 
-    if (error.message.includes('Invalid URL')) {
+    if (message.includes('Insufficient tokens')) {
         errorEmbed
-            .setTitle('❌ Invalid Token Tracker Link')
-            .setDescription('Your token tracker link is not set up correctly.')
-            .addFields(
-                { name: '📝 Quick Guide', value: '1. Use `/tokens setup` to set up your tracker\n2. Make sure to use a valid Google Sheets URL' }
-            )
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
-    } else if (error.message.includes('permission')) {
-        errorEmbed
-            .setTitle('❌ Access Denied')
-            .setDescription('The bot cannot access your token tracker.')
-            .addFields(
-                { name: '📝 Quick Guide', value: '1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure to give **edit** permissions' }
-            )
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
-    } else if (error.message.includes('404')) {
-        errorEmbed
-            .setTitle('❌ Missing Sheet or Tab')
-            .setDescription('Your token tracker sheet or tab is missing.')
-            .addFields(
-                { name: '📝 Quick Guide', value: '1. Make sure you have a tab named `loggedTracker`\n2. Check that your sheet URL is correct' }
-            )
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
-    } else if (error.message.includes('headers')) {
-        errorEmbed
-            .setTitle('❌ Missing Required Headers')
-            .setDescription('Your token tracker is missing required headers.')
-            .addFields(
-                { name: '📝 Quick Guide', value: '1. Add these headers in cells B7:F7:\n`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT`' }
-            )
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
-    } else if (error.message.includes('No \'earned\' entries found')) {
-        errorEmbed
-            .setTitle('✅ Token Tracker Setup Complete')
-            .setDescription('Your token tracker has been set up successfully!')
-            .addFields(
-                { name: '📝 Next Steps', value: '1. Add entries with type "earned" in column E to start tracking tokens:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```\n\n2. Your current token balance is set to 0\n3. Use `/tokens check` to view your balance\n4. Use `/tokens setup` again to sync when you add entries' }
-            )
-            .setColor(0x00FF00)
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
-    } else if (error.message.includes('contains spaces that will cause range parsing errors')) {
-        errorEmbed
-            .setTitle('❌ Sheet Name Contains Spaces')
-            .setDescription('Your sheet tab name has spaces that prevent the bot from reading it correctly.')
-            .addFields(
-                { name: '📝 How to Fix', value: '1. Right-click on your sheet tab name\n2. Select "Rename"\n3. Change it to exactly `loggedTracker` (no spaces)\n4. Press Enter to save\n\n**Important:** The tab name must be exactly `loggedTracker` with no leading, trailing, or multiple spaces.' }
-            )
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
-    } else if (error.message.includes('Unknown interaction')) {
+            .setTitle('❌ Not Enough Tokens')
+            .setDescription('You do not have enough tokens to complete that action.');
+    } else if (message.includes('Unknown interaction')) {
         errorEmbed
             .setTitle('❌ Interaction Expired')
-            .setDescription('The interaction has expired.')
-            .addFields(
-                { name: '📝 Quick Guide', value: '1. Please try the command again\n2. Make sure to respond within 3 seconds' }
-            )
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
+            .setDescription('This interaction expired. Please run the command again.');
+    } else if (message.includes('Database queries temporarily blocked')) {
+        errorEmbed
+            .setTitle('⚠️ Please Try Again')
+            .setDescription('The database is temporarily throttling requests. Please try again in a moment.');
     } else {
         errorEmbed
-            .setTitle('❌ Token Tracker Error')
-            .setDescription('An error occurred with your token tracker!')
-            .addFields(
-                { 
-                    name: '📝 Required Headers', 
-                    value: 'Make sure your sheet has these headers in row 7 (B7:F7):\n```\nSUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n```',
-                    inline: false 
-                },
-                { 
-                    name: '📋 Example Entry', 
-                    value: 'Add at least one entry with type "earned" in column E:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```',
-                    inline: false 
-                },
-                { 
-                    name: '🔑 Access Setup', 
-                    value: '1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure you have a tab named exactly `loggedTracker`\n3. Use `/tokens setup` to verify your setup',
-                    inline: false 
-                }
-            )
-            .setFooter({ 
-                text: 'Need more help? Use /tokens setup to verify your setup'
-            })
-            .setTimestamp();
+            .setTitle('❌ Token Error')
+            .setDescription('An error occurred while processing tokens. Please try again later.');
     }
 
-    return {
-        errorEmbed,
-        fullMessage: `${errorEmbed.data.title}\n\n${errorEmbed.data.description}\n\n${errorEmbed.data.fields[0].value}\n\n💡 Need more help? Use \`/tokens setup\` to verify your setup.`
-    };
+    const title = errorEmbed.data?.title || '❌ Token Error';
+    const description = errorEmbed.data?.description || 'An error occurred.';
+    const firstField = errorEmbed.data?.fields?.[0]?.value || '';
+    const fullMessage = [title, description, firstField].filter(Boolean).join('\n\n');
+
+    return { errorEmbed, fullMessage };
 }
 
 // ------------------- Log Token Balance Change -------------------

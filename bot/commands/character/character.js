@@ -797,9 +797,9 @@ async function handleChangeJob(interaction) {
   const userTokens = await getOrCreateToken(interaction.user.id);
   
   if (!userTokens) {
-    console.log('[handleChangeJob] No token tracker found');
+    console.log('[handleChangeJob] Failed to load user token balance');
     await interaction.followUp({
-      content: "❌ You do not have a Token Tracker set up. Please use `/tokens setup` first.",
+      content: "❌ Unable to load your token balance right now. Please try again in a moment.",
       ephemeral: true
     });
     return;
@@ -816,7 +816,12 @@ async function handleChangeJob(interaction) {
   }
 
   console.log('[handleChangeJob] Processing job change and deducting 500 tokens');
-  await updateTokenBalance(interaction.user.id, -500);
+  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+  await updateTokenBalance(interaction.user.id, -500, {
+    category: 'character',
+    description: `Job change (${character.name}: ${previousJob} → ${newJob})`,
+    link: interactionUrl
+  });
 
   // Log to token tracker
   try {
@@ -1152,9 +1157,9 @@ async function handleChangeVillage(interaction) {
   const userTokens = await getOrCreateToken(interaction.user.id);
   
   if (!userTokens) {
-    console.log('[handleChangeVillage] No token tracker found');
+    console.log('[handleChangeVillage] Failed to load user token balance');
     await interaction.followUp({
-      content: "❌ You do not have a Token Tracker set up. Please use `/tokens setup` first.",
+      content: "❌ Unable to load your token balance right now. Please try again in a moment.",
       ephemeral: true
     });
     return;
@@ -1171,7 +1176,12 @@ async function handleChangeVillage(interaction) {
   }
 
   console.log('[handleChangeVillage] Processing village change and deducting 500 tokens');
-  await updateTokenBalance(interaction.user.id, -500);
+  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+  await updateTokenBalance(interaction.user.id, -500, {
+    category: 'character',
+    description: `Village change (${character.name}: ${previousVillage} → ${newVillage})`,
+    link: interactionUrl
+  });
 
   // Token tracker logging removed - Google Sheets functionality no longer used
 

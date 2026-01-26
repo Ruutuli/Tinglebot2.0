@@ -769,67 +769,31 @@ const editSyncErrorMessage = async (interaction, errorMessage) => {
 };
 
 // ------------------- Function: createTokenTrackerSetupEmbed -------------------
-// Creates setup instructions embed for token tracker Google Sheets configuration
+// Legacy: Token tracker Google Sheets setup (deprecated).
+// Tokens are now tracked automatically in the database; keep this function
+// for compatibility with older command flows, but do not reference Sheets.
 const createTokenTrackerSetupEmbed = (
  username,
  googleSheetsUrl,
  errorMessage = ""
 ) => {
- const fields = [
-  {
-   name: "1. Open the Example Template",
-   value: `[📄 Token Tracker Example Template](https://docs.google.com/spreadsheets/d/1zAEqKbAMEdV0oGz7lNAhHaAPt_eIseMMSnyIXr-hovc/edit?usp=sharing)`,
-  },
-  {
-   name: "2. Make a Copy of the Template",
-   value:
-    "🔖 Go to **File > Make a Copy** in the menu to create your own sheet.",
-  },
-  {
-   name: '3. Create a New Tab Named "loggedTracker"',
-   value:
-    "📂 Ensure you have a tab named exactly `loggedTracker` in your Google Sheet.",
-  },
-  {
-   name: "4. Add Headers to Your Tracker",
-   value: `Ensure these headers are present in the in these cells of the **loggedTracker** tab B7:F7:
-            \`\`\`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT
-            \`\`\``,
-  },
-  {
-   name: "5. Share Your Google Sheet",
-   value:
-    "📧 Share the sheet with this email address with **edit permissions**:\n`tinglebot@rotw-tinglebot.iam.gserviceaccount.com`",
-  },
- ];
+ // Keep params for compatibility; unused after deprecation.
+ void googleSheetsUrl;
 
- if (errorMessage) {
-  fields.push({
-   name: "Error",
-   value: `❌ **${errorMessage}**`,
-  });
- } else {
-  fields.push({
-   name: "Success",
-   value: "🎉 Your token tracker setup appears to be correct! 🎉",
-  });
- }
-
- return new EmbedBuilder()
-  .setTitle(`📋 Setup Instructions for ${username}`)
+ const embed = new EmbedBuilder()
+  .setTitle(`🪙 Tokens for ${username}`)
   .setDescription(
-   `Follow these steps to set up your Google Sheets token tracker:
-        
-        **Ensure your Google Sheets URL follows this format:**
-        \`\`\`
-        https://docs.google.com/spreadsheets/d/1AbcDefGhijk/edit
-        \`\`\`
-        Make sure all steps are completed before testing.`
+   "Tokens are tracked automatically in the database. No external tracker setup is required.\n\nUse `/tokens check` to view your current balance, and the Dashboard for detailed history."
   )
-  .addFields(fields)
   .setColor(getRandomColor())
   .setTimestamp()
-  .setFooter({ text: "Need help? Contact a mod for assistance!" });
+  .setFooter({ text: "Tokens" });
+
+ if (errorMessage) {
+  embed.addFields({ name: "Info", value: `⚠️ ${errorMessage}` });
+ }
+
+ return embed;
 };
 
 // ------------------- Function: createCraftingEmbed -------------------
@@ -1075,8 +1039,8 @@ const createWritingSubmissionEmbed = (submissionData) => {
   });
 
   fields.push({
-    name: "📊 Token Tracker",
-    value: submissionData.tokenTracker ? `[Token Tracker](${submissionData.tokenTracker})` : "N/A",
+    name: "🪙 Tokens",
+    value: `[View Tokens](https://tinglebot.xyz/profile?tab=tokens)`,
     inline: true,
   });
 
@@ -1192,10 +1156,7 @@ const createArtSubmissionEmbed = (submissionData) => {
   // Member field (proper mention)
   const memberField = userId ? `<@${userId}>` : username ? `@${username}` : 'N/A';
 
-  // Token tracker link from submission data
-  const tokenTrackerLink = submissionData.tokenTracker
-    ? `[Token Tracker](${submissionData.tokenTracker})`
-    : 'N/A';
+  const tokensDashboardLink = 'https://tinglebot.xyz/profile?tab=tokens';
 
   // Quest/Event and Bonus
   const questEventField = questEvent || 'N/A';
@@ -1242,7 +1203,7 @@ const createArtSubmissionEmbed = (submissionData) => {
   
   fields.push({ name: 'Art Title', value: artTitle, inline: false });
   fields.push({ name: 'Member', value: memberField, inline: true });
-  fields.push({ name: 'Token Tracker Link', value: tokenTrackerLink, inline: true });
+  fields.push({ name: '🪙 Tokens', value: `[View Tokens](${tokensDashboardLink})`, inline: true });
   
   // Add blight ID if provided
   if (submissionData.blightId && submissionData.blightId !== 'N/A') {

@@ -1033,6 +1033,7 @@ async function initializeClient() {
         const ModCharacter = require('@/models/ModCharacterModel');
         const Pet = require('@/models/PetModel');
         const Mount = require('@/models/MountModel');
+        const { Stable, ForSaleMount, ForSalePet } = require('@/models/StableModel');
         const Quest = require('@/models/QuestModel');
         const Party = require('@/models/PartyModel');
         const MinigameModel = require('@/models/MinigameModel');
@@ -1122,6 +1123,20 @@ async function initializeClient() {
         // 7. Delete mounts
         const mountResult = await Mount.deleteMany({ discordId: discordId });
         deletionResults.mounts = mountResult.deletedCount;
+
+        // 7.5. Clean up stable + market listings tied to deleted characters
+        // This prevents orphaned storedPets/for-sale entries after a user leaves.
+        let stableDeleted = { deletedCount: 0 };
+        let forSalePetsDeleted = { deletedCount: 0 };
+        let forSaleMountsDeleted = { deletedCount: 0 };
+        if (allCharacterIds.length > 0) {
+          stableDeleted = await Stable.deleteMany({ characterId: { $in: allCharacterIds } });
+          forSalePetsDeleted = await ForSalePet.deleteMany({ characterId: { $in: allCharacterIds } });
+          forSaleMountsDeleted = await ForSaleMount.deleteMany({ characterId: { $in: allCharacterIds } });
+        }
+        deletionResults.stables = stableDeleted.deletedCount;
+        deletionResults.forSalePets = forSalePetsDeleted.deletedCount;
+        deletionResults.forSaleMounts = forSaleMountsDeleted.deletedCount;
         
         // 8. Remove user from active quests
         const questUpdateResult = await Quest.updateMany(

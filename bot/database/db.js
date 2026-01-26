@@ -71,6 +71,7 @@ const Quest = require("../models/QuestModel");
 const RelicModel = require("../models/RelicModel");
 const User = require("../models/UserModel");
 const Pet = require("../models/PetModel");
+const { Stable, ForSaleMount, ForSalePet } = require("../models/StableModel");
 const generalCategories = require("../models/GeneralItemCategories");
 
 // ============================================================================
@@ -432,9 +433,32 @@ const updateCharacterById = async (characterId, updateData) => {
 const deleteCharacterById = async (characterId) => {
  try {
   await connectToTinglebot();
-  return await Character.findByIdAndDelete(new ObjectId(characterId))
-   .lean()
-   .exec();
+  const charObjectId = new ObjectId(characterId);
+
+  // Cascade delete: pets + stable/market listings tied to this character.
+  // 1) Capture owned pet IDs before deleting.
+  const ownedPets = await Pet.find({ owner: charObjectId }).select("_id").lean().exec();
+  const ownedPetIds = ownedPets.map((p) => p._id).filter(Boolean);
+
+  // 2) Remove any stable/market records referencing these pets/character.
+  // Stable is 1:1 per character; safest to delete the stable record entirely.
+  await Stable.deleteMany({ characterId: charObjectId });
+
+  // Remove for-sale listings for this character (and any listing that references an owned pet).
+  await ForSalePet.deleteMany({
+    $or: [
+      { characterId: charObjectId },
+      ...(ownedPetIds.length > 0 ? [{ petId: { $in: ownedPetIds } }] : []),
+    ],
+  });
+  // Also remove any for-sale mounts tied to this character to prevent orphaned listings.
+  await ForSaleMount.deleteMany({ characterId: charObjectId });
+
+  // 3) Delete the pets themselves.
+  await Pet.deleteMany({ owner: charObjectId });
+
+  // 4) Delete the character last.
+  return await Character.findByIdAndDelete(charObjectId).lean().exec();
  } catch (error) {
   handleError(error, "db.js");
   console.error(
@@ -1585,45 +1609,59 @@ async function getOrCreateToken(userId) {
 // ------------------- updateTokenBalance -------------------
 async function updateTokenBalance(userId, change, transactionMetadata = null) {
  try {
+  await connectToTinglebot();
+
   if (isNaN(change)) {
    throw new Error(
     `[tokenService.js]: Invalid token change value provided: ${change}`
    );
   }
+  const normalizedChange = Number(change);
+  if (!Number.isFinite(normalizedChange)) {
+   throw new Error(
+    `[tokenService.js]: Invalid token change value provided: ${change}`
+   );
+  }
+
+  // Ensure user exists and has a discordId on insert.
   const user = await User.findOneAndUpdate(
    { discordId: userId },
-   {},
+   { $setOnInsert: { discordId: userId, tokens: 0 } },
    { new: true, upsert: true, setDefaultsOnInsert: true }
   );
   const currentBalance = user.tokens || 0;
-  const newBalance = currentBalance + change;
+  const newBalance = currentBalance + normalizedChange;
   if (newBalance < 0) {
    throw new Error(
-    `[tokenService.js]: Insufficient tokens. Current balance: ${currentBalance}, Change: ${change}`
+    `[tokenService.js]: Insufficient tokens. Current balance: ${currentBalance}, Change: ${normalizedChange}`
    );
   }
   user.tokens = newBalance;
   await user.save();
   
-  // Log transaction to TokenTransactionModel if metadata is provided
-  if (transactionMetadata) {
-    try {
-      const TokenTransaction = require('../models/TokenTransactionModel');
-      const transactionType = change >= 0 ? 'earned' : 'spent';
-      await TokenTransaction.createTransaction({
-        userId: userId,
-        amount: Math.abs(change),
-        type: transactionType,
-        category: transactionMetadata.category || '',
-        description: transactionMetadata.description || '',
-        link: transactionMetadata.link || '',
-        balanceBefore: currentBalance,
-        balanceAfter: newBalance
-      });
-    } catch (logError) {
-      // Log error but don't fail the transaction
-      console.error('[tokenService.js]: ⚠️ Error logging token transaction:', logError);
-    }
+  // Always log transactions for Dashboard history (best-effort; never fail the balance update).
+  if (normalizedChange !== 0) {
+   try {
+    const TokenTransaction = require('../models/TokenTransactionModel');
+    const transactionType = normalizedChange >= 0 ? 'earned' : 'spent';
+
+    const meta = (transactionMetadata && typeof transactionMetadata === 'object')
+     ? transactionMetadata
+     : {};
+
+    await TokenTransaction.createTransaction({
+     userId: userId,
+     amount: Math.abs(normalizedChange),
+     type: transactionType,
+     category: meta.category || 'system',
+     description: meta.description || 'Token balance update',
+     link: meta.link || '',
+     balanceBefore: currentBalance,
+     balanceAfter: newBalance
+    });
+   } catch (logError) {
+    console.error('[tokenService.js]: ⚠️ Error logging token transaction:', logError);
+   }
   }
   
   return newBalance;

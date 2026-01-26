@@ -470,10 +470,7 @@ function createDenialDMEmbed(submissionId, title, reason) {
 async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab) {
   const embed = createSubmissionEmbed('modApproval', { submissionId, title, tokenAmount, userId, collab });
   
-  // Get user token tracker URLs
-  const user = await User.findOne({ discordId: userId });
-  const userTokenTracker = user?.tokenTracker || 'No token tracker set up';
-  const userTrackerLink = userTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${userTokenTracker})` : 'No token tracker set up';
+  const tokensDashboardLink = `[View Tokens](https://tinglebot.xyz/profile?tab=tokens)`;
   
   // Check if collaboration exists (handle both array and legacy string format)
   const hasCollaborators = collab && ((Array.isArray(collab) && collab.length > 0) || (typeof collab === 'string' && collab.trim() && collab !== 'N/A'));
@@ -489,7 +486,7 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
     embed.addFields(
       { 
         name: '💰 Main User Tokens', 
-        value: `<@${userId}> received **${tokenAmount} tokens**\n${userTrackerLink}`, 
+        value: `<@${userId}> received **${tokenAmount} tokens**\n${tokensDashboardLink}`, 
         inline: true 
       }
     );
@@ -498,15 +495,10 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
     for (const collaboratorMention of collaborators) {
       const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
       
-      // Get collaborator token tracker URL
-      const collaborator = await User.findOne({ discordId: collaboratorId });
-      const collabTokenTracker = collaborator?.tokenTracker || 'No token tracker set up';
-      const collabTrackerLink = collabTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${collabTokenTracker})` : 'No token tracker set up';
-      
       embed.addFields(
         { 
           name: '💰 Collaborator Tokens', 
-          value: `<@${collaboratorId}> received **${tokenAmount} tokens**\n${collabTrackerLink}`, 
+          value: `<@${collaboratorId}> received **${tokenAmount} tokens**\n${tokensDashboardLink}`, 
           inline: true 
         }
       );
@@ -515,7 +507,7 @@ async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmou
     embed.addFields(
       { 
         name: '💰 User Tokens', 
-        value: `<@${userId}> received **${tokenAmount} tokens**\n${userTrackerLink}`, 
+        value: `<@${userId}> received **${tokenAmount} tokens**\n${tokensDashboardLink}`, 
         inline: true 
       }
     );
@@ -2448,8 +2440,11 @@ async function handleApprove(interaction) {
           // Each person gets tokensPerPerson (not split - bonuses are already included)
           // Update tokens for the main user
           try {
-            await updateTokenBalance(userId, tokensPerPerson);
-            await appendEarnedTokens(userId, title, category, tokensPerPerson, messageUrl);
+            await updateTokenBalance(userId, tokensPerPerson, {
+              category: 'submission',
+              description: title,
+              link: messageUrl
+            });
           } catch (tokenError) {
             console.error(`[mod.js]: ❌ Error updating tokens for main user ${userId}:`, tokenError);
             tokenErrors.push(`Main user (${userId})`);
@@ -2460,8 +2455,11 @@ async function handleApprove(interaction) {
             const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
             
             try {
-              await updateTokenBalance(collaboratorId, tokensPerPerson);
-              await appendEarnedTokens(collaboratorId, title, category, tokensPerPerson, messageUrl);
+              await updateTokenBalance(collaboratorId, tokensPerPerson, {
+                category: 'submission',
+                description: title,
+                link: messageUrl
+              });
             } catch (tokenError) {
               console.error(`[mod.js]: ❌ Error updating tokens for collaborator ${collaboratorId}:`, tokenError);
               tokenErrors.push(`Collaborator (${collaboratorId})`);
@@ -2490,8 +2488,11 @@ async function handleApprove(interaction) {
         } else {
           // No collaboration - assign all tokens to the main user
           try {
-            await updateTokenBalance(userId, tokensPerPerson);
-            await appendEarnedTokens(userId, title, category, tokensPerPerson, messageUrl);
+            await updateTokenBalance(userId, tokensPerPerson, {
+              category: 'submission',
+              description: title,
+              link: messageUrl
+            });
           } catch (tokenError) {
             console.error(`[mod.js]: ❌ Error updating tokens for user ${userId}:`, tokenError);
             tokenErrors.push(`User (${userId})`);
@@ -2596,7 +2597,7 @@ async function handleApprove(interaction) {
         // Add warning if token updates failed
         let warningMessage = '';
         if (tokenErrors.length > 0) {
-          warningMessage = `⚠️ **Note:** Submission approved, but there were issues updating token trackers for: ${tokenErrors.join(', ')}. Please check that users have valid token tracker URLs set up.`;
+          warningMessage = `⚠️ **Note:** Submission approved, but there were issues updating token balances for: ${tokenErrors.join(', ')}. Please try again or contact an admin if it persists.`;
         }
         
         return interaction.editReply({ 

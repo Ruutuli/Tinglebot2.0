@@ -1105,7 +1105,12 @@ module.exports = {
      }
 
      // deduct tokens
-     await updateTokenBalance(userId, -cost);
+     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+     await updateTokenBalance(userId, -cost, {
+       category: 'pet',
+       description: `Pet upgrade (${pet.name} → Level ${targetLevel})`,
+       link: interactionUrl
+     });
 
      // perform the upgrade
      await upgradePetLevel(character._id, petName, targetLevel);
@@ -1192,15 +1197,6 @@ module.exports = {
        text: `Pet upgraded successfully! Rolls reset every Sunday at midnight.`,
        iconURL: character.icon
       });
-
-     // Add token tracker link if available
-     if (user && user.tokenTracker) {
-       upgradeEmbed.addFields({
-        name: "__Token Tracker__",
-        value: `> [View Token Tracker](${user.tokenTracker})`,
-        inline: false,
-       });
-     }
 
      return interaction.editReply({ embeds: [upgradeEmbed] });
     }

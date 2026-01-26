@@ -17,7 +17,8 @@ export const metadata: Metadata = {
     default: "Tinglebot Dashboard",
     template: "%s | Tinglebot Dashboard",
   },
-  description: "Tingle, Tingle! Kooloo-Limpah! Welcome to the Tinglebot Dashboard - your comprehensive management interface for the Tinglebot Discord bot. Create and manage characters, track quests and tokens, browse models, and access all bot-related features. Companion dashboard for the Roots of the Wild Discord community. Visit https://rootsofthewild.com/ for more information.",
+  description:
+    "Kooloo-Limpah! Tinglebot Dashboard for the Roots of the Wild Discord: manage characters, quests, tokens, inventory, and models.",
   keywords: ["tinglebot", "discord bot", "dashboard", "roots of the wild", "zelda", "rpg", "character management"],
   authors: [{ name: "Tinglebot" }],
   creator: "Tinglebot",
@@ -36,7 +37,8 @@ export const metadata: Metadata = {
     url: "/",
     siteName: "Tinglebot Dashboard",
     title: "Tinglebot Dashboard",
-    description: "Tingle, Tingle! Kooloo-Limpah! Welcome to the Tinglebot Dashboard - your comprehensive management interface for the Tinglebot Discord bot. Create and manage characters, track quests and tokens, browse models, and access all bot-related features. Companion dashboard for the Roots of the Wild Discord community. Visit https://rootsofthewild.com/ for more information.",
+    description:
+      "Kooloo-Limpah! Tinglebot Dashboard for the Roots of the Wild Discord: manage characters, quests, tokens, inventory, and models.",
     images: [
       {
         url: "/tingle_icon.png",
@@ -49,7 +51,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary",
     title: "Tinglebot Dashboard",
-    description: "Tingle, Tingle! Kooloo-Limpah! Welcome to the Tinglebot Dashboard - your comprehensive management interface for the Tinglebot Discord bot. Create and manage characters, track quests and tokens, browse models, and access all bot-related features. Companion dashboard for the Roots of the Wild Discord community. Visit https://rootsofthewild.com/ for more information.",
+    description:
+      "Kooloo-Limpah! Tinglebot Dashboard for the Roots of the Wild Discord: manage characters, quests, tokens, inventory, and models.",
     images: ["/tingle_icon.png"],
   },
   icons: {

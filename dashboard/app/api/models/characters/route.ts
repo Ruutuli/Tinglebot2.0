@@ -82,6 +82,8 @@ export async function GET(req: NextRequest) {
     const isModCharacterParam = getFilterParamMultiple(params, "isModCharacter");
 
     const filter: Record<string, unknown> = {};
+    // Hide drafts/pending/needs_changes from global list: only show accepted regular characters.
+    filter.status = "accepted";
 
     const re = buildSearchRegex(search);
     if (re) {

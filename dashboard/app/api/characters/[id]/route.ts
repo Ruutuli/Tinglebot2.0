@@ -191,6 +191,19 @@ export async function GET(
       `Character loaded: id=${String((char as { _id?: unknown })._id)}, name="${String((char as { name?: unknown }).name ?? "")}", isModCharacter=${String(isModCharacter)}`
     );
     
+    // Hide drafts/pending/needs_changes from public character pages.
+    // Only accepted characters are viewable here (drafts remain visible only in My OCs and moderation queue).
+    if (!isModCharacter) {
+      const status = (char as { status?: string | null }).status ?? null;
+      if (status !== "accepted") {
+        logger.warn(
+          "api/characters/[id] GET",
+          `Blocking non-accepted character page (status=${String(status)}) for slugOrId="${slugOrId}"`
+        );
+        return NextResponse.json({ error: "Character not found" }, { status: 404 });
+      }
+    }
+
     // For GET requests, don't check ownership (public character pages)
     // Ownership check is only needed for PUT requests
 

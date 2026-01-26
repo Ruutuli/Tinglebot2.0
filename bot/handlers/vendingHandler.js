@@ -3779,7 +3779,12 @@ async function handlePouchUpgradeConfirm(interaction) {
 
     // ------------------- Process Upgrade -------------------
     // Update token balance
-    await updateTokenBalance(userId, -upgradeCost);
+    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+    await updateTokenBalance(userId, -upgradeCost, {
+      category: 'vending',
+      description: `Pouch upgrade (${characterName} → ${newPouchType.toUpperCase()})`,
+      link: interactionUrl
+    });
 
     // Update character's pouch
     await Character.updateOne(

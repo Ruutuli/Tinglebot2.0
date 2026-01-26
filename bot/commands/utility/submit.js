@@ -348,25 +348,7 @@ module.exports = {
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
-    // Check if user has synced tokens and token tracker set up
-    const user = interaction.user;
-    const userData = await User.findOne({ discordId: user.id });
-
-    if (!userData) {
-      await interaction.reply({
-        content: '❌ **User data not found. Please try again later.**',
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!userData.tokenTracker || userData.tokenTracker.trim() === '') {
-      await interaction.reply({
-        content: '❌ **You cannot use this command until your token tracker is set up. Please set up your token tracker first.**',
-        ephemeral: true,
-      });
-      return;
-    }
+    // Tokens are tracked automatically in the database.
 
 
     // ------------------- Handle Art Submission -------------------
@@ -459,7 +441,6 @@ module.exports = {
           collab: collab.length > 0 ? collab : [],
           blightId: blightId,
           taggedCharacters: taggedCharacters.length > 0 ? taggedCharacters : [],
-          tokenTracker: userData.tokenTracker || null,
         };
 
         // Save to database using the helper
@@ -695,7 +676,6 @@ module.exports = {
           collab: collab.length > 0 ? collab : [],
           blightId: blightId,
           taggedCharacters: taggedCharacters,
-          tokenTracker: userData.tokenTracker || null,
         };
         if (boostEffects.length > 0) {
           submissionData.boostEffects = boostEffects;

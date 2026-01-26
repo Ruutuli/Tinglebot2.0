@@ -629,8 +629,11 @@ async function handleSubmissionCompletion(interaction) {
     const submissionTitle = submissionData.title || fileName;
     const submissionUrl = submissionData.fileUrl || fileUrl;
     
-    await appendEarnedTokens(user.id, submissionTitle, submissionCategory, finalTokenAmount, submissionUrl);
-    await updateTokenBalance(user.id, finalTokenAmount);
+    await updateTokenBalance(user.id, finalTokenAmount, {
+      category: 'submission',
+      description: submissionTitle,
+      link: submissionUrl
+    });
     console.log(`[submissionHandler.js]: ✅ Token count updated`);
 
     // Clean up storage
@@ -766,19 +769,28 @@ async function handleSubmitAction(interaction) {
         
         // Each person gets tokensPerPerson (not split - bonuses are already included)
         // Update tokens for the main user
-        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, tokensPerPerson, submissionUrl);
-        await updateTokenBalance(user.id, tokensPerPerson);
+        await updateTokenBalance(user.id, tokensPerPerson, {
+          category: 'submission',
+          description: submissionTitle,
+          link: submissionUrl
+        });
         
         // Update tokens for each collaborator
         for (const collaboratorMention of collaborators) {
           const collaboratorId = collaboratorMention.replace(/[<@>]/g, '');
-          await appendEarnedTokens(collaboratorId, submissionTitle, submissionCategory, tokensPerPerson, submissionUrl);
-          await updateTokenBalance(collaboratorId, tokensPerPerson);
+          await updateTokenBalance(collaboratorId, tokensPerPerson, {
+            category: 'submission',
+            description: submissionTitle,
+            link: submissionUrl
+          });
         }
       } else {
         // No collaboration; assign all tokens to the main user.
-        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, tokensPerPerson, submissionUrl);
-        await updateTokenBalance(user.id, tokensPerPerson);
+        await updateTokenBalance(user.id, tokensPerPerson, {
+          category: 'submission',
+          description: submissionTitle,
+          link: submissionUrl
+        });
       }
     } catch (error) {
       handleError(error, 'submissionHandler.js');
