@@ -9,7 +9,6 @@ const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discor
 // ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId, fetchAllItems } = require('@/database/db.js');
 const ItemModel = require('@/models/ItemModel');
-const Weather = require('@/models/WeatherModel');
 
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../../modules/rngModule.js');
@@ -351,30 +350,8 @@ async function getWeatherForVillage(village, now) {
   const { startUTC: startOfPeriodUTC } = getCurrentPeriodBounds(now);
   const { startUTC: startOfNextPeriodUTC } = getNextPeriodBounds(now);
   
-  let weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
-  
-  if (!weather) {
-    const normalizedVillage = normalizeVillageName(village);
-    const fallbackWeather = await Weather.findOne({
-      village: normalizedVillage,
-      $or: [
-        { postedToDiscord: true },
-        { postedToDiscord: { $exists: false } }
-      ]
-    })
-      .sort({ date: -1 })
-      .lean();
-    
-    if (fallbackWeather) {
-      const weatherDate = fallbackWeather.date instanceof Date ? fallbackWeather.date : new Date(fallbackWeather.date);
-      if (weatherDate >= startOfNextPeriodUTC) {
-        console.error(`[specialweather.js]: ❌ Fallback weather rejected: from future period for ${village}`);
-        weather = null;
-      } else {
-        weather = fallbackWeather;
-      }
-    }
-  }
+  // Special weather uses DB truth for the current period (it should not depend on Discord posting success).
+  const weather = await getWeatherWithoutGeneration(village);
 
   return { weather, periodBounds: { startOfPeriodUTC, startOfNextPeriodUTC } };
 }

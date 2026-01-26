@@ -102,7 +102,8 @@ async function initializeScheduler(discordClient, mongoConnectionString) {
 
     for (const [name, config] of taskRegistry) {
       const { cronExpression, options } = config;
-      await agenda.every(cronExpression, name, options.data || {}, { skipImmediate: true });
+      // Ensure cron expressions are interpreted in UTC (EST/EDT is user-facing only).
+      await agenda.every(cronExpression, name, options.data || {}, { skipImmediate: true, timezone: 'UTC' });
       logger.info('SCHEDULER', `Scheduled "${name}" every ${cronExpression}`);
     }
 

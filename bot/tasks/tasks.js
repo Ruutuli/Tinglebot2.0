@@ -10,8 +10,8 @@ const {
   getCurrentWeather,
   generateWeatherEmbed,
   markWeatherAsPosted,
+  markWeatherAsPmPosted,
   getWeatherWithoutGeneration,
-  getCurrentPeriodBounds
 } = require('@/services/weatherService');
 const Character = require('@/models/CharacterModel');
 const User = require('@/models/UserModel');
@@ -74,6 +74,11 @@ async function dailyWeather(client, _data = {}) {
         logger.warn('SCHEDULED', `daily-weather: no weather for ${village}`);
         continue;
       }
+      // Idempotency: if already posted this period, do nothing.
+      if (weather.postedToDiscord === true) {
+        logger.info('SCHEDULED', `daily-weather: already posted for ${village}, skipping`);
+        continue;
+      }
       const { embed, files } = await generateWeatherEmbed(village, weather);
       await channel.send({ embeds: [embed], files });
       await markWeatherAsPosted(village, weather);
@@ -104,74 +109,29 @@ async function weatherFallbackCheck(client, _data = {}) {
         continue;
       }
       
-      // Check if weather was posted today (only posted weather)
-      const weather = await getWeatherWithoutGeneration(village, { onlyPosted: true });
-      
+      // Fallback triggers if DB record is missing OR record exists but AM post was not marked successful.
+      // DB is the source of truth; never rely on scanning messages.
+      let weather = await getWeatherWithoutGeneration(village);
       if (!weather) {
-        logger.warn('SCHEDULED', `weather-fallback-check: No posted weather for ${village}, attempting to post`);
-        // Try to get current weather (will generate if needed)
-        const currentWeather = await getCurrentWeather(village);
-        if (currentWeather) {
-          const { embed, files } = await generateWeatherEmbed(village, currentWeather);
-          await channel.send({ embeds: [embed], files });
-          await markWeatherAsPosted(village, currentWeather);
-          logger.success('SCHEDULED', `weather-fallback-check: Posted missing weather for ${village}`);
-        }
-      } else {
-        // Weather exists with postedToDiscord: true, but verify it was actually posted
-        // Check if there's a recent message in the channel that looks like a weather embed
-        const now = new Date();
-        const { startUTC: periodStart } = getCurrentPeriodBounds(now);
-        const periodStartTime = periodStart.getTime();
-        const oneHourAgo = now.getTime() - (60 * 60 * 1000);
-        
-        // If period started more than an hour ago, check for recent weather messages
-        let foundRecentWeatherMessage = false;
-        if (periodStartTime < oneHourAgo) {
-          try {
-            // Fetch recent messages (last 20 messages should be enough)
-            const messages = await channel.messages.fetch({ limit: 20 });
-            
-            // Check if any message has embeds and was sent after the period started
-            for (const [_, message] of messages) {
-              if (message.embeds && message.embeds.length > 0) {
-                const messageTime = message.createdTimestamp;
-                // Check if message was sent after period started and has weather-like content
-                if (messageTime >= periodStartTime) {
-                  const embed = message.embeds[0];
-                  // Weather embeds typically have temperature, wind, precipitation fields
-                  if (embed && embed.fields && embed.fields.some(f => 
-                    f.name === 'Temperature' || f.name === 'Wind' || f.name === 'Precipitation'
-                  )) {
-                    foundRecentWeatherMessage = true;
-                    logger.info('SCHEDULED', `weather-fallback-check: Found recent weather message for ${village} (message ID: ${message.id})`);
-                    break;
-                  }
-                }
-              }
-            }
-          } catch (msgError) {
-            logger.warn('SCHEDULED', `weather-fallback-check: Error checking messages for ${village}: ${msgError.message}`);
-          }
-        } else {
-          // Period started less than an hour ago, assume it's fine if marked as posted
-          foundRecentWeatherMessage = true;
-        }
-        
-        // If no recent weather message found, post it anyway
-        if (!foundRecentWeatherMessage) {
-          logger.warn('SCHEDULED', `weather-fallback-check: Weather marked as posted for ${village} but no recent message found, reposting`);
-          const currentWeather = await getCurrentWeather(village);
-          if (currentWeather) {
-            const { embed, files } = await generateWeatherEmbed(village, currentWeather);
-            await channel.send({ embeds: [embed], files });
-            await markWeatherAsPosted(village, currentWeather);
-            logger.success('SCHEDULED', `weather-fallback-check: Reposted weather for ${village}`);
-          }
-        } else {
-          logger.info('SCHEDULED', `weather-fallback-check: Weather already posted for ${village}, skipping`);
-        }
+        logger.warn('SCHEDULED', `weather-fallback-check: No weather record for ${village}, generating`);
+        weather = await getCurrentWeather(village); // generate+save if needed
       }
+
+      if (!weather) {
+        logger.warn('SCHEDULED', `weather-fallback-check: Still no weather for ${village} after generation attempt`);
+        continue;
+      }
+
+      if (weather.postedToDiscord === true) {
+        logger.info('SCHEDULED', `weather-fallback-check: Weather already marked as posted for ${village}, skipping`);
+        continue;
+      }
+
+      logger.warn('SCHEDULED', `weather-fallback-check: Weather not posted for ${village}, attempting post`);
+      const { embed, files } = await generateWeatherEmbed(village, weather);
+      await channel.send({ embeds: [embed], files });
+      await markWeatherAsPosted(village, weather);
+      logger.success('SCHEDULED', `weather-fallback-check: Posted missing weather for ${village}`);
     } catch (err) {
       logger.error('SCHEDULED', `weather-fallback-check: ${village} failed: ${err.message}`);
     }
@@ -186,10 +146,42 @@ async function weatherReminder(client, _data = {}) {
     return;
   }
   logger.info('SCHEDULED', 'weather-reminder: starting');
-  
-  // Weather reminder is optional - can be implemented later if needed
-  // For now, just log that it ran
-  logger.info('SCHEDULED', 'weather-reminder: reminder check completed');
+
+  // 8pm EST repost: read-only, never regenerate. Must repost the saved record for the day.
+  for (const village of VILLAGES) {
+    const channelId = VILLAGE_CHANNELS[village];
+    if (!channelId) {
+      logger.warn('SCHEDULED', `weather-reminder: no town hall for ${village}`);
+      continue;
+    }
+    try {
+      const channel = await client.channels.fetch(channelId).catch(() => null);
+      if (!channel) {
+        logger.warn('SCHEDULED', `weather-reminder: could not fetch channel ${village}`);
+        continue;
+      }
+
+      const weather = await getWeatherWithoutGeneration(village);
+      if (!weather) {
+        logger.warn('SCHEDULED', `weather-reminder: no saved weather to repost for ${village}`);
+        continue;
+      }
+
+      if (weather.pmPostedToDiscord === true) {
+        logger.info('SCHEDULED', `weather-reminder: already PM-posted for ${village}, skipping`);
+        continue;
+      }
+
+      const { embed, files } = await generateWeatherEmbed(village, weather);
+      await channel.send({ embeds: [embed], files });
+      await markWeatherAsPmPosted(village, weather);
+      logger.success('SCHEDULED', `weather-reminder: PM reposted ${village}`);
+    } catch (err) {
+      logger.error('SCHEDULED', `weather-reminder: ${village} failed: ${err.message}`);
+    }
+  }
+
+  logger.success('SCHEDULED', 'weather-reminder: done');
 }
 
 // ============================================================================

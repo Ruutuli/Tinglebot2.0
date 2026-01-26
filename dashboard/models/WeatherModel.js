@@ -52,6 +52,14 @@ const WeatherSchema = new mongoose.Schema({
   },
   postedAt: {
     type: Date
+  },
+  // Evening repost tracking (8pm EST / 01:00 UTC). Same saved record, read-only repost.
+  pmPostedToDiscord: {
+    type: Boolean,
+    default: false
+  },
+  pmPostedAt: {
+    type: Date
   }
 }, {
   timestamps: true

@@ -679,18 +679,37 @@ function isValidCurrentPeriodWeather(weather, now, startOfNextPeriodUTC) {
 // Save weather with duplicate handling -
 async function saveWeatherWithDuplicateHandling(normalizedVillage, normalizedDate, newWeather, periodSearchStart, startOfNextPeriodUTC) {
   try {
+    // Extra safety: if DB isn't connected, don't proceed (prevents “posted but not saved” confusion).
+    // In practice the bot should connect during initialization, but this makes failures explicit.
+    if (mongoose.connection?.readyState !== 1) {
+      throw new Error(
+        `MongoDB not connected (readyState=${mongoose.connection?.readyState}). Cannot save weather for ${normalizedVillage}.`
+      );
+    }
+
     const savedWeather = await Weather.findOneAndUpdate(
       {
         village: normalizedVillage,
         date: normalizedDate
       },
-      newWeather,
+      // Insert-only: never overwrite an existing weather record for the day.
+      // This prevents races/fallbacks from mutating the source-of-truth doc.
+      { $setOnInsert: newWeather },
       {
         upsert: true,
         new: true,
         setDefaultsOnInsert: true
       }
     );
+
+    // Verify persistence by re-checking existence via _id (one extra read, once per village/day).
+    if (!savedWeather?._id) {
+      throw new Error(`Weather save returned no _id for ${normalizedVillage}`);
+    }
+    const persisted = await Weather.exists({ _id: savedWeather._id });
+    if (!persisted) {
+      throw new Error(`Weather save verification failed for ${normalizedVillage} (id=${savedWeather._id})`);
+    }
     
     console.log(`[weatherService.js]✅ Generated and saved new weather for ${normalizedVillage} period (ID: ${savedWeather._id}, Date: ${savedWeather.date.toISOString()})`);
     return savedWeather;
@@ -762,6 +781,27 @@ async function markWeatherAsPosted(village, weather) {
   );
   if (updated) {
     console.log(`[weatherService.js]✅ Marked weather as posted for ${normalizedVillage} (ID: ${id})`);
+  }
+  return updated;
+}
+
+// ------------------- Mark Weather As PM Posted ------------------
+// Updates weather document after evening repost to Discord (pmPostedToDiscord, pmPostedAt).
+async function markWeatherAsPmPosted(village, weather) {
+  const normalizedVillage = normalizeVillageName(village);
+  const id = weather?._id;
+  if (!id) {
+    console.warn('[weatherService.js]⚠️ markWeatherAsPmPosted: no _id on weather, skipping update');
+    return null;
+  }
+  const now = new Date();
+  const updated = await Weather.findByIdAndUpdate(
+    id,
+    { $set: { pmPostedToDiscord: true, pmPostedAt: now } },
+    { new: true }
+  );
+  if (updated) {
+    console.log(`[weatherService.js]✅ Marked weather as PM-posted for ${normalizedVillage} (ID: ${id})`);
   }
   return updated;
 }
@@ -851,9 +891,22 @@ async function getCurrentWeather(village) {
       });
     }
     
-    // Validate weather is actually for current period (not future)
-    if (weather && !isValidCurrentPeriodWeather(weather, now, startOfNextPeriodUTC)) {
-      weather = null;
+    // Validate weather is actually for current period (not yesterday via lookback, and not future)
+    if (weather) {
+      const weatherDate = weather.date instanceof Date ? weather.date : new Date(weather.date);
+      // Reject anything before current period start (lookback can accidentally return yesterday)
+      if (weatherDate < startOfPeriodUTC) {
+        console.log(
+          `[weatherService.js]⚠️ Found weather for ${normalizedVillage} but it's before current period (weather date: ${weatherDate.toISOString()}, period start: ${startOfPeriodUTC.toISOString()}), ignoring`
+        );
+        weather = null;
+      } else if (weatherDate >= startOfNextPeriodUTC) {
+        // Should never happen due to our exclusive end searches, but keep this guard explicit.
+        weather = null;
+      } else if (!isValidCurrentPeriodWeather(weather, now, startOfNextPeriodUTC)) {
+        // Excludes future/scheduled (Song of Storms) docs
+        weather = null;
+      }
     }
     
     // Generate new weather if none exists or if we filtered out future weather
@@ -864,10 +917,20 @@ async function getCurrentWeather(village) {
         onlyPosted: false
       });
       
-      if (finalCheck && isValidCurrentPeriodWeather(finalCheck, now, startOfNextPeriodUTC)) {
+      if (finalCheck) {
+        const finalDate = finalCheck.date instanceof Date ? finalCheck.date : new Date(finalCheck.date);
+        const isInCurrentPeriod = finalDate >= startOfPeriodUTC && finalDate < startOfNextPeriodUTC;
+        if (isInCurrentPeriod && isValidCurrentPeriodWeather(finalCheck, now, startOfNextPeriodUTC)) {
         console.log(`[weatherService.js]✅ Found existing weather for ${normalizedVillage} period (ID: ${finalCheck._id}), using it instead of generating new`);
         weather = finalCheck;
-      } else {
+        } else if (!isInCurrentPeriod && finalCheck) {
+          console.log(
+            `[weatherService.js]⚠️ Final check found weather outside current period for ${normalizedVillage} (date: ${finalDate.toISOString()}), generating new instead`
+          );
+        }
+      }
+
+      if (!weather) {
         console.log(`[weatherService.js]🔄 No existing weather found for ${normalizedVillage} period, generating new weather for date: ${startOfPeriodUTC.toISOString()}`);
         const season = getCurrentSeason();
         weather = await generateAndSaveWeather(normalizedVillage, normalizedDate, season, periodSearchStart, startOfNextPeriodUTC);
@@ -884,15 +947,34 @@ async function getCurrentWeather(village) {
 // ============================================================================
 // ------------------- Banner Generation -------------------
 // ============================================================================
-// ------------------- Get Random Banner ------------------
-// Get random banner path for village -
-function getRandomBanner(village) {
+// ------------------- Deterministic Banner Helpers ------------------
+// Keep AM/PM posts visually consistent by deriving a stable banner from the saved record.
+function stableHash32(input) {
+  const str = String(input ?? '');
+  // FNV-1a 32-bit
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function getBannerForWeather(village, weather) {
   const banners = BANNER_PATHS[village];
   if (!banners || banners.length === 0) {
     console.error(`[weatherService.js]❌ No banners found for village: ${village}`);
     return null;
   }
-  return banners[Math.floor(Math.random() * banners.length)];
+  const idPart = weather?._id ? String(weather._id) : '';
+  let datePart = '';
+  if (weather?.date) {
+    const d = weather.date instanceof Date ? weather.date : new Date(weather.date);
+    datePart = Number.isNaN(d.getTime()) ? '' : d.toISOString();
+  }
+  const seed = `${village}|${idPart || datePart || 'no-seed'}`;
+  const idx = stableHash32(seed) % banners.length;
+  return banners[idx];
 }
 
 // ------------------- Get Overlay Path ------------------
@@ -915,7 +997,7 @@ async function generateBanner(village, weather, options = {}) {
   
   try {
 
-    const bannerPath = getRandomBanner(village);
+    const bannerPath = getBannerForWeather(village, weather);
     if (!bannerPath) {
       console.error(`[weatherService.js]: Failed to get banner for ${village}`);
       return null;
@@ -1312,8 +1394,9 @@ async function generateWeatherEmbed(village, weather, options = {}) {
     const precipEmoji = weather.precipitation.emoji || '🌧️';
     const specialEmoji = weather.special && weather.special.emoji ? weather.special.emoji : '';
     const emojiSummary = `${tempEmoji}${windEmoji}${precipEmoji}${specialEmoji}`;
-    const now = new Date();
-    const hyruleanDate = convertToHyruleanDate(now);
+    const displayDateRaw = weather?.date instanceof Date ? weather.date : new Date(weather?.date);
+    const displayDate = Number.isNaN(displayDateRaw.getTime()) ? new Date() : displayDateRaw;
+    const hyruleanDate = convertToHyruleanDate(displayDate);
     const dateLine = `**Hyrulean Date: ${hyruleanDate}**`;
     const title = options.title || `${village}'s Daily Weather Forecast`;
     const embed = new EmbedBuilder()
@@ -1327,7 +1410,7 @@ async function generateWeatherEmbed(village, weather, options = {}) {
         { name: 'Precipitation', value: weather.precipitation?.label || 'N/A', inline: false }
       )
       .setThumbnail(`attachment://${seasonIconName}`)
-      .setTimestamp();
+      .setTimestamp(displayDate);
 
     if (weather.special && weather.special.label) {
       const specialText = specialWeatherFlavorText(weather.special.label);
@@ -1362,6 +1445,7 @@ module.exports = {
   getWeatherWithoutGeneration,
   simulateWeightedWeather,
   markWeatherAsPosted,
+  markWeatherAsPmPosted,
 
   // Banner and embed generation
   generateBanner,
