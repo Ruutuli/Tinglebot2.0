@@ -33,6 +33,15 @@ type ItemDocument = {
   [key: string]: unknown;
 };
 
+// Type definition for InventoryLog model
+interface InventoryLogModel {
+  getCharacterLogs(
+    characterName: string,
+    filters?: Record<string, unknown>
+  ): Promise<unknown[]>;
+  create(data: Record<string, unknown>): Promise<unknown>;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
@@ -262,7 +271,7 @@ export async function POST(req: NextRequest) {
     // Log removal to InventoryLog
     try {
       const InventoryLogModule = await import("@/models/InventoryLogModel.js");
-      const InventoryLog = InventoryLogModule.default || InventoryLogModule;
+      const InventoryLog = (InventoryLogModule.default || InventoryLogModule) as InventoryLogModel;
       await InventoryLog.create({
         characterName: sourceChar.name,
         characterId: sourceChar._id,
@@ -290,7 +299,7 @@ export async function POST(req: NextRequest) {
     // Log addition to InventoryLog
     try {
       const InventoryLogModule = await import("@/models/InventoryLogModel.js");
-      const InventoryLog = InventoryLogModule.default || InventoryLogModule;
+      const InventoryLog = (InventoryLogModule.default || InventoryLogModule) as InventoryLogModel;
       await InventoryLog.create({
         characterName: destChar.name,
         characterId: destChar._id,

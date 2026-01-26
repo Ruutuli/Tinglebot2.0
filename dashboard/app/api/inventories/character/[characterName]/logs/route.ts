@@ -9,6 +9,15 @@ function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Type definition for InventoryLog model
+interface InventoryLogModel {
+  getCharacterLogs(
+    characterName: string,
+    filters?: Record<string, unknown>
+  ): Promise<unknown[]>;
+  create(data: Record<string, unknown>): Promise<unknown>;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ characterName: string }> }
@@ -53,10 +62,10 @@ export async function GET(
     }
 
     // Import InventoryLog model
-    let InventoryLog: unknown;
+    let InventoryLog: InventoryLogModel;
     try {
       const InventoryLogModule = await import("@/models/InventoryLogModel.js");
-      InventoryLog = InventoryLogModule.default || InventoryLogModule;
+      InventoryLog = (InventoryLogModule.default || InventoryLogModule) as InventoryLogModel;
     } catch (importError) {
       const errorMsg = importError instanceof Error ? importError.message : String(importError);
       logger.error("api/inventories/character/[characterName]/logs", `Failed to import InventoryLog model: ${errorMsg}`);
