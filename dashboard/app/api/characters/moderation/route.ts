@@ -80,7 +80,15 @@ export async function GET(_req: NextRequest) {
     // Get votes for each character
     const charactersWithVotes = await Promise.all(
       pendingChars.map(async (char) => {
-        let votes = [];
+        type Vote = {
+          vote: "approve" | "needs_changes";
+          modId: string;
+          modUsername: string;
+          reason: string | null;
+          note: string | null;
+          createdAt: Date;
+        };
+        let votes: Vote[] = [];
         try {
           votes = await getVotesForCharacter(
             String(char._id),
