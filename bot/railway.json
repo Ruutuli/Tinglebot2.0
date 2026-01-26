@@ -1,8 +1,9 @@
 {
     "$schema": "https://railway.com/railway.schema.json",
-    "_comment": "Railway configuration for Bot Service - Discord bot application. IMPORTANT: In Railway UI, set Root Directory to: /bot. Watch Paths should be: ** (all files in bot/).",
+    "_comment": "Railway configuration for Bot Service - Discord bot application. IMPORTANT: In Railway UI, set Root Directory to: /bot. Watch Paths should be: bot/** (only watch bot directory).",
     "build": {
-        "builder": "NIXPACKS"
+        "builder": "NIXPACKS",
+        "watchPatterns": ["bot/**"]
     },
     "deploy": {
         "runtime": "V2",

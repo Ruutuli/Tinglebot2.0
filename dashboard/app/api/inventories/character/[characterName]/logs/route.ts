@@ -65,7 +65,7 @@ export async function GET(
     let InventoryLog: InventoryLogModel;
     try {
       const InventoryLogModule = await import("@/models/InventoryLogModel.js");
-      InventoryLog = (InventoryLogModule.default || InventoryLogModule) as InventoryLogModel;
+      InventoryLog = (InventoryLogModule.default || InventoryLogModule) as unknown as InventoryLogModel;
     } catch (importError) {
       const errorMsg = importError instanceof Error ? importError.message : String(importError);
       logger.error("api/inventories/character/[characterName]/logs", `Failed to import InventoryLog model: ${errorMsg}`);

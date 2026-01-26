@@ -20,7 +20,7 @@ This project consists of two main services that need to be deployed separately o
 
 **Service Settings:**
 - **Root Directory:** `/bot`
-- **Watch Paths:** `**` (all files in bot/)
+- **Watch Paths:** `bot/**` (IMPORTANT: Only watch bot directory to prevent deploying when dashboard changes)
 - **Start Command:** `npm start`
 - **Healthcheck Path:** `/health`
 - **Port:** Automatically assigned by Railway (uses `PORT` env var)
@@ -31,7 +31,7 @@ This project consists of two main services that need to be deployed separately o
 
 **Service Settings:**
 - **Root Directory:** `/dashboard`
-- **Watch Paths:** `**` (all files in dashboard/)
+- **Watch Paths:** `dashboard/**` (IMPORTANT: Only watch dashboard directory to prevent deploying when bot changes)
 - **Start Command:** `npm start`
 - **Healthcheck Path:** `/health` (if implemented) or root `/`
 - **Port:** Automatically assigned by Railway (uses `PORT` env var)
@@ -105,11 +105,11 @@ BOT_URL=your_bot_url
 3. **Configure Service Settings:**
    - **Bot Service:**
      - Set Root Directory to `/bot`
-     - Set Watch Paths to `**`
+     - Set Watch Paths to `bot/**` (CRITICAL: This prevents bot from deploying when only dashboard files change)
      - Set Healthcheck Path to `/health`
    - **Dashboard Service:**
      - Set Root Directory to `/dashboard`
-     - Set Watch Paths to `**`
+     - Set Watch Paths to `dashboard/**` (CRITICAL: This prevents dashboard from deploying when only bot files change)
      - Set Healthcheck Path to `/` (or `/health` if implemented)
 
 4. **Set Environment Variables:**

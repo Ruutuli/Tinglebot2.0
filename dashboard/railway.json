@@ -1,9 +1,10 @@
 {
     "$schema": "https://railway.com/railway.schema.json",
-    "_comment": "Railway configuration for Dashboard Service - Next.js web dashboard application. IMPORTANT: In Railway UI, set Root Directory to: /dashboard. Watch Paths should be: ** (all files in dashboard/).",
+    "_comment": "Railway configuration for Dashboard Service - Next.js web dashboard application. IMPORTANT: In Railway UI, set Root Directory to: /dashboard. Watch Paths should be: dashboard/** (only watch dashboard directory).",
     "build": {
         "builder": "NIXPACKS",
-        "buildCommand": "npm run build"
+        "buildCommand": "npm run build",
+        "watchPatterns": ["dashboard/**"]
     },
     "deploy": {
         "runtime": "V2",
