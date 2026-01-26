@@ -245,8 +245,8 @@ const formatImageUrl = (url: string): string => {
 };
 
 const getItemCategory = (item: InventoryItem): string | null => {
-  for (const cat of item.category) {
-    const catLower = cat.toLowerCase();
+  for (const cat of item.category ?? []) {
+    const catLower = String(cat ?? "").toLowerCase();
     for (const config of categoryConfig) {
       if (catLower.includes(config.name.toLowerCase())) {
         return config.name;
@@ -254,8 +254,8 @@ const getItemCategory = (item: InventoryItem): string | null => {
     }
   }
   
-  for (const type of item.type) {
-    const typeLower = type.toLowerCase();
+  for (const type of item.type ?? []) {
+    const typeLower = String(type ?? "").toLowerCase();
     for (const config of categoryConfig) {
       if (typeLower.includes(config.name.toLowerCase())) {
         return config.name;
@@ -538,16 +538,16 @@ export default function CharacterInventoryPage() {
     if (inventorySearch.trim()) {
       const searchLower = inventorySearch.toLowerCase();
       filtered = filtered.filter((item) =>
-        item.itemName.toLowerCase().includes(searchLower)
+        String(item.itemName ?? "").toLowerCase().includes(searchLower)
       );
     }
 
     const activeCategories = getActiveFilterValues(inventoryFilterGroups, "category");
     if (activeCategories.length > 0) {
       filtered = filtered.filter((item) =>
-        item.category.some((cat) =>
+        (item.category ?? []).some((cat: unknown) =>
           activeCategories.some((ac) =>
-            cat.toLowerCase().includes(ac.toLowerCase())
+            String(cat ?? "").toLowerCase().includes(String(ac ?? "").toLowerCase())
           )
         )
       );
@@ -556,8 +556,10 @@ export default function CharacterInventoryPage() {
     const activeTypes = getActiveFilterValues(inventoryFilterGroups, "type");
     if (activeTypes.length > 0) {
       filtered = filtered.filter((item) =>
-        item.type.some((t) =>
-          activeTypes.some((at) => t.toLowerCase().includes(at.toLowerCase()))
+        (item.type ?? []).some((t: unknown) =>
+          activeTypes.some((at) =>
+            String(t ?? "").toLowerCase().includes(String(at ?? "").toLowerCase())
+          )
         )
       );
     }
@@ -602,7 +604,7 @@ export default function CharacterInventoryPage() {
     if (historySearch.trim()) {
       const searchLower = historySearch.toLowerCase();
       filtered = filtered.filter((log) =>
-        log.itemName.toLowerCase().includes(searchLower)
+        String(log.itemName ?? "").toLowerCase().includes(searchLower)
       );
     }
 
@@ -610,7 +612,7 @@ export default function CharacterInventoryPage() {
     if (activeObtains.length > 0) {
       filtered = filtered.filter((log) =>
         activeObtains.some((ao) =>
-          log.obtain.toLowerCase().includes(ao.toLowerCase())
+          String(log.obtain ?? "").toLowerCase().includes(String(ao ?? "").toLowerCase())
         )
       );
     }
@@ -620,7 +622,7 @@ export default function CharacterInventoryPage() {
       filtered = filtered.filter((log) =>
         log.location &&
         activeLocations.some((al) =>
-          String(log.location).toLowerCase().includes(al.toLowerCase())
+          String(log.location ?? "").toLowerCase().includes(String(al ?? "").toLowerCase())
         )
       );
     }

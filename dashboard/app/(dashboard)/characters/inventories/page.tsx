@@ -525,8 +525,8 @@ export default function InventoriesPage() {
       const searchLower = transactionsSearch.toLowerCase();
       filtered = filtered.filter(
         (t) =>
-          t.itemName.toLowerCase().includes(searchLower) ||
-          t.characterName.toLowerCase().includes(searchLower)
+          String(t.itemName ?? "").toLowerCase().includes(searchLower) ||
+          String(t.characterName ?? "").toLowerCase().includes(searchLower)
       );
     }
 
@@ -546,7 +546,9 @@ export default function InventoriesPage() {
       .map((opt) => opt.value as string) || [];
     if (activeObtains.length > 0) {
       filtered = filtered.filter((t) =>
-        activeObtains.some((ao) => t.obtain.toLowerCase().includes(ao.toLowerCase()))
+        activeObtains.some((ao) =>
+          String(t.obtain ?? "").toLowerCase().includes(String(ao ?? "").toLowerCase())
+        )
       );
     }
 
@@ -560,7 +562,7 @@ export default function InventoriesPage() {
         (t) =>
           t.location &&
           activeLocations.some((al) =>
-            String(t.location).toLowerCase().includes(al.toLowerCase())
+            String(t.location ?? "").toLowerCase().includes(String(al ?? "").toLowerCase())
           )
       );
     }
@@ -799,11 +801,15 @@ export default function InventoriesPage() {
       const searchLower = search.toLowerCase();
       filtered = filtered.filter(
         (item) =>
-          item.itemName.toLowerCase().includes(searchLower) ||
-          item.category.some((cat) => cat.toLowerCase().includes(searchLower)) ||
-          item.type.some((t) => t.toLowerCase().includes(searchLower)) ||
-          item.characters.some((char) =>
-            char.characterName.toLowerCase().includes(searchLower)
+          String(item.itemName ?? "").toLowerCase().includes(searchLower) ||
+          (item.category ?? []).some((cat: unknown) =>
+            String(cat ?? "").toLowerCase().includes(searchLower)
+          ) ||
+          (item.type ?? []).some((t: unknown) =>
+            String(t ?? "").toLowerCase().includes(searchLower)
+          ) ||
+          (item.characters ?? []).some((char: any) =>
+            String(char?.characterName ?? "").toLowerCase().includes(searchLower)
           )
       );
     }
@@ -1202,16 +1208,22 @@ export default function InventoriesPage() {
 
         const equippable: InventoryItem[] = [];
         
-        inventoryItems.forEach((item: { itemName: string; Equipped?: boolean }) => {
+        inventoryItems.forEach((item: { itemName?: string | null; Equipped?: boolean }) => {
           if (item.Equipped === true) {
             return;
           }
-          
-          if (equippedItemNames.has(item.itemName.toLowerCase())) {
+
+          const itemName = String(item?.itemName ?? "").trim();
+          if (!itemName) {
+            return;
+          }
+          const itemNameLower = itemName.toLowerCase();
+
+          if (equippedItemNames.has(itemNameLower)) {
             return;
           }
 
-          const itemDetails = getItemDetails(item.itemName);
+          const itemDetails = getItemDetails(itemName);
           
           if (!itemDetails) {
             return;
@@ -1219,7 +1231,7 @@ export default function InventoriesPage() {
           
           const itemData = {
             _id: null,
-            itemName: item.itemName,
+            itemName,
             categoryGear: itemDetails.categoryGear,
             type: itemDetails.type || [],
             subtype: itemDetails.subtype || [],
@@ -1233,7 +1245,7 @@ export default function InventoriesPage() {
           if (weaponType || shieldCheck || armorSlot) {
             equippable.push({
               _id: null,
-              itemName: item.itemName,
+              itemName,
               categoryGear: itemDetails.categoryGear || "",
               type: itemDetails.type || [],
               subtype: itemDetails.subtype || [],
