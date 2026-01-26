@@ -345,14 +345,16 @@ function getGearByKey(
 }
 
 /* [page.tsx]🧠 Format roll combination type to readable label - */
-function formatRollType(rollType: string): string {
+function formatRollType(rollType: string | null | undefined): string {
   const rollTypeMap: Record<string, string> = {
     petprey: "Prey",
     petforage: "Forage",
     petmon: "Monster",
     petexplore: "Explore",
   };
-  return rollTypeMap[rollType.toLowerCase()] || capitalize(rollType.replace(/^pet/, ""));
+  if (!rollType || typeof rollType !== "string") return "Unknown";
+  const normalized = rollType.toLowerCase();
+  return rollTypeMap[normalized] || capitalize(rollType.replace(/^pet/, ""));
 }
 
 /* [page.tsx]🧠 Get quest type styling (icon, color, label) - */
@@ -535,8 +537,10 @@ function canSubmitCharacter(status: string | null | undefined): boolean {
   return status === null || status === undefined || status === "needs_changes";
 }
 
-function getVillageBorderImages(village: string): { top: string; bottom: string } {
-  const villageLower = village.toLowerCase();
+function getVillageBorderImages(
+  village: string | null | undefined
+): { top: string; bottom: string } {
+  const villageLower = String(village ?? "").toLowerCase();
   if (villageLower === "rudania") {
     return {
       top: "/assets/BOTW Sheikah Borders/ROTW_border_red_top.png",
