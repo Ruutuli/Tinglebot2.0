@@ -32,7 +32,12 @@ export async function GET() {
   const isMod = await isModeratorUser(user.id);
 
   // Try to get member info directly to see what Discord returns
-  let memberInfo: unknown = null;
+  type DiscordMemberInfo = {
+    roles?: string[];
+    [key: string]: unknown;
+  };
+  
+  let memberInfo: DiscordMemberInfo | null = null;
   let memberInfoError: string | null = null;
   
   if (guildId && hasToken) {
@@ -43,7 +48,7 @@ export async function GET() {
       );
       
       if (res.ok) {
-        memberInfo = await res.json();
+        memberInfo = (await res.json()) as DiscordMemberInfo;
       } else {
         const errorText = await res.text();
         try {
