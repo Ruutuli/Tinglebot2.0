@@ -50,15 +50,15 @@ export async function GET(
     }
 
     // Find character (case-insensitive)
-    const character = await Character.findOne({
+    const character: { name: string; _id: unknown; icon?: string } | null = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedName}$`, "i") },
-    }).lean();
+    }).lean() as { name: string; _id: unknown; icon?: string } | null;
 
     if (!character) {
       // Try mod characters
-      const modCharacter = await ModCharacter.findOne({
+      const modCharacter: { name: string; _id: unknown; icon?: string } | null = await ModCharacter.findOne({
         name: { $regex: new RegExp(`^${escapedName}$`, "i") },
-      }).lean();
+      }).lean() as { name: string; _id: unknown; icon?: string } | null;
 
       if (!modCharacter) {
         return NextResponse.json({ error: "Character not found" }, { status: 404 });
