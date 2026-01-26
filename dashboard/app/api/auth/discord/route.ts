@@ -13,7 +13,7 @@
 
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { getAppUrl } from "@/lib/config";
+import { getDiscordRedirectUri } from "@/lib/config";
 
 const DISCORD_AUTH_URL = "https://discord.com/oauth2/authorize";
 const SCOPES = ["identify"];
@@ -27,8 +27,7 @@ function isValidRedirectPath(path: string): boolean {
 
 export async function GET(request: NextRequest) {
   const clientId = process.env.DISCORD_CLIENT_ID;
-  const appUrl = getAppUrl();
-  const redirectUri = `${appUrl}/api/auth/discord/callback`;
+  const redirectUri = getDiscordRedirectUri();
 
   if (!clientId) {
     return NextResponse.json(

@@ -7,6 +7,14 @@ import webpack from "webpack";
 const projectRoot = path.resolve(process.cwd());
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return [
+      // Allow using a non-API redirect URI in Discord settings/env while
+      // still handling it via the existing route handlers under /api.
+      { source: "/auth/discord", destination: "/api/auth/discord" },
+      { source: "/auth/discord/callback", destination: "/api/auth/discord/callback" },
+    ];
+  },
   images: {
     remotePatterns: [
       {

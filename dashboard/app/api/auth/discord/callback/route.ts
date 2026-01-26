@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, type SessionUser } from "@/lib/session";
-import { getAppUrl } from "@/lib/config";
+import { getAppUrl, getDiscordRedirectUri } from "@/lib/config";
 
 const TOKEN_URL = "https://discord.com/api/oauth2/token";
 const USER_URL = "https://discord.com/api/users/@me";
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const redirectUri = `${appUrl}/api/auth/discord/callback`;
+  const redirectUri = getDiscordRedirectUri();
 
   if (!clientId || !clientSecret) {
     const res = redirectWithAuthError(appUrl, "config");
