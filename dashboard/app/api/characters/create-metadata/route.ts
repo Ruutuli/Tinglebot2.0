@@ -72,7 +72,7 @@ export async function GET() {
       Item = mongoose.models.Item;
     } else {
       const { default: ItemModel } = await import("@/models/ItemModel.js");
-      Item = ItemModel as mongoose.Model<unknown>;
+      Item = ItemModel as unknown as mongoose.Model<unknown>;
     }
     
     // Check if user is admin
