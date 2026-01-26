@@ -45,10 +45,15 @@ type AggregatedItem = {
   image?: string;
 };
 
+type CharacterSelectDoc = {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+};
+
 type CharacterModel = {
   find: (query: { userId: string }) => {
     select: (fields: string) => {
-      lean: () => Promise<Array<{ _id: unknown; name: string }>>;
+      lean: () => Promise<CharacterSelectDoc[]>;
     };
   };
 };
@@ -175,9 +180,9 @@ async function fetchItemDetails(
       itemName: { $in: Array.from(uniqueItemNames) },
     })
       .select("itemName category type image")
-      .lean<ItemDetail[]>();
+      .lean();
 
-    return itemDetails;
+    return itemDetails as ItemDetail[];
   } catch (queryError) {
     const error = normalizeError(queryError);
     logger.error("[aggregated/route.ts] ❌ Failed to query items:", error.message);
@@ -239,13 +244,9 @@ export async function GET(req: NextRequest) {
     const { Character, ModCharacter } = await loadCharacterModels();
 
     // Get user's characters (both regular and mod)
-    type CharacterSelectDoc = {
-      _id: mongoose.Types.ObjectId;
-      name: string;
-    };
     const [regularChars, modChars] = await Promise.all([
-      Character.find({ userId: user.id }).select("_id name").lean<CharacterSelectDoc[]>(),
-      ModCharacter.find({ userId: user.id }).select("_id name").lean<CharacterSelectDoc[]>(),
+      Character.find({ userId: user.id }).select("_id name").lean(),
+      ModCharacter.find({ userId: user.id }).select("_id name").lean(),
     ]);
 
     const allCharacters: CharacterWithModFlag[] = [
