@@ -11,8 +11,8 @@ function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Cache user-specific character inventory items for 1 minute
-export const revalidate = 60;
+// Uses session cookies; must be dynamically rendered per-request.
+export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,

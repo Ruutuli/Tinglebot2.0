@@ -182,7 +182,7 @@ async function fetchItemDetails(
       .select("itemName category type image")
       .lean();
 
-    return itemDetails as ItemDetail[];
+    return itemDetails as unknown as ItemDetail[];
   } catch (queryError) {
     const error = normalizeError(queryError);
     logger.error("[aggregated/route.ts] ❌ Failed to query items:", error.message);

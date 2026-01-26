@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { Loading } from "@/components/ui";
 import type {
@@ -46,8 +45,7 @@ function getMedalEmoji(rank: number): string {
 
 export default function LevelsPage() {
   const { user: sessionUser, loading: sessionLoading } = useSession();
-  const searchParams = useSearchParams();
-  const tab = useMemo(() => parseTab(searchParams.get("tab")), [searchParams]);
+  const [tab, setTab] = useState<TabValue>("my-rank");
 
   const [myRankData, setMyRankData] = useState<MyRankData | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -63,6 +61,22 @@ export default function LevelsPage() {
     { value: "blupee-hunters", label: "Blupee Hunters", icon: "fa-paw" },
     { value: "exchange", label: "Exchange", icon: "fa-exchange-alt" },
   ];
+
+  // Keep `tab` in sync with the URL without `useSearchParams` (avoids build-time
+  // prerender/Suspense errors).
+  useEffect(() => {
+    const syncTabFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      setTab(parseTab(params.get("tab")));
+    };
+
+    // Initial sync + handle back/forward navigation.
+    syncTabFromUrl();
+    window.addEventListener("popstate", syncTabFromUrl);
+    return () => {
+      window.removeEventListener("popstate", syncTabFromUrl);
+    };
+  }, []);
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -198,6 +212,7 @@ export default function LevelsPage() {
             <Link
               key={value}
               href={`/levels?tab=${value}`}
+              onClick={() => setTab(value)}
               className={`flex min-w-[140px] flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${
                 tab === value
                   ? "bg-gradient-to-r from-[var(--totk-dark-ocher)] to-[var(--totk-mid-ocher)] text-[var(--totk-ivory)] shadow-lg shadow-[var(--totk-dark-ocher)]/20 scale-[1.02] z-10"

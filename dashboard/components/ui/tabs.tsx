@@ -44,6 +44,7 @@ export function Tabs<T extends string>({
             <Link
               key={value}
               href={href}
+              onClick={() => onTabChange?.(value)}
               className={tabClassName(isActive)}
               aria-current={isActive ? "page" : undefined}
             >

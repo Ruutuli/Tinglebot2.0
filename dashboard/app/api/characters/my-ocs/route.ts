@@ -48,8 +48,8 @@ function buildSort(sortBy: string): Record<string, 1 | -1> {
 
 // ------------------- GET handler -------------------
 
-// Cache user-specific characters for 1 minute
-export const revalidate = 60;
+// Uses session cookies; must be dynamically rendered per-request.
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {

@@ -7,7 +7,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import type {
   UserProfile,
@@ -150,11 +149,22 @@ function ProfileTabbedLayout({
   sessionUser: { id: string; username: string; avatar?: string | null } | null;
   activityData: ActivityData | null;
 }) {
-  const searchParams = useSearchParams();
-  const tab = useMemo(
-    () => parseTab(searchParams.get("tab")),
-    [searchParams]
-  );
+  const [tab, setTab] = useState<TabValue>("profile");
+
+  // Keep `tab` in sync with the URL without `useSearchParams` (avoids build-time
+  // prerender/Suspense errors).
+  useEffect(() => {
+    const syncTabFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      setTab(parseTab(params.get("tab")));
+    };
+
+    syncTabFromUrl();
+    window.addEventListener("popstate", syncTabFromUrl);
+    return () => {
+      window.removeEventListener("popstate", syncTabFromUrl);
+    };
+  }, []);
 
   const tabs: { value: TabValue; label: string; icon: string }[] = [
     { value: "profile", label: "Profile", icon: "fa-user-circle" },
@@ -178,6 +188,7 @@ function ProfileTabbedLayout({
             href: `/profile?tab=${value}`,
           }))}
           activeTab={tab}
+          onTabChange={setTab}
         />
 
         {tab === "profile" && (

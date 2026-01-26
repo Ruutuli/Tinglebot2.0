@@ -10,8 +10,9 @@ import {
 } from "@/lib/api-utils";
 import { logger } from "@/utils/logger";
 
-// Cache this route for 5 minutes (300 seconds) on the server
-export const revalidate = 300;
+// Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
+// Caching is handled via `Cache-Control` response headers below.
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {

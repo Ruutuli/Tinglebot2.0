@@ -15,12 +15,9 @@ import {
 import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
 
-// ============================================================================
-// ------------------- Route Segment Config (Caching) -------------------
-// ============================================================================
-// Cache this route for 5 minutes (300 seconds) on the server
-// This reduces database load by serving cached responses
-export const revalidate = 300; // 5 minutes
+// Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
+// Caching is handled via `Cache-Control` response headers below.
+export const dynamic = "force-dynamic";
 
 // ============================================================================
 // ------------------- GET Handler -------------------

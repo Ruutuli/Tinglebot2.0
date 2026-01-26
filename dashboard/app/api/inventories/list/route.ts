@@ -27,9 +27,8 @@ function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Cache user-specific inventory summaries for 1 minute
-// Note: This is user-specific, so cache is per-user via session
-export const revalidate = 60;
+// Uses session cookies; must be dynamically rendered per-request.
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {

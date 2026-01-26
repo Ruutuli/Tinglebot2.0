@@ -526,7 +526,7 @@ export function TopBar() {
             type="button"
             onClick={scrollToTop}
             aria-label="Scroll to top"
-            className="scroll-to-top-btn"
+            className="scroll-to-top-btn min-w-[48px] min-h-[48px]"
             style={{
               position: "fixed",
               bottom: "16px",
@@ -549,7 +549,6 @@ export function TopBar() {
               boxShadow: "0 4px 16px rgba(0,0,0,0.5), 0 0 16px rgba(73, 213, 156, 0.3)",
               transition: "transform 0.2s ease, box-shadow 0.2s ease",
             }}
-            className="min-w-[48px] min-h-[48px]"
           >
             <svg
               aria-hidden

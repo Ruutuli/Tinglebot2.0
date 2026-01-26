@@ -8,6 +8,36 @@ import { connect } from "@/lib/db";
 import { getNextSundayMidnightEST, getCurrentWeekStartDate } from "@/lib/date-utils";
 import { logger } from "@/utils/logger";
 
+type CharacterOfWeekRecord = {
+  _id: unknown;
+  characterId: unknown;
+  characterName: string;
+  userId: string;
+  startDate: Date;
+  endDate: Date;
+  isActive?: boolean;
+  featuredReason?: string;
+  views?: number;
+  __v?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
+type CharacterFull = {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  race: string;
+  job: string;
+  currentVillage?: string;
+  homeVillage: string;
+  icon?: string;
+  userId: string;
+};
+
+export type CurrentCharacterOfWeek = CharacterOfWeekRecord & {
+  character: CharacterFull;
+};
+
 /**
  * Select a character for the week using the fair rotation algorithm
  * Priority 1: Characters never featured (randomly selected)
@@ -181,35 +211,26 @@ export async function rotateCharacterOfWeek(
 /**
  * Get the current featured character
  */
-export async function getCurrentCharacterOfWeek() {
+export async function getCurrentCharacterOfWeek(): Promise<CurrentCharacterOfWeek | null> {
   await connect();
   
   const CharacterOfWeek = (await import("@/models/CharacterOfWeekModel.js")).default;
   const Character = (await import("@/models/CharacterModel.js")).default;
   
   try {
-    const current = await CharacterOfWeek.findOne({ isActive: true })
-      .lean();
+    const current = (await CharacterOfWeek.findOne({ isActive: true }).lean()) as unknown;
     
     if (!current || Array.isArray(current)) {
       return null;
     }
+
+    const currentRecord = current as CharacterOfWeekRecord;
     
     // Get full character data
-    type CharacterFullDoc = {
-      _id: mongoose.Types.ObjectId;
-      name: string;
-      race: string;
-      job: string;
-      currentVillage?: string;
-      homeVillage: string;
-      icon?: string;
-      userId: string;
-    };
-    const characterId = String(current.characterId);
+    const characterId = String(currentRecord.characterId);
     const character = await Character.findById(characterId)
       .select("_id name race job currentVillage homeVillage icon userId")
-      .lean<CharacterFullDoc>();
+      .lean<CharacterFull>();
     
     if (!character || Array.isArray(character)) {
       logger.warn(
@@ -220,7 +241,7 @@ export async function getCurrentCharacterOfWeek() {
     }
     
     return {
-      ...current,
+      ...currentRecord,
       character: {
         _id: character._id,
         name: character.name,

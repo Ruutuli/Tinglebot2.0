@@ -1,10 +1,18 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 
 interface SidebarContextType {
   isMobileOpen: boolean;
-  setIsMobileOpen: (open: boolean) => void;
+  setIsMobileOpen: Dispatch<SetStateAction<boolean>>;
   isMobile: boolean;
 }
 

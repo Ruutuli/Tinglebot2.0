@@ -44,8 +44,9 @@ function buildSort(sortBy: string): Record<string, 1 | -1> {
   return sort;
 }
 
-// Cache this route for 2 minutes (120 seconds) - characters change more frequently
-export const revalidate = 120;
+// Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
+// Caching is handled via `Cache-Control` response headers below.
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {

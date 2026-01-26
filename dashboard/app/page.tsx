@@ -6,7 +6,7 @@
 // [page.tsx]✨ Core deps -
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { clsx } from "clsx";
@@ -1105,12 +1105,23 @@ function QuestCard(q: MonthlyQuestItem) {
 // [page.tsx]🧱 Homepage shell -
 export default function HomePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const authError = searchParams.get("auth_error");
-  const authDetails = searchParams.get("details");
-  const authErrorInfo = getAuthErrorMessage(authError, authDetails);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authDetails, setAuthDetails] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setAuthError(params.get("auth_error"));
+    setAuthDetails(params.get("details"));
+  }, []);
+
+  const authErrorInfo = useMemo(
+    () => getAuthErrorMessage(authError, authDetails),
+    [authError, authDetails]
+  );
 
   const dismissAuthError = useCallback(() => {
+    setAuthError(null);
+    setAuthDetails(null);
     router.replace("/");
   }, [router]);
 

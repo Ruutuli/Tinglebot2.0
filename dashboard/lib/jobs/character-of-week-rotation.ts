@@ -54,6 +54,6 @@ export async function defineRotationJob(): Promise<void> {
  */
 export async function triggerRotationJob(): Promise<void> {
   const agenda = await getAgenda();
-  await agenda.now(JOB_NAME);
+  await agenda.now(JOB_NAME, {});
   logger.info("character-of-week-rotation", "Manually triggered rotation job");
 }

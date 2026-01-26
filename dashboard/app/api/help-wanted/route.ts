@@ -8,8 +8,8 @@ import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 import { logger } from "@/utils/logger";
 
-// Cache user-specific help wanted quests for 1 minute
-export const revalidate = 60;
+// Uses session cookies; must be dynamically rendered per-request.
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
