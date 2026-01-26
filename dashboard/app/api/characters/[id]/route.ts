@@ -600,9 +600,14 @@ export async function PUT(
             // For other fields, check if value differs from current value
             const currentValue = (char as Record<string, unknown>)[field];
             const newValue = typeof value === "string" ? value.trim() : value;
+
+            const normalizeForCompare = (v: unknown) => {
+              if (v === undefined || v === null) return "";
+              return String(v).trim();
+            };
             
             // Only validate if the value is actually changing
-            if (String(currentValue) !== String(newValue)) {
+            if (normalizeForCompare(currentValue) !== normalizeForCompare(newValue)) {
               if (!isFieldEditable(fieldName, characterStatus as CharacterStatus)) {
                 return NextResponse.json(
                   { error: `Field "${fieldName}" cannot be edited when character status is "${characterStatus ?? "draft"}"` },

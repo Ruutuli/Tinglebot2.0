@@ -2500,7 +2500,7 @@ async function handleApprove(interaction) {
 
           // Send embed DM to user
           try {
-            const userEmbed = createApprovalDMEmbed(submissionId, title, tokenAmount, false);
+            const userEmbed = createApprovalDMEmbed(submissionId, title, tokensPerPerson, false);
             await interaction.client.users.send(userId, { embeds: [userEmbed] });
           } catch (dmError) {
             console.error(`[mod.js]: ❌ Error sending DM to user ${userId}:`, dmError);

@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       ModCharacter.find(characterQuery)
         .select("_id userId name job perk currentVillage homeVillage inventory")
         .lean(),
-    ])) as [CharacterLean[], CharacterLean[]];
+    ])) as unknown as [CharacterLean[], CharacterLean[]];
 
     const allCharacters = [
       ...regularChars.map((c) => ({ ...c, __model: "Character" as const })),

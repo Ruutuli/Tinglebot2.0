@@ -2488,7 +2488,7 @@ async function viewBlightStatus(interaction, characterName) {
     }
 
     // Add next roll reminder
-    const nextRollTime = new Date();
+    let nextRollTime = new Date();
     // Calculate next 1:00 AM UTC (8:00 PM EST)
     const next1AMUTC = get1AMUTC(new Date());
     if (next1AMUTC <= new Date()) {

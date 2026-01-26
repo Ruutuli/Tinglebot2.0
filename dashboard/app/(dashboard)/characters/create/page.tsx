@@ -1088,25 +1088,64 @@ export function CreateForm({
 
       setSubmitLoading(true);
       try {
+        const submitLockedString = (fieldName: string, value: string, initialValue?: string) => {
+          if (isEditMode && initialCharacter && !isEditable(fieldName)) {
+            return typeof initialValue === "string" ? initialValue : value;
+          }
+          return value.trim();
+        };
+        const submitLockedOptionalNumberString = (
+          fieldName: string,
+          value: string,
+          initialValue?: number | null
+        ) => {
+          if (isEditMode && initialCharacter && !isEditable(fieldName)) {
+            return initialValue == null ? "" : String(initialValue);
+          }
+          return value.trim() || "";
+        };
+
         const form = new FormData();
-        form.set("age", age.trim() || "");
-        form.set("appLink", appLink.trim());
-        form.set("extras", extras.trim());
-        form.set("gender", gender.trim());
+        form.set(
+          "age",
+          submitLockedOptionalNumberString("age", age, initialCharacter?.age ?? null)
+        );
+        form.set("appLink", submitLockedString("appLink", appLink, initialCharacter?.appLink));
+        form.set("extras", submitLockedString("extras", extras, initialCharacter?.extras));
+        form.set("gender", submitLockedString("gender", gender, initialCharacter?.gender));
         form.set("hearts", String(isEditMode && initialCharacter?.maxHearts ? initialCharacter.maxHearts : DEFAULT_HEARTS));
-        form.set("height", height.trim() || "");
-        form.set("history", history.trim());
-        form.set("job", job.trim());
-        form.set("name", name.trim());
-        form.set("personality", personality.trim());
-        form.set("pronouns", pronouns.trim());
-        form.set("race", race.trim());
+        form.set(
+          "height",
+          submitLockedOptionalNumberString("height", height, initialCharacter?.height ?? null)
+        );
+        form.set(
+          "history",
+          submitLockedString("history", history, initialCharacter?.history)
+        );
+        form.set("job", submitLockedString("job", job, initialCharacter?.job));
+        form.set("name", submitLockedString("name", name, initialCharacter?.name));
+        form.set(
+          "personality",
+          submitLockedString("personality", personality, initialCharacter?.personality)
+        );
+        form.set(
+          "pronouns",
+          submitLockedString("pronouns", pronouns, initialCharacter?.pronouns)
+        );
+        form.set("race", submitLockedString("race", race, initialCharacter?.race));
         form.set("stamina", String(isEditMode && initialCharacter?.maxStamina ? initialCharacter.maxStamina : DEFAULT_STAMINA));
         if (!isEditMode) {
           form.set("submit", doSubmit ? "true" : "false");
         }
-        form.set("village", village.trim());
-        form.set("virtue", virtue.trim() || "TBA");
+        form.set(
+          "village",
+          submitLockedString(
+            "homeVillage",
+            village,
+            initialCharacter?.homeVillage ?? initialCharacter?.village
+          )
+        );
+        form.set("virtue", submitLockedString("virtue", virtue, initialCharacter?.virtue) || "TBA");
         // Combine month and day into MM-DD format
         if (birthdayMonth.trim() && birthdayDay.trim()) {
           const monthNum = parseInt(birthdayMonth.trim(), 10);
