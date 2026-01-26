@@ -2,6 +2,7 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
@@ -46,15 +47,22 @@ export async function GET(
     }
 
     // Find character (case-insensitive)
-    let foundCharacter: { _id: unknown } | null = await Character.findOne({
+    type CharacterIdDoc = {
+      _id: mongoose.Types.ObjectId;
+    };
+    let foundCharacter = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedName}$`, "i") },
-    }).lean() as { _id: unknown } | null;
+    })
+      .select("_id")
+      .lean<CharacterIdDoc>();
 
     if (!foundCharacter) {
       // Try mod characters
       foundCharacter = await ModCharacter.findOne({
         name: { $regex: new RegExp(`^${escapedName}$`, "i") },
-      }).lean() as { _id: unknown } | null;
+      })
+        .select("_id")
+        .lean<CharacterIdDoc>();
 
       if (!foundCharacter) {
         return NextResponse.json({ error: "Character not found" }, { status: 404 });

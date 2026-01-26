@@ -76,11 +76,16 @@ export async function GET() {
     const Weather = (await import("@/models/WeatherModel.js")).default;
     const { start, end } = getCurrentWeatherDayRangeUTC();
 
+    type WeatherDoc = {
+      village: string;
+      date: Date;
+      [key: string]: unknown;
+    };
     const docs = await Weather.find({
       village: { $in: VILLAGES },
       date: { $gte: start, $lte: end },
     })
-      .lean()
+      .lean<WeatherDoc[]>()
       .exec();
 
     const response = NextResponse.json({ weather: docs });

@@ -24,11 +24,15 @@ export async function GET() {
     await connect();
     const Quest = (await import("@/models/QuestModel.js")).default;
 
+    type QuestDoc = {
+      date?: string;
+      [key: string]: unknown;
+    };
     const docs = await Quest.find({})
-      .lean()
+      .lean<QuestDoc[]>()
       .exec();
 
-    const dateStrings = [...new Set((docs as { date?: string }[]).map((d) => d.date).filter(Boolean))] as string[];
+    const dateStrings = [...new Set(docs.map((d) => d.date).filter(Boolean))] as string[];
     if (dateStrings.length === 0) {
       return NextResponse.json({ quests: [], month: null });
     }
@@ -50,7 +54,7 @@ export async function GET() {
     const latestYear = latestDate.getFullYear();
     const latestMonth = latestDate.getMonth();
 
-    const quests = (docs as { date?: string }[]).filter((q) => {
+    const quests = docs.filter((q) => {
       const d = parseMonthYear(q.date ?? "");
       return d && d.getFullYear() === latestYear && d.getMonth() === latestMonth;
     });

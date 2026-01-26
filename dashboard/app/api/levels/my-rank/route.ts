@@ -50,7 +50,7 @@ export async function GET() {
     const { default: User } = await import("@/models/UserModel.js");
 
     // Get current user
-    const user: {
+    type UserLeveling = {
       leveling?: {
         level: number;
         xp?: number;
@@ -59,16 +59,10 @@ export async function GET() {
         hasImportedFromMee6?: boolean;
         importedMee6Level?: number | null;
       };
-    } | null = await User.findOne({ discordId }).lean() as {
-      leveling?: {
-        level: number;
-        xp?: number;
-        totalMessages?: number;
-        lastExchangedLevel?: number;
-        hasImportedFromMee6?: boolean;
-        importedMee6Level?: number | null;
-      };
-    } | null;
+    };
+    const user = await User.findOne({ discordId })
+      .select("leveling")
+      .lean<UserLeveling>();
     if (!user) {
       return NextResponse.json(
         { error: "User not found" },

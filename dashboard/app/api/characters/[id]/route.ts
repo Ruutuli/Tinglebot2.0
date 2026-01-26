@@ -128,12 +128,16 @@ export async function GET(
     } else {
       // Try by slug (name) - use case-insensitive regex
       const slugRegex = new RegExp(`^${slugOrId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      const regularChars = await (Character as { find: (filter: Record<string, unknown>) => Promise<CharDoc[]> }).find({}) as CharDoc[];
-      char = regularChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) ?? null;
+      const regularChars = await Character.find({})
+        .select("name")
+        .lean<Array<Pick<CharDoc, "_id" | "name">>>();
+      char = regularChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) as CharDoc | null;
       
       if (!char) {
-        const modChars = await (ModCharacter as { find: (filter: Record<string, unknown>) => Promise<CharDoc[]> }).find({}) as CharDoc[];
-        char = modChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) ?? null;
+        const modChars = await ModCharacter.find({})
+          .select("name")
+          .lean<Array<Pick<CharDoc, "_id" | "name">>>();
+        char = modChars.find((c) => createSlug(c.name) === slugOrId.toLowerCase()) as CharDoc | null;
         if (char) {
           isModCharacter = true;
         }
@@ -344,10 +348,10 @@ export async function PUT(
     } else {
       // Try by name - use case-insensitive regex
       const nameRegex = new RegExp(`^${slugOrId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      char = (await (Character as { findOne: (filter: Record<string, unknown>) => Promise<CharDoc | null> }).findOne({ name: nameRegex })) as CharDoc | null;
+      char = await Character.findOne({ name: nameRegex }) as CharDoc | null;
       
       if (!char) {
-        char = (await (ModCharacter as { findOne: (filter: Record<string, unknown>) => Promise<CharDoc | null> }).findOne({ name: nameRegex })) as CharDoc | null;
+        char = await ModCharacter.findOne({ name: nameRegex }) as CharDoc | null;
         if (char) {
           isModCharacter = true;
         }

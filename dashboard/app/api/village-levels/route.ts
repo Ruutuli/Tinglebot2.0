@@ -32,12 +32,11 @@ export async function GET() {
     const docs = await Village.find({
       name: { $in: [...VILLAGE_ORDER] },
     })
-      .lean()
+      .lean<VillageDoc[]>()
       .exec();
 
     const byName = new Map<string, VillageDoc>();
-    for (const d of docs) {
-      const doc = d as unknown as VillageDoc;
+    for (const doc of docs) {
       byName.set(doc.name, doc);
     }
 

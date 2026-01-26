@@ -99,13 +99,17 @@ export async function POST(req: NextRequest) {
     let sourceCharacter = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedSourceName}$`, "i") },
       userId: user.id,
-    }).lean();
+    })
+      .select("_id name userId job perk currentVillage homeVillage")
+      .lean<CharacterDocument>();
 
     if (!sourceCharacter) {
       sourceCharacter = await ModCharacter.findOne({
         name: { $regex: new RegExp(`^${escapedSourceName}$`, "i") },
         userId: user.id,
-      }).lean();
+      })
+        .select("_id name userId job perk currentVillage homeVillage")
+        .lean<CharacterDocument>();
     }
 
     if (!sourceCharacter) {
@@ -115,21 +119,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Type assertion: ensure sourceCharacter is a single document, not an array
-    const sourceChar = sourceCharacter as unknown as CharacterDocument;
+    const sourceChar = sourceCharacter;
 
     // Find destination character
     const escapedDestName = escapeRegExp(destinationCharacterName);
     let destinationCharacter = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedDestName}$`, "i") },
       userId: user.id,
-    }).lean();
+    })
+      .select("_id name userId job perk currentVillage homeVillage")
+      .lean<CharacterDocument>();
 
     if (!destinationCharacter) {
       destinationCharacter = await ModCharacter.findOne({
         name: { $regex: new RegExp(`^${escapedDestName}$`, "i") },
         userId: user.id,
-      }).lean();
+      })
+        .select("_id name userId job perk currentVillage homeVillage")
+        .lean<CharacterDocument>();
     }
 
     if (!destinationCharacter) {
@@ -139,8 +146,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Type assertion: ensure destinationCharacter is a single document, not an array
-    const destChar = destinationCharacter as unknown as CharacterDocument;
+    const destChar = destinationCharacter;
 
     // Connect to inventories database (using cached connection)
     const db = await getInventoriesDb();
@@ -189,7 +195,9 @@ export async function POST(req: NextRequest) {
 
     const itemDetails = await Item.findOne({
       itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
-    }).lean();
+    })
+      .select("_id itemName category type subtype")
+      .lean<ItemDocument>();
 
     if (!itemDetails) {
       return NextResponse.json(
@@ -198,8 +206,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Type assertion: ensure itemDetails is properly typed
-    const item = itemDetails as unknown as ItemDocument;
+    const item = itemDetails;
 
     // Remove items from source character's inventory
     let remainingToRemove = quantityNum;

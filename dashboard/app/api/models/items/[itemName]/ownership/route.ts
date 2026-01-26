@@ -94,13 +94,19 @@ export async function GET(
       typeof item._id === 'string' ? new mongoose.Types.ObjectId(item._id) : item._id as mongoose.Types.ObjectId
     );
     
+    type CharacterSelectDoc = {
+      _id: mongoose.Types.ObjectId;
+      name: string;
+    };
     const characters = await Character.find({
       _id: { $in: characterIds }
-    }).select("_id name").lean();
+    })
+      .select("_id name")
+      .lean<CharacterSelectDoc[]>();
     
     // Create a map of characterId -> characterName
     const characterMap = new Map(
-      characters.map((char: { _id: mongoose.Types.ObjectId; name: string }) => [
+      characters.map((char) => [
         char._id.toString(),
         char.name
       ])

@@ -141,7 +141,7 @@ export async function GET() {
     const docs = await Notification.find({ userId })
       .sort({ createdAt: -1 })
       .limit(100)
-      .lean();
+      .lean<NotificationDocument[]>();
 
     const notifications = docs.map(transformNotification);
     return NextResponse.json({ notifications });

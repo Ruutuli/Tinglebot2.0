@@ -3,6 +3,7 @@
  * Handles selection algorithm and rotation functions
  */
 
+import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getNextSundayMidnightEST, getCurrentWeekStartDate } from "@/lib/date-utils";
 import { logger } from "@/utils/logger";
@@ -24,7 +25,14 @@ export async function selectCharacterForWeek(): Promise<{
   
   try {
     // Get all accepted characters
-    const allCharacters = await Character.find({ status: "accepted" }).lean();
+    type CharacterSelectDoc = {
+      _id: mongoose.Types.ObjectId;
+      name: string;
+      userId: string;
+    };
+    const allCharacters = await Character.find({ status: "accepted" })
+      .select("_id name userId")
+      .lean<CharacterSelectDoc[]>();
     
     if (allCharacters.length === 0) {
       logger.warn("character-of-week", "No accepted characters found");
@@ -54,11 +62,16 @@ export async function selectCharacterForWeek(): Promise<{
       );
     } else {
       // Priority 2: All have been featured, find the one featured longest ago
+      type CharacterOfWeekSelectDoc = {
+        characterId: mongoose.Types.ObjectId;
+        endDate: Date;
+      };
       const featuredHistory = await CharacterOfWeek.find({
         characterId: { $in: allCharacters.map((c) => c._id) },
       })
+        .select("characterId endDate")
         .sort({ endDate: 1 }) // Sort by endDate ascending (oldest first)
-        .lean();
+        .lean<CharacterOfWeekSelectDoc[]>();
       
       if (featuredHistory.length === 0) {
         // Fallback: just pick a random character
@@ -183,8 +196,20 @@ export async function getCurrentCharacterOfWeek() {
     }
     
     // Get full character data
+    type CharacterFullDoc = {
+      _id: mongoose.Types.ObjectId;
+      name: string;
+      race: string;
+      job: string;
+      currentVillage?: string;
+      homeVillage: string;
+      icon?: string;
+      userId: string;
+    };
     const characterId = String(current.characterId);
-    const character = await Character.findById(characterId).lean();
+    const character = await Character.findById(characterId)
+      .select("_id name race job currentVillage homeVillage icon userId")
+      .lean<CharacterFullDoc>();
     
     if (!character || Array.isArray(character)) {
       logger.warn(
@@ -230,7 +255,15 @@ export async function setCharacterOfWeek(
   
   try {
     // Verify character exists and is accepted
-    const character = await Character.findById(characterId).lean();
+    type CharacterStatusDoc = {
+      _id: mongoose.Types.ObjectId;
+      name: string;
+      userId: string;
+      status: string;
+    };
+    const character = await Character.findById(characterId)
+      .select("_id name userId status")
+      .lean<CharacterStatusDoc>();
     
     if (!character || Array.isArray(character)) {
       throw new Error(`Character not found: ${characterId}`);

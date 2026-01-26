@@ -16,11 +16,22 @@ export async function GET() {
     const { default: User } = await import("@/models/UserModel.js");
 
     // Get top 10 users sorted by level (descending), then XP (descending)
+    type LeaderboardUserDoc = {
+      username?: string;
+      nickname?: string;
+      leveling: {
+        level: number;
+        xp?: number;
+        totalMessages?: number;
+      };
+      avatar?: string;
+      discordId: string;
+    };
     const topUsers = await User.find({})
       .sort({ 'leveling.level': -1, 'leveling.xp': -1 })
       .limit(10)
       .select('username nickname leveling.xp leveling.level leveling.totalMessages avatar discordId')
-      .lean();
+      .lean<LeaderboardUserDoc[]>();
 
     const leaderboard = topUsers
       .filter((user) => user.leveling && typeof user.leveling.level === 'number')

@@ -173,12 +173,12 @@ export async function GET() {
       messageTracking,
     ] = await Promise.all([
       // User profile
-      User.findOne({ discordId }).lean(),
+      User.findOne({ discordId }).lean<UserDoc>(),
       // Characters (regular)
       Character.find({ userId: discordId })
-        .lean()
+        .lean<CharacterDoc[]>()
         .then((chars) =>
-          chars.map((char: unknown) => {
+          chars.map((char) => {
             const doc = normalizeMongooseDoc(char) as CharacterDoc;
             // Convert Maps to objects
             const result: Record<string, unknown> = { ...doc };
@@ -195,9 +195,9 @@ export async function GET() {
         ),
       // Characters (mod)
       ModCharacter.find({ userId: discordId })
-        .lean()
+        .lean<CharacterDoc[]>()
         .then((chars) =>
-          chars.map((char: unknown) => {
+          chars.map((char) => {
             const doc = normalizeMongooseDoc(char) as CharacterDoc;
             const result: Record<string, unknown> = { ...doc };
             if (doc.dailyRoll instanceof Map) {

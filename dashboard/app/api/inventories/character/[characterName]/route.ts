@@ -50,15 +50,24 @@ export async function GET(
     }
 
     // Find character (case-insensitive)
-    const character: { name: string; _id: unknown; icon?: string } | null = await Character.findOne({
+    type CharacterDoc = {
+      _id: mongoose.Types.ObjectId;
+      name: string;
+      icon?: string;
+    };
+    const character = await Character.findOne({
       name: { $regex: new RegExp(`^${escapedName}$`, "i") },
-    }).lean() as { name: string; _id: unknown; icon?: string } | null;
+    })
+      .select("_id name icon")
+      .lean<CharacterDoc>();
 
     if (!character) {
       // Try mod characters
-      const modCharacter: { name: string; _id: unknown; icon?: string } | null = await ModCharacter.findOne({
+      const modCharacter = await ModCharacter.findOne({
         name: { $regex: new RegExp(`^${escapedName}$`, "i") },
-      }).lean() as { name: string; _id: unknown; icon?: string } | null;
+      })
+        .select("_id name icon")
+        .lean<CharacterDoc>();
 
       if (!modCharacter) {
         return NextResponse.json({ error: "Character not found" }, { status: 404 });
@@ -105,10 +114,10 @@ export async function GET(
 
       // Only fetch items that are owned or commonly needed (optimization)
       // If you want to show ALL items, remove the $in filter, but it will be slower
-      const allItems: ItemDocument[] = ownedItemNames.size > 0
-        ? (await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
+      const allItems = ownedItemNames.size > 0
+        ? await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
             .select("itemName category type subtype image")
-            .lean()) as unknown as ItemDocument[]
+            .lean<ItemDocument[]>()
         : [];
 
       // Merge all items with owned status
@@ -182,10 +191,10 @@ export async function GET(
 
     // Only fetch items that are owned or commonly needed (optimization)
     // If you want to show ALL items, remove the $in filter, but it will be slower
-    const allItems: ItemDocument[] = ownedItemNames.size > 0
-      ? (await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
+    const allItems = ownedItemNames.size > 0
+      ? await Item.find({ itemName: { $in: Array.from(ownedItemNames) } })
           .select("itemName category type subtype image")
-          .lean()) as unknown as ItemDocument[]
+          .lean<ItemDocument[]>()
       : [];
 
     // Merge all items with owned status

@@ -32,6 +32,7 @@ export async function GET() {
       );
     }
 
+    // User.findOne() returns a document instance, not lean, so methods are available
     const exchangeData = user.getExchangeableLevels();
     const preview: ExchangePreview = {
       exchangeableLevels: exchangeData.exchangeableLevels,

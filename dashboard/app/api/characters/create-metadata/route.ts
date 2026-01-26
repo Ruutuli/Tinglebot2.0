@@ -126,18 +126,26 @@ export async function GET() {
       jobsByVillage[village].sort();
     }
 
+    type ItemGearDoc = {
+      _id: mongoose.Types.ObjectId;
+      itemName?: string;
+      categoryGear?: string;
+      type?: string[];
+      subtype?: string[];
+      modifierHearts?: number;
+    };
     const [starterItems, allWeapons, allShields, allArmor] = await Promise.all([
       Item.find({
         itemName: { $in: [...STARTER_GEAR_NAMES] },
       })
         .select("_id itemName categoryGear subtype modifierHearts")
-        .lean()
+        .lean<ItemGearDoc[]>()
         .exec(),
       Item.find({
         categoryGear: "Weapon",
       })
         .select("_id itemName categoryGear type subtype modifierHearts")
-        .lean()
+        .lean<ItemGearDoc[]>()
         .exec(),
       Item.find({
         $or: [
@@ -146,13 +154,13 @@ export async function GET() {
         ]
       })
         .select("_id itemName categoryGear type subtype modifierHearts")
-        .lean()
+        .lean<ItemGearDoc[]>()
         .exec(),
       Item.find({
         categoryGear: "Armor",
       })
         .select("_id itemName categoryGear type subtype modifierHearts")
-        .lean()
+        .lean<ItemGearDoc[]>()
         .exec(),
     ]);
 

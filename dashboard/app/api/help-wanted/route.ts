@@ -144,9 +144,15 @@ export async function GET() {
       characterMap.set("68436b06ce1cf9f45f17e99b", "Fiddle");
       characterMap.set("684184db7e58feb80a435bcb", "Test Character");
     } else if (characterIds.size > 0) {
-      const characters = await (Character as unknown as {
-        find: (filter: { _id: { $in: unknown[] } }) => Promise<Array<{ _id: unknown; name?: string }>>;
-      }).find({ _id: { $in: Array.from(characterIds).map(id => new mongoose.Types.ObjectId(id)) } });
+      type CharacterSelectDoc = {
+        _id: mongoose.Types.ObjectId;
+        name?: string;
+      };
+      const characters = await Character.find({ 
+        _id: { $in: Array.from(characterIds).map(id => new mongoose.Types.ObjectId(id)) } 
+      })
+        .select("_id name")
+        .lean<CharacterSelectDoc[]>();
       
       characters.forEach((char) => {
         const charId = typeof char._id === "object" && char._id && "_id" in char._id
