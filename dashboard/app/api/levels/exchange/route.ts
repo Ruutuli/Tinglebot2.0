@@ -98,7 +98,17 @@ export async function POST() {
     // Log transaction to TokenTransactionModel
     try {
       const { default: TokenTransaction } = await import("@/models/TokenTransactionModel.js");
-      await TokenTransaction.createTransaction({
+      await (TokenTransaction as unknown as {
+        createTransaction: (data: {
+          userId: string;
+          amount: number;
+          type: string;
+          category: string;
+          description: string;
+          balanceBefore: number;
+          balanceAfter: number;
+        }) => Promise<unknown>;
+      }).createTransaction({
         userId: discordId,
         amount: result.tokensReceived,
         type: 'earned',
