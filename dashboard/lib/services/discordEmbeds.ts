@@ -239,7 +239,7 @@ export function buildNeedsChangesDMEmbed(
     fields: [
       {
         name: "✏️ Next Steps",
-        value: `Please review the feedback above and make the necessary changes to your character.\n\nOnce you've made the changes, you can resubmit your character for review.\n\n[Edit Character](${ocPageUrl})`,
+        value: `Please review the feedback above and make the necessary changes to your character.\n\nOnce you've made the changes, you can resubmit your character for review.\n\nIf you need to discuss further before resubmitting, please reach out to the roots.admin discord account!\n\n[Edit Character](${ocPageUrl})`,
         inline: false,
       },
     ],

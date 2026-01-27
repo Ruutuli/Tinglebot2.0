@@ -126,7 +126,7 @@ async function createDashboardNotification(
       const feedbackText = data.feedback
         ?.map((f) => `**${f.modUsername}:** ${f.text}`)
         .join("\n\n") || "No feedback provided";
-      message = `Your character **${character.name}** needs some changes before it can be approved.\n\n**Moderator Feedback:**\n\n${feedbackText}`;
+      message = `Your character **${character.name}** needs some changes before it can be approved.\n\n**Moderator Feedback:**\n\n${feedbackText}\n\nIf you need to discuss further before resubmitting, please reach out to the roots.admin discord account!`;
       links.push({
         text: "Edit Character",
         url: ocPageUrl,
