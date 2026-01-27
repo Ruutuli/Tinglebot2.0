@@ -221,6 +221,9 @@ export function buildNeedsChangesDMEmbed(
     value: string;
     inline?: boolean;
   }>;
+  footer?: {
+    text: string;
+  };
 } {
   const characterId = String(character._id);
   const ocPageUrl = character.publicSlug
@@ -239,10 +242,13 @@ export function buildNeedsChangesDMEmbed(
     fields: [
       {
         name: "✏️ Next Steps",
-        value: `Please review the feedback above and make the necessary changes to your character.\n\nOnce you've made the changes, you can resubmit your character for review.\n\nIf you need to discuss further before resubmitting, please reach out to the roots.admin discord account!\n\n[Edit Character](${ocPageUrl})`,
+        value: `Please review the feedback above and make the necessary changes to your character.\n\nOnce you've made the changes, you can resubmit your character for review.\n\n[Edit Character](${ocPageUrl})`,
         inline: false,
       },
     ],
+    footer: {
+      text: "💬 If you need to discuss any of the changes, please reach out to the roots.admin discord account!",
+    },
   };
 }
 
