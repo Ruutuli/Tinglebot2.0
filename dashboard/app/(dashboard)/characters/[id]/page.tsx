@@ -1330,16 +1330,13 @@ export default function OCDetailPage() {
                     key={stableKey}
                     className="rounded-lg border border-[#ffa500]/30 bg-[var(--botw-warm-black)]/50 p-3 sm:p-4"
                   >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-semibold text-[#ffa500]">
-                        {feedback.modUsername || "Moderator"}
-                      </span>
-                      {feedback.createdAt && (
+                    {feedback.createdAt && (
+                      <div className="mb-2 flex items-center justify-end">
                         <span className="text-xs text-[var(--totk-grey-200)]">
                           {formatDate(feedback.createdAt)}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     <div className="text-sm leading-relaxed text-[var(--botw-pale)]">
                       <ReactMarkdown components={MARKDOWN_COMPONENTS}>
                         {feedback.text || "No feedback provided"}

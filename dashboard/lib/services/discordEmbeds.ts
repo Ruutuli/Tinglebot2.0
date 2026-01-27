@@ -227,9 +227,9 @@ export function buildNeedsChangesDMEmbed(
     ? `${APP_URL}/characters/${character.publicSlug}`
     : `${APP_URL}/characters/${characterId}`;
 
-  // Combine all feedback
+  // Combine all feedback (without mod usernames)
   const feedbackText = feedback
-    .map((f) => `**${f.modUsername}:**\n${f.text}`)
+    .map((f) => f.text)
     .join("\n\n");
 
   return {

@@ -336,16 +336,13 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
             </div>
             <div className="space-y-1.5 sm:space-y-2">
               {applicationFeedback.map((feedback, idx) => {
-                // Create stable key from feedback content and mod username
-                const feedbackKey = `${feedback.modUsername || "mod"}-${idx}-${feedback.text.slice(0, 20)}`;
+                // Create stable key from feedback content
+                const feedbackKey = `feedback-${idx}-${feedback.text.slice(0, 20)}`;
                 return (
                   <div
                     key={feedbackKey}
                     className="text-xs sm:text-sm text-[var(--botw-pale)] bg-[var(--botw-warm-black)]/50 rounded px-2 sm:px-3 py-1.5 sm:py-2 border border-[#ff6347]/20"
                   >
-                    <div className="font-medium text-[var(--totk-grey-200)] mb-0.5 break-words">
-                      {feedback.modUsername || "Moderator"}:
-                    </div>
                     <div className="break-words overflow-wrap-anywhere">
                       <ReactMarkdown components={FEEDBACK_MARKDOWN_COMPONENTS}>
                         {feedback.text}
