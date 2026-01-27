@@ -5,7 +5,8 @@
 // ============================================================================
 
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import { useSession } from "@/hooks/use-session";
 import { useModelList } from "@/hooks/use-model-list";
 import { Loading } from "@/components/ui";
@@ -26,6 +27,59 @@ type ApplicationFeedback = Array<{ modUsername?: string; text: string }>;
 
 type CharacterWithFeedback = Character & {
   applicationFeedback?: ApplicationFeedback;
+};
+
+// Markdown components for feedback rendering
+type MarkdownComponentProps = {
+  children?: ReactNode;
+  href?: string;
+};
+
+const FEEDBACK_MARKDOWN_COMPONENTS: Components = {
+  p: ({ children }: MarkdownComponentProps) => (
+    <p className="mb-2 last:mb-0">{children}</p>
+  ),
+  ul: ({ children }: MarkdownComponentProps) => (
+    <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>
+  ),
+  ol: ({ children }: MarkdownComponentProps) => (
+    <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>
+  ),
+  li: ({ children }: MarkdownComponentProps) => (
+    <li className="ml-2">{children}</li>
+  ),
+  strong: ({ children }: MarkdownComponentProps) => (
+    <strong className="font-bold text-[var(--totk-light-green)]">{children}</strong>
+  ),
+  em: ({ children }: MarkdownComponentProps) => (
+    <em className="italic">{children}</em>
+  ),
+  code: ({ children }: MarkdownComponentProps) => (
+    <code className="bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] px-1 py-0.5 rounded text-xs font-mono">
+      {children}
+    </code>
+  ),
+  pre: ({ children }: MarkdownComponentProps) => (
+    <pre className="bg-[var(--botw-warm-black)] p-2 rounded overflow-x-auto mb-2 text-xs">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }: MarkdownComponentProps) => (
+    <blockquote className="border-l-4 border-[var(--totk-green)] pl-2 italic mb-2">
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href }: MarkdownComponentProps) => (
+    <a
+      href={href}
+      className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)]"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  br: () => <br />,
 };
 
 // ============================================================================
@@ -292,7 +346,11 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
                     <div className="font-medium text-[var(--totk-grey-200)] mb-0.5 break-words">
                       {feedback.modUsername || "Moderator"}:
                     </div>
-                    <div className="break-words">{feedback.text}</div>
+                    <div className="break-words">
+                      <ReactMarkdown components={FEEDBACK_MARKDOWN_COMPONENTS}>
+                        {feedback.text}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 );
               })}

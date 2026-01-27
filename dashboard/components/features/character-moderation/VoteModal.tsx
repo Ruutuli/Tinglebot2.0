@@ -160,11 +160,14 @@ export function VoteModal({
                 setReason(e.target.value);
                 setError(null);
               }}
-              placeholder="Provide feedback on what needs to be changed..."
+              placeholder="Provide feedback on what needs to be changed... (Markdown and line breaks supported)"
               required
               rows={4}
               className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-300)] focus:border-[var(--totk-light-green)] focus:outline-none"
             />
+            <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+              Markdown formatting is supported. Use double line breaks for new paragraphs.
+            </p>
           </div>
         )}
 

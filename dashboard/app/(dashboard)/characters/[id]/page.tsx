@@ -1340,9 +1340,11 @@ export default function OCDetailPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm leading-relaxed text-[var(--botw-pale)] whitespace-pre-wrap">
-                      {feedback.text || "No feedback provided"}
-                    </p>
+                    <div className="text-sm leading-relaxed text-[var(--botw-pale)]">
+                      <ReactMarkdown components={MARKDOWN_COMPONENTS}>
+                        {feedback.text || "No feedback provided"}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                   );
                 })}
