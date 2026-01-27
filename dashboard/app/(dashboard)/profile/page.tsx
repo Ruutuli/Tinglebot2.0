@@ -2194,6 +2194,16 @@ type NotificationItem = {
 };
 
 /* [profile/page.tsx]✨ Markdown components for notification rendering - */
+
+/**
+ * Convert plain URLs in text to markdown links
+ */
+function convertUrlsToMarkdown(text: string): string {
+  // URL regex pattern - matches http(s):// URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, (url) => `[${url}](${url})`);
+}
+
 type MarkdownComponentProps = {
   children?: ReactNode;
   href?: string;
@@ -2529,7 +2539,7 @@ function NotificationsTabContent() {
                         <p className="break-words text-sm font-semibold text-[var(--botw-pale)]">{n.title}</p>
                         <div className="mt-1 break-words text-xs leading-relaxed text-[var(--totk-grey-200)] overflow-wrap-anywhere">
                           <ReactMarkdown components={NOTIFICATION_MARKDOWN_COMPONENTS}>
-                            {n.message}
+                            {convertUrlsToMarkdown(n.message)}
                           </ReactMarkdown>
                         </div>
                         <div className="mt-2 flex items-center gap-3 flex-wrap">

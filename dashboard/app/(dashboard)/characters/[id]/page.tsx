@@ -148,6 +148,15 @@ type MarkdownComponentProps = {
   href?: string;
 };
 
+/**
+ * Convert plain URLs in text to markdown links
+ */
+function convertUrlsToMarkdown(text: string): string {
+  // URL regex pattern - matches http(s):// URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, (url) => `[${url}](${url})`);
+}
+
 const MARKDOWN_COMPONENTS: Components = {
   p: ({ children }: MarkdownComponentProps) => (
     <p className="mb-3 last:mb-0">{children}</p>
@@ -1339,7 +1348,7 @@ export default function OCDetailPage() {
                     )}
                     <div className="text-sm leading-relaxed text-[var(--botw-pale)]">
                       <ReactMarkdown components={MARKDOWN_COMPONENTS}>
-                        {feedback.text || "No feedback provided"}
+                        {convertUrlsToMarkdown(feedback.text || "No feedback provided")}
                       </ReactMarkdown>
                     </div>
                   </div>

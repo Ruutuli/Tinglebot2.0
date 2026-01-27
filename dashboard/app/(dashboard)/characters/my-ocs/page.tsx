@@ -35,6 +35,15 @@ type MarkdownComponentProps = {
   href?: string;
 };
 
+/**
+ * Convert plain URLs in text to markdown links
+ */
+function convertUrlsToMarkdown(text: string): string {
+  // URL regex pattern - matches http(s):// URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, (url) => `[${url}](${url})`);
+}
+
 const FEEDBACK_MARKDOWN_COMPONENTS: Components = {
   p: ({ children }: MarkdownComponentProps) => (
     <p className="mb-2 last:mb-0 break-words">{children}</p>
@@ -345,7 +354,7 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
                   >
                     <div className="break-words overflow-wrap-anywhere">
                       <ReactMarkdown components={FEEDBACK_MARKDOWN_COMPONENTS}>
-                        {feedback.text}
+                        {convertUrlsToMarkdown(feedback.text)}
                       </ReactMarkdown>
                     </div>
                   </div>

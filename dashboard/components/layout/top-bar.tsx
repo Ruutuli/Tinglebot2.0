@@ -81,6 +81,16 @@ function formatNotificationTime(date: Date | string): string {
 }
 
 /* [top-bar.tsx]✨ Markdown components for notification rendering - */
+
+/**
+ * Convert plain URLs in text to markdown links
+ */
+function convertUrlsToMarkdown(text: string): string {
+  // URL regex pattern - matches http(s):// URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, (url) => `[${url}](${url})`);
+}
+
 type MarkdownComponentProps = {
   children?: ReactNode;
   href?: string;
@@ -417,7 +427,7 @@ function NotificationsDropdown() {
                           </p>
                           <div className="mt-0.5 text-xs break-words overflow-wrap-anywhere" style={{ color: "var(--totk-grey-200)" }}>
                             <ReactMarkdown components={NOTIFICATION_MARKDOWN_COMPONENTS}>
-                              {n.message}
+                              {convertUrlsToMarkdown(n.message)}
                             </ReactMarkdown>
                           </div>
                           <p className="mt-1 text-[10px] uppercase tracking-wider break-words" style={{ color: "var(--totk-dark-ocher)" }}>
