@@ -7,6 +7,7 @@ import { discordApiRequest } from "@/lib/discord";
 import { buildApplicationEmbed } from "./discordEmbeds";
 import { logger } from "@/utils/logger";
 import { getVotesForCharacter } from "@/lib/ocApplicationService";
+import { getAppUrl } from "@/lib/config";
 
 const ADMIN_REVIEW_CHANNEL_ID =
   process.env.ADMIN_REVIEW_CHANNEL_ID || "964342870796537909";
@@ -232,10 +233,31 @@ export async function handleResubmission(
       }
     );
 
-    // Post notification message
+    // Post notification message as embed
     const version = character.applicationVersion ?? 1;
+    const APP_URL = getAppUrl();
+    const moderationUrl = `${APP_URL}/characters/moderation`;
+    
+    const updateEmbed = {
+      title: `🔄 Character Application Update`,
+      description: `**${character.name}** has an updated application!`,
+      color: 0x4caf50, // Green
+      fields: [
+        {
+          name: "📋 Version",
+          value: `v${version}`,
+          inline: true,
+        },
+        {
+          name: "🔗 Review",
+          value: `[View in Moderation Panel](${moderationUrl})`,
+          inline: true,
+        },
+      ],
+    };
+    
     await discordApiRequest(`channels/${channelId}/messages`, "POST", {
-      content: `🔄 **${character.name}** app has an update! (v${version})`,
+      embeds: [updateEmbed],
     });
 
     logger.info(
