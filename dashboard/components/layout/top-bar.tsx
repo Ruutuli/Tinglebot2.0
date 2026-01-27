@@ -8,8 +8,10 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import ReactMarkdown, { type Components } from "react-markdown";
 import { useSession } from "@/hooks/use-session";
 import { useSidebar } from "./sidebar-context";
 
@@ -78,10 +80,65 @@ function formatNotificationTime(date: Date | string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/* [top-bar.tsx]✨ Markdown components for notification rendering - */
+type MarkdownComponentProps = {
+  children?: ReactNode;
+  href?: string;
+};
+
+const NOTIFICATION_MARKDOWN_COMPONENTS: Components = {
+  p: ({ children }: MarkdownComponentProps) => (
+    <p className="mb-1 last:mb-0 break-words">{children}</p>
+  ),
+  ul: ({ children }: MarkdownComponentProps) => (
+    <ul className="list-disc list-inside mb-1 space-y-0.5 break-words">{children}</ul>
+  ),
+  ol: ({ children }: MarkdownComponentProps) => (
+    <ol className="list-decimal list-inside mb-1 space-y-0.5 break-words">{children}</ol>
+  ),
+  li: ({ children }: MarkdownComponentProps) => (
+    <li className="ml-1 break-words">{children}</li>
+  ),
+  strong: ({ children }: MarkdownComponentProps) => (
+    <strong className="font-bold text-[var(--totk-light-green)] break-words">{children}</strong>
+  ),
+  em: ({ children }: MarkdownComponentProps) => (
+    <em className="italic break-words">{children}</em>
+  ),
+  code: ({ children }: MarkdownComponentProps) => (
+    <code className="bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] px-1 py-0.5 rounded text-[10px] font-mono break-words">
+      {children}
+    </code>
+  ),
+  pre: ({ children }: MarkdownComponentProps) => (
+    <pre className="bg-[var(--botw-warm-black)] p-1.5 rounded overflow-x-auto mb-1 text-[10px] break-words">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }: MarkdownComponentProps) => (
+    <blockquote className="border-l-2 border-[var(--totk-green)] pl-1.5 italic mb-1 break-words">
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href }: MarkdownComponentProps) => (
+    <a
+      href={href}
+      className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)] break-words"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  br: () => <br />,
+};
+
 function NotificationsDropdown() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hasUnreadIndicator, setHasUnreadIndicator] = useState(false);
 
   const hasUnread = useMemo(
     () => notifications.some((n) => !n.read),
@@ -91,6 +148,29 @@ function NotificationsDropdown() {
     () => notifications.filter((n) => !n.read).length,
     [notifications]
   );
+
+  // Fetch notification count for indicator (polling every 30 seconds)
+  useEffect(() => {
+    const checkUnreadCount = async () => {
+      try {
+        const res = await fetch("/api/users/notifications");
+        if (!res.ok) return;
+        const data = await res.json();
+        const hasUnread = data.notifications?.some((n: { read: boolean }) => !n.read) || false;
+        setHasUnreadIndicator(hasUnread);
+      } catch (err) {
+        // Silently fail - don't spam console
+      }
+    };
+
+    // Check immediately
+    checkUnreadCount();
+
+    // Then poll every 30 seconds
+    const interval = setInterval(checkUnreadCount, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch notifications when dropdown opens
   useEffect(() => {
@@ -120,6 +200,9 @@ function NotificationsDropdown() {
           time: formatNotificationTime(n.createdAt),
         }));
         setNotifications(formattedNotifications);
+        // Update indicator state when we fetch full list
+        const hasUnread = formattedNotifications.some((n) => !n.read);
+        setHasUnreadIndicator(hasUnread);
       } catch (err: unknown) {
         if (abortController.signal.aborted) return;
         const error = err instanceof Error ? err : new Error(String(err));
@@ -147,6 +230,7 @@ function NotificationsDropdown() {
       });
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        setHasUnreadIndicator(false);
       }
     } catch (error) {
       console.error("[top-bar.tsx]❌ Error marking all as read:", error);
@@ -164,6 +248,10 @@ function NotificationsDropdown() {
         setNotifications((prev) =>
           prev.map((n) => (n.id === id ? { ...n, read: true } : n))
         );
+        // Update indicator if no more unread
+        const updated = notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
+        const stillHasUnread = updated.some((n) => !n.read);
+        setHasUnreadIndicator(stillHasUnread);
       }
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -176,6 +264,9 @@ function NotificationsDropdown() {
 
   const handleNotificationClick = (id: string) => {
     markOneRead(id);
+    setOpen(false);
+    // Navigate to profile notifications page with the notification ID as hash
+    router.push(`/profile?tab=notifications#notification-${id}`);
   };
 
   return (
@@ -186,21 +277,22 @@ function NotificationsDropdown() {
           suppressHydrationWarning
           className="relative flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border-2 transition-all duration-200 hover:scale-105 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)] focus:ring-offset-2 focus:ring-offset-[var(--totk-brown)] data-[state=open]:bg-white/10 data-[state=open]:ring-2 data-[state=open]:ring-[var(--totk-light-green)] data-[state=open]:ring-offset-2 data-[state=open]:ring-offset-[var(--totk-brown)] min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px]"
           style={{ borderColor: "var(--totk-dark-ocher)" }}
-          aria-label={hasUnread ? `${unreadCount} unread notifications` : "Open notifications"}
+          aria-label={hasUnreadIndicator || hasUnread ? `${unreadCount || "some"} unread notifications` : "Open notifications"}
         >
           <i
             aria-hidden
             className="fa-solid fa-bell text-[var(--botw-pale)]"
           />
-          <NotificationBubble hasUnread={hasUnread && unreadCount > 0} />
+          <NotificationBubble hasUnread={hasUnreadIndicator || (hasUnread && unreadCount > 0)} />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
-          className="z-[100] min-w-[280px] sm:min-w-[300px] max-w-[calc(100vw-2rem)] sm:max-w-[90vw] overflow-hidden rounded-xl bg-[var(--botw-warm-black)] pt-3 pb-2 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:slide-out-to-top-2"
+          className="z-[100] w-[calc(100vw-2rem)] sm:w-[400px] max-w-[calc(100vw-2rem)] sm:max-w-[90vw] overflow-hidden rounded-xl bg-[var(--botw-warm-black)] pt-3 pb-2 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:slide-out-to-top-2"
           style={{
             boxShadow:
               "0 12px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(0, 163, 218, 0.12)",
+            maxHeight: "calc(100vh - 100px)",
           }}
           align="end"
           sideOffset={10}
@@ -298,17 +390,19 @@ function NotificationsDropdown() {
                             boxShadow: n.read ? "none" : "0 0 6px rgba(73, 213, 156, 0.6)",
                           }}
                         />
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 overflow-hidden">
                           <p
-                            className={titleClass}
+                            className={`${titleClass} break-words`}
                             style={{ color: "var(--totk-ivory)" }}
                           >
                             {n.title}
                           </p>
-                          <p className="mt-0.5 truncate text-xs" style={{ color: "var(--totk-grey-200)" }}>
-                            {n.message}
-                          </p>
-                          <p className="mt-1 text-[10px] uppercase tracking-wider" style={{ color: "var(--totk-dark-ocher)" }}>
+                          <div className="mt-0.5 text-xs break-words overflow-wrap-anywhere" style={{ color: "var(--totk-grey-200)" }}>
+                            <ReactMarkdown components={NOTIFICATION_MARKDOWN_COMPONENTS}>
+                              {n.message}
+                            </ReactMarkdown>
+                          </div>
+                          <p className="mt-1 text-[10px] uppercase tracking-wider break-words" style={{ color: "var(--totk-dark-ocher)" }}>
                             {n.time}
                           </p>
                         </div>

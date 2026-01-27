@@ -514,7 +514,13 @@ export function useModelList<T>(
         setFilterOptions(json.filterOptions);
       }
     } catch (e) {
+      // Ignore aborted requests - they're expected when navigating away or refetching
       if (signal.aborted) return;
+      // Ignore DOMException with name "AbortError" - this is the standard abort error
+      if (e instanceof Error && e.name === "AbortError") return;
+      // Ignore errors that mention "aborted" or "signal"
+      if (e instanceof Error && (e.message.toLowerCase().includes("aborted") || e.message.toLowerCase().includes("signal"))) return;
+      
       const errorMessage = e instanceof Error ? e.message : String(e);
       // Provide more context for network errors
       if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {

@@ -37,42 +37,42 @@ type MarkdownComponentProps = {
 
 const FEEDBACK_MARKDOWN_COMPONENTS: Components = {
   p: ({ children }: MarkdownComponentProps) => (
-    <p className="mb-2 last:mb-0">{children}</p>
+    <p className="mb-2 last:mb-0 break-words">{children}</p>
   ),
   ul: ({ children }: MarkdownComponentProps) => (
-    <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>
+    <ul className="list-disc list-inside mb-2 space-y-1 break-words">{children}</ul>
   ),
   ol: ({ children }: MarkdownComponentProps) => (
-    <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>
+    <ol className="list-decimal list-inside mb-2 space-y-1 break-words">{children}</ol>
   ),
   li: ({ children }: MarkdownComponentProps) => (
-    <li className="ml-2">{children}</li>
+    <li className="ml-2 break-words">{children}</li>
   ),
   strong: ({ children }: MarkdownComponentProps) => (
-    <strong className="font-bold text-[var(--totk-light-green)]">{children}</strong>
+    <strong className="font-bold text-[var(--totk-light-green)] break-words">{children}</strong>
   ),
   em: ({ children }: MarkdownComponentProps) => (
-    <em className="italic">{children}</em>
+    <em className="italic break-words">{children}</em>
   ),
   code: ({ children }: MarkdownComponentProps) => (
-    <code className="bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] px-1 py-0.5 rounded text-xs font-mono">
+    <code className="bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] px-1 py-0.5 rounded text-xs font-mono break-words">
       {children}
     </code>
   ),
   pre: ({ children }: MarkdownComponentProps) => (
-    <pre className="bg-[var(--botw-warm-black)] p-2 rounded overflow-x-auto mb-2 text-xs">
+    <pre className="bg-[var(--botw-warm-black)] p-2 rounded overflow-x-auto mb-2 text-xs break-words">
       {children}
     </pre>
   ),
   blockquote: ({ children }: MarkdownComponentProps) => (
-    <blockquote className="border-l-4 border-[var(--totk-green)] pl-2 italic mb-2">
+    <blockquote className="border-l-4 border-[var(--totk-green)] pl-2 italic mb-2 break-words">
       {children}
     </blockquote>
   ),
   a: ({ children, href }: MarkdownComponentProps) => (
     <a
       href={href}
-      className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)]"
+      className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)] break-words"
       target="_blank"
       rel="noopener noreferrer"
     >
@@ -346,7 +346,7 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
                     <div className="font-medium text-[var(--totk-grey-200)] mb-0.5 break-words">
                       {feedback.modUsername || "Moderator"}:
                     </div>
-                    <div className="break-words">
+                    <div className="break-words overflow-wrap-anywhere">
                       <ReactMarkdown components={FEEDBACK_MARKDOWN_COMPONENTS}>
                         {feedback.text}
                       </ReactMarkdown>

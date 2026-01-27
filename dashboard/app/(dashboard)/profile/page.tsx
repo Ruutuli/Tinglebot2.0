@@ -4,9 +4,10 @@
 /* ------------------- Imports ------------------- */
 /* ============================================================================ */
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import ReactMarkdown, { type Components } from "react-markdown";
 import { useSession } from "@/hooks/use-session";
 import type {
   UserProfile,
@@ -2192,6 +2193,59 @@ type NotificationItem = {
   createdAt: string;
 };
 
+/* [profile/page.tsx]✨ Markdown components for notification rendering - */
+type MarkdownComponentProps = {
+  children?: ReactNode;
+  href?: string;
+};
+
+const NOTIFICATION_MARKDOWN_COMPONENTS: Components = {
+  p: ({ children }: MarkdownComponentProps) => (
+    <p className="mb-1.5 last:mb-0 break-words">{children}</p>
+  ),
+  ul: ({ children }: MarkdownComponentProps) => (
+    <ul className="list-disc list-inside mb-1.5 space-y-1 break-words">{children}</ul>
+  ),
+  ol: ({ children }: MarkdownComponentProps) => (
+    <ol className="list-decimal list-inside mb-1.5 space-y-1 break-words">{children}</ol>
+  ),
+  li: ({ children }: MarkdownComponentProps) => (
+    <li className="ml-2 break-words">{children}</li>
+  ),
+  strong: ({ children }: MarkdownComponentProps) => (
+    <strong className="font-bold text-[var(--totk-light-green)] break-words">{children}</strong>
+  ),
+  em: ({ children }: MarkdownComponentProps) => (
+    <em className="italic break-words">{children}</em>
+  ),
+  code: ({ children }: MarkdownComponentProps) => (
+    <code className="bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] px-1 py-0.5 rounded text-xs font-mono break-words">
+      {children}
+    </code>
+  ),
+  pre: ({ children }: MarkdownComponentProps) => (
+    <pre className="bg-[var(--botw-warm-black)] p-2 rounded overflow-x-auto mb-1.5 text-xs break-words">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }: MarkdownComponentProps) => (
+    <blockquote className="border-l-4 border-[var(--totk-green)] pl-2 italic mb-1.5 break-words">
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href }: MarkdownComponentProps) => (
+    <a
+      href={href}
+      className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)] break-words"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  br: () => <br />,
+};
+
 function NotificationsTabContent() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2222,6 +2276,29 @@ function NotificationsTabContent() {
   useEffect(() => {
     fetchNotifications();
   }, []);
+
+  // Scroll to notification when hash is present in URL
+  useEffect(() => {
+    if (typeof window === "undefined" || loading) return;
+    
+    const hash = window.location.hash;
+    if (hash && hash.startsWith("#notification-")) {
+      const notificationId = hash.replace("#notification-", "");
+      // Wait a bit for notifications to render
+      const timer = setTimeout(() => {
+        const element = document.getElementById(`notification-${notificationId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Highlight the notification briefly
+          element.classList.add("ring-2", "ring-[var(--totk-light-green)]", "ring-offset-2");
+          setTimeout(() => {
+            element.classList.remove("ring-2", "ring-[var(--totk-light-green)]", "ring-offset-2");
+          }, 2000);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, notifications]);
 
   const handleMarkAllAsRead = async () => {
     try {
@@ -2404,7 +2481,8 @@ function NotificationsTabContent() {
               return (
                 <div
                   key={n.id}
-                  className={`group relative flex gap-3 border-l-2 py-4 pl-4 pr-4 transition-all duration-200 first:pt-0 last:pb-0 hover:bg-[var(--totk-grey-400)]/10 ${
+                  id={`notification-${n.id}`}
+                  className={`group relative flex gap-3 border-l-2 py-4 pl-4 pr-4 transition-all duration-200 first:pt-0 last:pb-0 hover:bg-[var(--totk-grey-400)]/10 scroll-mt-4 ${
                     !n.read ? "border-l-[var(--totk-light-green)] bg-[var(--totk-light-green)]/5" : "border-l-transparent"
                   }`}
                 >
@@ -2427,12 +2505,16 @@ function NotificationsTabContent() {
                       }`}
                     />
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 overflow-hidden">
                         <p className="break-words text-sm font-semibold text-[var(--botw-pale)]">{n.title}</p>
-                        <p className="mt-1 break-words text-xs leading-relaxed text-[var(--totk-grey-200)]">{n.message}</p>
-                        <div className="mt-2 flex items-center gap-3">
+                        <div className="mt-1 break-words text-xs leading-relaxed text-[var(--totk-grey-200)] overflow-wrap-anywhere">
+                          <ReactMarkdown components={NOTIFICATION_MARKDOWN_COMPONENTS}>
+                            {n.message}
+                          </ReactMarkdown>
+                        </div>
+                        <div className="mt-2 flex items-center gap-3 flex-wrap">
                           <p className="text-[11px] text-[var(--totk-grey-200)]">
                             {formatDate(n.createdAt)}
                           </p>

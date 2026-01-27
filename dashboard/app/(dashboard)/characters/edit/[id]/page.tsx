@@ -150,7 +150,12 @@ export default function EditCharacterPage() {
       }
       setCharacter(data.character);
     } catch (e) {
+      // Ignore aborted requests - they're expected when navigating away or refetching
       if (characterFetchAbortControllerRef.current?.signal.aborted) return;
+      // Ignore DOMException with name "AbortError" - this is the standard abort error
+      if (e instanceof Error && e.name === "AbortError") return;
+      // Ignore errors that mention "aborted" or "signal"
+      if (e instanceof Error && (e.message.toLowerCase().includes("aborted") || e.message.toLowerCase().includes("signal"))) return;
       setCharError(e instanceof Error ? e.message : String(e));
       setCharacter(null);
     } finally {
@@ -179,7 +184,12 @@ export default function EditCharacterPage() {
       if (signal.aborted) return;
       setMetadata(data);
     } catch (e) {
+      // Ignore aborted requests - they're expected when navigating away or refetching
       if (metadataFetchAbortControllerRef.current?.signal.aborted) return;
+      // Ignore DOMException with name "AbortError" - this is the standard abort error
+      if (e instanceof Error && e.name === "AbortError") return;
+      // Ignore errors that mention "aborted" or "signal"
+      if (e instanceof Error && (e.message.toLowerCase().includes("aborted") || e.message.toLowerCase().includes("signal"))) return;
       setMetaError(e instanceof Error ? e.message : String(e));
       setMetadata(null);
     } finally {

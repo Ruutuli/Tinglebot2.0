@@ -30,6 +30,11 @@ export const ACCEPTED_EDITABLE_FIELDS = [
   "birthday",
 ] as const;
 
+// Fields locked when status is "needs_changes" (after revision)
+export const NEEDS_CHANGES_LOCKED_FIELDS = [
+  "name",
+] as const;
+
 /**
  * Check if a field is editable based on character status
  * @param fieldName - The name of the field to check
@@ -58,8 +63,17 @@ export function isFieldEditable(
     return false;
   }
 
-  // DRAFT and NEEDS_CHANGES: All fields editable except always-locked ones
-  if (normalizedStatus === "draft" || normalizedStatus === "needs_changes") {
+  // NEEDS_CHANGES: Lock name field (after revision)
+  if (normalizedStatus === "needs_changes") {
+    if (NEEDS_CHANGES_LOCKED_FIELDS.includes(baseFieldName as typeof NEEDS_CHANGES_LOCKED_FIELDS[number])) {
+      return false;
+    }
+    // Other fields are editable (except always-locked ones already checked above)
+    return true;
+  }
+
+  // DRAFT: All fields editable except always-locked ones
+  if (normalizedStatus === "draft") {
     return true; // Already checked for always-locked fields above
   }
 
@@ -89,10 +103,37 @@ export function getEditableFields(status: CharacterStatus): string[] {
     return [];
   }
 
-  // DRAFT and NEEDS_CHANGES: All fields except always-locked ones
-  if (normalizedStatus === "draft" || normalizedStatus === "needs_changes") {
+  // NEEDS_CHANGES: All fields except always-locked ones and name
+  if (normalizedStatus === "needs_changes") {
+    // Return common character fields (excluding always-locked ones and name)
+    return [
+      "age",
+      "height",
+      "pronouns",
+      "gender",
+      "race",
+      "homeVillage",
+      "currentVillage",
+      "job",
+      "virtue",
+      "personality",
+      "history",
+      "extras",
+      "icon",
+      "appArt",
+      "appLink",
+      "birthday",
+      "gearWeapon",
+      "gearShield",
+      "gearArmor",
+    ];
+  }
+
+  // DRAFT: All fields except always-locked ones
+  if (normalizedStatus === "draft") {
     // Return common character fields (excluding always-locked ones)
     return [
+      "name",
       "age",
       "height",
       "pronouns",
