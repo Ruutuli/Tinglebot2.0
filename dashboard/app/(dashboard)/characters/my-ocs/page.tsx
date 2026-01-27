@@ -138,21 +138,28 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
 
   const handleResubmit = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     setResubmitting(true);
-    let timeoutId: NodeJS.Timeout | null = null;
     try {
-      // TODO: Implement resubmit logic
-      // Add your resubmit API call here
-      await new Promise<void>((resolve) => {
-        timeoutId = setTimeout(() => resolve(), 1000);
+      const response = await fetch(`/api/characters/${character._id}/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to resubmit character");
+      }
+
+      // Show success message and refresh the page to show updated status
+      alert("Character resubmitted successfully! The page will refresh to show the updated status.");
+      window.location.reload();
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       console.error("[my-ocs/page.tsx]❌ Failed to resubmit character:", error);
-    } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      alert(`Failed to resubmit character: ${error.message}`);
       setResubmitting(false);
     }
   };
@@ -299,12 +306,12 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 pt-3 sm:pt-4 border-t border-[var(--totk-dark-ocher)]/50">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 pt-3 sm:pt-4 border-t border-[var(--totk-dark-ocher)]/50 sm:flex-wrap">
           {character.status === "needs_changes" && (
             <button
               onClick={handleResubmit}
               disabled={resubmitting}
-              className={`${baseButtonClass} bg-[var(--totk-light-green)] text-[var(--botw-warm-black)] hover:bg-[var(--totk-light-green)] hover:shadow-[0_0_12px_rgba(73,213,156,0.5)] hover:scale-[1.02] active:scale-[0.98] border border-[var(--totk-light-green)]/30 disabled:opacity-50`}
+              className="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-xs sm:text-sm font-bold shadow-lg transition-all min-h-[44px] bg-[var(--totk-light-green)] text-[var(--botw-warm-black)] hover:bg-[var(--totk-light-green)] hover:shadow-[0_0_12px_rgba(73,213,156,0.5)] hover:scale-[1.02] active:scale-[0.98] border border-[var(--totk-light-green)]/30 disabled:opacity-50 sm:flex-1 min-w-0"
             >
               <i className="fa-solid fa-paper-plane" />
               <span>{resubmitting ? "Resubmitting..." : "Resubmit"}</span>
@@ -313,7 +320,7 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
           <Link
             href={`/characters/edit/${character._id}`}
             onClick={handleLinkClick}
-            className={`${baseButtonClass} bg-[var(--totk-mid-ocher)] text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] active:bg-[var(--totk-dark-ocher)] transition-colors border border-[var(--totk-light-ocher)]/30`}
+            className="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-xs sm:text-sm font-bold shadow-lg transition-all min-h-[44px] bg-[var(--totk-mid-ocher)] text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] active:bg-[var(--totk-dark-ocher)] transition-colors border border-[var(--totk-light-ocher)]/30 sm:flex-1 min-w-0"
           >
             <i className="fa-solid fa-pen-to-square" />
             <span>Edit</span>
@@ -321,7 +328,7 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
           <Link
             href={`/characters/inventories/${createSlug(characterName)}`}
             onClick={handleLinkClick}
-            className={`${baseButtonClass} bg-[var(--botw-blue)] text-white hover:bg-[var(--botw-dark-blue)] active:bg-[var(--botw-dark-blue)] transition-colors border border-[var(--botw-blue)]/30`}
+            className="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-xs sm:text-sm font-bold shadow-lg transition-all min-h-[44px] bg-[var(--botw-blue)] text-white hover:bg-[var(--botw-dark-blue)] active:bg-[var(--botw-dark-blue)] transition-colors border border-[var(--botw-blue)]/30 sm:flex-1 min-w-0"
           >
             <i className="fa-solid fa-box" />
             <span>Inventory</span>
@@ -329,7 +336,7 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
           <Link
             href={`/characters/${createSlug(characterName)}`}
             onClick={handleLinkClick}
-            className={`${baseButtonClass} bg-[var(--totk-green)] text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-green)] active:bg-[var(--totk-dark-green)] transition-colors border border-[var(--totk-light-green)]/30`}
+            className="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-xs sm:text-sm font-bold shadow-lg transition-all min-h-[44px] bg-[var(--totk-green)] text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-green)] active:bg-[var(--totk-dark-green)] transition-colors border border-[var(--totk-light-green)]/30 sm:flex-1 min-w-0"
           >
             <i className="fa-solid fa-user-circle" />
             <span>Bio</span>
