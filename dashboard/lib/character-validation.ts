@@ -129,9 +129,15 @@ export function validateOneOf<T extends string>(
   allowed: readonly T[],
   fieldName: string
 ): ValidationResult {
-  const s = typeof value === "string" ? value.trim() : String(value ?? "");
+  const s = (typeof value === "string" ? value : String(value ?? "")).trim();
   if (!s) return { ok: false, error: `Missing or invalid ${fieldName}` };
-  const ok = (allowed as readonly string[]).includes(s);
+
+  const allowedStrings = allowed as readonly string[];
+  if (allowedStrings.includes(s)) return { ok: true };
+
+  // Be tolerant of legacy casing/whitespace (e.g. "inariko" vs "Inariko").
+  const lower = s.toLowerCase();
+  const ok = allowedStrings.some((a) => a.toLowerCase() === lower);
   return ok ? { ok: true } : { ok: false, error: `Invalid ${fieldName}` };
 }
 

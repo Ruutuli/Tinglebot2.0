@@ -912,13 +912,10 @@ export function CreateForm({
     ]);
     if (!r.ok) return r.error;
 
-    // Only require files if not in edit mode OR if in edit mode but no existing preview
-    if (!isEditMode || !iconPreview) {
+    // Only require files on create. Editing should not force re-uploads (legacy OCs may have blank URLs).
+    if (!isEditMode) {
       if (!iconFile || iconFile.size === 0) return "Icon file is required.";
-    }
-    if (!isEditMode || !appArtPreview) {
-      if (!appArtFile || appArtFile.size === 0)
-        return "App art file is required.";
+      if (!appArtFile || appArtFile.size === 0) return "App art file is required.";
     }
 
     r = validateAge(age || undefined);
@@ -1950,7 +1947,7 @@ export function CreateForm({
                 id="appArt"
                 label="Application Art Image"
                 preview={appArtPreview}
-                required={!isEditMode || !appArtPreview}
+                required={!isEditMode}
                 onChange={handleAppArtChange}
                 disabled={!isEditable("appArt")}
               />
@@ -1972,7 +1969,7 @@ export function CreateForm({
                 id="icon"
                 label="Character Icon"
                 preview={iconPreview}
-                required={!isEditMode || !iconPreview}
+                required={!isEditMode}
                 onChange={handleIconChange}
               />
             </div>
