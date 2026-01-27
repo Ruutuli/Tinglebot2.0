@@ -340,7 +340,7 @@ export function buildDecisionChannelEmbed(
     inline?: boolean;
   }>;
 } {
-  const dashboardUrl = `${APP_URL}/profile`;
+  const dashboardUrl = `${APP_URL}/profile?tab=notifications`;
   const emoji = decision === "approved" ? "✅" : "⚠️";
   const decisionText = decision === "approved" ? "approved" : "needs changes";
 

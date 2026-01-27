@@ -90,6 +90,24 @@ const NOTIFICATION_MARKDOWN_COMPONENTS: Components = {
   p: ({ children }: MarkdownComponentProps) => (
     <p className="mb-1 last:mb-0 break-words">{children}</p>
   ),
+  h1: ({ children }: MarkdownComponentProps) => (
+    <h1 className="text-lg font-bold mb-2 mt-2 first:mt-0 break-words" style={{ color: "var(--totk-light-ocher)" }}>{children}</h1>
+  ),
+  h2: ({ children }: MarkdownComponentProps) => (
+    <h2 className="text-base font-bold mb-1.5 mt-2 first:mt-0 break-words" style={{ color: "var(--totk-light-ocher)" }}>{children}</h2>
+  ),
+  h3: ({ children }: MarkdownComponentProps) => (
+    <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0 break-words" style={{ color: "var(--totk-light-ocher)" }}>{children}</h3>
+  ),
+  h4: ({ children }: MarkdownComponentProps) => (
+    <h4 className="text-sm font-semibold mb-1 mt-1.5 first:mt-0 break-words" style={{ color: "var(--totk-light-ocher)" }}>{children}</h4>
+  ),
+  h5: ({ children }: MarkdownComponentProps) => (
+    <h5 className="text-xs font-semibold mb-1 mt-1.5 first:mt-0 break-words" style={{ color: "var(--totk-light-ocher)" }}>{children}</h5>
+  ),
+  h6: ({ children }: MarkdownComponentProps) => (
+    <h6 className="text-xs font-medium mb-1 mt-1 first:mt-0 break-words" style={{ color: "var(--totk-light-ocher)" }}>{children}</h6>
+  ),
   ul: ({ children }: MarkdownComponentProps) => (
     <ul className="list-disc list-inside mb-1 space-y-0.5 break-words">{children}</ul>
   ),
