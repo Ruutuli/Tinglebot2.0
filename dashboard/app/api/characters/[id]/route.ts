@@ -193,14 +193,45 @@ export async function GET(
     
     // Hide drafts/pending/needs_changes from public character pages.
     // Only accepted characters are viewable here (drafts remain visible only in My OCs and moderation queue).
+    // However, allow admins and owners to see pending characters.
     if (!isModCharacter) {
       const status = (char as { status?: string | null }).status ?? null;
       if (status !== "accepted") {
-        logger.warn(
-          "api/characters/[id] GET",
-          `Blocking non-accepted character page (status=${String(status)}) for slugOrId="${slugOrId}"`
-        );
-        return NextResponse.json({ error: "Character not found" }, { status: 404 });
+        // Check if user is admin or owner
+        let canView = false;
+        try {
+          const session = await getSession();
+          const user = session.user ?? null;
+          if (user?.id) {
+            // Check if user is admin
+            const isAdmin = await isAdminUser(user.id);
+            // Check if user is the owner
+            const isOwner = char.userId === user.id;
+            canView = isAdmin || isOwner;
+          }
+        } catch (e) {
+          // If session check fails, user is not logged in or there's an error
+          logger.debug(
+            "api/characters/[id] GET",
+            `Session check failed: ${e instanceof Error ? e.message : String(e)}`
+          );
+        }
+        
+        if (!canView) {
+          logger.warn(
+            "api/characters/[id] GET",
+            `Blocking non-accepted character page (status=${String(status)}) for slugOrId="${slugOrId}"`
+          );
+          return NextResponse.json(
+            { error: "Character pending. Come back later." },
+            { status: 404 }
+          );
+        } else {
+          logger.info(
+            "api/characters/[id] GET",
+            `Allowing access to pending character (status=${String(status)}) for admin/owner`
+          );
+        }
       }
     }
 

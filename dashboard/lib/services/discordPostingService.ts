@@ -25,6 +25,8 @@ type CharacterDocument = {
   applicationVersion?: number;
   publicSlug?: string | null;
   appLink?: string;
+  icon?: string;
+  appArt?: string;
   discordMessageId?: string | null;
   discordThreadId?: string | null;
   maxHearts?: number;

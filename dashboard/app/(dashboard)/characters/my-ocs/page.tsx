@@ -355,8 +355,15 @@ function MyOCsContent() {
   });
 
   // Separate drafts (not submitted) from submitted pending characters
-  const drafts = allCharacters.filter((c) => !c.status || c.status === null);
-  const pending = allCharacters.filter((c) => c.status === "pending" || c.status === "needs_changes");
+  // Explicitly handle null, undefined, and missing status fields as drafts
+  const drafts = allCharacters.filter((c) => {
+    const status = c.status;
+    return status === null || status === undefined || status === "" || !status;
+  });
+  const pending = allCharacters.filter((c) => {
+    const status = c.status;
+    return status === "pending" || status === "needs_changes";
+  });
   const accepted = allCharacters.filter((c) => c.status === "accepted");
 
   // Precompute section title

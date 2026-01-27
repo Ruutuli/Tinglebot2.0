@@ -115,20 +115,44 @@ export async function GET(req: NextRequest) {
     const filter: Record<string, unknown> = { userId: user.id };
 
     // If "pendingOnly" is set, only return characters that are not 'accepted'
+    // This includes characters with status: null (drafts), 'pending', or 'needs_changes'
+    // When pendingOnly is NOT set, return ALL characters (no status filter)
     const pendingOnly = params.get("pendingOnly") === "true";
+    const statusConditions: Array<Record<string, unknown>> = [];
     if (pendingOnly) {
-      filter.status = { $ne: "accepted" };
+      // Explicitly include all non-accepted statuses: null (draft), 'pending', 'needs_changes'
+      // Also handle cases where status field might be missing or undefined
+      statusConditions.push(
+        { status: null },
+        { status: { $exists: false } }, // Field doesn't exist
+        { status: "pending" },
+        { status: "needs_changes" }
+      );
     }
+    // When pendingOnly is false/not set, no status filter is applied - returns ALL characters
 
     const re = buildSearchRegex(search);
+    const searchConditions: Array<Record<string, unknown>> = [];
     if (re) {
-      filter.$or = [
+      searchConditions.push(
         { name: re },
         { job: re },
         { race: re },
         { currentVillage: re },
         { homeVillage: re },
+      );
+    }
+
+    // Combine status and search conditions properly
+    if (statusConditions.length > 0 && searchConditions.length > 0) {
+      filter.$and = [
+        { $or: statusConditions },
+        { $or: searchConditions }
       ];
+    } else if (statusConditions.length > 0) {
+      filter.$or = statusConditions;
+    } else if (searchConditions.length > 0) {
+      filter.$or = searchConditions;
     }
     if (races.length) filter.race = { $in: races };
     if (villages.length) filter.currentVillage = { $in: villages };
@@ -140,22 +164,52 @@ export async function GET(req: NextRequest) {
     const modFilter: Record<string, unknown> = { userId: user.id };
     
     // Apply pendingOnly filter to mod characters as well
+    // This includes characters with status: null (drafts), 'pending', or 'needs_changes'
+    // When pendingOnly is NOT set, return ALL characters (no status filter)
+    const modStatusConditions: Array<Record<string, unknown>> = [];
     if (pendingOnly) {
-      modFilter.status = { $ne: "accepted" };
+      // Explicitly include all non-accepted statuses: null (draft), 'pending', 'needs_changes'
+      // Also handle cases where status field might be missing or undefined
+      modStatusConditions.push(
+        { status: null },
+        { status: { $exists: false } }, // Field doesn't exist
+        { status: "pending" },
+        { status: "needs_changes" }
+      );
     }
+    // When pendingOnly is false/not set, no status filter is applied - returns ALL characters
     
+    const modSearchConditions: Array<Record<string, unknown>> = [];
     if (re) {
-      modFilter.$or = [
+      modSearchConditions.push(
         { name: re },
         { job: re },
         { race: re },
         { currentVillage: re },
         { homeVillage: re },
+      );
+    }
+
+    // Combine status and search conditions properly for mod characters
+    if (modStatusConditions.length > 0 && modSearchConditions.length > 0) {
+      modFilter.$and = [
+        { $or: modStatusConditions },
+        { $or: modSearchConditions }
       ];
+    } else if (modStatusConditions.length > 0) {
+      modFilter.$or = modStatusConditions;
+    } else if (modSearchConditions.length > 0) {
+      modFilter.$or = modSearchConditions;
     }
     if (races.length) modFilter.race = { $in: races };
     if (villages.length) modFilter.currentVillage = { $in: villages };
     if (jobs.length) modFilter.job = { $in: jobs };
+
+    // Log the filter for debugging (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      logger.info("api/characters/my-ocs", `Filter: ${JSON.stringify(filter)}`);
+      logger.info("api/characters/my-ocs", `ModFilter: ${JSON.stringify(modFilter)}`);
+    }
 
     // Fetch both regular and mod characters (fetch enough to fill the page after combining)
     const [regularChars, modChars, regularTotal, modTotal, raceOpts, villageOpts, jobOpts] = await Promise.all([
@@ -179,9 +233,15 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Combine results and add isModCharacter flag, then sort and paginate
-    // Preserve mod character's actual status (including null for drafts)
+    // Preserve character's actual status (including null for drafts) for both regular and mod characters
     const combined: Array<Record<string, unknown> & { isModCharacter: boolean; name?: string }> = [
-      ...regularChars.map((c) => ({ ...c, isModCharacter: false })),
+      ...regularChars.map((c) => ({ 
+        ...c, 
+        isModCharacter: false,
+        // Explicitly preserve status field - keep null as null for drafts
+        // Only default to "accepted" if status is undefined (old characters without status field)
+        status: c.status !== undefined ? c.status : "accepted"
+      })),
       ...modChars.map((c) => ({ 
         ...c, 
         isModCharacter: true,
@@ -191,6 +251,17 @@ export async function GET(req: NextRequest) {
         status: c.status !== undefined ? c.status : "accepted"
       })),
     ];
+    
+    // Log status distribution for debugging (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      const statusCounts: Record<string, number> = combined.reduce((acc: Record<string, number>, c) => {
+        const status: string = c.status === null ? 'null' : (typeof c.status === 'string' ? c.status : 'undefined');
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      logger.info("api/characters/my-ocs", `Status distribution: ${JSON.stringify(statusCounts)}`);
+      logger.info("api/characters/my-ocs", `Total characters returned: ${combined.length}`);
+    }
     
     // Sort combined results (simple sort by the sort field)
     const sortField = buildSort(sortBy);

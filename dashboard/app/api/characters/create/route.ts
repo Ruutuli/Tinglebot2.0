@@ -205,6 +205,22 @@ export async function POST(req: NextRequest) {
     res = validateVirtue(virtue ?? "");
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
 
+    // Check if character name already exists (case-insensitive)
+    const trimmedName = (name as string).trim();
+    const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const nameRegex = new RegExp(`^${escapedName}$`, "i");
+    
+    const existingCharacter = await Character.findOne({ name: nameRegex });
+    const existingModCharacter = await ModCharacter.findOne({ name: nameRegex });
+    
+    if (existingCharacter || existingModCharacter) {
+      return NextResponse.json(
+        { error: `A character with the name "${trimmedName}" already exists. Character names must be unique.` },
+        { status: 400 }
+      );
+    }
+
     let starterGear: StarterGearItem[] = [];
     if (typeof starterGearRaw === "string" && starterGearRaw.trim()) {
       try {

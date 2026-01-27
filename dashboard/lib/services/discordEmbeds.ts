@@ -18,6 +18,8 @@ type CharacterData = {
   applicationVersion?: number;
   publicSlug?: string | null;
   appLink?: string;
+  icon?: string;
+  appArt?: string;
   maxHearts?: number;
   currentHearts?: number;
   maxStamina?: number;
@@ -79,6 +81,8 @@ export function buildApplicationEmbed(
 ): {
   title: string;
   description?: string;
+  thumbnail?: { url: string };
+  image?: { url: string };
   fields: Array<{
     name: string;
     value: string;
@@ -114,7 +118,18 @@ export function buildApplicationEmbed(
   const attack = character.attack ?? 0;
   const defense = character.defense ?? 0;
 
-  return {
+  // Build embed with thumbnail (icon) and image (appArt)
+  const embed: {
+    title: string;
+    description?: string;
+    thumbnail?: { url: string };
+    image?: { url: string };
+    fields: Array<{
+      name: string;
+      value: string;
+      inline?: boolean;
+    }>;
+  } = {
     title: `✨ New Character Created: ${character.name}`,
     description: "A new character has been submitted and is awaiting moderation review.",
     fields: [
@@ -168,7 +183,7 @@ export function buildApplicationEmbed(
       {
         name: "🔗 Links",
         value: [
-          character.appLink ? `📋 [View Application](${character.appLink})` : "",
+          `📋 [View Application](${ocPageUrl})`,
           `⚖️ [Review in Moderation Panel](${moderationUrl})`,
         ]
           .filter(Boolean)
@@ -177,6 +192,18 @@ export function buildApplicationEmbed(
       },
     ],
   };
+
+  // Add thumbnail (icon) if available
+  if (character.icon) {
+    embed.thumbnail = { url: character.icon };
+  }
+
+  // Add image (appArt) if available
+  if (character.appArt) {
+    embed.image = { url: character.appArt };
+  }
+
+  return embed;
 }
 
 /**
