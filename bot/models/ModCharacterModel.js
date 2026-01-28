@@ -229,9 +229,14 @@ modCharacterSchema.pre('save', function (next) {
   // Ensure mod characters are always considered synced
   this.inventorySynced = true;
   
-  // If this is an existing mod character (not new) and doesn't have a status, set it to 'accepted'
-  // This handles backward compatibility for mod characters created before the moderation system
-  if (!this.isNew && !this.status) {
+  // IMPORTANT: Only set status to 'accepted' for OLD mod characters that were already approved
+  // This is for backward compatibility ONLY. New mod characters should remain as DRAFT (null)
+  // Only auto-approve if:
+  // 1. Character is not new (existing character)
+  // 2. Status is currently null/undefined (no status set)
+  // 3. Character has approvedAt set (was approved before moderation system)
+  // This prevents auto-approving mod characters that were never submitted
+  if (!this.isNew && !this.status && this.approvedAt) {
     this.status = 'accepted'; // Use lowercase string constant
   }
   
