@@ -66,6 +66,11 @@ const HelpWantedQuestSchema = new mongoose.Schema({
     type: String,
     default: null
     // Discord channel ID where the quest embed was posted
+  },
+  postedToDiscord: {
+    type: Boolean,
+    default: false
+    // Whether the quest has been successfully posted to Discord
   }
 });
 

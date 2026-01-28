@@ -2634,6 +2634,59 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
 // ------------------- Quest Posting -------------------
 // ============================================================================
 
+// ------------------- Function: verifyQuestMessageExists -------------------
+// Verifies that a quest's Discord message actually exists
+// Also updates postedToDiscord field based on verification result
+async function verifyQuestMessageExists(client, quest) {
+  try {
+    if (!quest.messageId || !quest.channelId) {
+      // No messageId/channelId means not posted
+      if (quest.postedToDiscord) {
+        quest.postedToDiscord = false;
+        await quest.save();
+      }
+      return false;
+    }
+
+    if (!client?.channels) {
+      return false;
+    }
+
+    const channel = await client.channels.fetch(quest.channelId).catch(() => null);
+    if (!channel) {
+      logger.warn('QUEST', `Could not fetch channel ${quest.channelId} for quest ${quest.questId}`);
+      // Message doesn't exist - update flag
+      if (quest.postedToDiscord) {
+        quest.postedToDiscord = false;
+        await quest.save();
+      }
+      return false;
+    }
+
+    const message = await channel.messages.fetch(quest.messageId).catch(() => null);
+    const exists = !!message;
+    
+    // Update postedToDiscord flag to match reality
+    if (exists && !quest.postedToDiscord) {
+      quest.postedToDiscord = true;
+      await quest.save();
+    } else if (!exists && quest.postedToDiscord) {
+      quest.postedToDiscord = false;
+      await quest.save();
+    }
+    
+    return exists;
+  } catch (error) {
+    logger.error('QUEST', `Error verifying message for quest ${quest.questId}: ${error.message}`);
+    // On error, assume not posted
+    if (quest.postedToDiscord) {
+      quest.postedToDiscord = false;
+      await quest.save().catch(() => {}); // Don't fail if save fails
+    }
+    return false;
+  }
+}
+
 // ------------------- Function: postQuestToDiscord -------------------
 // Posts a quest embed to the appropriate town hall channel
 async function postQuestToDiscord(client, quest) {
@@ -2674,15 +2727,23 @@ async function postQuestToDiscord(client, quest) {
     // Post the embed
     const message = await channel.send({ embeds: [embed] });
     
-    // Update the quest with messageId and channelId
+    // Verify the message was actually created before saving
+    if (!message || !message.id) {
+      logger.error('QUEST', `Failed to get message ID after posting quest ${quest.questId}`);
+      return null;
+    }
+    
+    // Update the quest with messageId, channelId, and postedToDiscord flag
     quest.messageId = message.id;
     quest.channelId = channelId;
+    quest.postedToDiscord = true;
     await quest.save();
     
-    logger.info('QUEST', `Posted quest ${quest.questId} for ${quest.village} to channel ${channelId}`);
+    logger.info('QUEST', `Posted quest ${quest.questId} for ${quest.village} to channel ${channelId} (message ${message.id})`);
     return message;
   } catch (error) {
     logger.error('QUEST', `Failed to post quest ${quest.questId} to Discord: ${error.message}`, error);
+    // Don't save messageId/channelId if posting failed
     return null;
   }
 }
@@ -2960,6 +3021,7 @@ module.exports = {
   getCurrentQuestSchedule,
   updateQuestEmbed,
   postQuestToDiscord,
+  verifyQuestMessageExists,
   isQuestExpired,
   checkAndCompleteQuestFromSubmission,
   isTravelBlockedByWeather,

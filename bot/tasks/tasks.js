@@ -893,7 +893,7 @@ async function helpWantedBoardCheck(client, _data = {}) {
       return;
     }
     
-    const { updateQuestEmbed, postQuestToDiscord, isQuestExpired } = require('@/modules/helpWantedModule');
+    const { updateQuestEmbed, postQuestToDiscord, verifyQuestMessageExists, isQuestExpired } = require('@/modules/helpWantedModule');
     
     // Get today's date string (YYYY-MM-DD format in UTC)
     const now = new Date();
@@ -901,18 +901,23 @@ async function helpWantedBoardCheck(client, _data = {}) {
     
     // Only check quests from today (active quests that might need updates)
     // Yesterday's quests are already expired and won't change
+    // Check quests that claim to be posted (have messageId/channelId or postedToDiscord flag)
     const postedQuests = await HelpWantedQuest.find({
-      messageId: { $exists: true, $ne: null },
-      channelId: { $exists: true, $ne: null },
-      date: today
+      date: today,
+      $or: [
+        { postedToDiscord: true },
+        { messageId: { $exists: true, $ne: null } },
+        { channelId: { $exists: true, $ne: null } }
+      ]
     });
     
     let updatedCount = 0;
     let skippedCount = 0;
+    let repostedCount = 0;
     let errorCount = 0;
     
     // Update each quest's embed only if it's been completed (status changed)
-    // We don't need to update every quest every hour - only when something changes
+    // Also verify messages actually exist and repost if missing
     if (postedQuests && postedQuests.length > 0) {
       logger.info('SCHEDULED', `help-wanted-board-check: found ${postedQuests.length} today's posted quest(s) to check`);
       
@@ -925,8 +930,30 @@ async function helpWantedBoardCheck(client, _data = {}) {
             continue;
           }
           
+          // Verify the message actually exists in Discord
+          const messageExists = await verifyQuestMessageExists(client, freshQuest);
+          if (!messageExists) {
+            // Message doesn't exist - clear IDs and postedToDiscord flag, then repost
+            logger.warn('SCHEDULED', `help-wanted-board-check: message ${freshQuest.messageId} not found for quest ${freshQuest.questId}, reposting`);
+            freshQuest.messageId = null;
+            freshQuest.channelId = null;
+            freshQuest.postedToDiscord = false;
+            await freshQuest.save();
+            
+            // Repost the quest
+            const message = await postQuestToDiscord(client, freshQuest);
+            if (message) {
+              repostedCount++;
+              logger.info('SCHEDULED', `help-wanted-board-check: reposted quest ${freshQuest.questId} for ${freshQuest.village}`);
+            } else {
+              errorCount++;
+              logger.error('SCHEDULED', `help-wanted-board-check: failed to repost quest ${freshQuest.questId}`);
+            }
+            continue;
+          }
+          
           // Only update if quest has been completed (status changed)
-          // We don't need to update available quests every hour
+          // We don't need to update available quests every hour - only when something changes
           if (freshQuest.completed) {
             // Update the embed to show completion status
             await updateQuestEmbed(client, freshQuest, freshQuest.completedBy || null);
@@ -944,10 +971,11 @@ async function helpWantedBoardCheck(client, _data = {}) {
       }
     }
     
-    // Find unposted quests that should be posted (from today, no messageId/channelId)
+    // Find unposted quests that should be posted (from today, not postedToDiscord or missing messageId/channelId)
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
       $or: [
+        { postedToDiscord: false },
         { messageId: { $exists: false } },
         { messageId: null },
         { channelId: { $exists: false } },
@@ -995,6 +1023,7 @@ async function helpWantedBoardCheck(client, _data = {}) {
     const summary = [];
     if (updatedCount > 0) summary.push(`updated ${updatedCount} quest(s)`);
     if (skippedCount > 0) summary.push(`skipped ${skippedCount} quest(s) (no changes)`);
+    if (repostedCount > 0) summary.push(`reposted ${repostedCount} quest(s) (message missing)`);
     if (postedCount > 0) summary.push(`posted ${postedCount} quest(s)`);
     if (errorCount > 0) summary.push(`${errorCount} error(s)`);
     
@@ -1020,16 +1049,49 @@ async function postUnpostedQuestsOnStartup(client) {
       return;
     }
     
-    const { postQuestToDiscord } = require('@/modules/helpWantedModule');
+    const { postQuestToDiscord, verifyQuestMessageExists } = require('@/modules/helpWantedModule');
     
     // Get today's date string (YYYY-MM-DD format in UTC)
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     
-    // Find unposted quests from today
+    // First, check quests that claim to be posted but might have missing messages
+    const postedQuests = await HelpWantedQuest.find({
+      date: today,
+      $or: [
+        { postedToDiscord: true },
+        { messageId: { $exists: true, $ne: null } },
+        { channelId: { $exists: true, $ne: null } }
+      ]
+    });
+    
+    let repostedCount = 0;
+    
+    // Verify posted quests actually have valid messages
+    if (postedQuests && postedQuests.length > 0) {
+      for (const quest of postedQuests) {
+        try {
+          const messageExists = await verifyQuestMessageExists(client, quest);
+          if (!messageExists) {
+            // Message doesn't exist - clear IDs and postedToDiscord flag so it gets reposted
+            logger.warn('STARTUP', `postUnpostedQuestsOnStartup: message ${quest.messageId} not found for quest ${quest.questId}, will repost`);
+            quest.messageId = null;
+            quest.channelId = null;
+            quest.postedToDiscord = false;
+            await quest.save();
+            repostedCount++;
+          }
+        } catch (err) {
+          logger.error('STARTUP', `postUnpostedQuestsOnStartup: error verifying quest ${quest.questId}: ${err.message}`);
+        }
+      }
+    }
+    
+    // Find unposted quests from today (including ones we just cleared)
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
       $or: [
+        { postedToDiscord: false },
         { messageId: { $exists: false } },
         { messageId: null },
         { channelId: { $exists: false } },
@@ -1038,7 +1100,11 @@ async function postUnpostedQuestsOnStartup(client) {
     });
     
     if (!unpostedQuests || unpostedQuests.length === 0) {
-      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: no unposted quests found');
+      if (repostedCount > 0) {
+        logger.info('STARTUP', `postUnpostedQuestsOnStartup: verified ${repostedCount} quest(s) need reposting, but none found to post`);
+      } else {
+        logger.info('STARTUP', 'postUnpostedQuestsOnStartup: no unposted quests found');
+      }
       return;
     }
     
@@ -1078,8 +1144,13 @@ async function postUnpostedQuestsOnStartup(client) {
       }
     }
     
-    if (postedCount > 0 || errorCount > 0) {
-      logger.success('STARTUP', `postUnpostedQuestsOnStartup: done (posted ${postedCount} quest(s), ${errorCount} error(s))`);
+    const summary = [];
+    if (repostedCount > 0) summary.push(`verified ${repostedCount} quest(s) need reposting`);
+    if (postedCount > 0) summary.push(`posted ${postedCount} quest(s)`);
+    if (errorCount > 0) summary.push(`${errorCount} error(s)`);
+    
+    if (summary.length > 0) {
+      logger.success('STARTUP', `postUnpostedQuestsOnStartup: done (${summary.join(', ')})`);
     } else {
       logger.info('STARTUP', 'postUnpostedQuestsOnStartup: done (no quests to post)');
     }
