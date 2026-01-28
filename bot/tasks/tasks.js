@@ -1055,6 +1055,15 @@ async function postUnpostedQuestsOnStartup(client) {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     
+    // First, check how many quests exist for today
+    const allTodaysQuests = await HelpWantedQuest.find({ date: today });
+    logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${allTodaysQuests.length} quest(s) total for today (${today})`);
+    
+    if (allTodaysQuests.length === 0) {
+      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: no quests generated for today yet');
+      return;
+    }
+    
     // First, check quests that claim to be posted but might have missing messages
     const postedQuests = await HelpWantedQuest.find({
       date: today,
@@ -1066,20 +1075,46 @@ async function postUnpostedQuestsOnStartup(client) {
     });
     
     let repostedCount = 0;
+    let verifiedCount = 0;
     
-    // Verify posted quests actually have valid messages
+    // Verify posted quests actually have valid messages and repost if missing
     if (postedQuests && postedQuests.length > 0) {
+      logger.info('STARTUP', `postUnpostedQuestsOnStartup: verifying ${postedQuests.length} posted quest(s) from today`);
+      
       for (const quest of postedQuests) {
         try {
-          const messageExists = await verifyQuestMessageExists(client, quest);
+          // Refresh from database
+          const freshQuest = await HelpWantedQuest.findById(quest._id);
+          if (!freshQuest) {
+            logger.warn('STARTUP', `postUnpostedQuestsOnStartup: quest ${quest.questId} not found in database`);
+            continue;
+          }
+          
+          const messageExists = await verifyQuestMessageExists(client, freshQuest);
           if (!messageExists) {
-            // Message doesn't exist - clear IDs and postedToDiscord flag so it gets reposted
-            logger.warn('STARTUP', `postUnpostedQuestsOnStartup: message ${quest.messageId} not found for quest ${quest.questId}, will repost`);
-            quest.messageId = null;
-            quest.channelId = null;
-            quest.postedToDiscord = false;
-            await quest.save();
-            repostedCount++;
+            // Message doesn't exist - clear IDs and repost immediately
+            logger.warn('STARTUP', `postUnpostedQuestsOnStartup: message ${freshQuest.messageId} not found for quest ${freshQuest.questId}, reposting`);
+            freshQuest.messageId = null;
+            freshQuest.channelId = null;
+            freshQuest.postedToDiscord = false;
+            await freshQuest.save();
+            
+            // Skip if quest is already completed
+            if (freshQuest.completed) {
+              logger.debug('STARTUP', `postUnpostedQuestsOnStartup: skipping completed quest ${freshQuest.questId}`);
+              continue;
+            }
+            
+            // Repost immediately
+            const message = await postQuestToDiscord(client, freshQuest);
+            if (message) {
+              repostedCount++;
+              logger.info('STARTUP', `postUnpostedQuestsOnStartup: reposted quest ${freshQuest.questId} for ${freshQuest.village}`);
+            } else {
+              logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to repost quest ${freshQuest.questId}`);
+            }
+          } else {
+            verifiedCount++;
           }
         } catch (err) {
           logger.error('STARTUP', `postUnpostedQuestsOnStartup: error verifying quest ${quest.questId}: ${err.message}`);
@@ -1087,7 +1122,7 @@ async function postUnpostedQuestsOnStartup(client) {
       }
     }
     
-    // Find unposted quests from today (including ones we just cleared)
+    // Find unposted quests from today (ones that were never posted)
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
       $or: [
@@ -1099,60 +1134,54 @@ async function postUnpostedQuestsOnStartup(client) {
       ]
     });
     
-    if (!unpostedQuests || unpostedQuests.length === 0) {
-      if (repostedCount > 0) {
-        logger.info('STARTUP', `postUnpostedQuestsOnStartup: verified ${repostedCount} quest(s) need reposting, but none found to post`);
-      } else {
-        logger.info('STARTUP', 'postUnpostedQuestsOnStartup: no unposted quests found');
-      }
-      return;
-    }
-    
-    logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${unpostedQuests.length} unposted quest(s) to post`);
-    
     let postedCount = 0;
     let errorCount = 0;
     
-    for (const quest of unpostedQuests) {
-      try {
-        // Refresh quest from database
-        const freshQuest = await HelpWantedQuest.findById(quest._id);
-        if (!freshQuest) {
-          logger.warn('STARTUP', `postUnpostedQuestsOnStartup: quest ${quest.questId} not found in database`);
-          continue;
-        }
-        
-        // Skip if quest is already completed (shouldn't happen, but safety check)
-        if (freshQuest.completed) {
-          logger.debug('STARTUP', `postUnpostedQuestsOnStartup: skipping completed quest ${freshQuest.questId}`);
-          continue;
-        }
-        
-        // Post the quest to Discord
-        const message = await postQuestToDiscord(client, freshQuest);
-        if (message) {
-          postedCount++;
-          logger.info('STARTUP', `postUnpostedQuestsOnStartup: posted quest ${freshQuest.questId} for ${freshQuest.village}`);
-        } else {
+    if (unpostedQuests && unpostedQuests.length > 0) {
+      logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${unpostedQuests.length} unposted quest(s) to post`);
+      
+      for (const quest of unpostedQuests) {
+        try {
+          // Refresh quest from database
+          const freshQuest = await HelpWantedQuest.findById(quest._id);
+          if (!freshQuest) {
+            logger.warn('STARTUP', `postUnpostedQuestsOnStartup: quest ${quest.questId} not found in database`);
+            continue;
+          }
+          
+          // Skip if quest is already completed (shouldn't happen, but safety check)
+          if (freshQuest.completed) {
+            logger.debug('STARTUP', `postUnpostedQuestsOnStartup: skipping completed quest ${freshQuest.questId}`);
+            continue;
+          }
+          
+          // Post the quest to Discord
+          const message = await postQuestToDiscord(client, freshQuest);
+          if (message) {
+            postedCount++;
+            logger.info('STARTUP', `postUnpostedQuestsOnStartup: posted quest ${freshQuest.questId} for ${freshQuest.village}`);
+          } else {
+            errorCount++;
+            logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${freshQuest.questId}`);
+          }
+        } catch (err) {
           errorCount++;
-          logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${freshQuest.questId}`);
+          logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${quest.questId}: ${err.message}`);
+          // Continue with other quests even if one fails
         }
-      } catch (err) {
-        errorCount++;
-        logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${quest.questId}: ${err.message}`);
-        // Continue with other quests even if one fails
       }
     }
     
     const summary = [];
-    if (repostedCount > 0) summary.push(`verified ${repostedCount} quest(s) need reposting`);
-    if (postedCount > 0) summary.push(`posted ${postedCount} quest(s)`);
+    if (verifiedCount > 0) summary.push(`verified ${verifiedCount} quest(s) are posted`);
+    if (repostedCount > 0) summary.push(`reposted ${repostedCount} quest(s) (message missing)`);
+    if (postedCount > 0) summary.push(`posted ${postedCount} new quest(s)`);
     if (errorCount > 0) summary.push(`${errorCount} error(s)`);
     
     if (summary.length > 0) {
       logger.success('STARTUP', `postUnpostedQuestsOnStartup: done (${summary.join(', ')})`);
     } else {
-      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: done (no quests to post)');
+      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: done (no quests from today to post)');
     }
   } catch (err) {
     logger.error('STARTUP', `postUnpostedQuestsOnStartup: ${err.message}`);
