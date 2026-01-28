@@ -55,6 +55,15 @@ function getIsModConstraint(values: string[]): boolean | null {
   return wantsMod;
 }
 
+// Helper function to create case-insensitive filter conditions for string arrays
+function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
+  const conditions = values.map(value => {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return { [field]: new RegExp(`^${escaped}$`, "i") };
+  });
+  return { $or: conditions };
+}
+
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
 // Caching is handled via `Cache-Control` response headers below.
 export const dynamic = "force-dynamic";
@@ -95,26 +104,40 @@ export async function GET(req: NextRequest) {
         { homeVillage: re },
       ];
     }
-    // Case-insensitive race filtering to handle both "Zora" and "zora" in database
+    // Case-insensitive filtering for all string-based filters
     if (races.length) {
-      // Use $or with regex patterns for case-insensitive matching
-      const raceConditions = races.map(race => {
-        const escaped = race.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        return { race: new RegExp(`^${escaped}$`, "i") };
-      });
+      const raceFilter = buildCaseInsensitiveFilter("race", races);
       if (filter.$or) {
         // If $or already exists (from search), combine with race conditions
         filter.$and = [
           { $or: filter.$or },
-          { $or: raceConditions }
+          raceFilter
         ];
         delete filter.$or;
       } else {
-        filter.$or = raceConditions;
+        filter.$or = raceFilter.$or;
       }
     }
-    if (villages.length) filter.currentVillage = { $in: villages };
-    if (jobs.length) filter.job = { $in: jobs };
+    if (villages.length) {
+      const villageFilter = buildCaseInsensitiveFilter("currentVillage", villages);
+      if (filter.$or || filter.$and) {
+        // If we already have $or or $and, add to $and
+        if (!filter.$and) filter.$and = [];
+        filter.$and.push(villageFilter);
+      } else {
+        filter.$or = villageFilter.$or;
+      }
+    }
+    if (jobs.length) {
+      const jobFilter = buildCaseInsensitiveFilter("job", jobs);
+      if (filter.$or || filter.$and) {
+        // If we already have $or or $and, add to $and
+        if (!filter.$and) filter.$and = [];
+        filter.$and.push(jobFilter);
+      } else {
+        filter.$or = jobFilter.$or;
+      }
+    }
 
     // Build mod character filter (same filters as regular characters)
     const modFilter: Record<string, unknown> = {};
@@ -127,26 +150,40 @@ export async function GET(req: NextRequest) {
         { homeVillage: re },
       ];
     }
-    // Case-insensitive race filtering to handle both "Zora" and "zora" in database
+    // Case-insensitive filtering for all string-based filters
     if (races.length) {
-      // Use $or with regex patterns for case-insensitive matching
-      const raceConditions = races.map(race => {
-        const escaped = race.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        return { race: new RegExp(`^${escaped}$`, "i") };
-      });
+      const raceFilter = buildCaseInsensitiveFilter("race", races);
       if (modFilter.$or) {
         // If $or already exists (from search), combine with race conditions
         modFilter.$and = [
           { $or: modFilter.$or },
-          { $or: raceConditions }
+          raceFilter
         ];
         delete modFilter.$or;
       } else {
-        modFilter.$or = raceConditions;
+        modFilter.$or = raceFilter.$or;
       }
     }
-    if (villages.length) modFilter.currentVillage = { $in: villages };
-    if (jobs.length) modFilter.job = { $in: jobs };
+    if (villages.length) {
+      const villageFilter = buildCaseInsensitiveFilter("currentVillage", villages);
+      if (modFilter.$or || modFilter.$and) {
+        // If we already have $or or $and, add to $and
+        if (!modFilter.$and) modFilter.$and = [];
+        modFilter.$and.push(villageFilter);
+      } else {
+        modFilter.$or = villageFilter.$or;
+      }
+    }
+    if (jobs.length) {
+      const jobFilter = buildCaseInsensitiveFilter("job", jobs);
+      if (modFilter.$or || modFilter.$and) {
+        // If we already have $or or $and, add to $and
+        if (!modFilter.$and) modFilter.$and = [];
+        modFilter.$and.push(jobFilter);
+      } else {
+        modFilter.$or = jobFilter.$or;
+      }
+    }
 
     const sortConfig = SORT_MAP[sortBy] || SORT_MAP.name;
     const sortField = sortConfig.field;

@@ -15,6 +15,15 @@ import {
 import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
 
+// Helper function to create case-insensitive filter conditions for string arrays
+function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
+  const conditions = values.map(value => {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return { [field]: new RegExp(`^${escaped}$`, "i") };
+  });
+  return { $or: conditions };
+}
+
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
 // Caching is handled via `Cache-Control` response headers below.
 export const dynamic = "force-dynamic";
@@ -88,14 +97,18 @@ export async function GET(req: NextRequest) {
       });
     }
     
-    // Category filter
+    // Category filter (case-insensitive)
     if (categories.length) {
-      filter.category = { $in: categories };
+      const categoryFilter = buildCaseInsensitiveFilter("category", categories);
+      // Add to orConditions array which will be combined with $and at the end
+      orConditions.push(categoryFilter);
     }
     
-    // Type filter
+    // Type filter (case-insensitive)
     if (types.length) {
-      filter.type = { $in: types };
+      const typeFilter = buildCaseInsensitiveFilter("type", types);
+      // Add to orConditions array which will be combined with $and at the end
+      orConditions.push(typeFilter);
     }
     
     // Rarity filter

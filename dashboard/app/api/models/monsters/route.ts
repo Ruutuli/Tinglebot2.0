@@ -10,6 +10,15 @@ import {
 } from "@/lib/api-utils";
 import { logger } from "@/utils/logger";
 
+// Helper function to create case-insensitive filter conditions for string arrays
+function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
+  const conditions = values.map(value => {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return { [field]: new RegExp(`^${escaped}$`, "i") };
+  });
+  return { $or: conditions };
+}
+
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
 // Caching is handled via `Cache-Control` response headers below.
 export const dynamic = "force-dynamic";
@@ -36,8 +45,28 @@ export async function GET(req: NextRequest) {
         { type: re },
       ];
     }
-    if (species.length) filter.species = { $in: species };
-    if (types.length) filter.type = { $in: types };
+    // Case-insensitive filtering for string-based filters
+    if (species.length) {
+      const speciesFilter = buildCaseInsensitiveFilter("species", species);
+      if (filter.$or) {
+        filter.$and = [
+          { $or: filter.$or },
+          speciesFilter
+        ];
+        delete filter.$or;
+      } else {
+        filter.$or = speciesFilter.$or;
+      }
+    }
+    if (types.length) {
+      const typeFilter = buildCaseInsensitiveFilter("type", types);
+      if (filter.$or || filter.$and) {
+        if (!filter.$and) filter.$and = [];
+        filter.$and.push(typeFilter);
+      } else {
+        filter.$or = typeFilter.$or;
+      }
+    }
     if (tiers.length) filter.tier = { $in: tiers };
 
     const [data, total, speciesOpts, typeOpts, tierOpts] = await Promise.all([
