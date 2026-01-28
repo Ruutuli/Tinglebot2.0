@@ -1051,22 +1051,27 @@ async function postUnpostedQuestsOnStartup(client) {
     
     const { postQuestToDiscord, verifyQuestMessageExists } = require('@/modules/helpWantedModule');
     
-    // Get today's date string (YYYY-MM-DD format in UTC)
+    // Get today's and yesterday's date strings (YYYY-MM-DD format in UTC)
     const now = new Date();
     const today = now.toISOString().split('T')[0];
+    const yesterday = new Date(now);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
     
-    // First, check how many quests exist for today
-    const allTodaysQuests = await HelpWantedQuest.find({ date: today });
-    logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${allTodaysQuests.length} quest(s) total for today (${today})`);
+    // Check how many quests exist for today and yesterday
+    const allRecentQuests = await HelpWantedQuest.find({ 
+      date: { $in: [today, yesterdayStr] }
+    });
+    logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${allRecentQuests.length} quest(s) total for today (${today}) and yesterday (${yesterdayStr})`);
     
-    if (allTodaysQuests.length === 0) {
-      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: no quests generated for today yet');
+    if (allRecentQuests.length === 0) {
+      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: no quests generated for today or yesterday yet');
       return;
     }
     
-    // First, check quests that claim to be posted but might have missing messages
+    // First, check quests that claim to be posted but might have missing messages (from today and yesterday)
     const postedQuests = await HelpWantedQuest.find({
-      date: today,
+      date: { $in: [today, yesterdayStr] },
       $or: [
         { postedToDiscord: true },
         { messageId: { $exists: true, $ne: null } },
@@ -1122,9 +1127,11 @@ async function postUnpostedQuestsOnStartup(client) {
       }
     }
     
-    // Find unposted quests from today (ones that were never posted)
+    // Find unposted quests from today and yesterday (ones that were never posted)
+    // Only post yesterday's quests if they haven't expired yet (check scheduledPostTime)
+    const currentHour = now.getUTCHours();
     const unpostedQuests = await HelpWantedQuest.find({
-      date: today,
+      date: { $in: [today, yesterdayStr] },
       $or: [
         { postedToDiscord: false },
         { messageId: { $exists: false } },
@@ -1134,13 +1141,44 @@ async function postUnpostedQuestsOnStartup(client) {
       ]
     });
     
+    // Filter out yesterday's quests that have expired
+    // Quests expire at midnight EST (05:00 UTC) on the day after they were posted
+    // So a quest from yesterday (2026-01-27) expires at 05:00 UTC today (2026-01-28)
+    const validUnpostedQuests = unpostedQuests.filter(quest => {
+      if (quest.date === today) {
+        // Today's quests are always valid to post
+        return true;
+      }
+      
+      // For yesterday's quests, check if we're past midnight EST (05:00 UTC today)
+      // If current time is before 05:00 UTC today, the quest hasn't expired yet
+      const currentHour = now.getUTCHours();
+      const currentMinute = now.getUTCMinutes();
+      const midnightEST = 5; // Midnight EST = 05:00 UTC
+      
+      if (currentHour < midnightEST || (currentHour === midnightEST && currentMinute === 0)) {
+        // Before midnight EST today, so yesterday's quests are still valid
+        return true;
+      }
+      
+      // Past midnight EST, so yesterday's quests have expired
+      logger.debug('STARTUP', `postUnpostedQuestsOnStartup: skipping expired quest ${quest.questId} from ${quest.date}`);
+      return false;
+    });
+    
     let postedCount = 0;
     let errorCount = 0;
+    let skippedExpiredCount = 0;
     
-    if (unpostedQuests && unpostedQuests.length > 0) {
-      logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${unpostedQuests.length} unposted quest(s) to post`);
+    if (validUnpostedQuests && validUnpostedQuests.length > 0) {
+      if (validUnpostedQuests.length < unpostedQuests.length) {
+        skippedExpiredCount = unpostedQuests.length - validUnpostedQuests.length;
+        logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${unpostedQuests.length} unposted quest(s), ${skippedExpiredCount} expired, ${validUnpostedQuests.length} valid to post`);
+      } else {
+        logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${validUnpostedQuests.length} unposted quest(s) to post`);
+      }
       
-      for (const quest of unpostedQuests) {
+      for (const quest of validUnpostedQuests) {
         try {
           // Refresh quest from database
           const freshQuest = await HelpWantedQuest.findById(quest._id);
@@ -1176,12 +1214,13 @@ async function postUnpostedQuestsOnStartup(client) {
     if (verifiedCount > 0) summary.push(`verified ${verifiedCount} quest(s) are posted`);
     if (repostedCount > 0) summary.push(`reposted ${repostedCount} quest(s) (message missing)`);
     if (postedCount > 0) summary.push(`posted ${postedCount} new quest(s)`);
+    if (skippedExpiredCount > 0) summary.push(`skipped ${skippedExpiredCount} expired quest(s)`);
     if (errorCount > 0) summary.push(`${errorCount} error(s)`);
     
     if (summary.length > 0) {
       logger.success('STARTUP', `postUnpostedQuestsOnStartup: done (${summary.join(', ')})`);
     } else {
-      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: done (no quests from today to post)');
+      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: done (no quests to post)');
     }
   } catch (err) {
     logger.error('STARTUP', `postUnpostedQuestsOnStartup: ${err.message}`);
