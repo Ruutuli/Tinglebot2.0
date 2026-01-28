@@ -11,7 +11,7 @@ import { sendOCDecisionNotification } from "@/lib/services/notificationService";
 import { assignCharacterRoles } from "@/lib/services/roleAssignmentService";
 
 // Approval threshold: number of approve votes needed
-export const APPROVAL_THRESHOLD = 1;
+export const APPROVAL_THRESHOLD = 4;
 
 type VoteDocument = {
   _id: unknown;
