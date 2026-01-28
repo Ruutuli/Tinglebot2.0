@@ -1218,7 +1218,7 @@ export default function HomePage() {
       try {
         setIsLoadingWeather(true);
         setWeatherError(null);
-        const res = await fetch("/api/weather", { signal });
+        const res = await fetch("/api/weather", { signal, cache: "no-store" });
         if (signal.aborted) return;
         if (!res.ok) throw new Error("Failed to fetch weather");
         const data: { weather: WeatherApiDoc[] } = await res.json();

@@ -4,11 +4,13 @@
 // ------------------- Imports -------------------
 // ============================================================================
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { Loading, Tabs, SearchFilterBar } from "@/components/ui";
 import type { TabItem, FilterGroup } from "@/components/ui";
+import { CraftersGuideTab } from "@/components/features/crafters-guide/CraftersGuideTab";
 import { capitalize, createSlug } from "@/lib/string-utils";
 import { equipItem, getWeaponType, isShield, getArmorSlot, type EquippedGear } from "@/lib/gear-equip";
 import { getCachedData, setCachedData } from "@/lib/cache-utils";
@@ -220,34 +222,28 @@ function InventoryCard({ summary }: { summary: InventorySummary }) {
 // ------------------- Main Component -------------------
 // ============================================================================
 
-export default function InventoriesPage() {
+function InventoriesPageContent() {
   // ============================================================================
   // ------------------- Hooks & State -------------------
   // ============================================================================
 
-  const { user, isAdmin, loading: sessionLoading } = useSession();
-  const [activeTab, setActiveTab] = useState<"all-items" | "transfer" | "equip" | "stats" | "transactions">("all-items");
+  const { user, loading: sessionLoading } = useSession();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<"all-items" | "transfer" | "equip" | "stats" | "transactions" | "crafters-guide">(
+    tabParam === "crafters-guide" ? "crafters-guide" : "all-items"
+  );
+
+  useEffect(() => {
+    if (tabParam === "crafters-guide") setActiveTab("crafters-guide");
+  }, [tabParam]);
+
   const [summaries, setSummaries] = useState<InventorySummary[]>([]);
   const [aggregatedItems, setAggregatedItems] = useState<AggregatedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingAggregated, setLoadingAggregated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aggregatedError, setAggregatedError] = useState<string | null>(null);
-  
-  // Admin-only backfill controls
-  const [seedScope, setSeedScope] = useState<"user" | "all">("user");
-  const [seedMigrateUrls, setSeedMigrateUrls] = useState(true);
-  const [seeding, setSeeding] = useState(false);
-  const [seedError, setSeedError] = useState<string | null>(null);
-  const [seedResult, setSeedResult] = useState<null | {
-    results?: {
-      charactersProcessed?: number;
-      charactersFailed?: number;
-      insertedLogs?: number;
-      skippedExistingLogs?: number;
-      migratedInventoryUrls?: number;
-    };
-  }>(null);
 
   const [search, setSearch] = useState("");
   const [filterGroups, setFilterGroups] = useState<FilterGroup[]>([]);
@@ -289,34 +285,6 @@ export default function InventoriesPage() {
   // ============================================================================
   // ------------------- Data Fetching -------------------
   // ============================================================================
-
-  const runSeed = useCallback(async () => {
-    setSeeding(true);
-    setSeedError(null);
-    setSeedResult(null);
-    try {
-      const res = await fetch("/api/inventories/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scope: seedScope,
-          migrateInventoryUrls: seedMigrateUrls,
-        }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg = json?.message || json?.error || "Failed to seed inventory logs";
-        throw new Error(msg);
-      }
-      setSeedResult(json);
-    } catch (err) {
-      const error = normalizeError(err);
-      setSeedError(error.message);
-    } finally {
-      setSeeding(false);
-    }
-  }, [seedScope, seedMigrateUrls]);
 
   useEffect(() => {
     if (!user) return;
@@ -2196,85 +2164,6 @@ export default function InventoriesPage() {
           </p>
         </div>
 
-        {/* Admin Tools */}
-        {isAdmin && (
-          <div className="mb-6 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 p-5 shadow-lg">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-[var(--totk-light-green)]">Admin Tools</h3>
-                <p className="text-sm text-[var(--totk-grey-200)] opacity-80">
-                  Backfill missing inventory logs and optionally migrate legacy inventory URLs.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 px-3 py-2 text-sm text-[var(--botw-pale)]">
-                  <span className="font-semibold">Scope</span>
-                  <select
-                    value={seedScope}
-                    onChange={(e) => setSeedScope(e.target.value === "all" ? "all" : "user")}
-                    className="rounded bg-[var(--botw-warm-black)] px-2 py-1 text-sm text-[var(--botw-pale)] border border-[var(--totk-dark-ocher)]/40"
-                    disabled={seeding}
-                  >
-                    <option value="user">My characters</option>
-                    <option value="all">All characters</option>
-                  </select>
-                </label>
-
-                <label className="flex items-center gap-2 rounded-md border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 px-3 py-2 text-sm text-[var(--botw-pale)]">
-                  <input
-                    type="checkbox"
-                    checked={seedMigrateUrls}
-                    onChange={(e) => setSeedMigrateUrls(e.target.checked)}
-                    disabled={seeding}
-                  />
-                  <span className="font-semibold">Migrate legacy inventory URLs</span>
-                </label>
-
-                <button
-                  onClick={runSeed}
-                  disabled={seeding}
-                  className="rounded-md bg-[var(--totk-mid-ocher)] px-4 py-2 text-sm font-bold text-[var(--totk-ivory)] shadow-sm transition-all hover:bg-[var(--totk-dark-ocher)] disabled:opacity-60"
-                >
-                  {seeding ? "Seeding..." : "Run Seed"}
-                </button>
-              </div>
-            </div>
-
-            {seedError && (
-              <div className="mt-4 rounded-md border border-[#ff6347] bg-[#ff6347]/10 p-3 text-sm text-[#ff6347]">
-                {seedError}
-              </div>
-            )}
-            {seedResult?.results && (
-              <div className="mt-4 rounded-md border border-[var(--totk-light-green)]/40 bg-[var(--totk-light-green)]/10 p-3 text-sm text-[var(--botw-pale)]">
-                <div className="font-semibold text-[var(--totk-light-green)] mb-1">Seed complete</div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <div>
-                    <div className="text-xs uppercase tracking-wider opacity-70">Processed</div>
-                    <div className="font-bold">{seedResult.results.charactersProcessed ?? 0}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wider opacity-70">Failed</div>
-                    <div className="font-bold">{seedResult.results.charactersFailed ?? 0}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wider opacity-70">Inserted</div>
-                    <div className="font-bold">{seedResult.results.insertedLogs ?? 0}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wider opacity-70">Existing</div>
-                    <div className="font-bold">{seedResult.results.skippedExistingLogs ?? 0}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-wider opacity-70">URLs Migrated</div>
-                    <div className="font-bold">{seedResult.results.migratedInventoryUrls ?? 0}</div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Error Display */}
         {error && (
           <div className="mb-6 rounded-lg border-2 border-[#ff6347] bg-[var(--botw-warm-black)]/90 p-6 shadow-lg">
@@ -2295,6 +2184,7 @@ export default function InventoriesPage() {
           <Tabs
             tabs={[
               { value: "all-items", label: "All Items", icon: "fa-boxes" },
+              { value: "crafters-guide", label: "Crafters Guide", icon: "fa-hammer" },
               { value: "transactions", label: "All Transactions", icon: "fa-history" },
               { value: "transfer", label: "Transfer Items", icon: "fa-exchange-alt" },
               { value: "equip", label: "Equip Gear", icon: "fa-shield-alt" },
@@ -2898,6 +2788,10 @@ export default function InventoriesPage() {
             </div>
           )}
 
+          {activeTab === "crafters-guide" && (
+            <CraftersGuideTab />
+          )}
+
           {activeTab === "stats" && (
             <div className="space-y-6">
               {loadingAggregated ? (
@@ -3328,5 +3222,21 @@ export default function InventoriesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function InventoriesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-full p-4 sm:p-6 md:p-8">
+        <div className="mx-auto max-w-[90rem]">
+          <div className="flex items-center justify-center p-12">
+            <Loading message="Loading..." variant="inline" size="lg" />
+          </div>
+        </div>
+      </div>
+    }>
+      <InventoriesPageContent />
+    </Suspense>
   );
 }

@@ -558,15 +558,6 @@ export default function CharactersPage() {
       itemsPerPage={itemsPerPage}
       onPageChange={setCurrentPage}
     >
-      <div className="mb-4 flex justify-end">
-        <Link
-          href="/characters/my-companions"
-          className="flex items-center gap-2 rounded-md bg-gradient-to-r from-[var(--totk-mid-ocher)] to-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-bold text-[var(--totk-ivory)] shadow-lg hover:shadow-[0_0_20px_rgba(229,220,183,0.3)] transition-all transform hover:-translate-y-0.5 border border-[var(--totk-light-ocher)]/30"
-        >
-          <i className="fa-solid fa-paw text-sm" />
-          <span>My Companions</span>
-        </Link>
-      </div>
       {characters.length === 0 ? (
         <div className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-6">
           <p className="text-center text-[var(--botw-pale)]">
