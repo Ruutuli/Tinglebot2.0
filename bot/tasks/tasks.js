@@ -893,24 +893,28 @@ async function helpWantedBoardCheck(client, _data = {}) {
       return;
     }
     
-    const { updateQuestEmbed, postQuestToDiscord } = require('@/modules/helpWantedModule');
+    const { updateQuestEmbed, postQuestToDiscord, isQuestExpired } = require('@/modules/helpWantedModule');
     
     // Get today's date string (YYYY-MM-DD format in UTC)
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     
-    // Find all quests that have been posted (have messageId and channelId)
+    // Only check quests from today (active quests that might need updates)
+    // Yesterday's quests are already expired and won't change
     const postedQuests = await HelpWantedQuest.find({
       messageId: { $exists: true, $ne: null },
-      channelId: { $exists: true, $ne: null }
+      channelId: { $exists: true, $ne: null },
+      date: today
     });
     
     let updatedCount = 0;
+    let skippedCount = 0;
     let errorCount = 0;
     
-    // Update each quest's embed to reflect current status
+    // Update each quest's embed only if it's been completed (status changed)
+    // We don't need to update every quest every hour - only when something changes
     if (postedQuests && postedQuests.length > 0) {
-      logger.info('SCHEDULED', `help-wanted-board-check: found ${postedQuests.length} posted quest(s) to check`);
+      logger.info('SCHEDULED', `help-wanted-board-check: found ${postedQuests.length} today's posted quest(s) to check`);
       
       for (const quest of postedQuests) {
         try {
@@ -921,11 +925,17 @@ async function helpWantedBoardCheck(client, _data = {}) {
             continue;
           }
           
-          // Update the embed (this will handle expired status, completion status, etc.)
-          await updateQuestEmbed(client, freshQuest, freshQuest.completedBy || null);
-          updatedCount++;
-          
-          logger.debug('SCHEDULED', `help-wanted-board-check: updated embed for quest ${freshQuest.questId} (${freshQuest.village})`);
+          // Only update if quest has been completed (status changed)
+          // We don't need to update available quests every hour
+          if (freshQuest.completed) {
+            // Update the embed to show completion status
+            await updateQuestEmbed(client, freshQuest, freshQuest.completedBy || null);
+            updatedCount++;
+            logger.debug('SCHEDULED', `help-wanted-board-check: updated completed quest ${freshQuest.questId} (${freshQuest.village})`);
+          } else {
+            // Quest is still available, no need to update
+            skippedCount++;
+          }
         } catch (err) {
           errorCount++;
           logger.error('SCHEDULED', `help-wanted-board-check: failed to update quest ${quest.questId}: ${err.message}`);
@@ -984,6 +994,7 @@ async function helpWantedBoardCheck(client, _data = {}) {
     
     const summary = [];
     if (updatedCount > 0) summary.push(`updated ${updatedCount} quest(s)`);
+    if (skippedCount > 0) summary.push(`skipped ${skippedCount} quest(s) (no changes)`);
     if (postedCount > 0) summary.push(`posted ${postedCount} quest(s)`);
     if (errorCount > 0) summary.push(`${errorCount} error(s)`);
     
