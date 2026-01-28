@@ -19,6 +19,11 @@ function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Arr
   return { $or: conditions };
 }
 
+type ListFilter = Record<string, unknown> & {
+  $and?: Array<Record<string, unknown>>;
+  $or?: unknown[];
+};
+
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
 // Caching is handled via `Cache-Control` response headers below.
 export const dynamic = "force-dynamic";
@@ -38,7 +43,7 @@ export async function GET(req: NextRequest) {
     const rollsMin = params.get("rollsMin");
     const rollsMax = params.get("rollsMax");
 
-    const filter: Record<string, unknown> = {};
+    const filter: ListFilter = {};
 
     // Search filter
     const re = buildSearchRegex(search);

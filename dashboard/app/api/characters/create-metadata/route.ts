@@ -30,8 +30,10 @@ export type GearItemOption = {
   subtype?: string[];
 };
 
+export type RaceOption = { name: string; value: string };
+
 export type CreateMetadataResponse = {
-  races: string[];
+  races: RaceOption[];
   jobs: string[];
   jobsByVillage: Record<string, string[]>; // Jobs organized by village
   villages: string[];
@@ -80,8 +82,10 @@ export async function GET() {
     const user = session.user ?? null;
     const isAdmin = user ? await isAdminUser(user.id) : false;
 
-    // Use static data for races and jobs
-    const races = RACES.map(r => r.name).sort();
+    // Use static data for races and jobs (name for display, value for form state/API)
+    const races = RACES.map((r) => ({ name: r.name, value: r.value })).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
     // Filter out mod jobs for non-admins
     const availableJobs = isAdmin 
       ? [...ALL_JOBS] 
@@ -292,7 +296,7 @@ export async function GET() {
     legsArmor.sort((a, b) => a.name.localeCompare(b.name));
 
     const body: CreateMetadataResponse = {
-      races: races.length ? races : [],
+      races,
       jobs: jobs.length ? jobs : [],
       jobsByVillage: jobsByVillage,
       villages: [...VILLAGES] as string[],

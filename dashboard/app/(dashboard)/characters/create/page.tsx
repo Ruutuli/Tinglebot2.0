@@ -59,7 +59,7 @@ type GearItemOption = {
 };
 
 export type CreateMetadata = {
-  races: string[];
+  races: { name: string; value: string }[];
   jobs: string[];
   jobsByVillage: Record<string, string[]>;
   villages: string[];
@@ -1754,10 +1754,10 @@ export function CreateForm({
                 <option value="">Select a race...</option>
                 {metadata.races.map((r) => (
                   <option
-                    key={r}
-                    value={r}
+                    key={r.value}
+                    value={r.value}
                   >
-                    {capitalize(r)}
+                    {r.name}
                   </option>
                 ))}
               </select>

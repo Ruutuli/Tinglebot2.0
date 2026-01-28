@@ -55,6 +55,11 @@ function getIsModConstraint(values: string[]): boolean | null {
   return wantsMod;
 }
 
+type ListFilter = Record<string, unknown> & {
+  $and?: Array<Record<string, unknown>>;
+  $or?: unknown[];
+};
+
 // Helper function to create case-insensitive filter conditions for string arrays
 function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
   const conditions = values.map(value => {
@@ -90,7 +95,7 @@ export async function GET(req: NextRequest) {
     const sortBy = params.get("sortBy") || "name";
     const isModCharacterParam = getFilterParamMultiple(params, "isModCharacter");
 
-    const filter: Record<string, unknown> = {};
+    const filter: ListFilter = {};
     // Hide drafts/pending/needs_changes from global list: only show accepted regular characters.
     filter.status = "accepted";
 
@@ -140,7 +145,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Build mod character filter (same filters as regular characters)
-    const modFilter: Record<string, unknown> = {};
+    const modFilter: ListFilter = {};
     if (re) {
       modFilter.$or = [
         { name: re },
