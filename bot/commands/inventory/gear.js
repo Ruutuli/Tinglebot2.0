@@ -11,7 +11,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { escapeRegExp } = require('@/utils/inventoryUtils.js');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
-const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('@/database/db.js');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById, updateModCharacterById } = require('@/database/db.js');
 
 
 // ------------------- Database Models -------------------
@@ -146,8 +146,9 @@ module.exports = {
           update['gearShield'] = null;
         }
 
-        // Update the character by unequipping the selected gear.
-        await updateCharacterById(character._id, { $unset: update });
+        // Use the appropriate update function based on character type
+        const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+        await updateFunction(character._id, { $unset: update });
         // Recalculate character stats after gear removal.
         await updateCharacterDefense(character._id);
         await updateCharacterAttack(character._id);
@@ -309,6 +310,10 @@ module.exports = {
 
       let unequippedMessage = ''; // To track any gear that was automatically unequipped due to conflicts.
 
+      // ------------------- Determine Update Function Based on Character Type -------------------
+      // Use the appropriate update function based on whether this is a mod character
+      const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+
       // ------------------- Validate Equipment Type and Slot -------------------
       // Check if the item can be equipped in the selected slot.
       logger.debug('VALIDATION', `Validating item - ${itemName}, Category: ${JSON.stringify(itemDetail.category)}, Type: ${JSON.stringify(itemDetail.type)}, Slot: ${type}`);
@@ -349,21 +354,21 @@ module.exports = {
       if (type === 'weapon' || type === 'shield') {
         if (itemDetail.type.includes('2h')) {
           if (character.gearWeapon) {
-            await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+            await updateFunction(character._id, { $unset: { gearWeapon: 1 } });
             unequippedMessage += 'Your existing weapon has been unequipped because you cannot have a 2h weapon and another weapon equipped. ';
           }
           if (character.gearShield) {
-            await updateCharacterById(character._id, { $unset: { gearShield: 1 } });
+            await updateFunction(character._id, { $unset: { gearShield: 1 } });
             unequippedMessage += 'Your shield has been unequipped because you cannot have a 2h weapon and a shield equipped. ';
           }
         } else if (itemDetail.subtype?.includes('shield')) {
           if (character.gearWeapon?.type?.includes('2h')) {
-            await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+            await updateFunction(character._id, { $unset: { gearWeapon: 1 } });
             unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a shield and a 2h weapon equipped. ';
           }
         } else if (itemDetail.type.includes('1h')) {
           if (character.gearWeapon?.type?.includes('2h')) {
-            await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+            await updateFunction(character._id, { $unset: { gearWeapon: 1 } });
             unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a 1h weapon and a 2h weapon equipped. ';
           }
         }
@@ -371,19 +376,20 @@ module.exports = {
 
       // ------------------- Equip Item Logic -------------------
       // Update the character's gear based on the selected slot.
+      // Use the appropriate update function based on character type
       if (['head', 'chest', 'legs'].includes(type)) {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        const updatedGearArmor = { ...character.gearArmor, [type]: { name: itemName, stats: { modifierHearts } } };
+        const updatedGearArmor = { ...(character.gearArmor || {}), [type]: { name: itemName, stats: { modifierHearts } } };
         logger.debug('CHARACTER', `Updating gearArmor - Slot: ${type}, Item: ${itemName}`);
-        await updateCharacterById(character._id, { gearArmor: updatedGearArmor });
+        await updateFunction(character._id, { gearArmor: updatedGearArmor });
       } else if (type === 'weapon') {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
         logger.debug('CHARACTER', `Updating gearWeapon - Item: ${itemName}`);
-        await updateCharacterById(character._id, { gearWeapon: { name: itemName, stats: { modifierHearts }, type: itemDetail.type } });
+        await updateFunction(character._id, { gearWeapon: { name: itemName, stats: { modifierHearts }, type: itemDetail.type } });
       } else if (type === 'shield') {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
         logger.debug('CHARACTER', `Updating gearShield - Item: ${itemName}`);
-        await updateCharacterById(character._id, { gearShield: { name: itemName, stats: { modifierHearts }, subtype: itemDetail.subtype } });
+        await updateFunction(character._id, { gearShield: { name: itemName, stats: { modifierHearts }, subtype: itemDetail.subtype } });
       }
 
       // ------------------- Recalculate Character Stats -------------------
@@ -393,7 +399,18 @@ module.exports = {
       await updateCharacterAttack(character._id);
 
       // ------------------- Fetch Updated Character and Gear Details -------------------
-      const updatedCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+      let updatedCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+      
+      // If not found as regular character, try as mod character
+      if (!updatedCharacter) {
+        updatedCharacter = await fetchModCharacterByNameAndUserId(characterName, userId);
+      }
+      
+      if (!updatedCharacter) {
+        await interaction.editReply({ content: `❌ **Character ${characterName} not found after update.**`, flags: [MessageFlags.Ephemeral] });
+        return;
+      }
+      
       const updatedItemDetails = await ItemModel.find({
         itemName: {
           $in: [
