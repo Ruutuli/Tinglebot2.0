@@ -46,6 +46,49 @@ const VILLAGE_CHANNELS = {
   Vhintl: process.env.VHINTL_TOWNHALL
 };
 
+// ------------------- Helper: hasScheduledTimePassed -------------------
+// Checks if the scheduled post time (cron format: "minute hour * * *") has passed
+// Returns true if current UTC time >= scheduled time for today
+function hasScheduledTimePassed(scheduledPostTime) {
+  if (!scheduledPostTime) {
+    return false; // Can't determine if time passed without a schedule
+  }
+  
+  try {
+    // Parse cron format: "minute hour * * *"
+    const parts = scheduledPostTime.split(' ');
+    if (parts.length < 2) {
+      logger.warn('SCHEDULED', `Invalid cron format: ${scheduledPostTime}`);
+      return false;
+    }
+    
+    const scheduledMinute = parseInt(parts[0], 10);
+    const scheduledHour = parseInt(parts[1], 10);
+    
+    if (isNaN(scheduledMinute) || isNaN(scheduledHour)) {
+      logger.warn('SCHEDULED', `Invalid cron time values: ${scheduledPostTime}`);
+      return false;
+    }
+    
+    // Get current UTC time
+    const now = new Date();
+    const currentHour = now.getUTCHours();
+    const currentMinute = now.getUTCMinutes();
+    
+    // Compare: current time >= scheduled time
+    if (currentHour > scheduledHour) {
+      return true; // Current hour is past scheduled hour
+    } else if (currentHour === scheduledHour && currentMinute >= scheduledMinute) {
+      return true; // Same hour, current minute >= scheduled minute
+    }
+    
+    return false; // Scheduled time hasn't passed yet
+  } catch (error) {
+    logger.error('SCHEDULED', `Error checking scheduled time: ${error.message}`);
+    return false; // On error, don't post (safer)
+  }
+}
+
 // ============================================================================
 // ------------------- Weather Tasks -------------------
 // ============================================================================
@@ -984,9 +1027,10 @@ async function helpWantedBoardCheck(client, _data = {}) {
     });
     
     let postedCount = 0;
+    let skippedTimeCount = 0;
     
     if (unpostedQuests && unpostedQuests.length > 0) {
-      logger.info('SCHEDULED', `help-wanted-board-check: found ${unpostedQuests.length} unposted quest(s) to post`);
+      logger.info('SCHEDULED', `help-wanted-board-check: found ${unpostedQuests.length} unposted quest(s) to check`);
       
       for (const quest of unpostedQuests) {
         try {
@@ -1000,6 +1044,13 @@ async function helpWantedBoardCheck(client, _data = {}) {
           // Skip if quest is already completed (shouldn't happen, but safety check)
           if (freshQuest.completed) {
             logger.debug('SCHEDULED', `help-wanted-board-check: skipping completed quest ${freshQuest.questId}`);
+            continue;
+          }
+          
+          // Check if scheduled time has passed - only post if time has passed
+          if (!hasScheduledTimePassed(freshQuest.scheduledPostTime)) {
+            skippedTimeCount++;
+            logger.debug('SCHEDULED', `help-wanted-board-check: skipping quest ${freshQuest.questId} - scheduled time ${freshQuest.scheduledPostTime} has not passed yet`);
             continue;
           }
           
@@ -1024,6 +1075,7 @@ async function helpWantedBoardCheck(client, _data = {}) {
     if (updatedCount > 0) summary.push(`updated ${updatedCount} quest(s)`);
     if (skippedCount > 0) summary.push(`skipped ${skippedCount} quest(s) (no changes)`);
     if (repostedCount > 0) summary.push(`reposted ${repostedCount} quest(s) (message missing)`);
+    if (skippedTimeCount > 0) summary.push(`skipped ${skippedTimeCount} quest(s) (time not reached)`);
     if (postedCount > 0) summary.push(`posted ${postedCount} quest(s)`);
     if (errorCount > 0) summary.push(`${errorCount} error(s)`);
     
@@ -1141,12 +1193,18 @@ async function postUnpostedQuestsOnStartup(client) {
       ]
     });
     
-    // Filter out yesterday's quests that have expired
+    // Filter out quests that haven't reached their scheduled time yet, and yesterday's quests that have expired
     // Quests expire at midnight EST (05:00 UTC) on the day after they were posted
     // So a quest from yesterday (2026-01-27) expires at 05:00 UTC today (2026-01-28)
     const validUnpostedQuests = unpostedQuests.filter(quest => {
+      // First check: scheduled time must have passed
+      if (!hasScheduledTimePassed(quest.scheduledPostTime)) {
+        logger.debug('STARTUP', `postUnpostedQuestsOnStartup: skipping quest ${quest.questId} - scheduled time ${quest.scheduledPostTime} has not passed yet`);
+        return false;
+      }
+      
       if (quest.date === today) {
-        // Today's quests are always valid to post
+        // Today's quests are valid to post if scheduled time has passed
         return true;
       }
       

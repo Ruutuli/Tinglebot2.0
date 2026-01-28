@@ -693,23 +693,25 @@ export async function PUT(
       if (typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
         try {
           const equippedGearData = JSON.parse(equippedGearRaw) as {
-            gearWeapon?: { name: string; stats: Record<string, number> };
-            gearShield?: { name: string; stats: Record<string, number> };
+            gearWeapon?: { name: string; stats: Record<string, number> } | null;
+            gearShield?: { name: string; stats: Record<string, number> } | null;
             gearArmor?: {
-              head?: { name: string; stats: Record<string, number> };
-              chest?: { name: string; stats: Record<string, number> };
-              legs?: { name: string; stats: Record<string, number> };
-            };
+              head?: { name: string; stats: Record<string, number> } | null;
+              chest?: { name: string; stats: Record<string, number> } | null;
+              legs?: { name: string; stats: Record<string, number> } | null;
+            } | null;
           };
 
           // Check if gear is actually being changed (use normalized compare: DB stores Map, form sends Record)
-          const hasGearChanges =
-            (equippedGearData.gearWeapon != null &&
-              normalizeGearItem(char.gearWeapon) !== normalizeGearItem(equippedGearData.gearWeapon)) ||
-            (equippedGearData.gearShield != null &&
-              normalizeGearItem(char.gearShield) !== normalizeGearItem(equippedGearData.gearShield)) ||
-            (equippedGearData.gearArmor != null &&
-              normalizeGearArmor(char.gearArmor) !== normalizeGearArmor(equippedGearData.gearArmor));
+          // Only check if the field is explicitly provided (not undefined) and differs from current value
+          const weaponChanged = equippedGearData.gearWeapon !== undefined && 
+            normalizeGearItem(char.gearWeapon) !== normalizeGearItem(equippedGearData.gearWeapon ?? null);
+          const shieldChanged = equippedGearData.gearShield !== undefined && 
+            normalizeGearItem(char.gearShield) !== normalizeGearItem(equippedGearData.gearShield ?? null);
+          const armorChanged = equippedGearData.gearArmor !== undefined && 
+            normalizeGearArmor(char.gearArmor) !== normalizeGearArmor(equippedGearData.gearArmor ?? null);
+
+          const hasGearChanges = weaponChanged || shieldChanged || armorChanged;
 
           if (hasGearChanges) {
             if (!isFieldEditable("gearWeapon", characterStatus as CharacterStatus) || 
@@ -869,24 +871,30 @@ export async function PUT(
       }
 
       // Update character fields (only if not a gear-only update)
-      char.set({
-        name: (name as string).trim(),
-        age: age ? parseInt(String(age), 10) : null,
-        height: height ? parseFloat(String(height)) : null,
-        pronouns: (pronouns as string).trim(),
-        gender: typeof gender === "string" ? gender.trim() : "",
-        race: (race as string).trim(),
-        homeVillage: (village as string).trim(),
-        job: (job as string).trim(),
-        virtue: (virtue ?? "TBA").trim().toLowerCase(),
-        personality: typeof personality === "string" ? personality.trim() : "",
-        history: typeof history === "string" ? history.trim() : "",
-        extras: typeof extras === "string" ? extras.trim() : "",
-        appLink: typeof appLink === "string" ? appLink.trim() : "",
-        birthday: typeof birthday === "string" ? birthday.trim() : "",
+      // Build update object with only provided fields to ensure they're saved
+      const updateData: Record<string, unknown> = {
         maxHearts: hearts,
         maxStamina: stamina,
-      });
+      };
+      
+      // Only include fields that are provided in the request
+      // This ensures locked fields that are sent (with their initial values) are preserved
+      if (name !== undefined) updateData.name = (name as string).trim();
+      if (age !== undefined) updateData.age = age ? parseInt(String(age), 10) : null;
+      if (height !== undefined) updateData.height = height ? parseFloat(String(height)) : null;
+      if (pronouns !== undefined) updateData.pronouns = (pronouns as string).trim();
+      if (gender !== undefined) updateData.gender = typeof gender === "string" ? gender.trim() : "";
+      if (race !== undefined) updateData.race = (race as string).trim();
+      if (village !== undefined) updateData.homeVillage = (village as string).trim();
+      if (job !== undefined) updateData.job = (job as string).trim();
+      if (virtue !== undefined) updateData.virtue = (virtue ?? "TBA").trim().toLowerCase();
+      if (personality !== undefined) updateData.personality = typeof personality === "string" ? personality.trim() : "";
+      if (history !== undefined) updateData.history = typeof history === "string" ? history.trim() : "";
+      if (extras !== undefined) updateData.extras = typeof extras === "string" ? extras.trim() : "";
+      if (appLink !== undefined) updateData.appLink = typeof appLink === "string" ? appLink.trim() : "";
+      if (birthday !== undefined) updateData.birthday = typeof birthday === "string" ? birthday.trim() : "";
+      
+      char.set(updateData);
 
       // Upload files to GCS if provided, otherwise keep existing URLs
       if (iconFile && iconFile instanceof File && iconFile.size > 0) {
