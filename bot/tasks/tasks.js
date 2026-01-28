@@ -1006,6 +1006,89 @@ async function helpWantedBoardCheck(client, _data = {}) {
 }
 
 // ============================================================================
+// ------------------- Startup Tasks -------------------
+// ============================================================================
+
+// ------------------- postUnpostedQuestsOnStartup -------------------
+// Posts any unposted quests from today when the bot starts up
+async function postUnpostedQuestsOnStartup(client) {
+  try {
+    logger.info('STARTUP', 'postUnpostedQuestsOnStartup: starting');
+    
+    if (!client?.channels) {
+      logger.error('STARTUP', 'postUnpostedQuestsOnStartup: Discord client not available');
+      return;
+    }
+    
+    const { postQuestToDiscord } = require('@/modules/helpWantedModule');
+    
+    // Get today's date string (YYYY-MM-DD format in UTC)
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    // Find unposted quests from today
+    const unpostedQuests = await HelpWantedQuest.find({
+      date: today,
+      $or: [
+        { messageId: { $exists: false } },
+        { messageId: null },
+        { channelId: { $exists: false } },
+        { channelId: null }
+      ]
+    });
+    
+    if (!unpostedQuests || unpostedQuests.length === 0) {
+      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: no unposted quests found');
+      return;
+    }
+    
+    logger.info('STARTUP', `postUnpostedQuestsOnStartup: found ${unpostedQuests.length} unposted quest(s) to post`);
+    
+    let postedCount = 0;
+    let errorCount = 0;
+    
+    for (const quest of unpostedQuests) {
+      try {
+        // Refresh quest from database
+        const freshQuest = await HelpWantedQuest.findById(quest._id);
+        if (!freshQuest) {
+          logger.warn('STARTUP', `postUnpostedQuestsOnStartup: quest ${quest.questId} not found in database`);
+          continue;
+        }
+        
+        // Skip if quest is already completed (shouldn't happen, but safety check)
+        if (freshQuest.completed) {
+          logger.debug('STARTUP', `postUnpostedQuestsOnStartup: skipping completed quest ${freshQuest.questId}`);
+          continue;
+        }
+        
+        // Post the quest to Discord
+        const message = await postQuestToDiscord(client, freshQuest);
+        if (message) {
+          postedCount++;
+          logger.info('STARTUP', `postUnpostedQuestsOnStartup: posted quest ${freshQuest.questId} for ${freshQuest.village}`);
+        } else {
+          errorCount++;
+          logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${freshQuest.questId}`);
+        }
+      } catch (err) {
+        errorCount++;
+        logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${quest.questId}: ${err.message}`);
+        // Continue with other quests even if one fails
+      }
+    }
+    
+    if (postedCount > 0 || errorCount > 0) {
+      logger.success('STARTUP', `postUnpostedQuestsOnStartup: done (posted ${postedCount} quest(s), ${errorCount} error(s))`);
+    } else {
+      logger.info('STARTUP', 'postUnpostedQuestsOnStartup: done (no quests to post)');
+    }
+  } catch (err) {
+    logger.error('STARTUP', `postUnpostedQuestsOnStartup: ${err.message}`);
+  }
+}
+
+// ============================================================================
 // ------------------- Raid/Village Tasks -------------------
 // ============================================================================
 
@@ -1295,6 +1378,7 @@ function registerScheduledTasks(scheduler) {
 module.exports = { 
   registerScheduledTasks, 
   dailyWeather, 
-  characterTimerPoll, 
+  characterTimerPoll,
+  postUnpostedQuestsOnStartup,
   TASKS 
 };

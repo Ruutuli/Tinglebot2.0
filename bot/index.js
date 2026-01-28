@@ -499,10 +499,13 @@ async function initializeClient() {
         
         // Initialize universal scheduler (Agenda) and register tasks
         const scheduler = require('@/utils/scheduler');
-        const { registerScheduledTasks } = require('./tasks/tasks');
+        const { registerScheduledTasks, postUnpostedQuestsOnStartup } = require('./tasks/tasks');
         registerScheduledTasks(scheduler);
         await scheduler.initializeScheduler(client);
         logger.info('SYSTEM', 'Scheduler initialized (daily weather at 8am EST)');
+        
+        // Post any unposted quests from today on startup
+        await postUnpostedQuestsOnStartup(client);
         
         // Check blood moon status
         logBloodMoonStatus();
