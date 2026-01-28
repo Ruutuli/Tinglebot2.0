@@ -439,13 +439,26 @@ function buildQueryParams(
 
 export type UseModelListOptions = {
   apiPath?: string;
+  /** Override default items-per-page (e.g. 100 for My OCs so all characters load without pagination). */
+  defaultLimit?: number;
 };
+
+function getDefaultLimit(
+  resource: ModelListResource,
+  defaultLimit?: number
+): number {
+  if (defaultLimit != null && defaultLimit > 0) return defaultLimit;
+  if (resource === "items") return DEFAULT_LIMIT_ITEMS;
+  if (resource === "village-shops") return DEFAULT_LIMIT_VILLAGE_SHOPS;
+  return DEFAULT_LIMIT;
+}
 
 export function useModelList<T>(
   resource: ModelListResource,
   options?: UseModelListOptions
 ) {
   const apiPath = options?.apiPath;
+  const defaultLimit = options?.defaultLimit;
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -458,11 +471,7 @@ export function useModelList<T>(
   const [filters, setFilters] = useState<Record<string, (string | number | boolean)[]>>({});
   const [sortBy, setSortBy] = useState<string>("name");
   const [itemsPerPage, setItemsPerPage] = useState<number>(
-    resource === "items" 
-      ? DEFAULT_LIMIT_ITEMS 
-      : resource === "village-shops"
-      ? DEFAULT_LIMIT_VILLAGE_SHOPS
-      : DEFAULT_LIMIT
+    getDefaultLimit(resource, defaultLimit)
   );
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -638,15 +647,9 @@ export function useModelList<T>(
     setSearch("");
     setFilters({});
     setSortBy("name");
-    setItemsPerPage(
-      resource === "items" 
-        ? DEFAULT_LIMIT_ITEMS 
-        : resource === "village-shops"
-        ? DEFAULT_LIMIT_VILLAGE_SHOPS
-        : DEFAULT_LIMIT
-    );
+    setItemsPerPage(getDefaultLimit(resource, defaultLimit));
     setCurrentPage(1);
-  }, [resource]);
+  }, [resource, defaultLimit]);
 
   return {
     data,

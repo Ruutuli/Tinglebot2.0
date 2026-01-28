@@ -423,6 +423,7 @@ function CharacterSection({
 function MyOCsContent() {
   const { data: allCharacters, loading, error, refetch } = useModelList<Character>("characters", {
     apiPath: "/api/characters/my-ocs",
+    defaultLimit: 100,
   });
 
   // Separate drafts (not submitted) from submitted pending characters

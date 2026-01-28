@@ -95,7 +95,24 @@ export async function GET(req: NextRequest) {
         { homeVillage: re },
       ];
     }
-    if (races.length) filter.race = { $in: races };
+    // Case-insensitive race filtering to handle both "Zora" and "zora" in database
+    if (races.length) {
+      // Use $or with regex patterns for case-insensitive matching
+      const raceConditions = races.map(race => {
+        const escaped = race.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return { race: new RegExp(`^${escaped}$`, "i") };
+      });
+      if (filter.$or) {
+        // If $or already exists (from search), combine with race conditions
+        filter.$and = [
+          { $or: filter.$or },
+          { $or: raceConditions }
+        ];
+        delete filter.$or;
+      } else {
+        filter.$or = raceConditions;
+      }
+    }
     if (villages.length) filter.currentVillage = { $in: villages };
     if (jobs.length) filter.job = { $in: jobs };
 
@@ -110,7 +127,24 @@ export async function GET(req: NextRequest) {
         { homeVillage: re },
       ];
     }
-    if (races.length) modFilter.race = { $in: races };
+    // Case-insensitive race filtering to handle both "Zora" and "zora" in database
+    if (races.length) {
+      // Use $or with regex patterns for case-insensitive matching
+      const raceConditions = races.map(race => {
+        const escaped = race.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return { race: new RegExp(`^${escaped}$`, "i") };
+      });
+      if (modFilter.$or) {
+        // If $or already exists (from search), combine with race conditions
+        modFilter.$and = [
+          { $or: modFilter.$or },
+          { $or: raceConditions }
+        ];
+        delete modFilter.$or;
+      } else {
+        modFilter.$or = raceConditions;
+      }
+    }
     if (villages.length) modFilter.currentVillage = { $in: villages };
     if (jobs.length) modFilter.job = { $in: jobs };
 
