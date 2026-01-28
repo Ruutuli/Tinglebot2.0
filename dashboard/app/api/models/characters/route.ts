@@ -10,7 +10,7 @@ import {
 import { fetchDiscordUsernames } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 import { RACES, ALL_JOBS, MOD_JOBS } from "@/data/characterData";
-import type { PipelineStage } from "mongoose";
+import type { FilterQuery, PipelineStage } from "mongoose";
 
 type SortConfig = {
   field: string;
@@ -55,11 +55,6 @@ function getIsModConstraint(values: string[]): boolean | null {
   return wantsMod;
 }
 
-type ListFilter = Record<string, unknown> & {
-  $and?: Array<Record<string, unknown>>;
-  $or?: unknown[];
-};
-
 // Helper function to create case-insensitive filter conditions for string arrays
 function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
   const conditions = values.map(value => {
@@ -95,7 +90,7 @@ export async function GET(req: NextRequest) {
     const sortBy = params.get("sortBy") || "name";
     const isModCharacterParam = getFilterParamMultiple(params, "isModCharacter");
 
-    const filter: ListFilter = {};
+    const filter: FilterQuery<unknown> = {};
     // Hide drafts/pending/needs_changes from global list: only show accepted regular characters.
     filter.status = "accepted";
 
@@ -145,7 +140,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Build mod character filter (same filters as regular characters)
-    const modFilter: ListFilter = {};
+    const modFilter: FilterQuery<unknown> = {};
     if (re) {
       modFilter.$or = [
         { name: re },

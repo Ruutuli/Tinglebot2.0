@@ -9,6 +9,7 @@ import {
   buildSearchRegex,
 } from "@/lib/api-utils";
 import { logger } from "@/utils/logger";
+import type { FilterQuery } from "mongoose";
 
 // Helper function to create case-insensitive filter conditions for string arrays
 function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
@@ -18,11 +19,6 @@ function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Arr
   });
   return { $or: conditions };
 }
-
-type ListFilter = Record<string, unknown> & {
-  $and?: Array<Record<string, unknown>>;
-  $or?: unknown[];
-};
 
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
 // Caching is handled via `Cache-Control` response headers below.
@@ -43,7 +39,7 @@ export async function GET(req: NextRequest) {
     const rollsMin = params.get("rollsMin");
     const rollsMax = params.get("rollsMax");
 
-    const filter: ListFilter = {};
+    const filter: FilterQuery<unknown> = {};
 
     // Search filter
     const re = buildSearchRegex(search);
