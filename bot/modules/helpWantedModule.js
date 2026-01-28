@@ -2631,6 +2631,63 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
 }
 
 // ============================================================================
+// ------------------- Quest Posting -------------------
+// ============================================================================
+
+// ------------------- Function: postQuestToDiscord -------------------
+// Posts a quest embed to the appropriate town hall channel
+async function postQuestToDiscord(client, quest) {
+  try {
+    if (!client?.channels) {
+      logger.error('QUEST', 'postQuestToDiscord: Discord client not available');
+      return null;
+    }
+
+    // Get the town hall channel for the quest's village
+    const townHallChannels = {
+      'Rudania': process.env.RUDANIA_TOWNHALL || '629028823001858060',
+      'Inariko': process.env.INARIKO_TOWNHALL || '629028490179510308',
+      'Vhintl': process.env.VHINTL_TOWNHALL || '629030018965700668'
+    };
+
+    const channelId = townHallChannels[quest.village];
+    if (!channelId) {
+      logger.error('QUEST', `No town hall channel found for village ${quest.village}`);
+      return null;
+    }
+
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      logger.error('QUEST', `Could not fetch town hall channel ${channelId} for village ${quest.village}`);
+      return null;
+    }
+
+    // Format the quest as an embed
+    const questEmbeds = await formatSpecificQuestsAsEmbedsByVillage([quest]);
+    const embed = questEmbeds[quest.village];
+    
+    if (!embed) {
+      logger.error('QUEST', `Failed to format embed for quest ${quest.questId}`);
+      return null;
+    }
+
+    // Post the embed
+    const message = await channel.send({ embeds: [embed] });
+    
+    // Update the quest with messageId and channelId
+    quest.messageId = message.id;
+    quest.channelId = channelId;
+    await quest.save();
+    
+    logger.info('QUEST', `Posted quest ${quest.questId} for ${quest.village} to channel ${channelId}`);
+    return message;
+  } catch (error) {
+    logger.error('QUEST', `Failed to post quest ${quest.questId} to Discord: ${error.message}`, error);
+    return null;
+  }
+}
+
+// ============================================================================
 // ------------------- Auto-Quest Completion -------------------
 // ============================================================================
 
@@ -2902,6 +2959,7 @@ module.exports = {
   getQuestsForScheduledTime,
   getCurrentQuestSchedule,
   updateQuestEmbed,
+  postQuestToDiscord,
   isQuestExpired,
   checkAndCompleteQuestFromSubmission,
   isTravelBlockedByWeather,

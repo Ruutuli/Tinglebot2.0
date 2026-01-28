@@ -884,14 +884,111 @@ async function monthlyQuestRewardPayout(_client, _data = {}) {
 // ============================================================================
 
 // ------------------- help-wanted-board-check (Every hour) -------------------
-async function helpWantedBoardCheck(_client, _data = {}) {
+async function helpWantedBoardCheck(client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'help-wanted-board-check: starting');
     
-    // Help wanted board check logic would go here
-    // This can be implemented when help wanted board system is ready
+    if (!client?.channels) {
+      logger.error('SCHEDULED', 'help-wanted-board-check: Discord client not available');
+      return;
+    }
     
-    logger.info('SCHEDULED', 'help-wanted-board-check: done (board check system not yet implemented)');
+    const { updateQuestEmbed, postQuestToDiscord } = require('@/modules/helpWantedModule');
+    
+    // Get today's date string (YYYY-MM-DD format in UTC)
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    // Find all quests that have been posted (have messageId and channelId)
+    const postedQuests = await HelpWantedQuest.find({
+      messageId: { $exists: true, $ne: null },
+      channelId: { $exists: true, $ne: null }
+    });
+    
+    let updatedCount = 0;
+    let errorCount = 0;
+    
+    // Update each quest's embed to reflect current status
+    if (postedQuests && postedQuests.length > 0) {
+      logger.info('SCHEDULED', `help-wanted-board-check: found ${postedQuests.length} posted quest(s) to check`);
+      
+      for (const quest of postedQuests) {
+        try {
+          // Refresh quest from database to get latest completion status
+          const freshQuest = await HelpWantedQuest.findById(quest._id);
+          if (!freshQuest) {
+            logger.warn('SCHEDULED', `help-wanted-board-check: quest ${quest.questId} not found in database`);
+            continue;
+          }
+          
+          // Update the embed (this will handle expired status, completion status, etc.)
+          await updateQuestEmbed(client, freshQuest, freshQuest.completedBy || null);
+          updatedCount++;
+          
+          logger.debug('SCHEDULED', `help-wanted-board-check: updated embed for quest ${freshQuest.questId} (${freshQuest.village})`);
+        } catch (err) {
+          errorCount++;
+          logger.error('SCHEDULED', `help-wanted-board-check: failed to update quest ${quest.questId}: ${err.message}`);
+          // Continue with other quests even if one fails
+        }
+      }
+    }
+    
+    // Find unposted quests that should be posted (from today, no messageId/channelId)
+    const unpostedQuests = await HelpWantedQuest.find({
+      date: today,
+      $or: [
+        { messageId: { $exists: false } },
+        { messageId: null },
+        { channelId: { $exists: false } },
+        { channelId: null }
+      ]
+    });
+    
+    let postedCount = 0;
+    
+    if (unpostedQuests && unpostedQuests.length > 0) {
+      logger.info('SCHEDULED', `help-wanted-board-check: found ${unpostedQuests.length} unposted quest(s) to post`);
+      
+      for (const quest of unpostedQuests) {
+        try {
+          // Refresh quest from database
+          const freshQuest = await HelpWantedQuest.findById(quest._id);
+          if (!freshQuest) {
+            logger.warn('SCHEDULED', `help-wanted-board-check: unposted quest ${quest.questId} not found in database`);
+            continue;
+          }
+          
+          // Skip if quest is already completed (shouldn't happen, but safety check)
+          if (freshQuest.completed) {
+            logger.debug('SCHEDULED', `help-wanted-board-check: skipping completed quest ${freshQuest.questId}`);
+            continue;
+          }
+          
+          // Post the quest to Discord
+          const message = await postQuestToDiscord(client, freshQuest);
+          if (message) {
+            postedCount++;
+            logger.info('SCHEDULED', `help-wanted-board-check: posted quest ${freshQuest.questId} for ${freshQuest.village}`);
+          } else {
+            errorCount++;
+            logger.error('SCHEDULED', `help-wanted-board-check: failed to post quest ${freshQuest.questId}`);
+          }
+        } catch (err) {
+          errorCount++;
+          logger.error('SCHEDULED', `help-wanted-board-check: failed to post quest ${quest.questId}: ${err.message}`);
+          // Continue with other quests even if one fails
+        }
+      }
+    }
+    
+    const summary = [];
+    if (updatedCount > 0) summary.push(`updated ${updatedCount} quest(s)`);
+    if (postedCount > 0) summary.push(`posted ${postedCount} quest(s)`);
+    if (errorCount > 0) summary.push(`${errorCount} error(s)`);
+    
+    const summaryText = summary.length > 0 ? summary.join(', ') : 'no changes';
+    logger.success('SCHEDULED', `help-wanted-board-check: done (${summaryText})`);
   } catch (err) {
     logger.error('SCHEDULED', `help-wanted-board-check: ${err.message}`);
   }
