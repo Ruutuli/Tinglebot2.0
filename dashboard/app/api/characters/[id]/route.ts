@@ -73,6 +73,45 @@ type CharDoc = {
   toObject: () => Record<string, unknown>;
 };
 
+/** Normalize stats (Map or Record) to a plain object with sorted keys for stable comparison. */
+function normalizeStats(s: Map<string, number> | Record<string, number> | undefined): Record<string, number> {
+  if (!s) return {};
+  const o = s instanceof Map ? Object.fromEntries(s) : s;
+  return Object.keys(o)
+    .sort()
+    .reduce((acc, k) => {
+      acc[k] = (o as Record<string, number>)[k];
+      return acc;
+    }, {} as Record<string, number>);
+}
+
+/** Normalize a single gear item (weapon/shield or armor slot) for comparison. DB uses Map for stats; form sends Record. */
+function normalizeGearItem(
+  item: { name: string; stats?: Map<string, number> | Record<string, number> } | null | undefined
+): string {
+  if (!item) return "";
+  return JSON.stringify({ name: item.name, stats: normalizeStats(item.stats) });
+}
+
+/** Normalize full armor (head/chest/legs) for comparison. */
+function normalizeGearArmor(
+  armor:
+    | {
+        head?: { name: string; stats?: Map<string, number> | Record<string, number> } | null;
+        chest?: { name: string; stats?: Map<string, number> | Record<string, number> } | null;
+        legs?: { name: string; stats?: Map<string, number> | Record<string, number> } | null;
+      }
+    | null
+    | undefined
+): string {
+  if (!armor) return "";
+  return JSON.stringify({
+    head: normalizeGearItem(armor.head ?? undefined),
+    chest: normalizeGearItem(armor.chest ?? undefined),
+    legs: normalizeGearItem(armor.legs ?? undefined),
+  });
+}
+
 // ------------------- Route Segment Config (Caching) -------------------
 // Cache character data for 2 minutes - characters change more frequently than models
 export const revalidate = 120;
@@ -663,11 +702,14 @@ export async function PUT(
             };
           };
 
-          // Check if gear is being changed
-          const hasGearChanges = 
-            (equippedGearData.gearWeapon && JSON.stringify(char.gearWeapon) !== JSON.stringify(equippedGearData.gearWeapon)) ||
-            (equippedGearData.gearShield && JSON.stringify(char.gearShield) !== JSON.stringify(equippedGearData.gearShield)) ||
-            (equippedGearData.gearArmor && JSON.stringify(char.gearArmor) !== JSON.stringify(equippedGearData.gearArmor));
+          // Check if gear is actually being changed (use normalized compare: DB stores Map, form sends Record)
+          const hasGearChanges =
+            (equippedGearData.gearWeapon != null &&
+              normalizeGearItem(char.gearWeapon) !== normalizeGearItem(equippedGearData.gearWeapon)) ||
+            (equippedGearData.gearShield != null &&
+              normalizeGearItem(char.gearShield) !== normalizeGearItem(equippedGearData.gearShield)) ||
+            (equippedGearData.gearArmor != null &&
+              normalizeGearArmor(char.gearArmor) !== normalizeGearArmor(equippedGearData.gearArmor));
 
           if (hasGearChanges) {
             if (!isFieldEditable("gearWeapon", characterStatus as CharacterStatus) || 
