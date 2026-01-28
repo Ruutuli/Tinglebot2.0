@@ -1527,8 +1527,8 @@ const TASKS = [
   { name: 'birthday-remove-role', cron: '0 5 * * *', handler: birthdayRemoveRole },
   { name: 'birthday-announcements', cron: '0 5 * * *', handler: birthdayAnnouncements },
   
-  // Daily Reset Tasks (all at 12am EST = 05:00 UTC)
-  { name: 'reset-daily-rolls', cron: '0 5 * * *', handler: resetDailyRolls },
+  // Daily Reset Tasks (gather/loot daily roll at 8am EST = 13:00 UTC; others at 12am EST = 05:00 UTC)
+  { name: 'reset-daily-rolls', cron: '0 13 * * *', handler: resetDailyRolls }, // 8am EST
   { name: 'reset-pet-roll-dates', cron: '0 5 * * *', handler: resetPetRollDates },
   { name: 'recover-daily-stamina', cron: '0 13 * * *', handler: recoverDailyStaminaTask }, // 8am EST = 13:00 UTC
   { name: 'generate-daily-quests', cron: '0 5 * * *', handler: generateDailyQuests },

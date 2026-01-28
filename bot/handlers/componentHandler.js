@@ -2007,7 +2007,7 @@ async function handleRestSpotChoice(interaction) {
 
     // Check cooldown (reuse logic from village.js)
     const now = new Date();
-    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0)); // 8am EST
     if (now < rollover) {
       rollover.setUTCDate(rollover.getUTCDate() - 1);
     }

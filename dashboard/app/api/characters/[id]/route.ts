@@ -692,6 +692,10 @@ export async function PUT(
       // Check gear fields if provided
       if (typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
         try {
+          logger.info(
+            "api/characters/[id] PUT gear check",
+            `characterId=${slugOrId} status=${characterStatus ?? "null"} equippedGearRaw length=${equippedGearRaw.length}`
+          );
           const equippedGearData = JSON.parse(equippedGearRaw) as {
             gearWeapon?: { name: string; stats: Record<string, number> } | null;
             gearShield?: { name: string; stats: Record<string, number> } | null;
@@ -704,27 +708,55 @@ export async function PUT(
 
           // Check if gear is actually being changed (use normalized compare: DB stores Map, form sends Record)
           // Only check if the field is explicitly provided (not undefined) and differs from current value
-          const weaponChanged = equippedGearData.gearWeapon !== undefined && 
-            normalizeGearItem(char.gearWeapon) !== normalizeGearItem(equippedGearData.gearWeapon ?? null);
-          const shieldChanged = equippedGearData.gearShield !== undefined && 
-            normalizeGearItem(char.gearShield) !== normalizeGearItem(equippedGearData.gearShield ?? null);
-          const armorChanged = equippedGearData.gearArmor !== undefined && 
-            normalizeGearArmor(char.gearArmor) !== normalizeGearArmor(equippedGearData.gearArmor ?? null);
+          const dbWeaponNorm = normalizeGearItem(char.gearWeapon);
+          const formWeaponNorm = normalizeGearItem(equippedGearData.gearWeapon ?? null);
+          const dbShieldNorm = normalizeGearItem(char.gearShield);
+          const formShieldNorm = normalizeGearItem(equippedGearData.gearShield ?? null);
+          const dbArmorNorm = normalizeGearArmor(char.gearArmor);
+          const formArmorNorm = normalizeGearArmor(equippedGearData.gearArmor ?? null);
+
+          const weaponChanged = equippedGearData.gearWeapon !== undefined && dbWeaponNorm !== formWeaponNorm;
+          const shieldChanged = equippedGearData.gearShield !== undefined && dbShieldNorm !== formShieldNorm;
+          const armorChanged = equippedGearData.gearArmor !== undefined && dbArmorNorm !== formArmorNorm;
 
           const hasGearChanges = weaponChanged || shieldChanged || armorChanged;
 
+          logger.info(
+            "api/characters/[id] PUT gear compare",
+            `weaponChanged=${weaponChanged} shieldChanged=${shieldChanged} armorChanged=${armorChanged} hasGearChanges=${hasGearChanges}`
+          );
+          if (weaponChanged) {
+            logger.info("api/characters/[id] PUT gear weapon diff", `db=${dbWeaponNorm} form=${formWeaponNorm}`);
+          }
+          if (shieldChanged) {
+            logger.info("api/characters/[id] PUT gear shield diff", `db=${dbShieldNorm} form=${formShieldNorm}`);
+          }
+          if (armorChanged) {
+            logger.info("api/characters/[id] PUT gear armor diff", `db=${dbArmorNorm} form=${formArmorNorm}`);
+          }
+
           if (hasGearChanges) {
-            if (!isFieldEditable("gearWeapon", characterStatus as CharacterStatus) || 
-                !isFieldEditable("gearShield", characterStatus as CharacterStatus) || 
-                !isFieldEditable("gearArmor", characterStatus as CharacterStatus)) {
+            const gearEditable = isFieldEditable("gearWeapon", characterStatus as CharacterStatus) &&
+              isFieldEditable("gearShield", characterStatus as CharacterStatus) &&
+              isFieldEditable("gearArmor", characterStatus as CharacterStatus);
+            logger.info(
+              "api/characters/[id] PUT gear editability",
+              `status=${characterStatus} gearEditable=${gearEditable}`
+            );
+            if (!gearEditable) {
+              logger.warn(
+                "api/characters/[id] PUT gear blocked",
+                `Rejecting edit: gear fields not editable for status "${characterStatus ?? "draft"}"`
+              );
               return NextResponse.json(
                 { error: `Gear fields cannot be edited when character status is "${characterStatus ?? "draft"}"` },
                 { status: 403 }
               );
             }
           }
-        } catch {
+        } catch (e) {
           // Ignore invalid JSON, will be handled later
+          logger.warn("api/characters/[id] PUT gear parse", e instanceof Error ? e.message : String(e));
         }
       }
     }

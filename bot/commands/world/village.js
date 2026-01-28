@@ -984,10 +984,10 @@ function getRestSpotCooldownKey(villageName) {
 // Returns { canUse: boolean, reason?: string }
 function canUseRestSpot(character, villageName) {
     const now = new Date();
-    // Compute the most recent 12:00 UTC (8am EST) rollover
-    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+    // Compute the most recent 13:00 UTC (8am EST) rollover
+    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0));
     if (now < rollover) {
-        // If before today's 12:00 UTC, use yesterday's 12:00 UTC
+        // If before today's 13:00 UTC, use yesterday's 13:00 UTC
         rollover.setUTCDate(rollover.getUTCDate() - 1);
     }
 
