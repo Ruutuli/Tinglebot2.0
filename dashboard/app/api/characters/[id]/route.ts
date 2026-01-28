@@ -112,6 +112,24 @@ function normalizeGearArmor(
   });
 }
 
+/**
+ * True only if the form is actually changing this gear item in a meaningful way.
+ * When the client sends the same item name but empty stats (common when form doesn't persist stats),
+ * we treat it as "no change" so we don't block edits for accepted characters.
+ */
+function gearItemMeaningfullyChanged(
+  dbItem: { name: string; stats?: Map<string, number> | Record<string, number> } | null | undefined,
+  formItem: { name: string; stats?: Record<string, number> } | null | undefined
+): boolean {
+  if (formItem === undefined) return false;
+  if (normalizeGearItem(dbItem) === normalizeGearItem(formItem ?? null)) return false;
+  if (!formItem || !dbItem) return true;
+  if (formItem.name !== dbItem.name) return true;
+  const formStats = formItem.stats && typeof formItem.stats === "object" ? formItem.stats : {};
+  if (Object.keys(formStats).length === 0) return false; // same name, client sent no stats -> no meaningful change
+  return true;
+}
+
 // ------------------- Route Segment Config (Caching) -------------------
 // Cache character data for 2 minutes - characters change more frequently than models
 export const revalidate = 120;
@@ -706,18 +724,17 @@ export async function PUT(
             } | null;
           };
 
-          // Check if gear is actually being changed (use normalized compare: DB stores Map, form sends Record)
-          // Only check if the field is explicitly provided (not undefined) and differs from current value
-          const dbWeaponNorm = normalizeGearItem(char.gearWeapon);
-          const formWeaponNorm = normalizeGearItem(equippedGearData.gearWeapon ?? null);
-          const dbShieldNorm = normalizeGearItem(char.gearShield);
-          const formShieldNorm = normalizeGearItem(equippedGearData.gearShield ?? null);
-          const dbArmorNorm = normalizeGearArmor(char.gearArmor);
-          const formArmorNorm = normalizeGearArmor(equippedGearData.gearArmor ?? null);
-
-          const weaponChanged = equippedGearData.gearWeapon !== undefined && dbWeaponNorm !== formWeaponNorm;
-          const shieldChanged = equippedGearData.gearShield !== undefined && dbShieldNorm !== formShieldNorm;
-          const armorChanged = equippedGearData.gearArmor !== undefined && dbArmorNorm !== formArmorNorm;
+          // Check if gear is actually being changed. Use "meaningfully changed" so we don't block
+          // when the client sends same item names but empty stats (form often omits stats).
+          const weaponChanged = equippedGearData.gearWeapon !== undefined &&
+            gearItemMeaningfullyChanged(char.gearWeapon, equippedGearData.gearWeapon ?? null);
+          const shieldChanged = equippedGearData.gearShield !== undefined &&
+            gearItemMeaningfullyChanged(char.gearShield, equippedGearData.gearShield ?? null);
+          const armorChanged = equippedGearData.gearArmor !== undefined && (
+            gearItemMeaningfullyChanged(char.gearArmor?.head, equippedGearData.gearArmor?.head ?? null) ||
+            gearItemMeaningfullyChanged(char.gearArmor?.chest, equippedGearData.gearArmor?.chest ?? null) ||
+            gearItemMeaningfullyChanged(char.gearArmor?.legs, equippedGearData.gearArmor?.legs ?? null)
+          );
 
           const hasGearChanges = weaponChanged || shieldChanged || armorChanged;
 
@@ -725,15 +742,6 @@ export async function PUT(
             "api/characters/[id] PUT gear compare",
             `weaponChanged=${weaponChanged} shieldChanged=${shieldChanged} armorChanged=${armorChanged} hasGearChanges=${hasGearChanges}`
           );
-          if (weaponChanged) {
-            logger.info("api/characters/[id] PUT gear weapon diff", `db=${dbWeaponNorm} form=${formWeaponNorm}`);
-          }
-          if (shieldChanged) {
-            logger.info("api/characters/[id] PUT gear shield diff", `db=${dbShieldNorm} form=${formShieldNorm}`);
-          }
-          if (armorChanged) {
-            logger.info("api/characters/[id] PUT gear armor diff", `db=${dbArmorNorm} form=${formArmorNorm}`);
-          }
 
           if (hasGearChanges) {
             const gearEditable = isFieldEditable("gearWeapon", characterStatus as CharacterStatus) &&
@@ -761,8 +769,15 @@ export async function PUT(
       }
     }
 
-    // Update equipped gear if provided
-    if (typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
+    // Update equipped gear only when the user is allowed to edit gear (admins/mods or status allows gear edits).
+    // When gear is locked (e.g. accepted), never touch gear fields — leave DB as-is.
+    const canEditGear =
+      canBypassRestrictions ||
+      (isFieldEditable("gearWeapon", characterStatus as CharacterStatus) &&
+        isFieldEditable("gearShield", characterStatus as CharacterStatus) &&
+        isFieldEditable("gearArmor", characterStatus as CharacterStatus));
+
+    if (canEditGear && typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
       try {
         const equippedGearData = JSON.parse(equippedGearRaw) as {
           gearWeapon?: { name: string; stats: Record<string, number> } | null;
@@ -785,50 +800,68 @@ export async function PUT(
           } | null;
         } = {};
         
+        // When form sends same item name but empty stats (client omits stats), preserve DB stats
+        const statsForItem = (
+          formItem: { name: string; stats?: Record<string, number> } | null,
+          dbItem: { name: string; stats?: Map<string, number> | Record<string, number> } | null | undefined
+        ): Record<string, number> => {
+          const formStats = formItem?.stats ?? {};
+          if (Object.keys(formStats).length > 0) return formStats;
+          if (dbItem && formItem && dbItem.name === formItem.name) {
+            return normalizeStats(dbItem.stats);
+          }
+          return formStats;
+        };
+
         // Handle weapon - set to null if explicitly undefined/null, otherwise convert
         if (equippedGearData.gearWeapon !== undefined) {
           if (equippedGearData.gearWeapon) {
+            const stats = statsForItem(equippedGearData.gearWeapon, char.gearWeapon);
             gear.gearWeapon = {
               name: equippedGearData.gearWeapon.name,
-              stats: new Map(Object.entries(equippedGearData.gearWeapon.stats)),
+              stats: new Map(Object.entries(stats)),
             };
           } else {
             gear.gearWeapon = null;
           }
         }
-        
+
         // Handle shield - set to null if explicitly undefined/null, otherwise convert
         if (equippedGearData.gearShield !== undefined) {
           if (equippedGearData.gearShield) {
+            const stats = statsForItem(equippedGearData.gearShield, char.gearShield);
             gear.gearShield = {
               name: equippedGearData.gearShield.name,
-              stats: new Map(Object.entries(equippedGearData.gearShield.stats)),
+              stats: new Map(Object.entries(stats)),
             };
           } else {
             gear.gearShield = null;
           }
         }
-        
+
         // Handle armor
         if (equippedGearData.gearArmor !== undefined) {
           if (equippedGearData.gearArmor) {
             gear.gearArmor = {};
             if (equippedGearData.gearArmor.head) {
+              const stats = statsForItem(equippedGearData.gearArmor.head, char.gearArmor?.head);
               gear.gearArmor.head = {
                 name: equippedGearData.gearArmor.head.name,
-                stats: new Map(Object.entries(equippedGearData.gearArmor.head.stats)),
+                stats: new Map(Object.entries(stats)),
               };
             }
             if (equippedGearData.gearArmor.chest) {
+              const stats = statsForItem(equippedGearData.gearArmor.chest, char.gearArmor?.chest);
               gear.gearArmor.chest = {
                 name: equippedGearData.gearArmor.chest.name,
-                stats: new Map(Object.entries(equippedGearData.gearArmor.chest.stats)),
+                stats: new Map(Object.entries(stats)),
               };
             }
             if (equippedGearData.gearArmor.legs) {
+              const stats = statsForItem(equippedGearData.gearArmor.legs, char.gearArmor?.legs);
               gear.gearArmor.legs = {
                 name: equippedGearData.gearArmor.legs.name,
-                stats: new Map(Object.entries(equippedGearData.gearArmor.legs.stats)),
+                stats: new Map(Object.entries(stats)),
               };
             }
           } else {
