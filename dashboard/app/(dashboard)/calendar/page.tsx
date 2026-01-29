@@ -254,6 +254,7 @@ function BirthdayCard({ birthday, size = "md", onClick }: BirthdayCardProps) {
           height={size === "sm" ? 16 : 48}
           className={`${iconSize} rounded-full object-cover ${iconRingSize}`}
           onError={handleImageError}
+          unoptimized
         />
       ) : null}
       <div 

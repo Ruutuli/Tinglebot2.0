@@ -182,6 +182,7 @@ function PetCard({ pet }: { pet: Pet }) {
                 fill
                 className="object-cover"
                 onError={handleImageError}
+                unoptimized
               />
             </div>
           ) : (

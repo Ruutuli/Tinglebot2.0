@@ -1680,27 +1680,6 @@ export default function OCDetailPage() {
               title="Equipped Gear"
               titleColor="text-[var(--totk-light-ocher)]"
             >
-              {(!character.gearArmor?.chest || !character.gearArmor?.legs) && (
-                <div className="mb-3 rounded-lg border-2 border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/10 p-3 text-sm text-[var(--botw-pale)]">
-                  <p className="font-medium text-[var(--totk-light-ocher)]">
-                    Equip starter armor on your OC
-                  </p>
-                  <p className="mt-1">
-                    All characters should have <strong>Old Shirt</strong> (chest) and <strong>Well-Worn Trousers</strong> (legs) equipped. If you haven&apos;t already, add them from your inventory on the{" "}
-                    {user && character.userId === user.id && character._id ? (
-                      <Link
-                        href={`/characters/edit/${character._id}`}
-                        className="font-medium text-[var(--totk-light-green)] underline hover:no-underline"
-                      >
-                        Edit
-                      </Link>
-                    ) : (
-                      "Edit"
-                    )}
-                    {" "}page.
-                  </p>
-                </div>
-              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 {GEAR_ITEMS_CONFIG.map(({ key, label, icon }) => {
                   const gear = getGearByKey(character, key);

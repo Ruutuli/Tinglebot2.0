@@ -279,6 +279,8 @@ async function handleSelectMenuInteraction(interaction) {
       }
 
       const processedBoosts = new Set();
+      /** Character names that had Tokens boost applied — cleared on confirm so boost is one-use only */
+      const boostFulfillmentTargets = [];
 
       for (const character of focusCharacters) {
         if (!character.boostedBy) continue;
@@ -304,6 +306,7 @@ async function handleSelectMenuInteraction(interaction) {
             finalTokenAmount = boostedTokens;
             boostEffects.push(`👩‍🏫 **Critique & Composition:** ${booster.name} added 🪙 ${tokenIncrease}.`);
             processedBoosts.add('teacher_tokens');
+            boostFulfillmentTargets.push(character.name);
           }
         }
 
@@ -318,6 +321,7 @@ async function handleSelectMenuInteraction(interaction) {
             finalTokenAmount = boostedTokens;
             boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
             processedBoosts.add('scholar_tokens');
+            boostFulfillmentTargets.push(character.name);
           }
         }
       }
@@ -357,6 +361,7 @@ async function handleSelectMenuInteraction(interaction) {
                 finalTokenAmount = boostedTokens;
                 boostEffects.push(`👩‍🏫 **Critique & Composition:** ${booster.name} added 🪙 ${tokenIncrease}.`);
                 processedBoosts.add('teacher_tokens');
+                boostFulfillmentTargets.push(character.name);
                 console.log(`[selectMenuHandler.js]: 📖 Teacher boost - Critique & Composition (+${tokenIncrease} tokens) from user character ${character.name}`);
               }
             }
@@ -372,6 +377,7 @@ async function handleSelectMenuInteraction(interaction) {
                 finalTokenAmount = boostedTokens;
                 boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
                 processedBoosts.add('scholar_tokens');
+                boostFulfillmentTargets.push(character.name);
                 console.log(`[selectMenuHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens) from user character ${character.name}`);
               }
             }
@@ -407,9 +413,11 @@ async function handleSelectMenuInteraction(interaction) {
       if (boostEffects.length > 0) {
         submissionUpdatePayload.boostEffects = boostEffects;
         submissionUpdatePayload.boostTokenIncrease = boostTokenIncrease;
+        submissionUpdatePayload.boostFulfillmentTargets = boostFulfillmentTargets;
       } else {
         submissionUpdatePayload.boostEffects = [];
         submissionUpdatePayload.boostTokenIncrease = 0;
+        submissionUpdatePayload.boostFulfillmentTargets = [];
       }
 
       await updateSubmissionData(submissionId, submissionUpdatePayload);

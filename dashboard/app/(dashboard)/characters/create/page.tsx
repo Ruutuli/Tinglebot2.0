@@ -734,14 +734,10 @@ export function CreateForm({
           (c) => c.name === gearChest.name
         );
         if (chest) setEquippedChest(chest);
-      } else if (!gearChest && !equippedChest) {
-        // Existing OC missing chest armor: pre-fill default so they can save it
-        const oldShirt = availableGearItems.chestArmor.find(
-          (item) => item.name === DEFAULT_CHEST_ARMOR
-        );
-        if (oldShirt) setEquippedChest(oldShirt);
       }
+      // Don't pre-fill defaults when editing existing characters
     } else if (!isEditMode && availableGearItems.chestArmor.length > 0 && !equippedChest) {
+      // Only pre-fill defaults for newly created characters
       const oldShirt = availableGearItems.chestArmor.find(
         (item) => item.name === DEFAULT_CHEST_ARMOR
       );
@@ -759,14 +755,10 @@ export function CreateForm({
           (l) => l.name === gearLegs.name
         );
         if (legs) setEquippedLegs(legs);
-      } else if (!gearLegs && !equippedLegs) {
-        // Existing OC missing legs armor: pre-fill default so they can save it
-        const wellWornTrousers = availableGearItems.legsArmor.find(
-          (item) => item.name === DEFAULT_LEGS_ARMOR
-        );
-        if (wellWornTrousers) setEquippedLegs(wellWornTrousers);
       }
+      // Don't pre-fill defaults when editing existing characters
     } else if (!isEditMode && availableGearItems.legsArmor.length > 0 && !equippedLegs) {
+      // Only pre-fill defaults for newly created characters
       const wellWornTrousers = availableGearItems.legsArmor.find(
         (item) => item.name === DEFAULT_LEGS_ARMOR
       );
@@ -1266,6 +1258,11 @@ export function CreateForm({
           }
 
           // Convert gear to format for API
+          const convertStats = (stats: Record<string, number> | Map<string, number> | undefined): Record<string, number> => {
+            if (!stats) return {};
+            if (stats instanceof Map) return Object.fromEntries(stats);
+            return stats;
+          };
           gearForSubmit = {
             gearArmor: currentGear.gearArmor
               ? {
@@ -1276,7 +1273,12 @@ export function CreateForm({
                           currentGear.gearArmor.chest.stats
                         ),
                       }
-                    : null,
+                    : (isEditMode && initialCharacter?.gearArmor?.chest
+                        ? {
+                            name: initialCharacter.gearArmor.chest.name,
+                            stats: convertStats(initialCharacter.gearArmor.chest.stats),
+                          }
+                        : null),
                   head: currentGear.gearArmor.head
                     ? {
                         name: currentGear.gearArmor.head.name,
@@ -1292,7 +1294,12 @@ export function CreateForm({
                           currentGear.gearArmor.legs.stats
                         ),
                       }
-                    : null,
+                    : (isEditMode && initialCharacter?.gearArmor?.legs
+                        ? {
+                            name: initialCharacter.gearArmor.legs.name,
+                            stats: convertStats(initialCharacter.gearArmor.legs.stats),
+                          }
+                        : null),
                 }
               : null,
             gearShield: currentGear.gearShield
@@ -1989,101 +1996,103 @@ export function CreateForm({
         </div>
       </section>
 
-      {/* Equip Gear */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <i
-            aria-hidden
-            className="fa-solid fa-shield-halved text-xl text-[var(--totk-light-green)]"
-          />
-          <h2 className={styles.sectionTitle}>Equip Gear</h2>
-        </div>
-        <p className={styles.labelMuted}>
-          Equip weapons, shields, and armor for your character. Only starting
-          gear can be equipped during character creation. All new characters are
-          automatically equipped with &quot;Old Shirt&quot; (chest) and
-          &quot;Well-Worn Trousers&quot; (legs). Conflicts are automatically
-          resolved (e.g., equipping a 2H weapon will unequip your shield).
-        </p>
-        {gearConflictAlert && (
-          <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 px-4 py-3 text-sm text-[var(--botw-pale)] animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center gap-2">
-              <i
-                aria-hidden
-                className="fa-solid fa-info-circle text-[var(--totk-light-green)]"
-              />
-              <span>{gearConflictAlert}</span>
-            </div>
+      {/* Equip Gear - Hidden for accepted characters */}
+      {characterStatus !== "accepted" && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <i
+              aria-hidden
+              className="fa-solid fa-shield-halved text-xl text-[var(--totk-light-green)]"
+            />
+            <h2 className={styles.sectionTitle}>Equip Gear</h2>
           </div>
-        )}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <GearSelect
-            availableItems={availableGearItems.weapons}
-            disabled={!isEditable("gearWeapon")}
-            formatItemDisplay={formatItemDisplay}
-            icon="fa-solid fa-hand-fist"
-            label="Weapon"
-            onChange={handleWeaponChange}
-            selectedId={equippedWeapon?.id}
-            selectClassName={styles.select}
-            labelClassName={styles.label}
-            mutedClassName={styles.labelMuted}
-            helpText="Select a weapon to equip"
-          />
-          <GearSelect
-            availableItems={availableGearItems.shields}
-            disabled={!isEditable("gearShield")}
-            formatItemDisplay={formatItemDisplay}
-            icon="fa-solid fa-shield"
-            label="Shield"
-            onChange={handleShieldChange}
-            selectedId={equippedShield?.id}
-            selectClassName={styles.select}
-            labelClassName={styles.label}
-            mutedClassName={styles.labelMuted}
-            helpText="Select a shield to equip"
-          />
-          <GearSelect
-            availableItems={availableGearItems.headArmor}
-            disabled={!isEditable("gearArmor")}
-            formatItemDisplay={formatItemDisplay}
-            icon="fa-solid fa-hat-wizard"
-            label="Head Armor"
-            onChange={handleHeadChange}
-            selectedId={equippedHead?.id}
-            selectClassName={styles.select}
-            labelClassName={styles.label}
-            mutedClassName={styles.labelMuted}
-            helpText="Select head armor to equip"
-          />
-          <GearSelect
-            availableItems={availableGearItems.chestArmor}
-            disabled={!isEditable("gearArmor.chest")}
-            formatItemDisplay={formatItemDisplay}
-            icon="fa-solid fa-vest"
-            label="Chest Armor"
-            onChange={handleChestChange}
-            selectedId={equippedChest?.id}
-            selectClassName={styles.select}
-            labelClassName={styles.label}
-            mutedClassName={styles.labelMuted}
-            helpText="Select chest armor to equip"
-          />
-          <GearSelect
-            availableItems={availableGearItems.legsArmor}
-            disabled={!isEditable("gearArmor")}
-            formatItemDisplay={formatItemDisplay}
-            icon="fa-solid fa-socks"
-            label="Legs Armor"
-            onChange={handleLegsChange}
-            selectedId={equippedLegs?.id}
-            selectClassName={styles.select}
-            labelClassName={styles.label}
-            mutedClassName={styles.labelMuted}
-            helpText="Select legs armor to equip"
-          />
-        </div>
-      </section>
+          <p className={styles.labelMuted}>
+            Equip weapons, shields, and armor for your character. Only starting
+            gear can be equipped during character creation. All new characters are
+            automatically equipped with &quot;Old Shirt&quot; (chest) and
+            &quot;Well-Worn Trousers&quot; (legs). Conflicts are automatically
+            resolved (e.g., equipping a 2H weapon will unequip your shield).
+          </p>
+          {gearConflictAlert && (
+            <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 px-4 py-3 text-sm text-[var(--botw-pale)] animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2">
+                <i
+                  aria-hidden
+                  className="fa-solid fa-info-circle text-[var(--totk-light-green)]"
+                />
+                <span>{gearConflictAlert}</span>
+              </div>
+            </div>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <GearSelect
+              availableItems={availableGearItems.weapons}
+              disabled={!isEditable("gearWeapon")}
+              formatItemDisplay={formatItemDisplay}
+              icon="fa-solid fa-hand-fist"
+              label="Weapon"
+              onChange={handleWeaponChange}
+              selectedId={equippedWeapon?.id}
+              selectClassName={styles.select}
+              labelClassName={styles.label}
+              mutedClassName={styles.labelMuted}
+              helpText="Select a weapon to equip"
+            />
+            <GearSelect
+              availableItems={availableGearItems.shields}
+              disabled={!isEditable("gearShield")}
+              formatItemDisplay={formatItemDisplay}
+              icon="fa-solid fa-shield"
+              label="Shield"
+              onChange={handleShieldChange}
+              selectedId={equippedShield?.id}
+              selectClassName={styles.select}
+              labelClassName={styles.label}
+              mutedClassName={styles.labelMuted}
+              helpText="Select a shield to equip"
+            />
+            <GearSelect
+              availableItems={availableGearItems.headArmor}
+              disabled={!isEditable("gearArmor")}
+              formatItemDisplay={formatItemDisplay}
+              icon="fa-solid fa-hat-wizard"
+              label="Head Armor"
+              onChange={handleHeadChange}
+              selectedId={equippedHead?.id}
+              selectClassName={styles.select}
+              labelClassName={styles.label}
+              mutedClassName={styles.labelMuted}
+              helpText="Select head armor to equip"
+            />
+            <GearSelect
+              availableItems={availableGearItems.chestArmor}
+              disabled={!isEditMode ? true : !isEditable("gearArmor.chest")}
+              formatItemDisplay={formatItemDisplay}
+              icon="fa-solid fa-vest"
+              label="Chest Armor"
+              onChange={handleChestChange}
+              selectedId={equippedChest?.id}
+              selectClassName={styles.select}
+              labelClassName={styles.label}
+              mutedClassName={styles.labelMuted}
+              helpText={!isEditMode ? "Old Shirt (fixed for new characters)" : "Select chest armor to equip"}
+            />
+            <GearSelect
+              availableItems={availableGearItems.legsArmor}
+              disabled={!isEditMode ? true : !isEditable("gearArmor")}
+              formatItemDisplay={formatItemDisplay}
+              icon="fa-solid fa-socks"
+              label="Legs Armor"
+              onChange={handleLegsChange}
+              selectedId={equippedLegs?.id}
+              selectClassName={styles.select}
+              labelClassName={styles.label}
+              mutedClassName={styles.labelMuted}
+              helpText={!isEditMode ? "Well-Worn Trousers (fixed for new characters)" : "Select legs armor to equip"}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Biography Information */}
       <section className={styles.section}>

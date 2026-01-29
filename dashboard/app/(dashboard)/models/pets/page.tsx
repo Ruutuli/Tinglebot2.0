@@ -139,6 +139,7 @@ export default function PetsPage() {
                           const target = e.target as HTMLImageElement;
                           target.src = "/ankle_icon.png";
                         }}
+                        unoptimized
                       />
                     </div>
                   </div>
@@ -181,6 +182,7 @@ export default function PetsPage() {
                               const target = e.target as HTMLImageElement;
                               target.src = "/ankle_icon.png";
                             }}
+                            unoptimized
                           />
                         ) : (
                           <i className="fas fa-user text-sm text-[var(--totk-light-ocher)]" aria-hidden="true"></i>

@@ -435,6 +435,36 @@ async function handleConfirmation(interaction, userId, submissionData) {
       // Don't throw here, just log the error since the submission was already posted
     }
 
+    // Clear Tokens boost after use so it only applies to this one submission (Teacher/Scholar art/writing boost)
+    const hadTokenBoost = (submissionData.boostTokenIncrease && submissionData.boostTokenIncrease > 0) ||
+      (submissionData.boostFulfillmentTargets && submissionData.boostFulfillmentTargets.length > 0) ||
+      (Array.isArray(submissionData.boostMetadata) && submissionData.boostMetadata.some(m => m.targets && m.targets.length > 0));
+    if (hadTokenBoost) {
+      const { clearBoostAfterUse } = require('../commands/jobs/boosting');
+      const { fetchModCharacterByName } = require('@/database/db');
+      const namesToClear = Array.isArray(submissionData.boostFulfillmentTargets) && submissionData.boostFulfillmentTargets.length > 0
+        ? submissionData.boostFulfillmentTargets
+        : (Array.isArray(submissionData.boostMetadata) ? submissionData.boostMetadata.flatMap(m => m.targets || []) : []);
+      const seen = new Set();
+      for (const characterName of namesToClear) {
+        if (!characterName || seen.has(characterName)) continue;
+        seen.add(characterName);
+        try {
+          let character = await fetchCharacterByName(characterName);
+          if (!character) character = await fetchModCharacterByName(characterName);
+          if (character && character.boostedBy) {
+            await clearBoostAfterUse(character, {
+              client: interaction.client,
+              context: 'art/writing submission confirmed'
+            });
+            logger.success('SUBMISSION', `✅ Cleared Tokens boost for ${characterName} after submission confirm`);
+          }
+        } catch (clearErr) {
+          console.error(`[componentHandler.js]: ❌ Failed to clear boost for ${characterName}:`, clearErr);
+        }
+      }
+    }
+
     logger.success('SUBMISSION', `✅ Confirmed submission ${submissionData.submissionId} with ${totalTokens} tokens`);
   } catch (error) {
     // Log detailed error information

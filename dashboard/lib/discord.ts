@@ -132,8 +132,10 @@ export async function userHasGuildRole(
         }
       })();
       
-      // Always log errors in development, and for 403/404 which are common permission issues
-      if (process.env.NODE_ENV === "development" || res.status === 403 || res.status === 404) {
+      // 404 = Unknown Member (user left guild or not in cache) — expected, no log
+      // Log 403 (permission) and other errors; in development optionally log 404 for debugging
+      const isUnknownMember = res.status === 404 && errorJson?.code === 10007;
+      if (!isUnknownMember && (process.env.NODE_ENV === "development" || res.status === 403)) {
         console.error(
           `[userHasGuildRole] Discord API error (${res.status}) for user ${userId} in guild ${guildId}:\n` +
           `  Role ID being checked: ${roleId}\n` +
