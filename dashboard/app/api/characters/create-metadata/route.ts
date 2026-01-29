@@ -62,7 +62,7 @@ function slotFromItem(
     // Armor slot from type array (e.g. Chest, Legs, Head) so Old Shirt / Well-Worn Trousers map correctly
     if (types.some((t) => t === "chest")) return "chest";
     if (types.some((t) => t === "legs")) return "legs";
-    if (types.some((t) => t === "head")) return "head";
+    // head is not in StarterGearOption.slot; head armor is excluded from starter gear
     if (sub.some((s) => s.includes("chest") || s.includes("body"))) return "chest";
     if (sub.some((s) => s.includes("leg") || s.includes("foot") || s.includes("ankle")))
       return "legs";
