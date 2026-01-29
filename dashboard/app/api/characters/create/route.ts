@@ -37,6 +37,10 @@ import { gcsUploadService } from "@/lib/services/gcsUploadService";
 const PLACEHOLDER_ICON = "/placeholder-icon.png";
 const PLACEHOLDER_APPART = "/placeholder-appart.png";
 
+// Default starter armor so every new character has chest/legs equipped
+const DEFAULT_CHEST_ARMOR = "Old Shirt";
+const DEFAULT_LEGS_ARMOR = "Well-Worn Trousers";
+
 type StarterGearItem = {
   id: string;
   name: string;
@@ -287,6 +291,28 @@ export async function POST(req: NextRequest) {
         /* ignore invalid JSON */
       }
     }
+
+    // Ensure every new character has default chest/legs armor if missing
+    if (!gear.gearArmor) gear.gearArmor = {};
+    if (!gear.gearArmor.chest) {
+      gear.gearArmor.chest = {
+        name: DEFAULT_CHEST_ARMOR,
+        stats: new Map([
+          ["attack", 0],
+          ["defense", 0],
+        ]),
+      };
+    }
+    if (!gear.gearArmor.legs) {
+      gear.gearArmor.legs = {
+        name: DEFAULT_LEGS_ARMOR,
+        stats: new Map([
+          ["attack", 0],
+          ["defense", 0],
+        ]),
+      };
+    }
+
     const hearts = (() => {
       const v = get("hearts");
       if (v == null || v === "") return DEFAULT_HEARTS;
@@ -384,6 +410,8 @@ export async function POST(req: NextRequest) {
     await dbUser.save();
 
     // Add gear items to character inventory
+    // This includes: weapon (if selected), shield (if selected), and default armor (Old Shirt, Well-Worn Trousers)
+    // All equipped gear should be in the character's inventory so they can see what they have
     try {
       const { default: Item } = await import("@/models/ItemModel.js");
       
@@ -392,13 +420,14 @@ export async function POST(req: NextRequest) {
       const collectionName = (name as string).toLowerCase().trim();
       const collection = db.collection(collectionName);
       
-      // Collect all gear items
+      // Collect all gear items from the character (includes defaults if auto-added)
+      // Use char.gear* to ensure we get whatever gear the character actually has, including auto-added defaults
       const gearItems: Array<{ name: string }> = [];
-      if (gear.gearWeapon) gearItems.push({ name: gear.gearWeapon.name });
-      if (gear.gearShield) gearItems.push({ name: gear.gearShield.name });
-      if (gear.gearArmor?.head) gearItems.push({ name: gear.gearArmor.head.name });
-      if (gear.gearArmor?.chest) gearItems.push({ name: gear.gearArmor.chest.name });
-      if (gear.gearArmor?.legs) gearItems.push({ name: gear.gearArmor.legs.name });
+      if (char.gearWeapon) gearItems.push({ name: char.gearWeapon.name });
+      if (char.gearShield) gearItems.push({ name: char.gearShield.name });
+      if (char.gearArmor?.head) gearItems.push({ name: char.gearArmor.head.name });
+      if (char.gearArmor?.chest) gearItems.push({ name: char.gearArmor.chest.name });
+      if (char.gearArmor?.legs) gearItems.push({ name: char.gearArmor.legs.name });
       
       // Add each gear item to inventory
       for (const gearItem of gearItems) {

@@ -50,13 +50,19 @@ export type CreateMetadataResponse = {
 // ------------------- Map item to starter gear slot -------------------
 function slotFromItem(
   categoryGear: string,
+  type: string[] | undefined,
   subtype: string[] | undefined
 ): StarterGearOption["slot"] | null {
   const c = (categoryGear || "").toLowerCase();
+  const types = (type || []).map((t) => String(t).toLowerCase());
   const sub = (subtype || []).map((s) => String(s).toLowerCase());
   if (c === "weapon") return "weapon";
   if (c === "armor" || c === "shield") {
     if (sub.some((s) => s.includes("shield"))) return "shield";
+    // Armor slot from type array (e.g. Chest, Legs, Head) so Old Shirt / Well-Worn Trousers map correctly
+    if (types.some((t) => t === "chest")) return "chest";
+    if (types.some((t) => t === "legs")) return "legs";
+    if (types.some((t) => t === "head")) return "head";
     if (sub.some((s) => s.includes("chest") || s.includes("body"))) return "chest";
     if (sub.some((s) => s.includes("leg") || s.includes("foot") || s.includes("ankle")))
       return "legs";
@@ -142,7 +148,7 @@ export async function GET() {
       Item.find({
         itemName: { $in: [...STARTER_GEAR_NAMES] },
       })
-        .select("_id itemName categoryGear subtype modifierHearts")
+        .select("_id itemName categoryGear type subtype modifierHearts")
         .lean<ItemGearDoc[]>()
         .exec(),
       Item.find({
@@ -174,11 +180,12 @@ export async function GET() {
       _id: unknown;
       itemName?: string;
       categoryGear?: string;
+      type?: string[];
       subtype?: string[];
       modifierHearts?: number;
     }>) {
       const id = String(it._id);
-      const slot = slotFromItem(it.categoryGear || "", it.subtype);
+      const slot = slotFromItem(it.categoryGear || "", it.type, it.subtype);
       if (!slot || seen.has(`${slot}:${id}`)) continue;
       seen.add(`${slot}:${id}`);
       starterGear.push({

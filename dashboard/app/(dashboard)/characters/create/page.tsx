@@ -734,6 +734,12 @@ export function CreateForm({
           (c) => c.name === gearChest.name
         );
         if (chest) setEquippedChest(chest);
+      } else if (!gearChest && !equippedChest) {
+        // Existing OC missing chest armor: pre-fill default so they can save it
+        const oldShirt = availableGearItems.chestArmor.find(
+          (item) => item.name === DEFAULT_CHEST_ARMOR
+        );
+        if (oldShirt) setEquippedChest(oldShirt);
       }
     } else if (!isEditMode && availableGearItems.chestArmor.length > 0 && !equippedChest) {
       const oldShirt = availableGearItems.chestArmor.find(
@@ -753,6 +759,12 @@ export function CreateForm({
           (l) => l.name === gearLegs.name
         );
         if (legs) setEquippedLegs(legs);
+      } else if (!gearLegs && !equippedLegs) {
+        // Existing OC missing legs armor: pre-fill default so they can save it
+        const wellWornTrousers = availableGearItems.legsArmor.find(
+          (item) => item.name === DEFAULT_LEGS_ARMOR
+        );
+        if (wellWornTrousers) setEquippedLegs(wellWornTrousers);
       }
     } else if (!isEditMode && availableGearItems.legsArmor.length > 0 && !equippedLegs) {
       const wellWornTrousers = availableGearItems.legsArmor.find(
