@@ -60,6 +60,11 @@ const WeatherSchema = new mongoose.Schema({
   },
   pmPostedAt: {
     type: Date
+  },
+  // Weather damage tracking - ensures damage is only applied once per weather period
+  weatherDamageApplied: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

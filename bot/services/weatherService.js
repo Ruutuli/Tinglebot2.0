@@ -1436,6 +1436,82 @@ async function generateWeatherEmbed(village, weather, options = {}) {
 }
 
 // ============================================================================
+// ------------------- Weather Damage Calculation -------------------
+// ============================================================================
+
+// ------------------- Calculate Weather Damage -------------------
+// Calculates village damage based on wind, precipitation, and special weather conditions
+// Returns an object with total damage and breakdown by category
+function calculateWeatherDamage(weather) {
+  if (!weather) {
+    return { total: 0, wind: 0, precipitation: 0, special: 0 };
+  }
+
+  let windDamage = 0;
+  let precipitationDamage = 0;
+  let specialDamage = 0;
+
+  // Wind damage (chip damage from structural strain)
+  if (weather.wind && weather.wind.label) {
+    const windLabel = weather.wind.label;
+    if (windLabel === "41 - 62(km/h) // Strong") {
+      windDamage = 1;
+    } else if (windLabel === "63 - 87(km/h) // Gale") {
+      windDamage = 1;
+    } else if (windLabel === "88 - 117(km/h) // Storm") {
+      windDamage = 1;
+    } else if (windLabel === ">= 118(km/h) // Hurricane") {
+      windDamage = 2;
+    }
+  }
+
+  // Precipitation damage
+  if (weather.precipitation && weather.precipitation.label) {
+    const precipLabel = weather.precipitation.label;
+    if (precipLabel === "Heavy Snow") {
+      precipitationDamage = 2;
+    } else if (precipLabel === "Blizzard") {
+      precipitationDamage = 5;
+    } else if (precipLabel === "Hail") {
+      precipitationDamage = 3;
+    }
+  }
+
+  // Special weather damage
+  if (weather.special && weather.special.label) {
+    const specialLabel = weather.special.label;
+    switch (specialLabel) {
+      case "Blight Rain":
+        specialDamage = 50;
+        break;
+      case "Avalanche":
+        specialDamage = 15;
+        break;
+      case "Rock Slide":
+        specialDamage = 15;
+        break;
+      case "Flood":
+        specialDamage = 20;
+        break;
+      case "Lightning Storm":
+        specialDamage = 5;
+        break;
+      default:
+        specialDamage = 0;
+    }
+  }
+
+  const total = windDamage + precipitationDamage + specialDamage;
+
+  return {
+    total,
+    wind: windDamage,
+    precipitation: precipitationDamage,
+    special: specialDamage
+  };
+}
+
+// ============================================================================
 // ------------------- Public API -------------------
 // ============================================================================
 
@@ -1460,5 +1536,8 @@ module.exports = {
   normalizeVillageName,
   parseFahrenheit,
   parseWind,
-  scheduleSpecialWeather
+  scheduleSpecialWeather,
+
+  // Weather damage calculation
+  calculateWeatherDamage
 }; 

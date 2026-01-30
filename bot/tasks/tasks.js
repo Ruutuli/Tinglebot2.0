@@ -12,7 +12,9 @@ const {
   markWeatherAsPosted,
   markWeatherAsPmPosted,
   getWeatherWithoutGeneration,
+  calculateWeatherDamage,
 } = require('@/services/weatherService');
+const { damageVillage } = require('@/modules/villageModule');
 const Character = require('@/models/CharacterModel');
 const User = require('@/models/UserModel');
 const Pet = require('@/models/PetModel');
@@ -124,7 +126,38 @@ async function dailyWeather(client, _data = {}) {
       }
       const { embed, files } = await generateWeatherEmbed(village, weather);
       await channel.send({ embeds: [embed], files });
-      await markWeatherAsPosted(village, weather);
+      
+      // Apply weather damage if not already applied for this weather period
+      if (!weather.weatherDamageApplied) {
+        try {
+          const damageBreakdown = calculateWeatherDamage(weather);
+          const damageAmount = damageBreakdown.total;
+          
+          if (damageAmount > 0) {
+            await damageVillage(village, damageAmount);
+            logger.success('SCHEDULED', `Weather damage: ${village} took ${damageAmount} HP damage (Wind: ${damageBreakdown.wind}, Precipitation: ${damageBreakdown.precipitation}, Special: ${damageBreakdown.special})`);
+          } else {
+            logger.info('SCHEDULED', `Weather damage: ${village} - no damage conditions met`);
+          }
+          damageApplied = true;
+        } catch (damageErr) {
+          // Log error but don't fail weather posting if damage application fails
+          logger.error('SCHEDULED', `Weather damage application failed for ${village}: ${damageErr.message}`);
+        }
+      }
+      
+      // Mark weather as posted and damage as applied (if applicable) in one update
+      const Weather = require('@/models/WeatherModel');
+      const updateData = { 
+        postedToDiscord: true, 
+        postedAt: new Date() 
+      };
+      // Mark damage as applied if we processed it (even if no damage occurred or error happened)
+      if (!weather.weatherDamageApplied) {
+        updateData.weatherDamageApplied = true;
+      }
+      await Weather.findByIdAndUpdate(weather._id, { $set: updateData });
+      
       logger.success('SCHEDULED', `daily-weather: posted ${village}`);
     } catch (err) {
       logger.error('SCHEDULED', `daily-weather: ${village} failed: ${err.message}`);
