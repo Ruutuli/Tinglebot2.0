@@ -8,6 +8,7 @@ import { buildApplicationEmbed } from "./discordEmbeds";
 import { logger } from "@/utils/logger";
 import { getVotesForCharacter } from "@/lib/ocApplicationService";
 import { getAppUrl } from "@/lib/config";
+import { createSlug } from "@/lib/string-utils";
 
 const ADMIN_REVIEW_CHANNEL_ID =
   process.env.ADMIN_REVIEW_CHANNEL_ID || "964342870796537909";
@@ -272,5 +273,51 @@ export async function handleResubmission(
       `Error handling resubmission: ${error instanceof Error ? error.message : String(error)}`
     );
     return false;
+  }
+}
+
+/**
+ * Notify moderators when a new character is created
+ * Sends a simple message to the admin review channel with a link to the character
+ */
+export async function notifyCharacterCreation(
+  character: CharacterDocument
+): Promise<void> {
+  try {
+    if (!ADMIN_REVIEW_CHANNEL_ID) {
+      logger.warn(
+        "discordPostingService",
+        "ADMIN_REVIEW_CHANNEL_ID not configured, skipping character creation notification"
+      );
+      return;
+    }
+
+    const APP_URL = getAppUrl();
+    const characterId = String(character._id);
+    
+    // Construct character URL - prefer publicSlug, fallback to slug from name, then ID
+    const characterSlug = character.publicSlug || createSlug(character.name) || characterId;
+    const characterUrl = `${APP_URL}/characters/${characterSlug}`;
+
+    const message = `new character created! [View Character](${characterUrl})`;
+
+    await discordApiRequest(
+      `channels/${ADMIN_REVIEW_CHANNEL_ID}/messages`,
+      "POST",
+      {
+        content: message,
+      }
+    );
+
+    logger.info(
+      "discordPostingService",
+      `Sent character creation notification for character ${characterId} (${character.name})`
+    );
+  } catch (error) {
+    // Log error but don't throw - character creation should succeed even if notification fails
+    logger.error(
+      "discordPostingService",
+      `Error sending character creation notification: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }

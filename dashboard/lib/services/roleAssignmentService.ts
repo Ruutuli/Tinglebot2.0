@@ -9,6 +9,7 @@ import { getAppUrl } from "@/lib/config";
 
 const GUILD_ID = process.env.GUILD_ID || "";
 const LOGGING_CHANNEL_ID = process.env.LOGGING_CHANNEL_ID || "";
+const RESIDENT_ROLE_ID = process.env.RESIDENT_ROLE_ID || "";
 const APP_URL = getAppUrl();
 
 // Role mappings
@@ -156,6 +157,19 @@ export async function assignCharacterRoles(
           `No role mapping found for village: ${character.homeVillage}`
         );
       }
+    }
+
+    // Assign resident role
+    if (RESIDENT_ROLE_ID) {
+      const success = await assignRole(userId, RESIDENT_ROLE_ID);
+      if (!success) {
+        errors.push(`Failed to assign resident role`);
+      }
+    } else {
+      logger.warn(
+        "roleAssignmentService",
+        "RESIDENT_ROLE_ID not configured, skipping resident role assignment"
+      );
     }
 
     // Assign job perk role

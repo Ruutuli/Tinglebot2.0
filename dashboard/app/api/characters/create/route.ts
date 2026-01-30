@@ -32,6 +32,8 @@ import {
 import { submitCharacter } from "@/lib/character-submit";
 import { logger } from "@/utils/logger";
 import { gcsUploadService } from "@/lib/services/gcsUploadService";
+import { notifyCharacterCreation } from "@/lib/services/discordPostingService";
+import { assignCharacterRoles } from "@/lib/services/roleAssignmentService";
 
 // ------------------- Placeholder URLs (fallback if GCS not configured) -------------------
 const PLACEHOLDER_ICON = "/placeholder-icon.png";
@@ -405,6 +407,28 @@ export async function POST(req: NextRequest) {
     recalculateStats(char);
     
     await char.save();
+
+    // Assign Discord roles (race, village, resident) - non-blocking
+    try {
+      await assignCharacterRoles(user.id, char);
+    } catch (roleError) {
+      // Log error but don't fail character creation if role assignment fails
+      logger.error(
+        "api/characters/create",
+        `Failed to assign roles: ${roleError instanceof Error ? roleError.message : String(roleError)}`
+      );
+    }
+
+    // Notify moderators about new character creation (non-blocking)
+    try {
+      await notifyCharacterCreation(char);
+    } catch (notificationError) {
+      // Log error but don't fail character creation if notification fails
+      logger.error(
+        "api/characters/create",
+        `Failed to send character creation notification: ${notificationError instanceof Error ? notificationError.message : String(notificationError)}`
+      );
+    }
 
     dbUser.characterSlot = Math.max(0, (dbUser.characterSlot ?? 0) - 1);
     await dbUser.save();
