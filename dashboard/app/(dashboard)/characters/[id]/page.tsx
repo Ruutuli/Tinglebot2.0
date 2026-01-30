@@ -202,10 +202,8 @@ const MARKDOWN_COMPONENTS: Components = {
     </code>
   ),
   pre: ({ children }: MarkdownComponentProps) => (
-    <pre className="bg-[var(--botw-warm-black)] p-3 rounded overflow-x-auto overflow-y-hidden mb-3 max-w-full">
-      <code className="block whitespace-pre text-xs font-mono text-[var(--totk-light-green)]">
-        {children}
-      </code>
+    <pre className="bg-[var(--botw-warm-black)] p-3 rounded mb-3 max-w-full overflow-hidden [&>code]:block [&>code]:whitespace-pre-wrap [&>code]:break-words [&>code]:px-0 [&>code]:py-0 [&>code]:bg-transparent">
+      {children}
     </pre>
   ),
   blockquote: ({ children }: MarkdownComponentProps) => (
