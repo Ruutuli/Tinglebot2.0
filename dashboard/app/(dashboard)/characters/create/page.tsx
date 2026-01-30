@@ -155,6 +155,52 @@ function gearItemToItemData(item: GearItemOption): ItemData {
   };
 }
 
+/* [create/page.tsx]🧠 Find and validate gear item by name across all categories - */
+function findGearItemByName(
+  itemName: string,
+  availableGearItems: {
+    weapons: GearItemOption[];
+    shields: GearItemOption[];
+    headArmor: GearItemOption[];
+    chestArmor: GearItemOption[];
+    legsArmor: GearItemOption[];
+  }
+): { item: GearItemOption; actualType: "weapon" | "shield" | "armor" } | null {
+  // Search all gear categories
+  const allItems = [
+    ...availableGearItems.weapons.map((w) => ({ item: w, category: "weapons" as const })),
+    ...availableGearItems.shields.map((s) => ({ item: s, category: "shields" as const })),
+    ...availableGearItems.headArmor.map((h) => ({ item: h, category: "headArmor" as const })),
+    ...availableGearItems.chestArmor.map((c) => ({ item: c, category: "chestArmor" as const })),
+    ...availableGearItems.legsArmor.map((l) => ({ item: l, category: "legsArmor" as const })),
+  ];
+
+  const found = allItems.find(({ item }) => item.name === itemName);
+  if (!found) return null;
+
+  // Determine actual type using gear-equip functions
+  const itemData = gearItemToItemData(found.item);
+  const weaponType = getWeaponType(itemData);
+  const isShieldItem = isShield(itemData);
+  const armorSlot = getArmorSlot(itemData);
+
+  let actualType: "weapon" | "shield" | "armor";
+  if (weaponType) {
+    actualType = "weapon";
+  } else if (isShieldItem) {
+    actualType = "shield";
+  } else if (armorSlot) {
+    actualType = "armor";
+  } else {
+    // Fallback to category-based type if type detection fails
+    if (found.category === "weapons") actualType = "weapon";
+    else if (found.category === "shields") actualType = "shield";
+    else actualType = "armor";
+  }
+
+  return { item: found.item, actualType };
+}
+
 /* [create/page.tsx]🧠 Equipped gear builder - */
 function buildEquippedGearState(
   weapon: GearItemOption | null,
@@ -691,28 +737,55 @@ export function CreateForm({
 
   /* [create/page.tsx]🧠 Load initial gear from character data - */
   useEffect(() => {
-    if (isEditMode && initialCharacter && availableGearItems.weapons.length > 0) {
+    if (isEditMode && initialCharacter) {
       const gearWeapon = initialCharacter.gearWeapon;
+      const gearShield = initialCharacter.gearShield;
+      
       if (gearWeapon) {
-        const weapon = availableGearItems.weapons.find(
-          (w) => w.name === gearWeapon.name
-        );
-        if (weapon) setEquippedWeapon(weapon);
+        // Search all gear items to find the item by name
+        const found = findGearItemByName(gearWeapon.name, availableGearItems);
+        if (found) {
+          // Validate that it's actually a weapon, not a shield or armor
+          if (found.actualType === "weapon") {
+            setEquippedWeapon(found.item);
+          } else if (found.actualType === "shield" && !gearShield) {
+            // If gearWeapon contains a shield (corrupted data) and gearShield is empty,
+            // move it to the correct slot to fix the corruption
+            console.warn(
+              `Character has shield "${gearWeapon.name}" incorrectly stored in gearWeapon slot. Moving to shield slot.`
+            );
+            setEquippedShield(found.item);
+          } else {
+            // If gearWeapon contains armor or a shield when gearShield is already set, ignore it
+            console.warn(
+              `Character has non-weapon item "${gearWeapon.name}" in gearWeapon slot. Ignoring.`
+            );
+          }
+        }
       }
     }
-  }, [isEditMode, initialCharacter, availableGearItems.weapons]);
+  }, [isEditMode, initialCharacter, availableGearItems]);
 
   useEffect(() => {
-    if (isEditMode && initialCharacter && availableGearItems.shields.length > 0) {
+    if (isEditMode && initialCharacter) {
       const gearShield = initialCharacter.gearShield;
       if (gearShield) {
-        const shield = availableGearItems.shields.find(
-          (s) => s.name === gearShield.name
-        );
-        if (shield) setEquippedShield(shield);
+        // Search all gear items to find the item by name
+        const found = findGearItemByName(gearShield.name, availableGearItems);
+        if (found) {
+          // Validate that it's actually a shield
+          if (found.actualType === "shield") {
+            setEquippedShield(found.item);
+          } else {
+            // If gearShield contains a weapon or armor (corrupted data), don't set it
+            console.warn(
+              `Character has non-shield item "${gearShield.name}" in gearShield slot. Ignoring.`
+            );
+          }
+        }
       }
     }
-  }, [isEditMode, initialCharacter, availableGearItems.shields]);
+  }, [isEditMode, initialCharacter, availableGearItems]);
 
   useEffect(() => {
     if (isEditMode && initialCharacter && availableGearItems.headArmor.length > 0) {
