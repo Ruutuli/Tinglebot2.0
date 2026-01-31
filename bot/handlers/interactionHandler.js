@@ -101,50 +101,52 @@ const initializeReactionHandler = (client) => {
         }
       }
 
-      // Help Wanted quest completion logic - check for checkmark reactions from Tinglebot
+      // Help Wanted quest completion logic - run on any checkmark in submissions channel (mod or bot)
       if (reaction.emoji.name === '✅' || reaction.emoji.name === '☑️' || reaction.emoji.name === '✔️') {
         // Check if this is a submission message in the submissions channel
         if (reaction.message.channel.id === '940446392789389362') { // Submissions channel ID
-          // Check if Tinglebot reacted (approval)
-          const botUser = client.user;
-          if (reaction.users.cache.has(botUser.id)) {
-            console.log('[interactionHandler.js]: ✅ Checkmark reaction detected on submission - checking for quest completion');
-            
-            // Get the message URL
-            const messageUrl = `https://discord.com/channels/${reaction.message.guildId}/${reaction.message.channelId}/${reaction.message.id}`;
-            
-            // Try to find submission data by message URL
-            const { retrieveSubmissionFromStorage } = require('@/utils/storage');
-            const { checkAndCompleteQuestFromSubmission } = require('../modules/helpWantedModule');
-            
-            // We need to find the submission data - let's check if we can get it from the embed
-            const embed = reaction.message.embeds[0];
-            if (embed && embed.fields) {
-              const submissionIdField = embed.fields.find(field => field.name === 'Submission ID' || field.name === '🆔 Submission ID');
-              if (submissionIdField) {
-                const submissionId = submissionIdField.value.replace(/`/g, '').trim();
-                console.log(`[interactionHandler.js]: Found submission ID: ${submissionId}`);
-                
-                try {
-                  const submissionData = await retrieveSubmissionFromStorage(submissionId);
-                  if (submissionData) {
-                    // Update the message URL in submission data
-                    submissionData.messageUrl = messageUrl;
-                    
-                    // ------------------- Blight Healing Note -------------------
-                    // Note: Blight healing is NOT auto-completed when approving submissions via reactions.
-                    // Users must use /blight submit with their submission ID to complete the healing process.
-                    // This ensures the user explicitly submits their approved work for healing.
-                    if (submissionData.blightId && submissionData.blightId !== 'N/A') {
-                      console.log(`[interactionHandler.js]: Submission ${submissionId} has blightId ${submissionData.blightId} - user must use /blight submit to complete healing`);
-                    }
-                    
-                    // Process quest completion
+          console.log('[interactionHandler.js]: ✅ Checkmark reaction detected on submission - checking for quest completion');
+
+          const messageUrl = `https://discord.com/channels/${reaction.message.guildId}/${reaction.message.channelId}/${reaction.message.id}`;
+          const { retrieveSubmissionFromStorage } = require('@/utils/storage');
+          const { checkAndCompleteQuestFromSubmission } = require('../modules/helpWantedModule');
+
+          const embed = reaction.message.embeds[0];
+          if (embed && embed.fields) {
+            const submissionIdField = embed.fields.find(field => field.name === 'Submission ID' || field.name === '🆔 Submission ID');
+            if (submissionIdField) {
+              const submissionId = submissionIdField.value.replace(/`/g, '').trim();
+              console.log(`[interactionHandler.js]: Found submission ID: ${submissionId}`);
+
+              try {
+                let submissionData = await retrieveSubmissionFromStorage(submissionId);
+                if (!submissionData) {
+                  const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
+                  const approved = await ApprovedSubmission.findOne({ submissionId }).lean();
+                  if (approved) {
+                    submissionData = {
+                      submissionId: approved.submissionId,
+                      questEvent: approved.questEvent || 'N/A',
+                      category: approved.category,
+                      userId: approved.userId,
+                      messageUrl: approved.messageUrl || messageUrl,
+                    };
+                  }
+                }
+                if (submissionData) {
+                  submissionData.messageUrl = messageUrl;
+                  submissionData.approvedSubmissionData = true;
+
+                  if (submissionData.blightId && submissionData.blightId !== 'N/A') {
+                    console.log(`[interactionHandler.js]: Submission ${submissionId} has blightId ${submissionData.blightId} - user must use /blight submit to complete healing`);
+                  }
+
+                  if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
                     await checkAndCompleteQuestFromSubmission(submissionData, client);
                   }
-                } catch (error) {
-                  console.error(`[interactionHandler.js]: Error retrieving submission data for ${submissionId}:`, error);
                 }
+              } catch (error) {
+                console.error(`[interactionHandler.js]: Error retrieving submission data for ${submissionId}:`, error);
               }
             }
           }

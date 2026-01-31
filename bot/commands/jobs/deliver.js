@@ -559,7 +559,8 @@ const command = {
     // ------------------- Deactivate Job Voucher -------------------
     if (courierCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
      const deactivationResult = await deactivateJobVoucher(
-      courierCharacter._id
+      courierCharacter._id,
+      { afterUse: true }
      );
      if (!deactivationResult.success) {
       console.error(

@@ -713,7 +713,7 @@ module.exports = {
         if (!activationResult.success) {
           error('CRFT', `Failed to activate job voucher for ${character.name}`);
         } else {
-          const deactivationResult = await deactivateJobVoucher(character._id);
+          const deactivationResult = await deactivateJobVoucher(character._id, { afterUse: true });
           if (!deactivationResult.success) {
             error('CRFT', `Failed to deactivate job voucher for ${character.name}`);
           } else {

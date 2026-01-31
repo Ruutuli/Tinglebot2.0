@@ -1145,7 +1145,7 @@ module.exports = {
 
       // ------------------- Deactivate Job Voucher ------------------
       if (character.jobVoucher) {
-        const deactivationResult = await deactivateJobVoucher(character._id);
+        const deactivationResult = await deactivateJobVoucher(character._id, { afterUse: true });
         if (!deactivationResult.success) {
           // Failed to deactivate job voucher
         }

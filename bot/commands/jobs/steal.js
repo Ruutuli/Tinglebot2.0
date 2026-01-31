@@ -1498,7 +1498,7 @@ async function handleStealError(error, interaction, operationType) {
 async function deactivateJobVoucherIfNeeded(thiefCharacter, voucherCheck) {
     // Only deactivate if character has a voucher and it's not a skip case
     if (thiefCharacter.jobVoucher && voucherCheck && !voucherCheck.skipVoucher) {
-        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id, { afterUse: true });
         if (!deactivationResult.success) {
             logger.error('JOB', `❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
         } else {

@@ -13,6 +13,8 @@ const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
 const { getWeatherWithoutGeneration } = require('@/services/weatherService');
 const VillageShopItem = require('@/models/VillageShopsModel');
 const TempData = require('@/models/TempDataModel');
+const { clearBoostAfterUse } = require('../jobs/boosting.js');
+const { deactivateJobVoucher } = require('../../modules/jobVoucherModule');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -1672,6 +1674,12 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     }
     
     await updateQuestEmbed(interaction.client, quest, quest.completedBy);
+
+    // ------------------- Deactivate Job Voucher After Monster Hunt Completion -------------------
+    const refreshedCharacter = await Character.findById(character._id);
+    if (refreshedCharacter && refreshedCharacter.jobVoucher) {
+      await deactivateJobVoucher(refreshedCharacter._id, { afterUse: true });
+    }
   }
   
   // Send final summary
@@ -2076,6 +2084,18 @@ module.exports = {
 
         // Update quest embed
         await updateQuestEmbed(interaction.client, quest, quest.completedBy);
+
+        // ------------------- Clear Boost and Deactivate Job Voucher After Completion -------------------
+        const refreshedCharacter = await Character.findById(character._id);
+        if (refreshedCharacter) {
+          await clearBoostAfterUse(refreshedCharacter, {
+            client: interaction.client,
+            context: 'helpwanted complete'
+          });
+          if (refreshedCharacter.jobVoucher) {
+            await deactivateJobVoucher(refreshedCharacter._id, { afterUse: true });
+          }
+        }
 
         // Send success response
         const successEmbed = createQuestCompletionEmbed(character, quest, interaction.user.id);

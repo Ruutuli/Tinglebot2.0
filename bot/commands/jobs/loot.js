@@ -683,7 +683,7 @@ module.exports = {
 
        // Deactivate Job Voucher AFTER successful raid trigger
        if (character.jobVoucher && !voucherCheck?.skipVoucher) {
-         const deactivationResult = await deactivateJobVoucher(character._id);
+         const deactivationResult = await deactivateJobVoucher(character._id, { afterUse: true });
          if (!deactivationResult.success) {
            logger.error('LOOT', `❌ Failed to deactivate job voucher for ${character.name}`);
          } else {
@@ -845,7 +845,7 @@ async function handleBloodMoonRerolls(
 
     // Deactivate Job Voucher AFTER successful raid trigger
     if (character.jobVoucher) {
-      const deactivationResult = await deactivateJobVoucher(character._id);
+      const deactivationResult = await deactivateJobVoucher(character._id, { afterUse: true });
       if (!deactivationResult.success) {
         logger.error('LOOT', `❌ Failed to deactivate job voucher for ${character.name}`);
       } else {
@@ -1639,7 +1639,7 @@ async function processLootingLogic(
 
   // ------------------- Deactivate Job Voucher if needed -------------------
   if (shouldDeactivateVoucher && character.jobVoucher) {
-    const deactivationResult = await deactivateJobVoucher(character._id);
+    const deactivationResult = await deactivateJobVoucher(character._id, { afterUse: true });
     if (!deactivationResult.success) {
       logger.error('LOOT', `❌ Failed to deactivate job voucher for ${character.name}`);
     } else {

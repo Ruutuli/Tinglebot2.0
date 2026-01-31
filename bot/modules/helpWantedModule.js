@@ -2859,6 +2859,17 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
       if (user) {
         await updateUserTracking(user, quest, submissionData.userId);
       }
+      // Mark collab partners as having completed the quest
+      const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
+      for (const collaboratorMention of collabList) {
+        if (!collaboratorMention || typeof collaboratorMention !== 'string') continue;
+        const collaboratorId = collaboratorMention.replace(/[<@!>]/g, '').trim();
+        if (!collaboratorId) continue;
+        const collabUser = await User.findOne({ discordId: collaboratorId });
+        if (collabUser) {
+          await updateUserTracking(collabUser, quest, collaboratorId);
+        }
+      }
       // Update quest embed to show completion status
       await updateQuestEmbed(client, quest, {
         userId: submissionData.userId,
@@ -2883,6 +2894,17 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
     const user = await User.findOne({ discordId: submissionData.userId });
     if (user) {
       await updateUserTracking(user, quest, submissionData.userId);
+    }
+    // Mark collab partners as having completed the quest
+    const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
+    for (const collaboratorMention of collabList) {
+      if (!collaboratorMention || typeof collaboratorMention !== 'string') continue;
+      const collaboratorId = collaboratorMention.replace(/[<@!>]/g, '').trim();
+      if (!collaboratorId) continue;
+      const collabUser = await User.findOne({ discordId: collaboratorId });
+      if (collabUser) {
+        await updateUserTracking(collabUser, quest, collaboratorId);
+      }
     }
 
     // Update quest embed
@@ -3020,6 +3042,7 @@ module.exports = {
   getQuestsForScheduledTime,
   getCurrentQuestSchedule,
   updateQuestEmbed,
+  updateUserTracking,
   postQuestToDiscord,
   verifyQuestMessageExists,
   isQuestExpired,

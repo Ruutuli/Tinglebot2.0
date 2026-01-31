@@ -1,6 +1,6 @@
 // ============================================================================
 // ------------------- Global Error Handling System -------------------
-// Unified error handling with Discord logging, Trello integration, and database error tracking
+// Unified error handling with Discord logging and database error tracking
 // ============================================================================
 
 const { EmbedBuilder } = require('discord.js');
@@ -33,7 +33,6 @@ let consecutiveDatabaseErrors = 0;
 let lastErrorTime = null;
 let isShuttingDown = false;
 let client = null;
-let trelloLogger = null;
 
 // Error deduplication cache - tracks recently logged errors to prevent spam
 const errorLogCache = new Map();
@@ -137,7 +136,7 @@ function shouldLogError(error, source) {
 // ============================================================================
 
 function initializeErrorHandler(trelloLoggerFunction, discordClient) {
-  trelloLogger = trelloLoggerFunction;
+  // trelloLoggerFunction parameter kept for backward compatibility but not used
   client = discordClient;
   logger.success('SYSTEM', 'Error handling system initialized');
 }
@@ -307,27 +306,8 @@ function buildErrorContext(error, context) {
   return extraInfo;
 }
 
-async function handleTrelloLogging(error, source, context, extraInfo, timestamp, message) {
-  if (!trelloLogger) return null;
-  
-  let trelloContent = `**Error Message:**\n\`\`\`${message}\`\`\`\n`;
-  trelloContent += `**File:** ${source}\n`;
-  trelloContent += `**Time:** ${timestamp}\n`;
-  if (extraInfo) trelloContent += `**Context:**\n${extraInfo}\n`;
 
-  if (context.commandName) trelloContent += `**Command Used:** ${context.commandName}\n`;
-  if (context.userTag) trelloContent += `**User:** ${context.userTag} (${context.userId})\n`;
-  if (context.options) trelloContent += `**Options:**\n\`\`\`${JSON.stringify(context.options)}\`\`\`\n`;
-
-  try {
-    return await trelloLogger(trelloContent, source);
-  } catch (err) {
-    console.error(`[globalErrorHandler.js]: ❌ Failed to create Trello card: ${err.message}`);
-    return null;
-  }
-}
-
-async function handleDiscordLogging(error, source, context, extraInfo, message, trelloLink) {
+async function handleDiscordLogging(error, source, context, extraInfo, message) {
   if (!client || !client.channels?.cache.has(ERROR_LOG_CHANNEL_ID)) return;
   
   const errorChannel = client.channels.cache.get(ERROR_LOG_CHANNEL_ID);
@@ -346,8 +326,7 @@ async function handleDiscordLogging(error, source, context, extraInfo, message, 
       { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
       { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` || "No error message available" },
       ...(isDiscordError ? [{ name: "🤖 Error Type", value: "**Discord API Issue** - This is not a bot problem. Discord's servers are experiencing issues." }] : []),
-      ...(extraInfo ? [{ name: "🌐 Context", value: extraInfo }] : []),
-      { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
+      ...(extraInfo ? [{ name: "🌐 Context", value: extraInfo }] : [])
     )
     .setTimestamp();
 
@@ -472,15 +451,9 @@ Error: ${message}
     console.log(`[globalErrorHandler.js]: 🤖 Discord API error detected: ${error.message}`);
   }
 
-  // Handle Trello logging (only if should log)
-  let trelloLink = null;
-  if (shouldLog) {
-    trelloLink = await handleTrelloLogging(error, source, context, extraInfo, timestamp, message);
-  }
-
   // Discord error channel logging (only if should log)
   if (shouldLog) {
-    await handleDiscordLogging(error, source, context, extraInfo, message, trelloLink);
+    await handleDiscordLogging(error, source, context, extraInfo, message);
   }
 
   // Handle response based on type

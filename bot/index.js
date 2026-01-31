@@ -55,11 +55,6 @@ const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHand
 // ============================================================================
 // ------------------- Scripts & Modules -------------------
 // ============================================================================
-const {
-  createTrelloCard,
-  logWishlistToTrello,
-  logErrorToTrello,
-} = require("./scripts/trello");
 const { isBloodMoonDay } = require("./scripts/bloodmoon");
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
@@ -463,7 +458,7 @@ async function initializeClient() {
       readyHandlerExecuted = true;
 
       // Update error handlers with client reference
-      initializeErrorHandler(logErrorToTrello, client);
+      initializeErrorHandler(null, client);
       initializeErrorTracking(client);
 
       // Display banner
@@ -636,64 +631,14 @@ async function initializeClient() {
     // ------------------- Message Event Handlers -------------------
     // ============================================================================
 
-    // ------------------- Error Report Channel ------------------
-    const ERROR_REPORT_CHANNEL_ID = "1379974822506795030";
-    client.on("messageCreate", async (message) => {
-      await handleChannelMessage(message, ERROR_REPORT_CHANNEL_ID, async (msg) => {
-        if (!msg.content.replace(/\*/g, "").startsWith("Command")) {
-          const reply = await msg.reply(
-            "❌ **Bug Report Rejected — Missing Required Format!**\n\n" +
-              "Your message must start with this line:\n" +
-              "`Command: [Command Name]`\n\n" +
-              "> Example:\n> `Command: /gather`\n\n" +
-              "Please update your post to match this format:\n\n" +
-              "**Command:** [Specify the command or feature]\n" +
-              "**Issue:** [Brief description of the problem]\n" +
-              "**Steps to Reproduce:**\n1. [Step 1]\n2. [Step 2]\n" +
-              "**Error Output:** [Error message]\n**Screenshots:** [Attach images]\n" +
-              "**Expected Behavior:** [What you expected to happen]\n" +
-              "**Actual Behavior:** [What actually happened]"
-          );
-          setTimeout(() => reply.delete().catch(() => {}), 600000);
-          return;
-        }
-
-        try {
-          const commandMatch = msg.content.match(/Command:\s*\[?([^\n\]]+)\]?/i);
-          const threadName = commandMatch ? commandMatch[1].trim() : 'Unknown Command';
-          const username = msg.author?.tag || msg.author?.username || `User-${msg.author?.id}`;
-          const cardUrl = await createTrelloCard({
-            threadName,
-            username,
-            content: msg.content,
-            images: msg.attachments.map((attachment) => attachment.url),
-            createdAt: msg.createdAt,
-          });
-
-          if (cardUrl) {
-            await msg.reply(
-              `✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`
-            );
-          } else {
-            await msg.reply(`❌ Failed to send bug report to Trello.`);
-          }
-        } catch (err) {
-          logger.error('TRELLO', `[index.js]❌ Error handling error report for Trello: ${err.message}`);
-        }
-      });
-    });
 
     // ------------------- Wishlist Channel Handler ------------------
     // Shared handler for wishlist and new channel
     async function handleWishlistMessage(message) {
-      const content = message.content;
-      const author = message.author.tag;
       try {
-        await logWishlistToTrello(content, author, process.env.TRELLO_WISHLIST);
         await message.react("⭐");
       } catch (err) {
-        logger.error('TRELLO', `[index.js]❌ Failed to log wishlist to Trello: ${err.message}`);
-        await message.reply("❌ Could not send this wishlist item to Trello.");
+        logger.error('WISHLIST', `[index.js]❌ Failed to react to wishlist message: ${err.message}`);
       }
     }
 

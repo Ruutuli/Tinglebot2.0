@@ -465,6 +465,11 @@ async function handleSubmissionCompletion(interaction) {
       delete submissionData.boostMetadata;
     }
 
+    // Clear Tokens boost immediately so it only applies to this submission (no race with other submissions)
+    for (const character of boostFulfillmentMap.values()) {
+      await fulfillTokenBoost(character, interaction.client);
+    }
+
     // Save updated submission data using submissionId
     console.log(`[submissionHandler.js]: 💾 Saving final submission data for ID: ${submissionId}`);
     await saveSubmissionToStorage(submissionId, submissionData);
@@ -481,10 +486,6 @@ async function handleSubmissionCompletion(interaction) {
     // Update submission data with message URL
     submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
     await saveSubmissionToStorage(submissionId, submissionData);
-
-    for (const character of boostFulfillmentMap.values()) {
-      await fulfillTokenBoost(character, interaction.client);
-    }
 
     // Link submission to quest if quest ID is provided
     if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {

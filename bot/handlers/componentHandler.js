@@ -413,6 +413,15 @@ async function handleConfirmation(interaction, userId, submissionData) {
           });
         }
 
+        // Add quest/event field if submission is for an HWQ so mods know to use /mod approve
+        if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+          notificationFields.push({
+            name: '🎯 Quest/Event',
+            value: `\`${submissionData.questEvent}\``,
+            inline: false
+          });
+        }
+
         const notificationEmbed = new EmbedBuilder()
           .setColor(typeColor)
           .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)
@@ -2689,7 +2698,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       if (jobVoucherResult && jobVoucherResult.success) {
         const activationResult = await activateJobVoucher(freshCharacter, continueData.jobVoucherJob, jobVoucherResult.item, 1, interaction);
         if (activationResult.success) {
-          await deactivateJobVoucher(freshCharacter._id);
+          await deactivateJobVoucher(freshCharacter._id, { afterUse: true });
         }
       }
     }

@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, getInventoriesDb } from "@/lib/db";
 import mongoose from "mongoose";
 import { getSession, isAdminUser } from "@/lib/session";
 import { MOD_JOBS, ALL_JOBS } from "@/data/characterData";
@@ -409,7 +409,23 @@ export async function GET(
     const out = typeof char.toObject === "function" ? char.toObject() : (char as unknown as Record<string, unknown>);
     // Ensure isModCharacter flag is set correctly
     out.isModCharacter = isModCharacter;
-    
+
+    // Derive spirit orbs from inventory (source of truth); character document may be stale
+    try {
+      const characterName = (char as { name?: string }).name;
+      if (characterName && typeof characterName === "string") {
+        const db = await getInventoriesDb();
+        const collection = db.collection(characterName.toLowerCase());
+        const spiritOrbEntry = await collection.findOne({
+          itemName: { $regex: /^spirit orb$/i },
+        });
+        out.spiritOrbs = spiritOrbEntry?.quantity ?? 0;
+      }
+    } catch (inventoryErr) {
+      const msg = inventoryErr instanceof Error ? inventoryErr.message : String(inventoryErr);
+      logger.debug("api/characters/[id] GET", `Spirit orbs from inventory skipped: ${msg}`);
+    }
+
     // Fetch Discord username for the character owner
     if (char.userId) {
       const usernames = await fetchDiscordUsernames([char.userId]);

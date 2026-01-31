@@ -2618,18 +2618,21 @@ async function clearBoostAfterUse(character, options = {}) {
     return { success: false, cleared: false, error: 'Character is null or undefined' };
   }
 
-  if (!character.boostedBy || !shouldClearBoost) {
-    if (character.boostedBy && !shouldClearBoost) {
+  if (!shouldClearBoost) {
+    if (character.boostedBy) {
       logger.info('BOOST', `Boost preserved for ${character.name}${context ? ` (${context})` : ''}`);
     }
     return { success: true, cleared: false };
   }
 
+  // Look up active boost by character name (TempData is source of truth; boostedBy can be out-of-sync)
+  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+  if (!activeBoost && !character.boostedBy) {
+    return { success: true, cleared: false };
+  }
+
   try {
     logger.info('BOOST', `Clearing boost for ${character.name}${context ? ` (${context})` : ''}`);
-    
-    // Mark active boost as fulfilled in TempData and update embed
-    const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
     
     if (activeBoost && (activeBoost.status === 'accepted' || activeBoost.status === 'pending')) {
       activeBoost.status = 'fulfilled';

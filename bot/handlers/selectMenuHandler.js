@@ -33,6 +33,7 @@ const {
 } = require('@/utils/storage');
 const { fetchCharacterByNameAndUserId, fetchCharacterByName, fetchCharactersByUserId, fetchModCharactersByUserId } = require('@/database/db');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
+const { clearBoostAfterUse } = require('../commands/jobs/boosting');
 
 // Menu utilities to generate select menus for the submission process
 const {
@@ -235,13 +236,16 @@ async function handleSelectMenuInteraction(interaction) {
       // Get the updated submission data
       const updatedSubmissionData = await retrieveSubmissionFromStorage(submissionId);
       
-      // Get quest bonus if quest is linked
+      // Get quest bonus and collab bonus if quest is linked
       let questBonus = 0;
+      let collabBonus = 0;
       if (updatedSubmissionData.questEvent && updatedSubmissionData.questEvent !== 'N/A') {
-        const { getQuestBonus } = require('@/utils/tokenUtils');
+        const { getQuestBonus, getCollabBonus } = require('@/utils/tokenUtils');
         const userId = updatedSubmissionData.userId || interaction.user.id;
         questBonus = await getQuestBonus(updatedSubmissionData.questEvent, userId);
+        collabBonus = await getCollabBonus(updatedSubmissionData.questEvent);
         console.log(`[selectMenuHandler.js]: 🎯 Quest bonus for ${updatedSubmissionData.questEvent}: ${questBonus}`);
+        console.log(`[selectMenuHandler.js]: 🤝 Collab bonus for ${updatedSubmissionData.questEvent}: ${collabBonus}`);
         
         // Update submission data with the actual quest bonus (convert to string for storage)
         await updateSubmissionData(submissionId, {
@@ -252,7 +256,8 @@ async function handleSelectMenuInteraction(interaction) {
       // Calculate tokens with complete data
       const { totalTokens, breakdown } = calculateTokens({
         ...updatedSubmissionData,
-        questBonus
+        questBonus,
+        collabBonus
       });
       let finalTokenAmount = totalTokens;
       const boostEffects = [];
@@ -307,6 +312,11 @@ async function handleSelectMenuInteraction(interaction) {
             boostEffects.push(`👩‍🏫 **Critique & Composition:** ${booster.name} added 🪙 ${tokenIncrease}.`);
             processedBoosts.add('teacher_tokens');
             boostFulfillmentTargets.push(character.name);
+            try {
+              await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
+            } catch (clearErr) {
+              console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+            }
           }
         }
 
@@ -322,6 +332,11 @@ async function handleSelectMenuInteraction(interaction) {
             boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
             processedBoosts.add('scholar_tokens');
             boostFulfillmentTargets.push(character.name);
+            try {
+              await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
+            } catch (clearErr) {
+              console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+            }
           }
         }
       }
@@ -363,6 +378,11 @@ async function handleSelectMenuInteraction(interaction) {
                 processedBoosts.add('teacher_tokens');
                 boostFulfillmentTargets.push(character.name);
                 console.log(`[selectMenuHandler.js]: 📖 Teacher boost - Critique & Composition (+${tokenIncrease} tokens) from user character ${character.name}`);
+                try {
+                  await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
+                } catch (clearErr) {
+                  console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+                }
               }
             }
 
@@ -379,6 +399,11 @@ async function handleSelectMenuInteraction(interaction) {
                 processedBoosts.add('scholar_tokens');
                 boostFulfillmentTargets.push(character.name);
                 console.log(`[selectMenuHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens) from user character ${character.name}`);
+                try {
+                  await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
+                } catch (clearErr) {
+                  console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+                }
               }
             }
           }

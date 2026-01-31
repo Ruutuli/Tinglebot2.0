@@ -1008,7 +1008,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
 
     // Deactivate job voucher if needed
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {
-      const deactivationResult = await deactivateJobVoucher(healerCharacter._id);
+      const deactivationResult = await deactivateJobVoucher(healerCharacter._id, { afterUse: true });
       if (!deactivationResult.success) {
         logger.error('JOB', `Failed to deactivate job voucher for ${healerCharacter.name}`);
       }
@@ -1361,7 +1361,7 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
 
     // Deactivate job voucher if needed
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {
-      const deactivationResult = await deactivateJobVoucher(healerCharacter._id);
+      const deactivationResult = await deactivateJobVoucher(healerCharacter._id, { afterUse: true });
       if (!deactivationResult.success) {
         logger.error('JOB', `Failed to deactivate job voucher for ${healerCharacter.name}`);
       }

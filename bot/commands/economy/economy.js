@@ -1480,7 +1480,7 @@ async function handleShopBuy(interaction) {
 
     await interaction.editReply({ embeds: [purchaseEmbed] });
 
-    if (boostFlavorNotes.length > 0 && character.boostedBy) {
+    if (totalPrice !== beforeBoost) {
       await clearBoostAfterUse(character, {
         client: interaction?.client,
         context: 'economy buy'
@@ -1950,7 +1950,7 @@ if (quantity <= 0) {
 
   interaction.editReply({ embeds: [saleEmbed] });
 
-  if (boostFlavorNotes.length > 0 && character.boostedBy) {
+  if (totalPrice !== preBoostPrice) {
    await clearBoostAfterUse(character, {
      client: interaction?.client,
      context: 'economy sell'
@@ -2426,7 +2426,7 @@ async function createTradeSession(initiator, target, items) {
     confirmChannelId: null,
   };
 
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 34 hours
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
   await TempData.create({ key: tradeId, type: 'trade', data: tradeData, expiresAt });
   return tradeId;
 }
@@ -3137,7 +3137,7 @@ async function handleTrade(interaction) {
               [fromCharacter.userId, toCharacter.userId].includes(user.id);
           };
 
-          const collector = tradeMessage.createReactionCollector({ filter, time: 24 * 60 * 60 * 1000 }); // 34 hours
+          const collector = tradeMessage.createReactionCollector({ filter, time: 24 * 60 * 60 * 1000 }); // 24 hours
           collector.on('collect', async (reaction, user) => {
             try {
               const latestTrade = await TempData.findByTypeAndKey('trade', tradeId);

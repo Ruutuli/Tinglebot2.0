@@ -246,8 +246,8 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
         console.log(`[jobVoucherModule.js]: 🏠 Village: ${character.currentVillage}`);
         console.log(`[jobVoucherModule.js]: 🔄 Current Job: ${character.job || 'None'}`);
 
-        // First ensure any existing voucher is deactivated
-        await deactivateJobVoucher(character._id);
+        // First ensure any existing voucher is deactivated (afterUse so we always clear)
+        await deactivateJobVoucher(character._id, { afterUse: true });
 
         // Then activate the new voucher
         // Use appropriate update function based on character type
@@ -292,8 +292,10 @@ async function fetchJobVoucherItem() {
 }
 
 // ------------------- Deactivate Job Voucher -------------------
-async function deactivateJobVoucher(characterId) {
+async function deactivateJobVoucher(characterId, options = {}) {
     try {
+        const { afterUse = false } = options;
+
         // Fetch character to get name - check both regular and mod characters
         let character = await Character.findById(characterId);
         if (!character) {
@@ -305,8 +307,8 @@ async function deactivateJobVoucher(characterId) {
             }
         }
 
-        // Check if the voucher has been used (indicated by lastGatheredAt being set)
-        if (character.lastGatheredAt) {
+        // When not "after use" (e.g. manual cancel), block if voucher was already used
+        if (!afterUse && character.lastGatheredAt) {
             console.log(`[Job Voucher Module]: ❌ Cannot cancel used job voucher for ${character.name}`);
             return {
                 success: false,

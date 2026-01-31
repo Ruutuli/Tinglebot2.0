@@ -325,7 +325,16 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
           case "mod":
             if (interaction.options._subcommand) {
               const modSubcommand = interaction.options.getSubcommand();
-              if (modSubcommand === "give") {
+              const modSubcommandGroup = interaction.options.getSubcommandGroup(false);
+              if (modSubcommandGroup === "quest") {
+                if (modSubcommand === "complete") {
+                  if (focusedOption.name === "character") {
+                    await handleModQuestCharacterAutocomplete(interaction, focusedOption);
+                  } else if (focusedOption.name === "quest_id") {
+                    await handleModHelpWantedQuestIdAutocomplete(interaction, focusedOption);
+                  }
+                }
+              } else if (modSubcommand === "give") {
                 if (focusedOption.name === "character") {
                   await handleModGiveCharacterAutocomplete(interaction, focusedOption);
                 } else if (focusedOption.name === "item") {
@@ -3963,6 +3972,59 @@ async function handleModGiveItemAutocomplete(interaction, focusedOption) {
   console.error("[handleModGiveItemAutocomplete]: Error:", error);
   await safeRespondWithError(interaction);
  }
+}
+
+// ------------------- /mod quest complete: Character Autocomplete (scoped to selected user) -------------------
+async function handleModQuestCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const targetUser = interaction.options.getUser('user');
+    if (!targetUser) {
+      await interaction.respond([]);
+      return;
+    }
+    const [characters, modCharacters] = await Promise.all([
+      fetchCharactersByUserId(targetUser.id),
+      fetchModCharactersByUserId(targetUser.id)
+    ]);
+    const allCharacters = [...(characters || []), ...(modCharacters || [])];
+    const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
+    const choices = allCharacters
+      .filter(c => c.name.toLowerCase().includes(focusedValue))
+      .map(c => ({
+        name: c.isModCharacter
+          ? `${c.name} | ${capitalize(c.currentVillage)} | ${c.modTitle} (${c.modType})`
+          : `${c.name} | ${capitalize(c.currentVillage)} | ${capitalize(c.job)}`,
+        value: c.name
+      }));
+    await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    console.error('[autocompleteHandler.js] Error in handleModQuestCharacterAutocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- /mod quest complete: Help Wanted Quest ID Autocomplete (all quests, including completed/past) -------------------
+async function handleModHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
+  try {
+    const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
+    const quests = await HelpWantedQuest.find({})
+      .sort({ date: -1 })
+      .limit(50)
+      .lean();
+    const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
+    const choices = quests
+      .filter(q => q.questId.toLowerCase().includes(focusedValue) || (q.village && q.village.toLowerCase().includes(focusedValue)) || (q.type && q.type.toLowerCase().includes(focusedValue)))
+      .map(q => ({
+        name: `${q.questId} | ${q.village} | ${q.type}${q.completed ? ' (completed)' : ''}`,
+        value: q.questId
+      }));
+    await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    console.error('[autocompleteHandler.js] Error in handleModHelpWantedQuestIdAutocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
 }
 
 // ------------------- /mod petlevel: Character Autocomplete -------------------

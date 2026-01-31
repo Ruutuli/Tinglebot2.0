@@ -200,6 +200,21 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
+    // Compute attack/defense from equipped gear so list display and sort match profile (gear as source of truth).
+    const addComputedStats: PipelineStage.AddFields = {
+      $addFields: {
+        attack: { $ifNull: ["$gearWeapon.stats.attack", 0] },
+        defense: {
+          $add: [
+            { $ifNull: ["$gearShield.stats.defense", 0] },
+            { $ifNull: ["$gearArmor.head.stats.defense", 0] },
+            { $ifNull: ["$gearArmor.chest.stats.defense", 0] },
+            { $ifNull: ["$gearArmor.legs.stats.defense", 0] },
+          ],
+        },
+      },
+    };
+
     // Preserve previous behavior where null/undefined values sort last for non-name sorts.
     const addSortNullFlag: PipelineStage.AddFields = {
       $addFields: {
@@ -234,6 +249,7 @@ export async function GET(req: NextRequest) {
         const pipeline: PipelineStage[] = [
           { $match: modFilter },
           { $addFields: { isModCharacter: true, status: "accepted" } },
+          addComputedStats,
           addSortNullFlag,
           facetStage,
         ];
@@ -246,6 +262,7 @@ export async function GET(req: NextRequest) {
       const pipeline: PipelineStage[] = [
         { $match: filter },
         { $addFields: { isModCharacter: false } },
+        addComputedStats,
         addSortNullFlag,
         facetStage,
       ];
@@ -258,6 +275,7 @@ export async function GET(req: NextRequest) {
       const pipeline: PipelineStage[] = [
         { $match: filter },
         { $addFields: { isModCharacter: false } },
+        addComputedStats,
         addSortNullFlag,
         facetStage,
       ];
@@ -270,12 +288,14 @@ export async function GET(req: NextRequest) {
       const unionPipeline: PipelineStage[] = [
         { $match: filter },
         { $addFields: { isModCharacter: false } },
+        addComputedStats,
         {
           $unionWith: {
             coll: modColl,
             pipeline: [
               { $match: modFilter },
               { $addFields: { isModCharacter: true, status: "accepted" } },
+              addComputedStats,
             ],
           },
         },
