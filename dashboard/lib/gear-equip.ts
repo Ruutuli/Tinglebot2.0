@@ -17,12 +17,12 @@ export type ItemData = {
 };
 
 export type EquippedGear = {
-  gearWeapon?: { name: string; stats: Map<string, number> };
-  gearShield?: { name: string; stats: Map<string, number> };
+  gearWeapon?: { name: string; stats: Map<string, number> | Record<string, number> };
+  gearShield?: { name: string; stats: Map<string, number> | Record<string, number> };
   gearArmor?: {
-    head?: { name: string; stats: Map<string, number> };
-    chest?: { name: string; stats: Map<string, number> };
-    legs?: { name: string; stats: Map<string, number> };
+    head?: { name: string; stats: Map<string, number> | Record<string, number> };
+    chest?: { name: string; stats: Map<string, number> | Record<string, number> };
+    legs?: { name: string; stats: Map<string, number> | Record<string, number> };
   };
 };
 
@@ -169,13 +169,44 @@ export function equipItem(
 }
 
 /**
+ * Helper function to get modifierHearts from stats (handles both Map and plain object)
+ */
+function getModifierHearts(stats: Map<string, number> | Record<string, number> | undefined): number {
+  if (!stats) return 0;
+  
+  // Handle Map objects
+  if (stats instanceof Map) {
+    // Try "modifierHearts" first (actual storage format)
+    const modHearts = stats.get("modifierHearts");
+    if (modHearts != null) return modHearts;
+    // Fallback to "attack" or "defense" for backward compatibility
+    return stats.get("attack") || stats.get("defense") || 0;
+  }
+  
+  // Handle plain objects
+  if (typeof stats === "object" && stats !== null) {
+    // Try "modifierHearts" first (actual storage format)
+    if ("modifierHearts" in stats) {
+      const value = (stats as Record<string, unknown>).modifierHearts;
+      return typeof value === "number" ? value : 0;
+    }
+    // Fallback to "attack" or "defense" for backward compatibility
+    const attack = (stats as Record<string, unknown>).attack;
+    const defense = (stats as Record<string, unknown>).defense;
+    if (typeof attack === "number") return attack;
+    if (typeof defense === "number") return defense;
+  }
+  
+  return 0;
+}
+
+/**
  * Calculate total attack from equipped gear
  * Attack = weapon's modifierHearts value
  */
 export function calculateAttack(gear: EquippedGear): number {
   if (!gear.gearWeapon) return 0;
-  // modifierHearts is stored in the stats map under "attack" key
-  return gear.gearWeapon.stats.get("attack") || 0;
+  return getModifierHearts(gear.gearWeapon.stats);
 }
 
 /**
@@ -186,19 +217,19 @@ export function calculateDefense(gear: EquippedGear): number {
   let defense = 0;
   
   if (gear.gearArmor?.head) {
-    defense += gear.gearArmor.head.stats.get("defense") || 0;
+    defense += getModifierHearts(gear.gearArmor.head.stats);
   }
   
   if (gear.gearArmor?.chest) {
-    defense += gear.gearArmor.chest.stats.get("defense") || 0;
+    defense += getModifierHearts(gear.gearArmor.chest.stats);
   }
   
   if (gear.gearArmor?.legs) {
-    defense += gear.gearArmor.legs.stats.get("defense") || 0;
+    defense += getModifierHearts(gear.gearArmor.legs.stats);
   }
   
   if (gear.gearShield) {
-    defense += gear.gearShield.stats.get("defense") || 0;
+    defense += getModifierHearts(gear.gearShield.stats);
   }
   
   return defense;
@@ -209,12 +240,12 @@ export function calculateDefense(gear: EquippedGear): number {
  * This should be called after any gear changes
  */
 export function recalculateStats(character: {
-  gearWeapon?: { name: string; stats: Map<string, number> };
-  gearShield?: { name: string; stats: Map<string, number> };
+  gearWeapon?: { name: string; stats: Map<string, number> | Record<string, number> };
+  gearShield?: { name: string; stats: Map<string, number> | Record<string, number> };
   gearArmor?: {
-    head?: { name: string; stats: Map<string, number> };
-    chest?: { name: string; stats: Map<string, number> };
-    legs?: { name: string; stats: Map<string, number> };
+    head?: { name: string; stats: Map<string, number> | Record<string, number> };
+    chest?: { name: string; stats: Map<string, number> | Record<string, number> };
+    legs?: { name: string; stats: Map<string, number> | Record<string, number> };
   };
   attack?: number;
   defense?: number;

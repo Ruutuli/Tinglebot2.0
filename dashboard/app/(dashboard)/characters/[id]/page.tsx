@@ -1648,7 +1648,11 @@ export default function OCDetailPage() {
                 <StatCard
                   icon="fa-hand-fist"
                   label="ATTACK"
-                  value={calculateAttack(character, gearModifierHearts)}
+                  value={
+                    character.gearWeapon
+                      ? calculateAttack(character, gearModifierHearts)
+                      : (character.attack ?? 0)
+                  }
                   borderColor="border-[#ff6347]"
                   iconColor="text-[#ff6347]"
                   shadowColor="rgba(255,99,71,0.6)"
@@ -1656,7 +1660,11 @@ export default function OCDetailPage() {
                 <StatCard
                   icon="fa-shield-halved"
                   label="DEFENSE"
-                  value={calculateDefense(character, gearModifierHearts)}
+                  value={
+                    character.gearArmor || character.gearShield
+                      ? calculateDefense(character, gearModifierHearts)
+                      : (character.defense ?? 0)
+                  }
                   borderColor="border-[var(--totk-light-ocher)]"
                   iconColor="text-[var(--totk-light-ocher)]"
                   shadowColor="rgba(229,220,183,0.6)"

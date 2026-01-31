@@ -147,6 +147,7 @@ const { simulateWeightedWeather, getCurrentWeather, getCurrentPeriodBounds, getN
 const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
 const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
 const ItemModel = require('@/models/ItemModel');
+const Quest = require('@/models/QuestModel');
 const Pet = require('@/models/PetModel');
 const TempData = require('@/models/TempDataModel');
 const User = require('@/models/UserModel');
@@ -1083,11 +1084,11 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand Group: quest -------------------
+// ------------------- Subcommand Group: helpwanted -------------------
 .addSubcommandGroup(group =>
   group
-    .setName('quest')
-    .setDescription('📋 Mark quest complete or add quests to a user\'s total')
+    .setName('helpwanted')
+    .setDescription('📋 Help Wanted: daily village quests (item, monster, escort, etc.)')
     .addSubcommand(sub =>
       sub
         .setName('complete')
@@ -1113,10 +1114,16 @@ const modCommand = new SlashCommandBuilder()
             .setAutocomplete(true)
         )
     )
+)
+// ------------------- Subcommand Group: quest -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('quest')
+    .setDescription('📋 Listed/Member quests: RP, Art, Writing, unofficial events')
     .addSubcommand(sub =>
       sub
         .setName('add')
-        .setDescription('Add quest completions to a user\'s total (unofficial/listed/member quests)')
+        .setDescription('Add quest completions to a user\'s total')
         .addUserOption(opt =>
           opt
             .setName('user')
@@ -1126,22 +1133,23 @@ const modCommand = new SlashCommandBuilder()
         .addIntegerOption(opt =>
           opt
             .setName('amount')
-            .setDescription('Number of quest completions to add')
-            .setRequired(true)
+            .setDescription('Number of quest completions to add (ignored if quest_id provided)')
+            .setRequired(false)
             .setMinValue(1)
             .setMaxValue(100)
         )
         .addStringOption(opt =>
           opt
             .setName('reason')
-            .setDescription('Reason (e.g. Member quests, Unofficial event)')
+            .setDescription('Reason for generic adds (e.g. Member quests, Unofficial event)')
             .setRequired(false)
         )
-        .addBooleanOption(opt =>
+        .addStringOption(opt =>
           opt
-            .setName('also_help_wanted')
-            .setDescription('Also add to Help Wanted total (for 50-completion exchange)')
+            .setName('quest_id')
+            .setDescription('Specific quest ID from database (RP/Art/Writing) - adds that quest if user participated')
             .setRequired(false)
+            .setAutocomplete(true)
         )
     )
 )
@@ -1921,10 +1929,12 @@ async function execute(interaction) {
       } else if (subcommand === 'minigame') {
         return await handleMinigame(interaction);
       }
-    } else if (subcommandGroup === 'quest') {
+    } else if (subcommandGroup === 'helpwanted') {
       if (subcommand === 'complete') {
-        return await handleModQuestComplete(interaction);
-      } else if (subcommand === 'add') {
+        return await handleModHelpWantedComplete(interaction);
+      }
+    } else if (subcommandGroup === 'quest') {
+      if (subcommand === 'add') {
         return await handleModQuestAdd(interaction);
       }
     } else if (subcommandGroup === 'weather') {
@@ -3683,9 +3693,9 @@ async function handleResetRolls(interaction) {
   }
 }
 
-// ------------------- Function: handleModQuestComplete -------------------
+// ------------------- Function: handleModHelpWantedComplete -------------------
 // Marks a Help Wanted quest as completed by a chosen user/character (mod override, no validations)
-async function handleModQuestComplete(interaction) {
+async function handleModHelpWantedComplete(interaction) {
   const targetUser = interaction.options.getUser('user');
   const characterName = interaction.options.getString('character');
   const questId = interaction.options.getString('quest_id');
@@ -3749,16 +3759,56 @@ async function handleModQuestComplete(interaction) {
 }
 
 // ------------------- Function: handleModQuestAdd -------------------
-// Adds quest completions to a user's total (unofficial/listed/member quests)
+// Adds quest completions to a user's total (unofficial/listed/member quests, or specific quest from DB)
 async function handleModQuestAdd(interaction) {
   const targetUser = interaction.options.getUser('user');
+  const questId = interaction.options.getString('quest_id');
   const amount = interaction.options.getInteger('amount');
   const reason = interaction.options.getString('reason') || 'Mod-added quest';
-  const alsoHelpWanted = interaction.options.getBoolean('also_help_wanted') ?? false;
 
   const user = await User.getOrCreateUser(targetUser.id);
-  const baseId = `mod-add-${targetUser.id}-${Date.now()}`;
 
+  // ------------------- Mode: Add specific quest from database (RP/Art/Writing) -------------------
+  if (questId) {
+    const quest = await Quest.findOne({ questID: questId });
+    if (!quest) {
+      return interaction.editReply({
+        content: `❌ Quest with ID \`${questId}\` not found in the database.`,
+        ephemeral: true
+      });
+    }
+    const participant = quest.getParticipant(targetUser.id);
+    if (!participant) {
+      return interaction.editReply({
+        content: `❌ <@${targetUser.id}> is not a participant in quest **${quest.title}** (\`${questId}\`).`,
+        ephemeral: true
+      });
+    }
+    await user.recordQuestCompletion({
+      questId: quest.questID,
+      questType: quest.questType || 'Other',
+      questTitle: quest.title || `Quest ${quest.questID}`,
+      rewardSource: 'immediate'
+    });
+    await user.save();
+
+    const summary = user.getQuestTurnInSummary();
+    const pendingTurnIns = summary.totalPending ?? (user.quests?.pendingTurnIns || 0) + (user.quests?.legacy?.pendingTurnIns || 0);
+    return interaction.editReply({
+      content: `✅ Added quest **${quest.title}** (\`${questId}\`) to <@${targetUser.id}>'s completions (they participated).\n• Quest turn-in pending: **${pendingTurnIns}**`,
+      ephemeral: true
+    });
+  }
+
+  // ------------------- Mode: Add generic amount -------------------
+  if (!amount || amount < 1) {
+    return interaction.editReply({
+      content: '❌ Please specify an **amount** or a **quest_id** to add a specific quest from the database.',
+      ephemeral: true
+    });
+  }
+
+  const baseId = `mod-add-${targetUser.id}-${Date.now()}`;
   for (let i = 0; i < amount; i++) {
     await user.recordQuestCompletion({
       questId: `${baseId}-${i}`,
@@ -3768,48 +3818,12 @@ async function handleModQuestAdd(interaction) {
     });
   }
 
-  if (alsoHelpWanted) {
-    if (!user.helpWanted) {
-      user.helpWanted = {
-        lastCompletion: null,
-        cooldownUntil: null,
-        totalCompletions: 0,
-        currentCompletions: 0,
-        lastExchangeAmount: 0,
-        lastExchangeAt: null,
-        completions: []
-      };
-    }
-    user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + amount;
-    user.helpWanted.currentCompletions = (user.helpWanted.currentCompletions || 0) + amount;
-    const now = new Date();
-    const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
-    for (let i = 0; i < amount; i++) {
-      user.helpWanted.completions.push({
-        date: today,
-        village: null,
-        questType: 'mod',
-        questId: `mod-hw-${targetUser.id}-${Date.now()}-${i}`,
-        timestamp: new Date()
-      });
-    }
-    if (user.helpWanted.completions.length > 100) {
-      user.helpWanted.completions = user.helpWanted.completions.slice(-100);
-    }
-  }
-
   await user.save();
 
   const summary = user.getQuestTurnInSummary();
   const pendingTurnIns = summary.totalPending ?? (user.quests?.pendingTurnIns || 0) + (user.quests?.legacy?.pendingTurnIns || 0);
-  let content = `✅ Added **${amount}** quest completion(s) to <@${targetUser.id}>'s total.\n• Quest turn-in pending: **${pendingTurnIns}**`;
-  if (alsoHelpWanted) {
-    content += `\n• Help Wanted total: **${user.helpWanted.totalCompletions}** (current for exchange: **${user.helpWanted.currentCompletions}**)`;
-  }
-  content += '.';
-
   return interaction.editReply({
-    content,
+    content: `✅ Added **${amount}** quest completion(s) to <@${targetUser.id}>'s total.\n• Quest turn-in pending: **${pendingTurnIns}**`,
     ephemeral: true
   });
 }

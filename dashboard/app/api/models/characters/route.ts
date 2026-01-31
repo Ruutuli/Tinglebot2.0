@@ -200,16 +200,23 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    // Compute attack/defense from equipped gear so list display and sort match profile (gear as source of truth).
+    // Compute attack/defense from equipped gear for list display.
+    // Bot stores gear stats with "modifierHearts" key (as seen in MongoDB documents).
+    // Dashboard gear-equip may use "attack"/"defense" keys. Support both with fallback.
     const addComputedStats: PipelineStage.AddFields = {
       $addFields: {
-        attack: { $ifNull: ["$gearWeapon.stats.attack", 0] },
+        attack: {
+          $ifNull: [
+            { $ifNull: ["$gearWeapon.stats.modifierHearts", "$gearWeapon.stats.attack"] },
+            0,
+          ],
+        },
         defense: {
           $add: [
-            { $ifNull: ["$gearShield.stats.defense", 0] },
-            { $ifNull: ["$gearArmor.head.stats.defense", 0] },
-            { $ifNull: ["$gearArmor.chest.stats.defense", 0] },
-            { $ifNull: ["$gearArmor.legs.stats.defense", 0] },
+            { $ifNull: [{ $ifNull: ["$gearArmor.head.stats.modifierHearts", "$gearArmor.head.stats.defense"] }, 0] },
+            { $ifNull: [{ $ifNull: ["$gearArmor.chest.stats.modifierHearts", "$gearArmor.chest.stats.defense"] }, 0] },
+            { $ifNull: [{ $ifNull: ["$gearArmor.legs.stats.modifierHearts", "$gearArmor.legs.stats.defense"] }, 0] },
+            { $ifNull: [{ $ifNull: ["$gearShield.stats.modifierHearts", "$gearShield.stats.defense"] }, 0] },
           ],
         },
       },

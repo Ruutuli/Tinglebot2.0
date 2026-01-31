@@ -326,13 +326,17 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             if (interaction.options._subcommand) {
               const modSubcommand = interaction.options.getSubcommand();
               const modSubcommandGroup = interaction.options.getSubcommandGroup(false);
-              if (modSubcommandGroup === "quest") {
+              if (modSubcommandGroup === "helpwanted") {
                 if (modSubcommand === "complete") {
                   if (focusedOption.name === "character") {
                     await handleModQuestCharacterAutocomplete(interaction, focusedOption);
                   } else if (focusedOption.name === "quest_id") {
                     await handleModHelpWantedQuestIdAutocomplete(interaction, focusedOption);
                   }
+                }
+              } else if (modSubcommandGroup === "quest") {
+                if (modSubcommand === "add" && focusedOption.name === "quest_id") {
+                  await handleModQuestAddQuestIdAutocomplete(interaction, focusedOption);
                 }
               } else if (modSubcommand === "give") {
                 if (focusedOption.name === "character") {
@@ -4004,7 +4008,33 @@ async function handleModQuestCharacterAutocomplete(interaction, focusedOption) {
   }
 }
 
-// ------------------- /mod quest complete: Help Wanted Quest ID Autocomplete (all quests, including completed/past) -------------------
+// ------------------- /mod quest add: Main Quest ID Autocomplete (RP/Art/Writing - all quests including completed) -------------------
+async function handleModQuestAddQuestIdAutocomplete(interaction, focusedOption) {
+  try {
+    const quests = await Quest.find({})
+      .sort({ date: -1 })
+      .limit(50)
+      .lean();
+    const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
+    const choices = quests
+      .filter(q =>
+        (q.questID && q.questID.toLowerCase().includes(focusedValue)) ||
+        (q.title && q.title.toLowerCase().includes(focusedValue)) ||
+        (q.location && q.location.toLowerCase().includes(focusedValue))
+      )
+      .map(q => ({
+        name: `${q.questID} - ${q.title || 'Untitled'} (${q.questType || '?'})`,
+        value: q.questID
+      }));
+    await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    console.error('[autocompleteHandler.js] Error in handleModQuestAddQuestIdAutocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- /mod helpwanted complete: Help Wanted Quest ID Autocomplete (all quests, including completed/past) -------------------
 async function handleModHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
   try {
     const HelpWantedQuest = require('@/models/HelpWantedQuestModel');

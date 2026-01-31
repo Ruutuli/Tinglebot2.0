@@ -47,7 +47,6 @@ export async function getAgenda(): Promise<Agenda> {
   // Handle Agenda events
   agendaInstance.on("ready", () => {
     isAgendaReady = true;
-    logger.success("agenda", "Agenda scheduler is ready");
   });
   
   agendaInstance.on("error", (error) => {
@@ -55,11 +54,11 @@ export async function getAgenda(): Promise<Agenda> {
   });
   
   agendaInstance.on("start", (job) => {
-    logger.info("agenda", `Job ${job.attrs.name} starting`);
+    // Only log job starts in debug mode
   });
   
   agendaInstance.on("complete", (job) => {
-    logger.success("agenda", `Job ${job.attrs.name} completed`);
+    // Only log job completions in debug mode
   });
   
   agendaInstance.on("fail", (error, job) => {
@@ -81,7 +80,6 @@ export async function startAgenda(): Promise<void> {
   
   // Check if already ready
   if (isAgendaReady) {
-    logger.info("agenda", "Agenda scheduler already ready");
     return;
   }
   
@@ -103,7 +101,6 @@ export async function startAgenda(): Promise<void> {
         resolved = true;
         clearTimeout(timeout);
         isAgendaReady = true;
-        logger.success("agenda", "Agenda scheduler started and ready");
         resolve();
       }
     };

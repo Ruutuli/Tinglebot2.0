@@ -26,6 +26,7 @@ export const navItems: NavItem[] = [
     ],
   },
   { href: "/levels", label: "Levels & Progression", icon: "fa-chart-line" },
+  { href: "/stats", label: "Statistics", icon: "fa-chart-bar" },
   { href: "/calendar", label: "Calendar", icon: "fa-calendar" },
   { href: "/profile", label: "Profile", icon: "fa-user-circle" },
   {

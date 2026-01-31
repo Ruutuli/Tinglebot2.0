@@ -144,17 +144,12 @@ export async function GET(
     // GET requests are public - no authentication required
     const { id: slugOrId } = await params;
     const skipHelpWanted = req.nextUrl.searchParams.get("skipHelpWanted") === "true";
-    logger.info(
-      "api/characters/[id] GET",
-      `Incoming request: slugOrId="${slugOrId}", skipHelpWanted=${String(skipHelpWanted)}`
-    );
     if (!slugOrId?.trim()) {
       logger.warn("api/characters/[id] GET", "Missing character identifier (empty slugOrId)");
       return NextResponse.json({ error: "Character identifier required" }, { status: 400 });
     }
 
     await connect();
-    logger.info("api/characters/[id] GET", "Connected to database");
     const { default: Character } = await import("@/models/CharacterModel.js");
     const { default: ModCharacter } = await import("@/models/ModCharacterModel.js");
     // Import Pet and Mount models to register schemas for population
@@ -178,13 +173,8 @@ export async function GET(
     
     // Check if it looks like an ObjectId (24 hex characters)
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(slugOrId);
-    logger.info("api/characters/[id] GET", `Identifier type: ${isObjectId ? "ObjectId" : "slug"}`);
     
     const loadCharacterById = async (id: string, useModCharacter = false) => {
-      logger.info(
-        "api/characters/[id] GET",
-        `Loading character by id=${id} (collection=${useModCharacter ? "ModCharacter" : "Character"})`
-      );
       if (useModCharacter) {
         return (
           (await (ModCharacter as { findById: (id: string) => Promise<CharDoc | null> }).findById(
@@ -209,16 +199,11 @@ export async function GET(
       }
     } else {
       const slug = slugOrId.toLowerCase();
-      logger.info("api/characters/[id] GET", `Slug lookup: "${slug}"`);
       const regularChars = await Character.find({})
         .select("name")
         .lean<Array<Pick<CharDoc, "_id" | "name">>>();
       const slugMatch = regularChars.find((c) => createSlug(c.name) === slug);
       if (slugMatch) {
-        logger.info(
-          "api/characters/[id] GET",
-          `Slug matched regular character name="${slugMatch.name}", id=${String(slugMatch._id)}`
-        );
         char = await loadCharacterById(String(slugMatch._id));
       }
 
@@ -228,10 +213,6 @@ export async function GET(
           .lean<Array<Pick<CharDoc, "_id" | "name">>>();
         const modSlugMatch = modChars.find((c) => createSlug(c.name) === slug);
         if (modSlugMatch) {
-          logger.info(
-            "api/characters/[id] GET",
-            `Slug matched mod character name="${modSlugMatch.name}", id=${String(modSlugMatch._id)}`
-          );
           isModCharacter = true;
           char = await loadCharacterById(String(modSlugMatch._id), true);
         }
@@ -242,11 +223,6 @@ export async function GET(
       logger.warn("api/characters/[id] GET", `Character not found for slugOrId="${slugOrId}"`);
       return NextResponse.json({ error: "Character not found" }, { status: 404 });
     }
-
-    logger.info(
-      "api/characters/[id] GET",
-      `Character loaded: id=${String((char as { _id?: unknown })._id)}, name="${String((char as { name?: unknown }).name ?? "")}", isModCharacter=${String(isModCharacter)}`
-    );
     
     // Hide drafts/pending/needs_changes from public character pages.
     // Only accepted characters are viewable here (drafts remain visible only in My OCs and moderation queue).
@@ -268,10 +244,6 @@ export async function GET(
           }
         } catch (e) {
           // If session check fails, user is not logged in or there's an error
-          logger.debug(
-            "api/characters/[id] GET",
-            `Session check failed: ${e instanceof Error ? e.message : String(e)}`
-          );
         }
         
         if (!canView) {
@@ -312,18 +284,14 @@ export async function GET(
       // Convert string ID to ObjectId for proper MongoDB query
       const charObjectId = new mongoose.Types.ObjectId(charId);
       
-      logger.debug("api/characters/[id] GET", `Fetching help wanted quests for character ID: ${charId} (ObjectId: ${charObjectId.toString()})`);
-      
       try {
         // Check if model already exists to avoid recompilation error
         let HelpWantedQuest: unknown;
         if (mongoose.models.HelpWantedQuest) {
           HelpWantedQuest = mongoose.models.HelpWantedQuest;
-          logger.debug("api/characters/[id] GET", `Using existing HelpWantedQuest model`);
         } else {
           const module = await import("@/models/HelpWantedQuestModel.js");
           HelpWantedQuest = module.default;
-          logger.debug("api/characters/[id] GET", `HelpWantedQuest model imported successfully`);
         }
         
         type QuestDoc = {
@@ -337,7 +305,6 @@ export async function GET(
           completed: true,
           "completedBy.characterId": charObjectId
         };
-        logger.debug("api/characters/[id] GET", `Querying help wanted quests with filter: {"completed":true,"completedBy.characterId":ObjectId("${charObjectId.toString()}")}`);
         
         const questQuery = (HelpWantedQuest as unknown as {
           find: (filter: Record<string, unknown>) => {
@@ -345,11 +312,6 @@ export async function GET(
           };
         }).find(queryFilter);
         const completedQuests = await questQuery.sort({ date: -1 }).limit(50); // Get most recent 50 completions
-
-        logger.debug("api/characters/[id] GET", `Found ${completedQuests.length} completed quests`);
-        if (completedQuests.length > 0) {
-          logger.debug("api/characters/[id] GET", `Sample quest: ${JSON.stringify(completedQuests[0])}`);
-        }
 
         // Build completions array from quest data
         const questCompletions = completedQuests
@@ -366,8 +328,6 @@ export async function GET(
             questType: quest.type!
           }));
 
-        logger.debug("api/characters/[id] GET", `Built ${questCompletions.length} quest completions`);
-
         // Get the most recent completion date
         const lastCompletion = questCompletions.length > 0 ? questCompletions[0].date : null;
 
@@ -376,11 +336,9 @@ export async function GET(
           const charObj = char as { helpWanted?: { completions?: unknown[]; lastCompletion?: string | null } };
           if (!charObj.helpWanted) {
             charObj.helpWanted = { completions: [], lastCompletion: null };
-            logger.debug("api/characters/[id] GET", `Initialized helpWanted object`);
           }
           // Merge with existing completions, avoiding duplicates
           const existingCompletions = (charObj.helpWanted.completions || []) as Array<{ date?: string; village?: string; questType?: string }>;
-          logger.debug("api/characters/[id] GET", `Existing completions: ${existingCompletions.length}`);
           
           const existingKeys = new Set(
             existingCompletions.map((c) => `${c.date}-${c.village}-${c.questType}`)
@@ -388,15 +346,11 @@ export async function GET(
           const newCompletions = questCompletions.filter(
             (c: { date: string; village: string; questType: string }) => !existingKeys.has(`${c.date}-${c.village}-${c.questType}`)
           );
-          logger.debug("api/characters/[id] GET", `New completions to add: ${newCompletions.length}`);
           
           charObj.helpWanted.completions = [...existingCompletions, ...newCompletions];
           if (lastCompletion && (!charObj.helpWanted.lastCompletion || lastCompletion > charObj.helpWanted.lastCompletion)) {
             charObj.helpWanted.lastCompletion = lastCompletion;
           }
-          logger.debug("api/characters/[id] GET", `Updated helpWanted with ${charObj.helpWanted.completions.length} total completions, lastCompletion: ${charObj.helpWanted.lastCompletion}`);
-        } else {
-          logger.debug("api/characters/[id] GET", `No quest completions found, helpWanted remains unchanged`);
         }
       } catch (err) {
         // If HelpWantedQuest model doesn't exist or query fails, just continue without it
@@ -422,8 +376,7 @@ export async function GET(
         out.spiritOrbs = spiritOrbEntry?.quantity ?? 0;
       }
     } catch (inventoryErr) {
-      const msg = inventoryErr instanceof Error ? inventoryErr.message : String(inventoryErr);
-      logger.debug("api/characters/[id] GET", `Spirit orbs from inventory skipped: ${msg}`);
+      // Silently skip if inventory lookup fails
     }
 
     // Fetch Discord username for the character owner
@@ -435,10 +388,6 @@ export async function GET(
     }
     
     const response = NextResponse.json({ character: out });
-    logger.info(
-      "api/characters/[id] GET",
-      `Responding with character keys: ${Object.keys(out).slice(0, 25).join(", ")}${Object.keys(out).length > 25 ? ", ..." : ""}`
-    );
     
     // Add cache headers for browser/CDN caching
     // Character data changes more frequently, so shorter cache time

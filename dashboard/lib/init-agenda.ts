@@ -22,8 +22,6 @@ export async function initializeAgenda(): Promise<void> {
   }
   
   try {
-    logger.info("init-agenda", "Initializing Agenda scheduler...");
-    
     // Ensure database connection
     await connect();
     
@@ -37,7 +35,6 @@ export async function initializeAgenda(): Promise<void> {
     await ensureCharacterOfWeekExists();
     
     isInitialized = true;
-    logger.success("init-agenda", "Agenda initialization completed");
   } catch (error) {
     logger.error(
       "init-agenda",
@@ -56,9 +53,7 @@ async function ensureCharacterOfWeekExists(): Promise<void> {
     const current = await getCurrentCharacterOfWeek();
     
     if (!current) {
-      logger.info("init-agenda", "No Character of the Week found, creating initial one...");
       await rotateCharacterOfWeek("Initial setup");
-      logger.success("init-agenda", "Initial Character of the Week created");
       return;
     }
     
@@ -67,17 +62,7 @@ async function ensureCharacterOfWeekExists(): Promise<void> {
     const endDate = new Date(current.endDate);
     
     if (now >= endDate) {
-      logger.info(
-        "init-agenda",
-        `Current Character of the Week expired (ended ${endDate.toISOString()}), rotating...`
-      );
       await rotateCharacterOfWeek("Startup rotation (expired)");
-      logger.success("init-agenda", "Character of the Week rotated on startup");
-    } else {
-      logger.info(
-        "init-agenda",
-        `Character of the Week exists: ${current.characterName} (ends ${endDate.toISOString()})`
-      );
     }
   } catch (error) {
     logger.error(

@@ -16,9 +16,7 @@ const JOB_SCHEDULE = "0 5 * * 0"; // Every Sunday at 05:00 UTC (midnight EST)
  */
 async function handleRotation(job: Job) {
   try {
-    logger.info("character-of-week-rotation", "Starting weekly rotation job");
     await rotateCharacterOfWeek("Weekly rotation");
-    logger.success("character-of-week-rotation", "Weekly rotation completed successfully");
   } catch (error) {
     logger.error(
       "character-of-week-rotation",
@@ -42,11 +40,6 @@ export async function defineRotationJob(): Promise<void> {
   
   // Schedule the job to run every Sunday at 05:00 UTC
   await agenda.every(JOB_SCHEDULE, JOB_NAME);
-  
-  logger.success(
-    "character-of-week-rotation",
-    `Scheduled ${JOB_NAME} to run ${JOB_SCHEDULE}`
-  );
 }
 
 /**
@@ -55,5 +48,4 @@ export async function defineRotationJob(): Promise<void> {
 export async function triggerRotationJob(): Promise<void> {
   const agenda = await getAgenda();
   await agenda.now(JOB_NAME, {});
-  logger.info("character-of-week-rotation", "Manually triggered rotation job");
 }

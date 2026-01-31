@@ -3,6 +3,8 @@
 // Organized and grouped per 2025 coding standards.
 // ============================================================================
 
+const { EmbedBuilder } = require('discord.js');
+
 const { connectToInventories, connectToTinglebot } = require('@/database/db');
 
 const { handleError } = require('@/utils/globalErrorHandler');
@@ -99,6 +101,17 @@ const initializeReactionHandler = (client) => {
           const embed = await createHealEmbed(null, { ...healingRequest, name: healingRequest.characterRequesting }, healingRequest.heartsToHeal, healingRequest.paymentOffered, healingRequest.healingRequestId, null, 'cancelled');
           await reaction.message.edit({ embeds: [embed] });
         }
+      }
+
+      // Bot-reports channel: reply when someone marks a message as fixed with a checkmark
+      const isCheckmark = reaction.emoji.name === '✅' || reaction.emoji.name === '☑️' || reaction.emoji.name === '✔️' ||
+        reaction.emoji.id === '854499720797618207';
+      if (reaction.message.channel.id === '1379974822506795030' && isCheckmark) {
+        const bugFixedEmbed = new EmbedBuilder()
+          .setColor(0x57F287) // green
+          .setTitle('Bug fixed')
+          .setDescription('This bug has been fixed! If you are still having issues with it, please rereport it.');
+        await reaction.message.reply({ embeds: [bugFixedEmbed] });
       }
 
       // Help Wanted quest completion logic - run on any checkmark in submissions channel (mod or bot)
