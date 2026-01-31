@@ -216,13 +216,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     
-    // Use shared inventory collection for mod characters
-    let collectionName;
-    if (character.isModCharacter) {
-      collectionName = 'mod_shared_inventory';
-    } else {
-      collectionName = character.name.toLowerCase();
-    }
+    // Use same per-character collection for both regular and mod characters
+    // (must match getCharacterInventoryCollectionWithModSupport and removeItemInventoryDatabase)
+    const collectionName = character.name.toLowerCase();
     logger.info('INVENTORY', `📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);

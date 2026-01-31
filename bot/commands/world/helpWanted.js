@@ -269,13 +269,8 @@ async function validateItemQuestRequirements(character, quest) {
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     
-    // Use shared inventory collection for mod characters
-    let collectionName;
-    if (character.isModCharacter) {
-      collectionName = 'mod_shared_inventory';
-    } else {
-      collectionName = character.name.toLowerCase();
-    }
+    // Per-character collection (same for regular and mod characters)
+    const collectionName = character.name.toLowerCase();
     const inventoryCollection = db.collection(collectionName);
     
     const dbItems = await inventoryCollection.find({
@@ -345,13 +340,8 @@ async function validateCraftingQuestRequirements(character, quest) {
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     
-    // Use shared inventory collection for mod characters
-    let collectionName;
-    if (character.isModCharacter) {
-      collectionName = 'mod_shared_inventory';
-    } else {
-      collectionName = character.name.toLowerCase();
-    }
+    // Per-character collection (same for regular and mod characters)
+    const collectionName = character.name.toLowerCase();
     console.log(`[helpWanted.js]: Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
@@ -444,13 +434,8 @@ async function removeQuestItems(character, quest, interaction) {
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     
-    // Use shared inventory collection for mod characters
-    let collectionName;
-    if (character.isModCharacter) {
-      collectionName = 'mod_shared_inventory';
-    } else {
-      collectionName = character.name.toLowerCase();
-    }
+    // Per-character collection (same for regular and mod characters)
+    const collectionName = character.name.toLowerCase();
     const inventoryCollection = db.collection(collectionName);
     
     let itemsToRemove = [];
