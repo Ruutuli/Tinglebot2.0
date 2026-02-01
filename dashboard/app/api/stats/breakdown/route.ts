@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const allowedTypes = ["race", "job", "homeVillage", "petSpecies", "petType", "inventoryCharacter", "inventoryItem"];
+    const allowedTypes = ["race", "job", "gender", "homeVillage", "petSpecies", "petType", "inventoryCharacter", "inventoryItem"];
     if (!allowedTypes.includes(type)) {
       return NextResponse.json(
         { error: `Type must be one of: ${allowedTypes.join(", ")}` },
@@ -60,6 +60,75 @@ export async function GET(request: Request) {
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(" ")
         .trim();
+    };
+
+    // Normalize gender into broader categories (same as stats route)
+    const normalizeGender = (g: string): string => {
+      if (!g) return "Unknown";
+      const gender = String(g).toLowerCase().trim();
+      
+      // Split by common separators (|, ||, /, etc.) and get the first meaningful word
+      const firstPart = gender.split(/[\s|/]+/)[0].trim();
+      const fullText = gender.replace(/[|/]/g, " ").replace(/\s+/g, " ").trim();
+      
+      // Check for word boundaries - look for "male" as a whole word or at start
+      const hasMale = /\bmale\b/.test(fullText) || firstPart === "male" || fullText.startsWith("male");
+      const hasFemale = /\bfemale\b/.test(fullText) || firstPart === "female" || fullText.startsWith("female");
+      const hasDemigirl = /\bdemigirl\b/.test(fullText) || /\bdemi-girl\b/.test(fullText) || /\bdemi girl\b/.test(fullText);
+      const hasDemiboy = /\bdemiboy\b/.test(fullText) || /\bdemi-boy\b/.test(fullText) || /\bdemi boy\b/.test(fullText);
+      const hasTrans = /\btrans\b/.test(fullText) || /\btransman\b/.test(fullText) || /\btrans man\b/.test(fullText) || /\btransgender\b/.test(fullText);
+      const hasNonbinary = /\bnonbinary\b/.test(fullText) || /\bnon-binary\b/.test(fullText) || /\bnon binary\b/.test(fullText) || /\benby\b/.test(fullText) || /\benby\b/.test(fullText);
+      const hasGenderfluid = /\bgenderfluid\b/.test(fullText) || /\bgender-fluid\b/.test(fullText) || /\bgender fluid\b/.test(fullText);
+      const hasAgender = /\bagender\b/.test(fullText) || /\ba-gender\b/.test(fullText) || /\ba gender\b/.test(fullText);
+      const hasBigender = /\bbigender\b/.test(fullText) || /\bbi-gender\b/.test(fullText) || /\bbi gender\b/.test(fullText);
+      const hasPangender = /\bpangender\b/.test(fullText) || /\bpan-gender\b/.test(fullText) || /\bpan gender\b/.test(fullText);
+      const hasNeutrois = /\bneutrois\b/.test(fullText);
+      const hasTwoSpirit = /\btwo.spirit\b/.test(fullText) || /\b2spirit\b/.test(fullText) || /\b2-spirit\b/.test(fullText);
+      
+      // Male variations (check first to avoid conflicts)
+      if (hasMale && !hasFemale && !hasDemigirl) {
+        // Trans men are still Male category
+        if (hasTrans && (hasMale || fullText.includes("man"))) {
+          return "Male";
+        }
+        // Demiboy goes to Nonbinary
+        if (hasDemiboy) {
+          return "Nonbinary";
+        }
+        return "Male";
+      }
+      
+      // Female variations
+      if (hasFemale || hasDemigirl) {
+        return "Female";
+      }
+      
+      // Nonbinary variations (check these before default)
+      if (hasNonbinary || hasGenderfluid || hasAgender || hasDemiboy || hasBigender || hasPangender || hasNeutrois || hasTwoSpirit) {
+        return "Nonbinary";
+      }
+      
+      // Check for trans without clear male/female indicator
+      if (hasTrans) {
+        // If it says "trans man" or similar, it's Male
+        if (fullText.includes("man") || fullText.includes("male")) {
+          return "Male";
+        }
+        // If it says "trans woman" or similar, it's Female
+        if (fullText.includes("woman") || fullText.includes("female")) {
+          return "Female";
+        }
+        // Otherwise, could be nonbinary
+        return "Nonbinary";
+      }
+      
+      // Default: return capitalized first word
+      const firstWord = firstPart || String(g).split(/[\s|/]/)[0].trim();
+      if (firstWord) {
+        return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+      }
+      
+      return "Unknown";
     };
 
     await connect();
@@ -181,6 +250,16 @@ export async function GET(request: Request) {
         matchingVillages.length > 0
           ? { $in: matchingVillages }
           : { $regex: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") };
+    } else if (type === "gender") {
+      // For gender, we need to match all genders that normalize to the clicked category
+      const allGenders = await Character.distinct("gender", { status: "accepted" });
+      const matchingGenders = allGenders.filter(
+        (g) => g && normalizeGender(String(g)).toLowerCase() === value.trim().toLowerCase()
+      );
+      characterFilter.gender =
+        matchingGenders.length > 0
+          ? { $in: matchingGenders }
+          : { $regex: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") };
     } else {
       characterFilter[type] = { $regex: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") };
     }
@@ -188,7 +267,7 @@ export async function GET(request: Request) {
     logger.info("api/stats/breakdown", `Filter: ${JSON.stringify(characterFilter)}`);
 
     const characters = await Character.find(characterFilter)
-      .select("_id name homeVillage currentVillage job race")
+      .select("_id name homeVillage currentVillage job race gender")
       .lean();
 
     logger.info("api/stats/breakdown", `Found ${characters.length} characters matching filter`);
@@ -199,7 +278,7 @@ export async function GET(request: Request) {
       return acc;
     }, {} as Record<string, number>);
 
-    const byJob = type === "race"
+    const byJob = type === "race" || type === "gender"
       ? characters.reduce((acc, char) => {
           const job = normalizeName(char.job || "Unknown");
           acc[job] = (acc[job] || 0) + 1;
@@ -207,10 +286,27 @@ export async function GET(request: Request) {
         }, {} as Record<string, number>)
       : {};
 
-    const byRace = type === "job"
+    const byRace = type === "job" || type === "gender"
       ? characters.reduce((acc, char) => {
           const race = normalizeName(char.race || "Unknown");
           acc[race] = (acc[race] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      : {};
+
+    const byGender = type === "job" || type === "race"
+      ? characters.reduce((acc, char) => {
+          const gender = normalizeName(char.gender || "Unknown");
+          acc[gender] = (acc[gender] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      : {};
+
+    // Detailed gender breakdown (shows original gender values, not normalized)
+    const byGenderDetailed = type === "gender"
+      ? characters.reduce((acc, char) => {
+          const gender = char.gender || "Unknown";
+          acc[gender] = (acc[gender] || 0) + 1;
           return acc;
         }, {} as Record<string, number>)
       : {};
@@ -242,6 +338,22 @@ export async function GET(request: Request) {
         ...(type === "job" && {
           byRace: Object.entries(byRace)
             .map(([race, count]) => ({ race, count }))
+            .sort((a, b) => b.count - a.count),
+          byGender: Object.entries(byGender)
+            .map(([gender, count]) => ({ gender, count }))
+            .sort((a, b) => b.count - a.count),
+        }),
+        ...(type === "race" && {
+          byGender: Object.entries(byGender)
+            .map(([gender, count]) => ({ gender, count }))
+            .sort((a, b) => b.count - a.count),
+        }),
+        ...(type === "gender" && {
+          byGenderDetailed: Object.entries(byGenderDetailed)
+            .map(([gender, count]) => ({ gender, count }))
+            .sort((a, b) => b.count - a.count),
+          byJob: Object.entries(byJob)
+            .map(([job, count]) => ({ job, count }))
             .sort((a, b) => b.count - a.count),
         }),
       },

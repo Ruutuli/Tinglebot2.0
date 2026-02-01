@@ -34,6 +34,7 @@ type StatsData = {
     byCurrentVillage: Array<{ village: string; count: number }>;
     byJob: Array<{ job: string; count: number }>;
     byRace: Array<{ race: string; count: number }>;
+    byGender: Array<{ gender: string; count: number }>;
     byRaceByVillage: Array<{ race: string; village: string; count: number }>;
     birthdayByMonth: Array<{ month: number; monthName: string; count: number }>;
     birthdayBySeason: Array<{ season: string; count: number }>;
@@ -133,6 +134,8 @@ type CharacterBreakdown = {
     byHomeVillage: Array<{ village: string; count: number }>;
     byJob?: Array<{ job: string; count: number }>;
     byRace?: Array<{ race: string; count: number }>;
+    byGender?: Array<{ gender: string; count: number }>;
+    byGenderDetailed?: Array<{ gender: string; count: number }>;
   };
 };
 
@@ -636,6 +639,18 @@ function CharacterStatsSection({
       .sort((a, b) => b.count - a.count);
   }, [data.byJob]);
 
+  const genderChartData = useMemo(() => {
+    const genderMap = new Map<string, number>();
+    data.byGender?.forEach((item) => {
+      const normalizedName = capitalize((item.gender || "").trim() || "Unknown");
+      const currentCount = genderMap.get(normalizedName) || 0;
+      genderMap.set(normalizedName, currentCount + item.count);
+    });
+    return Array.from(genderMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [data.byGender]);
+
   const raceChartData = useMemo(() => {
     const raceMap = new Map<string, number>();
     data.byRace.forEach((item) => {
@@ -722,6 +737,21 @@ function CharacterStatsSection({
             </div>
           </div>
         </div>
+      )}
+
+      {genderChartData.length > 0 && (
+        <SectionCard title="Characters by Gender" icon="fa-venus-mars" accentColor={SECTION_ACCENT_COLORS.characters}>
+          <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
+          <SharedBarChart
+            data={genderChartData}
+            layout="vertical"
+            height={Math.max(200, genderChartData.length * 40 + 50)}
+            barColor={SECTION_ACCENT_HEX.characters}
+            barSize={32}
+            onBarClick={(payload) => payload?.name && onBreakdownClick("gender", payload.name)}
+            nameLabel="Characters"
+          />
+        </SectionCard>
       )}
 
       {raceChartData.length > 0 && (
@@ -1595,6 +1625,27 @@ function BreakdownModal({
                   </div>
                 </div>
 
+                {data.breakdown.byGenderDetailed && (
+                  <div>
+                    <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
+                      Detailed Gender Breakdown
+                    </h3>
+                    <div className="space-y-2">
+                      {data.breakdown.byGenderDetailed.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
+                        >
+                          <span className="text-[var(--botw-pale)]">{item.gender || "Unknown"}</span>
+                          <span className="font-semibold text-[var(--totk-light-green)]">
+                            {item.count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {data.breakdown.byJob && (
                   <div>
                     <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
@@ -1628,6 +1679,27 @@ function BreakdownModal({
                           className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
                         >
                           <span className="text-[var(--botw-pale)]">{capitalize(item.race)}</span>
+                          <span className="font-semibold text-[var(--totk-light-green)]">
+                            {item.count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {data.breakdown.byGender && (
+                  <div>
+                    <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
+                      By Gender
+                    </h3>
+                    <div className="space-y-2">
+                      {data.breakdown.byGender.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
+                        >
+                          <span className="text-[var(--botw-pale)]">{capitalize(item.gender)}</span>
                           <span className="font-semibold text-[var(--totk-light-green)]">
                             {item.count}
                           </span>

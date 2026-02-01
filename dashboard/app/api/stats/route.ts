@@ -71,6 +71,75 @@ export async function GET() {
       return String(v).charAt(0).toUpperCase() + String(v).slice(1).toLowerCase();
     };
 
+    // Normalize gender into broader categories
+    const normalizeGender = (g: string): string => {
+      if (!g) return "Unknown";
+      const gender = String(g).toLowerCase().trim();
+      
+      // Split by common separators (|, ||, /, etc.) and get the first meaningful word
+      const firstPart = gender.split(/[\s|/]+/)[0].trim();
+      const fullText = gender.replace(/[|/]/g, " ").replace(/\s+/g, " ").trim();
+      
+      // Check for word boundaries - look for "male" as a whole word or at start
+      const hasMale = /\bmale\b/.test(fullText) || firstPart === "male" || fullText.startsWith("male");
+      const hasFemale = /\bfemale\b/.test(fullText) || firstPart === "female" || fullText.startsWith("female");
+      const hasDemigirl = /\bdemigirl\b/.test(fullText) || /\bdemi-girl\b/.test(fullText) || /\bdemi girl\b/.test(fullText);
+      const hasDemiboy = /\bdemiboy\b/.test(fullText) || /\bdemi-boy\b/.test(fullText) || /\bdemi boy\b/.test(fullText);
+      const hasTrans = /\btrans\b/.test(fullText) || /\btransman\b/.test(fullText) || /\btrans man\b/.test(fullText) || /\btransgender\b/.test(fullText);
+      const hasNonbinary = /\bnonbinary\b/.test(fullText) || /\bnon-binary\b/.test(fullText) || /\bnon binary\b/.test(fullText) || /\benby\b/.test(fullText) || /\benby\b/.test(fullText);
+      const hasGenderfluid = /\bgenderfluid\b/.test(fullText) || /\bgender-fluid\b/.test(fullText) || /\bgender fluid\b/.test(fullText);
+      const hasAgender = /\bagender\b/.test(fullText) || /\ba-gender\b/.test(fullText) || /\ba gender\b/.test(fullText);
+      const hasBigender = /\bbigender\b/.test(fullText) || /\bbi-gender\b/.test(fullText) || /\bbi gender\b/.test(fullText);
+      const hasPangender = /\bpangender\b/.test(fullText) || /\bpan-gender\b/.test(fullText) || /\bpan gender\b/.test(fullText);
+      const hasNeutrois = /\bneutrois\b/.test(fullText);
+      const hasTwoSpirit = /\btwo.spirit\b/.test(fullText) || /\b2spirit\b/.test(fullText) || /\b2-spirit\b/.test(fullText);
+      
+      // Male variations (check first to avoid conflicts)
+      if (hasMale && !hasFemale && !hasDemigirl) {
+        // Trans men are still Male category
+        if (hasTrans && (hasMale || fullText.includes("man"))) {
+          return "Male";
+        }
+        // Demiboy goes to Nonbinary
+        if (hasDemiboy) {
+          return "Nonbinary";
+        }
+        return "Male";
+      }
+      
+      // Female variations
+      if (hasFemale || hasDemigirl) {
+        return "Female";
+      }
+      
+      // Nonbinary variations (check these before default)
+      if (hasNonbinary || hasGenderfluid || hasAgender || hasDemiboy || hasBigender || hasPangender || hasNeutrois || hasTwoSpirit) {
+        return "Nonbinary";
+      }
+      
+      // Check for trans without clear male/female indicator
+      if (hasTrans) {
+        // If it says "trans man" or similar, it's Male
+        if (fullText.includes("man") || fullText.includes("male")) {
+          return "Male";
+        }
+        // If it says "trans woman" or similar, it's Female
+        if (fullText.includes("woman") || fullText.includes("female")) {
+          return "Female";
+        }
+        // Otherwise, could be nonbinary
+        return "Nonbinary";
+      }
+      
+      // Default: return capitalized first word
+      const firstWord = firstPart || String(g).split(/[\s|/]/)[0].trim();
+      if (firstWord) {
+        return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+      }
+      
+      return "Unknown";
+    };
+
     // Character aggregations
     const [
       characterTotal,
@@ -78,6 +147,7 @@ export async function GET() {
       characterByCurrentVillage,
       characterByJob,
       characterByRace,
+      characterByGender,
       characterByRaceAndVillage,
       characterStatusCounts,
       characterAverages,
@@ -102,6 +172,11 @@ export async function GET() {
       Character.aggregate([
         { $match: characterFilter },
         { $group: { _id: "$race", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Character.aggregate([
+        { $match: characterFilter },
+        { $group: { _id: "$gender", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
       Character.aggregate([
@@ -520,6 +595,16 @@ export async function GET() {
           race: item._id || "Unknown",
           count: item.count,
         })),
+        byGender: (() => {
+          const genderMap = new Map<string, number>();
+          characterByGender.forEach((item) => {
+            const normalizedGender = normalizeGender(item._id || "Unknown");
+            genderMap.set(normalizedGender, (genderMap.get(normalizedGender) || 0) + item.count);
+          });
+          return Array.from(genderMap.entries())
+            .map(([gender, count]) => ({ gender, count }))
+            .sort((a, b) => b.count - a.count);
+        })(),
         byRaceByVillage: characterByRaceAndVillage.map((item) => ({
           race: item._id?.race || "Unknown",
           village: normalizeVillage(String(item._id?.homeVillage ?? "Unknown")),
