@@ -3901,10 +3901,8 @@ async function handleVillageTypeAutocomplete(interaction, focusedOption) {
           const requiredTokens = village.tokenRequirements instanceof Map
             ? village.tokenRequirements.get(nextLevel.toString())
             : village.tokenRequirements[nextLevel.toString()] || 0;
-          const currentTokens = village.currentTokens || 0;
-          const maxPerDonation = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
-          const remainingNeeded = requiredTokens - currentTokens;
-          limit = Math.min(maxPerDonation, remainingNeeded);
+          // Show 5% of required (the donation cap rule), not the remaining-needed amount
+          limit = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
         }
         choices.push({ name: `Tokens | Limit: ${limit}`, value: 'Tokens' });
       } else {
