@@ -230,7 +230,7 @@ async function sendCriticalErrorNotification(error, source) {
     const criticalEmbed = new EmbedBuilder()
       .setColor(0xFF0000)
       .setTitle("🚨 CRITICAL ERROR THRESHOLD REACHED 🚨")
-      .setDescription(`**@everyone** - The bot is experiencing critical database connection issues and will be shut down immediately!`)
+      .setDescription(`The bot is experiencing critical database connection issues and will be shut down immediately!`)
       .addFields(
         { name: "📊 Consecutive Errors", value: `${consecutiveDatabaseErrors}`, inline: true },
         { name: "⏰ Time Window", value: `${ERROR_RESET_TIME / 1000 / 60} minutes`, inline: true },
@@ -243,7 +243,6 @@ async function sendCriticalErrorNotification(error, source) {
       .setTimestamp();
     
     await consoleChannel.send({ 
-      content: "@everyone",
       embeds: [criticalEmbed]
     });
     
@@ -357,12 +356,12 @@ function buildMentionContent(error, context) {
   } else {
     if (isDiscordError) {
       if (error.code === 10062) {
-        return `HEY! @everyone! ⏰\n\n**Interaction timeouts are normal!**\n\nDiscord interactions expire after 15 minutes. If you see this error, just restart your command - it's not a bug!`;
+        return `⏰ **Interaction timeouts are normal!** Discord interactions expire after 15 minutes. If you see this error, just restart your command - it's not a bug!`;
       } else {
-        return `HEY! @everyone! 🤖\n\n**Discord API is currently experiencing issues!**\n\nThis is not a bot problem - Discord's servers are having trouble. Please wait a few minutes before trying commands again.`;
+        return `🤖 **Discord API is currently experiencing issues!** This is not a bot problem - Discord's servers are having trouble. Please wait a few minutes before trying commands again.`;
       }
     } else {
-      return `HEY! @here! 🚨\n\nWe are not sure who or what is causing this error, but we ask that members stop using commands until Ruu can check what is wrong!`;
+      return `🚨 **An error occurred.** Ruu has been notified and will look into it.`;
     }
   }
 }

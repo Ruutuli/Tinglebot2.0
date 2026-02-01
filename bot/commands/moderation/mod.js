@@ -6638,19 +6638,13 @@ async function handleVillageDamage(interaction) {
     await interaction.editReply({ embeds: [moderatorEmbed], ephemeral: true });
 
     // Send to town hall channel (public announcement)
-    // For testing, use the test channel ID provided by user
-    const TEST_CHANNEL_ID = '1391812848099004578';
-    
-    // Map village names to their respective town hall channel IDs
     const villageChannelMap = {
       'rudania': process.env.RUDANIA_TOWNHALL,
       'inariko': process.env.INARIKO_TOWNHALL,
       'vhintl': process.env.VHINTL_TOWNHALL
     };
-    
-    // Use test channel for now, later switch to actual town hall channel
-    const targetChannelId = TEST_CHANNEL_ID; // TODO: Change to villageChannelMap[villageName.toLowerCase()] when ready
-    
+    const targetChannelId = villageChannelMap[villageName.toLowerCase()];
+    if (targetChannelId) {
     try {
       const announcementChannel = await interaction.client.channels.fetch(targetChannelId).catch(() => null);
       if (announcementChannel) {
@@ -6669,6 +6663,7 @@ async function handleVillageDamage(interaction) {
     } catch (error) {
       console.error('[handleVillageDamage] Error posting to town hall channel:', error);
       // Don't fail the command if announcement fails
+    }
     }
 
     return;

@@ -155,7 +155,15 @@ async function processItemContribution(village, interaction, itemName, qty, char
     const remainingNeeded = requiredMax - current;
     if (qty > Math.min(maxPerDonation, remainingNeeded)) {
         const allowed = Math.min(maxPerDonation, remainingNeeded);
-        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} (10% of required).**` };
+        const embed = new EmbedBuilder()
+            .setColor('#E74C3C')
+            .setTitle('❌ Maximum Donation Exceeded')
+            .setDescription(
+                `The maximum donation per contribution is **${allowed}** (10% of required).\n\n` +
+                `Please donate **${allowed}** or fewer.`
+            )
+            .setFooter({ text: 'Item contributions are capped at 10% of required per donation' });
+        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} (10% of required).**`, embed };
     }
 
     // Deduct items from character
@@ -253,7 +261,15 @@ async function processTokenContribution(village, interaction, qty, characterName
     const remainingNeeded = requiredTokensMax - currentTokens;
     if (qty > Math.min(maxPerDonation, remainingNeeded)) {
         const allowed = Math.min(maxPerDonation, remainingNeeded);
-        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} tokens (5% of required).**` };
+        const embed = new EmbedBuilder()
+            .setColor('#E74C3C')
+            .setTitle('❌ Maximum Donation Exceeded')
+            .setDescription(
+                `The maximum donation per contribution is **${allowed} tokens** (5% of required).\n\n` +
+                `Please donate **${allowed}** tokens or fewer.`
+            )
+            .setFooter({ text: 'Token contributions are capped at 5% of required per donation' });
+        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} tokens (5% of required).**`, embed };
     }
 
     // Deduct tokens from user balance
@@ -330,7 +346,15 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                 : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);
             const maxPerDonation = Math.max(1, Math.ceil(requiredTokensForCap * DONATION_TOKEN_PERCENT));
             if (qty > maxPerDonation) {
-                return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**` };
+                const embed = new EmbedBuilder()
+                    .setColor('#E74C3C')
+                    .setTitle('❌ Maximum Donation Exceeded')
+                    .setDescription(
+                        `The maximum donation per contribution is **${maxPerDonation} tokens** (5% of required).\n\n` +
+                        `Please donate **${maxPerDonation}** tokens or fewer.`
+                    )
+                    .setFooter({ text: 'Token contributions are capped at 5% of required per donation' });
+                return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**`, embed };
             }
 
             // Calculate how much HP can be restored
@@ -338,6 +362,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
             const hpRestored = Math.floor(qty / tokensPerHP);
             const actualHpRestored = Math.min(hpRestored, hpNeeded);
             const tokensForRepair = actualHpRestored * tokensPerHP;
+            const maxTokensNeeded = hpNeeded * tokensPerHP;
             const tokensRemaining = qty - tokensForRepair;
             
             // Apply repair
@@ -570,7 +595,15 @@ async function processRepair(village, interaction, qty, characterName) {
             : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);
         const maxPerDonation = Math.max(1, Math.ceil(requiredTokensForCap * DONATION_TOKEN_PERCENT));
         if (qty > maxPerDonation) {
-            return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**` };
+            const embed = new EmbedBuilder()
+                .setColor('#E74C3C')
+                .setTitle('❌ Maximum Donation Exceeded')
+                .setDescription(
+                    `The maximum donation per contribution is **${maxPerDonation} tokens** (5% of required).\n\n` +
+                    `Please donate **${maxPerDonation}** tokens or fewer.`
+                )
+                .setFooter({ text: 'Token contributions are capped at 5% of required per donation' });
+            return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**`, embed };
         }
 
         const tokensPerHP = getTokensPerHP(village.level);
@@ -868,19 +901,16 @@ async function sendLevelUpAnnouncement(village, client) {
     }
 
     try {
-        // Test channel ID for now
-        const TEST_CHANNEL_ID = '1391812848099004578';
-        
-        // Map village names to their respective town hall channel IDs
         const villageChannelMap = {
             'Rudania': process.env.RUDANIA_TOWNHALL,
             'Inariko': process.env.INARIKO_TOWNHALL,
             'Vhintl': process.env.VHINTL_TOWNHALL
         };
-        
-        // Use test channel for now, later switch to actual town hall channel
-        const targetChannelId = TEST_CHANNEL_ID; // TODO: Change to villageChannelMap[village.name] when ready
-        
+        const targetChannelId = villageChannelMap[village.name] || null;
+        if (!targetChannelId) {
+            console.log(`[sendLevelUpAnnouncement] No town hall channel configured for ${village.name}, skipping announcement`);
+            return;
+        }
         const announcementChannel = await client.channels.fetch(targetChannelId).catch(() => null);
         if (!announcementChannel) {
             console.error(`[sendLevelUpAnnouncement] Could not find channel ${targetChannelId} for level-up announcement`);
@@ -1513,18 +1543,27 @@ module.exports = {
                     }
                 }
 
-                // Validate that character belongs to the village
+                // Validate that character's HOME village matches the target village
                 if (characterName) {
                     const donatingCharacter = await fetchCharacterByName(characterName);
                     if (!donatingCharacter) {
                         return interaction.reply({ content: `❌ **Character "${characterName}" not found.**`, ephemeral: true });
                     }
                     
-                    const characterVillage = donatingCharacter.currentVillage?.toLowerCase()?.trim();
+                    const characterHomeVillage = donatingCharacter.homeVillage?.toLowerCase()?.trim();
                     const targetVillage = villageName.toLowerCase().trim();
                     
-                    if (characterVillage !== targetVillage) {
-                        return interaction.reply({ content: `❌ **Character "${characterName}" must be from ${villageName} to donate to this village. Current village: ${donatingCharacter.currentVillage || 'Unknown'}.**`, ephemeral: true });
+                    if (characterHomeVillage !== targetVillage) {
+                        const homeDisplay = donatingCharacter.homeVillage ? donatingCharacter.homeVillage.charAt(0).toUpperCase() + donatingCharacter.homeVillage.slice(1).toLowerCase() : 'Unknown';
+                        const embed = new EmbedBuilder()
+                            .setColor('#E74C3C')
+                            .setTitle('❌ Cannot Donate to This Village')
+                            .setDescription(
+                                `**${characterName}**'s home village is **${homeDisplay}**, not **${villageName}**.\n\n` +
+                                `Characters can only donate to their **home village**.`
+                            )
+                            .setFooter({ text: `Target village: ${villageName}` });
+                        return interaction.reply({ embeds: [embed], ephemeral: true });
                     }
                 }
 
@@ -1570,6 +1609,9 @@ module.exports = {
                 // Process donate contribution (combines repair and upgrade)
                 const result = await processImprove(village, interaction, type, cleanItemName, qty, characterName);
                 if (!result.success) {
+                    if (result.embed) {
+                        return interaction.reply({ embeds: [result.embed], ephemeral: true });
+                    }
                     return interaction.reply({ content: result.message, ephemeral: true });
                 }
 

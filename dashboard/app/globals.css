@@ -212,6 +212,15 @@ body::-webkit-scrollbar-thumb:hover {
   background: var(--totk-green) !important;
 }
 
+/* [globals.css]🎛️ Hide scrollbar utility - overrides global scrollbar styling */
+.scrollbar-hide {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+}
+
 /* ============================================================================ */
 /* ------------------- Utilities ------------------- */
 /* ============================================================================ */
