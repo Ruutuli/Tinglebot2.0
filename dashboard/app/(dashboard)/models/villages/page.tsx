@@ -72,6 +72,23 @@ function formatDate(date: Date | string | null | undefined): string {
   }
 }
 
+function formatCooldownKey(key: string): string {
+  // Pattern: userId_Items_ItemName_donate or userId_donate
+  const parts = key.split("_");
+  
+  if (parts.length >= 4 && parts[1] === "Items") {
+    // Format: userId_Items_ItemName_donate
+    const itemName = parts.slice(2, -1).join(" "); // Handle item names with spaces
+    return `Item Donation: ${itemName}`;
+  } else if (parts.length >= 2 && parts[parts.length - 1] === "donate") {
+    // Format: userId_donate (token donation)
+    return "Token Donation";
+  }
+  
+  // Fallback: return the key as-is if pattern doesn't match
+  return key;
+}
+
 function getVillageBannerSrc(name: string, level?: number): string {
   const safeName = String(name || "").replace(/[^a-zA-Z]/g, "");
   const lvl = Math.min(3, Math.max(1, level ?? 1));
@@ -306,6 +323,18 @@ export default function VillagesPage() {
                             <span>{capitalize(village.raidQuotaPeriodType)}</span>
                           </div>
                         )}
+                        {village.raidQuotaPeriodType && (
+                          <div className="flex justify-between">
+                            <span className="font-medium">Frequency:</span>
+                            <span className="text-[var(--totk-light-green)]">
+                              {village.raidQuotaPeriodType === "week" 
+                                ? "3x per week" 
+                                : village.raidQuotaPeriodType === "biweek"
+                                ? "3x per 2 weeks"
+                                : "3x per month"}
+                            </span>
+                          </div>
+                        )}
                         {village.raidQuotaCount != null && (
                           <div className="flex justify-between">
                             <span className="font-medium">Raid Count:</span>
@@ -344,20 +373,6 @@ export default function VillagesPage() {
                               <span className="text-[var(--totk-light-ocher)]">{village.vendingDiscount}%</span>
                             </div>
                           )}
-                        </div>
-                      </div>
-                    )}
-                    {/* ------------------- Cooldowns ------------------- */}
-                    {village.cooldowns && Object.keys(village.cooldowns).length > 0 && (
-                      <div className="rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--totk-brown)]/40 p-3 shadow-inner">
-                        <div className="mb-2 font-semibold text-[var(--totk-light-ocher)]">Cooldowns</div>
-                        <div className="space-y-1 text-xs">
-                          {Object.entries(village.cooldowns).map(([key, val]) => (
-                            <div key={key} className="flex justify-between">
-                              <span>{key}</span>
-                              <span>{typeof val === "string" ? formatDate(val) : String(val)}</span>
-                            </div>
-                          ))}
                         </div>
                       </div>
                     )}
