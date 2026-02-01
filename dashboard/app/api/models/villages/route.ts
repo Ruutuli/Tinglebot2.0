@@ -11,9 +11,10 @@ import {
 import { logger } from "@/utils/logger";
 
 // ------------------- Map Serialization -------------------
-function serializeMap(m: Map<unknown, unknown> | Record<string, unknown> | null | undefined): Record<string, unknown> {
+function serializeMap(m: unknown): Record<string, unknown> {
   if (m instanceof Map) return Object.fromEntries(m);
-  return (m ?? {}) as Record<string, unknown>;
+  if (m != null && typeof m === "object" && !Array.isArray(m)) return m as Record<string, unknown>;
+  return {};
 }
 
 // ------------------- Case-Insensitive Filter -------------------

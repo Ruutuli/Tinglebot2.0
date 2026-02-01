@@ -244,7 +244,7 @@ export default function VillagesPage() {
                         <div className="mb-3 font-semibold text-[var(--totk-light-ocher)]">
                           Materials{village.level != null && village.level < 3 ? ` (Level ${village.level + 1})` : ""}
                         </div>
-                        <div className="scrollbar-hide max-h-40 space-y-2.5 overflow-y-auto">
+                        <div className="space-y-2.5">
                           {village.materialsProgress.map((m) => (
                             <div key={m.material}>
                               <div className="mb-0.5 flex justify-between text-xs">
@@ -280,7 +280,7 @@ export default function VillagesPage() {
                     {village.contributors && village.contributors.length > 0 && (
                       <div className="rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--totk-brown)]/40 p-3 shadow-inner">
                         <div className="mb-2 font-semibold text-[var(--totk-light-ocher)]">Contributors</div>
-                        <div className="scrollbar-hide max-h-24 space-y-1.5 overflow-y-auto text-xs">
+                        <div className="space-y-1.5 text-xs">
                           {village.contributors.slice(0, 10).map((c) => (
                             <div key={c.characterId} className="flex justify-between">
                               <span className="truncate">{c.characterName}</span>

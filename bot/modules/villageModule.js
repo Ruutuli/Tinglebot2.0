@@ -50,7 +50,51 @@ const initializeVillages = async () => {
                 await Village.create(villageData);
                 console.log(`[villageModule.js] ✅ Initialized village: ${name}`);
             } else {
-                console.log(`[villageModule.js] ℹ️ Village already exists: ${name}`);
+                // Sync config materials to existing village (add new, remove deprecated, update required)
+                const existingMaterials = existingVillage.materials instanceof Map
+                    ? Object.fromEntries(existingVillage.materials)
+                    : existingVillage.materials || {};
+                let materialsChanged = false;
+
+                // Add new materials from config
+                for (const [materialKey, configMaterial] of Object.entries(config.materials)) {
+                    if (!existingMaterials[materialKey]) {
+                        existingVillage.materials.set(materialKey, {
+                            current: 0,
+                            required: configMaterial.required
+                        });
+                        materialsChanged = true;
+                        console.log(`[villageModule.js] 📦 Added material "${materialKey}" to ${name}`);
+                    } else {
+                        // Update required amounts if config changed
+                        const existing = existingMaterials[materialKey];
+                        const newRequired = configMaterial.required;
+                        if (JSON.stringify(existing?.required) !== JSON.stringify(newRequired)) {
+                            existingVillage.materials.set(materialKey, {
+                                ...existing,
+                                required: newRequired
+                            });
+                            materialsChanged = true;
+                        }
+                    }
+                }
+
+                // Remove materials no longer in config
+                for (const materialKey of Object.keys(existingMaterials)) {
+                    if (!config.materials[materialKey]) {
+                        existingVillage.materials.delete(materialKey);
+                        materialsChanged = true;
+                        console.log(`[villageModule.js] 📦 Removed material "${materialKey}" from ${name}`);
+                    }
+                }
+
+                if (materialsChanged) {
+                    existingVillage.markModified('materials');
+                    await existingVillage.save();
+                    console.log(`[villageModule.js] ✅ Synced materials for ${name}`);
+                } else {
+                    console.log(`[villageModule.js] ℹ️ Village already exists: ${name}`);
+                }
             }
         } catch (error) {
             handleError(error, 'villageModule.js');
