@@ -20,6 +20,7 @@ const { recoverHearts, recoverStamina } = require('../../modules/characterStatsM
 // ============================================================================
 const ItemModel = require('@/models/ItemModel');
 const { Village, VILLAGE_CONFIG, DEFAULT_TOKEN_REQUIREMENTS } = require('@/models/VillageModel');
+const UserModel = require('@/models/UserModel');
 const { initializeVillages, updateVillageStatus } = require('../../modules/villageModule');
 
 // ============================================================================
@@ -1584,43 +1585,109 @@ module.exports = {
 
                 // Check cooldown (resets every Sunday at midnight EST)
                 // Cooldown is per-user per-village (1 donation per week per village, regardless of item type)
-                const cooldownKey = `${interaction.user.id}_donate`;
+                // Use UserModel's villageDonations field for atomic cooldown tracking
+                const currentWeekStart = getCurrentDonationWeekStart();
+                const villageKey = villageName.toLowerCase(); // Use lowercase village name as key
+                
                 if (COOLDOWN_ENABLED) {
-                    const storedCooldown = village.cooldowns.get(cooldownKey);
-                    const currentWeekStart = getCurrentDonationWeekStart();
-                    let isOnCooldown = false;
-                    let cooldownMessage = '';
-                    if (typeof storedCooldown === 'number') {
-                        isOnCooldown = storedCooldown === currentWeekStart;
-                        if (isOnCooldown) {
-                            const nextReset = getNextDonationReset();
-                            const hoursUntilReset = Math.ceil((nextReset - new Date()) / (1000 * 60 * 60));
-                            cooldownMessage = `⏳ **You've already contributed this week. Cooldown resets in ${hoursUntilReset} hour(s) on Sunday at midnight EST.**`;
+                    // Use atomic findOneAndUpdate to check and set cooldown in one operation
+                    // This prevents race conditions where two requests try to donate simultaneously
+                    const userUpdateResult = await UserModel.findOneAndUpdate(
+                        { 
+                            discordId: interaction.user.id,
+                            $or: [
+                                { [`villageDonations.${villageKey}`]: { $exists: false } },
+                                { [`villageDonations.${villageKey}`]: { $ne: currentWeekStart } }
+                            ]
+                        },
+                        { 
+                            $set: { [`villageDonations.${villageKey}`]: currentWeekStart }
+                        },
+                        { new: true }
+                    );
+                    
+                    // If updateResult is null, it means the user is already on cooldown for this week
+                    if (!userUpdateResult) {
+                        // Check what the current cooldown is to provide accurate message
+                        const user = await UserModel.findOne({ discordId: interaction.user.id });
+                        const storedCooldown = user?.villageDonations?.get?.(villageKey);
+                        
+                        const nextReset = getNextDonationReset();
+                        let hoursUntilReset = 0;
+                        let minutesUntilReset = 0;
+                        let cooldownDescription = '';
+                        
+                        if (typeof storedCooldown === 'number' && storedCooldown === currentWeekStart) {
+                            hoursUntilReset = Math.ceil((nextReset - new Date()) / (1000 * 60 * 60));
+                            const daysUntilReset = Math.floor(hoursUntilReset / 24);
+                            const remainingHours = hoursUntilReset % 24;
+                            
+                            if (daysUntilReset > 0) {
+                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                    `🔄 **Cooldown resets:** ${daysUntilReset} day(s) and ${remainingHours} hour(s)\n` +
+                                    `📅 **Reset time:** Sunday at midnight EST`;
+                            } else {
+                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                    `🔄 **Cooldown resets in:** ${hoursUntilReset} hour(s)\n` +
+                                    `📅 **Reset time:** Sunday at midnight EST`;
+                            }
+                        } else if (storedCooldown instanceof Date && storedCooldown > new Date()) {
+                            // Legacy: old rolling 7-day cooldown
+                            minutesUntilReset = Math.ceil((storedCooldown - new Date()) / 1000 / 60);
+                            const legacyHours = Math.floor(minutesUntilReset / 60);
+                            const legacyMinutes = minutesUntilReset % 60;
+                            
+                            if (legacyHours > 0) {
+                                cooldownDescription = `⏳ **Please wait before contributing again.**\n\n` +
+                                    `🔄 **Cooldown remaining:** ${legacyHours} hour(s) and ${legacyMinutes} minute(s)`;
+                            } else {
+                                cooldownDescription = `⏳ **Please wait before contributing again.**\n\n` +
+                                    `🔄 **Cooldown remaining:** ${legacyMinutes} minute(s)`;
+                            }
+                        } else {
+                            hoursUntilReset = Math.ceil((nextReset - new Date()) / (1000 * 60 * 60));
+                            const daysUntilReset = Math.floor(hoursUntilReset / 24);
+                            const remainingHours = hoursUntilReset % 24;
+                            
+                            if (daysUntilReset > 0) {
+                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                    `🔄 **Cooldown resets:** ${daysUntilReset} day(s) and ${remainingHours} hour(s)\n` +
+                                    `📅 **Reset time:** Sunday at midnight EST`;
+                            } else {
+                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                    `🔄 **Cooldown resets in:** ${hoursUntilReset} hour(s)\n` +
+                                    `📅 **Reset time:** Sunday at midnight EST`;
+                            }
                         }
-                    } else if (storedCooldown instanceof Date && storedCooldown > new Date()) {
-                        isOnCooldown = true; // Legacy: old rolling 7-day cooldown
-                        const remainingMinutes = Math.ceil((storedCooldown - new Date()) / 1000 / 60);
-                        cooldownMessage = `⏳ **Please wait ${remainingMinutes} minutes before contributing again.**`;
-                    }
-                    if (isOnCooldown) {
-                        return interaction.reply({ content: cooldownMessage, ephemeral: true });
+                        
+                        const cooldownEmbed = new EmbedBuilder()
+                            .setTitle(`${village.name} (Level ${village.level})`)
+                            .setDescription(cooldownDescription)
+                            .addFields(
+                                { name: '💡 **Tip**', value: `> You can donate once per week per village.\n> Use </village view:1324300899585363968> to check the current status.`, inline: false }
+                            )
+                            .setColor(village.color)
+                            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                            .setImage(BORDER_IMAGE);
+                        
+                        return interaction.reply({ embeds: [cooldownEmbed] });
                     }
                 }
 
                 // Process donate contribution (combines repair and upgrade)
                 const result = await processImprove(village, interaction, type, cleanItemName, qty, characterName);
                 if (!result.success) {
+                    // If donation failed, remove the cooldown we just set from UserModel
+                    if (COOLDOWN_ENABLED) {
+                        await UserModel.findOneAndUpdate(
+                            { discordId: interaction.user.id },
+                            { $unset: { [`villageDonations.${villageKey}`]: "" } }
+                        );
+                    }
                     if (result.embed) {
                         return interaction.reply({ embeds: [result.embed], ephemeral: true });
                     }
                     return interaction.reply({ content: result.message, ephemeral: true });
-                }
-
-                // Set cooldown (week start - resets every Sunday at midnight EST)
-                if (COOLDOWN_ENABLED) {
-                    village.cooldowns.set(cooldownKey, getCurrentDonationWeekStart());
-                    village.markModified('cooldowns');
-                    await village.save();
                 }
 
                 return interaction.reply({ embeds: [result.embed] });

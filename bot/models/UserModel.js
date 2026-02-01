@@ -132,6 +132,13 @@ const userSchema = new mongoose.Schema({
       tokensReceived: { type: Number }, // Tokens received for this catch
       timestamp: { type: Date, default: Date.now } // When the catch occurred
     }]
+  },
+
+  // ------------------- Village Donation Cooldown System -------------------
+  villageDonations: {
+    type: Map,
+    of: Number, // Stores week start timestamp (Sunday midnight EST) per village
+    default: {}
   }
 });
 
