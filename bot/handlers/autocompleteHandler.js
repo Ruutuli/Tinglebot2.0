@@ -5668,9 +5668,9 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
       fetchModCharactersByUserId(userId)
     ]);
 
-    // Filter out accepted characters - they should not show up in dropdowns
-    const filteredCharacters = characters.filter((character) => character.status !== 'accepted');
-    const filteredModCharacters = modCharacters.filter((character) => character.status !== 'accepted');
+    // Only show accepted (approved) characters so the dropdown lists the user's OCs
+    const filteredCharacters = characters.filter((character) => character.status === 'accepted');
+    const filteredModCharacters = modCharacters.filter((character) => character.status === 'accepted');
 
     // Map regular characters to autocomplete choices with formatted display
     const regularChoices = filteredCharacters.map((character) => ({
