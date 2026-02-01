@@ -680,10 +680,16 @@ async function recoverDailyStaminaTask(_client, _data = {}) {
 }
 
 // ------------------- generate-daily-quests (midnight EST = 05:00 UTC) -------------------
-async function generateDailyQuests(_client, _data = {}) {
+async function generateDailyQuests(client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'generate-daily-quests: starting');
     await runHelpWantedGeneration();
+    // Run board check immediately after generation so midnight-scheduled quests get posted.
+    // Without this, a race condition at 05:00 UTC can cause help-wanted-board-check to run
+    // before generation finishes, missing the new quests until the next hourly run.
+    if (client?.channels) {
+      await helpWantedBoardCheck(client, {});
+    }
     logger.success('SCHEDULED', 'generate-daily-quests: done');
   } catch (err) {
     logger.error('SCHEDULED', `generate-daily-quests: ${err.message}`);
