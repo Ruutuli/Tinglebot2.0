@@ -18,7 +18,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   LabelList,
 } from "recharts";
@@ -50,12 +49,15 @@ type StatsData = {
   };
   weather: {
     total: number;
-    specialCount: number;
-    precipitationByVillage: Array<{
-      village: string;
-      mostCommon: { type: string; count: number } | null;
-      allPrecipitations: Array<{ type: string; count: number }>;
-    }>;
+    recordsByVillage: Array<{ village: string; count: number }>;
+    recordsBySeason: Array<{ season: string; count: number }>;
+    specialByVillage: Array<{ village: string; count: number }>;
+    specialBySeason: Array<{ season: string; count: number }>;
+    specialByVillageAndType: Array<{ village: string; type: string; count: number }>;
+    precipitationByVillageAndType: Array<{ village: string; type: string; count: number }>;
+    precipitationBySeason: Array<{ season: string; type: string; count: number }>;
+    temperatureByVillage: Array<{ village: string; type: string; count: number }>;
+    windByVillage: Array<{ village: string; type: string; count: number }>;
   };
   pets: {
     total: number;
@@ -65,7 +67,57 @@ type StatsData = {
     averageLevel: number;
     ownerCount: number;
   };
-};
+  mounts: {
+    total: number;
+    bySpecies: Array<{ species: string; count: number }>;
+    byLevel: Array<{ level: string; count: number }>;
+    byRegion: Array<{ region: string; count: number }>;
+  };
+  quests: {
+    total: number;
+    byType: Array<{ type: string; count: number }>;
+    byStatus: Array<{ status: string; count: number }>;
+  };
+  helpWanted: {
+    total: number;
+    completed: number;
+    byVillage: Array<{ village: string; count: number }>;
+    byType: Array<{ type: string; count: number }>;
+  };
+  relics: {
+    total: number;
+    appraised: number;
+    unique: number;
+  };
+  relationships: {
+    total: number;
+    byType: Array<{ type: string; count: number }>;
+  };
+  raids: {
+    total: number;
+    byVillage: Array<{ village: string; count: number }>;
+    byResult: Array<{ result: string; count: number }>;
+    byStatus: Array<{ status: string; count: number }>;
+    byTier: Array<{ tier: number; count: number }>;
+  };
+  stealStats: {
+    totalAttempts: number;
+    successfulSteals: number;
+    successRate: number;
+    byRarity: { common: number; uncommon: number; rare: number };
+    topVictims: Array<{ name: string; count: number }>;
+  };
+  minigames: {
+    total: number;
+    byGameType: Array<{ gameType: string; count: number }>;
+    byStatus: Array<{ status: string; count: number }>;
+    byVillage: Array<{ village: string; count: number }>;
+  };
+  inventory: {
+    topCharactersByItems: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }>;
+    topItemsByCharacterCount: Array<{ itemName: string; characterCount: number }>;
+  };
+}
 
 type BreakdownData = {
   type: "race" | "job";
@@ -78,6 +130,234 @@ type BreakdownData = {
     byRace?: Array<{ race: string; count: number }>;
   };
 };
+
+/* ============================================================================ */
+/* ------------------- Chart theme & palette ------------------- */
+/* ============================================================================ */
+
+const SECTION_ACCENT_COLORS: Record<string, string> = {
+  characters: "var(--totk-light-green)",
+  weather: "var(--botw-blue)",
+  pets: "var(--totk-light-ocher)",
+  mounts: "var(--totk-mid-ocher)",
+  quests: "var(--totk-light-green)",
+  helpWanted: "var(--botw-blue)",
+  relics: "var(--totk-light-ocher)",
+  relationships: "var(--stats-accent-relationship)",
+  raids: "var(--totk-mid-ocher)",
+  stealStats: "var(--stats-accent-steal)",
+  minigames: "var(--totk-light-green)",
+  inventory: "var(--botw-blue)",
+};
+
+/** Hex fallbacks for bar fills so SVG charts don't rely on CSS variables. */
+const SECTION_ACCENT_HEX: Record<string, string> = {
+  characters: "#49d59c",
+  weather: "#00a3da",
+  pets: "#e5dcb7",
+  mounts: "#b99f65",
+  quests: "#49d59c",
+  helpWanted: "#00a3da",
+  relics: "#e5dcb7",
+  relationships: "#e07a7a",
+  raids: "#b99f65",
+  stealStats: "#b494e3",
+  minigames: "#49d59c",
+};
+
+const VILLAGE_COLORS: Record<string, string> = {
+  Rudania: "#FF6B6B",
+  Inariko: "#7FB3FF",
+  Vhintl: "#6BCF7F",
+};
+
+function getVillageColor(village: string): string {
+  const key = capitalize((village || "").trim());
+  if (VILLAGE_COLORS[key]) return VILLAGE_COLORS[key];
+  const lower = (village || "").toLowerCase();
+  if (lower.includes("rudania")) return VILLAGE_COLORS.Rudania;
+  if (lower.includes("inariko")) return VILLAGE_COLORS.Inariko;
+  if (lower.includes("vhintl")) return VILLAGE_COLORS.Vhintl;
+  return "#49d59c";
+}
+
+const CHART_SEQUENTIAL_COLORS = [
+  "#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#D4B3FF",
+  "#E1BAFF", "#FFB3E6", "#B3E5FF", "#FFF4BA", "#B3FFB3", "#B3D9FF",
+  "#FFD4B3", "#E6B3FF", "#B3F5FF", "#FFE6B3", "#D4FFB3", "#FFB3D4",
+  "#C9BAFF",
+];
+
+const CHART_TOOLTIP_STYLE = {
+  contentStyle: {
+    backgroundColor: "var(--botw-warm-black)",
+    border: "1px solid var(--totk-dark-ocher)",
+    borderRadius: "8px",
+    color: "var(--botw-pale)",
+    fontSize: "13px",
+  },
+  itemStyle: { color: "var(--botw-pale)", fontSize: "13px" },
+  labelStyle: { color: "var(--totk-light-green)", fontSize: "14px", fontWeight: 600 },
+  cursor: { fill: "rgba(255, 255, 255, 0.1)" },
+};
+
+const CHART_AXIS_PROPS = {
+  stroke: "var(--totk-grey-200)" as const,
+  tickFill: "var(--totk-grey-200)",
+  gridStroke: "var(--totk-grey-400)",
+  gridOpacity: 0.3,
+};
+
+/* ============================================================================ */
+/* ------------------- Shared chart components ------------------- */
+/* ============================================================================ */
+
+type BarChartDataItem = { name: string; count: number; [key: string]: unknown };
+
+function SharedBarChart({
+  data,
+  dataKey = "count",
+  nameKey = "name",
+  barColor,
+  colorByIndex,
+  layout = "vertical",
+  onBarClick,
+  height = 256,
+  barSize = 24,
+  nameLabel,
+}: {
+  data: BarChartDataItem[];
+  dataKey?: string;
+  nameKey?: string;
+  barColor?: string;
+  colorByIndex?: boolean;
+  layout?: "vertical" | "horizontal";
+  onBarClick?: (payload: { name?: string }) => void;
+  height?: number;
+  barSize?: number;
+  nameLabel?: string;
+}) {
+  const horizontalBars = layout === "vertical";
+  return (
+    <div className="min-w-0 w-full" style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+        <BarChart
+          data={data}
+          layout={layout}
+          margin={{ top: 8, right: 40, left: horizontalBars ? 4 : 20, bottom: horizontalBars ? 20 : 8 }}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke={CHART_AXIS_PROPS.gridStroke}
+            opacity={CHART_AXIS_PROPS.gridOpacity}
+          />
+          <XAxis
+            type={horizontalBars ? "number" : "category"}
+            dataKey={horizontalBars ? undefined : nameKey}
+            stroke={CHART_AXIS_PROPS.stroke}
+            tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: horizontalBars ? 10 : 11 }}
+            angle={!horizontalBars && data.length > 6 ? -30 : 0}
+            textAnchor={!horizontalBars && data.length > 6 ? "end" : "middle"}
+            height={!horizontalBars && data.length > 6 ? 80 : undefined}
+            interval={0}
+            dy={!horizontalBars && data.length > 6 ? 15 : undefined}
+            dx={!horizontalBars && data.length > 6 ? -8 : undefined}
+          />
+          <YAxis
+            type={horizontalBars ? "category" : "number"}
+            dataKey={horizontalBars ? nameKey : undefined}
+            stroke={CHART_AXIS_PROPS.stroke}
+            tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: 11 }}
+            width={horizontalBars ? 110 : undefined}
+            interval={0}
+          />
+          <Tooltip
+            {...CHART_TOOLTIP_STYLE}
+            formatter={(value: number | undefined) => [`${value ?? 0}`, nameLabel ?? "Count"]}
+          />
+          <Bar
+            dataKey={dataKey}
+            name={nameLabel ?? "Count"}
+            radius={horizontalBars ? [0, 8, 8, 0] : [8, 8, 0, 0]}
+            barSize={barSize}
+            onClick={onBarClick}
+            style={onBarClick ? { cursor: "pointer" } : undefined}
+          >
+            {barColor
+              ? data.map((_, index) => <Cell key={index} fill={barColor} />)
+              : data.map((_, index) => (
+                  <Cell
+                    key={index}
+                    fill={
+                      colorByIndex
+                        ? CHART_SEQUENTIAL_COLORS[index % CHART_SEQUENTIAL_COLORS.length]
+                        : CHART_SEQUENTIAL_COLORS[0]
+                    }
+                  />
+                ))}
+            <LabelList
+              dataKey={dataKey}
+              position={horizontalBars ? "right" : "top"}
+              fill="#d6cecd"
+              fontSize={12}
+              fontWeight="bold"
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+type PieChartDataItem = { name: string; value: number; [key: string]: unknown };
+
+function SharedPieChart({
+  data,
+  valueKey = "value",
+  nameKey = "name",
+  colors,
+  outerRadius = 80,
+  labelFormatter,
+}: {
+  data: PieChartDataItem[];
+  valueKey?: string;
+  nameKey?: string;
+  colors: string[] | "village";
+  outerRadius?: number;
+  labelFormatter?: (name: string, percent: number) => string;
+}) {
+  const getColor = (entry: PieChartDataItem, index: number) =>
+    colors === "village" ? getVillageColor(entry.name) : colors[index % colors.length];
+  const defaultLabel = (props: { name?: string; percent?: number }) =>
+    labelFormatter ? labelFormatter(props.name ?? "", props.percent ?? 0) : `${props.name ?? ""} ${((props.percent ?? 0) * 100).toFixed(0)}%`;
+  return (
+    <div className="h-64 w-full">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            label={defaultLabel}
+            outerRadius={outerRadius}
+            dataKey={valueKey}
+          >
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={getColor(entry, index)} />
+            ))}
+          </Pie>
+          <Tooltip
+            contentStyle={CHART_TOOLTIP_STYLE.contentStyle}
+            itemStyle={CHART_TOOLTIP_STYLE.itemStyle}
+            labelStyle={CHART_TOOLTIP_STYLE.labelStyle}
+            formatter={(value: number | undefined) => [`${value ?? 0}`, "Count"]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 /* ============================================================================ */
 /* ------------------- Main Component ------------------- */
@@ -187,25 +467,14 @@ export default function StatsPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
-            icon="fa-user"
-            label="Total Characters"
-            value={statsData.characters.total.toLocaleString()}
-            color="var(--totk-light-green)"
-          />
-          <StatCard
-            icon="fa-cloud"
-            label="Weather Records"
-            value={statsData.weather.total.toLocaleString()}
-            color="var(--botw-blue)"
-          />
-          <StatCard
-            icon="fa-paw"
-            label="Total Pets"
-            value={statsData.pets.total.toLocaleString()}
-            color="var(--totk-light-ocher)"
-          />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          <StatCard icon="fa-user" label="Characters" value={statsData.characters.total.toLocaleString()} color={SECTION_ACCENT_COLORS.characters} />
+          <StatCard icon="fa-cloud" label="Weather" value={statsData.weather.total.toLocaleString()} color={SECTION_ACCENT_COLORS.weather} />
+          <StatCard icon="fa-paw" label="Pets" value={statsData.pets.total.toLocaleString()} color={SECTION_ACCENT_COLORS.pets} />
+          <StatCard icon="fa-horse" label="Mounts" value={statsData.mounts.total.toLocaleString()} color={SECTION_ACCENT_COLORS.mounts} />
+          <StatCard icon="fa-scroll" label="Quests" value={statsData.quests.total.toLocaleString()} color={SECTION_ACCENT_COLORS.quests} />
+          <StatCard icon="fa-gem" label="Relics" value={statsData.relics.total.toLocaleString()} color={SECTION_ACCENT_COLORS.relics} />
+          <StatCard icon="fa-dragon" label="Raids" value={(statsData.raids?.total ?? 0).toLocaleString()} color={SECTION_ACCENT_COLORS.raids} />
         </div>
 
         {/* Character Statistics */}
@@ -216,6 +485,33 @@ export default function StatsPage() {
 
         {/* Pet Statistics */}
         <PetStatsSection data={statsData.pets} />
+
+        {/* Mount Statistics */}
+        <MountStatsSection data={statsData.mounts} />
+
+        {/* Quest Statistics */}
+        <QuestStatsSection data={statsData.quests} />
+
+        {/* Help Wanted Statistics */}
+        <HelpWantedStatsSection data={statsData.helpWanted} />
+
+        {/* Relic Statistics */}
+        <RelicStatsSection data={statsData.relics} />
+
+        {/* Relationship Statistics */}
+        <RelationshipStatsSection data={statsData.relationships} />
+
+        {/* Raid Statistics */}
+        {statsData.raids && <RaidStatsSection data={statsData.raids} />}
+
+        {/* Steal Statistics */}
+        {statsData.stealStats && <StealStatsSection data={statsData.stealStats} />}
+
+        {/* Minigame Statistics */}
+        {statsData.minigames && <MinigameStatsSection data={statsData.minigames} />}
+
+        {/* Inventory Statistics */}
+        {statsData.inventory && <InventoryStatsSection data={statsData.inventory} />}
       </div>
 
       {/* Breakdown Modal */}
@@ -237,6 +533,18 @@ export default function StatsPage() {
 /* ------------------- Character Statistics Section ------------------- */
 /* ============================================================================ */
 
+function normalizeVillageName(village: string): string {
+  if (!village) return "Unknown";
+  const normalized = village.toLowerCase().trim();
+  if (normalized === "rudania" || normalized.startsWith("rudania")) return "Rudania";
+  if (normalized === "inariko" || normalized.startsWith("inariko")) return "Inariko";
+  if (normalized === "vhintl" || normalized.startsWith("vhintl")) return "Vhintl";
+  if (normalized.includes("rudania")) return "Rudania";
+  if (normalized.includes("inariko")) return "Inariko";
+  if (normalized.includes("vhintl")) return "Vhintl";
+  return capitalize(village);
+}
+
 function CharacterStatsSection({ 
   data, 
   onBarClick 
@@ -244,23 +552,7 @@ function CharacterStatsSection({
   data: StatsData["characters"];
   onBarClick: (type: "race" | "job", value: string) => void;
 }) {
-  // ------------------- Normalize Village Names -------------------
-  const normalizeVillageName = (village: string): string => {
-    if (!village) return "Unknown";
-    const normalized = village.toLowerCase().trim();
-    // Handle any case variation
-    if (normalized === "rudania" || normalized.startsWith("rudania")) return "Rudania";
-    if (normalized === "inariko" || normalized.startsWith("inariko")) return "Inariko";
-    if (normalized === "vhintl" || normalized.startsWith("vhintl")) return "Vhintl";
-    // Fallback: try to match partial strings
-    if (normalized.includes("rudania")) return "Rudania";
-    if (normalized.includes("inariko")) return "Inariko";
-    if (normalized.includes("vhintl")) return "Vhintl";
-    return capitalize(village);
-  };
-
   const villageChartData = useMemo(() => {
-    // Aggregate by normalized village name to prevent duplicates
     const villageMap = new Map<string, number>();
     data.byHomeVillage.forEach((item) => {
       const normalizedName = normalizeVillageName(item.village);
@@ -272,8 +564,12 @@ function CharacterStatsSection({
       .sort((a, b) => b.count - a.count);
   }, [data.byHomeVillage]);
 
+  const villagePieData = useMemo(
+    () => villageChartData.map(({ name, count }) => ({ name, value: count })),
+    [villageChartData]
+  );
+
   const jobChartData = useMemo(() => {
-    // Normalize and aggregate job names to prevent duplicates
     const jobMap = new Map<string, number>();
     data.byJob.forEach((item) => {
       const normalizedName = capitalize(item.job.trim());
@@ -286,7 +582,6 @@ function CharacterStatsSection({
   }, [data.byJob]);
 
   const raceChartData = useMemo(() => {
-    // Normalize and aggregate race names to prevent duplicates
     const raceMap = new Map<string, number>();
     data.byRace.forEach((item) => {
       const normalizedName = capitalize(item.race.trim());
@@ -298,42 +593,9 @@ function CharacterStatsSection({
       .sort((a, b) => b.count - a.count);
   }, [data.byRace]);
 
-  // ------------------- Village Colors -------------------
-  const getVillageColor = (village: string): string => {
-    const normalized = normalizeVillageName(village);
-    if (normalized === "Rudania") return "#C6000A"; // Red
-    if (normalized === "Inariko") return "#6BA3FF"; // Blue
-    if (normalized === "Vhintl") return "#4AA144"; // Green
-    return "var(--totk-light-green)";
-  };
-
-  // ------------------- Pastel Rainbow Colors -------------------
-  const PASTEL_COLORS = [
-    "#FFB3BA", // Pastel Red
-    "#FFDFBA", // Pastel Orange
-    "#FFFFBA", // Pastel Yellow
-    "#BAFFC9", // Pastel Green
-    "#BAE1FF", // Pastel Blue
-    "#D4B3FF", // Pastel Indigo
-    "#E1BAFF", // Pastel Violet
-    "#FFB3E6", // Pastel Pink
-    "#B3E5FF", // Pastel Sky Blue
-    "#FFF4BA", // Pastel Gold
-    "#FFC0CB", // Pastel Pink
-    "#B3FFB3", // Pastel Lime
-    "#B3D9FF", // Pastel Light Blue
-    "#FFD4B3", // Pastel Peach
-    "#E6B3FF", // Pastel Lavender
-    "#B3F5FF", // Pastel Cyan
-    "#FFE6B3", // Pastel Cream
-    "#D4FFB3", // Pastel Mint
-    "#FFB3D4", // Pastel Rose
-    "#C9BAFF", // Pastel Periwinkle
-  ];
-
   return (
     <div className="space-y-6">
-      <SectionCard title="Character Statistics" icon="fa-user">
+      <SectionCard title="Character Statistics" icon="fa-user" accentColor={SECTION_ACCENT_COLORS.characters}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Metric label="Total Characters" value={data.total.toLocaleString()} accent="green" />
           <Metric label="Blighted" value={data.statusCounts.blighted} accent="muted" />
@@ -342,175 +604,49 @@ function CharacterStatsSection({
         </div>
       </SectionCard>
 
-      {/* Village Distribution */}
-      {villageChartData.length > 0 && (
-        <SectionCard title="Characters by Home Village" icon="fa-map-marker-alt">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <PieChart>
-                <Pie
-                  data={villageChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {villageChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={getVillageColor(entry.name)} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--botw-warm-black)",
-                    border: "1px solid var(--totk-dark-ocher)",
-                    borderRadius: "8px",
-                    color: "var(--botw-pale)",
-                  }}
-                  itemStyle={{ color: "var(--botw-pale)", fontSize: "13px" }}
-                  labelStyle={{ color: "var(--totk-light-green)", fontSize: "14px", fontWeight: 600 }}
-                  formatter={(value: number | undefined) => [`${value ?? 0} characters`, "Count"]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+      {villagePieData.length > 0 && (
+        <SectionCard title="Characters by Home Village" icon="fa-map-marker-alt" accentColor={SECTION_ACCENT_COLORS.characters}>
+          <SharedPieChart
+            data={villagePieData}
+            valueKey="value"
+            colors="village"
+            outerRadius={100}
+            labelFormatter={(name, percent) => `${name} ${(percent * 100).toFixed(0)}%`}
+          />
         </SectionCard>
       )}
 
-      {/* All Jobs */}
       {jobChartData.length > 0 && (
-        <SectionCard title="Characters by Job" icon="fa-briefcase">
+        <SectionCard title="Characters by Job" icon="fa-briefcase" accentColor={SECTION_ACCENT_COLORS.characters}>
           <div className="h-[32rem] w-full -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <BarChart data={jobChartData} margin={{ top: 80, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--totk-grey-400)" opacity={0.3} />
-                <XAxis 
-                  dataKey="name"
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-light-green)", fontSize: 13, fontWeight: 600 }}
-                  angle={-30}
-                  textAnchor="end"
-                  height={80}
-                  interval={0}
-                  dy={15}
-                  dx={-8}
-                />
-                <YAxis 
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-grey-200)", fontSize: 14, fontWeight: 500 }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--botw-warm-black)",
-                    border: "1px solid var(--totk-dark-ocher)",
-                    borderRadius: "8px",
-                    color: "var(--botw-pale)",
-                    fontSize: "13px",
-                  }}
-                  itemStyle={{ color: "var(--botw-pale)", fontSize: "13px" }}
-                  labelStyle={{ color: "var(--totk-light-green)", fontSize: "14px", fontWeight: 600 }}
-                  cursor={{ fill: "rgba(255, 255, 255, 0.1)" }}
-                />
-                <Bar 
-                  dataKey="count" 
-                  name="Characters" 
-                  radius={[8, 8, 0, 0]}
-                  onClick={(data: { name?: string }) => {
-                    if (data?.name) {
-                      onBarClick("job", data.name);
-                    }
-                  }}
-                  style={{ cursor: "pointer" }}
-                >
-                  {jobChartData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={PASTEL_COLORS[index % PASTEL_COLORS.length]}
-                    />
-                  ))}
-                  <LabelList 
-                    dataKey="count" 
-                    position="top" 
-                    fill="var(--botw-pale)" 
-                    fontSize={13} 
-                    fontWeight="bold"
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <SharedBarChart
+              data={jobChartData}
+              layout="horizontal"
+              height={512}
+              colorByIndex
+              onBarClick={(payload) => payload?.name && onBarClick("job", payload.name)}
+              nameLabel="Characters"
+            />
           </div>
         </SectionCard>
       )}
 
-      {/* Race Distribution */}
       {raceChartData.length > 0 && (
-        <SectionCard title="Characters by Race" icon="fa-users">
+        <SectionCard title="Characters by Race" icon="fa-users" accentColor={SECTION_ACCENT_COLORS.characters}>
           <div className="h-[32rem] w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <BarChart data={raceChartData} margin={{ top: 80, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--totk-grey-400)" opacity={0.3} />
-                <XAxis 
-                  dataKey="name"
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-light-green)", fontSize: 13, fontWeight: 600 }}
-                  angle={-30}
-                  textAnchor="end"
-                  height={80}
-                  interval={0}
-                  dy={15}
-                  dx={-8}
-                />
-                <YAxis 
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-grey-200)", fontSize: 14, fontWeight: 500 }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--botw-warm-black)",
-                    border: "1px solid var(--totk-dark-ocher)",
-                    borderRadius: "8px",
-                    color: "var(--botw-pale)",
-                    fontSize: "13px",
-                  }}
-                  itemStyle={{ color: "var(--botw-pale)", fontSize: "13px" }}
-                  labelStyle={{ color: "var(--totk-light-green)", fontSize: "14px", fontWeight: 600 }}
-                  cursor={{ fill: "rgba(255, 255, 255, 0.1)" }}
-                />
-                <Bar 
-                  dataKey="count" 
-                  name="Characters" 
-                  radius={[8, 8, 0, 0]}
-                  onClick={(data: { name?: string }) => {
-                    if (data?.name) {
-                      onBarClick("race", data.name);
-                    }
-                  }}
-                  style={{ cursor: "pointer" }}
-                >
-                  {raceChartData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={PASTEL_COLORS[index % PASTEL_COLORS.length]}
-                    />
-                  ))}
-                  <LabelList 
-                    dataKey="count" 
-                    position="top" 
-                    fill="var(--botw-pale)" 
-                    fontSize={13} 
-                    fontWeight="bold"
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <SharedBarChart
+              data={raceChartData}
+              layout="horizontal"
+              height={512}
+              colorByIndex
+              onBarClick={(payload) => payload?.name && onBarClick("race", payload.name)}
+              nameLabel="Characters"
+            />
           </div>
         </SectionCard>
       )}
 
-      {/* Average Stats */}
-      <SectionCard title="Average Character Stats" icon="fa-chart-bar">
+      <SectionCard title="Average Character Stats" icon="fa-chart-bar" accentColor={SECTION_ACCENT_COLORS.characters}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Metric label="Avg Max Hearts" value={data.averages.maxHearts.toFixed(1)} accent="green" />
           <Metric label="Avg Max Stamina" value={data.averages.maxStamina.toFixed(1)} accent="blue" />
@@ -526,119 +662,115 @@ function CharacterStatsSection({
 /* ------------------- Weather Statistics Section ------------------- */
 /* ============================================================================ */
 
+const SEASON_ORDER = ["spring", "summer", "fall", "winter"];
+
 function WeatherStatsSection({ data }: { data: StatsData["weather"] }) {
-  // Helper function to normalize village names
-  const normalizeVillageName = (village: string): string => {
-    if (!village) return "Unknown";
-    const normalized = village.toLowerCase().trim();
-    if (normalized === "rudania" || normalized.startsWith("rudania")) return "Rudania";
-    if (normalized === "inariko" || normalized.startsWith("inariko")) return "Inariko";
-    if (normalized === "vhintl" || normalized.startsWith("vhintl")) return "Vhintl";
-    if (normalized.includes("rudania")) return "Rudania";
-    if (normalized.includes("inariko")) return "Inariko";
-    if (normalized.includes("vhintl")) return "Vhintl";
-    return village
-      .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(" ");
-  };
+  // Special weather per village: array of { village, data: [{ type, count }] }
+  const specialByVillagePerVillage = useMemo(() => {
+    const villages = [...new Set(data.specialByVillageAndType.map((p) => p.village))];
+    return villages.map((village) => {
+      const items = data.specialByVillageAndType
+        .filter((p) => p.village === village)
+        .sort((a, b) => b.count - a.count)
+        .map((p) => ({ name: p.type, count: p.count }));
+      return { village, data: items };
+    }).filter((v) => v.data.length > 0);
+  }, [data.specialByVillageAndType]);
 
-  // Get village color
-  const getVillageColor = (village: string): string => {
-    const normalized = normalizeVillageName(village);
-    if (normalized === "Rudania") return "#FF6B6B"; // Red
-    if (normalized === "Inariko") return "#7FB3FF"; // Blue
-    if (normalized === "Vhintl") return "#6BCF7F"; // Green
-    return "var(--totk-light-green)";
-  };
+  // Per-village: array of { village, data: [{ type, count }] }
+  const precipitationByVillagePerVillage = useMemo(() => {
+    const villages = [...new Set(data.precipitationByVillageAndType.map((p) => p.village))];
+    return villages.map((village) => {
+      const items = data.precipitationByVillageAndType
+        .filter((p) => p.village === village)
+        .sort((a, b) => b.count - a.count)
+        .map((p) => ({ name: p.type, count: p.count }));
+      return { village, data: items };
+    }).filter((v) => v.data.length > 0);
+  }, [data.precipitationByVillageAndType]);
 
-  const precipitationChartData = useMemo(() => {
-    return data.precipitationByVillage
-      .filter((item) => item.mostCommon)
-      .map((item) => ({
-        name: capitalize(item.village),
-        precipitation: item.mostCommon!.type,
-        count: item.mostCommon!.count,
-        village: item.village,
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [data.precipitationByVillage]);
+  // Per-season: array of { season, data: [{ type, count }] }
+  const precipitationBySeasonPerSeason = useMemo(() => {
+    const seasons = ["spring", "summer", "fall", "winter"];
+    return seasons.map((season) => {
+      const items = data.precipitationBySeason
+        .filter((p) => p.season === season)
+        .sort((a, b) => b.count - a.count)
+        .map((p) => ({ name: p.type, count: p.count }));
+      return { season, data: items };
+    }).filter((s) => s.data.length > 0);
+  }, [data.precipitationBySeason]);
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Weather Statistics" icon="fa-cloud">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Metric label="Total Records" value={data.total.toLocaleString()} accent="blue" />
-          <Metric label="Special Weather" value={data.specialCount.toLocaleString()} accent="green" />
-        </div>
+      <SectionCard title="Weather Statistics" icon="fa-cloud" accentColor={SECTION_ACCENT_COLORS.weather}>
+        <p className="text-sm text-[var(--botw-pale)]">
+          {data.total.toLocaleString()} total records across villages and seasons
+        </p>
       </SectionCard>
 
-      {/* Special Weather */}
-      <SectionCard title="Special Weather" icon="fa-star">
-        <div className="rounded-xl border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-3">
-          <p className="mb-0.5 text-[11px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
-            Total Special Weather Events
-          </p>
-          <p className="text-2xl font-bold tabular-nums text-[var(--totk-light-green)]">
-            {data.specialCount.toLocaleString()}
-          </p>
-          {data.total > 0 && (
-            <p className="mt-1 text-xs text-[var(--botw-pale)]">
-              {((data.specialCount / data.total) * 100).toFixed(1)}% of all weather records
-            </p>
-          )}
-        </div>
-      </SectionCard>
+      {specialByVillagePerVillage.length > 0 && (
+        <SectionCard title="Special Weather by Village" icon="fa-star" accentColor={SECTION_ACCENT_COLORS.weather}>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {specialByVillagePerVillage.map(({ village, data: chartData }) => (
+              <div
+                key={village}
+                className="rounded-xl border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/10 p-4"
+              >
+                <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">{capitalize(village)}</h4>
+                <SharedBarChart
+                  data={chartData}
+                  layout="vertical"
+                  height={Math.max(180, chartData.length * 32)}
+                  barColor={getVillageColor(village)}
+                  barSize={20}
+                />
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
 
-      {/* Most Common Precipitation by Village */}
-      {precipitationChartData.length > 0 && (
-        <SectionCard title="Most Common Precipitation by Village" icon="fa-cloud-rain">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <BarChart data={precipitationChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--totk-grey-400)" opacity={0.3} />
-                <XAxis 
-                  dataKey="name" 
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-grey-200)", fontSize: 12 }}
+      {precipitationByVillagePerVillage.length > 0 && (
+        <SectionCard title="Precipitation by Village" icon="fa-cloud-rain" accentColor={SECTION_ACCENT_COLORS.weather}>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {precipitationByVillagePerVillage.map(({ village, data: chartData }) => (
+              <div
+                key={village}
+                className="rounded-xl border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/10 p-4"
+              >
+                <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">{capitalize(village)}</h4>
+                <SharedBarChart
+                  data={chartData}
+                  layout="vertical"
+                  height={Math.max(180, chartData.length * 32)}
+                  barColor={getVillageColor(village)}
+                  barSize={20}
                 />
-                <YAxis 
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-grey-200)", fontSize: 12 }}
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {precipitationBySeasonPerSeason.length > 0 && (
+        <SectionCard title="Precipitation by Season" icon="fa-cloud-rain" accentColor={SECTION_ACCENT_COLORS.weather}>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {precipitationBySeasonPerSeason.map(({ season, data: chartData }) => (
+              <div
+                key={season}
+                className="rounded-xl border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/10 p-4"
+              >
+                <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">{capitalize(season)}</h4>
+                <SharedBarChart
+                  data={chartData}
+                  layout="vertical"
+                  height={Math.max(180, chartData.length * 32)}
+                  barColor={CHART_SEQUENTIAL_COLORS[SEASON_ORDER.indexOf(season) % CHART_SEQUENTIAL_COLORS.length]}
+                  barSize={20}
                 />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--botw-warm-black)",
-                    border: "1px solid var(--totk-dark-ocher)",
-                    borderRadius: "8px",
-                    color: "var(--botw-pale)",
-                  }}
-                  itemStyle={{ color: "var(--botw-pale)", fontSize: "13px" }}
-                  labelStyle={{ color: "var(--totk-light-green)", fontSize: "14px", fontWeight: 600 }}
-                  formatter={(value: number | undefined) => [`${value ?? 0} times`, "Count"]}
-                  cursor={{ fill: "rgba(255, 255, 255, 0.1)" }}
-                />
-                <Bar 
-                  dataKey="count" 
-                  name="Count"
-                  radius={[8, 8, 0, 0]}
-                >
-                  {precipitationChartData.map((entry: { village: string }, index: number) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={getVillageColor(entry.village)}
-                    />
-                  ))}
-                  <LabelList 
-                    dataKey="precipitation" 
-                    position="top" 
-                    fill="var(--botw-pale)" 
-                    fontSize={11} 
-                    fontWeight="bold"
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+              </div>
+            ))}
           </div>
         </SectionCard>
       )}
@@ -651,13 +783,6 @@ function WeatherStatsSection({ data }: { data: StatsData["weather"] }) {
 /* ============================================================================ */
 
 function PetStatsSection({ data }: { data: StatsData["pets"] }) {
-  const statusChartData = useMemo(() => {
-    return data.byStatus.map((item) => ({
-      name: capitalize(item.status.replace("_", " ")),
-      value: item.count,
-    }));
-  }, [data.byStatus]);
-
   const speciesChartData = useMemo(() => {
     return data.bySpecies.slice(0, 10).map((item) => ({
       name: capitalize(item.species),
@@ -665,11 +790,9 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
     }));
   }, [data.bySpecies]);
 
-  const COLORS = ["var(--totk-light-green)", "var(--botw-blue)", "var(--totk-light-ocher)", "var(--totk-mid-ocher)"];
-
   return (
     <div className="space-y-6">
-      <SectionCard title="Pet Statistics" icon="fa-paw">
+      <SectionCard title="Pet Statistics" icon="fa-paw" accentColor={SECTION_ACCENT_COLORS.pets}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Metric label="Total Pets" value={data.total.toLocaleString()} accent="green" />
           <Metric label="Avg Level" value={data.averageLevel.toFixed(1)} accent="blue" />
@@ -677,83 +800,360 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
         </div>
       </SectionCard>
 
-      {/* Pet Status Distribution */}
-      {statusChartData.length > 0 && (
-        <SectionCard title="Pets by Status" icon="fa-info-circle">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <PieChart>
-                <Pie
-                  data={statusChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {statusChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--botw-warm-black)",
-                    border: "1px solid var(--totk-dark-ocher)",
-                    borderRadius: "8px",
-                    color: "var(--botw-pale)",
-                  }}
-                  itemStyle={{ color: "var(--botw-pale)", fontSize: "13px" }}
-                  labelStyle={{ color: "var(--totk-light-green)", fontSize: "14px", fontWeight: 600 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Top Species */}
       {speciesChartData.length > 0 && (
-        <SectionCard title="Top 10 Pet Species" icon="fa-dog">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <BarChart data={speciesChartData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--totk-grey-400)" opacity={0.3} />
-                <XAxis 
-                  type="number"
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-grey-200)", fontSize: 10 }}
-                />
-                <YAxis 
-                  type="category"
-                  dataKey="name"
-                  stroke="var(--totk-grey-200)"
-                  tick={{ fill: "var(--totk-grey-200)", fontSize: 10 }}
-                  width={120}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--botw-warm-black)",
-                    border: "1px solid var(--totk-dark-ocher)",
-                    borderRadius: "8px",
-                    color: "var(--botw-pale)",
-                  }}
-                  itemStyle={{ color: "var(--botw-pale)" }}
-                  labelStyle={{ color: "var(--totk-light-green)" }}
-                  cursor={{ fill: "rgba(255, 255, 255, 0.1)" }}
-                />
-                <Bar 
-                  dataKey="count" 
-                  fill="var(--totk-light-ocher)" 
-                  name="Pets" 
-                  radius={[0, 8, 8, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <SectionCard title="Top 10 Pet Species" icon="fa-dog" accentColor={SECTION_ACCENT_COLORS.pets}>
+          <SharedBarChart
+            data={speciesChartData}
+            layout="vertical"
+            height={256}
+            barColor={SECTION_ACCENT_HEX.pets}
+            nameLabel="Pets"
+          />
         </SectionCard>
       )}
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Mount Statistics Section ------------------- */
+/* ============================================================================ */
+
+function MountStatsSection({ data }: { data: StatsData["mounts"] }) {
+  const speciesData = useMemo(() => data.bySpecies.map((i) => ({ name: i.species, count: i.count })), [data.bySpecies]);
+  const levelData = useMemo(() => data.byLevel.map((i) => ({ name: i.level, count: i.count })), [data.byLevel]);
+  const regionData = useMemo(() => data.byRegion.map((i) => ({ name: i.region || "Unknown", count: i.count })), [data.byRegion]);
+
+  if (data.total === 0) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Mount Statistics" icon="fa-horse" accentColor={SECTION_ACCENT_COLORS.mounts}>
+        <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total mounts</p>
+        <div className="grid gap-6 lg:grid-cols-3">
+          {speciesData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Species</h4>
+              <SharedBarChart data={speciesData} layout="vertical" height={256} barColor={CHART_SEQUENTIAL_COLORS[0]} barSize={24} />
+            </div>
+          )}
+          {levelData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Level</h4>
+              <SharedBarChart data={levelData} layout="vertical" height={256} barColor={CHART_SEQUENTIAL_COLORS[2]} barSize={24} />
+            </div>
+          )}
+          {regionData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Region</h4>
+              <SharedBarChart data={regionData} layout="vertical" height={256} barColor={CHART_SEQUENTIAL_COLORS[3]} barSize={24} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Quest Statistics Section ------------------- */
+/* ============================================================================ */
+
+function QuestStatsSection({ data }: { data: StatsData["quests"] }) {
+  const byTypeData = useMemo(() => data.byType.map((i) => ({ name: i.type, count: i.count })), [data.byType]);
+  const byStatusData = useMemo(() => data.byStatus.map((i) => ({ name: capitalize(i.status), count: i.count })), [data.byStatus]);
+
+  if (data.total === 0) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Quest Statistics" icon="fa-scroll" accentColor={SECTION_ACCENT_COLORS.quests}>
+        <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total quests</p>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {byTypeData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
+              <SharedBarChart data={byTypeData} layout="vertical" height={256} barColor={SECTION_ACCENT_HEX.quests} barSize={28} />
+            </div>
+          )}
+          {byStatusData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Status</h4>
+              <SharedBarChart data={byStatusData} layout="vertical" height={256} barColor={SECTION_ACCENT_HEX.quests} barSize={28} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Help Wanted Statistics Section ------------------- */
+/* ============================================================================ */
+
+function HelpWantedStatsSection({ data }: { data: StatsData["helpWanted"] }) {
+  const byVillageData = useMemo(() => data.byVillage.map((i) => ({ name: capitalize(i.village), count: i.count })), [data.byVillage]);
+  const byTypeData = useMemo(() => data.byType.map((i) => ({ name: capitalize(i.type), count: i.count })), [data.byType]);
+  const completionPct = data.total > 0 ? ((data.completed / data.total) * 100).toFixed(1) : "0";
+
+  if (data.total === 0) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Help Wanted Statistics" icon="fa-clipboard-list" accentColor={SECTION_ACCENT_COLORS.helpWanted}>
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Metric label="Total" value={data.total.toLocaleString()} accent="blue" />
+          <Metric label="Completed" value={data.completed.toLocaleString()} accent="green" />
+          <Metric label="Completion Rate" value={`${completionPct}%`} accent="ocher" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {byVillageData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
+              <SharedBarChart data={byVillageData} layout="vertical" height={220} barColor={SECTION_ACCENT_HEX.helpWanted} barSize={24} />
+            </div>
+          )}
+          {byTypeData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
+              <SharedBarChart data={byTypeData} layout="vertical" height={220} barColor={SECTION_ACCENT_HEX.helpWanted} barSize={24} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Relic Statistics Section ------------------- */
+/* ============================================================================ */
+
+function RelicStatsSection({ data }: { data: StatsData["relics"] }) {
+  if (data.total === 0) return null;
+  const appraisedPct = data.total > 0 ? ((data.appraised / data.total) * 100).toFixed(1) : "0";
+  return (
+    <SectionCard title="Relic Statistics" icon="fa-gem" accentColor={SECTION_ACCENT_COLORS.relics}>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Metric label="Total Relics" value={data.total.toLocaleString()} accent="ocher" />
+        <Metric label="Appraised" value={data.appraised.toLocaleString()} accent="green" />
+        <Metric label="Appraisal Rate" value={`${appraisedPct}%`} accent="blue" />
+        <Metric label="Unique" value={data.unique.toLocaleString()} accent="ocher" />
+      </div>
+    </SectionCard>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Relationship Statistics Section ------------------- */
+/* ============================================================================ */
+
+function RelationshipStatsSection({ data }: { data: StatsData["relationships"] }) {
+  const byTypeData = useMemo(
+    () => data.byType.map((i) => ({ name: i.type.replace(/_/g, " "), count: i.count })).sort((a, b) => b.count - a.count),
+    [data.byType]
+  );
+  if (data.total === 0) return null;
+  return (
+    <SectionCard title="Relationship Statistics" icon="fa-heart" accentColor={SECTION_ACCENT_COLORS.relationships}>
+      <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total relationships</p>
+      {byTypeData.length > 0 && (
+        <SharedBarChart
+          data={byTypeData}
+          layout="vertical"
+          height={320}
+          barColor={SECTION_ACCENT_HEX.relationships}
+          barSize={24}
+        />
+      )}
+    </SectionCard>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Raid Statistics Section ------------------- */
+/* ============================================================================ */
+
+function RaidStatsSection({ data }: { data: StatsData["raids"] }) {
+  const byVillageData = useMemo(() => data.byVillage.map((i) => ({ name: i.village, count: i.count })), [data.byVillage]);
+  const byResultData = useMemo(() => data.byResult.map((i) => ({ name: capitalize(i.result), count: i.count })), [data.byResult]);
+  const byTierData = useMemo(() => data.byTier.map((i) => ({ name: `Tier ${i.tier}`, count: i.count })), [data.byTier]);
+
+  if (data.total === 0) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Raid Statistics" icon="fa-dragon" accentColor={SECTION_ACCENT_COLORS.raids}>
+        <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total raids</p>
+        <div className="grid gap-6 lg:grid-cols-3">
+          {byVillageData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
+              <SharedBarChart data={byVillageData} layout="vertical" height={180} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
+            </div>
+          )}
+          {byResultData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Result</h4>
+              <SharedBarChart data={byResultData} layout="vertical" height={120} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
+            </div>
+          )}
+          {byTierData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Monster Tier</h4>
+              <SharedBarChart data={byTierData} layout="vertical" height={180} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Steal Statistics Section ------------------- */
+/* ============================================================================ */
+
+function StealStatsSection({ data }: { data: StatsData["stealStats"] }) {
+  const rarityData = useMemo(
+    () => [
+      { name: "Common", count: data.byRarity.common },
+      { name: "Uncommon", count: data.byRarity.uncommon },
+      { name: "Rare", count: data.byRarity.rare },
+    ].filter((d) => d.count > 0),
+    [data.byRarity]
+  );
+  const topVictimsData = useMemo(() => data.topVictims.map((i) => ({ name: i.name || "Unknown", count: i.count })), [data.topVictims]);
+
+  if (data.totalAttempts === 0) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Steal Statistics" icon="fa-hand-holding" accentColor={SECTION_ACCENT_COLORS.stealStats}>
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Metric label="Total Attempts" value={data.totalAttempts.toLocaleString()} accent="ocher" />
+          <Metric label="Successful" value={data.successfulSteals.toLocaleString()} accent="green" />
+          <Metric label="Success Rate" value={`${data.successRate}%`} accent="blue" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {rarityData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items by Rarity</h4>
+              <SharedBarChart data={rarityData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.stealStats} barSize={28} />
+            </div>
+          )}
+          {topVictimsData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Top Victims</h4>
+              <SharedBarChart data={topVictimsData} layout="vertical" height={Math.max(200, topVictimsData.length * 28)} barColor={SECTION_ACCENT_HEX.stealStats} barSize={22} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Minigame Statistics Section ------------------- */
+/* ============================================================================ */
+
+function MinigameStatsSection({ data }: { data: StatsData["minigames"] }) {
+  const byGameTypeData = useMemo(() => data.byGameType.map((i) => ({ name: i.gameType.replace(/_/g, " "), count: i.count })), [data.byGameType]);
+  const byStatusData = useMemo(() => data.byStatus.map((i) => ({ name: capitalize(i.status), count: i.count })), [data.byStatus]);
+  const byVillageData = useMemo(() => data.byVillage.map((i) => ({ name: capitalize(i.village), count: i.count })), [data.byVillage]);
+
+  if (data.total === 0) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Minigame Statistics" icon="fa-gamepad" accentColor={SECTION_ACCENT_COLORS.minigames}>
+        <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total sessions</p>
+        <div className="grid gap-6 lg:grid-cols-3">
+          {byGameTypeData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Game Type</h4>
+              <SharedBarChart data={byGameTypeData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.minigames} barSize={24} />
+            </div>
+          )}
+          {byStatusData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Status</h4>
+              <SharedBarChart data={byStatusData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.minigames} barSize={24} />
+            </div>
+          )}
+          {byVillageData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
+              <SharedBarChart data={byVillageData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.minigames} barSize={24} />
+            </div>
+          )}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Inventory Statistics Section ------------------- */
+/* ============================================================================ */
+
+type InventoryCharacterRow = { characterName: string; slug: string; totalItems: number; uniqueItems: number };
+type InventoryItemRow = { itemName: string; characterCount: number };
+
+function InventoryStatsSection({ data }: { data: StatsData["inventory"] }) {
+  const topCharactersData = useMemo(
+    () =>
+      data.topCharactersByItems.map((c: InventoryCharacterRow) => ({
+        name: c.characterName,
+        count: c.totalItems,
+        slug: c.slug,
+        uniqueItems: c.uniqueItems,
+      })),
+    [data.topCharactersByItems]
+  );
+  const topItemsData = useMemo(
+    () => data.topItemsByCharacterCount.map((i: InventoryItemRow) => ({ name: i.itemName, count: i.characterCount })),
+    [data.topItemsByCharacterCount]
+  );
+
+  if (data.topCharactersByItems.length === 0 && data.topItemsByCharacterCount.length === 0) return null;
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Inventory" icon="fa-box" accentColor={SECTION_ACCENT_COLORS.inventory}>
+        <p className="mb-4 text-sm text-[var(--botw-pale)]">
+          Characters with the most items (total quantity) and items owned by the most characters.
+        </p>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {topCharactersData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Characters with most items</h4>
+              <div className="space-y-2">
+                {topCharactersData.slice(0, 15).map((c: { name: string; count: number; slug: string; uniqueItems: number }) => (
+                  <Link
+                    key={c.slug}
+                    href={`/characters/${c.slug}`}
+                    className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2 transition-colors hover:bg-[var(--totk-dark-ocher)]/20"
+                  >
+                    <span className="font-medium text-[var(--botw-pale)]">{c.name}</span>
+                    <span className="tabular-nums text-[var(--totk-light-green)]">
+                      {c.count.toLocaleString()} items{c.uniqueItems !== c.count ? ` (${c.uniqueItems} unique)` : ""}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+          {topItemsData.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items owned by most characters</h4>
+              <SharedBarChart
+                data={topItemsData}
+                layout="vertical"
+                height={Math.max(220, topItemsData.length * 28)}
+                barColor={SECTION_ACCENT_HEX.inventory}
+                barSize={22}
+                nameLabel="Characters"
+              />
+            </div>
+          )}
+        </div>
+      </SectionCard>
     </div>
   );
 }
@@ -785,15 +1185,6 @@ function BreakdownModal({
       .split(" ")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(" ");
-  };
-
-  // Get village color (lighter, more readable versions)
-  const getVillageColor = (village: string): string => {
-    const normalized = normalizeVillageName(village);
-    if (normalized === "Rudania") return "#FF6B6B"; // Lighter Red
-    if (normalized === "Inariko") return "#7FB3FF"; // Lighter Blue
-    if (normalized === "Vhintl") return "#6BCF7F"; // Lighter Green
-    return "#B8E6B8"; // Light green for unknown
   };
 
   if (!data && !loading) return null;
@@ -972,17 +1363,20 @@ function StatCard({
 function SectionCard({
   title,
   icon,
+  accentColor,
   children,
 }: {
   title: string;
   icon: string;
+  accentColor?: string;
   children: React.ReactNode;
 }) {
+  const color = accentColor ?? "var(--totk-light-green)";
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
       <div className="mb-4 flex items-center gap-3 md:mb-5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--totk-light-green)]/15">
-          <i className={`fa-solid ${icon} text-[var(--totk-light-green)]`} />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${color}20` }}>
+          <i className={`fa-solid ${icon}`} style={{ color }} />
         </div>
         <h2 className="text-sm font-semibold tracking-tight text-[var(--totk-light-ocher)] sm:text-base">{title}</h2>
       </div>

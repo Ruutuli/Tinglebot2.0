@@ -49,6 +49,10 @@
   /* Blight RGB values for rgba() usage */
   --blight-border-rgb: 173, 20, 87;
 
+  /* Stats page section accents */
+  --stats-accent-relationship: #e07a7a;
+  --stats-accent-steal: #b494e3;
+
   /* Blood Moon Theme */
   --blood-moon-red: #8B0000;
   --blood-moon-red-rgb: 139, 0, 0;

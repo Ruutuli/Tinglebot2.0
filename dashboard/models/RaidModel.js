@@ -643,4 +643,4 @@ raidSchema.statics.cleanupExpiredRaids = async function(client = null) {
 // ============================================================================
 // ---- Export ----
 // ============================================================================
-module.exports = mongoose.model('Raid', raidSchema); 
+module.exports = mongoose.models.Raid || mongoose.model('Raid', raidSchema); 

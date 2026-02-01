@@ -201,6 +201,14 @@ function findGearItemByName(
   return { item: found.item, actualType };
 }
 
+/* [create/page.tsx]🧠 Helper function to convert stats to Record - */
+function statsToRecord(stats: Map<string, number> | Record<string, number>): Record<string, number> {
+  if (stats instanceof Map) {
+    return Object.fromEntries(stats);
+  }
+  return stats;
+}
+
 /* [create/page.tsx]🧠 Equipped gear builder - */
 function buildEquippedGearState(
   weapon: GearItemOption | null,
@@ -1342,7 +1350,7 @@ export function CreateForm({
                   chest: currentGear.gearArmor.chest
                     ? {
                         name: currentGear.gearArmor.chest.name,
-                        stats: Object.fromEntries(
+                        stats: statsToRecord(
                           currentGear.gearArmor.chest.stats
                         ),
                       }
@@ -1355,7 +1363,7 @@ export function CreateForm({
                   head: currentGear.gearArmor.head
                     ? {
                         name: currentGear.gearArmor.head.name,
-                        stats: Object.fromEntries(
+                        stats: statsToRecord(
                           currentGear.gearArmor.head.stats
                         ),
                       }
@@ -1363,7 +1371,7 @@ export function CreateForm({
                   legs: currentGear.gearArmor.legs
                     ? {
                         name: currentGear.gearArmor.legs.name,
-                        stats: Object.fromEntries(
+                        stats: statsToRecord(
                           currentGear.gearArmor.legs.stats
                         ),
                       }
@@ -1378,13 +1386,13 @@ export function CreateForm({
             gearShield: currentGear.gearShield
               ? {
                   name: currentGear.gearShield.name,
-                  stats: Object.fromEntries(currentGear.gearShield.stats),
+                  stats: statsToRecord(currentGear.gearShield.stats),
                 }
               : null,
             gearWeapon: currentGear.gearWeapon
               ? {
                   name: currentGear.gearWeapon.name,
-                  stats: Object.fromEntries(currentGear.gearWeapon.stats),
+                  stats: statsToRecord(currentGear.gearWeapon.stats),
                 }
               : null,
           };

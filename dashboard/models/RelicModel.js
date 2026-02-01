@@ -38,4 +38,4 @@ const RelicSchema = new Schema({
   uses: { type: String, default: '' },                 // Potential uses or applications.
 }, { collection: 'relics' });
 
-module.exports = mongoose.model('Relic', RelicSchema);
+module.exports = mongoose.models.Relic || mongoose.model('Relic', RelicSchema);

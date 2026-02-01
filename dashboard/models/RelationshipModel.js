@@ -91,5 +91,5 @@ relationshipSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('Relationship', relationshipSchema);
+module.exports = mongoose.models.Relationship || mongoose.model('Relationship', relationshipSchema);
 

@@ -1348,13 +1348,13 @@ function InventoriesPageContent() {
       gearWeapon: gear.gearWeapon
         ? {
             name: gear.gearWeapon.name,
-            stats: Object.fromEntries(gear.gearWeapon.stats),
+            stats: statsToRecord(gear.gearWeapon.stats),
           }
         : null,
       gearShield: gear.gearShield
         ? {
             name: gear.gearShield.name,
-            stats: Object.fromEntries(gear.gearShield.stats),
+            stats: statsToRecord(gear.gearShield.stats),
           }
         : null,
       gearArmor: gear.gearArmor
@@ -1362,25 +1362,33 @@ function InventoriesPageContent() {
             head: gear.gearArmor.head
               ? {
                   name: gear.gearArmor.head.name,
-                  stats: Object.fromEntries(gear.gearArmor.head.stats),
+                  stats: statsToRecord(gear.gearArmor.head.stats),
                 }
               : null,
             chest: gear.gearArmor.chest
               ? {
                   name: gear.gearArmor.chest.name,
-                  stats: Object.fromEntries(gear.gearArmor.chest.stats),
+                  stats: statsToRecord(gear.gearArmor.chest.stats),
                 }
               : null,
             legs: gear.gearArmor.legs
               ? {
                   name: gear.gearArmor.legs.name,
-                  stats: Object.fromEntries(gear.gearArmor.legs.stats),
+                  stats: statsToRecord(gear.gearArmor.legs.stats),
                 }
               : null,
           }
         : null,
     };
   }, []);
+
+  // Helper function to convert stats to Record format
+  const statsToRecord = (stats: Map<string, number> | Record<string, number>): Record<string, number> => {
+    if (stats instanceof Map) {
+      return Object.fromEntries(stats);
+    }
+    return stats;
+  };
 
   // Helper function to convert character gear to EquippedGear format
   const convertStatsToMap = (stats?: Record<string, unknown>): Map<string, number> => {
@@ -1489,24 +1497,24 @@ function InventoriesPageContent() {
         ...characterData,
         gearWeapon: newGear.gearWeapon ? {
           name: newGear.gearWeapon.name,
-          stats: Object.fromEntries(newGear.gearWeapon.stats),
+          stats: statsToRecord(newGear.gearWeapon.stats),
         } : null,
         gearShield: newGear.gearShield ? {
           name: newGear.gearShield.name,
-          stats: Object.fromEntries(newGear.gearShield.stats),
+          stats: statsToRecord(newGear.gearShield.stats),
         } : null,
         gearArmor: newGear.gearArmor ? {
           head: newGear.gearArmor.head ? {
             name: newGear.gearArmor.head.name,
-            stats: Object.fromEntries(newGear.gearArmor.head.stats),
+            stats: statsToRecord(newGear.gearArmor.head.stats),
           } : null,
           chest: newGear.gearArmor.chest ? {
             name: newGear.gearArmor.chest.name,
-            stats: Object.fromEntries(newGear.gearArmor.chest.stats),
+            stats: statsToRecord(newGear.gearArmor.chest.stats),
           } : null,
           legs: newGear.gearArmor.legs ? {
             name: newGear.gearArmor.legs.name,
-            stats: Object.fromEntries(newGear.gearArmor.legs.stats),
+            stats: statsToRecord(newGear.gearArmor.legs.stats),
           } : null,
         } : null,
       };
@@ -1820,15 +1828,15 @@ function InventoriesPageContent() {
         update.gearArmor = {
           head: slot === "head" ? null : (currentGear.gearArmor.head ? {
             name: currentGear.gearArmor.head.name,
-            stats: Object.fromEntries(currentGear.gearArmor.head.stats) as Record<string, unknown>,
+            stats: statsToRecord(currentGear.gearArmor.head.stats) as Record<string, unknown>,
           } : null),
           chest: slot === "chest" ? null : (currentGear.gearArmor.chest ? {
             name: currentGear.gearArmor.chest.name,
-            stats: Object.fromEntries(currentGear.gearArmor.chest.stats) as Record<string, unknown>,
+            stats: statsToRecord(currentGear.gearArmor.chest.stats) as Record<string, unknown>,
           } : null),
           legs: slot === "legs" ? null : (currentGear.gearArmor.legs ? {
             name: currentGear.gearArmor.legs.name,
-            stats: Object.fromEntries(currentGear.gearArmor.legs.stats) as Record<string, unknown>,
+            stats: statsToRecord(currentGear.gearArmor.legs.stats) as Record<string, unknown>,
           } : null),
         };
       }

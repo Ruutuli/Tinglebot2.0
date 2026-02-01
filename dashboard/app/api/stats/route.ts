@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, getInventoriesDb } from "@/lib/db";
 import { logger } from "@/utils/logger";
 import type { PipelineStage } from "mongoose";
 
@@ -13,11 +13,26 @@ export async function GET() {
     const CharacterModule = await import("@/models/CharacterModel.js");
     const WeatherModule = await import("@/models/WeatherModel.js");
     const PetModule = await import("@/models/PetModel.js");
-    
-    // Handle both ESM default export and CommonJS module.exports
+    const MountModule = await import("@/models/MountModel.js");
+    const QuestModule = await import("@/models/QuestModel.js");
+    const HelpWantedModule = await import("@/models/HelpWantedQuestModel.js");
+    const RelicModule = await import("@/models/RelicModel.js");
+    const RelationshipModule = await import("@/models/RelationshipModel.js");
+    const RaidModule = await import("@/models/RaidModel.js");
+    const StealStatsModule = await import("@/models/StealStatsModel.js");
+    const MinigameModule = await import("@/models/MinigameModel.js");
+
     const Character = CharacterModule.default || CharacterModule;
     const Weather = WeatherModule.default || WeatherModule;
     const Pet = PetModule.default || PetModule;
+    const Mount = MountModule.default || MountModule;
+    const Quest = QuestModule.default || QuestModule;
+    const HelpWantedQuest = HelpWantedModule.default || HelpWantedModule;
+    const Relic = RelicModule.default || RelicModule;
+    const Relationship = RelationshipModule.default || RelationshipModule;
+    const Raid = RaidModule.default || RaidModule;
+    const StealStats = StealStatsModule.default || StealStatsModule;
+    const Minigame = MinigameModule.default || MinigameModule;
 
     // ------------------- Character Statistics -------------------
     // Only count accepted characters
@@ -104,68 +119,161 @@ export async function GET() {
 
     // ------------------- Weather Statistics -------------------
     const [
-      weatherTotal,
-      weatherSpecialCount,
-      weatherPrecipitationByVillage,
+      weatherRecordsByVillage,
+      weatherRecordsBySeason,
+      weatherSpecialByVillage,
+      weatherSpecialBySeason,
+      weatherSpecialByVillageAndType,
+      weatherPrecipitationByVillageAndType,
+      weatherPrecipitationBySeason,
+      weatherTemperatureByVillage,
+      weatherWindByVillage,
     ] = await Promise.all([
-      Weather.countDocuments({}),
-      Weather.countDocuments({
-        "special.label": { $exists: true, $ne: null, $ne: "" },
-      }),
+      Weather.aggregate([
+        { $group: { _id: "$village", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Weather.aggregate([
+        { $group: { _id: "$season", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
       Weather.aggregate([
         {
           $match: {
-            "precipitation.label": { $exists: true, $ne: null, $ne: "" },
+            "special.label": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: "$village", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Weather.aggregate([
+        {
+          $match: {
+            "special.label": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: "$season", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Weather.aggregate([
+        {
+          $match: {
+            "special.label": { $exists: true, $nin: [null, ""] },
           },
         },
         {
           $group: {
             _id: {
               village: "$village",
-              precipitation: "$precipitation.label",
+              type: "$special.label",
             },
             count: { $sum: 1 },
           },
         },
         {
+          $project: {
+            village: "$_id.village",
+            type: "$_id.type",
+            count: 1,
+          },
+        },
+        { $sort: { village: 1, count: -1 } },
+      ]),
+      Weather.aggregate([
+        {
+          $match: {
+            "precipitation.label": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        {
           $group: {
-            _id: "$_id.village",
-            precipitations: {
-              $push: {
-                type: "$_id.precipitation",
-                count: "$count",
-              },
+            _id: {
+              village: "$village",
+              type: "$precipitation.label",
             },
+            count: { $sum: 1 },
           },
         },
         {
           $project: {
-            village: "$_id",
-            mostCommon: {
-              $arrayElemAt: [
-                {
-                  $slice: [
-                    {
-                      $sortArray: {
-                        input: "$precipitations",
-                        sortBy: { count: -1 },
-                      },
-                    },
-                    1,
-                  ],
-                },
-                0,
-              ],
-            },
-            allPrecipitations: {
-              $sortArray: {
-                input: "$precipitations",
-                sortBy: { count: -1 },
-              },
-            },
+            village: "$_id.village",
+            type: "$_id.type",
+            count: 1,
           },
         },
-        { $sort: { village: 1 } },
+        { $sort: { village: 1, count: -1 } },
+      ]),
+      Weather.aggregate([
+        {
+          $match: {
+            "precipitation.label": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              season: "$season",
+              type: "$precipitation.label",
+            },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            season: "$_id.season",
+            type: "$_id.type",
+            count: 1,
+          },
+        },
+        { $sort: { season: 1, count: -1 } },
+      ]),
+      Weather.aggregate([
+        {
+          $match: {
+            "temperature.label": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              village: "$village",
+              type: "$temperature.label",
+            },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            village: "$_id.village",
+            type: "$_id.type",
+            count: 1,
+          },
+        },
+        { $sort: { village: 1, count: -1 } },
+      ]),
+      Weather.aggregate([
+        {
+          $match: {
+            "wind.label": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              village: "$village",
+              type: "$wind.label",
+            },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            village: "$_id.village",
+            type: "$_id.type",
+            count: 1,
+          },
+        },
+        { $sort: { village: 1, count: -1 } },
       ]),
     ]);
 
@@ -202,6 +310,171 @@ export async function GET() {
       Pet.distinct("owner"),
     ]);
 
+    // ------------------- Mount Statistics -------------------
+    const [
+      mountTotal,
+      mountBySpecies,
+      mountByLevel,
+      mountByRegion,
+    ] = await Promise.all([
+      Mount.countDocuments({}),
+      Mount.aggregate([{ $group: { _id: "$species", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      Mount.aggregate([{ $group: { _id: "$level", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      Mount.aggregate([{ $group: { _id: "$region", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+    ]);
+
+    // ------------------- Quest Statistics -------------------
+    const [
+      questTotal,
+      questByType,
+      questByStatus,
+    ] = await Promise.all([
+      Quest.countDocuments({}),
+      Quest.aggregate([{ $group: { _id: "$questType", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      Quest.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+    ]);
+
+    // ------------------- Help Wanted Statistics -------------------
+    const [
+      helpWantedTotal,
+      helpWantedByVillage,
+      helpWantedByType,
+      helpWantedCompleted,
+    ] = await Promise.all([
+      HelpWantedQuest.countDocuments({}),
+      HelpWantedQuest.aggregate([{ $group: { _id: "$village", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      HelpWantedQuest.aggregate([{ $group: { _id: "$type", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      HelpWantedQuest.countDocuments({ completed: true }),
+    ]);
+
+    // ------------------- Relic Statistics -------------------
+    const [
+      relicTotal,
+      relicAppraised,
+      relicUnique,
+    ] = await Promise.all([
+      Relic.countDocuments({}),
+      Relic.countDocuments({ appraised: true }),
+      Relic.countDocuments({ unique: true }),
+    ]);
+
+    // ------------------- Relationship Statistics -------------------
+    const [relationshipTotal, relationshipByType] = await Promise.all([
+      Relationship.countDocuments({}),
+      Relationship.aggregate([
+        { $unwind: "$relationshipTypes" },
+        { $group: { _id: "$relationshipTypes", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+    ]);
+
+    // ------------------- Raid Statistics -------------------
+    const [
+      raidTotal,
+      raidByVillage,
+      raidByResult,
+      raidByTier,
+    ] = await Promise.all([
+      Raid.countDocuments({}),
+      Raid.aggregate([
+        { $group: { _id: "$village", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Raid.aggregate([
+        { $match: { result: { $in: ["defeated", "timeout"] } } },
+        { $group: { _id: "$result", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Raid.aggregate([
+        { $group: { _id: "$monster.tier", count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+    ]);
+
+    // ------------------- Steal Statistics -------------------
+    const [
+      stealStatsDocs,
+      stealVictimsAgg,
+    ] = await Promise.all([
+      StealStats.find({}).lean(),
+      StealStats.aggregate([
+        { $unwind: "$victims" },
+        {
+          $group: {
+            _id: "$victims.characterName",
+            count: { $sum: { $ifNull: ["$victims.count", 1] } },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 15 },
+      ]),
+    ]);
+    const stealTotalAttempts = stealStatsDocs.reduce((s, d) => s + (d.totalAttempts || 0), 0);
+    const stealTotalSuccess = stealStatsDocs.reduce((s, d) => s + (d.successfulSteals || 0), 0);
+    const stealByRarity = {
+      common: stealStatsDocs.reduce((s, d) => s + (d.itemsByRarity?.common ?? 0), 0),
+      uncommon: stealStatsDocs.reduce((s, d) => s + (d.itemsByRarity?.uncommon ?? 0), 0),
+      rare: stealStatsDocs.reduce((s, d) => s + (d.itemsByRarity?.rare ?? 0), 0),
+    };
+
+    // ------------------- Minigame Statistics -------------------
+    const [
+      minigameTotal,
+      minigameByType,
+      minigameByStatus,
+      minigameByVillage,
+    ] = await Promise.all([
+      Minigame.countDocuments({}),
+      Minigame.aggregate([
+        { $group: { _id: "$gameType", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Minigame.aggregate([
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      Minigame.aggregate([
+        { $group: { _id: "$village", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+    ]);
+
+    // ------------------- Inventory Statistics -------------------
+    let topCharactersByItems: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }> = [];
+    let topItemsByCharacterCount: Array<{ itemName: string; characterCount: number }> = [];
+    try {
+      const acceptedCharacters = await Character.find(characterFilter).select("name publicSlug").lean();
+      const db = await getInventoriesDb();
+      const itemToCharCount = new Map<string, number>();
+      const characterStats: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }> = [];
+      for (const char of acceptedCharacters) {
+        const name = char.name as string;
+        const slug = (char.publicSlug as string) || name.toLowerCase().replace(/\s+/g, "-");
+        try {
+          const collection = db.collection(name.toLowerCase());
+          const items = await collection.find({ quantity: { $gt: 0 } }).toArray() as Array<{ quantity?: number; itemName?: string }>;
+          const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+          const uniqueNames = new Set(items.map((item) => item.itemName).filter(Boolean));
+          characterStats.push({ characterName: name, slug, totalItems, uniqueItems: uniqueNames.size });
+          for (const itemName of uniqueNames) {
+            if (itemName) itemToCharCount.set(itemName, (itemToCharCount.get(itemName) || 0) + 1);
+          }
+        } catch {
+          characterStats.push({ characterName: name, slug, totalItems: 0, uniqueItems: 0 });
+        }
+      }
+      topCharactersByItems = characterStats
+        .filter((c) => c.totalItems > 0)
+        .sort((a, b) => b.totalItems - a.totalItems)
+        .slice(0, 15);
+      topItemsByCharacterCount = Array.from(itemToCharCount.entries())
+        .map(([itemName, characterCount]) => ({ itemName, characterCount }))
+        .sort((a, b) => b.characterCount - a.characterCount)
+        .slice(0, 20);
+    } catch (invErr) {
+      logger.error("api/stats", invErr instanceof Error ? invErr.message : String(invErr));
+    }
+
     // Format response data
     const response = {
       characters: {
@@ -237,17 +510,47 @@ export async function GET() {
         },
       },
       weather: {
-        total: weatherTotal,
-        specialCount: weatherSpecialCount,
-        precipitationByVillage: weatherPrecipitationByVillage.map((item) => ({
+        total: weatherRecordsByVillage.reduce((sum, i) => sum + i.count, 0),
+        recordsByVillage: weatherRecordsByVillage.map((item) => ({
+          village: item._id || "Unknown",
+          count: item.count,
+        })),
+        recordsBySeason: weatherRecordsBySeason.map((item) => ({
+          season: item._id || "Unknown",
+          count: item.count,
+        })),
+        specialByVillage: weatherSpecialByVillage.map((item) => ({
+          village: item._id || "Unknown",
+          count: item.count,
+        })),
+        specialBySeason: weatherSpecialBySeason.map((item) => ({
+          season: item._id || "Unknown",
+          count: item.count,
+        })),
+        specialByVillageAndType: weatherSpecialByVillageAndType.map((item) => ({
           village: item.village || "Unknown",
-          mostCommon: item.mostCommon
-            ? {
-                type: item.mostCommon.type,
-                count: item.mostCommon.count,
-              }
-            : null,
-          allPrecipitations: item.allPrecipitations || [],
+          type: item.type || "Unknown",
+          count: item.count,
+        })),
+        precipitationByVillageAndType: weatherPrecipitationByVillageAndType.map((item) => ({
+          village: item.village || "Unknown",
+          type: item.type || "Unknown",
+          count: item.count,
+        })),
+        precipitationBySeason: weatherPrecipitationBySeason.map((item) => ({
+          season: item.season || "Unknown",
+          type: item.type || "Unknown",
+          count: item.count,
+        })),
+        temperatureByVillage: weatherTemperatureByVillage.map((item) => ({
+          village: item.village || "Unknown",
+          type: item.type || "Unknown",
+          count: item.count,
+        })),
+        windByVillage: weatherWindByVillage.map((item) => ({
+          village: item.village || "Unknown",
+          type: item.type || "Unknown",
+          count: item.count,
         })),
       },
       pets: {
@@ -266,6 +569,55 @@ export async function GET() {
         })),
         averageLevel: Math.round((petAverageLevel[0]?.avgLevel || 0) * 100) / 100,
         ownerCount: petOwnerCount.length,
+      },
+      mounts: {
+        total: mountTotal,
+        bySpecies: mountBySpecies.map((item) => ({ species: item._id || "Unknown", count: item.count })),
+        byLevel: mountByLevel.map((item) => ({ level: item._id || "Unknown", count: item.count })),
+        byRegion: mountByRegion.map((item) => ({ region: item._id || "Unknown", count: item.count })),
+      },
+      quests: {
+        total: questTotal,
+        byType: questByType.map((item) => ({ type: item._id || "Unknown", count: item.count })),
+        byStatus: questByStatus.map((item) => ({ status: item._id || "Unknown", count: item.count })),
+      },
+      helpWanted: {
+        total: helpWantedTotal,
+        completed: helpWantedCompleted,
+        byVillage: helpWantedByVillage.map((item) => ({ village: item._id || "Unknown", count: item.count })),
+        byType: helpWantedByType.map((item) => ({ type: item._id || "Unknown", count: item.count })),
+      },
+      relics: {
+        total: relicTotal,
+        appraised: relicAppraised,
+        unique: relicUnique,
+      },
+      relationships: {
+        total: relationshipTotal,
+        byType: relationshipByType.map((item) => ({ type: item._id || "Unknown", count: item.count })),
+      },
+      raids: {
+        total: raidTotal,
+        byVillage: raidByVillage.map((item) => ({ village: item._id || "Unknown", count: item.count })),
+        byResult: raidByResult.map((item) => ({ result: item._id || "Unknown", count: item.count })),
+        byTier: raidByTier.map((item) => ({ tier: item._id ?? 0, count: item.count })),
+      },
+      stealStats: {
+        totalAttempts: stealTotalAttempts,
+        successfulSteals: stealTotalSuccess,
+        successRate: stealTotalAttempts > 0 ? Math.round((stealTotalSuccess / stealTotalAttempts) * 10000) / 100 : 0,
+        byRarity: stealByRarity,
+        topVictims: stealVictimsAgg.map((item) => ({ name: item._id || "Unknown", count: item.count })),
+      },
+      minigames: {
+        total: minigameTotal,
+        byGameType: minigameByType.map((item) => ({ gameType: item._id || "Unknown", count: item.count })),
+        byStatus: minigameByStatus.map((item) => ({ status: item._id || "Unknown", count: item.count })),
+        byVillage: minigameByVillage.map((item) => ({ village: item._id || "Unknown", count: item.count })),
+      },
+      inventory: {
+        topCharactersByItems,
+        topItemsByCharacterCount,
       },
     };
 
