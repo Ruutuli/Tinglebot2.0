@@ -13,6 +13,7 @@ const {
 } = require('@/database/db');
 const { getBoostEffect, normalizeJobName } = require('../../modules/boostingModule');
 const { getJobPerk } = require('../../modules/jobsModule');
+const { deactivateJobVoucher } = require('../../modules/jobVoucherModule');
 const { useStamina } = require('../../modules/characterStatsModule');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const TempData = require('@/models/TempDataModel');
@@ -1118,11 +1119,14 @@ async function handleBoostAccept(interaction) {
    logger.error('BOOST', `Could not find target character "${requestData.targetCharacter}"`);
  }
 
- // Mark job voucher as used if booster has an active voucher
+ // Deactivate job voucher if booster had an active voucher
  if (booster.jobVoucher) {
-   booster.lastGatheredAt = new Date().toISOString();
-   await booster.save();
-   logger.info('BOOST', `Marked job voucher as used for ${booster.name} after accepting boost`);
+   const deactivationResult = await deactivateJobVoucher(booster._id, { afterUse: true });
+   if (!deactivationResult.success) {
+     logger.error('BOOST', `Failed to deactivate job voucher for ${booster.name}`);
+   } else {
+     logger.info('BOOST', `Job voucher deactivated for ${booster.name} after accepting boost`);
+   }
  }
 
  // Save updated request data

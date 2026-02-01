@@ -2846,40 +2846,9 @@ async function checkSubmissionApproval(messageUrl, client) {
 }
 
 // ------------------- Function: completeQuestFromSubmission -------------------
-// Completes a quest when a submission is approved (only if quest period has ended)
+// Completes a quest when a mod approves an art/writing submission (immediately upon approval)
 async function completeQuestFromSubmission(quest, submissionData, client) {
   try {
-    // Check if quest period has ended before completing
-    // Help Wanted quests expire at midnight on the day they are posted
-    if (!isQuestExpired(quest)) {
-      logger.info('QUEST', `Quest ${quest.questId} submission approved, but quest period has not ended yet. Completion will be processed when period expires.`);
-      // Update user tracking to mark they completed the quest (even though quest isn't completed yet)
-      const User = require('@/models/UserModel');
-      const user = await User.findOne({ discordId: submissionData.userId });
-      if (user) {
-        await updateUserTracking(user, quest, submissionData.userId);
-      }
-      // Mark collab partners as having completed the quest
-      const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
-      for (const collaboratorMention of collabList) {
-        if (!collaboratorMention || typeof collaboratorMention !== 'string') continue;
-        const collaboratorId = collaboratorMention.replace(/[<@!>]/g, '').trim();
-        if (!collaboratorId) continue;
-        const collabUser = await User.findOne({ discordId: collaboratorId });
-        if (collabUser) {
-          await updateUserTracking(collabUser, quest, collaboratorId);
-        }
-      }
-      // Update quest embed to show completion status
-      await updateQuestEmbed(client, quest, {
-        userId: submissionData.userId,
-        characterId: null,
-        timestamp: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})
-      });
-      return; // Don't complete quest or send messages until period ends
-    }
-
-    // Quest period has ended - proceed with completion
     // Mark quest as completed
     quest.completed = true;
     quest.completedBy = {
@@ -2913,7 +2882,7 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
     // Send completion message to the original town hall channel
     await sendQuestCompletionMessage(quest, submissionData, client);
 
-    logger.success('QUEST', `Quest ${quest.questId} completed via submission approval (period has ended)`);
+    logger.success('QUEST', `Quest ${quest.questId} completed via submission approval`);
     
   } catch (error) {
     logger.error('QUEST', 'Error completing quest from submission', error);
@@ -3008,7 +2977,10 @@ async function sendQuestCompletionMessage(quest, submissionData, client) {
     // Add border image
     completionEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
-    await channel.send({ embeds: [completionEmbed] });
+    await channel.send({
+      content: `<@${submissionData.userId}> Quest completed!`,
+      embeds: [completionEmbed]
+    });
     logger.success('QUEST', `Quest completion message sent to ${quest.village} town hall`);
     
   } catch (error) {
