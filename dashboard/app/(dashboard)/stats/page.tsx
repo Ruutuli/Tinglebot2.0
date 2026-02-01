@@ -239,12 +239,12 @@ function SharedBarChart({
 }) {
   const horizontalBars = layout === "vertical";
   return (
-    <div className="min-w-0 w-full" style={{ height }}>
+    <div className="min-w-0 w-full overflow-hidden" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart
           data={data}
           layout={layout}
-          margin={{ top: 8, right: 40, left: horizontalBars ? 4 : 20, bottom: horizontalBars ? 20 : 8 }}
+          margin={{ top: 8, right: 32, left: horizontalBars ? 4 : 12, bottom: horizontalBars ? 20 : 8 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -267,8 +267,8 @@ function SharedBarChart({
             type={horizontalBars ? "category" : "number"}
             dataKey={horizontalBars ? nameKey : undefined}
             stroke={CHART_AXIS_PROPS.stroke}
-            tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: 11 }}
-            width={horizontalBars ? 110 : undefined}
+            tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: 10 }}
+            width={horizontalBars ? 88 : undefined}
             interval={0}
           />
           <Tooltip
@@ -457,17 +457,17 @@ export default function StatsPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="min-h-screen overflow-x-hidden p-3 sm:p-4 md:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1600px] space-y-4 sm:space-y-6">
         {/* Page Header */}
-        <div className="mb-4 sm:mb-6 flex items-center justify-center gap-2 sm:gap-4">
-          <img src="/Side=Left.svg" alt="" className="h-4 w-auto sm:h-6" />
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[var(--totk-light-ocher)]">Statistics</h1>
-          <img src="/Side=Right.svg" alt="" className="h-4 w-auto sm:h-6" />
+        <div className="mb-3 sm:mb-6 flex items-center justify-center gap-2 sm:gap-4">
+          <img src="/Side=Left.svg" alt="" className="h-4 w-auto sm:h-6" aria-hidden />
+          <h1 className="text-center text-xl sm:text-2xl md:text-3xl font-bold text-[var(--totk-light-ocher)]">Statistics</h1>
+          <img src="/Side=Right.svg" alt="" className="h-4 w-auto sm:h-6" aria-hidden />
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
           <StatCard icon="fa-user" label="Characters" value={statsData.characters.total.toLocaleString()} color={SECTION_ACCENT_COLORS.characters} />
           <StatCard icon="fa-cloud" label="Weather" value={statsData.weather.total.toLocaleString()} color={SECTION_ACCENT_COLORS.weather} />
           <StatCard icon="fa-paw" label="Pets" value={statsData.pets.total.toLocaleString()} color={SECTION_ACCENT_COLORS.pets} />
@@ -618,30 +618,34 @@ function CharacterStatsSection({
 
       {jobChartData.length > 0 && (
         <SectionCard title="Characters by Job" icon="fa-briefcase" accentColor={SECTION_ACCENT_COLORS.characters}>
-          <div className="h-[32rem] w-full -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8">
-            <SharedBarChart
-              data={jobChartData}
-              layout="horizontal"
-              height={512}
-              colorByIndex
-              onBarClick={(payload) => payload?.name && onBarClick("job", payload.name)}
-              nameLabel="Characters"
-            />
+          <div className="-mx-2 overflow-x-auto px-2 sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+            <div className="h-[28rem] min-w-[280px] sm:h-[32rem]" style={{ width: Math.max(280, jobChartData.length * 48) }}>
+              <SharedBarChart
+                data={jobChartData}
+                layout="horizontal"
+                height={448}
+                colorByIndex
+                onBarClick={(payload) => payload?.name && onBarClick("job", payload.name)}
+                nameLabel="Characters"
+              />
+            </div>
           </div>
         </SectionCard>
       )}
 
       {raceChartData.length > 0 && (
         <SectionCard title="Characters by Race" icon="fa-users" accentColor={SECTION_ACCENT_COLORS.characters}>
-          <div className="h-[32rem] w-full">
-            <SharedBarChart
-              data={raceChartData}
-              layout="horizontal"
-              height={512}
-              colorByIndex
-              onBarClick={(payload) => payload?.name && onBarClick("race", payload.name)}
-              nameLabel="Characters"
-            />
+          <div className="-mx-2 overflow-x-auto px-2 sm:-mx-4 sm:px-4">
+            <div className="h-[28rem] min-w-[280px] sm:h-[32rem]" style={{ width: Math.max(280, raceChartData.length * 48) }}>
+              <SharedBarChart
+                data={raceChartData}
+                layout="horizontal"
+                height={448}
+                colorByIndex
+                onBarClick={(payload) => payload?.name && onBarClick("race", payload.name)}
+                nameLabel="Characters"
+              />
+            </div>
           </div>
         </SectionCard>
       )}
@@ -790,6 +794,13 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
     }));
   }, [data.bySpecies]);
 
+  const typeChartData = useMemo(() => {
+    return data.byType.map((item) => ({
+      name: capitalize((item.type || "").replace(/_/g, " ")),
+      count: item.count,
+    }));
+  }, [data.byType]);
+
   return (
     <div className="space-y-6">
       <SectionCard title="Pet Statistics" icon="fa-paw" accentColor={SECTION_ACCENT_COLORS.pets}>
@@ -800,15 +811,37 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
         </div>
       </SectionCard>
 
-      {speciesChartData.length > 0 && (
-        <SectionCard title="Top 10 Pet Species" icon="fa-dog" accentColor={SECTION_ACCENT_COLORS.pets}>
-          <SharedBarChart
-            data={speciesChartData}
-            layout="vertical"
-            height={256}
-            barColor={SECTION_ACCENT_HEX.pets}
-            nameLabel="Pets"
-          />
+      {(speciesChartData.length > 0 || typeChartData.length > 0) && (
+        <SectionCard title="Pets by Species and Type" icon="fa-paw" accentColor={SECTION_ACCENT_COLORS.pets}>
+          <p className="mb-4 text-xs text-[var(--totk-grey-200)]">
+            Species = kind of animal (e.g. dog, cat). Type = pet category (e.g. companion, battle).
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+            {speciesChartData.length > 0 && (
+              <div className="min-w-0">
+                <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Species</h4>
+                <SharedBarChart
+                  data={speciesChartData}
+                  layout="vertical"
+                  height={256}
+                  barColor={SECTION_ACCENT_HEX.pets}
+                  nameLabel="Pets"
+                />
+              </div>
+            )}
+            {typeChartData.length > 0 && (
+              <div className="min-w-0">
+                <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
+                <SharedBarChart
+                  data={typeChartData}
+                  layout="vertical"
+                  height={256}
+                  barColor={CHART_SEQUENTIAL_COLORS[2]}
+                  nameLabel="Pets"
+                />
+              </div>
+            )}
+          </div>
         </SectionCard>
       )}
     </div>
@@ -829,7 +862,7 @@ function MountStatsSection({ data }: { data: StatsData["mounts"] }) {
     <div className="space-y-6">
       <SectionCard title="Mount Statistics" icon="fa-horse" accentColor={SECTION_ACCENT_COLORS.mounts}>
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total mounts</p>
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {speciesData.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Species</h4>
@@ -867,7 +900,7 @@ function QuestStatsSection({ data }: { data: StatsData["quests"] }) {
     <div className="space-y-6">
       <SectionCard title="Quest Statistics" icon="fa-scroll" accentColor={SECTION_ACCENT_COLORS.quests}>
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total quests</p>
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {byTypeData.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
@@ -904,15 +937,15 @@ function HelpWantedStatsSection({ data }: { data: StatsData["helpWanted"] }) {
           <Metric label="Completed" value={data.completed.toLocaleString()} accent="green" />
           <Metric label="Completion Rate" value={`${completionPct}%`} accent="ocher" />
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {byVillageData.length > 0 && (
-            <div>
+            <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
               <SharedBarChart data={byVillageData} layout="vertical" height={220} barColor={SECTION_ACCENT_HEX.helpWanted} barSize={24} />
             </div>
           )}
           {byTypeData.length > 0 && (
-            <div>
+            <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
               <SharedBarChart data={byTypeData} layout="vertical" height={220} barColor={SECTION_ACCENT_HEX.helpWanted} barSize={24} />
             </div>
@@ -982,21 +1015,21 @@ function RaidStatsSection({ data }: { data: StatsData["raids"] }) {
     <div className="space-y-6">
       <SectionCard title="Raid Statistics" icon="fa-dragon" accentColor={SECTION_ACCENT_COLORS.raids}>
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total raids</p>
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {byVillageData.length > 0 && (
-            <div>
+            <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
               <SharedBarChart data={byVillageData} layout="vertical" height={180} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
             </div>
           )}
           {byResultData.length > 0 && (
-            <div>
+            <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Result</h4>
               <SharedBarChart data={byResultData} layout="vertical" height={120} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
             </div>
           )}
           {byTierData.length > 0 && (
-            <div>
+            <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Monster Tier</h4>
               <SharedBarChart data={byTierData} layout="vertical" height={180} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
             </div>
@@ -1031,7 +1064,7 @@ function StealStatsSection({ data }: { data: StatsData["stealStats"] }) {
           <Metric label="Successful" value={data.successfulSteals.toLocaleString()} accent="green" />
           <Metric label="Success Rate" value={`${data.successRate}%`} accent="blue" />
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {rarityData.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items by Rarity</h4>
@@ -1064,7 +1097,7 @@ function MinigameStatsSection({ data }: { data: StatsData["minigames"] }) {
     <div className="space-y-6">
       <SectionCard title="Minigame Statistics" icon="fa-gamepad" accentColor={SECTION_ACCENT_COLORS.minigames}>
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total sessions</p>
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {byGameTypeData.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Game Type</h4>
@@ -1119,20 +1152,20 @@ function InventoryStatsSection({ data }: { data: StatsData["inventory"] }) {
         <p className="mb-4 text-sm text-[var(--botw-pale)]">
           Characters with the most items (total quantity) and items owned by the most characters.
         </p>
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
           {topCharactersData.length > 0 && (
-            <div>
+            <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Characters with most items</h4>
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 {topCharactersData.slice(0, 15).map((c: { name: string; count: number; slug: string; uniqueItems: number }) => (
                   <Link
                     key={c.slug}
                     href={`/characters/${c.slug}`}
-                    className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2 transition-colors hover:bg-[var(--totk-dark-ocher)]/20"
+                    className="flex min-h-[44px] min-w-0 items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-3 py-2 transition-colors hover:bg-[var(--totk-dark-ocher)]/20 active:bg-[var(--totk-dark-ocher)]/20 sm:px-4"
                   >
-                    <span className="font-medium text-[var(--botw-pale)]">{c.name}</span>
-                    <span className="tabular-nums text-[var(--totk-light-green)]">
-                      {c.count.toLocaleString()} items{c.uniqueItems !== c.count ? ` (${c.uniqueItems} unique)` : ""}
+                    <span className="min-w-0 truncate font-medium text-[var(--botw-pale)]" title={c.name}>{c.name}</span>
+                    <span className="shrink-0 tabular-nums text-sm text-[var(--totk-light-green)] sm:text-base">
+                      {c.count.toLocaleString()} items{c.uniqueItems !== c.count ? ` (${c.uniqueItems})` : ""}
                     </span>
                   </Link>
                 ))}
@@ -1140,16 +1173,18 @@ function InventoryStatsSection({ data }: { data: StatsData["inventory"] }) {
             </div>
           )}
           {topItemsData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items owned by most characters</h4>
-              <SharedBarChart
-                data={topItemsData}
-                layout="vertical"
-                height={Math.max(220, topItemsData.length * 28)}
-                barColor={SECTION_ACCENT_HEX.inventory}
-                barSize={22}
-                nameLabel="Characters"
-              />
+              <div className="min-h-[200px] min-w-[200px]">
+                <SharedBarChart
+                  data={topItemsData}
+                  layout="vertical"
+                  height={Math.max(220, topItemsData.length * 28)}
+                  barColor={SECTION_ACCENT_HEX.inventory}
+                  barSize={22}
+                  nameLabel="Characters"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -1191,17 +1226,17 @@ function BreakdownModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/95 p-6 shadow-xl backdrop-blur-sm"
+        className="relative max-h-[85dvh] w-full max-w-4xl overflow-y-auto rounded-t-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/95 p-4 shadow-xl backdrop-blur-sm sm:rounded-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
+        {/* Close Button - touch-friendly min size */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-lg p-2 text-[var(--totk-grey-200)] transition-colors hover:bg-[var(--totk-dark-ocher)]/20 hover:text-[var(--totk-light-green)]"
+          className="absolute right-2 top-2 flex h-11 w-11 min-w-[44px] items-center justify-center rounded-lg text-[var(--totk-grey-200)] transition-colors hover:bg-[var(--totk-dark-ocher)]/20 hover:text-[var(--totk-light-green)] active:bg-[var(--totk-dark-ocher)]/30 sm:right-4 sm:top-4 sm:h-auto sm:w-auto sm:min-w-0 sm:p-2"
           aria-label="Close"
         >
           <i className="fa-solid fa-times text-xl" />
@@ -1228,14 +1263,14 @@ function BreakdownModal({
               <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
                 Character Names
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 sm:gap-2">
                 {data.characterNames.map((char, idx) => {
                   const villageColor = getVillageColor(char.homeVillage);
                   return (
                     <Link
                       key={idx}
                       href={`/characters/${char.slug}`}
-                      className="rounded-lg border px-3 py-1 text-sm transition-colors hover:opacity-80"
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border px-3 py-2 text-sm transition-colors hover:opacity-80 active:opacity-90 sm:py-1"
                       style={{
                         borderColor: `${villageColor}40`,
                         backgroundColor: `${villageColor}15`,
@@ -1339,19 +1374,19 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-5">
-      <div className="flex min-w-0 items-center gap-4">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-3 shadow-sm backdrop-blur-sm sm:p-4 md:p-5">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11"
           style={{ backgroundColor: `${color}20` }}
         >
-          <i className={`fa-solid ${icon} text-base`} style={{ color }} />
+          <i className={`fa-solid ${icon} text-sm sm:text-base`} style={{ color }} />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <p className="truncate text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)] sm:text-[11px]">
             {label}
           </p>
-          <p className="mt-0.5 break-all text-lg font-bold tabular-nums sm:text-xl" style={{ color }}>
+          <p className="mt-0.5 truncate text-base font-bold tabular-nums sm:text-lg md:text-xl" style={{ color }} title={String(value)}>
             {value}
           </p>
         </div>
@@ -1373,14 +1408,14 @@ function SectionCard({
 }) {
   const color = accentColor ?? "var(--totk-light-green)";
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
-      <div className="mb-4 flex items-center gap-3 md:mb-5">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
+      <div className="mb-3 flex min-w-0 items-center gap-3 md:mb-5">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${color}20` }}>
           <i className={`fa-solid ${icon}`} style={{ color }} />
         </div>
-        <h2 className="text-sm font-semibold tracking-tight text-[var(--totk-light-ocher)] sm:text-base">{title}</h2>
+        <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-[var(--totk-light-ocher)] sm:text-base">{title}</h2>
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -1403,11 +1438,11 @@ function Metric({
           ? "text-[var(--totk-light-ocher)]"
           : "text-[var(--botw-pale)]";
   return (
-    <div className="rounded-xl border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/50 px-4 py-3">
-      <p className="mb-0.5 text-[11px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/50 px-3 py-2 sm:px-4 sm:py-3">
+      <p className="mb-0.5 truncate text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)] sm:text-[11px]">
         {label}
       </p>
-      <p className={`text-lg font-bold tabular-nums ${accentColor}`}>{value}</p>
+      <p className={`truncate text-base font-bold tabular-nums sm:text-lg ${accentColor}`} title={typeof value === "string" ? value : undefined}>{value}</p>
     </div>
   );
 }
