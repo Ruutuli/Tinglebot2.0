@@ -40,7 +40,12 @@ const {
   cleanupOldTrackingData
 } = require('@/scripts/bloodmoon');
 const { generateDailyQuests: runHelpWantedGeneration } = require('@/modules/helpWantedModule');
+const { updateSubmissionData } = require('@/utils/storage');
+const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 
+const APPROVAL_CHANNEL_ID = '1381479893090566144';
+const COMMUNITY_BOARD_CHANNEL_ID = process.env.COMMUNITY_BOARD_CHANNEL_ID || '651614266046152705';
+const MOD_ROLE_ID = process.env.MOD_ROLE_ID || '606128760655183882';
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const VILLAGE_CHANNELS = {
   Rudania: process.env.RUDANIA_TOWNHALL,
@@ -560,10 +565,34 @@ async function birthdayAnnouncements(client, _data = {}) {
       description += `🎂 **User Birthdays:**\n${userMentions}\n\n🎁 **It's your birthday!** Use \`/birthday claim\` to get your rewards!\n\n**Choose one:**\n• 💰 1500 tokens\n• 🛍️ 75% shop discount\n\n`;
     }
     
-    // Character birthdays (OC birthdays, RP only)
+    // Character birthdays: single source for embed copy, blessing, random gift (cakes or 1% Spirit Orb)
+    const characterBirthdayConfig = {
+      cakes: ['Carrot Cake', 'Fruit Cake', 'Monster Cake', 'Nut Cake'],
+      blessings: [
+        "May Din's flame warm your path and her strength guard you through another year.",
+        "May Nayru's light guide your steps and her wisdom grace every choice you make.",
+        "May Farore's wind carry you onward and her courage steady your heart."
+      ],
+      line: (blessing) => `🎂 **Happy birthday!** *${blessing}* Here's a cake! 🎂`
+    };
+    const characterGiftLines = [];
     if (birthdayCharacters.length > 0) {
-      const characterNames = birthdayCharacters.map(char => `**${char.name}**`).join(', ');
+      const blessing = characterBirthdayConfig.blessings[Math.floor(Math.random() * characterBirthdayConfig.blessings.length)];
+      for (const char of birthdayCharacters) {
+        const isSpiritOrb = Math.random() < 0.01;
+        const itemName = isSpiritOrb ? 'Spirit Orb' : characterBirthdayConfig.cakes[Math.floor(Math.random() * characterBirthdayConfig.cakes.length)];
+        try {
+          await addItemInventoryDatabase(char._id, itemName, 1, null, 'Character Birthday');
+          characterGiftLines.push(`**${char.name}** received **${itemName}**`);
+        } catch (err) {
+          logger.error('SCHEDULED', `birthday-announcements: Failed to add ${itemName} to ${char.name}: ${err.message}`);
+          characterGiftLines.push(`**${char.name}** — gift could not be delivered`);
+        }
+      }
+      const characterNames = birthdayCharacters.map(c => `**${c.name}**`).join(', ');
       description += `🎭 **Character Birthdays:**\n${characterNames}\n\n`;
+      description += characterBirthdayConfig.line(blessing) + '\n\n';
+      description += characterGiftLines.join('\n');
     }
     
     const embed = new EmbedBuilder()
@@ -881,9 +910,9 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
           continue;
         }
         
-        // Calculate tokens (1 boost = 500 tokens)
+        // Calculate tokens (1 boost = 1000 tokens)
         const boostCount = 1; // Each member with premiumSince has 1 boost
-        const tokens = boostCount * 500;
+        const tokens = boostCount * 1000;
         
         // Update user
         if (!user.boostRewards) {
@@ -911,6 +940,25 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
       } catch (err) {
         logger.error('SCHEDULED', `monthly-nitro-boost-rewards: Failed for user ${userId}: ${err.message}`);
       }
+    }
+    
+    // Post announcement to community board channel
+    const communityBoardChannel = await client.channels.fetch(COMMUNITY_BOARD_CHANNEL_ID).catch(() => null);
+    if (communityBoardChannel) {
+      const embed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('💜 Monthly Nitro Boost Rewards')
+        .setDescription(
+          rewardedCount > 0
+            ? `Thank you to our **${rewardedCount}** server booster${rewardedCount !== 1 ? 's' : ''}! Each has received **1000 tokens** for boosting this month.`
+            : 'No new boost rewards were distributed this month. Thank you to everyone who boosts the server!'
+        )
+        .setTimestamp();
+      await communityBoardChannel.send({ embeds: [embed] }).catch(err => {
+        logger.error('SCHEDULED', `monthly-nitro-boost-rewards: Failed to post to community board: ${err.message}`);
+      });
+    } else {
+      logger.warn('SCHEDULED', 'monthly-nitro-boost-rewards: Community board channel not found, announcement not posted');
     }
     
     logger.success('SCHEDULED', `monthly-nitro-boost-rewards: done (rewarded ${rewardedCount} users)`);
@@ -1535,6 +1583,70 @@ async function blightExpirationWarnings(client, _data = {}) {
   }
 }
 
+// ------------------- submission-mod-reminder (Every hour) -------------------
+// @s the mod role in the approval channel if an art/writing submission hasn't been approved within 12 hours
+async function submissionModReminder(client, _data = {}) {
+  if (!client?.channels) {
+    logger.error('SCHEDULED', 'submission-mod-reminder: Discord client not available');
+    return;
+  }
+  try {
+    logger.info('SCHEDULED', 'submission-mod-reminder: starting');
+
+    if (!MOD_ROLE_ID) {
+      logger.warn('SCHEDULED', 'submission-mod-reminder: MOD_ROLE_ID not configured, skipping');
+      return;
+    }
+
+    const approvalChannel = await client.channels.fetch(APPROVAL_CHANNEL_ID).catch(() => null);
+    if (!approvalChannel?.isTextBased()) {
+      logger.warn('SCHEDULED', 'submission-mod-reminder: Approval channel not found or not text-based');
+      return;
+    }
+
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const pendingSubmissions = await TempData.findAllByType('submission');
+
+    const toRemind = pendingSubmissions.filter((doc) => {
+      const d = doc.data || {};
+      if (!d.pendingNotificationMessageId) return false;
+      if (d.modReminderSentAt) return false;
+      const updatedAt = d.updatedAt ? new Date(d.updatedAt) : null;
+      if (!updatedAt || updatedAt > twelveHoursAgo) return false;
+      return true;
+    });
+
+    let remindedCount = 0;
+    for (const doc of toRemind) {
+      const submissionId = doc.key;
+      const data = doc.data || {};
+      const notificationMessageId = data.pendingNotificationMessageId;
+
+      try {
+        const notificationMessage = await approvalChannel.messages.fetch(notificationMessageId).catch(() => null);
+        if (!notificationMessage) {
+          logger.warn('SCHEDULED', `submission-mod-reminder: Notification message not found for submission ${submissionId}`);
+          continue;
+        }
+
+        await notificationMessage.reply({
+          content: `<@&${MOD_ROLE_ID}> This submission has been pending for 12+ hours and needs approval.`,
+        });
+
+        await updateSubmissionData(submissionId, { modReminderSentAt: new Date() });
+        remindedCount++;
+        logger.info('SCHEDULED', `submission-mod-reminder: Sent mod reminder for submission ${submissionId}`);
+      } catch (err) {
+        logger.error('SCHEDULED', `submission-mod-reminder: Failed for submission ${submissionId}: ${err.message}`);
+      }
+    }
+
+    logger.success('SCHEDULED', `submission-mod-reminder: done (reminded mods for ${remindedCount} submission(s))`);
+  } catch (err) {
+    logger.error('SCHEDULED', `submission-mod-reminder: ${err.message}`);
+  }
+}
+
 // ============================================================================
 // ------------------- Task Registry -------------------
 // ============================================================================
@@ -1592,7 +1704,8 @@ const TASKS = [
   
   // Expiration Cleanup Tasks
   { name: 'cleanup-boost-expirations', cron: '0 * * * *', handler: cleanupBoostExpirations }, // Every hour
-  { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings } // Every 6 hours
+  { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings }, // Every 6 hours
+  { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder } // Every hour - @mods if art/writing pending 12+ hours
 ];
 
 /**

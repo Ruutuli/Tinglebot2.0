@@ -195,7 +195,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
 // Adds a single item to inventory database
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "") {
   try {
-    if (!interaction && obtain !== 'Trade') {
+    const allowedNullInteractionObtain = ['Trade', 'Character Birthday'];
+    if (!interaction && !allowedNullInteractionObtain.includes(obtain)) {
       throw new Error("Interaction object is undefined.");
     }
 

@@ -193,9 +193,17 @@ async function sendQuestCompletionNotification(quest, participant, channelId = n
 // ------------------- Get Quest Notification Channel -------------------
 async function getQuestNotificationChannel(quest, participant) {
     try {
+        const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
+
         // For RP quests, use the RP thread if available
         if (quest.questType.toLowerCase() === 'rp' && participant.rpThreadId) {
             return participant.rpThreadId;
+        }
+
+        // Art, Writing, and Art/Writing quest completion notifications always go to Sheikah Slate
+        const questType = (quest.questType || '').toLowerCase();
+        if (questType === 'art' || questType === 'writing' || questType === 'art / writing' || questType === 'art/writing') {
+            return SHEIKAH_SLATE_CHANNEL_ID;
         }
 
         // For other quest types, use the quest channel if specified
@@ -205,7 +213,6 @@ async function getQuestNotificationChannel(quest, participant) {
 
         // Fallback to Sheikah Slate channel for quest completion notifications
         // (Quest Board channel is used for quest announcements, not completions)
-        const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
         return SHEIKAH_SLATE_CHANNEL_ID;
 
     } catch (error) {
