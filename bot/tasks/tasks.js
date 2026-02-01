@@ -23,6 +23,7 @@ const Village = require('@/models/VillageModel');
 const Raid = require('@/models/RaidModel');
 const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
 const TempData = require('@/models/TempDataModel');
+const TokenTransaction = require('@/models/TokenTransactionModel');
 const { releaseFromJail } = require('@/utils/jailCheck');
 const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('@/modules/characterStatsModule');
@@ -919,6 +920,8 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
         // Calculate tokens (1 boost = 1000 tokens)
         const boostCount = 1; // Each member with premiumSince has 1 boost
         const tokens = boostCount * 1000;
+        const balanceBefore = user.tokens || 0;
+        const balanceAfter = balanceBefore + tokens;
         
         // Update user
         if (!user.boostRewards) {
@@ -937,10 +940,26 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
           tokensReceived: tokens,
           timestamp: new Date()
         });
-        user.tokens = (user.tokens || 0) + tokens;
+        user.tokens = balanceAfter;
         
         await user.save();
         rewardedCount++;
+        
+        // Log to TokenTransactionModel for tracking/analytics
+        try {
+          await TokenTransaction.createTransaction({
+            userId,
+            amount: tokens,
+            type: 'earned',
+            category: 'nitro_boost',
+            description: `Monthly Nitro Boost reward (${currentMonth})`,
+            link: '',
+            balanceBefore,
+            balanceAfter
+          });
+        } catch (logErr) {
+          logger.error('SCHEDULED', `monthly-nitro-boost-rewards: Failed to log transaction for ${userId}: ${logErr.message}`);
+        }
         
         logger.info('SCHEDULED', `monthly-nitro-boost-rewards: Rewarded ${userId} with ${tokens} tokens`);
       } catch (err) {

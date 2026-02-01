@@ -929,7 +929,10 @@ async function distributeRewards(quest, participant, rewardContext = {}) {
         results.tokenBreakdown.total = totalTokensToAward;
         
         if (totalTokensToAward > 0) {
-            const tokenResult = await distributeTokens(participant.userId, totalTokensToAward);
+            const tokenResult = await distributeTokens(participant.userId, totalTokensToAward, {
+                category: 'quest_reward',
+                description: quest.title ? `Quest: ${quest.title}` : `Quest ${quest.questID || 'reward'}`
+            });
             if (tokenResult.success) {
                 results.tokensAdded = tokenResult.tokensAdded;
                 if (entertainerBonusActive && entertainerBonusAmount > 0) {
@@ -974,12 +977,32 @@ async function distributeRewards(quest, participant, rewardContext = {}) {
 }
 
 // ------------------- Distribute Tokens ------------------
-async function distributeTokens(userId, tokensToAward) {
+async function distributeTokens(userId, tokensToAward, transactionMeta = {}) {
     try {
         const user = await findUserSafely(userId);
+        const balanceBefore = user.tokens || 0;
+        const balanceAfter = balanceBefore + tokensToAward;
 
-        user.tokens = (user.tokens || 0) + tokensToAward;
+        user.tokens = balanceAfter;
         await user.save();
+
+        // Log to TokenTransactionModel for tracking/analytics
+        try {
+            const TokenTransaction = require('../models/TokenTransactionModel');
+            await TokenTransaction.createTransaction({
+                userId: String(userId),
+                amount: tokensToAward,
+                type: 'earned',
+                category: transactionMeta.category || 'quest_reward',
+                description: transactionMeta.description || 'Quest reward',
+                link: transactionMeta.link || '',
+                balanceBefore,
+                balanceAfter
+            });
+        } catch (logErr) {
+            console.error('[questRewardModule.js] Failed to log token transaction:', logErr.message);
+        }
+
         console.log(`[questRewardModule.js] 💰 Added ${tokensToAward} tokens to user ${userId}`);
         
         return { success: true, tokensAdded: tokensToAward };

@@ -41,8 +41,28 @@ const VILLAGE_IMAGES = {
 };
 
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
-const COOLDOWN_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week in milliseconds
-const COOLDOWN_ENABLED = true; 
+const COOLDOWN_ENABLED = true;
+const DONATION_ITEM_PERCENT = 0.10; // Max 10% of items needed per donation
+const DONATION_TOKEN_PERCENT = 0.05; // Max 5% of tokens needed per donation
+
+// Donation cooldown resets every Sunday at 8am EST (13:00 UTC)
+// ------------------- Function: getCurrentDonationWeekStart -------------------
+// Returns timestamp of the Sunday 8am EST (13:00 UTC) that started the current week
+function getCurrentDonationWeekStart() {
+    const now = new Date();
+    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0));
+    if (now < rollover) {
+        rollover.setUTCDate(rollover.getUTCDate() - 1);
+    }
+    rollover.setUTCDate(rollover.getUTCDate() - rollover.getUTCDay());
+    return rollover.getTime();
+}
+
+// ------------------- Function: getNextDonationReset -------------------
+// Returns Date of next Sunday 8am EST when cooldowns reset
+function getNextDonationReset() {
+    return new Date(getCurrentDonationWeekStart() + 7 * 24 * 60 * 60 * 1000);
+}
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -126,6 +146,14 @@ async function processItemContribution(village, interaction, itemName, qty, char
 
     if (current + qty > required) {
         return { success: false, message: `❌ **Cannot contribute more than required. Need ${required - current} more.**` };
+    }
+
+    // Cap qty at 10% of required per donation
+    const maxPerDonation = Math.max(1, Math.ceil(required * DONATION_ITEM_PERCENT));
+    const remainingNeeded = required - current;
+    if (qty > Math.min(maxPerDonation, remainingNeeded)) {
+        const allowed = Math.min(maxPerDonation, remainingNeeded);
+        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} (10% of required).**` };
     }
 
     // Deduct items from character
@@ -219,6 +247,14 @@ async function processTokenContribution(village, interaction, qty, characterName
         return { success: false, message: `❌ **Cannot contribute more than required. Need ${requiredTokens - currentTokens} more tokens.**` };
     }
 
+    // Cap qty at 5% of required per donation
+    const maxPerDonation = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
+    const remainingNeeded = requiredTokens - currentTokens;
+    if (qty > Math.min(maxPerDonation, remainingNeeded)) {
+        const allowed = Math.min(maxPerDonation, remainingNeeded);
+        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} tokens (5% of required).**` };
+    }
+
     // Deduct tokens from user balance
     const balanceBefore = tokenRecord.tokens;
     const newBalance = await updateTokenBalance(userId, -qty, {
@@ -288,6 +324,12 @@ async function processImprove(village, interaction, type, itemName, qty, charact
             // Calculate token cost per HP: scales with village level
             const tokensPerHP = getTokensPerHP(village.level);
             const maxTokensNeeded = hpNeeded * tokensPerHP;
+
+            // Cap qty at 5% of repair tokens needed per donation
+            const maxPerDonation = Math.max(1, Math.ceil(maxTokensNeeded * DONATION_TOKEN_PERCENT));
+            if (qty > maxPerDonation) {
+                return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of repair cost).**` };
+            }
             
             // Calculate how much HP can be restored
             // HP_restored = tokens_contributed / (village_level × 50)
@@ -1180,7 +1222,8 @@ module.exports = {
                 .addIntegerOption(option =>
                     option.setName('qty')
                         .setDescription('Quantity of items or tokens to contribute')
-                        .setRequired(true))
+                        .setRequired(true)
+                        .setAutocomplete(true))
                 .addStringOption(option =>
                     option.setName('itemname')
                         .setDescription('Name of the item to use (if using Items)')
@@ -1499,13 +1542,27 @@ module.exports = {
                     }
                 }
 
-                // Check cooldown (temporarily disabled for testing)
+                // Check cooldown (resets every Sunday at 8am EST)
                 const cooldownKey = `${interaction.user.id}_${type}_${cleanItemName || 'tokens'}_donate`;
                 if (COOLDOWN_ENABLED) {
-                    const cooldownTime = village.cooldowns.get(cooldownKey);
-                    if (cooldownTime && cooldownTime > new Date()) {
-                        const remainingTime = Math.ceil((cooldownTime - new Date()) / 1000 / 60); // Convert to minutes
-                        return interaction.reply({ content: `⏳ **Please wait ${remainingTime} minutes before contributing again.**`, ephemeral: true });
+                    const storedCooldown = village.cooldowns.get(cooldownKey);
+                    const currentWeekStart = getCurrentDonationWeekStart();
+                    let isOnCooldown = false;
+                    let cooldownMessage = '';
+                    if (typeof storedCooldown === 'number') {
+                        isOnCooldown = storedCooldown === currentWeekStart;
+                        if (isOnCooldown) {
+                            const nextReset = getNextDonationReset();
+                            const hoursUntilReset = Math.ceil((nextReset - new Date()) / (1000 * 60 * 60));
+                            cooldownMessage = `⏳ **You've already contributed this week. Cooldown resets in ${hoursUntilReset} hour(s) on Sunday at 8am EST.**`;
+                        }
+                    } else if (storedCooldown instanceof Date && storedCooldown > new Date()) {
+                        isOnCooldown = true; // Legacy: old rolling 7-day cooldown
+                        const remainingMinutes = Math.ceil((storedCooldown - new Date()) / 1000 / 60);
+                        cooldownMessage = `⏳ **Please wait ${remainingMinutes} minutes before contributing again.**`;
+                    }
+                    if (isOnCooldown) {
+                        return interaction.reply({ content: cooldownMessage, ephemeral: true });
                     }
                 }
 
@@ -1515,9 +1572,10 @@ module.exports = {
                     return interaction.reply({ content: result.message, ephemeral: true });
                 }
 
-                // Set cooldown (1 week, currently disabled for testing)
+                // Set cooldown (week start - resets every Sunday at 8am EST)
                 if (COOLDOWN_ENABLED) {
-                    village.cooldowns.set(cooldownKey, new Date(Date.now() + COOLDOWN_DURATION));
+                    village.cooldowns.set(cooldownKey, getCurrentDonationWeekStart());
+                    village.markModified('cooldowns');
                     await village.save();
                 }
 

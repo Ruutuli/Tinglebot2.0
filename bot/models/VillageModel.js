@@ -190,7 +190,7 @@ const VillageSchema = new mongoose.Schema({
     },
     raidQuotaPeriodType: {
         type: String,
-        enum: ['week', 'month'],
+        enum: ['week', 'biweek', 'month'],
         default: null,
     },
     lastQuotaRaidTime: {

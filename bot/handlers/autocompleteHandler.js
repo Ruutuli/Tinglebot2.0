@@ -701,6 +701,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleVillageCharacterAutocomplete(interaction, focusedOption, villageSubcommand);
             } else if (focusedOption.name === "itemname") {
               await handleVillageItemAutocomplete(interaction, focusedOption, villageSubcommand);
+            } else if (focusedOption.name === "qty" && villageSubcommand === "donate") {
+              await handleVillageQtyAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -3792,11 +3794,12 @@ async function handleVillageItemAutocomplete(interaction, focusedOption, subcomm
 
     // Get materials for donate subcommand
     let requiredMaterials = [];
+    let materials = {};
+    let nextLevel = village.level + 1;
     
     if (subcommand === 'donate') {
       // Get materials needed for next level
-      const nextLevel = village.level + 1;
-      const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
+      materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
       requiredMaterials = Object.entries(materials)
         .filter(([key, value]) => {
           const required = value.required?.[nextLevel];
@@ -3848,21 +3851,143 @@ async function handleVillageItemAutocomplete(interaction, focusedOption, subcomm
       .select('itemName')
       .lean();
 
-    // Filter and format choices (without emoji)
+    // Filter and format choices (without emoji), include donation limit when donate subcommand
+    const DONATION_ITEM_PERCENT = 0.10;
     const choices = items
       .filter(item => item.itemName.toLowerCase().includes(searchQuery))
       .map(item => {
         const quantity = inventoryMap.get(item.itemName.toLowerCase()) || 0;
-        return {
-          name: `${item.itemName} - Qty: ${quantity}`,
-          value: item.itemName
-        };
+        let nameStr = `${item.itemName} - Qty: ${quantity}`;
+        const materialKey = Object.keys(materials).find(k => k.toLowerCase() === item.itemName.toLowerCase());
+        if (subcommand === 'donate' && materialKey) {
+          const material = materials[materialKey];
+          const required = material.required?.[nextLevel] || 0;
+          const current = material.current || 0;
+          const maxPerDonation = Math.max(1, Math.ceil(required * DONATION_ITEM_PERCENT));
+          const remainingNeeded = required - current;
+          const limit = Math.min(maxPerDonation, remainingNeeded);
+          nameStr += ` | limit: ${limit}`;
+        }
+        return { name: nameStr, value: item.itemName };
       })
       .slice(0, 25); // Discord limit
 
     return await safeRespondWithValidation(interaction, choices);
   } catch (error) {
     console.error('[handleVillageItemAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleVillageQtyAutocomplete -------------------
+// Provides autocomplete for qty with donation limits when village donate (Tokens or Items)
+async function handleVillageQtyAutocomplete(interaction, focusedOption) {
+  try {
+    const villageName = interaction.options.getString('name');
+    const type = interaction.options.getString('type');
+    const itemName = interaction.options.getString('itemname');
+    const searchValue = focusedOption.value?.trim() || '';
+
+    if (!villageName || !type) {
+      return await safeRespondWithValidation(interaction, []);
+    }
+
+    const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+    if (!village) {
+      return await safeRespondWithValidation(interaction, []);
+    }
+
+    const DONATION_TOKEN_PERCENT = 0.05;
+    const DONATION_ITEM_PERCENT = 0.10;
+    let limit = 0;
+
+    if (type === 'Tokens') {
+      const maxHealth = village.levelHealth instanceof Map
+        ? village.levelHealth.get(village.level.toString())
+        : village.levelHealth[village.level.toString()] || 100;
+      const isDamaged = village.health < maxHealth;
+
+      if (isDamaged) {
+        const hpNeeded = maxHealth - village.health;
+        const tokensPerHP = 100; // getTokensPerHP equivalent
+        const maxTokensNeeded = hpNeeded * tokensPerHP;
+        limit = Math.max(1, Math.ceil(maxTokensNeeded * DONATION_TOKEN_PERCENT));
+      } else {
+        const nextLevel = village.level + 1;
+        const requiredTokens = village.tokenRequirements instanceof Map
+          ? village.tokenRequirements.get(nextLevel.toString())
+          : village.tokenRequirements[nextLevel.toString()] || 0;
+        const currentTokens = village.currentTokens || 0;
+        const maxPerDonation = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
+        const remainingNeeded = requiredTokens - currentTokens;
+        limit = Math.min(maxPerDonation, remainingNeeded);
+      }
+
+      // Build suggested quantities: e.g. 50, 100, 150, ... up to limit
+      const step = limit <= 10 ? 1 : limit <= 100 ? 10 : limit <= 500 ? 50 : 100;
+      const suggestions = [];
+      for (let qty = step; qty <= limit; qty += step) {
+        suggestions.push({ name: `${qty} | limit: ${limit}`, value: qty });
+      }
+      if (limit > 0 && (suggestions.length === 0 || suggestions[suggestions.length - 1].value !== limit)) {
+        suggestions.push({ name: `${limit} | limit: ${limit}`, value: limit });
+      }
+      if (suggestions.length === 0) {
+        suggestions.push({ name: `Tokens | limit: ${limit}`, value: limit || 1 });
+      }
+
+      const filtered = searchValue
+        ? suggestions.filter(c => String(c.value).includes(searchValue))
+        : suggestions.slice(0, 25);
+      return await safeRespondWithValidation(interaction, filtered.slice(0, 25));
+    }
+
+    if (type === 'Items' && itemName) {
+      const nextLevel = village.level + 1;
+      const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
+      const materialKey = Object.keys(materials).find(k => k.toLowerCase() === itemName.toLowerCase());
+      if (materialKey) {
+        const material = materials[materialKey];
+        const required = material.required?.[nextLevel] || 0;
+        const current = material.current || 0;
+        const maxPerDonation = Math.max(1, Math.ceil(required * DONATION_ITEM_PERCENT));
+        const remainingNeeded = required - current;
+        limit = Math.min(maxPerDonation, remainingNeeded);
+
+        const step = limit <= 10 ? 1 : limit <= 50 ? 5 : 10;
+        const suggestions = [];
+        for (let qty = step; qty <= limit; qty += step) {
+          suggestions.push({ name: `${itemName} - ${qty} | limit: ${limit}`, value: qty });
+        }
+        if (limit > 0 && (suggestions.length === 0 || suggestions[suggestions.length - 1].value !== limit)) {
+          suggestions.push({ name: `${itemName} - ${limit} | limit: ${limit}`, value: limit });
+        }
+        if (suggestions.length === 0) {
+          suggestions.push({ name: `${itemName} | limit: ${limit}`, value: limit || 1 });
+        }
+
+        const filtered = searchValue
+          ? suggestions.filter(c => String(c.value).includes(searchValue))
+          : suggestions.slice(0, 25);
+        return await safeRespondWithValidation(interaction, filtered.slice(0, 25));
+      }
+    }
+
+    // Items without itemname: show generic suggestions
+    const genericChoices = [
+      { name: '1', value: 1 },
+      { name: '5', value: 5 },
+      { name: '10', value: 10 },
+      { name: '25', value: 25 },
+      { name: '50', value: 50 },
+      { name: '100', value: 100 }
+    ];
+    const filtered = searchValue
+      ? genericChoices.filter(c => String(c.value).includes(searchValue))
+      : genericChoices;
+    return await safeRespondWithValidation(interaction, filtered.slice(0, 25));
+  } catch (error) {
+    console.error('[handleVillageQtyAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
   }
 }

@@ -2,7 +2,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const User = require('@/models/UserModel');
 const { getUserLevelInfo, createProgressBar, getLeaderboard } = require('../../modules/levelingModule');
-const { connectToTinglebot } = require('@/database/db');
+const { connectToTinglebot, updateTokenBalance } = require('@/database/db');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -250,12 +250,11 @@ async function handleExchange(interaction) {
         return await interaction.reply({ embeds: [embed] });
       }
       
-      // Add tokens to user's balance
-      const newTokenBalance = user.tokens + exchangeResult.tokensReceived;
-      await User.findOneAndUpdate(
-        { discordId: interaction.user.id },
-        { $set: { tokens: newTokenBalance } }
-      );
+      // Add tokens to user's balance (updateTokenBalance logs to TokenTransactionModel)
+      const newTokenBalance = await updateTokenBalance(interaction.user.id, exchangeResult.tokensReceived, {
+        category: 'levels',
+        description: 'Level exchange'
+      });
       
       // Create success embed
       const embed = new EmbedBuilder()

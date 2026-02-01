@@ -1031,8 +1031,25 @@ userSchema.methods.giveBirthdayRewards = async function(rewardType = 'random') {
   
   if (finalRewardType === 'tokens') {
     rewardAmount = 1500;
-    this.tokens = (this.tokens || 0) + rewardAmount;
+    const balanceBefore = this.tokens || 0;
+    const balanceAfter = balanceBefore + rewardAmount;
+    this.tokens = balanceAfter;
     rewardDescription = `1500 tokens`;
+    try {
+      const TokenTransaction = require('./TokenTransactionModel');
+      await TokenTransaction.createTransaction({
+        userId: this.discordId,
+        amount: rewardAmount,
+        type: 'earned',
+        category: 'birthday',
+        description: 'Birthday reward',
+        link: '',
+        balanceBefore,
+        balanceAfter
+      });
+    } catch (logErr) {
+      logger.warn('USER', `Failed to log birthday token transaction for ${this.discordId}: ${logErr.message}`);
+    }
   } else if (finalRewardType === 'discount') {
     rewardAmount = 75;
     rewardDescription = `75% discount in village shops (active until end of your birthday)`;
@@ -1161,9 +1178,27 @@ userSchema.methods.giveBoostRewards = async function() {
   
   // Flat reward: 1000 tokens for boosting
   const tokensToReceive = 1000;
-  
+  const balanceBefore = this.tokens || 0;
+  const balanceAfter = balanceBefore + tokensToReceive;
+
   // Add tokens
-  this.tokens = (this.tokens || 0) + tokensToReceive;
+  this.tokens = balanceAfter;
+
+  try {
+    const TokenTransaction = require('./TokenTransactionModel');
+    await TokenTransaction.createTransaction({
+      userId: this.discordId,
+      amount: tokensToReceive,
+      type: 'earned',
+      category: 'nitro_boost',
+      description: `Monthly Nitro Boost reward (${currentMonth})`,
+      link: '',
+      balanceBefore,
+      balanceAfter
+    });
+  } catch (logErr) {
+    logger.warn('USER', `Failed to log boost token transaction for ${this.discordId}: ${logErr.message}`);
+  }
   
   // Update boost reward tracking
   this.boostRewards.lastRewardMonth = currentMonth;

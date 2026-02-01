@@ -131,9 +131,21 @@ function getCurrentMonthStart() {
   return date;
 }
 
+// ------------------- Get Current Biweek Start -------------------
+// Returns Sunday at start of current 2-week block (EST). Reference: Jan 5 2020 00:00 EST.
+function getCurrentBiweekStart() {
+  const refSunday = new Date(Date.UTC(2020, 0, 5, 5, 0, 0));
+  const weekStart = getCurrentWeekStart();
+  const weeksSince = (weekStart.getTime() - refSunday.getTime()) / WEEK_IN_MS;
+  const biweekIndex = Math.floor(weeksSince / 2);
+  return new Date(refSunday.getTime() + biweekIndex * 2 * WEEK_IN_MS);
+}
+
 // ------------------- Get Village Period Start -------------------
 function getVillagePeriodStart(level) {
-  return level === 1 ? getCurrentWeekStart() : getCurrentMonthStart();
+  if (level === 1) return getCurrentWeekStart();
+  if (level === 2) return getCurrentBiweekStart();
+  return getCurrentMonthStart();
 }
 
 // ------------------- Get Period End Date -------------------
@@ -141,6 +153,9 @@ function getPeriodEnd(periodStart, level) {
   const end = new Date(periodStart.getTime());
   if (level === 1) {
     end.setUTCDate(end.getUTCDate() + 6);
+    end.setUTCHours(23, 59, 59, 999);
+  } else if (level === 2) {
+    end.setUTCDate(end.getUTCDate() + 13);
     end.setUTCHours(23, 59, 59, 999);
   } else {
     end.setUTCMonth(end.getUTCMonth() + 1);
@@ -157,6 +172,13 @@ function getPeriodEnd(periodStart, level) {
   return end;
 }
 
+// ------------------- Get Period Type For Level -------------------
+function getPeriodTypeForLevel(level) {
+  if (level === 1) return 'week';
+  if (level === 2) return 'biweek';
+  return 'month';
+}
+
 // ------------------- Get Period Remaining Ratio -------------------
 function getPeriodRemainingRatio(periodStart, level) {
   const now = new Date();
@@ -171,9 +193,9 @@ function getPeriodRemainingRatio(periodStart, level) {
 // ------------------- Get Village Quota -------------------
 function getVillageQuota(level) {
   switch (level) {
-    case 1: return 1;
-    case 2: return 2;
-    case 3: return 1;
+    case 1: return 3;
+    case 2: return 3;
+    case 3: return 3;
     default: return 0;
   }
 }
@@ -223,10 +245,10 @@ async function setVillagePeriodData(villageName, periodStart, raidCount, periodT
 // ------------------- Check And Reset Period -------------------
 async function checkAndResetPeriod(villageName, level) {
   const currentPeriodStart = getVillagePeriodStart(level);
+  const periodType = getPeriodTypeForLevel(level);
   const periodData = await getVillagePeriodData(villageName);
   
   if (!periodData) {
-    const periodType = level === 1 ? 'week' : 'month';
     await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
     return {
       periodStart: currentPeriodStart,
@@ -236,7 +258,6 @@ async function checkAndResetPeriod(villageName, level) {
   }
   
   const storedPeriodStart = periodData.periodStart;
-  const periodType = level === 1 ? 'week' : 'month';
   const storedTime = storedPeriodStart.getTime();
   const currentTime = currentPeriodStart.getTime();
   const timeDiff = currentTime - storedTime;
@@ -265,6 +286,30 @@ async function checkAndResetPeriod(villageName, level) {
         periodType: periodType
       };
     } else if (Math.abs(timeDiff) > 0 && Math.abs(timeDiff) < 6 * 60 * 60 * 1000) {
+      await Village.findOneAndUpdate(
+        { name: villageName },
+        { 
+          $set: {
+            raidQuotaPeriodStart: currentPeriodStart,
+            raidQuotaPeriodType: periodType
+          }
+        }
+      );
+      return {
+        periodStart: currentPeriodStart,
+        raidCount: periodData.raidCount,
+        periodType: periodType
+      };
+    }
+  } else if (level === 2) {
+    if (timeDiff >= 14 * DAY_IN_MS) {
+      await setVillagePeriodData(villageName, currentPeriodStart, 0, periodType);
+      return {
+        periodStart: currentPeriodStart,
+        raidCount: 0,
+        periodType: periodType
+      };
+    } else if (timeDiff < -DAY_IN_MS) {
       await Village.findOneAndUpdate(
         { name: villageName },
         { 
@@ -309,7 +354,7 @@ async function resetAllVillageRaidQuotas() {
       const villageName = village.name;
       const level = village.level || 1;
       const currentPeriodStart = getVillagePeriodStart(level);
-      const periodType = level === 1 ? 'week' : 'month';
+      const periodType = getPeriodTypeForLevel(level);
       
       const storedPeriodStart = village.raidQuotaPeriodStart;
       const needsReset = !storedPeriodStart || 
@@ -351,6 +396,28 @@ function hasRaidWithinLastDay(lastRaidTime) {
   const now = new Date();
   const timeSinceLastRaid = now.getTime() - new Date(lastRaidTime).getTime();
   return timeSinceLastRaid < MIN_SPACING_MS;
+}
+
+// ------------------- Get Day-of-Week Raid Chance (EST) -------------------
+// Level 1 and 2: 10% Sunday … 100% Saturday.
+function getDayOfWeekRaidChance() {
+  const now = new Date();
+  const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const weekday = estNow.getUTCDay(); // 0 = Sunday … 6 = Saturday
+  return (weekday + 1) * 0.1;
+}
+
+// ------------------- Get Day-of-Month Raid Chance (EST) -------------------
+// Level 3: 1% first day of month … 100% last day of month.
+function getDayOfMonthRaidChance() {
+  const now = new Date();
+  const estNow = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  const year = estNow.getUTCFullYear();
+  const month = estNow.getUTCMonth();
+  const dayOfMonth = estNow.getUTCDate();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  if (lastDay <= 1) return 1;
+  return 0.01 + 0.99 * (dayOfMonth - 1) / (lastDay - 1);
 }
 
 // ------------------- Calculate Time-Based Probability -------------------
@@ -718,6 +785,9 @@ async function triggerRandomEncounter(channel, selectedVillage) {
 // ============================================================================
 // ------------------- Village Raid Quota Checking Functions -------------------
 // ============================================================================
+// Flow: (1) Per-village: period reset, eligibility, time-based probability,
+//       then level-specific day chance (week for L1/L2, month for L3).
+//       (2) Build eligible list. (3) Random selection. (4) Double-check and trigger.
 
 // ------------------- Check Village Raid Quotas -------------------
 async function checkVillageRaidQuotas(client) {
@@ -751,15 +821,20 @@ async function checkVillageRaidQuotas(client) {
       const timeRemainingRatio = getPeriodRemainingRatio(periodStart, level);
       
       if (timeRemainingRatio <= 0) {
+        // Quota not yet met and period running out: still apply day chance
+        const dayChance = level === 3 ? getDayOfMonthRaidChance() : getDayOfWeekRaidChance();
+        if (Math.random() >= dayChance) continue;
         eligibleVillages.push({ village, periodData, quota });
         continue;
       }
       
       const probability = calculateTimeBasedProbability(timeSinceReset, timeRemainingRatio);
       const roll = Math.random();
-      if (roll < probability) {
-        eligibleVillages.push({ village, periodData, quota });
-      }
+      if (roll >= probability) continue;
+      // Time-based roll passed; apply level-specific day chance (L1/L2: week, L3: month)
+      const dayChance = level === 3 ? getDayOfMonthRaidChance() : getDayOfWeekRaidChance();
+      if (Math.random() >= dayChance) continue;
+      eligibleVillages.push({ village, periodData, quota });
     }
     
     if (eligibleVillages.length === 0) {
@@ -811,7 +886,7 @@ async function checkVillageRaidQuotas(client) {
 async function tryReserveQuotaSlot(villageName, level, quota) {
   try {
     const periodStart = getVillagePeriodStart(level);
-    const periodType = level === 1 ? 'week' : 'month';
+    const periodType = getPeriodTypeForLevel(level);
     
     const periodData = await checkAndResetPeriod(villageName, level);
     if (!periodData) {

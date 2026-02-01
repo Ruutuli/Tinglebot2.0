@@ -1852,9 +1852,29 @@ async function execute(interaction) {
               status: 'active'
             });
           }
-          
-          target.tokens = (target.tokens || 0) + amount;
+
+          const balanceBefore = target.tokens || 0;
+          target.tokens = balanceBefore + amount;
+          const balanceAfter = target.tokens;
           await target.save();
+
+          // Log to TokenTransactionModel (best-effort; do not fail the mod action)
+          try {
+            const TokenTransaction = require('@/models/TokenTransactionModel');
+            const transactionType = amount >= 0 ? 'earned' : 'spent';
+            await TokenTransaction.createTransaction({
+              userId: user.id,
+              amount: Math.abs(amount),
+              type: transactionType,
+              category: 'mod',
+              description: amount >= 0 ? 'Mod token grant' : 'Mod token deduction',
+              link: '',
+              balanceBefore,
+              balanceAfter
+            });
+          } catch (logErr) {
+            logger.error('MOD', `Failed to log token transaction for ${user.id}: ${logErr.message}`);
+          }
 
           // Google Sheets token tracker functionality removed
           // if (target.tokenTracker) {
