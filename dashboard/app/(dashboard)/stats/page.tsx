@@ -633,8 +633,7 @@ function CharacterStatsSection({
     });
     return Array.from(jobMap.entries())
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
+      .sort((a, b) => b.count - a.count);
   }, [data.byJob]);
 
   const raceChartData = useMemo(() => {
@@ -646,8 +645,7 @@ function CharacterStatsSection({
     });
     return Array.from(raceMap.entries())
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 30);
+      .sort((a, b) => b.count - a.count);
   }, [data.byRace]);
 
   const STACK_VILLAGES = ["Rudania", "Inariko", "Vhintl", "Unknown"];
@@ -671,8 +669,7 @@ function CharacterStatsSection({
         const totalA = STACK_VILLAGES.reduce((s, v) => s + (Number(a[v]) || 0), 0);
         const totalB = STACK_VILLAGES.reduce((s, v) => s + (Number(b[v]) || 0), 0);
         return totalB - totalA;
-      })
-      .slice(0, 30);
+      });
   }, [data.byRaceByVillage]);
 
   return (
@@ -738,11 +735,11 @@ function CharacterStatsSection({
           <div className="min-w-0 overflow-visible">
             <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
             <div className="w-full pt-16 overflow-visible">
-              <div className="h-[30rem] w-full sm:h-[34rem] overflow-visible">
+              <div className="w-full overflow-visible" style={{ height: `${Math.max(600, raceChartData.length * 50 + 100)}px` }}>
                 <SharedBarChart
                   data={raceChartData}
                   layout="horizontal"
-                  height={480}
+                  height={Math.max(600, raceChartData.length * 50 + 100)}
                   barSize={86}
                   colorByIndex
                   onBarClick={(payload) => payload?.name && onBreakdownClick("race", payload.name)}
@@ -758,8 +755,8 @@ function CharacterStatsSection({
         <SectionCard title="Characters by Race by Village" icon="fa-users" accentColor={SECTION_ACCENT_COLORS.characters}>
           <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Stacked by home village. Click a bar to see more info.</p>
           <div className="w-full">
-            <div className="h-[28rem] w-full sm:h-[32rem]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <div className="w-full" style={{ height: `${Math.max(600, raceStackedData.length * 50 + 100)}px` }}>
+                <ResponsiveContainer width="100%" height={Math.max(600, raceStackedData.length * 50 + 100)} minWidth={0} minHeight={0}>
                   <BarChart
                     data={raceStackedData}
                     layout="vertical"
@@ -1002,7 +999,7 @@ function WeatherStatsSection({ data }: { data: StatsData["weather"] }) {
 
 function PetStatsSection({ data, onBreakdownClick }: { data: StatsData["pets"]; onBreakdownClick: (type: string, value: string) => void }) {
   const speciesChartData = useMemo(() => {
-    return data.bySpecies.slice(0, 10).map((item) => ({
+    return data.bySpecies.map((item) => ({
       name: capitalize(item.species),
       count: item.count,
     }));
@@ -1045,7 +1042,7 @@ function PetStatsSection({ data, onBreakdownClick }: { data: StatsData["pets"]; 
                 <SharedBarChart
                   data={speciesChartData}
                   layout="vertical"
-                  height={256}
+                  height={Math.max(256, speciesChartData.length * 32 + 50)}
                   barColor={SECTION_ACCENT_HEX.pets}
                   nameLabel="Pets"
                   onBarClick={(payload) => payload?.name && onBreakdownClick("petSpecies", payload.name)}
