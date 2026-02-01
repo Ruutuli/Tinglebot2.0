@@ -45,12 +45,12 @@ const COOLDOWN_ENABLED = true;
 const DONATION_ITEM_PERCENT = 0.10; // Max 10% of items needed per donation
 const DONATION_TOKEN_PERCENT = 0.05; // Max 5% of tokens needed per donation
 
-// Donation cooldown resets every Sunday at 8am EST (13:00 UTC)
+// Donation cooldown resets every Sunday at midnight EST (05:00 UTC)
 // ------------------- Function: getCurrentDonationWeekStart -------------------
-// Returns timestamp of the Sunday 8am EST (13:00 UTC) that started the current week
+// Returns timestamp of the Sunday midnight EST (05:00 UTC) that started the current week
 function getCurrentDonationWeekStart() {
     const now = new Date();
-    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0));
+    const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 5, 0, 0, 0));
     if (now < rollover) {
         rollover.setUTCDate(rollover.getUTCDate() - 1);
     }
@@ -59,7 +59,7 @@ function getCurrentDonationWeekStart() {
 }
 
 // ------------------- Function: getNextDonationReset -------------------
-// Returns Date of next Sunday 8am EST when cooldowns reset
+// Returns Date of next Sunday midnight EST when cooldowns reset
 function getNextDonationReset() {
     return new Date(getCurrentDonationWeekStart() + 7 * 24 * 60 * 60 * 1000);
 }
@@ -1582,8 +1582,9 @@ module.exports = {
                     }
                 }
 
-                // Check cooldown (resets every Sunday at 8am EST)
-                const cooldownKey = `${interaction.user.id}_${type}_${cleanItemName || 'tokens'}_donate`;
+                // Check cooldown (resets every Sunday at midnight EST)
+                // Cooldown is per-user per-village (1 donation per week per village, regardless of item type)
+                const cooldownKey = `${interaction.user.id}_donate`;
                 if (COOLDOWN_ENABLED) {
                     const storedCooldown = village.cooldowns.get(cooldownKey);
                     const currentWeekStart = getCurrentDonationWeekStart();
@@ -1594,7 +1595,7 @@ module.exports = {
                         if (isOnCooldown) {
                             const nextReset = getNextDonationReset();
                             const hoursUntilReset = Math.ceil((nextReset - new Date()) / (1000 * 60 * 60));
-                            cooldownMessage = `⏳ **You've already contributed this week. Cooldown resets in ${hoursUntilReset} hour(s) on Sunday at 8am EST.**`;
+                            cooldownMessage = `⏳ **You've already contributed this week. Cooldown resets in ${hoursUntilReset} hour(s) on Sunday at midnight EST.**`;
                         }
                     } else if (storedCooldown instanceof Date && storedCooldown > new Date()) {
                         isOnCooldown = true; // Legacy: old rolling 7-day cooldown
@@ -1615,7 +1616,7 @@ module.exports = {
                     return interaction.reply({ content: result.message, ephemeral: true });
                 }
 
-                // Set cooldown (week start - resets every Sunday at 8am EST)
+                // Set cooldown (week start - resets every Sunday at midnight EST)
                 if (COOLDOWN_ENABLED) {
                     village.cooldowns.set(cooldownKey, getCurrentDonationWeekStart());
                     village.markModified('cooldowns');
