@@ -19,7 +19,7 @@ const { recoverHearts, recoverStamina } = require('../../modules/characterStatsM
 // ---- Database Models ----
 // ============================================================================
 const ItemModel = require('@/models/ItemModel');
-const { Village } = require('@/models/VillageModel');
+const { Village, VILLAGE_CONFIG, DEFAULT_TOKEN_REQUIREMENTS } = require('@/models/VillageModel');
 const { initializeVillages, updateVillageStatus } = require('../../modules/villageModule');
 
 // ============================================================================
@@ -141,16 +141,19 @@ async function processItemContribution(village, interaction, itemName, qty, char
 
     const nextLevel = village.level + 1;
     const material = materials[matchedKey];
-    const required = material.required[nextLevel] || 0;
     const current = material.current || 0;
+    // Use VILLAGE_CONFIG max as base for percentage (not database)
+    const configMaterials = VILLAGE_CONFIG[village.name]?.materials || {};
+    const configKey = Object.keys(configMaterials).find(k => k.toLowerCase() === matchedKey.toLowerCase());
+    const requiredMax = configKey ? (configMaterials[configKey]?.required?.[nextLevel] ?? material.required?.[nextLevel] ?? 0) : (material.required?.[nextLevel] ?? 0);
 
-    if (current + qty > required) {
-        return { success: false, message: `❌ **Cannot contribute more than required. Need ${required - current} more.**` };
+    if (current + qty > requiredMax) {
+        return { success: false, message: `❌ **Cannot contribute more than required. Need ${requiredMax - current} more.**` };
     }
 
-    // Cap qty at 10% of required per donation
-    const maxPerDonation = Math.max(1, Math.ceil(required * DONATION_ITEM_PERCENT));
-    const remainingNeeded = required - current;
+    // Cap qty at 10% of max required per donation (always use max, not remaining)
+    const maxPerDonation = Math.max(1, Math.ceil(requiredMax * DONATION_ITEM_PERCENT));
+    const remainingNeeded = requiredMax - current;
     if (qty > Math.min(maxPerDonation, remainingNeeded)) {
         const allowed = Math.min(maxPerDonation, remainingNeeded);
         return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} (10% of required).**` };
@@ -194,7 +197,7 @@ async function processItemContribution(village, interaction, itemName, qty, char
     const item = await ItemModel.findOne({ itemName: { $regex: `^${matchedKey}$`, $options: 'i' } });
     const emoji = item?.emoji || ':grey_question:';
     const displayName = item?.itemName || matchedKey;
-    const progressBar = `\`${'▰'.repeat(Math.round(((current + qty) / required) * 10))}${'▱'.repeat(10 - Math.round(((current + qty) / required) * 10))}\``;
+    const progressBar = `\`${'▰'.repeat(Math.round(((current + qty) / requiredMax) * 10))}${'▱'.repeat(10 - Math.round(((current + qty) / requiredMax) * 10))}\``;
 
     const embed = new EmbedBuilder()
         .setTitle(`${village.name} (Level ${village.level})`)
@@ -207,7 +210,7 @@ async function processItemContribution(village, interaction, itemName, qty, char
                   `Use </village view:1324300899585363968> to check the current status.`
         )
         .addFields(
-            { name: '📦 Material Progress', value: `${emoji} ${displayName}\n> ${progressBar} ${current + qty}/${required}`, inline: true }
+            { name: '📦 Material Progress', value: `${emoji} ${displayName}\n> ${progressBar} ${current + qty}/${requiredMax}`, inline: true }
         )
         .setColor(village.color)
         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
@@ -238,18 +241,17 @@ async function processTokenContribution(village, interaction, qty, characterName
     }
 
     const nextLevel = village.level + 1;
-    const requiredTokens = village.tokenRequirements instanceof Map 
-        ? village.tokenRequirements.get(nextLevel.toString()) 
-        : village.tokenRequirements[nextLevel.toString()] || 0;
+    // Use VillageModel defaults as base for percentage (not database)
+    const requiredTokensMax = DEFAULT_TOKEN_REQUIREMENTS[nextLevel] ?? 0;
     const currentTokens = village.currentTokens || 0;
 
-    if (currentTokens + qty > requiredTokens) {
-        return { success: false, message: `❌ **Cannot contribute more than required. Need ${requiredTokens - currentTokens} more tokens.**` };
+    if (currentTokens + qty > requiredTokensMax) {
+        return { success: false, message: `❌ **Cannot contribute more than required. Need ${requiredTokensMax - currentTokens} more tokens.**` };
     }
 
-    // Cap qty at 5% of required per donation
-    const maxPerDonation = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
-    const remainingNeeded = requiredTokens - currentTokens;
+    // Cap qty at 5% of max required per donation (always use max, not remaining)
+    const maxPerDonation = Math.max(1, Math.ceil(requiredTokensMax * DONATION_TOKEN_PERCENT));
+    const remainingNeeded = requiredTokensMax - currentTokens;
     if (qty > Math.min(maxPerDonation, remainingNeeded)) {
         const allowed = Math.min(maxPerDonation, remainingNeeded);
         return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} tokens (5% of required).**` };
@@ -285,7 +287,7 @@ async function processTokenContribution(village, interaction, qty, characterName
     await village.save();
 
     // Generate embed
-    const progressBar = `\`${'▰'.repeat(Math.round(((currentTokens + qty) / requiredTokens) * 10))}${'▱'.repeat(10 - Math.round(((currentTokens + qty) / requiredTokens) * 10))}\``;
+    const progressBar = `\`${'▰'.repeat(Math.round(((currentTokens + qty) / requiredTokensMax) * 10))}${'▱'.repeat(10 - Math.round(((currentTokens + qty) / requiredTokensMax) * 10))}\``;
 
     const embed = new EmbedBuilder()
         .setTitle(`${village.name} (Level ${village.level})`)
@@ -298,7 +300,7 @@ async function processTokenContribution(village, interaction, qty, characterName
                   `Use </village view:1324300899585363968> to check the status.`
         )
         .addFields(
-            { name: '🪙 Token Progress', value: `> ${progressBar} ${currentTokens + qty}/${requiredTokens}`, inline: true }
+            { name: '🪙 Token Progress', value: `> ${progressBar} ${currentTokens + qty}/${requiredTokensMax}`, inline: true }
         )
         .setColor(village.color)
         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
@@ -385,9 +387,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                 if (repairComplete && tokensRemaining > 0 && canUpgradeNow) {
                     // Apply remaining tokens to upgrade (tokens already deducted, just update village)
                     const nextLevel = village.level + 1;
-                    const requiredTokens = village.tokenRequirements instanceof Map 
-                        ? village.tokenRequirements.get(nextLevel.toString()) 
-                        : village.tokenRequirements[nextLevel.toString()] || 0;
+                    const requiredTokens = DEFAULT_TOKEN_REQUIREMENTS[nextLevel] ?? 0;
                     const currentTokens = village.currentTokens || 0;
                     
                     if (currentTokens + tokensRemaining > requiredTokens) {
@@ -931,25 +931,23 @@ async function checkAndHandleVillageLevelUp(village, client = null) {
     
     const nextLevel = village.level + 1;
     const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
-    const requiredTokens = village.tokenRequirements instanceof Map 
-        ? village.tokenRequirements.get(nextLevel.toString()) 
-        : village.tokenRequirements[nextLevel.toString()] || 0;
-    
+    // Use VillageModel defaults (not database)
+    const requiredTokens = DEFAULT_TOKEN_REQUIREMENTS[nextLevel] ?? 0;
+
     console.log(`[checkAndHandleVillageLevelUp] Checking ${village.name} (Level ${village.level}) for level up to ${nextLevel}`);
     console.log(`[checkAndHandleVillageLevelUp] Required tokens: ${requiredTokens}, Current tokens: ${village.currentTokens || 0}`);
     
-    // Check if all materials are met for next level (cumulative system)
-    // Only check materials that have requirements for the next level
+    // Check if all materials are met for next level (use VILLAGE_CONFIG for required amounts)
+    const configMaterials = VILLAGE_CONFIG[village.name]?.materials || {};
     const materialChecks = [];
-    const materialsWithRequirements = Object.entries(materials).filter(([key, value]) => {
-        if (key.startsWith('$')) return false; // Skip special keys
-        const required = value.required?.[nextLevel] || 0;
-        return required > 0; // Only check materials with requirements
+    const materialsWithRequirements = Object.entries(configMaterials).filter(([key]) => {
+        const required = configMaterials[key]?.required?.[nextLevel] || 0;
+        return required > 0;
     });
-    
-    const allMaterialsMet = materialsWithRequirements.length === 0 || materialsWithRequirements.every(([key, value]) => {
-        const required = value.required?.[nextLevel] || 0;
-        const current = value.current || 0;
+
+    const allMaterialsMet = materialsWithRequirements.length === 0 || materialsWithRequirements.every(([key]) => {
+        const required = configMaterials[key]?.required?.[nextLevel] || 0;
+        const current = (materials[key]?.current ?? 0);
         const met = current >= required;
         materialChecks.push({ key, required, current, met });
         return met;

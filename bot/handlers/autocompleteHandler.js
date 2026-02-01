@@ -73,7 +73,7 @@ const ShopStock = require('@/models/VillageShopsModel');
 const TableRoll = require('@/models/TableRollModel');
 const TempData = require('@/models/TempDataModel');
 const { VendingRequest } = require('@/models/VendingModel');
-const { Village } = require('@/models/VillageModel');
+const { Village, VILLAGE_CONFIG, DEFAULT_TOKEN_REQUIREMENTS } = require('@/models/VillageModel');
 const generalCategories = require('@/models/GeneralItemCategories');
 
 
@@ -3851,15 +3851,23 @@ async function handleVillageItemAutocomplete(interaction, focusedOption, subcomm
       .select('itemName')
       .lean();
 
-    // Filter and format choices (without emoji)
+    // Filter and format choices (without emoji), include donation limit when donate subcommand
+    const DONATION_ITEM_PERCENT = 0.10;
     const choices = items
       .filter(item => item.itemName.toLowerCase().includes(searchQuery))
       .map(item => {
         const quantity = inventoryMap.get(item.itemName.toLowerCase()) || 0;
-        return {
-          name: `${item.itemName} - Qty: ${quantity}`,
-          value: item.itemName
-        };
+        let nameStr = `${item.itemName} - Qty: ${quantity}`;
+        if (subcommand === 'donate') {
+          const configMaterials = VILLAGE_CONFIG[villageName]?.materials || {};
+          const configKey = Object.keys(configMaterials).find(k => k.toLowerCase() === item.itemName.toLowerCase());
+          if (configKey) {
+            const requiredMax = configMaterials[configKey]?.required?.[nextLevel] || 0;
+            const limit = Math.max(1, Math.ceil(requiredMax * DONATION_ITEM_PERCENT));
+            nameStr += ` | limit: ${limit}`;
+          }
+        }
+        return { name: nameStr, value: item.itemName };
       })
       .slice(0, 25); // Discord limit
 
@@ -3898,10 +3906,9 @@ async function handleVillageTypeAutocomplete(interaction, focusedOption) {
           limit = Math.max(1, Math.ceil(maxTokensNeeded * DONATION_TOKEN_PERCENT));
         } else {
           const nextLevel = village.level + 1;
-          const requiredTokens = village.tokenRequirements instanceof Map
-            ? village.tokenRequirements.get(nextLevel.toString())
-            : village.tokenRequirements[nextLevel.toString()] || 0;
-          // Show 5% of required (the donation cap rule), not the remaining-needed amount
+          // Use VillageModel defaults as source of truth (10000 for L2, 50000 for L3)
+          const requiredTokens = DEFAULT_TOKEN_REQUIREMENTS[nextLevel] ?? 0;
+          // Show 5% of required (the donation cap rule)
           limit = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
         }
         choices.push({ name: `Tokens | Limit: ${limit}`, value: 'Tokens' });
