@@ -3790,10 +3790,10 @@ async function handleVillageItemAutocomplete(interaction, focusedOption, subcomm
       return await safeRespondWithValidation(interaction, []);
     }
 
-    // Get materials for improve subcommand
+    // Get materials for donate subcommand
     let requiredMaterials = [];
     
-    if (subcommand === 'improve') {
+    if (subcommand === 'donate') {
       // Get materials needed for next level
       const nextLevel = village.level + 1;
       const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;

@@ -296,7 +296,7 @@ module.exports = {
       //   if (villageStatus === 'damaged') {
       //     const capitalizedStartingVillage = capitalizeFirstLetter(startingVillage);
       //     return interaction.editReply({
-      //       content: `❌ **${character.name}** cannot travel because **${capitalizedStartingVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens using </village improve:1324300899585363968>.`
+      //       content: `❌ **${character.name}** cannot travel because **${capitalizedStartingVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens using </village donate:1324300899585363968>.`
       //     });
       //   }
       // }

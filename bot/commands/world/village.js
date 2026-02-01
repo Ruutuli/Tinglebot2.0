@@ -42,7 +42,7 @@ const VILLAGE_IMAGES = {
 
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const COOLDOWN_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week in milliseconds
-const COOLDOWN_ENABLED = false; // Temporarily disabled for testing
+const COOLDOWN_ENABLED = true; 
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -1150,10 +1150,10 @@ module.exports = {
                             { name: 'Vhintl', value: 'Vhintl' }
                         ))
         )
-        // ------------------- Subcommand: Improve Village -------------------
+        // ------------------- Subcommand: Donate -------------------
         .addSubcommand(subcommand =>
             subcommand
-                .setName('improve')
+                .setName('donate')
                 .setDescription('Repair with tokens or contribute materials/tokens for upgrades (auto-upgrades when ready)')
                 .addStringOption(option =>
                     option.setName('charactername')
@@ -1162,7 +1162,7 @@ module.exports = {
                         .setAutocomplete(true))
                 .addStringOption(option =>
                     option.setName('name')
-                        .setDescription('Name of the village to improve')
+                        .setDescription('Name of the village to donate to')
                         .setRequired(true)
                         .addChoices(
                             { name: 'Rudania', value: 'Rudania' },
@@ -1442,8 +1442,8 @@ module.exports = {
                 return interaction.reply({ embeds: [embed] });
             }
 
-            // ------------------- Subcommand: Improve -------------------
-            if (subcommand === 'improve') {
+            // ------------------- Subcommand: Donate -------------------
+            if (subcommand === 'donate') {
                 // Check if village is at max level
                 if (village.level >= 3 && village.status === 'max') {
                     const maxHealth = village.levelHealth instanceof Map 
@@ -1500,7 +1500,7 @@ module.exports = {
                 }
 
                 // Check cooldown (temporarily disabled for testing)
-                const cooldownKey = `${interaction.user.id}_${type}_${cleanItemName || 'tokens'}_improve`;
+                const cooldownKey = `${interaction.user.id}_${type}_${cleanItemName || 'tokens'}_donate`;
                 if (COOLDOWN_ENABLED) {
                     const cooldownTime = village.cooldowns.get(cooldownKey);
                     if (cooldownTime && cooldownTime > new Date()) {
@@ -1509,7 +1509,7 @@ module.exports = {
                     }
                 }
 
-                // Process improve contribution (combines repair and upgrade)
+                // Process donate contribution (combines repair and upgrade)
                 const result = await processImprove(village, interaction, type, cleanItemName, qty, characterName);
                 if (!result.success) {
                     return interaction.reply({ content: result.message, ephemeral: true });
