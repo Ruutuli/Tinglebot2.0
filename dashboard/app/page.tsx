@@ -944,7 +944,8 @@ function VillageLevelCard(v: VillageLevelItem) {
   const villageClass = villageName === "rudania" ? "village-card-rudania" : villageName === "inariko" ? "village-card-inariko" : villageName === "vhintl" ? "village-card-vhintl" : "";
 
   return (
-    <div className={clsx("group overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)] to-[var(--botw-warm-black)] transition-all duration-300 hover:scale-[1.02]", villageClass)} key={v.name}>
+    <Link href="/models/villages">
+      <div className={clsx("group overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)] to-[var(--botw-warm-black)] transition-all duration-300 hover:scale-[1.02] cursor-pointer", villageClass)}>
       <div className="relative h-24 w-full overflow-hidden">
         <Image
           alt={`${capitalize(v.name)} banner`}
@@ -1020,6 +1021,7 @@ function VillageLevelCard(v: VillageLevelItem) {
         </div>
       </div>
     </div>
+    </Link>
   );
 }
 
