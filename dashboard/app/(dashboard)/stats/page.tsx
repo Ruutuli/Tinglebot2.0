@@ -86,8 +86,8 @@ type StatsData = {
   helpWanted: {
     total: number;
     completed: number;
-    byVillage: Array<{ village: string; count: number }>;
     byType: Array<{ type: string; count: number }>;
+    byNpc?: Array<{ npc: string; count: number }>;
   };
   relics: {
     total: number;
@@ -246,6 +246,19 @@ const CHART_AXIS_PROPS = {
   gridOpacity: 0.3,
 };
 
+const MOBILE_BREAKPOINT = 768;
+
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+}
+
 /* ============================================================================ */
 /* ------------------- Shared chart components ------------------- */
 /* ============================================================================ */
@@ -275,15 +288,21 @@ function SharedBarChart({
   barSize?: number;
   nameLabel?: string;
 }) {
+  const isMobile = useIsMobile();
   const horizontalBars = layout === "vertical";
   const categoryTicks = horizontalBars ? data.map((d) => d.name) : undefined;
+  const effectiveHeight = isMobile ? Math.min(height, horizontalBars ? 320 : 280) : height;
+  const effectiveBarSize = isMobile ? (horizontalBars ? 18 : 22) : barSize;
+  const yAxisWidth = horizontalBars ? (isMobile ? 90 : 180) : undefined;
+  const tickFontSize = isMobile ? 10 : (horizontalBars ? 10 : 14);
+  const labelListFontSize = isMobile ? 11 : 14;
   return (
-    <div className={`min-w-0 w-full ${horizontalBars ? "overflow-visible" : "overflow-hidden"}`} style={{ height }}>
+    <div className={`min-w-0 w-full ${horizontalBars ? "overflow-visible" : "overflow-hidden"}`} style={{ height: effectiveHeight }}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart
           data={data}
           layout={layout}
-          margin={{ top: horizontalBars ? 52 : 32, right: horizontalBars ? 80 : 32, left: horizontalBars ? 12 : 12, bottom: horizontalBars ? 20 : 8 }}
+          margin={{ top: horizontalBars ? (isMobile ? 40 : 52) : 32, right: horizontalBars ? (isMobile ? 36 : 80) : 32, left: horizontalBars ? 12 : 12, bottom: horizontalBars ? (isMobile ? 16 : 20) : 8 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -294,10 +313,10 @@ function SharedBarChart({
             type={horizontalBars ? "number" : "category"}
             dataKey={horizontalBars ? undefined : nameKey}
             stroke={CHART_AXIS_PROPS.stroke}
-            tick={{ fill: horizontalBars ? CHART_AXIS_PROPS.tickFill : "var(--totk-light-ocher)", fontSize: horizontalBars ? 10 : 14, fontWeight: horizontalBars ? undefined : 600 }}
+            tick={{ fill: horizontalBars ? CHART_AXIS_PROPS.tickFill : "var(--totk-light-ocher)", fontSize: tickFontSize, fontWeight: horizontalBars ? undefined : 600 }}
             angle={!horizontalBars && data.length > 6 ? -30 : 0}
             textAnchor={!horizontalBars && data.length > 6 ? "end" : "middle"}
-            height={!horizontalBars && data.length > 6 ? 80 : undefined}
+            height={!horizontalBars && data.length > 6 ? (isMobile ? 60 : 80) : undefined}
             interval={0}
             dy={!horizontalBars && data.length > 6 ? 15 : undefined}
             dx={!horizontalBars && data.length > 6 ? -8 : undefined}
@@ -306,8 +325,8 @@ function SharedBarChart({
             type={horizontalBars ? "category" : "number"}
             dataKey={horizontalBars ? nameKey : undefined}
             stroke={CHART_AXIS_PROPS.stroke}
-            tick={{ fill: "var(--totk-light-ocher)", fontSize: 14, fontWeight: 600 }}
-            width={horizontalBars ? 180 : undefined}
+            tick={{ fill: "var(--totk-light-ocher)", fontSize: isMobile ? 10 : 14, fontWeight: 600 }}
+            width={yAxisWidth}
             interval={0}
             ticks={categoryTicks}
             minTickGap={horizontalBars ? 0 : undefined}
@@ -320,7 +339,7 @@ function SharedBarChart({
             dataKey={dataKey}
             name={nameLabel ?? "Count"}
             radius={horizontalBars ? [0, 8, 8, 0] : [8, 8, 0, 0]}
-            barSize={barSize}
+            barSize={effectiveBarSize}
             onClick={onBarClick}
             style={onBarClick ? { cursor: "pointer" } : undefined}
           >
@@ -340,9 +359,9 @@ function SharedBarChart({
               dataKey={dataKey}
               position={horizontalBars ? "right" : "top"}
               fill="var(--totk-light-ocher)"
-              fontSize={14}
+              fontSize={labelListFontSize}
               fontWeight="bold"
-              offset={horizontalBars ? 8 : 5}
+              offset={horizontalBars ? (isMobile ? 4 : 8) : 5}
             />
           </Bar>
         </BarChart>
@@ -370,12 +389,14 @@ function SharedPieChart({
   labelFormatter?: (name: string, percent: number) => string;
   onSliceClick?: (payload: { name?: string }) => void;
 }) {
+  const isMobile = useIsMobile();
+  const effectiveRadius = isMobile ? Math.min(outerRadius, 70) : outerRadius;
   const getColor = (entry: PieChartDataItem, index: number) =>
     colors === "village" ? getVillageColor(entry.name) : colors[index % colors.length];
   const defaultLabel = (props: { name?: string; percent?: number }) =>
     labelFormatter ? labelFormatter(props.name ?? "", props.percent ?? 0) : `${props.name ?? ""} ${((props.percent ?? 0) * 100).toFixed(0)}%`;
   return (
-    <div className={`h-64 w-full ${onSliceClick ? "cursor-pointer" : ""}`}>
+    <div className={`w-full ${onSliceClick ? "cursor-pointer" : ""} h-48 sm:h-64`}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <PieChart>
           <Pie
@@ -384,7 +405,7 @@ function SharedPieChart({
             cy="50%"
             labelLine={false}
             label={defaultLabel}
-            outerRadius={outerRadius}
+            outerRadius={effectiveRadius}
             dataKey={valueKey}
             onClick={onSliceClick ? (_, index) => {
               const entry = data[index];
@@ -610,6 +631,7 @@ function CharacterStatsSection({
   data: StatsData["characters"];
   onBreakdownClick: (type: string, value: string) => void;
 }) {
+  const isMobile = useIsMobile();
   const villageChartData = useMemo(() => {
     const villageMap = new Map<string, number>();
     data.byHomeVillage.forEach((item) => {
@@ -713,17 +735,17 @@ function CharacterStatsSection({
       )}
 
       {jobChartData.length > 0 && (
-        <div className="min-w-0 overflow-visible rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
           <div className="mb-3 flex min-w-0 items-center gap-3 md:mb-5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${SECTION_ACCENT_COLORS.characters}20` }}>
               <i className="fa-solid fa-briefcase" style={{ color: SECTION_ACCENT_COLORS.characters }} />
             </div>
             <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-[var(--totk-light-ocher)] sm:text-base">Characters by Job</h2>
           </div>
-          <div className="min-w-0 overflow-visible">
+          <div className="min-w-0 overflow-x-auto">
             <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
-            <div className="w-full overflow-visible" style={{ paddingTop: "1rem" }}>
-              <div className="h-[38rem] w-full sm:h-[42rem] overflow-visible">
+            <div className="w-full pt-4">
+              <div className="w-full min-w-0 max-h-[20rem] overflow-y-auto overflow-x-auto md:max-h-none md:h-[38rem] md:overflow-visible">
                 <SharedBarChart
                   data={jobChartData}
                   layout="horizontal"
@@ -755,17 +777,17 @@ function CharacterStatsSection({
       )}
 
       {raceChartData.length > 0 && (
-        <div className="min-w-0 overflow-visible rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
           <div className="mb-3 flex min-w-0 items-center gap-3 md:mb-5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${SECTION_ACCENT_COLORS.characters}20` }}>
               <i className="fa-solid fa-users" style={{ color: SECTION_ACCENT_COLORS.characters }} />
             </div>
             <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-[var(--totk-light-ocher)] sm:text-base">Characters by Race</h2>
           </div>
-          <div className="min-w-0 overflow-visible">
+          <div className="min-w-0 overflow-x-auto">
             <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
-            <div className="w-full pt-16 overflow-visible">
-              <div className="w-full overflow-visible" style={{ height: `${Math.max(600, raceChartData.length * 50 + 100)}px` }}>
+            <div className="w-full pt-4">
+              <div className="w-full min-w-0 max-h-[20rem] overflow-y-auto overflow-x-auto md:max-h-none md:overflow-visible" style={{ minHeight: "12rem" }}>
                 <SharedBarChart
                   data={raceChartData}
                   layout="horizontal"
@@ -784,17 +806,17 @@ function CharacterStatsSection({
       {raceStackedData.length > 0 && (
         <SectionCard title="Characters by Race by Village" icon="fa-users" accentColor={SECTION_ACCENT_COLORS.characters}>
           <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Stacked by home village. Click a bar to see more info.</p>
-          <div className="w-full">
-            <div className="w-full" style={{ height: `${Math.max(600, raceStackedData.length * 50 + 100)}px` }}>
-                <ResponsiveContainer width="100%" height={Math.max(600, raceStackedData.length * 50 + 100)} minWidth={0} minHeight={0}>
+          <div className="w-full min-w-0 overflow-x-auto">
+            <div className="w-full min-w-0 max-h-[20rem] overflow-y-auto overflow-x-auto md:max-h-none md:overflow-visible" style={{ height: isMobile ? 320 : Math.max(600, raceStackedData.length * 50 + 100), minHeight: isMobile ? 200 : undefined }}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={raceStackedData}
                     layout="vertical"
-                    margin={{ top: 8, right: 44, left: 4, bottom: 20 }}
+                    margin={{ top: 8, right: isMobile ? 28 : 44, left: 4, bottom: 20 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_AXIS_PROPS.gridStroke} opacity={CHART_AXIS_PROPS.gridOpacity} />
-                    <XAxis type="number" stroke={CHART_AXIS_PROPS.stroke} tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: 11 }} allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" stroke={CHART_AXIS_PROPS.stroke} tick={{ fill: "var(--botw-pale)", fontSize: 13, fontWeight: 600 }} width={160} interval={0} tickLine={false} />
+                    <XAxis type="number" stroke={CHART_AXIS_PROPS.stroke} tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: isMobile ? 10 : 11 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" stroke={CHART_AXIS_PROPS.stroke} tick={{ fill: "var(--botw-pale)", fontSize: isMobile ? 10 : 13, fontWeight: 600 }} width={isMobile ? 100 : 160} interval={0} tickLine={false} />
                     <Tooltip
                       content={({ active, payload, label }) => {
                         if (!active || !payload?.length || !label) return null;
@@ -825,7 +847,7 @@ function CharacterStatsSection({
                         stackId="race"
                         fill={getVillageColor(village)}
                         name={village}
-                        barSize={28}
+                        barSize={isMobile ? 18 : 28}
                         radius={idx === STACK_VILLAGES.length - 1 ? [0, 6, 6, 0] : 0}
                         onClick={(data: { name?: string }) => data?.name && onBreakdownClick("race", data.name)}
                         style={{ cursor: "pointer" }}
@@ -841,7 +863,7 @@ function CharacterStatsSection({
                               const x = Number(p.x) + Number(p.width) + 6;
                               const y = Number(p.y) + Number(p.height) / 2;
                               return (
-                                <text x={x} y={y} fill="var(--totk-light-ocher)" fontSize={14} fontWeight={600} dominantBaseline="middle">
+                                <text x={x} y={y} fill="var(--totk-light-ocher)" fontSize={isMobile ? 11 : 14} fontWeight={600} dominantBaseline="middle">
                                   {total}
                                 </text>
                               );
@@ -1067,7 +1089,7 @@ function PetStatsSection({ data, onBreakdownClick }: { data: StatsData["pets"]; 
           <p className="mb-4 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
           <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
             {speciesChartData.length > 0 && (
-              <div className="min-w-0">
+              <div className="min-w-0 overflow-x-auto">
                 <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Species</h4>
                 <SharedBarChart
                   data={speciesChartData}
@@ -1080,7 +1102,7 @@ function PetStatsSection({ data, onBreakdownClick }: { data: StatsData["pets"]; 
               </div>
             )}
             {typeChartData.length > 0 && (
-              <div className="min-w-0">
+              <div className="min-w-0 overflow-x-auto">
                 <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
                 <SharedBarChart
                   data={typeChartData}
@@ -1119,19 +1141,19 @@ function MountStatsSection({ data }: { data: StatsData["mounts"] }) {
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total mounts</p>
         <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {speciesData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Species</h4>
               <SharedBarChart data={speciesData} layout="vertical" height={256} barColor={CHART_SEQUENTIAL_COLORS[0]} barSize={24} />
             </div>
           )}
           {levelData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Level</h4>
               <SharedBarChart data={levelData} layout="vertical" height={256} barColor={CHART_SEQUENTIAL_COLORS[2]} barSize={24} />
             </div>
           )}
           {regionData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Region</h4>
               <SharedBarChart data={regionData} layout="vertical" height={256} barColor={CHART_SEQUENTIAL_COLORS[3]} barSize={24} />
             </div>
@@ -1157,13 +1179,13 @@ function QuestStatsSection({ data }: { data: StatsData["quests"] }) {
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total quests</p>
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {byTypeData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
               <SharedBarChart data={byTypeData} layout="vertical" height={256} barColor={SECTION_ACCENT_HEX.quests} barSize={28} />
             </div>
           )}
           {byStatusData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Status</h4>
               <SharedBarChart data={byStatusData} layout="vertical" height={256} barColor={SECTION_ACCENT_HEX.quests} barSize={28} />
             </div>
@@ -1179,8 +1201,8 @@ function QuestStatsSection({ data }: { data: StatsData["quests"] }) {
 /* ============================================================================ */
 
 function HelpWantedStatsSection({ data }: { data: StatsData["helpWanted"] }) {
-  const byVillageData = useMemo(() => data.byVillage.map((i) => ({ name: capitalize(i.village), count: i.count })), [data.byVillage]);
   const byTypeData = useMemo(() => data.byType.map((i) => ({ name: capitalize(i.type), count: i.count })), [data.byType]);
+  const byNpcData = useMemo(() => (data.byNpc ?? []).map((i) => ({ name: i.npc || "Unknown", count: i.count })), [data.byNpc]);
   const completionPct = data.total > 0 ? ((data.completed / data.total) * 100).toFixed(1) : "0";
 
   if (data.total === 0) return null;
@@ -1193,16 +1215,16 @@ function HelpWantedStatsSection({ data }: { data: StatsData["helpWanted"] }) {
           <Metric label="Completion Rate" value={`${completionPct}%`} accent="ocher" />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-          {byVillageData.length > 0 && (
-            <div className="min-w-0">
-              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
-              <SharedBarChart data={byVillageData} layout="vertical" height={220} barColor={SECTION_ACCENT_HEX.helpWanted} barSize={24} />
-            </div>
-          )}
           {byTypeData.length > 0 && (
-            <div className="min-w-0">
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Type</h4>
               <SharedBarChart data={byTypeData} layout="vertical" height={220} barColor={SECTION_ACCENT_HEX.helpWanted} barSize={24} />
+            </div>
+          )}
+          {byNpcData.length > 0 && (
+            <div className="min-w-0 overflow-x-auto">
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By NPC</h4>
+              <SharedBarChart data={byNpcData} layout="horizontal" height={220} barColor={SECTION_ACCENT_HEX.helpWanted} barSize={24} />
             </div>
           )}
         </div>
@@ -1244,13 +1266,15 @@ function RelationshipStatsSection({ data }: { data: StatsData["relationships"] }
     <SectionCard title="Relationship Statistics" icon="fa-heart" accentColor={SECTION_ACCENT_COLORS.relationships}>
       <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total relationships</p>
       {byTypeData.length > 0 && (
-        <SharedBarChart
-          data={byTypeData}
-          layout="vertical"
-          height={320}
-          barColor={SECTION_ACCENT_HEX.relationships}
-          barSize={24}
-        />
+        <div className="min-w-0 overflow-x-auto">
+          <SharedBarChart
+            data={byTypeData}
+            layout="vertical"
+            height={320}
+            barColor={SECTION_ACCENT_HEX.relationships}
+            barSize={24}
+          />
+        </div>
       )}
     </SectionCard>
   );
@@ -1263,6 +1287,7 @@ function RelationshipStatsSection({ data }: { data: StatsData["relationships"] }
 function RaidStatsSection({ data }: { data: StatsData["raids"] }) {
   const byVillageData = useMemo(() => data.byVillage.map((i) => ({ name: i.village, count: i.count })), [data.byVillage]);
   const byResultData = useMemo(() => data.byResult.map((i) => ({ name: capitalize(i.result), count: i.count })), [data.byResult]);
+  const byResultPieData = useMemo(() => byResultData.map((d) => ({ name: d.name, value: d.count })), [byResultData]);
   const byTierData = useMemo(() => data.byTier.map((i) => ({ name: `Tier ${i.tier}`, count: i.count })), [data.byTier]);
 
   if (data.total === 0) return null;
@@ -1272,19 +1297,25 @@ function RaidStatsSection({ data }: { data: StatsData["raids"] }) {
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total raids</p>
         <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {byVillageData.length > 0 && (
-            <div className="min-w-0">
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
               <SharedBarChart data={byVillageData} layout="vertical" height={180} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
             </div>
           )}
-          {byResultData.length > 0 && (
+          {byResultPieData.length > 0 && (
             <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Result</h4>
-              <SharedBarChart data={byResultData} layout="vertical" height={120} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
+              <SharedPieChart
+                data={byResultPieData}
+                valueKey="value"
+                colors={CHART_SEQUENTIAL_COLORS.slice(0, 4)}
+                outerRadius={80}
+                labelFormatter={(name, percent) => `${name} ${(percent * 100).toFixed(0)}%`}
+              />
             </div>
           )}
           {byTierData.length > 0 && (
-            <div className="min-w-0">
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Monster Tier</h4>
               <SharedBarChart data={byTierData} layout="vertical" height={180} barColor={SECTION_ACCENT_HEX.raids} barSize={24} />
             </div>
@@ -1300,18 +1331,6 @@ function RaidStatsSection({ data }: { data: StatsData["raids"] }) {
 /* ============================================================================ */
 
 function StealStatsSection({ data }: { data: StatsData["stealStats"] }) {
-  const rarityData = useMemo(
-    () => [
-      { name: "Common", count: data.byRarity.common },
-      { name: "Uncommon", count: data.byRarity.uncommon },
-      { name: "Rare", count: data.byRarity.rare },
-    ].filter((d) => d.count > 0),
-    [data.byRarity]
-  );
-  const rarityPieData = useMemo(
-    () => rarityData.map((d) => ({ name: d.name, value: d.count })),
-    [rarityData]
-  );
   const topVictimsData = useMemo(() => data.topVictims.map((i) => ({ name: i.name || "Unknown", count: i.count })), [data.topVictims]);
 
   if (data.totalAttempts === 0) return null;
@@ -1324,20 +1343,8 @@ function StealStatsSection({ data }: { data: StatsData["stealStats"] }) {
           <Metric label="Success Rate" value={`${data.successRate}%`} accent="blue" />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-          {rarityPieData.length > 0 && (
-            <div>
-              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items by Rarity</h4>
-              <SharedPieChart
-                data={rarityPieData}
-                valueKey="value"
-                colors={[CHART_SEQUENTIAL_COLORS[0], CHART_SEQUENTIAL_COLORS[2], CHART_SEQUENTIAL_COLORS[4]]}
-                outerRadius={110}
-                labelFormatter={(name, percent) => `${name} ${(percent * 100).toFixed(0)}%`}
-              />
-            </div>
-          )}
           {topVictimsData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Top Victims</h4>
               <SharedBarChart data={topVictimsData} layout="vertical" height={Math.max(200, topVictimsData.length * 28)} barColor={SECTION_ACCENT_HEX.stealStats} barSize={22} />
             </div>
@@ -1364,19 +1371,19 @@ function MinigameStatsSection({ data }: { data: StatsData["minigames"] }) {
         <p className="mb-4 text-sm text-[var(--botw-pale)]">{data.total.toLocaleString()} total sessions</p>
         <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {byGameTypeData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Game Type</h4>
               <SharedBarChart data={byGameTypeData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.minigames} barSize={24} />
             </div>
           )}
           {byStatusData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Status</h4>
               <SharedBarChart data={byStatusData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.minigames} barSize={24} />
             </div>
           )}
           {byVillageData.length > 0 && (
-            <div>
+            <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Village</h4>
               <SharedBarChart data={byVillageData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.minigames} barSize={24} />
             </div>
@@ -1442,7 +1449,7 @@ function InventoryStatsSection({ data, onBreakdownClick }: { data: StatsData["in
           {topItemsData.length > 0 && (
             <div className="min-w-0 overflow-x-auto">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items by total quantity</h4>
-              <div className="min-h-[600px] min-w-[200px]">
+              <div className="min-w-[200px] min-h-0 max-h-[20rem] overflow-y-auto overflow-x-auto md:max-h-none md:min-h-[600px] md:overflow-visible">
                 <SharedBarChart
                   data={topItemsData}
                   layout="vertical"

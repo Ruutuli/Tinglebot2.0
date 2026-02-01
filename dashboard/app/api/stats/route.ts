@@ -436,13 +436,13 @@ export async function GET() {
     // ------------------- Help Wanted Statistics -------------------
     const [
       helpWantedTotal,
-      helpWantedByVillage,
       helpWantedByType,
+      helpWantedByNpc,
       helpWantedCompleted,
     ] = await Promise.all([
       HelpWantedQuest.countDocuments({}),
-      HelpWantedQuest.aggregate([{ $group: { _id: "$village", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
       HelpWantedQuest.aggregate([{ $group: { _id: "$type", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      HelpWantedQuest.aggregate([{ $group: { _id: "$npcName", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
       HelpWantedQuest.countDocuments({ completed: true }),
     ]);
 
@@ -741,8 +741,8 @@ export async function GET() {
       helpWanted: {
         total: helpWantedTotal,
         completed: helpWantedCompleted,
-        byVillage: helpWantedByVillage.map((item) => ({ village: item._id || "Unknown", count: item.count })),
         byType: helpWantedByType.map((item) => ({ type: item._id || "Unknown", count: item.count })),
+        byNpc: helpWantedByNpc.map((item) => ({ npc: item._id || "Unknown", count: item.count })),
       },
       relics: {
         total: relicTotal,

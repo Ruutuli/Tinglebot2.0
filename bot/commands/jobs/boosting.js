@@ -2706,9 +2706,11 @@ module.exports.updateBoostAppliedMessage = async function updateBoostAppliedMess
     // Rebuild applied embed with latest status
     const booster = await fetchCharacterByNameWithFallback(requestData.boostingCharacter);
     const targetCharacter = await fetchCharacterByNameWithFallback(requestData.targetCharacter);
-    const boosterJob = getEffectiveJob(booster);
+    const boosterJob = booster ? getEffectiveJob(booster) : (requestData.boosterJob || 'Unknown');
     const boostEffectValidation = validateBoostEffect(boosterJob, requestData.category);
-    const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boostEffectValidation.boost);
+    // Use stored boost effect as fallback when config lookup fails (e.g. removed job/category, or "Other" custom)
+    const boost = boostEffectValidation.boost || parseStoredBoostEffect(requestData.boostEffect);
+    const embedData = createBoostAppliedEmbedData(booster, targetCharacter, requestData, boost);
     // ensure status taken from requestData
     embedData.status = requestData.status || embedData.status;
     const embed = createBoostAppliedEmbed(embedData);
