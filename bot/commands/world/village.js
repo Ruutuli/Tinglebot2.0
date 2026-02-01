@@ -1215,15 +1215,11 @@ module.exports = {
                     option.setName('type')
                         .setDescription('Contribute using Items or Tokens')
                         .setRequired(true)
-                        .addChoices(
-                            { name: 'Items', value: 'Items' },
-                            { name: 'Tokens', value: 'Tokens' }
-                        ))
+                        .setAutocomplete(true))
                 .addIntegerOption(option =>
                     option.setName('qty')
                         .setDescription('Quantity of items or tokens to contribute')
-                        .setRequired(true)
-                        .setAutocomplete(true))
+                        .setRequired(true))
                 .addStringOption(option =>
                     option.setName('itemname')
                         .setDescription('Name of the item to use (if using Items)')
