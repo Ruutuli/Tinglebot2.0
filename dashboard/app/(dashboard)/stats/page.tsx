@@ -20,6 +20,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   LabelList,
+  Legend,
 } from "recharts";
 
 /* ============================================================================ */
@@ -33,6 +34,9 @@ type StatsData = {
     byCurrentVillage: Array<{ village: string; count: number }>;
     byJob: Array<{ job: string; count: number }>;
     byRace: Array<{ race: string; count: number }>;
+    byRaceByVillage: Array<{ race: string; village: string; count: number }>;
+    birthdayByMonth: Array<{ month: number; monthName: string; count: number }>;
+    birthdayBySeason: Array<{ season: string; count: number }>;
     statusCounts: {
       blighted: number;
       ko: number;
@@ -115,12 +119,13 @@ type StatsData = {
   };
   inventory: {
     topCharactersByItems: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }>;
-    topItemsByCharacterCount: Array<{ itemName: string; characterCount: number }>;
+    topItemsByTotalQuantity: Array<{ itemName: string; totalQuantity: number }>;
   };
 }
 
-type BreakdownData = {
-  type: "race" | "job";
+type CharacterBreakdown = {
+  kind: "characters";
+  type: string;
   value: string;
   total: number;
   characterNames: Array<{ name: string; id: string; slug: string; homeVillage: string }>;
@@ -130,6 +135,35 @@ type BreakdownData = {
     byRace?: Array<{ race: string; count: number }>;
   };
 };
+
+type PetBreakdown = {
+  kind: "pets";
+  type: string;
+  value: string;
+  total: number;
+  pets: Array<{ name: string; species: string; petType: string; level: number; ownerName: string; ownerSlug: string }>;
+};
+
+type InventoryCharacterBreakdown = {
+  kind: "inventoryCharacter";
+  type: string;
+  value: string;
+  characterName: string | null;
+  slug: string | null;
+  totalItems: number;
+  uniqueItems: number;
+};
+
+type InventoryItemBreakdown = {
+  kind: "inventoryItem";
+  type: string;
+  value: string;
+  itemName: string;
+  total: number;
+  characters: Array<{ characterName: string; slug: string }>;
+};
+
+type BreakdownData = CharacterBreakdown | PetBreakdown | InventoryCharacterBreakdown | InventoryItemBreakdown;
 
 /* ============================================================================ */
 /* ------------------- Chart theme & palette ------------------- */
@@ -169,6 +203,7 @@ const VILLAGE_COLORS: Record<string, string> = {
   Rudania: "#FF6B6B",
   Inariko: "#7FB3FF",
   Vhintl: "#6BCF7F",
+  Unknown: "#9ca3af",
 };
 
 function getVillageColor(village: string): string {
@@ -238,13 +273,14 @@ function SharedBarChart({
   nameLabel?: string;
 }) {
   const horizontalBars = layout === "vertical";
+  const categoryTicks = horizontalBars ? data.map((d) => d.name) : undefined;
   return (
-    <div className="min-w-0 w-full overflow-hidden" style={{ height }}>
+    <div className={`min-w-0 w-full ${horizontalBars ? "overflow-visible" : "overflow-hidden"}`} style={{ height }}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart
           data={data}
           layout={layout}
-          margin={{ top: 8, right: 32, left: horizontalBars ? 4 : 12, bottom: horizontalBars ? 20 : 8 }}
+          margin={{ top: horizontalBars ? 52 : 32, right: horizontalBars ? 80 : 32, left: horizontalBars ? 12 : 12, bottom: horizontalBars ? 20 : 8 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -255,7 +291,7 @@ function SharedBarChart({
             type={horizontalBars ? "number" : "category"}
             dataKey={horizontalBars ? undefined : nameKey}
             stroke={CHART_AXIS_PROPS.stroke}
-            tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: horizontalBars ? 10 : 11 }}
+            tick={{ fill: horizontalBars ? CHART_AXIS_PROPS.tickFill : "var(--totk-light-ocher)", fontSize: horizontalBars ? 10 : 14, fontWeight: horizontalBars ? undefined : 600 }}
             angle={!horizontalBars && data.length > 6 ? -30 : 0}
             textAnchor={!horizontalBars && data.length > 6 ? "end" : "middle"}
             height={!horizontalBars && data.length > 6 ? 80 : undefined}
@@ -267,9 +303,11 @@ function SharedBarChart({
             type={horizontalBars ? "category" : "number"}
             dataKey={horizontalBars ? nameKey : undefined}
             stroke={CHART_AXIS_PROPS.stroke}
-            tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: 10 }}
-            width={horizontalBars ? 88 : undefined}
+            tick={{ fill: "var(--totk-light-ocher)", fontSize: 14, fontWeight: 600 }}
+            width={horizontalBars ? 180 : undefined}
             interval={0}
+            ticks={categoryTicks}
+            minTickGap={horizontalBars ? 0 : undefined}
           />
           <Tooltip
             {...CHART_TOOLTIP_STYLE}
@@ -298,9 +336,10 @@ function SharedBarChart({
             <LabelList
               dataKey={dataKey}
               position={horizontalBars ? "right" : "top"}
-              fill="#d6cecd"
-              fontSize={12}
+              fill="var(--totk-light-ocher)"
+              fontSize={14}
               fontWeight="bold"
+              offset={horizontalBars ? 8 : 5}
             />
           </Bar>
         </BarChart>
@@ -318,6 +357,7 @@ function SharedPieChart({
   colors,
   outerRadius = 80,
   labelFormatter,
+  onSliceClick,
 }: {
   data: PieChartDataItem[];
   valueKey?: string;
@@ -325,13 +365,14 @@ function SharedPieChart({
   colors: string[] | "village";
   outerRadius?: number;
   labelFormatter?: (name: string, percent: number) => string;
+  onSliceClick?: (payload: { name?: string }) => void;
 }) {
   const getColor = (entry: PieChartDataItem, index: number) =>
     colors === "village" ? getVillageColor(entry.name) : colors[index % colors.length];
   const defaultLabel = (props: { name?: string; percent?: number }) =>
     labelFormatter ? labelFormatter(props.name ?? "", props.percent ?? 0) : `${props.name ?? ""} ${((props.percent ?? 0) * 100).toFixed(0)}%`;
   return (
-    <div className="h-64 w-full">
+    <div className={`h-64 w-full ${onSliceClick ? "cursor-pointer" : ""}`}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <PieChart>
           <Pie
@@ -342,6 +383,12 @@ function SharedPieChart({
             label={defaultLabel}
             outerRadius={outerRadius}
             dataKey={valueKey}
+            onClick={onSliceClick ? (_, index) => {
+              const entry = data[index];
+              if (entry && typeof entry === "object" && "name" in entry) {
+                onSliceClick({ name: String(entry.name) });
+              }
+            } : undefined}
           >
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={getColor(entry, index)} />
@@ -407,16 +454,24 @@ export default function StatsPage() {
     };
   }, []);
 
-  const handleBarClick = async (type: "race" | "job", value: string) => {
+  const handleBreakdownClick = async (type: string, value: string) => {
     try {
       setLoadingBreakdown(true);
       setShowBreakdown(true);
-      const res = await fetch(`/api/stats/breakdown?type=${type}&value=${encodeURIComponent(value)}`);
+      const res = await fetch(`/api/stats/breakdown?type=${encodeURIComponent(type)}&value=${encodeURIComponent(value)}`);
       if (!res.ok) {
         throw new Error("Failed to fetch breakdown");
       }
-      const data = (await res.json()) as BreakdownData;
-      setBreakdownData(data);
+      const raw = (await res.json()) as BreakdownData | { kind?: string };
+      if (raw.kind === "pets") {
+        setBreakdownData(raw as PetBreakdown);
+      } else if (raw.kind === "inventoryCharacter") {
+        setBreakdownData(raw as InventoryCharacterBreakdown);
+      } else if (raw.kind === "inventoryItem") {
+        setBreakdownData(raw as InventoryItemBreakdown);
+      } else {
+        setBreakdownData({ ...raw, kind: "characters" } as CharacterBreakdown);
+      }
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error.message);
@@ -478,13 +533,13 @@ export default function StatsPage() {
         </div>
 
         {/* Character Statistics */}
-        <CharacterStatsSection data={statsData.characters} onBarClick={handleBarClick} />
+        <CharacterStatsSection data={statsData.characters} onBreakdownClick={handleBreakdownClick} />
 
         {/* Weather Statistics */}
         <WeatherStatsSection data={statsData.weather} />
 
         {/* Pet Statistics */}
-        <PetStatsSection data={statsData.pets} />
+        <PetStatsSection data={statsData.pets} onBreakdownClick={handleBreakdownClick} />
 
         {/* Mount Statistics */}
         <MountStatsSection data={statsData.mounts} />
@@ -511,7 +566,7 @@ export default function StatsPage() {
         {statsData.minigames && <MinigameStatsSection data={statsData.minigames} />}
 
         {/* Inventory Statistics */}
-        {statsData.inventory && <InventoryStatsSection data={statsData.inventory} />}
+        {statsData.inventory && <InventoryStatsSection data={statsData.inventory} onBreakdownClick={handleBreakdownClick} />}
       </div>
 
       {/* Breakdown Modal */}
@@ -545,12 +600,12 @@ function normalizeVillageName(village: string): string {
   return capitalize(village);
 }
 
-function CharacterStatsSection({ 
-  data, 
-  onBarClick 
-}: { 
+function CharacterStatsSection({
+  data,
+  onBreakdownClick,
+}: {
   data: StatsData["characters"];
-  onBarClick: (type: "race" | "job", value: string) => void;
+  onBreakdownClick: (type: string, value: string) => void;
 }) {
   const villageChartData = useMemo(() => {
     const villageMap = new Map<string, number>();
@@ -578,7 +633,8 @@ function CharacterStatsSection({
     });
     return Array.from(jobMap.entries())
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
   }, [data.byJob]);
 
   const raceChartData = useMemo(() => {
@@ -590,8 +646,34 @@ function CharacterStatsSection({
     });
     return Array.from(raceMap.entries())
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 30);
   }, [data.byRace]);
+
+  const STACK_VILLAGES = ["Rudania", "Inariko", "Vhintl", "Unknown"];
+  type RaceStackRow = { name: string; [k: string]: string | number };
+  const raceStackedData = useMemo((): RaceStackRow[] => {
+    if (!data.byRaceByVillage?.length) return [];
+    const byRace = new Map<string, RaceStackRow>();
+    data.byRaceByVillage.forEach(({ race, village, count }) => {
+      const normalizedRace = capitalize(race.trim());
+      const normalizedVillage = normalizeVillageName(village);
+      if (!byRace.has(normalizedRace)) {
+        const row: RaceStackRow = { name: normalizedRace };
+        STACK_VILLAGES.forEach((v) => (row[v] = 0));
+        byRace.set(normalizedRace, row);
+      }
+      const row = byRace.get(normalizedRace)!;
+      row[normalizedVillage] = (Number(row[normalizedVillage]) || 0) + count;
+    });
+    return Array.from(byRace.values())
+      .sort((a, b) => {
+        const totalA = STACK_VILLAGES.reduce((s, v) => s + (Number(a[v]) || 0), 0);
+        const totalB = STACK_VILLAGES.reduce((s, v) => s + (Number(b[v]) || 0), 0);
+        return totalB - totalA;
+      })
+      .slice(0, 30);
+  }, [data.byRaceByVillage]);
 
   return (
     <div className="space-y-6">
@@ -606,47 +688,145 @@ function CharacterStatsSection({
 
       {villagePieData.length > 0 && (
         <SectionCard title="Characters by Home Village" icon="fa-map-marker-alt" accentColor={SECTION_ACCENT_COLORS.characters}>
+          <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Click a slice to see more info.</p>
           <SharedPieChart
             data={villagePieData}
             valueKey="value"
             colors="village"
             outerRadius={100}
             labelFormatter={(name, percent) => `${name} ${(percent * 100).toFixed(0)}%`}
+            onSliceClick={(p) => p?.name && onBreakdownClick("homeVillage", p.name)}
           />
         </SectionCard>
       )}
 
       {jobChartData.length > 0 && (
-        <SectionCard title="Characters by Job" icon="fa-briefcase" accentColor={SECTION_ACCENT_COLORS.characters}>
-          <div className="-mx-2 overflow-x-auto px-2 sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
-            <div className="h-[28rem] min-w-[280px] sm:h-[32rem]" style={{ width: Math.max(280, jobChartData.length * 48) }}>
-              <SharedBarChart
-                data={jobChartData}
-                layout="horizontal"
-                height={448}
-                colorByIndex
-                onBarClick={(payload) => payload?.name && onBarClick("job", payload.name)}
-                nameLabel="Characters"
-              />
+        <div className="min-w-0 overflow-visible rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
+          <div className="mb-3 flex min-w-0 items-center gap-3 md:mb-5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${SECTION_ACCENT_COLORS.characters}20` }}>
+              <i className="fa-solid fa-briefcase" style={{ color: SECTION_ACCENT_COLORS.characters }} />
+            </div>
+            <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-[var(--totk-light-ocher)] sm:text-base">Characters by Job</h2>
+          </div>
+          <div className="min-w-0 overflow-visible">
+            <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
+            <div className="w-full overflow-visible" style={{ paddingTop: "1rem" }}>
+              <div className="h-[38rem] w-full sm:h-[42rem] overflow-visible">
+                <SharedBarChart
+                  data={jobChartData}
+                  layout="horizontal"
+                  height={600}
+                  barSize={36}
+                  colorByIndex
+                  onBarClick={(payload) => payload?.name && onBreakdownClick("job", payload.name)}
+                  nameLabel="Characters"
+                />
+              </div>
             </div>
           </div>
-        </SectionCard>
+        </div>
       )}
 
       {raceChartData.length > 0 && (
-        <SectionCard title="Characters by Race" icon="fa-users" accentColor={SECTION_ACCENT_COLORS.characters}>
-          <div className="-mx-2 overflow-x-auto px-2 sm:-mx-4 sm:px-4">
-            <div className="h-[28rem] min-w-[280px] sm:h-[32rem]" style={{ width: Math.max(280, raceChartData.length * 48) }}>
-              <SharedBarChart
-                data={raceChartData}
-                layout="horizontal"
-                height={448}
-                colorByIndex
-                onBarClick={(payload) => payload?.name && onBarClick("race", payload.name)}
-                nameLabel="Characters"
-              />
+        <div className="min-w-0 overflow-visible rounded-2xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-4 shadow-sm backdrop-blur-sm md:p-6">
+          <div className="mb-3 flex min-w-0 items-center gap-3 md:mb-5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${SECTION_ACCENT_COLORS.characters}20` }}>
+              <i className="fa-solid fa-users" style={{ color: SECTION_ACCENT_COLORS.characters }} />
+            </div>
+            <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-[var(--totk-light-ocher)] sm:text-base">Characters by Race</h2>
+          </div>
+          <div className="min-w-0 overflow-visible">
+            <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
+            <div className="w-full pt-16 overflow-visible">
+              <div className="h-[30rem] w-full sm:h-[34rem] overflow-visible">
+                <SharedBarChart
+                  data={raceChartData}
+                  layout="horizontal"
+                  height={480}
+                  barSize={86}
+                  colorByIndex
+                  onBarClick={(payload) => payload?.name && onBreakdownClick("race", payload.name)}
+                  nameLabel="Characters"
+                />
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {raceStackedData.length > 0 && (
+        <SectionCard title="Characters by Race by Village" icon="fa-users" accentColor={SECTION_ACCENT_COLORS.characters}>
+          <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Stacked by home village. Click a bar to see more info.</p>
+          <div className="w-full">
+            <div className="h-[28rem] w-full sm:h-[32rem]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                  <BarChart
+                    data={raceStackedData}
+                    layout="vertical"
+                    margin={{ top: 8, right: 44, left: 4, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_AXIS_PROPS.gridStroke} opacity={CHART_AXIS_PROPS.gridOpacity} />
+                    <XAxis type="number" stroke={CHART_AXIS_PROPS.stroke} tick={{ fill: CHART_AXIS_PROPS.tickFill, fontSize: 11 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" stroke={CHART_AXIS_PROPS.stroke} tick={{ fill: "var(--botw-pale)", fontSize: 13, fontWeight: 600 }} width={160} interval={0} tickLine={false} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length || !label) return null;
+                        const row = payload[0]?.payload as RaceStackRow;
+                        const total = STACK_VILLAGES.reduce((s, v) => s + (Number(row?.[v]) || 0), 0);
+                        return (
+                          <div className="rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2.5 shadow-lg" style={CHART_TOOLTIP_STYLE.contentStyle as React.CSSProperties}>
+                            <p className="font-semibold text-[var(--totk-light-green)]">{label}</p>
+                            <p className="mt-1 text-xs text-[var(--botw-pale)]">Total: {total} character{total !== 1 ? "s" : ""}</p>
+                            <ul className="mt-1.5 space-y-0.5 border-t border-[var(--totk-dark-ocher)]/30 pt-1.5">
+                              {STACK_VILLAGES.filter((v) => (Number(row?.[v]) || 0) > 0).map((v) => (
+                                <li key={v} className="flex items-center gap-2 text-xs">
+                                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: getVillageColor(v) }} />
+                                  {v}: {Number(row?.[v]) || 0}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      }}
+                      cursor={CHART_TOOLTIP_STYLE.cursor}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} formatter={(value) => <span style={{ color: "var(--botw-pale)" }}>{value}</span>} />
+                    {STACK_VILLAGES.map((village, idx) => (
+                      <Bar
+                        key={village}
+                        dataKey={village}
+                        stackId="race"
+                        fill={getVillageColor(village)}
+                        name={village}
+                        barSize={28}
+                        radius={idx === STACK_VILLAGES.length - 1 ? [0, 6, 6, 0] : 0}
+                        onClick={(data: { name?: string }) => data?.name && onBreakdownClick("race", data.name)}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {idx === STACK_VILLAGES.length - 1 && (
+                          <LabelList
+                            position="right"
+                            content={(props: unknown) => {
+                              const p = props as { x?: string | number; y?: string | number; width?: string | number; height?: string | number; payload?: RaceStackRow };
+                              const row = p.payload;
+                              const total = row ? STACK_VILLAGES.reduce((s, v) => s + (Number(row[v]) || 0), 0) : 0;
+                              if (total === 0) return null;
+                              const x = Number(p.x) + Number(p.width) + 6;
+                              const y = Number(p.y) + Number(p.height) / 2;
+                              return (
+                                <text x={x} y={y} fill="var(--totk-light-ocher)" fontSize={14} fontWeight={600} dominantBaseline="middle">
+                                  {total}
+                                </text>
+                              );
+                            }}
+                          />
+                        )}
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
         </SectionCard>
       )}
 
@@ -658,6 +838,40 @@ function CharacterStatsSection({
           <Metric label="Avg Defense" value={data.averages.defense.toFixed(1)} accent="ocher" />
         </div>
       </SectionCard>
+
+      {/* Birthdays by month / season */}
+      {(data.birthdayByMonth?.some((m) => m.count > 0) || data.birthdayBySeason?.some((s) => s.count > 0)) && (
+        <SectionCard title="Birthdays" icon="fa-calendar-star" accentColor={SECTION_ACCENT_COLORS.characters}>
+          <p className="mb-4 text-xs text-[var(--totk-grey-200)]">Character birthdays by month and season.</p>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {data.birthdayByMonth?.some((m) => m.count > 0) && (
+              <div className="min-w-0">
+                <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Month</h4>
+                <SharedBarChart
+                  data={data.birthdayByMonth.map((m) => ({ name: m.monthName.slice(0, 3), count: m.count }))}
+                  layout="vertical"
+                  height={280}
+                  barColor={SECTION_ACCENT_HEX.characters}
+                  barSize={20}
+                  nameLabel="Characters"
+                />
+              </div>
+            )}
+            {data.birthdayBySeason?.some((s) => s.count > 0) && (
+              <div className="min-w-0">
+                <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">By Season</h4>
+                <SharedPieChart
+                  data={data.birthdayBySeason.map((s) => ({ name: s.season, value: s.count }))}
+                  valueKey="value"
+                  colors={[VILLAGE_COLORS.Rudania, SECTION_ACCENT_HEX.characters, "#7FB3FF", "#b99f65"]}
+                  outerRadius={80}
+                  labelFormatter={(name, percent) => `${name} ${(percent * 100).toFixed(0)}%`}
+                />
+              </div>
+            )}
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }
@@ -786,7 +1000,7 @@ function WeatherStatsSection({ data }: { data: StatsData["weather"] }) {
 /* ------------------- Pet Statistics Section ------------------- */
 /* ============================================================================ */
 
-function PetStatsSection({ data }: { data: StatsData["pets"] }) {
+function PetStatsSection({ data, onBreakdownClick }: { data: StatsData["pets"]; onBreakdownClick: (type: string, value: string) => void }) {
   const speciesChartData = useMemo(() => {
     return data.bySpecies.slice(0, 10).map((item) => ({
       name: capitalize(item.species),
@@ -801,6 +1015,13 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
     }));
   }, [data.byType]);
 
+  const getRawTypeFromDisplayName = (displayName: string): string | undefined => {
+    const found = data.byType.find(
+      (i) => capitalize((i.type || "").replace(/_/g, " ")) === displayName
+    );
+    return found?.type;
+  };
+
   return (
     <div className="space-y-6">
       <SectionCard title="Pet Statistics" icon="fa-paw" accentColor={SECTION_ACCENT_COLORS.pets}>
@@ -813,9 +1034,10 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
 
       {(speciesChartData.length > 0 || typeChartData.length > 0) && (
         <SectionCard title="Pets by Species and Type" icon="fa-paw" accentColor={SECTION_ACCENT_COLORS.pets}>
-          <p className="mb-4 text-xs text-[var(--totk-grey-200)]">
+          <p className="mb-2 text-xs text-[var(--totk-grey-200)]">
             Species = kind of animal (e.g. dog, cat). Type = pet category (e.g. companion, battle).
           </p>
+          <p className="mb-4 text-xs text-[var(--totk-grey-200)]">Click a bar to see more info.</p>
           <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
             {speciesChartData.length > 0 && (
               <div className="min-w-0">
@@ -826,6 +1048,7 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
                   height={256}
                   barColor={SECTION_ACCENT_HEX.pets}
                   nameLabel="Pets"
+                  onBarClick={(payload) => payload?.name && onBreakdownClick("petSpecies", payload.name)}
                 />
               </div>
             )}
@@ -838,6 +1061,11 @@ function PetStatsSection({ data }: { data: StatsData["pets"] }) {
                   height={256}
                   barColor={CHART_SEQUENTIAL_COLORS[2]}
                   nameLabel="Pets"
+                  onBarClick={(payload) => {
+                    if (!payload?.name) return;
+                    const raw = getRawTypeFromDisplayName(payload.name);
+                    if (raw) onBreakdownClick("petType", raw);
+                  }}
                 />
               </div>
             )}
@@ -1053,6 +1281,10 @@ function StealStatsSection({ data }: { data: StatsData["stealStats"] }) {
     ].filter((d) => d.count > 0),
     [data.byRarity]
   );
+  const rarityPieData = useMemo(
+    () => rarityData.map((d) => ({ name: d.name, value: d.count })),
+    [rarityData]
+  );
   const topVictimsData = useMemo(() => data.topVictims.map((i) => ({ name: i.name || "Unknown", count: i.count })), [data.topVictims]);
 
   if (data.totalAttempts === 0) return null;
@@ -1065,10 +1297,16 @@ function StealStatsSection({ data }: { data: StatsData["stealStats"] }) {
           <Metric label="Success Rate" value={`${data.successRate}%`} accent="blue" />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-          {rarityData.length > 0 && (
+          {rarityPieData.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items by Rarity</h4>
-              <SharedBarChart data={rarityData} layout="vertical" height={140} barColor={SECTION_ACCENT_HEX.stealStats} barSize={28} />
+              <SharedPieChart
+                data={rarityPieData}
+                valueKey="value"
+                colors={[CHART_SEQUENTIAL_COLORS[0], CHART_SEQUENTIAL_COLORS[2], CHART_SEQUENTIAL_COLORS[4]]}
+                outerRadius={110}
+                labelFormatter={(name, percent) => `${name} ${(percent * 100).toFixed(0)}%`}
+              />
             </div>
           )}
           {topVictimsData.length > 0 && (
@@ -1127,9 +1365,9 @@ function MinigameStatsSection({ data }: { data: StatsData["minigames"] }) {
 /* ============================================================================ */
 
 type InventoryCharacterRow = { characterName: string; slug: string; totalItems: number; uniqueItems: number };
-type InventoryItemRow = { itemName: string; characterCount: number };
+type InventoryItemRow = { itemName: string; totalQuantity: number };
 
-function InventoryStatsSection({ data }: { data: StatsData["inventory"] }) {
+function InventoryStatsSection({ data, onBreakdownClick }: { data: StatsData["inventory"]; onBreakdownClick: (type: string, value: string) => void }) {
   const topCharactersData = useMemo(
     () =>
       data.topCharactersByItems.map((c: InventoryCharacterRow) => ({
@@ -1141,48 +1379,50 @@ function InventoryStatsSection({ data }: { data: StatsData["inventory"] }) {
     [data.topCharactersByItems]
   );
   const topItemsData = useMemo(
-    () => data.topItemsByCharacterCount.map((i: InventoryItemRow) => ({ name: i.itemName, count: i.characterCount })),
-    [data.topItemsByCharacterCount]
+    () => data.topItemsByTotalQuantity.map((i: InventoryItemRow) => ({ name: i.itemName, count: i.totalQuantity })),
+    [data.topItemsByTotalQuantity]
   );
 
-  if (data.topCharactersByItems.length === 0 && data.topItemsByCharacterCount.length === 0) return null;
+  if (data.topCharactersByItems.length === 0 && data.topItemsByTotalQuantity.length === 0) return null;
   return (
     <div className="space-y-6">
       <SectionCard title="Inventory" icon="fa-box" accentColor={SECTION_ACCENT_COLORS.inventory}>
-        <p className="mb-4 text-sm text-[var(--botw-pale)]">
+        <p className="mb-2 text-sm text-[var(--botw-pale)]">
           Characters with the most items (total quantity) and items owned by the most characters.
         </p>
+        <p className="mb-4 text-xs text-[var(--totk-grey-200)]">Click a character to see more info.</p>
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
           {topCharactersData.length > 0 && (
             <div className="min-w-0">
               <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Characters with most items</h4>
               <div className="space-y-1.5 sm:space-y-2">
                 {topCharactersData.slice(0, 15).map((c: { name: string; count: number; slug: string; uniqueItems: number }) => (
-                  <Link
+                  <button
                     key={c.slug}
-                    href={`/characters/${c.slug}`}
-                    className="flex min-h-[44px] min-w-0 items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-3 py-2 transition-colors hover:bg-[var(--totk-dark-ocher)]/20 active:bg-[var(--totk-dark-ocher)]/20 sm:px-4"
+                    type="button"
+                    onClick={() => onBreakdownClick("inventoryCharacter", c.slug)}
+                    className="flex min-h-[44px] min-w-0 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-3 py-2 text-left transition-colors hover:bg-[var(--totk-dark-ocher)]/20 active:bg-[var(--totk-dark-ocher)]/20 sm:px-4"
                   >
                     <span className="min-w-0 truncate font-medium text-[var(--botw-pale)]" title={c.name}>{c.name}</span>
                     <span className="shrink-0 tabular-nums text-sm text-[var(--totk-light-green)] sm:text-base">
                       {c.count.toLocaleString()} items{c.uniqueItems !== c.count ? ` (${c.uniqueItems})` : ""}
                     </span>
-                  </Link>
+                  </button>
                 ))}
               </div>
             </div>
           )}
           {topItemsData.length > 0 && (
             <div className="min-w-0 overflow-x-auto">
-              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items owned by most characters</h4>
-              <div className="min-h-[200px] min-w-[200px]">
+              <h4 className="mb-2 text-sm font-semibold text-[var(--totk-light-ocher)]">Items by total quantity</h4>
+              <div className="min-h-[600px] min-w-[200px]">
                 <SharedBarChart
                   data={topItemsData}
                   layout="vertical"
-                  height={Math.max(220, topItemsData.length * 28)}
+                  height={Math.max(600, topItemsData.length * 40)}
                   barColor={SECTION_ACCENT_HEX.inventory}
                   barSize={22}
-                  nameLabel="Characters"
+                  nameLabel="Total quantity"
                 />
               </div>
             </div>
@@ -1206,22 +1446,6 @@ function BreakdownModal({
   loading: boolean;
   onClose: () => void;
 }) {
-  // Helper function to normalize village names
-  const normalizeVillageName = (village: string): string => {
-    if (!village) return "Unknown";
-    const normalized = village.toLowerCase().trim();
-    if (normalized === "rudania" || normalized.startsWith("rudania")) return "Rudania";
-    if (normalized === "inariko" || normalized.startsWith("inariko")) return "Inariko";
-    if (normalized === "vhintl" || normalized.startsWith("vhintl")) return "Vhintl";
-    if (normalized.includes("rudania")) return "Rudania";
-    if (normalized.includes("inariko")) return "Inariko";
-    if (normalized.includes("vhintl")) return "Vhintl";
-    return village
-      .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(" ");
-  };
-
   if (!data && !loading) return null;
 
   return (
@@ -1247,111 +1471,177 @@ function BreakdownModal({
             <Loading />
           </div>
         ) : data ? (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="border-b border-[var(--totk-dark-ocher)]/30 pb-4">
-              <h2 className="text-2xl font-bold text-[var(--totk-light-ocher)]">
-                {capitalize(data.type)}: {capitalize(data.value)}
-              </h2>
-              <p className="mt-1 text-[var(--botw-pale)]">
-                Total: {data.total} character{data.total !== 1 ? "s" : ""}
-              </p>
-            </div>
-
-            {/* Character Names */}
-            <div>
-              <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
-                Character Names
-              </h3>
-              <div className="flex flex-wrap gap-2 sm:gap-2">
-                {data.characterNames.map((char, idx) => {
-                  const villageColor = getVillageColor(char.homeVillage);
-                  return (
-                    <Link
-                      key={idx}
-                      href={`/characters/${char.slug}`}
-                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border px-3 py-2 text-sm transition-colors hover:opacity-80 active:opacity-90 sm:py-1"
-                      style={{
-                        borderColor: `${villageColor}40`,
-                        backgroundColor: `${villageColor}15`,
-                        color: villageColor,
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {char.name}
-                    </Link>
-                  );
-                })}
+          data.kind === "inventoryCharacter" ? (
+            <div className="space-y-6">
+              <div className="border-b border-[var(--totk-dark-ocher)]/30 pb-4">
+                <h2 className="text-2xl font-bold text-[var(--totk-light-ocher)]">
+                  Inventory: {data.characterName ?? data.value}
+                </h2>
+                {data.slug && (
+                  <Link
+                    href={`/characters/${data.slug}`}
+                    className="mt-2 inline-block text-sm text-[var(--totk-light-green)] underline hover:opacity-80"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    View character page
+                  </Link>
+                )}
+                <p className="mt-1 text-[var(--botw-pale)]">
+                  Total items: {data.totalItems.toLocaleString()} · Unique: {data.uniqueItems.toLocaleString()}
+                </p>
               </div>
             </div>
-
-            {/* Breakdown Sections */}
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* By Home Village */}
+          ) : data.kind === "inventoryItem" ? (
+            <div className="space-y-6">
+              <div className="border-b border-[var(--totk-dark-ocher)]/30 pb-4">
+                <h2 className="text-2xl font-bold text-[var(--totk-light-ocher)]">Item: {capitalize(data.itemName)}</h2>
+                <p className="mt-1 text-[var(--botw-pale)]">
+                  Owned by {data.total} character{data.total !== 1 ? "s" : ""}
+                </p>
+              </div>
               <div>
-                <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
-                  By Home Village
-                </h3>
-                <div className="space-y-2">
-                  {data.breakdown.byHomeVillage.map((item, idx) => (
-                    <div
+                <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">Characters</h3>
+                <div className="flex flex-wrap gap-2 sm:gap-2">
+                  {data.characters.map((c, idx) => (
+                    <Link
                       key={idx}
-                      className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
+                      href={`/characters/${c.slug}`}
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--totk-grey-400)]/20 px-3 py-2 text-sm text-[var(--botw-pale)] transition-colors hover:opacity-80 active:opacity-90 sm:py-1"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <span className="text-[var(--botw-pale)]">{capitalize(item.village)}</span>
-                      <span className="font-semibold text-[var(--totk-light-green)]">
-                        {item.count}
-                      </span>
-                    </div>
+                      {c.characterName}
+                    </Link>
                   ))}
                 </div>
               </div>
-
-              {/* By Job (if race breakdown) */}
-              {data.breakdown.byJob && (
-                <div>
-                  <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
-                    By Job
-                  </h3>
-                  <div className="space-y-2">
-                    {data.breakdown.byJob.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
-                      >
-                        <span className="text-[var(--botw-pale)]">{capitalize(item.job)}</span>
-                        <span className="font-semibold text-[var(--totk-light-green)]">
-                          {item.count}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* By Race (if job breakdown) */}
-              {data.breakdown.byRace && (
-                <div>
-                  <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
-                    By Race
-                  </h3>
-                  <div className="space-y-2">
-                    {data.breakdown.byRace.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
-                      >
-                        <span className="text-[var(--botw-pale)]">{capitalize(item.race)}</span>
-                        <span className="font-semibold text-[var(--totk-light-green)]">
-                          {item.count}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
+          ) : data.kind === "pets" ? (
+            <div className="space-y-6">
+              <div className="border-b border-[var(--totk-dark-ocher)]/30 pb-4">
+                <h2 className="text-2xl font-bold text-[var(--totk-light-ocher)]">
+                  {data.type === "petSpecies" ? "Species" : "Type"}: {capitalize(data.value.replace(/_/g, " "))}
+                </h2>
+                <p className="mt-1 text-[var(--botw-pale)]">
+                  Total: {data.total} pet{data.total !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div>
+                <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">Pets</h3>
+                <div className="flex flex-wrap gap-2 sm:gap-2">
+                  {data.pets.map((pet, idx) => (
+                    <Link
+                      key={idx}
+                      href={`/characters/${pet.ownerSlug}`}
+                      className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--totk-grey-400)]/20 px-3 py-2 text-sm text-[var(--botw-pale)] transition-colors hover:opacity-80 active:opacity-90 sm:py-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {pet.name} <span className="text-[var(--totk-grey-200)]">({pet.ownerName})</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="border-b border-[var(--totk-dark-ocher)]/30 pb-4">
+                <h2 className="text-2xl font-bold text-[var(--totk-light-ocher)]">
+                  {capitalize(data.type)}: {capitalize(data.value)}
+                </h2>
+                <p className="mt-1 text-[var(--botw-pale)]">
+                  Total: {data.total} character{data.total !== 1 ? "s" : ""}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
+                  Character Names
+                </h3>
+                <div className="flex flex-wrap gap-2 sm:gap-2">
+                  {data.characterNames.map((char, idx) => {
+                    const villageColor = getVillageColor(char.homeVillage);
+                    return (
+                      <Link
+                        key={idx}
+                        href={`/characters/${char.slug}`}
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border px-3 py-2 text-sm transition-colors hover:opacity-80 active:opacity-90 sm:py-1"
+                        style={{
+                          borderColor: `${villageColor}40`,
+                          backgroundColor: `${villageColor}15`,
+                          color: villageColor,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {char.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
+                    By Home Village
+                  </h3>
+                  <div className="space-y-2">
+                    {data.breakdown.byHomeVillage.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
+                      >
+                        <span className="text-[var(--botw-pale)]">{capitalize(item.village)}</span>
+                        <span className="font-semibold text-[var(--totk-light-green)]">
+                          {item.count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {data.breakdown.byJob && (
+                  <div>
+                    <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
+                      By Job
+                    </h3>
+                    <div className="space-y-2">
+                      {data.breakdown.byJob.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
+                        >
+                          <span className="text-[var(--botw-pale)]">{capitalize(item.job)}</span>
+                          <span className="font-semibold text-[var(--totk-light-green)]">
+                            {item.count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {data.breakdown.byRace && (
+                  <div>
+                    <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
+                      By Race
+                    </h3>
+                    <div className="space-y-2">
+                      {data.breakdown.byRace.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
+                        >
+                          <span className="text-[var(--botw-pale)]">{capitalize(item.race)}</span>
+                          <span className="font-semibold text-[var(--totk-light-green)]">
+                            {item.count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
         ) : null}
       </div>
     </div>

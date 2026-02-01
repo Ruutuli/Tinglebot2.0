@@ -58,6 +58,19 @@ export async function GET() {
       },
     };
 
+    // Normalize village for consistent grouping (same logic as frontend)
+    const normalizeVillage = (v: string) => {
+      if (!v) return "Unknown";
+      const n = String(v).toLowerCase().trim();
+      if (n === "rudania" || n.startsWith("rudania")) return "Rudania";
+      if (n === "inariko" || n.startsWith("inariko")) return "Inariko";
+      if (n === "vhintl" || n.startsWith("vhintl")) return "Vhintl";
+      if (n.includes("rudania")) return "Rudania";
+      if (n.includes("inariko")) return "Inariko";
+      if (n.includes("vhintl")) return "Vhintl";
+      return String(v).charAt(0).toUpperCase() + String(v).slice(1).toLowerCase();
+    };
+
     // Character aggregations
     const [
       characterTotal,
@@ -65,8 +78,10 @@ export async function GET() {
       characterByCurrentVillage,
       characterByJob,
       characterByRace,
+      characterByRaceAndVillage,
       characterStatusCounts,
       characterAverages,
+      characterBirthdays,
     ] = await Promise.all([
       Character.countDocuments(characterFilter),
       Character.aggregate([
@@ -88,6 +103,11 @@ export async function GET() {
         { $match: characterFilter },
         { $group: { _id: "$race", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
+      ]),
+      Character.aggregate([
+        { $match: characterFilter },
+        { $group: { _id: { race: "$race", homeVillage: "$homeVillage" }, count: { $sum: 1 } } },
+        { $sort: { "_id.race": 1, count: -1 } },
       ]),
       Character.aggregate([
         { $match: characterFilter },
@@ -115,6 +135,10 @@ export async function GET() {
           },
         },
       ]),
+      Character.find(characterFilter)
+        .select("birthday")
+        .lean()
+        .then((docs: unknown[]) => docs.map((d) => (d as { birthday?: string }).birthday)),
     ]);
 
     // ------------------- Weather Statistics -------------------
@@ -441,11 +465,11 @@ export async function GET() {
 
     // ------------------- Inventory Statistics -------------------
     let topCharactersByItems: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }> = [];
-    let topItemsByCharacterCount: Array<{ itemName: string; characterCount: number }> = [];
+    let topItemsByTotalQuantity: Array<{ itemName: string; totalQuantity: number }> = [];
     try {
       const acceptedCharacters = await Character.find(characterFilter).select("name publicSlug").lean();
       const db = await getInventoriesDb();
-      const itemToCharCount = new Map<string, number>();
+      const itemToTotalQuantity = new Map<string, number>();
       const characterStats: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }> = [];
       for (const char of acceptedCharacters) {
         const name = char.name as string;
@@ -454,10 +478,11 @@ export async function GET() {
           const collection = db.collection(name.toLowerCase());
           const items = await collection.find({ quantity: { $gt: 0 } }).toArray() as Array<{ quantity?: number; itemName?: string }>;
           const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-          const uniqueNames = new Set(items.map((item) => item.itemName).filter(Boolean));
-          characterStats.push({ characterName: name, slug, totalItems, uniqueItems: uniqueNames.size });
-          for (const itemName of uniqueNames) {
-            if (itemName) itemToCharCount.set(itemName, (itemToCharCount.get(itemName) || 0) + 1);
+          characterStats.push({ characterName: name, slug, totalItems, uniqueItems: new Set(items.map((item) => item.itemName).filter(Boolean)).size });
+          for (const item of items) {
+            const itemName = item.itemName;
+            const qty = item.quantity || 0;
+            if (itemName) itemToTotalQuantity.set(itemName, (itemToTotalQuantity.get(itemName) || 0) + qty);
           }
         } catch {
           characterStats.push({ characterName: name, slug, totalItems: 0, uniqueItems: 0 });
@@ -467,9 +492,9 @@ export async function GET() {
         .filter((c) => c.totalItems > 0)
         .sort((a, b) => b.totalItems - a.totalItems)
         .slice(0, 15);
-      topItemsByCharacterCount = Array.from(itemToCharCount.entries())
-        .map(([itemName, characterCount]) => ({ itemName, characterCount }))
-        .sort((a, b) => b.characterCount - a.characterCount)
+      topItemsByTotalQuantity = Array.from(itemToTotalQuantity.entries())
+        .map(([itemName, totalQuantity]) => ({ itemName, totalQuantity }))
+        .sort((a, b) => b.totalQuantity - a.totalQuantity)
         .slice(0, 20);
     } catch (invErr) {
       logger.error("api/stats", invErr instanceof Error ? invErr.message : String(invErr));
@@ -495,6 +520,53 @@ export async function GET() {
           race: item._id || "Unknown",
           count: item.count,
         })),
+        byRaceByVillage: characterByRaceAndVillage.map((item) => ({
+          race: item._id?.race || "Unknown",
+          village: normalizeVillage(String(item._id?.homeVillage ?? "Unknown")),
+          count: item.count,
+        })),
+        birthdayByMonth: (() => {
+          const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          const parseMonth = (s: string | undefined): number | null => {
+            if (!s || typeof s !== "string") return null;
+            const t = s.trim();
+            if (!t) return null;
+            for (let i = 0; i < monthNames.length; i++) if (t.toLowerCase().startsWith(monthNames[i].toLowerCase().slice(0, 3))) return i + 1;
+            const slash = t.split("/");
+            if (slash.length >= 2) { const m = parseInt(slash[0], 10); if (m >= 1 && m <= 12) return m; const m2 = parseInt(slash[1], 10); if (m2 >= 1 && m2 <= 12) return m2; }
+            const dash = t.split("-");
+            if (dash.length >= 2) { const m = parseInt(dash[1], 10); if (m >= 1 && m <= 12) return m; const m0 = parseInt(dash[0], 10); if (m0 >= 1 && m0 <= 12) return m0; }
+            return null;
+          };
+          const byMonth: Record<number, number> = {};
+          for (let i = 1; i <= 12; i++) byMonth[i] = 0;
+          characterBirthdays.forEach((b) => {
+            const m = parseMonth(b);
+            if (m != null) byMonth[m]++;
+          });
+          return Object.entries(byMonth).map(([month, count]) => ({ month: parseInt(month, 10), monthName: monthNames[parseInt(month, 10) - 1], count }));
+        })(),
+        birthdayBySeason: (() => {
+          const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          const parseMonth = (s: string | undefined): number | null => {
+            if (!s || typeof s !== "string") return null;
+            const t = s.trim();
+            if (!t) return null;
+            for (let i = 0; i < monthNames.length; i++) if (t.toLowerCase().startsWith(monthNames[i].toLowerCase().slice(0, 3))) return i + 1;
+            const slash = t.split("/");
+            if (slash.length >= 2) { const m = parseInt(slash[0], 10); if (m >= 1 && m <= 12) return m; const m2 = parseInt(slash[1], 10); if (m2 >= 1 && m2 <= 12) return m2; }
+            const dash = t.split("-");
+            if (dash.length >= 2) { const m = parseInt(dash[1], 10); if (m >= 1 && m <= 12) return m; const m0 = parseInt(dash[0], 10); if (m0 >= 1 && m0 <= 12) return m0; }
+            return null;
+          };
+          const seasonByMonth: Record<number, string> = { 1: "Winter", 2: "Winter", 3: "Spring", 4: "Spring", 5: "Spring", 6: "Summer", 7: "Summer", 8: "Summer", 9: "Fall", 10: "Fall", 11: "Fall", 12: "Winter" };
+          const bySeason: Record<string, number> = { Winter: 0, Spring: 0, Summer: 0, Fall: 0 };
+          characterBirthdays.forEach((b) => {
+            const m = parseMonth(b);
+            if (m != null && seasonByMonth[m]) bySeason[seasonByMonth[m]]++;
+          });
+          return ["Winter", "Spring", "Summer", "Fall"].map((season) => ({ season, count: bySeason[season] ?? 0 }));
+        })(),
         statusCounts: {
           blighted: characterStatusCounts[0]?.blighted || 0,
           ko: characterStatusCounts[0]?.ko || 0,
@@ -594,7 +666,7 @@ export async function GET() {
       },
       relationships: {
         total: relationshipTotal,
-        byType: relationshipByType.map((item) => ({ type: item._id || "Unknown", count: item.count })),
+        byType: relationshipByType.map((item: { _id: string; count: number }) => ({ type: item._id || "Unknown", count: item.count })),
       },
       raids: {
         total: raidTotal,
@@ -617,7 +689,7 @@ export async function GET() {
       },
       inventory: {
         topCharactersByItems,
-        topItemsByCharacterCount,
+        topItemsByTotalQuantity,
       },
     };
 

@@ -98,5 +98,4 @@ minigameSchema.statics.cleanupOldSessions = async function() {
 // ============================================================================
 // ------------------- Export the Minigame model -------------------
 // ============================================================================
-const Minigame = mongoose.model('Minigame', minigameSchema);
-module.exports = Minigame;
+module.exports = mongoose.models.Minigame || mongoose.model('Minigame', minigameSchema);

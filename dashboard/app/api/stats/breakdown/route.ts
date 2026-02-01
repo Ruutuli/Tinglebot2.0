@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, getInventoriesDb } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
 export const dynamic = "force-dynamic";
@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type"); // "race" or "job"
-    const value = searchParams.get("value"); // the race or job name
+    const type = searchParams.get("type");
+    const value = searchParams.get("value");
 
     if (!type || !value) {
       return NextResponse.json(
@@ -17,26 +17,13 @@ export async function GET(request: Request) {
       );
     }
 
-    if (type !== "race" && type !== "job") {
+    const allowedTypes = ["race", "job", "homeVillage", "petSpecies", "petType", "inventoryCharacter", "inventoryItem"];
+    if (!allowedTypes.includes(type)) {
       return NextResponse.json(
-        { error: "Type must be 'race' or 'job'" },
+        { error: `Type must be one of: ${allowedTypes.join(", ")}` },
         { status: 400 }
       );
     }
-
-    await connect();
-    const CharacterModule = await import("@/models/CharacterModel.js");
-    const Character = CharacterModule.default || CharacterModule;
-
-    logger.info("api/stats/breakdown", `Request: type=${type}, value="${value}"`);
-
-    // Use case-insensitive regex match to handle variations in capitalization
-    const characterFilter: Record<string, unknown> = { 
-      status: "accepted",
-      [type]: { $regex: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }
-    };
-
-    logger.info("api/stats/breakdown", `Filter: ${JSON.stringify(characterFilter)}`);
 
     // Helper function to create slug from name
     const createSlug = (name: string): string => {
@@ -53,15 +40,12 @@ export async function GET(request: Request) {
     const normalizeVillageName = (village: string): string => {
       if (!village) return "Unknown";
       const normalized = village.toLowerCase().trim();
-      // Handle any case variation
       if (normalized === "rudania" || normalized.startsWith("rudania")) return "Rudania";
       if (normalized === "inariko" || normalized.startsWith("inariko")) return "Inariko";
       if (normalized === "vhintl" || normalized.startsWith("vhintl")) return "Vhintl";
-      // Fallback: try to match partial strings
       if (normalized.includes("rudania")) return "Rudania";
       if (normalized.includes("inariko")) return "Inariko";
       if (normalized.includes("vhintl")) return "Vhintl";
-      // Capitalize first letter of each word
       return village
         .split(" ")
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -78,42 +62,144 @@ export async function GET(request: Request) {
         .trim();
     };
 
-    // Get all characters matching the filter
+    await connect();
+
+    // --- Pet breakdown (petSpecies / petType) ---
+    if (type === "petSpecies" || type === "petType") {
+      const PetModule = await import("@/models/PetModel.js");
+      const Pet = PetModule.default || PetModule;
+      const field = type === "petSpecies" ? "species" : "petType";
+      const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pets = await Pet.find({ [field]: { $regex: new RegExp(`^${escaped}$`, "i") } })
+        .select("name species petType level ownerName owner")
+        .lean();
+
+      const petsWithSlug = pets.map((p: unknown) => {
+        const pet = p as Record<string, unknown>;
+        const ownerName = (pet.ownerName as string) || "Unknown";
+        return {
+          name: (pet.name as string) ?? "Unknown",
+          species: (pet.species as string) ?? "Unknown",
+          petType: (pet.petType as string) ?? "Unknown",
+          level: Number(pet.level) ?? 0,
+          ownerName,
+          ownerSlug: createSlug(ownerName),
+        };
+      });
+
+      return NextResponse.json({
+        kind: "pets",
+        type,
+        value,
+        total: petsWithSlug.length,
+        pets: petsWithSlug,
+      });
+    }
+
+    // --- Inventory breakdown (inventoryCharacter / inventoryItem) ---
+    if (type === "inventoryCharacter" || type === "inventoryItem") {
+      await connect();
+      const CharacterModule = await import("@/models/CharacterModel.js");
+      const Character = CharacterModule.default || CharacterModule;
+      const db = await getInventoriesDb();
+
+      if (type === "inventoryCharacter") {
+        const slug = value.trim();
+        const charDoc = await Character.findOne({ status: "accepted" })
+          .or([{ publicSlug: new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }, { name: slug }])
+          .select("name publicSlug")
+          .lean();
+        const char = charDoc as { name?: string; publicSlug?: string } | null;
+        if (!char) {
+          return NextResponse.json({ kind: "inventoryCharacter", type, value, characterName: null, slug: null, totalItems: 0, uniqueItems: 0 });
+        }
+        const name = char.name || "";
+        const publicSlug = char.publicSlug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
+        let totalItems = 0;
+        let uniqueItems = 0;
+        try {
+          const collection = db.collection(name.toLowerCase());
+          const items = (await collection.find({ quantity: { $gt: 0 } }).toArray()) as Array<{ quantity?: number; itemName?: string }>;
+          totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+          uniqueItems = new Set(items.map((item) => item.itemName).filter(Boolean)).size;
+        } catch {
+          // collection may not exist
+        }
+        return NextResponse.json({
+          kind: "inventoryCharacter",
+          type,
+          value,
+          characterName: name,
+          slug: publicSlug,
+          totalItems,
+          uniqueItems,
+        });
+      }
+
+      // inventoryItem: find characters who have this item
+      const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const itemRegex = new RegExp(`^${escaped}$`, "i");
+      const acceptedCharacters = await Character.find({ status: "accepted" }).select("name publicSlug").lean();
+      const charactersWithItem: Array<{ characterName: string; slug: string }> = [];
+      for (const char of acceptedCharacters) {
+        const name = (char.name as string) || "";
+        const slug = (char.publicSlug as string) || name.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
+        try {
+          const collection = db.collection(name.toLowerCase());
+          const hasItem = await collection.findOne({ itemName: { $regex: itemRegex }, quantity: { $gt: 0 } });
+          if (hasItem) charactersWithItem.push({ characterName: name, slug });
+        } catch {
+          // skip
+        }
+      }
+      return NextResponse.json({
+        kind: "inventoryItem",
+        type,
+        value,
+        itemName: value,
+        total: charactersWithItem.length,
+        characters: charactersWithItem.sort((a, b) => a.characterName.localeCompare(b.characterName)),
+      });
+    }
+
+    // --- Character breakdown (job / race / homeVillage) ---
+    const CharacterModule = await import("@/models/CharacterModel.js");
+    const Character = CharacterModule.default || CharacterModule;
+
+    logger.info("api/stats/breakdown", `Request: type=${type}, value="${value}"`);
+
+    const characterFilter: Record<string, unknown> = {
+      status: "accepted",
+    };
+    if (type === "homeVillage") {
+      const valueLower = value.trim().toLowerCase();
+      const allVillages = await Character.distinct("homeVillage", { status: "accepted" });
+      const matchingVillages = allVillages.filter(
+        (v) => v && normalizeVillageName(String(v)).toLowerCase() === valueLower
+      );
+      characterFilter.homeVillage =
+        matchingVillages.length > 0
+          ? { $in: matchingVillages }
+          : { $regex: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") };
+    } else {
+      characterFilter[type] = { $regex: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") };
+    }
+
+    logger.info("api/stats/breakdown", `Filter: ${JSON.stringify(characterFilter)}`);
+
     const characters = await Character.find(characterFilter)
       .select("_id name homeVillage currentVillage job race")
       .lean();
 
     logger.info("api/stats/breakdown", `Found ${characters.length} characters matching filter`);
 
-    // Log sample of actual values in database for debugging
-    if (characters.length > 0) {
-      const sampleValues = characters.slice(0, 5).map((char) => {
-        const charObj = char as Record<string, unknown>;
-        return {
-          name: char.name,
-          [type]: charObj[type],
-        };
-      });
-      logger.info("api/stats/breakdown", `Sample characters: ${JSON.stringify(sampleValues)}`);
-    }
-
-    // Check all unique values for this type to see what's actually in the DB (for debugging)
-    const allValues = await Character.distinct(type, { status: "accepted" });
-    const matchingValues = allValues.filter((v) => 
-      typeof v === "string" && v.toLowerCase() === value.toLowerCase()
-    );
-    logger.info("api/stats/breakdown", `All ${type} values matching "${value}" (case-insensitive): ${JSON.stringify(matchingValues)}`);
-    logger.info("api/stats/breakdown", `Total unique ${type} values in DB: ${allValues.length}`);
-
-    // Breakdown by home village (with normalization)
     const byHomeVillage = characters.reduce((acc, char) => {
       const village = normalizeVillageName(char.homeVillage || "Unknown");
       acc[village] = (acc[village] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    // Breakdown by job (if filtering by race) - with normalization
-    const byJob = type === "race" 
+    const byJob = type === "race"
       ? characters.reduce((acc, char) => {
           const job = normalizeName(char.job || "Unknown");
           acc[job] = (acc[job] || 0) + 1;
@@ -121,7 +207,6 @@ export async function GET(request: Request) {
         }, {} as Record<string, number>)
       : {};
 
-    // Breakdown by race (if filtering by job) - with normalization
     const byRace = type === "job"
       ? characters.reduce((acc, char) => {
           const race = normalizeName(char.race || "Unknown");
@@ -130,7 +215,6 @@ export async function GET(request: Request) {
         }, {} as Record<string, number>)
       : {};
 
-    // Character names with IDs, slugs, and home village
     const characterNames = characters
       .map((char) => ({
         name: char.name || "Unknown",
@@ -141,6 +225,7 @@ export async function GET(request: Request) {
       .sort((a, b) => a.name.localeCompare(b.name));
 
     const response = {
+      kind: "characters",
       type,
       value,
       total: characters.length,

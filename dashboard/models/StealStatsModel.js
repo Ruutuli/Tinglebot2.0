@@ -52,4 +52,4 @@ const stealStatsSchema = new mongoose.Schema({
     timestamps: true
 });
 
-module.exports = mongoose.model('StealStats', stealStatsSchema); 
+module.exports = mongoose.models.StealStats || mongoose.model('StealStats', stealStatsSchema); 
