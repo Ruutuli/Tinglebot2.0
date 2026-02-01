@@ -100,12 +100,11 @@ function formatProgress(current, max) {
 }
 
 // ------------------- Function: getTokensPerHP -------------------
-// Calculates the token cost per HP for village repair based on village level
-// Level 1: 100 tokens = 1 HP (10,000 tokens for 100 HP)
-// Level 2: 100 tokens = 1 HP (20,000 tokens for 200 HP)
-// Level 3: 100 tokens = 1 HP (30,000 tokens for 300 HP)
+// Token cost per 1 HP for village repair by level
+// Level 1: 100 tokens/HP | Level 2: 150 tokens/HP | Level 3: 166 tokens/HP
 function getTokensPerHP(villageLevel) {
-    return 100; // Flat rate: 100 tokens per HP for all levels
+    const tokensPerHP = { 1: 100, 2: 150, 3: 166 };
+    return tokensPerHP[villageLevel] ?? 100;
 }
 
 // ------------------- Function: processContribution -------------------
@@ -323,16 +322,17 @@ async function processImprove(village, interaction, type, itemName, qty, charact
         // If village is damaged and tokens are being donated, apply to repair first
         if (isDamaged && type === 'Tokens') {
             const hpNeeded = maxHealth - village.health;
-            // Calculate token cost per HP: scales with village level
             const tokensPerHP = getTokensPerHP(village.level);
-            const maxTokensNeeded = hpNeeded * tokensPerHP;
 
-            // Cap qty at 5% of repair tokens needed per donation
-            const maxPerDonation = Math.max(1, Math.ceil(maxTokensNeeded * DONATION_TOKEN_PERCENT));
+            // Cap qty at 5% of upgrade requirement only (never limit by HP/repair cost)
+            const requiredTokensForCap = village.level < 3
+                ? (DEFAULT_TOKEN_REQUIREMENTS[village.level + 1] ?? 0)
+                : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);
+            const maxPerDonation = Math.max(1, Math.ceil(requiredTokensForCap * DONATION_TOKEN_PERCENT));
             if (qty > maxPerDonation) {
-                return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of repair cost).**` };
+                return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**` };
             }
-            
+
             // Calculate how much HP can be restored
             // HP_restored = tokens_contributed / (village_level × 50)
             const hpRestored = Math.floor(qty / tokensPerHP);
@@ -559,14 +559,21 @@ async function processRepair(village, interaction, qty, characterName) {
         
         // Calculate HP needed
         const hpNeeded = maxHealth - village.health;
-        
+
         if (hpNeeded <= 0) {
             return { success: false, message: '❌ **This village is already at full health.**' };
         }
 
-        // Calculate token cost per HP: scales with village level
+        // Cap qty at 5% of upgrade requirement only (never limit by HP/repair cost)
+        const requiredTokensForCap = village.level < 3
+            ? (DEFAULT_TOKEN_REQUIREMENTS[village.level + 1] ?? 0)
+            : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);
+        const maxPerDonation = Math.max(1, Math.ceil(requiredTokensForCap * DONATION_TOKEN_PERCENT));
+        if (qty > maxPerDonation) {
+            return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**` };
+        }
+
         const tokensPerHP = getTokensPerHP(village.level);
-        const maxTokensNeeded = hpNeeded * tokensPerHP;
 
         // Calculate HP that can be restored with the tokens provided
         // HP_restored = tokens_contributed / (village_level × 50)

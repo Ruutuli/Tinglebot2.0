@@ -3893,24 +3893,11 @@ async function handleVillageTypeAutocomplete(interaction, focusedOption) {
       const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
       if (village) {
         const DONATION_TOKEN_PERCENT = 0.05;
-        let limit = 0;
-        const maxHealth = village.levelHealth instanceof Map
-          ? village.levelHealth.get(village.level.toString())
-          : village.levelHealth[village.level.toString()] || 100;
-        const isDamaged = village.health < maxHealth;
-
-        if (isDamaged) {
-          const hpNeeded = maxHealth - village.health;
-          const tokensPerHP = 100;
-          const maxTokensNeeded = hpNeeded * tokensPerHP;
-          limit = Math.max(1, Math.ceil(maxTokensNeeded * DONATION_TOKEN_PERCENT));
-        } else {
-          const nextLevel = village.level + 1;
-          // Use VillageModel defaults as source of truth (10000 for L2, 50000 for L3)
-          const requiredTokens = DEFAULT_TOKEN_REQUIREMENTS[nextLevel] ?? 0;
-          // Show 5% of required (the donation cap rule)
-          limit = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
-        }
+        // Limit is always 5% of upgrade requirement (never based on HP/repair)
+        const requiredTokens = village.level < 3
+          ? (DEFAULT_TOKEN_REQUIREMENTS[village.level + 1] ?? 0)
+          : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);
+        const limit = Math.max(1, Math.ceil(requiredTokens * DONATION_TOKEN_PERCENT));
         choices.push({ name: `Tokens | Limit: ${limit}`, value: 'Tokens' });
       } else {
         choices.push({ name: 'Tokens', value: 'Tokens' });
