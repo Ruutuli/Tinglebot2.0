@@ -1584,10 +1584,9 @@ module.exports = {
                 }
 
                 // Check cooldown (resets every Sunday at midnight EST)
-                // Cooldown is per-user per-village (1 donation per week per village, regardless of item type)
-                // Use UserModel's villageDonations field for atomic cooldown tracking
+                // Cooldown is per-user globally (1 donation per week total across all villages)
+                // Use UserModel's villageDonationCooldown field for atomic cooldown tracking
                 const currentWeekStart = getCurrentDonationWeekStart();
-                const villageKey = villageName.toLowerCase(); // Use lowercase village name as key
                 
                 if (COOLDOWN_ENABLED) {
                     // Use atomic findOneAndUpdate to check and set cooldown in one operation
@@ -1596,12 +1595,13 @@ module.exports = {
                         { 
                             discordId: interaction.user.id,
                             $or: [
-                                { [`villageDonations.${villageKey}`]: { $exists: false } },
-                                { [`villageDonations.${villageKey}`]: { $ne: currentWeekStart } }
+                                { villageDonationCooldown: { $exists: false } },
+                                { villageDonationCooldown: null },
+                                { villageDonationCooldown: { $ne: currentWeekStart } }
                             ]
                         },
                         { 
-                            $set: { [`villageDonations.${villageKey}`]: currentWeekStart }
+                            $set: { villageDonationCooldown: currentWeekStart }
                         },
                         { new: true }
                     );
@@ -1610,7 +1610,7 @@ module.exports = {
                     if (!userUpdateResult) {
                         // Check what the current cooldown is to provide accurate message
                         const user = await UserModel.findOne({ discordId: interaction.user.id });
-                        const storedCooldown = user?.villageDonations?.get?.(villageKey);
+                        const storedCooldown = user?.villageDonationCooldown;
                         
                         const nextReset = getNextDonationReset();
                         let hoursUntilReset = 0;
@@ -1623,11 +1623,11 @@ module.exports = {
                             const remainingHours = hoursUntilReset % 24;
                             
                             if (daysUntilReset > 0) {
-                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets:** ${daysUntilReset} day(s) and ${remainingHours} hour(s)\n` +
                                     `📅 **Reset time:** Sunday at midnight EST`;
                             } else {
-                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets in:** ${hoursUntilReset} hour(s)\n` +
                                     `📅 **Reset time:** Sunday at midnight EST`;
                             }
@@ -1650,11 +1650,11 @@ module.exports = {
                             const remainingHours = hoursUntilReset % 24;
                             
                             if (daysUntilReset > 0) {
-                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets:** ${daysUntilReset} day(s) and ${remainingHours} hour(s)\n` +
                                     `📅 **Reset time:** Sunday at midnight EST`;
                             } else {
-                                cooldownDescription = `⏳ **You've already contributed to ${village.name} this week.**\n\n` +
+                                cooldownDescription = `⏳ **You've already contributed to a village this week.**\n\n` +
                                     `🔄 **Cooldown resets in:** ${hoursUntilReset} hour(s)\n` +
                                     `📅 **Reset time:** Sunday at midnight EST`;
                             }
@@ -1664,7 +1664,7 @@ module.exports = {
                             .setTitle(`${village.name} (Level ${village.level})`)
                             .setDescription(cooldownDescription)
                             .addFields(
-                                { name: '💡 **Tip**', value: `> You can donate once per week per village.\n> Use </village view:1324300899585363968> to check the current status.`, inline: false }
+                                { name: '💡 **Tip**', value: `> You can donate once per week total (across all villages).\n> Use </village view:1324300899585363968> to check the current status.`, inline: false }
                             )
                             .setColor(village.color)
                             .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
@@ -1681,7 +1681,7 @@ module.exports = {
                     if (COOLDOWN_ENABLED) {
                         await UserModel.findOneAndUpdate(
                             { discordId: interaction.user.id },
-                            { $unset: { [`villageDonations.${villageKey}`]: "" } }
+                            { $set: { villageDonationCooldown: null } }
                         );
                     }
                     if (result.embed) {

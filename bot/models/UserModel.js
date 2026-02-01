@@ -135,10 +135,9 @@ const userSchema = new mongoose.Schema({
   },
 
   // ------------------- Village Donation Cooldown System -------------------
-  villageDonations: {
-    type: Map,
-    of: Number, // Stores week start timestamp (Sunday midnight EST) per village
-    default: {}
+  villageDonationCooldown: {
+    type: Number,
+    default: null // Stores week start timestamp (Sunday midnight EST) - applies to all villages (one donation per week total)
   }
 });
 
