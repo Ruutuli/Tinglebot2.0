@@ -417,32 +417,32 @@ async function damageVillage(villageName, damageAmount) {
                         
                         // Format health with progress bar (showing "After" state)
                         const healthBar = createProgressBar(healthAfter, currentMaxHealth);
-                        const healthValue = `**Before:** \`${healthBefore.toLocaleString()}/${maxHealth.toLocaleString()}\`\n> ${healthBar} **After:** \`${healthAfter.toLocaleString()}/${currentMaxHealth.toLocaleString()}\`\n**Lost:** \`${actualHPLost.toLocaleString()} HP\``;
+                        const healthValue = `> **Before:** \`${healthBefore.toLocaleString()}/${maxHealth.toLocaleString()}\`\n> ${healthBar} **After:** \`${healthAfter.toLocaleString()}/${currentMaxHealth.toLocaleString()}\`\n> **Lost:** \`${actualHPLost.toLocaleString()} HP\``;
                         
                         // Format tokens with progress bar (assuming a reasonable max for display)
                         // Using a max based on level or a default large value for display purposes
                         const tokenMax = Math.max(currentTokens, 50000); // Use current tokens as min, or 50k if higher
                         const tokenBar = createProgressBar(currentTokens, tokenMax);
-                        const tokenValue = `> ${tokenBar} **${currentTokens.toLocaleString()}**\n**Lost:** \`${tokensLost.toLocaleString()}\``;
+                        const tokenValue = `> ${tokenBar} **${currentTokens.toLocaleString()}**\n> **Lost:** \`${tokensLost.toLocaleString()}\``;
                         
                         // Build embed
                         const damageEmbed = new EmbedBuilder()
                             .setTitle(`${villageEmoji} ⚠️ Village Damage Report`)
-                            .setDescription(`**${village.name}** has taken damage!\n\n⚠️ **THIS IS CURRENTLY TESTING PURPOSES. PLEASE IGNORE THIS FOR THE TIME BEING.**`)
+                            .setDescription(`**${village.name}** has taken damage!\n\n[View Villages Dashboard](https://tinglebot.xyz/models/villages)`)
                             .setColor(embedColor)
                             .addFields(
                                 {
-                                    name: '❤️ Health',
+                                    name: '__❤️ Health__',
                                     value: healthValue,
                                     inline: true
                                 },
                                 {
-                                    name: '📊 Village Level',
-                                    value: `**Level:** ${village.level}${levelDropped ? ' ⬇️ (Decreased!)' : ''}`,
+                                    name: '__📊 Village Level__',
+                                    value: `> **Level:** ${village.level}${levelDropped ? ' ⬇️ (Decreased!)' : ''}`,
                                     inline: true
                                 },
                                 {
-                                    name: '🪙 Tokens',
+                                    name: '__🪙 Tokens__',
                                     value: tokenValue,
                                     inline: true
                                 }
@@ -452,9 +452,11 @@ async function damageVillage(villageName, damageAmount) {
                         
                         // Add materials lost field if any materials were lost
                         if (materialsLost !== 'No materials lost') {
+                            // Wrap each material line in quote blocks
+                            const materialsLostQuoted = materialsLostLines.map(line => `> ${line}`).join('\n');
                             damageEmbed.addFields({
-                                name: '📦 Materials Lost',
-                                value: materialsLost,
+                                name: '__📦 Materials Lost__',
+                                value: materialsLostQuoted,
                                 inline: false
                             });
                         }
