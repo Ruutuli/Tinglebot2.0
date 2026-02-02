@@ -83,8 +83,7 @@ export async function GET() {
       // Check for word boundaries - look for "male" as a whole word or at start
       const hasMale = /\bmale\b/.test(fullText) || firstPart === "male" || fullText.startsWith("male");
       const hasFemale = /\bfemale\b/.test(fullText) || firstPart === "female" || fullText.startsWith("female");
-      const hasDemigirl = /\bdemigirl\b/.test(fullText) || /\bdemi-girl\b/.test(fullText) || /\bdemi girl\b/.test(fullText);
-      const hasDemiboy = /\bdemiboy\b/.test(fullText) || /\bdemi-boy\b/.test(fullText) || /\bdemi boy\b/.test(fullText);
+      const hasDemi = /\bdemi\b/.test(fullText) || /\bdemi-/.test(fullText) || firstPart.startsWith("demi");
       const hasTrans = /\btrans\b/.test(fullText) || /\btransman\b/.test(fullText) || /\btrans man\b/.test(fullText) || /\btransgender\b/.test(fullText);
       const hasNonbinary = /\bnonbinary\b/.test(fullText) || /\bnon-binary\b/.test(fullText) || /\bnon binary\b/.test(fullText) || /\benby\b/.test(fullText) || /\benby\b/.test(fullText);
       const hasGenderfluid = /\bgenderfluid\b/.test(fullText) || /\bgender-fluid\b/.test(fullText) || /\bgender fluid\b/.test(fullText);
@@ -95,25 +94,22 @@ export async function GET() {
       const hasTwoSpirit = /\btwo.spirit\b/.test(fullText) || /\b2spirit\b/.test(fullText) || /\b2-spirit\b/.test(fullText);
       
       // Male variations (check first to avoid conflicts)
-      if (hasMale && !hasFemale && !hasDemigirl) {
+      if (hasMale && !hasFemale && !hasDemi) {
         // Trans men are still Male category
         if (hasTrans && (hasMale || fullText.includes("man"))) {
           return "Male";
-        }
-        // Demiboy goes to Nonbinary
-        if (hasDemiboy) {
-          return "Nonbinary";
         }
         return "Male";
       }
       
       // Female variations
-      if (hasFemale || hasDemigirl) {
+      if (hasFemale && !hasDemi) {
         return "Female";
       }
       
       // Nonbinary variations (check these before default)
-      if (hasNonbinary || hasGenderfluid || hasAgender || hasDemiboy || hasBigender || hasPangender || hasNeutrois || hasTwoSpirit) {
+      // Anything with "demi" is under the nonbinary umbrella
+      if (hasNonbinary || hasGenderfluid || hasAgender || hasDemi || hasBigender || hasPangender || hasNeutrois || hasTwoSpirit) {
         return "Nonbinary";
       }
       
