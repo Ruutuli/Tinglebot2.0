@@ -160,9 +160,9 @@ const weatherWeightModifiers = {
         "Rain": 1.5,
         "Light Rain": 1.4,
         "Heavy Rain": 1.3,
-        "Sunny": 1.2,
+        "Sunny": 1.5,
         "Fog": 1.1,
-        "Cinder Storm": 1.8
+        "Cinder Storm": 2.0
       },
       special: {
         "Blight Rain": 0.1
@@ -170,13 +170,11 @@ const weatherWeightModifiers = {
     },
     Summer: {
       temperature: {
-        "75°F / 24°C - Warm": 0.8,
-        "82°F / 28°C - Hot": 1.4,
-        "89°F / 32°C - Very Hot": 1.8,
+        "72°F / 22°C - Perfect": 0.8,
+        "82°F / 28°C - Warm": 1.4,
+        "89°F / 32°C - Hot": 1.8,
         "97°F / 36°C - Scorching": 2.2,
-        "105°F / 41°C - Blazing": 2.5,
-        "110°F / 43°C - Heat Wave": 2.8,
-        "115°F / 46°C - Infernal": 3.0
+        "100°F / 38°C - Heat Wave": 2.5
       },
       precipitation: {
         "Cinder Storm": 2.5,
@@ -192,7 +190,7 @@ const weatherWeightModifiers = {
       },
       precipitation: {
         "Cinder Storm": 1.8,
-        "Sunny": 1.4,
+        "Sunny": 1.5,
         "Rain": 1.2
       }
     },
@@ -205,6 +203,7 @@ const weatherWeightModifiers = {
       precipitation: {
         "Cinder Storm": 1.4,
         "Fog": 1.5,
+        "Sunny": 1.4,
         "Rain": 1.3
       }
     }
@@ -219,14 +218,15 @@ const weatherWeightModifiers = {
         "44°F / 6°C - Brisk": 0.8
       },
       precipitation: {
-        "Blizzard": 2.0,
-        "Heavy Snow": 1.8,
-        "Snow": 1.6,
-        "Light Snow": 1.4,
-        "Fog": 1.5,
-        "Cloudy": 1.3
+        "Blizzard": 2.8,
+        "Heavy Snow": 2.5,
+        "Snow": 2.2,
+        "Light Snow": 2.0,
+        "Fog": 1.4,
+        "Cloudy": 1.0
       },
       special: {
+        "Avalanche": 1.2,
         "Blight Rain": 0.1
       }
     },
@@ -238,7 +238,7 @@ const weatherWeightModifiers = {
         "72°F / 22°C - Perfect": 0.7
       },
       precipitation: {
-        "Fog": 1.8,
+        "Fog": 2.0,
         "Rain": 1.4,
         "Cloudy": 1.5,
         "Light Rain": 1.3
@@ -256,7 +256,7 @@ const weatherWeightModifiers = {
       precipitation: {
         "Rain": 1.5,
         "Thunderstorm": 1.4,
-        "Fog": 1.6,
+        "Fog": 1.9,
         "Cloudy": 1.3
       },
       special: {
@@ -270,10 +270,10 @@ const weatherWeightModifiers = {
         "52°F / 11°C - Cool": 1.2
       },
       precipitation: {
-        "Fog": 1.8,
-        "Snow": 1.5,
-        "Cloudy": 1.4,
-        "Light Snow": 1.3
+        "Fog": 2.0,
+        "Snow": 2.0,
+        "Cloudy": 1.2,
+        "Light Snow": 1.8
       }
     }
   },
@@ -291,12 +291,13 @@ const weatherWeightModifiers = {
         "Thunderstorm": 1.3,
         "Light Rain": 1.5,
         "Cloudy": 1.4,
+        "Sunny": 0.25,
         "Light Snow": 0.2,
         "Thundersnow": 0.1
       },
       special: {
-        "Blight Rain": 0.1,
-        "Lightning Storm": 1.2
+        "Blight Rain": 0.05,
+        "Lightning Storm": 1.5
       }
     },
     Spring: {
@@ -310,9 +311,11 @@ const weatherWeightModifiers = {
         "Thunderstorm": 1.8,
         "Fog": 1.5,
         "Heavy Rain": 1.4,
-        "Light Rain": 1.3
+        "Light Rain": 1.3,
+        "Sunny": 0.3
       },
       special: {
+        "Blight Rain": 0.05,
         "Muggy": 1.6,
         "Lightning Storm": 1.4
       }
@@ -328,9 +331,11 @@ const weatherWeightModifiers = {
         "Heavy Rain": 1.8,
         "Fog": 1.6,
         "Rain": 1.5,
-        "Light Rain": 1.4
+        "Light Rain": 1.4,
+        "Sunny": 0.3
       },
       special: {
+        "Blight Rain": 0.05,
         "Muggy": 2.2,
         "Lightning Storm": 1.8
       }
@@ -344,9 +349,11 @@ const weatherWeightModifiers = {
         "Fog": 1.8,
         "Rain": 1.6,
         "Thunderstorm": 1.7,
-        "Heavy Rain": 1.4
+        "Heavy Rain": 1.4,
+        "Sunny": 0.35
       },
       special: {
+        "Blight Rain": 0.05,
         "Lightning Storm": 1.5
       }
     }
