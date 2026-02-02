@@ -1510,7 +1510,7 @@ export function CreateForm({
         iconColor: "text-[var(--totk-light-green)]",
         title: "Character Approved - Limited Editing",
         titleColor: "text-[var(--totk-light-green)]",
-        description: "This character has been approved. Only profile fields (height, pronouns, icon, personality, history, extras, gender, virtue, appLink, appArt, birthday) can be edited.",
+        description: "This character has been approved. Only profile fields (age, height, pronouns, icon, personality, history, extras, gender, virtue, appLink, appArt, birthday) can be edited.",
       };
     }
     

@@ -17,6 +17,7 @@ export const ALWAYS_LOCKED_FIELDS = [
 
 // Fields editable in ACCEPTED status
 export const ACCEPTED_EDITABLE_FIELDS = [
+  "age",
   "height",
   "pronouns",
   "icon",
