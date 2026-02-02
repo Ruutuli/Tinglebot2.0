@@ -4030,28 +4030,16 @@ async function handleWaveStart(interaction) {
       return interaction.editReply({ content: `❌ **Invalid difficulty group: ${difficultyGroup}**` });
     }
 
-    // ------------------- Determine Correct Channel -------------------
-    // Map village names to their respective town hall channel IDs
-    const villageChannelMap = {
-      'rudania': process.env.RUDANIA_TOWNHALL,
-      'inariko': process.env.INARIKO_TOWNHALL,
-      'vhintl': process.env.VHINTL_TOWNHALL
-    };
-    const targetChannelId = villageChannelMap[village.toLowerCase()];
-    
-    if (!targetChannelId) {
-      return interaction.editReply({ content: `❌ **Invalid village: ${capitalizedVillage}**` });
-    }
-
-    // Get the target channel
-    const targetChannel = interaction.client.channels.cache.get(targetChannelId);
+    // ------------------- Use current channel/thread -------------------
+    // Post wave in the channel or thread where the command was used
+    const targetChannel = interaction.channel;
     if (!targetChannel) {
-      return interaction.editReply({ content: `❌ **Could not find town hall channel for ${capitalizedVillage}.**` });
+      return interaction.editReply({ content: `❌ **Could not resolve current channel.**` });
     }
 
     console.log(`[mod.js]: 🌊 Starting wave for ${capitalizedVillage} - ${monsterCount} monsters (${difficultyGroup})`);
-    console.log(`[mod.js]: 📍 Target channel ID: ${targetChannelId}`);
-    console.log(`[mod.js]: 📍 Target channel name: ${targetChannel.name}`);
+    console.log(`[mod.js]: 📍 Target channel/thread ID: ${targetChannel.id}`);
+    console.log(`[mod.js]: 📍 Target channel/thread name: ${targetChannel.name}`);
     
     // Create a modified interaction object that points to the correct channel
     const modifiedInteraction = {
@@ -4116,11 +4104,11 @@ async function handleWaveStart(interaction) {
     waveData.channelId = targetChannel.id;
     await waveData.save();
 
-    console.log(`[mod.js]: ✅ Wave started successfully in ${capitalizedVillage} town hall`);
+    console.log(`[mod.js]: ✅ Wave started successfully in ${targetChannel.id}`);
     
     // Send confirmation message to the mod
     return interaction.editReply({ 
-      content: `✅ **Wave started successfully!** The wave embed has been posted in ${capitalizedVillage} town hall.\n\n**Wave ID:** \`${waveId}\`\n**Monsters:** ${monsterCount}\n**Difficulty:** ${WAVE_DIFFICULTY_GROUPS[difficultyGroup].name}`,
+      content: `✅ **Wave started successfully!** The wave embed has been posted in this channel.\n\n**Wave ID:** \`${waveId}\`\n**Monsters:** ${monsterCount}\n**Difficulty:** ${WAVE_DIFFICULTY_GROUPS[difficultyGroup].name}`,
       ephemeral: true
     });
 
@@ -4484,28 +4472,16 @@ async function handleTriggerRaid(interaction) {
       }
     }
 
-    // ------------------- Determine Correct Channel -------------------
-    // Map village names to their respective town hall channel IDs
-    const villageChannelMap = {
-      'rudania': process.env.RUDANIA_TOWNHALL,
-      'inariko': process.env.INARIKO_TOWNHALL,
-      'vhintl': process.env.VHINTL_TOWNHALL
-    };
-
-    const targetChannelId = villageChannelMap[village.toLowerCase()];
-    if (!targetChannelId) {
-      return interaction.editReply({ content: `❌ **Invalid village: ${capitalizedVillage}**` });
-    }
-
-    // Get the target channel
-    const targetChannel = interaction.client.channels.cache.get(targetChannelId);
+    // ------------------- Use current channel/thread -------------------
+    // Post raid in the channel or thread where the command was used
+    const targetChannel = interaction.channel;
     if (!targetChannel) {
-      return interaction.editReply({ content: `❌ **Could not find channel for ${capitalizedVillage}.**` });
+      return interaction.editReply({ content: `❌ **Could not resolve current channel.**` });
     }
 
     console.log(`[mod.js]: 🎯 Triggering raid for ${monster.name} in ${capitalizedVillage}`);
-    console.log(`[mod.js]: 📍 Target channel ID: ${targetChannelId}`);
-    console.log(`[mod.js]: 📍 Target channel name: ${targetChannel.name}`);
+    console.log(`[mod.js]: 📍 Target channel/thread ID: ${targetChannel.id}`);
+    console.log(`[mod.js]: 📍 Target channel/thread name: ${targetChannel.name}`);
     
     // Create a modified interaction object that points to the correct channel
     const modifiedInteraction = {
@@ -4538,11 +4514,11 @@ async function handleTriggerRaid(interaction) {
       });
     }
 
-    console.log(`[mod.js]: ✅ Raid triggered successfully in ${capitalizedVillage} channel`);
+    console.log(`[mod.js]: ✅ Raid triggered successfully in ${targetChannel.id}`);
     
     // Send confirmation message to the mod
     return interaction.editReply({ 
-      content: `✅ **Raid triggered successfully!** The raid embed has been posted in the ${capitalizedVillage} town hall channel.`,
+      content: `✅ **Raid triggered successfully!** The raid embed has been posted in this channel.`,
       ephemeral: true
     });
 
