@@ -5011,20 +5011,21 @@ async function handleTravelAutocomplete(interaction, focusedOption) {
 
     if (focusedOption.name === "charactername") {
       try {
-        const characters = await fetchCharactersByUserId(interaction.user.id);
+        const userId = interaction.user.id;
+        const characters = await fetchCharactersByUserId(userId);
+        const modCharacters = await fetchModCharactersByUserId(userId);
         
-        if (!characters || characters.length === 0) {
-          return await safeAutocompleteResponse(interaction, []);
-        }
-
+        // Combine regular characters and mod characters
         // Filter out accepted characters - they should not show up in dropdowns
-        const filteredCharacters = characters.filter((char) => char.status !== 'accepted');
-        const choices = filteredCharacters.map(char => ({
-          name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-          value: char.name
+        const allCharacters = [...(characters || []), ...(modCharacters || [])]
+          .filter((character) => character.status !== 'accepted');
+        
+        const choices = allCharacters.map((character) => ({
+          name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+          value: character.name,
         }));
         
-        return await safeAutocompleteResponse(interaction, choices);
+        await respondWithFilteredChoices(interaction, focusedOption, choices);
       } catch (fetchError) {
         console.error('[autocompleteHandler.js]: ❌ Error fetching characters:', fetchError);
         await safeRespondWithError(interaction);
