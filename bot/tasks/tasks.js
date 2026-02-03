@@ -28,7 +28,7 @@ const { releaseFromJail } = require('@/utils/jailCheck');
 const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('@/modules/characterStatsModule');
 const { processMonthlyQuestRewards } = require('@/modules/questRewardModule');
-const { checkRaidExpiration } = require('@/modules/raidModule');
+const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME } = require('@/modules/raidModule');
 const { checkVillageRaidQuotas } = require('@/scripts/randomMonsterEncounters');
 const {
   postBlightRollCall,
@@ -1394,26 +1394,49 @@ async function postUnpostedQuestsOnStartup(client) {
 // ============================================================================
 // ------------------- Raid/Village Tasks -------------------
 // ============================================================================
+// Raid expiration is enforced in two ways (raid duration varies by tier, e.g. 10–20 mins):
+// 1. One-time Agenda job (raid-expiration): scheduled per raid at expiresAt; runs when time is over.
+// 2. Cleanup (raid-expiration-cleanup): every 5 min, finds raids where expiresAt has passed and expires them.
+//    Covers restarts and missed jobs. Uses Raid.findExpiredRaids() so we only process raids past their time.
 
-// ------------------- raid-expiration-cleanup (Every hour) -------------------
-async function raidExpirationCleanup(_client, _data = {}) {
+// ------------------- raid-expiration (One-time job: runs when this raid's time is over) -------------------
+async function raidExpiration(client, data = {}) {
+  try {
+    const { raidId } = data;
+    if (!raidId) {
+      logger.error('SCHEDULED', `${RAID_EXPIRATION_JOB_NAME}: Missing raidId in job data`);
+      return;
+    }
+
+    logger.info('SCHEDULED', `${RAID_EXPIRATION_JOB_NAME}: Processing expiration for raid ${raidId}`);
+    await checkRaidExpiration(raidId, client);
+  } catch (err) {
+    logger.error('SCHEDULED', `${RAID_EXPIRATION_JOB_NAME}: ${err.message}`);
+  }
+}
+
+// ------------------- raid-expiration-cleanup (Every 5 minutes: expire raids whose time has passed) -------------------
+async function raidExpirationCleanup(client, _data = {}) {
   try {
     logger.debug('SCHEDULED', 'raid-expiration-cleanup: starting');
-    
-    const activeRaids = await Raid.find({ status: 'active' });
-    let cleanedCount = 0;
-    
-    for (const raid of activeRaids) {
+
+    // Only raids where expiresAt <= now (time is over); duration varies by tier (10–20 mins)
+    const expiredRaids = await Raid.findExpiredRaids();
+    let processedCount = 0;
+    let failedCount = 0;
+
+    for (const raid of expiredRaids) {
       try {
-        await checkRaidExpiration(raid.raidId);
-        cleanedCount++;
+        await checkRaidExpiration(raid.raidId, client);
+        processedCount++;
       } catch (err) {
+        failedCount++;
         logger.error('SCHEDULED', `raid-expiration-cleanup: Failed for raid ${raid.raidId}: ${err.message}`);
       }
     }
-    
-    if (cleanedCount > 0) {
-      logger.info('SCHEDULED', `raid-expiration-cleanup: done (checked ${cleanedCount} raids)`);
+
+    if (expiredRaids.length > 0) {
+      logger.info('SCHEDULED', `raid-expiration-cleanup: processed ${processedCount} expired raid(s), ${failedCount} failed`);
     }
   } catch (err) {
     logger.error('SCHEDULED', `raid-expiration-cleanup: ${err.message}`);
@@ -1719,7 +1742,8 @@ const TASKS = [
   { name: 'help-wanted-board-check', cron: '0 * * * *', handler: helpWantedBoardCheck }, // Every hour
   
   // Raid/Village Tasks
-  { name: 'raid-expiration-cleanup', cron: '0 * * * *', handler: raidExpirationCleanup }, // Every hour
+  { name: RAID_EXPIRATION_JOB_NAME, cron: null, handler: raidExpiration }, // One-time job (scheduled per raid)
+  { name: 'raid-expiration-cleanup', cron: '*/5 * * * *', handler: raidExpirationCleanup }, // Every 5 minutes
   { name: 'village-raid-quota-check', cron: '0 * * * *', handler: villageRaidQuotaCheck }, // Every hour
   { name: 'quest-completion-check', cron: '0 */6 * * *', handler: questCompletionCheck }, // Every 6 hours
   { name: 'village-tracking-check', cron: '0 */2 * * *', handler: villageTrackingCheck }, // Every 2 hours

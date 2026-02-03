@@ -527,15 +527,19 @@ raidSchema.methods.timeoutRaid = function(villageDamage = 0) {
 };
 
 // ---- Method: failRaid ----
-// Mark the raid as failed and KO all participants
+// Mark the raid as failed and KO all participants (idempotent: safe to call if already failed)
 raidSchema.methods.failRaid = async function(client = null) {
+  if (this.status !== 'active') {
+    return this.save();
+  }
+
   this.status = 'timed_out';
   this.result = 'timeout';
   this.isActive = false;
   this.analytics.success = false;
   this.analytics.endTime = new Date();
   this.analytics.duration = this.analytics.endTime - this.analytics.startTime;
-  
+
   // Ensure participants array exists
   if (!this.participants) {
     this.participants = [];

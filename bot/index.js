@@ -502,6 +502,33 @@ async function initializeClient() {
         // Post any unposted quests from today on startup
         await postUnpostedQuestsOnStartup(client);
         
+        // Check for expired raids on startup
+        const { checkRaidExpiration } = require('./modules/raidModule');
+        const Raid = require('./models/RaidModel');
+        try {
+          const activeRaids = await Raid.find({ status: 'active' });
+          let expiredCount = 0;
+          for (const raid of activeRaids) {
+            try {
+              const raidBefore = raid.status;
+              await checkRaidExpiration(raid.raidId, client);
+              const raidAfter = await Raid.findOne({ raidId: raid.raidId });
+              if (raidAfter && raidBefore === 'active' && raidAfter.status !== 'active') {
+                expiredCount++;
+              }
+            } catch (err) {
+              logger.error('SYSTEM', `Failed to check expired raid ${raid.raidId} on startup: ${err.message}`);
+            }
+          }
+          if (expiredCount > 0) {
+            logger.info('SYSTEM', `Checked ${activeRaids.length} active raids on startup, expired ${expiredCount}`);
+          } else if (activeRaids.length > 0) {
+            logger.info('SYSTEM', `Checked ${activeRaids.length} active raids on startup, all still active`);
+          }
+        } catch (err) {
+          logger.error('SYSTEM', `Error checking expired raids on startup: ${err.message}`);
+        }
+        
         // Check blood moon status
         logBloodMoonStatus();
         

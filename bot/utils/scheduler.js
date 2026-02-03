@@ -48,7 +48,9 @@ function registerTask(name, cronExpression, taskFunction, options = {}) {
     taskFunction,
     options: options.data ? { data: options.data } : {}
   });
-  logger.info('SCHEDULER', `Registered task "${name}" (${cronExpression})`);
+  logger.info('SCHEDULER', cronExpression != null
+    ? `Registered task "${name}" (${cronExpression})`
+    : `Registered one-time task "${name}"`);
 }
 
 /**
@@ -102,9 +104,14 @@ async function initializeScheduler(discordClient, mongoConnectionString) {
 
     for (const [name, config] of taskRegistry) {
       const { cronExpression, options } = config;
-      // Ensure cron expressions are interpreted in UTC (EST/EDT is user-facing only).
-      await agenda.every(cronExpression, name, options.data || {}, { skipImmediate: true, timezone: 'UTC' });
-      logger.info('SCHEDULER', `Scheduled "${name}" every ${cronExpression}`);
+      // Only schedule recurring jobs (skip one-time jobs with null cron)
+      if (cronExpression) {
+        // Ensure cron expressions are interpreted in UTC (EST/EDT is user-facing only).
+        await agenda.every(cronExpression, name, options.data || {}, { skipImmediate: true, timezone: 'UTC' });
+        logger.info('SCHEDULER', `Scheduled "${name}" every ${cronExpression}`);
+      } else {
+        logger.info('SCHEDULER', `Registered one-time job "${name}" (will be scheduled manually)`);
+      }
     }
 
     initialized = true;
@@ -171,6 +178,70 @@ async function runNow(name, data = {}) {
   return agenda.now(name, data);
 }
 
+/**
+ * Schedule a one-time job to run at a specific time.
+ * @param {string} name - Job name (must be registered)
+ * @param {Date|string} when - When to run the job (Date object or ISO string)
+ * @param {object} [data] - Optional data for job.attrs.data
+ * @returns {Promise<import('agenda').Job>}
+ */
+async function scheduleOneTimeJob(name, when, data = {}) {
+  if (!agenda) throw new Error('Scheduler not initialized');
+  if (!taskRegistry.has(name)) {
+    throw new Error(`Job "${name}" is not registered`);
+  }
+  const whenDate = typeof when === 'string' ? new Date(when) : when;
+  const job = await agenda.schedule(whenDate, name, data || {});
+  logger.info('SCHEDULER', `Scheduled one-time job "${name}" for ${whenDate.toISOString()}`);
+  return job;
+}
+
+/**
+ * Cancel a specific job by name and data query.
+ * @param {string} name - Job name
+ * @param {object} dataQuery - Query to match job.attrs.data (e.g., { raidId: 'R123' })
+ * @returns {Promise<number>} Number of cancelled jobs
+ */
+async function cancelJob(name, dataQuery = {}) {
+  if (!agenda) return 0;
+  if (Object.keys(dataQuery).length === 0) {
+    logger.warn('SCHEDULER', 'cancelJob: empty dataQuery would match all jobs; refusing');
+    return 0;
+  }
+  try {
+    // Agenda stores data in attrs.data, so we need to query jobs and filter
+    const jobs = await agenda.jobs({ name });
+    let cancelledCount = 0;
+
+    for (const job of jobs) {
+      // Check if job data matches the query
+      const jobData = job.attrs.data || {};
+      let matches = true;
+      for (const [key, value] of Object.entries(dataQuery)) {
+        // Handle nested keys like 'data.raidId' by checking jobData directly
+        const actualKey = key.replace('data.', '');
+        if (jobData[actualKey] !== value) {
+          matches = false;
+          break;
+        }
+      }
+      
+      if (matches) {
+        await job.remove();
+        cancelledCount++;
+      }
+    }
+    
+    if (cancelledCount > 0) {
+      logger.info('SCHEDULER', `Cancelled ${cancelledCount} job(s) for "${name}" matching query`, dataQuery);
+    }
+    return cancelledCount;
+  } catch (err) {
+    logger.error('SCHEDULER', `Failed to cancel job "${name}": ${err.message}`);
+    throw err;
+  }
+}
+
 // ============================================================================
 // ------------------- Exports -------------------
 // ============================================================================
@@ -181,5 +252,7 @@ module.exports = {
   stopTask,
   stopAllTasks,
   getTaskStatus,
-  runNow
+  runNow,
+  scheduleOneTimeJob,
+  cancelJob
 };

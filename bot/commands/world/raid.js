@@ -114,7 +114,7 @@ module.exports = {
       // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
 
       // Check raid expiration and get raid data
-      const raidData = await checkRaidExpiration(raidId);
+      const raidData = await checkRaidExpiration(raidId, interaction.client);
       if (!raidData) {
         // Get all active raids for debugging
         const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);

@@ -45,6 +45,9 @@ function calculateRaidDuration(tier) {
 
 const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (Discord allows: 1, 3, 7, 14, 30, 60, 1440 minutes)
 
+/** Agenda job name for one-time raid expiration (used by scheduler and raidModule) */
+const RAID_EXPIRATION_JOB_NAME = 'raid-expiration';
+
 // Village resident role IDs
 const VILLAGE_RESIDENT_ROLES = {
   'Rudania': '907344585238409236',
@@ -445,87 +448,16 @@ async function startRaid(monster, village, interaction = null) {
 
     console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village} - Duration: ${Math.floor(raidDuration / (1000 * 60))} minutes`);
     
-    // Set up internal timer for raid timeout
-    setTimeout(async () => {
-      try {
-        // Check if raid is still active
-        const currentRaid = await Raid.findOne({ raidId: raidId });
-        if (currentRaid && currentRaid.status === 'active') {
-          console.log(`[raidModule.js]: ⏰ Raid ${raidId} timed out`);
-          
-          // Mark raid as failed and KO all participants
-          await currentRaid.failRaid(interaction?.client);
-
-          // Compose failure embed (used for thread or channel fallback)
-          const buildFailureEmbed = () => new EmbedBuilder()
-            .setColor('#FF0000')
-            .setTitle('💥 **Raid Failed!**')
-            .setDescription(`The raid against **${currentRaid.monster.name}** has failed!`)
-            .addFields(
-              {
-                name: '__Monster Status__',
-                value: `💙 **Hearts:** ${currentRaid.monster.currentHearts}/${currentRaid.monster.maxHearts}`,
-                inline: false
-              },
-              {
-                name: '__Participants__',
-                value: (currentRaid.participants && currentRaid.participants.length > 0)
-                  ? currentRaid.participants.map(p => `• **${p.name}** (${p.damage} hearts) - **KO'd**`).join('\n')
-                  : 'No participants',
-                inline: false
-              },
-              {
-                name: '__Failure__',
-                value: (currentRaid.participants && currentRaid.participants.length > 0)
-                  ? `All participants have been knocked out! 💀`
-                  : `The monster caused havoc as no one defended the village from it and then ran off!`,
-                inline: false
-              }
-            )
-            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-            .setFooter({ text: `Raid ID: ${raidId}` })
-            .setTimestamp();
-
-          // Try to send failure message to thread, else fall back to the original channel
-          if (interaction?.client) {
-            let sent = false;
-            if (currentRaid.threadId) {
-              try {
-                const thread = await interaction.client.channels.fetch(currentRaid.threadId);
-                if (thread) {
-                  await thread.send({ embeds: [buildFailureEmbed()] });
-                  console.log(`[raidModule.js]: 💬 Failure message sent to raid thread`);
-                  sent = true;
-                }
-              } catch (threadError) {
-                console.error(`[raidModule.js]: ❌ Error sending failure message to thread:`, threadError);
-              }
-            }
-
-            if (!sent && currentRaid.channelId) {
-              try {
-                const channel = await interaction.client.channels.fetch(currentRaid.channelId);
-                if (channel) {
-                  await channel.send({ embeds: [buildFailureEmbed()] });
-                  console.log(`[raidModule.js]: 💬 Failure message sent to raid channel (fallback)`);
-                  sent = true;
-                }
-              } catch (channelError) {
-                console.error(`[raidModule.js]: ❌ Error sending failure message to channel:`, channelError);
-              }
-            }
-          }
-          
-          console.log(`[raidModule.js]: 💥 Raid ${raidId} failed - All participants KO'd`);
-        }
-      } catch (timeoutError) {
-        console.error(`[raidModule.js]: ❌ Error in raid timeout handler:`, timeoutError);
-        handleError(timeoutError, 'raidModule.js', {
-          functionName: 'raidTimeout',
-          raidId: raidId
-        });
-      }
-    }, raidDuration);
+    // Schedule raid expiration using Agenda (persists across bot restarts)
+    try {
+      const scheduler = require('@/utils/scheduler');
+      const expirationTime = new Date(Date.now() + raidDuration);
+      await scheduler.scheduleOneTimeJob(RAID_EXPIRATION_JOB_NAME, expirationTime, { raidId });
+      logger.info('RAID', `Scheduled raid expiration for ${raidId} at ${expirationTime.toISOString()}`);
+    } catch (schedulerError) {
+      logger.error('RAID', `Failed to schedule raid expiration job: ${schedulerError.message}`);
+      // Fallback: cleanup task will catch expired raids every 5 minutes
+    }
     
     return {
       raidId,
@@ -823,6 +755,16 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
 
         // Check if monster is defeated
         if (raid.monster.currentHearts <= 0) {
+          // Cancel the scheduled expiration job since raid completed early
+          try {
+            const scheduler = require('@/utils/scheduler');
+            await scheduler.cancelJob(RAID_EXPIRATION_JOB_NAME, { raidId });
+            logger.info('RAID', `Cancelled expiration job for completed raid ${raidId}`);
+          } catch (cancelError) {
+            logger.warn('RAID', `Failed to cancel expiration job for raid ${raidId}: ${cancelError.message}`);
+            // Don't fail the raid completion if job cancellation fails
+          }
+          
           await raid.completeRaid('defeated');
         } else {
           // Reload character from database to get the latest state (hearts were saved in processRaidBattle)
@@ -901,7 +843,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
 
 // ---- Function: checkRaidExpiration ----
 // Checks if a raid has expired and handles the timeout consequences
-async function checkRaidExpiration(raidId) {
+async function checkRaidExpiration(raidId, client = null) {
   try {
     // Retrieve raid from database
     const raid = await Raid.findOne({ raidId: raidId });
@@ -916,13 +858,85 @@ async function checkRaidExpiration(raidId) {
 
     // Check if raid has expired
     if (raid.isExpired()) {
-      console.log(`[raidModule.js]: ⏰ Raid ${raidId} has expired`);
+      logger.info('RAID', `Raid ${raidId} has expired`);
 
-      // Mark raid as failed and KO all participants
-      // Note: client not available here, but village damage will still be applied
-      await raid.failRaid(null);
+      // Cancel any scheduled expiration job (in case it's still pending)
+      try {
+        const scheduler = require('@/utils/scheduler');
+        await scheduler.cancelJob(RAID_EXPIRATION_JOB_NAME, { raidId });
+      } catch (cancelError) {
+        // Ignore cancellation errors - job may have already run or been cancelled
+      }
 
-      console.log(`[raidModule.js]: 💥 Raid ${raidId} failed - All participants KO'd`);
+      // Mark raid as failed and KO all participants (idempotent)
+      await raid.failRaid(client);
+
+      // Try to send failure message if client is available
+      if (client) {
+        try {
+          const buildFailureEmbed = () => new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('💥 **Raid Failed!**')
+            .setDescription(`The raid against **${raid.monster.name}** has failed!`)
+            .addFields(
+              {
+                name: '__Monster Status__',
+                value: `💙 **Hearts:** ${raid.monster.currentHearts}/${raid.monster.maxHearts}`,
+                inline: false
+              },
+              {
+                name: '__Participants__',
+                value: (raid.participants && raid.participants.length > 0)
+                  ? raid.participants.map(p => `• **${p.name}** (${p.damage} hearts) - **KO'd**`).join('\n')
+                  : 'No participants',
+                inline: false
+              },
+              {
+                name: '__Failure__',
+                value: (raid.participants && raid.participants.length > 0)
+                  ? `All participants have been knocked out! 💀`
+                  : `The monster caused havoc as no one defended the village from it and then ran off!`,
+                inline: false
+              }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setFooter({ text: `Raid ID: ${raidId}` })
+            .setTimestamp();
+
+          // Try to send failure message to thread, else fall back to the original channel
+          let sent = false;
+          if (raid.threadId) {
+            try {
+              const thread = await client.channels.fetch(raid.threadId);
+              if (thread) {
+                await thread.send({ embeds: [buildFailureEmbed()] });
+                logger.info('RAID', 'Failure message sent to raid thread');
+                sent = true;
+              }
+            } catch (threadError) {
+              logger.error('RAID', `Error sending failure message to thread: ${threadError.message}`);
+            }
+          }
+
+          if (!sent && raid.channelId) {
+            try {
+              const channel = await client.channels.fetch(raid.channelId);
+              if (channel) {
+                await channel.send({ embeds: [buildFailureEmbed()] });
+                logger.info('RAID', 'Failure message sent to raid channel (fallback)');
+                sent = true;
+              }
+            } catch (channelError) {
+              logger.error('RAID', `Error sending failure message to channel: ${channelError.message}`);
+            }
+          }
+        } catch (messageError) {
+          logger.error('RAID', `Error sending failure message: ${messageError.message}`);
+          // Don't fail the expiration check if message sending fails
+        }
+      }
+
+      logger.info('RAID', `Raid ${raidId} failed (timeout) - participants KO'd`);
     }
 
     return raid;
@@ -931,7 +945,7 @@ async function checkRaidExpiration(raidId) {
       functionName: 'checkRaidExpiration',
       raidId: raidId
     });
-    console.error(`[raidModule.js]: ❌ Error checking raid expiration:`, error);
+    logger.error('RAID', `Error checking raid expiration: ${error.message}`);
     throw error;
   }
 }
@@ -1316,5 +1330,6 @@ module.exports = {
   createRaidEmbed,
   createRaidThread,
   triggerRaid,
-  calculateRaidDuration
+  calculateRaidDuration,
+  RAID_EXPIRATION_JOB_NAME
 };
