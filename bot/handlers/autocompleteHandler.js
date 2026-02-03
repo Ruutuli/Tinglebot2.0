@@ -698,6 +698,7 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             const villageSubcommand = interaction.options.getSubcommand(false);
             
             if (focusedOption.name === "charactername") {
+              // Handle charactername autocomplete for all village subcommands (rest, donate, etc.)
               await handleVillageCharacterAutocomplete(interaction, focusedOption, villageSubcommand);
             } else if (focusedOption.name === "type" && villageSubcommand === "donate") {
               await handleVillageTypeAutocomplete(interaction, focusedOption);
