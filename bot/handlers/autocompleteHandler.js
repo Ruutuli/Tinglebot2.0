@@ -934,9 +934,9 @@ async function handleCharacterBasedCommandsAutocomplete(
       clearTimeout(timeoutId); // Clear timeout if query succeeds
       
       // Combine regular characters and mod characters
-      // Filter out accepted characters - they should not show up in dropdowns
+      // Only show accepted characters - they should be the ones in dropdowns
       const allCharacters = [...(characters || []), ...(modCharacters || [])]
-        .filter((character) => character.status !== 'accepted');
+        .filter((character) => character.status === 'accepted');
       
       // Map all characters to choices with their basic info
       const choices = allCharacters.map((character) => ({
@@ -1009,14 +1009,14 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
     }));
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } else {
-    // For other blight commands (roll, history), show all characters owned by the user
+    // For other blight commands (roll, history), show only accepted characters owned by the user
     const characters = await fetchCharactersByUserId(userId);
     const modCharacters = await fetchModCharactersByUserId(userId);
     
     // Combine regular characters and mod characters
-    // Filter out accepted characters - they should not show up in dropdowns
-    const allCharacters = [...characters, ...modCharacters]
-      .filter((character) => character.status !== 'accepted');
+    // Only show accepted characters - they should be the ones in dropdowns
+    const allCharacters = [...(characters || []), ...(modCharacters || [])]
+      .filter((character) => character.status === 'accepted');
     
     const choices = allCharacters.map((character) => ({
       name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
@@ -1253,9 +1253,9 @@ async function handleBoostingRequestCharacterAutocomplete(interaction, focusedOp
   const modCharacters = await fetchModCharactersByUserId(userId);
   
   // Combine regular characters and mod characters
-  // Filter out accepted characters - they should not show up in dropdowns
-  const allCharacters = [...characters, ...modCharacters]
-    .filter((character) => character.status !== 'accepted');
+  // Only show accepted characters - they should be the ones in dropdowns
+  const allCharacters = [...(characters || []), ...(modCharacters || [])]
+    .filter((character) => character.status === 'accepted');
 
   const choices = allCharacters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
@@ -1355,9 +1355,9 @@ async function handleBoostingStatusCharacterAutocomplete(interaction, focusedOpt
   const modCharacters = await fetchModCharactersByUserId(userId);
   
   // Combine regular characters and mod characters
-  // Filter out accepted characters - they should not show up in dropdowns
-  const allCharacters = [...characters, ...modCharacters]
-    .filter((character) => character.status !== 'accepted');
+  // Only show accepted characters - they should be the ones in dropdowns
+  const allCharacters = [...(characters || []), ...(modCharacters || [])]
+    .filter((character) => character.status === 'accepted');
 
   const choices = allCharacters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
@@ -2145,8 +2145,8 @@ async function handleVendingRecipientAutocomplete(interaction, focusedOption) {
  async function handleAllRecipientAutocomplete(interaction, focusedOption) {
  try {
   const characters = await fetchAllCharacters();
-  // Filter out accepted characters - they should not show up in dropdowns
-  const filteredCharacters = characters.filter((c) => c.status !== 'accepted');
+  // Only show accepted characters - they should be the ones in dropdowns
+  const filteredCharacters = characters.filter((c) => c.status === 'accepted');
   const choices = filteredCharacters.map((c) => ({
    name: `${c.name} - ${capitalize(c.currentVillage)}`,
    value: c.name,
@@ -3102,8 +3102,8 @@ async function handleTransferCharacterAutocomplete(interaction, focusedOption) {
   try {
                 const userId = interaction.user.id;
                 const characters = await fetchCharactersByUserId(userId);
-                // Filter out accepted characters - they should not show up in dropdowns
-                const filteredCharacters = characters.filter((character) => character.status !== 'accepted');
+                // Only show accepted characters - they should be the ones in dropdowns
+                const filteredCharacters = (characters || []).filter((character) => character.status === 'accepted');
                 
    const choices = filteredCharacters.map((character) => ({
     name: character.name,
@@ -3296,9 +3296,9 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
   const modCharacters = await fetchModCharactersByUserId(userId);
   
   // Combine regular characters and mod characters
-  // Filter out accepted characters - they should not show up in dropdowns
-  const allCharacters = [...userCharacters, ...modCharacters]
-    .filter((character) => character.status !== 'accepted');
+  // Only show accepted characters - they should be the ones in dropdowns
+  const allCharacters = [...(userCharacters || []), ...(modCharacters || [])]
+    .filter((character) => character.status === 'accepted');
 
   if (!expeditionId) {
    const choices = allCharacters.map((char) => ({
@@ -4111,8 +4111,8 @@ async function handleModPetLevelCharacterAutocomplete(interaction, focusedOption
   try {
     // Provides autocomplete suggestions for all characters (admin can target any)
     const characters = await fetchAllCharacters();
-    // Filter out accepted characters - they should not show up in dropdowns
-    const filteredCharacters = characters.filter((c) => c.status !== 'accepted');
+    // Only show accepted characters - they should be the ones in dropdowns
+    const filteredCharacters = characters.filter((c) => c.status === 'accepted');
     const choices = filteredCharacters.map((c) => ({
       name: `${c.name} | ${capitalize(c.currentVillage)} | ${capitalize(c.job)}`,
       value: c.name,
@@ -4161,8 +4161,8 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
  try {
   // Provides autocomplete suggestions for all characters (admin can target any)
   const characters = await fetchAllCharacters(); // make sure to import this from characterService
-  // Filter out accepted characters - they should not show up in dropdowns
-  const filteredCharacters = characters.filter((c) => c.status !== 'accepted');
+  // Only show accepted characters - they should be the ones in dropdowns
+  const filteredCharacters = characters.filter((c) => c.status === 'accepted');
   const choices = filteredCharacters.map((c) => ({
    name: c.name,
    value: c.name,
@@ -5016,9 +5016,9 @@ async function handleTravelAutocomplete(interaction, focusedOption) {
         const modCharacters = await fetchModCharactersByUserId(userId);
         
         // Combine regular characters and mod characters
-        // Filter out accepted characters - they should not show up in dropdowns
+        // Only show accepted characters - they should be the ones in dropdowns
         const allCharacters = [...(characters || []), ...(modCharacters || [])]
-          .filter((character) => character.status !== 'accepted');
+          .filter((character) => character.status === 'accepted');
         
         const choices = allCharacters.map((character) => ({
           name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
@@ -5423,8 +5423,8 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
     if (focusedName === 'charactername') {
                 const userId = interaction.user.id;
                 const characters = await fetchCharactersByUserId(userId);
-                // Filter out accepted characters - they should not show up in dropdowns
-                const filteredCharacters = characters.filter((char) => char.status !== 'accepted');
+                // Only show accepted characters - they should be the ones in dropdowns
+                const filteredCharacters = (characters || []).filter((char) => char.status === 'accepted');
                 
     const choices = filteredCharacters.map(char => ({
         name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job || 'No Job'}`,
