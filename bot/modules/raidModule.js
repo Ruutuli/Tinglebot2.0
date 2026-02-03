@@ -648,7 +648,7 @@ async function joinRaid(character, raidId) {
           await character.save();
           
           // Assign blighted role
-          const { User } = require('../models');
+          const User = require('@/models/UserModel');
           const user = await User.findOne({ discordId: character.userId });
           if (user) {
             user.blightedcharacter = true;
