@@ -916,7 +916,7 @@ async function handleCharacterBasedCommandsAutocomplete(
     const userId = interaction.user.id;
     const mongoose = require('mongoose');
     
-    const requiredFields = ['name', 'currentVillage', 'job'];
+    const requiredFields = ['name', 'currentVillage', 'job', 'status'];
     const timeoutMs = 2500; // 2.5 seconds timeout
     
     let timeoutId;
