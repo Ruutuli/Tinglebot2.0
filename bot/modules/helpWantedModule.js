@@ -1738,6 +1738,9 @@ async function generateDailyQuests() {
       availableTimes = FIXED_CRON_TIMES.filter(cronTime => cronToHour(cronTime) < 12);
     }
     
+    // Exclude midnight (00:00 UTC) so Help Wanted never posts at midnight
+    availableTimes = availableTimes.filter(cronTime => cronToHour(cronTime) !== 0);
+    
     const selectedTimes = selectTimesWithVariableBuffer(availableTimes, totalQuestsNeeded);
     
     // Validate that we have enough times for all quests
@@ -1866,6 +1869,17 @@ async function generateDailyQuests() {
       if (quests.length === 0) {
         throw new Error(`All quests missing scheduledPostTime`);
       }
+    }
+    
+    // Validate that all quests have distinct scheduledPostTimes (no two quests post at the same time)
+    const scheduledTimes = quests.map(q => q.scheduledPostTime);
+    const uniqueTimes = new Set(scheduledTimes);
+    if (scheduledTimes.length !== uniqueTimes.size) {
+      const duplicateTimes = scheduledTimes.filter((time, index) => scheduledTimes.indexOf(time) !== index);
+      const duplicateQuests = quests.filter(q => duplicateTimes.includes(q.scheduledPostTime));
+      const duplicateDetails = duplicateQuests.map(q => `${q.questId} (${q.village})`).join(', ');
+      logger.error('QUEST', `Validation failed: Found ${scheduledTimes.length - uniqueTimes.size} duplicate scheduledPostTime(s). Duplicate times: ${[...new Set(duplicateTimes)].join(', ')}. Affected quests: ${duplicateDetails}`);
+      throw new Error(`Multiple quests have the same scheduledPostTime. This should not happen.`);
     }
 
     // Validate quest objects before saving
@@ -2050,20 +2064,30 @@ function selectTimesWithVariableBuffer(availableTimes, count) {
     logger.warn('QUEST', `Could only find ${selected.length} times with 3-hour buffer, using final fallback to ensure all villages get posting times`);
     selected.length = 0;
     
-    // Sort by hour and take evenly spaced times
+    // Sort by hour and take evenly spaced times, ensuring unique hours
     const sortedByHour = [...timeSlots].sort((a, b) => a.hour - b.hour);
     const step = Math.floor(sortedByHour.length / count);
     
+    // Track used hours to prevent duplicates
+    const usedHours = new Set();
+    
     for (let i = 0; i < count && i < sortedByHour.length; i++) {
       const index = Math.min(i * step, sortedByHour.length - 1);
-      selected.push(sortedByHour[index]);
+      const timeSlot = sortedByHour[index];
+      // Only add if this hour hasn't been used yet
+      if (!usedHours.has(timeSlot.hour)) {
+        selected.push(timeSlot);
+        usedHours.add(timeSlot.hour);
+      }
     }
     
-    // If still not enough, just take the first N available times
+    // If still not enough, fill from remaining unused hours
     if (selected.length < count) {
-      for (let i = selected.length; i < count && i < sortedByHour.length; i++) {
-        if (!selected.find(s => s.hour === sortedByHour[i].hour)) {
-          selected.push(sortedByHour[i]);
+      for (let i = 0; i < sortedByHour.length && selected.length < count; i++) {
+        const timeSlot = sortedByHour[i];
+        if (!usedHours.has(timeSlot.hour)) {
+          selected.push(timeSlot);
+          usedHours.add(timeSlot.hour);
         }
       }
     }
@@ -2079,11 +2103,47 @@ function selectTimesWithVariableBuffer(availableTimes, count) {
   // Sort selected times by hour for better scheduling
   selected.sort((a, b) => a.hour - b.hour);
   
-  // Log the selected times in a readable format
-  const timeDisplay = selected.map(t => formatHour(t.hour)).join(', ');
-  logger.info('QUEST', `Selected ${selected.length} times with variable buffer (3-6 hours): ${timeDisplay}`);
+  // Uniqueness pass: ensure all selected times have distinct hours
+  // Dedupe by hour (keep first occurrence of each hour)
+  const uniqueSelected = [];
+  const seenHours = new Set();
+  for (const timeSlot of selected) {
+    if (!seenHours.has(timeSlot.hour)) {
+      uniqueSelected.push(timeSlot);
+      seenHours.add(timeSlot.hour);
+    }
+  }
   
-  return selected.map(timeSlot => timeSlot.cron);
+  // If we lost some times due to deduplication, fill from unused hours
+  if (uniqueSelected.length < count) {
+    const allHours = new Set(timeSlots.map(ts => ts.hour));
+    const unusedHours = [...allHours].filter(h => !seenHours.has(h));
+    const unusedTimeSlots = timeSlots.filter(ts => unusedHours.includes(ts.hour));
+    
+    for (const timeSlot of unusedTimeSlots) {
+      if (uniqueSelected.length >= count) break;
+      if (!seenHours.has(timeSlot.hour)) {
+        uniqueSelected.push(timeSlot);
+        seenHours.add(timeSlot.hour);
+      }
+    }
+  }
+  
+  // Final check: if we still don't have enough distinct times, throw an error
+  if (uniqueSelected.length < count) {
+    const errorMsg = `Failed to select ${count} distinct times: only found ${uniqueSelected.length} unique hours out of ${availableTimes.length} available. This should not happen.`;
+    logger.error('QUEST', errorMsg);
+    throw new Error(errorMsg);
+  }
+  
+  // Sort again after deduplication/filling
+  uniqueSelected.sort((a, b) => a.hour - b.hour);
+  
+  // Log the selected times in a readable format
+  const timeDisplay = uniqueSelected.map(t => formatHour(t.hour)).join(', ');
+  logger.info('QUEST', `Selected ${uniqueSelected.length} distinct times with variable buffer (3-6 hours): ${timeDisplay}`);
+  
+  return uniqueSelected.map(timeSlot => timeSlot.cron);
 }
 
 // ============================================================================
