@@ -2635,6 +2635,13 @@ async function clearBoostAfterUse(character, options = {}) {
     return { success: true, cleared: false };
   }
 
+  // Only clear boosts that are "consumed on use" (Other category)
+  // Duration-based boosts (Gathering, Crafting, Looting, etc.) should remain active for 24h
+  if (activeBoost && activeBoost.category !== 'Other') {
+    logger.debug('BOOST', `Boost preserved for ${character.name} (category: ${activeBoost.category}) - duration-based${context ? ` (${context})` : ''}`);
+    return { success: true, cleared: false };
+  }
+
   try {
     logger.info('BOOST', `Clearing boost for ${character.name}${context ? ` (${context})` : ''}`);
     
