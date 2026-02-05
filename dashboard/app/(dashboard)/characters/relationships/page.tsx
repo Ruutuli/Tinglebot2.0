@@ -208,8 +208,6 @@ function CharacterRelationshipsModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (!character) return null;
-
   const handleDelete = useCallback(async (relationshipId: string, characterName: string, targetName: string) => {
     // Confirmation dialog
     const confirmed = window.confirm(
@@ -292,6 +290,8 @@ function CharacterRelationshipsModal({
   }, [outgoingRelationships, incomingRelationships]);
 
   const totalRelationships = relationshipMap.length;
+
+  if (!character) return null;
 
   return (
     <Modal
@@ -1308,38 +1308,50 @@ function AllEntriesTabContent({
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
                     {/* Character A */}
-                    <Link
-                      href={`/characters/${charASlug}`}
-                      className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0 max-w-full sm:max-w-[200px] justify-self-start"
-                    >
-                      <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
-                        <Image
-                          src={charAIconUrl}
-                          alt={relationship.characterName}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
+                    <div className="flex items-center gap-3 min-w-0 max-w-full sm:max-w-[200px] justify-self-start">
+                      <Link
+                        href={`/characters/${charASlug}`}
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0 flex-1"
+                      >
+                        <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
+                          <Image
+                            src={charAIconUrl}
+                            alt={relationship.characterName}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-bold text-[var(--totk-light-green)] truncate" title={relationship.characterName}>
+                            {relationship.characterName}
+                          </h4>
+                          {charA?.race && (
+                            <p className="text-xs text-[var(--botw-pale)] opacity-90 truncate" title={capitalize(charA.race)}>
+                              {capitalize(charA.race)}
+                            </p>
+                          )}
+                          {charAVillage && (
+                            <p className="text-xs text-[var(--totk-grey-200)] opacity-75 truncate mt-0.5" title={capitalize(charAVillage)}>
+                              {capitalize(charAVillage)}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                      {/* Arrow pointing right */}
+                      <div className="hidden sm:flex items-center text-[var(--totk-light-green)] text-xl px-2">
+                        <i className="fa-solid fa-arrow-right" />
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-bold text-[var(--totk-light-green)] truncate" title={relationship.characterName}>
-                          {relationship.characterName}
-                        </h4>
-                        {charA?.race && (
-                          <p className="text-xs text-[var(--botw-pale)] opacity-90 truncate" title={capitalize(charA.race)}>
-                            {capitalize(charA.race)}
-                          </p>
-                        )}
-                        {charAVillage && (
-                          <p className="text-xs text-[var(--totk-grey-200)] opacity-75 truncate mt-0.5" title={capitalize(charAVillage)}>
-                            {capitalize(charAVillage)}
-                          </p>
-                        )}
-                      </div>
-                    </Link>
+                    </div>
 
                     {/* Relationship Types & Info - Centered */}
                     <div className="flex flex-col items-center justify-center gap-2.5 min-w-0 px-2 sm:px-4 order-first sm:order-none">
+                      {/* Direction label for mobile */}
+                      <div className="sm:hidden text-xs text-[var(--botw-pale)] opacity-75 mb-1">
+                        <span className="font-semibold text-[var(--totk-light-green)]">{relationship.characterName}</span>
+                        {" "}feels this way about{" "}
+                        <span className="font-semibold text-[var(--totk-light-green)]">{relationship.targetCharacterName}</span>
+                      </div>
                       {/* Heart Icons */}
                       <div className="flex items-center gap-2 flex-wrap justify-center">
                         {relationship.relationshipTypes.map((type) => {
@@ -1373,35 +1385,37 @@ function AllEntriesTabContent({
                     </div>
 
                     {/* Character B */}
-                    <Link
-                      href={`/characters/${charBSlug}`}
-                      className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0 max-w-full sm:max-w-[200px] sm:flex-row-reverse justify-self-end"
-                    >
-                      <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
-                        <Image
-                          src={charBIconUrl}
-                          alt={relationship.targetCharacterName}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1 text-right sm:text-right">
-                        <h4 className="text-sm font-bold text-[var(--totk-light-green)] truncate" title={relationship.targetCharacterName}>
-                          {relationship.targetCharacterName}
-                        </h4>
-                        {charB?.race && (
-                          <p className="text-xs text-[var(--botw-pale)] opacity-90 truncate" title={capitalize(charB.race)}>
-                            {capitalize(charB.race)}
-                          </p>
-                        )}
-                        {charBVillage && (
-                          <p className="text-xs text-[var(--totk-grey-200)] opacity-75 truncate mt-0.5" title={capitalize(charBVillage)}>
-                            {capitalize(charBVillage)}
-                          </p>
-                        )}
-                      </div>
-                    </Link>
+                    <div className="flex items-center gap-3 min-w-0 max-w-full sm:max-w-[200px] sm:flex-row-reverse justify-self-end">
+                      <Link
+                        href={`/characters/${charBSlug}`}
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0 flex-1 sm:flex-row-reverse"
+                      >
+                        <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
+                          <Image
+                            src={charBIconUrl}
+                            alt={relationship.targetCharacterName}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1 text-left sm:text-right">
+                          <h4 className="text-sm font-bold text-[var(--totk-light-green)] truncate" title={relationship.targetCharacterName}>
+                            {relationship.targetCharacterName}
+                          </h4>
+                          {charB?.race && (
+                            <p className="text-xs text-[var(--botw-pale)] opacity-90 truncate" title={capitalize(charB.race)}>
+                              {capitalize(charB.race)}
+                            </p>
+                          )}
+                          {charBVillage && (
+                            <p className="text-xs text-[var(--totk-grey-200)] opacity-75 truncate mt-0.5" title={capitalize(charBVillage)}>
+                              {capitalize(charBVillage)}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );
