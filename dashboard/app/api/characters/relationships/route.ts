@@ -1,5 +1,6 @@
 // GET /api/characters/relationships — get current user's character relationships
 // POST /api/characters/relationships — create a new relationship
+// PUT /api/characters/relationships — update a relationship
 // DELETE /api/characters/relationships — delete a relationship
 
 import type { NextRequest } from "next/server";
@@ -268,6 +269,115 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         error: "Failed to create relationship",
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const session = await getSession();
+    const user = session.user ?? null;
+    if (!user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { relationshipId, relationshipTypes, notes } = body;
+
+    // Validation
+    if (!relationshipId) {
+      return NextResponse.json(
+        { error: "Relationship ID is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!relationshipTypes || !Array.isArray(relationshipTypes) || relationshipTypes.length === 0) {
+      return NextResponse.json(
+        { error: "At least one relationship type must be selected" },
+        { status: 400 }
+      );
+    }
+
+    // Validate relationship types
+    const validTypes = ['LOVERS', 'CRUSH', 'CLOSE_FRIEND', 'FRIEND', 'ACQUAINTANCE', 'DISLIKE', 'HATE', 'NEUTRAL', 'FAMILY', 'RIVAL', 'ADMIRE', 'OTHER'];
+    for (const type of relationshipTypes) {
+      if (!validTypes.includes(type)) {
+        return NextResponse.json(
+          { error: `Invalid relationship type: ${type}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate notes length
+    if (notes && typeof notes === 'string' && notes.length > 1000) {
+      return NextResponse.json(
+        { error: "Notes cannot exceed 1000 characters" },
+        { status: 400 }
+      );
+    }
+
+    await connect();
+    
+    const { default: Relationship } = await import("@/models/RelationshipModel.js");
+    const mongoose = (await import("mongoose")).default;
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(relationshipId)) {
+      return NextResponse.json(
+        { error: "Invalid relationship ID format" },
+        { status: 400 }
+      );
+    }
+
+    // Update the relationship, ensuring it belongs to the user
+    const updatedRelationship = await Relationship.findOneAndUpdate(
+      {
+        _id: new mongoose.Types.ObjectId(relationshipId),
+        userId: user.id,
+      },
+      {
+        relationshipTypes,
+        notes: notes || '',
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!updatedRelationship) {
+      return NextResponse.json(
+        { error: "Relationship not found or you don't have permission to update it" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      relationship: {
+        _id: updatedRelationship._id,
+        userId: updatedRelationship.userId,
+        characterId: updatedRelationship.characterId,
+        targetCharacterId: updatedRelationship.targetCharacterId,
+        characterName: updatedRelationship.characterName,
+        targetCharacterName: updatedRelationship.targetCharacterName,
+        relationshipTypes: updatedRelationship.relationshipTypes,
+        notes: updatedRelationship.notes,
+        createdAt: updatedRelationship.createdAt,
+        updatedAt: updatedRelationship.updatedAt,
+      },
+    });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    logger.error("api/characters/relationships PUT", errorMessage);
+    return NextResponse.json(
+      { 
+        error: "Failed to update relationship",
         details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
       },
       { status: 500 }

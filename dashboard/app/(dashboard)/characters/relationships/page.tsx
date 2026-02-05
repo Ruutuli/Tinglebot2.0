@@ -195,6 +195,7 @@ function CharacterRelationshipsModal({
   loading,
   user,
   onRefresh,
+  onEditClick,
 }: {
   character: Character | null;
   outgoingRelationships: Relationship[];
@@ -204,6 +205,7 @@ function CharacterRelationshipsModal({
   loading: boolean;
   user: { id: string } | null;
   onRefresh: () => void;
+  onEditClick: (relationship: Relationship) => void;
 }) {
   // Use local state to allow optimistic updates
   const [outgoingRelationships, setOutgoingRelationships] = useState<Relationship[]>(initialOutgoingRelationships);
@@ -447,23 +449,35 @@ function CharacterRelationshipsModal({
                         background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
                       }}
                     >
-                      {/* Delete Button */}
+                      {/* Edit and Delete Buttons */}
                       {isOwnRelationship && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(relData.outgoing!._id, character.name, relData.targetName);
-                          }}
-                          disabled={isDeleting}
-                          className="absolute top-2 right-2 z-10 rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Delete relationship"
-                        >
-                          {isDeleting ? (
-                            <i className="fa-solid fa-spinner fa-spin text-xs" />
-                          ) : (
-                            <i className="fa-solid fa-trash text-xs" />
-                          )}
-                        </button>
+                        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditClick(relData.outgoing!);
+                            }}
+                            className="rounded-md border-2 border-[var(--totk-light-green)]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20 hover:border-[var(--totk-light-green)] transition-colors"
+                            title="Edit relationship"
+                          >
+                            <i className="fa-solid fa-pencil text-xs" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(relData.outgoing!._id, character.name, relData.targetName);
+                            }}
+                            disabled={isDeleting}
+                            className="rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete relationship"
+                          >
+                            {isDeleting ? (
+                              <i className="fa-solid fa-spinner fa-spin text-xs" />
+                            ) : (
+                              <i className="fa-solid fa-trash text-xs" />
+                            )}
+                          </button>
+                        </div>
                       )}
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
                         <div className="flex items-center gap-1.5">
@@ -569,12 +583,15 @@ function CreateRelationshipModal({
   open,
   onOpenChange,
   onSuccess,
+  relationshipToEdit,
 }: {
   myCharacters: Character[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void | Promise<void>;
+  relationshipToEdit?: Relationship | null;
 }) {
+  const isEditMode = !!relationshipToEdit;
   const [characterAId, setCharacterAId] = useState<string>("");
   const [characterBId, setCharacterBId] = useState<string>("");
   const [characterBSearch, setCharacterBSearch] = useState<string>("");
@@ -645,10 +662,9 @@ function CreateRelationshipModal({
     return () => clearTimeout(timeoutId);
   }, [characterBSearch, open]);
 
-  // Reset form when modal opens/closes
+  // Reset form when modal opens/closes or populate when editing
   useEffect(() => {
     if (!open) {
-      setCharacterAId("");
       setCharacterAId("");
       setCharacterBId("");
       setCharacterBSearch("");
@@ -658,8 +674,22 @@ function CreateRelationshipModal({
       setError(null);
       setSuccess(null);
       setSearchResults([]);
+    } else if (relationshipToEdit) {
+      // Populate form with relationship data for editing
+      const charAId = typeof relationshipToEdit.characterId === 'string' 
+        ? relationshipToEdit.characterId 
+        : relationshipToEdit.characterId._id;
+      const charBId = typeof relationshipToEdit.targetCharacterId === 'string'
+        ? relationshipToEdit.targetCharacterId
+        : relationshipToEdit.targetCharacterId._id;
+      
+      setCharacterAId(String(charAId));
+      setCharacterBId(String(charBId));
+      setCharacterBSearch(relationshipToEdit.targetCharacterName);
+      setSelectedTypes(relationshipToEdit.relationshipTypes);
+      setNotes(relationshipToEdit.notes || "");
     }
-  }, [open]);
+  }, [open, relationshipToEdit]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -716,19 +746,22 @@ function CreateRelationshipModal({
     setSuccess(null);
 
     // Validation
-    if (!characterAId) {
-      setError("Please select Character A");
-      return;
-    }
+    if (!isEditMode) {
+      // Only validate character selection when creating, not editing
+      if (!characterAId) {
+        setError("Please select Character A");
+        return;
+      }
 
-    if (!characterBId) {
-      setError("Please select Character B");
-      return;
-    }
+      if (!characterBId) {
+        setError("Please select Character B");
+        return;
+      }
 
-    if (characterAId === characterBId) {
-      setError("A character cannot have a relationship with themselves");
-      return;
+      if (characterAId === characterBId) {
+        setError("A character cannot have a relationship with themselves");
+        return;
+      }
     }
 
     if (selectedTypes.length === 0) {
@@ -743,26 +776,37 @@ function CreateRelationshipModal({
 
     try {
       setSubmitting(true);
-      const res = await fetch("/api/characters/relationships", {
-        method: "POST",
+      
+      const url = "/api/characters/relationships";
+      const method = isEditMode ? "PUT" : "POST";
+      const body = isEditMode
+        ? {
+            relationshipId: relationshipToEdit!._id,
+            relationshipTypes: selectedTypes,
+            notes: notes.trim() || undefined,
+          }
+        : {
+            characterId: characterAId,
+            targetCharacterId: characterBId,
+            relationshipTypes: selectedTypes,
+            notes: notes.trim() || undefined,
+          };
+
+      const res = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          characterId: characterAId,
-          targetCharacterId: characterBId,
-          relationshipTypes: selectedTypes,
-          notes: notes.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to create relationship");
+        throw new Error(data.error || `Failed to ${isEditMode ? 'update' : 'create'} relationship`);
       }
 
-      setSuccess("Relationship created successfully!");
+      setSuccess(`Relationship ${isEditMode ? 'updated' : 'created'} successfully!`);
       // Close modal immediately and refresh in background
       onOpenChange(false);
       // Refresh relationships after a brief delay to ensure API has processed
@@ -770,7 +814,7 @@ function CreateRelationshipModal({
         await onSuccess();
       }, 100);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create relationship");
+      setError(err instanceof Error ? err.message : `Failed to ${isEditMode ? 'update' : 'create'} relationship`);
     } finally {
       setSubmitting(false);
     }
@@ -783,7 +827,7 @@ function CreateRelationshipModal({
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Create New Relationship"
+      title={isEditMode ? "Edit Relationship" : "Create New Relationship"}
       size="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -792,19 +836,25 @@ function CreateRelationshipModal({
           <label className="block text-sm font-bold text-[var(--totk-light-green)] mb-2">
             Character A (Your Character) *
           </label>
-          <select
-            value={characterAId}
-            onChange={(e) => setCharacterAId(e.target.value)}
-            className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2 text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
-            required
-          >
-            <option value="">Select a character...</option>
-            {myCharacters.map((char) => (
-              <option key={char._id} value={char._id}>
-                {char.name} {char.race ? `(${capitalize(char.race)})` : ""}
-              </option>
-            ))}
-          </select>
+          {isEditMode ? (
+            <div className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/50 px-4 py-2 text-[var(--botw-pale)] opacity-75">
+              {selectedCharacterA?.name || relationshipToEdit?.characterName}
+            </div>
+          ) : (
+            <select
+              value={characterAId}
+              onChange={(e) => setCharacterAId(e.target.value)}
+              className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2 text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+              required
+            >
+              <option value="">Select a character...</option>
+              {myCharacters.map((char) => (
+                <option key={char._id} value={char._id}>
+                  {char.name} {char.race ? `(${capitalize(char.race)})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Character B Selection */}
@@ -812,42 +862,47 @@ function CreateRelationshipModal({
           <label className="block text-sm font-bold text-[var(--totk-light-green)] mb-2">
             Character B (Other Character) *
           </label>
-          <div className="relative character-b-dropdown-container">
-            <div className="relative">
-              <input
-                type="text"
-                value={characterBSearch}
-                onChange={(e) => {
-                  const newValue = e.target.value;
-                  setCharacterBSearch(newValue);
-                  // Clear selection when user starts typing something different
-                  if (selectedCharacterB && newValue !== selectedCharacterB.name) {
-                    setCharacterBId("");
-                  }
-                  if (!newValue) {
-                    setCharacterBId("");
-                    setCharacterBSearch("");
-                  }
-                  setCharacterBDropdownOpen(true);
-                }}
-                onFocus={() => {
-                  setCharacterBDropdownOpen(true);
-                  // If characters are loaded and no search term, show initial results
-                  if (allCharacters.length > 0 && !characterBSearch.trim()) {
-                    // Already handled by filteredCharactersB showing first 100
-                  }
-                }}
-                placeholder="Search or select a character..."
-                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2 pr-10 text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setCharacterBDropdownOpen(!characterBDropdownOpen)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[var(--botw-pale)] hover:text-[var(--totk-light-green)] transition-colors"
-              >
-                <i className={`fa-solid ${characterBDropdownOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`} />
-              </button>
+          {isEditMode ? (
+            <div className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/50 px-4 py-2 text-[var(--botw-pale)] opacity-75">
+              {relationshipToEdit?.targetCharacterName}
             </div>
+          ) : (
+            <div className="relative character-b-dropdown-container">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={characterBSearch}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    setCharacterBSearch(newValue);
+                    // Clear selection when user starts typing something different
+                    if (selectedCharacterB && newValue !== selectedCharacterB.name) {
+                      setCharacterBId("");
+                    }
+                    if (!newValue) {
+                      setCharacterBId("");
+                      setCharacterBSearch("");
+                    }
+                    setCharacterBDropdownOpen(true);
+                  }}
+                  onFocus={() => {
+                    setCharacterBDropdownOpen(true);
+                    // If characters are loaded and no search term, show initial results
+                    if (allCharacters.length > 0 && !characterBSearch.trim()) {
+                      // Already handled by filteredCharactersB showing first 100
+                    }
+                  }}
+                  placeholder="Search or select a character..."
+                  className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2 pr-10 text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCharacterBDropdownOpen(!characterBDropdownOpen)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[var(--botw-pale)] hover:text-[var(--totk-light-green)] transition-colors"
+                >
+                  <i className={`fa-solid ${characterBDropdownOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`} />
+                </button>
+              </div>
             {characterBDropdownOpen && (loadingCharacters || loadingSearch) && (
               <div className="absolute z-10 mt-1 w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
                 <p className="text-sm text-[var(--botw-pale)] opacity-75 text-center">
@@ -911,12 +966,13 @@ function CreateRelationshipModal({
                 </p>
               </div>
             )}
-          </div>
-          {selectedCharacterB && (
-            <div className="mt-2 rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/50 p-2">
-              <span className="text-sm text-[var(--botw-pale)]">
-                Selected: <span className="font-semibold text-[var(--totk-light-green)]">{selectedCharacterB.name}</span>
-              </span>
+            {selectedCharacterB && (
+              <div className="mt-2 rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/50 p-2">
+                <span className="text-sm text-[var(--botw-pale)]">
+                  Selected: <span className="font-semibold text-[var(--totk-light-green)]">{selectedCharacterB.name}</span>
+                </span>
+              </div>
+            )}
             </div>
           )}
         </div>
@@ -1011,12 +1067,12 @@ function CreateRelationshipModal({
             {submitting ? (
               <>
                 <i className="fa-solid fa-spinner fa-spin mr-2" />
-                Creating...
+                {isEditMode ? "Updating..." : "Creating..."}
               </>
             ) : (
               <>
-                <i className="fa-solid fa-heart mr-2" />
-                Create Relationship
+                <i className={`fa-solid ${isEditMode ? 'fa-pencil' : 'fa-heart'} mr-2`} />
+                {isEditMode ? "Update Relationship" : "Create Relationship"}
               </>
             )}
           </button>
@@ -1034,12 +1090,14 @@ function AllEntriesTabContent({
   relationships, 
   user, 
   myCharacters,
-  onRefresh
+  onRefresh,
+  onEditClick
 }: { 
   relationships: Relationship[]; 
   user: { id: string } | null;
   myCharacters: Character[];
   onRefresh: () => void;
+  onEditClick: (relationship: Relationship) => void;
 }) {
   const [search, setSearch] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<RelationshipType[]>([]);
@@ -1345,23 +1403,35 @@ function AllEntriesTabContent({
                   key={relationship._id}
                   className="relative rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/40 via-[var(--botw-warm-black)]/50 to-[var(--totk-brown)]/40 p-4 shadow-lg hover:border-[var(--totk-light-green)] transition-all"
                 >
-                  {/* Delete Button */}
+                  {/* Edit and Delete Buttons */}
                   {isOwnRelationship && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(relationship._id, relationship.characterName, relationship.targetCharacterName);
-                      }}
-                      disabled={isDeleting}
-                      className="absolute top-2 right-2 z-10 rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Delete relationship"
-                    >
-                      {isDeleting ? (
-                        <i className="fa-solid fa-spinner fa-spin text-xs" />
-                      ) : (
-                        <i className="fa-solid fa-trash text-xs" />
-                      )}
-                    </button>
+                    <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditClick(relationship);
+                        }}
+                        className="rounded-md border-2 border-[var(--totk-light-green)]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20 hover:border-[var(--totk-light-green)] transition-colors"
+                        title="Edit relationship"
+                      >
+                        <i className="fa-solid fa-pencil text-xs" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(relationship._id, relationship.characterName, relationship.targetCharacterName);
+                        }}
+                        disabled={isDeleting}
+                        className="rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete relationship"
+                      >
+                        {isDeleting ? (
+                          <i className="fa-solid fa-spinner fa-spin text-xs" />
+                        ) : (
+                          <i className="fa-solid fa-trash text-xs" />
+                        )}
+                      </button>
+                    </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
                     {/* Character A */}
@@ -1512,6 +1582,8 @@ export default function RelationshipsPage() {
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [relationshipToEdit, setRelationshipToEdit] = useState<Relationship | null>(null);
 
   // Refresh relationships after creation or deletion
   const refreshRelationships = useCallback(async () => {
@@ -1890,6 +1962,10 @@ export default function RelationshipsPage() {
                 user={user}
                 myCharacters={myCharacters}
                 onRefresh={fetchAllRelationships}
+                onEditClick={(relationship) => {
+                  setRelationshipToEdit(relationship);
+                  setEditModalOpen(true);
+                }}
               />
             ) : (
               <>
@@ -1953,6 +2029,10 @@ export default function RelationshipsPage() {
             }
             console.log("[relationships/page.tsx] CharacterRelationshipsModal onRefresh completed");
           }}
+          onEditClick={(relationship) => {
+            setRelationshipToEdit(relationship);
+            setEditModalOpen(true);
+          }}
         />
 
         {activeTab === "my-relationships" && (
@@ -1967,6 +2047,32 @@ export default function RelationshipsPage() {
             }}
           />
         )}
+
+        {/* Edit modal - available from any tab */}
+        <CreateRelationshipModal
+          myCharacters={myCharacters}
+          open={editModalOpen}
+          onOpenChange={(open) => {
+            setEditModalOpen(open);
+            if (!open) {
+              setRelationshipToEdit(null);
+            }
+          }}
+          relationshipToEdit={relationshipToEdit}
+          onSuccess={async () => {
+            console.log("[relationships/page.tsx] EditRelationshipModal onSuccess called");
+            await refreshRelationships();
+            // Refresh modal if open
+            if (selectedCharacter) {
+              await fetchCharacterRelationships(selectedCharacter._id);
+            }
+            // Refresh All Entries if on that tab
+            if (activeTab === "all-entries") {
+              await fetchAllRelationships();
+            }
+            console.log("[relationships/page.tsx] EditRelationshipModal onSuccess completed");
+          }}
+        />
       </div>
     </main>
   );
