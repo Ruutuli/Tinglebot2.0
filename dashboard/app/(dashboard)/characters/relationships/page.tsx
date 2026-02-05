@@ -362,7 +362,7 @@ function CharacterRelationshipsModal({
                 </div>
                 <button
                   onClick={() => setDeleteSuccess(null)}
-                  className="text-[var(--totk-light-green)] hover:text-[var(--totk-light-green)]/80"
+                  className="text-[var(--totk-light-green)] hover:text-[var(--totk-light-green)]/80 p-2 -mr-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                 >
                   <i className="fa-solid fa-xmark" />
                 </button>
@@ -380,7 +380,7 @@ function CharacterRelationshipsModal({
                 </div>
                 <button
                   onClick={() => setDeleteError(null)}
-                  className="text-[#ff6347] hover:text-[#ff6347]/80"
+                  className="text-[#ff6347] hover:text-[#ff6347]/80 p-2 -mr-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                 >
                   <i className="fa-solid fa-xmark" />
                 </button>
@@ -398,15 +398,15 @@ function CharacterRelationshipsModal({
             return (
               <div
                 key={`${relData.targetName}-${index}`}
-                className="rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)]/80 to-[var(--totk-brown)]/40 p-5 shadow-lg"
+                className="rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)]/80 to-[var(--totk-brown)]/40 p-3 sm:p-5 shadow-lg"
               >
                 {/* Character Header */}
-                <div className="flex items-center gap-4 mb-5 pb-4 border-b-2 border-[var(--totk-dark-ocher)]/40">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-4 mb-4 sm:mb-5 pb-3 sm:pb-4 border-b-2 border-[var(--totk-dark-ocher)]/40">
                   <Link
                     href={`/characters/${targetSlug}`}
-                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    className="flex flex-col sm:flex-row items-center sm:items-center gap-3 hover:opacity-80 transition-opacity w-full sm:w-auto"
                   >
-                    <div className="relative h-20 w-20 overflow-hidden rounded-lg border-2 border-[var(--totk-light-green)]/50 bg-[var(--botw-warm-black)] shadow-lg ring-2 ring-[var(--totk-light-green)]/20">
+                    <div className="relative h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-lg border-2 border-[var(--totk-light-green)]/50 bg-[var(--botw-warm-black)] shadow-lg ring-2 ring-[var(--totk-light-green)]/20">
                       <Image
                         src={targetIconUrl}
                         alt={relData.targetName}
@@ -415,8 +415,8 @@ function CharacterRelationshipsModal({
                         unoptimized
                       />
                     </div>
-                    <div>
-                      <h4 className="text-lg font-bold text-[var(--totk-light-green)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                    <div className="text-center sm:text-left">
+                      <h4 className="text-base sm:text-lg font-bold text-[var(--totk-light-green)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                         {relData.targetName}
                       </h4>
                       {targetChar?.race && (
@@ -428,7 +428,7 @@ function CharacterRelationshipsModal({
                         <img
                           src={targetVillageCrestIcon}
                           alt={`${targetVillage} crest`}
-                          className="h-6 w-6 object-contain opacity-90 mt-1"
+                          className="h-6 w-6 object-contain opacity-90 mt-1 mx-auto sm:mx-0"
                         />
                       )}
                     </div>
@@ -443,7 +443,7 @@ function CharacterRelationshipsModal({
                   
                   return (
                     <div 
-                      className="relative mb-4 rounded-lg border-2 p-4 shadow-inner"
+                      className="relative mb-3 sm:mb-4 rounded-lg border-2 p-3 sm:p-4 shadow-inner"
                       style={{
                         borderColor: `${primaryConfig.borderColor}`,
                         background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
@@ -457,10 +457,10 @@ function CharacterRelationshipsModal({
                               e.stopPropagation();
                               onEditClick(relData.outgoing!);
                             }}
-                            className="rounded-md border-2 border-[var(--totk-light-green)]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20 hover:border-[var(--totk-light-green)] transition-colors"
+                            className="rounded-md border-2 border-[var(--totk-light-green)]/60 bg-[var(--botw-warm-black)]/90 p-2 sm:p-1.5 text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20 hover:border-[var(--totk-light-green)] transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                             title="Edit relationship"
                           >
-                            <i className="fa-solid fa-pencil text-xs" />
+                            <i className="fa-solid fa-pencil text-sm sm:text-xs" />
                           </button>
                           <button
                             onClick={(e) => {
@@ -468,25 +468,25 @@ function CharacterRelationshipsModal({
                               handleDelete(relData.outgoing!._id, character.name, relData.targetName);
                             }}
                             disabled={isDeleting}
-                            className="rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-2 sm:p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                             title="Delete relationship"
                           >
                             {isDeleting ? (
-                              <i className="fa-solid fa-spinner fa-spin text-xs" />
+                              <i className="fa-solid fa-spinner fa-spin text-sm sm:text-xs" />
                             ) : (
-                              <i className="fa-solid fa-trash text-xs" />
+                              <i className="fa-solid fa-trash text-sm sm:text-xs" />
                             )}
                           </button>
                         </div>
                       )}
-                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap pr-12 sm:pr-16">
                         <div className="flex items-center gap-1.5">
                           {relData.outgoing.relationshipTypes.map((type) => {
                             const config = RELATIONSHIP_CONFIG[type];
                             return (
                               <i 
                                 key={type}
-                                className={`fa-solid ${config.icon} text-lg`}
+                                className={`fa-solid ${config.icon} text-base sm:text-lg`}
                                 style={{ color: config.color }}
                                 title={config.label}
                               />
@@ -494,23 +494,23 @@ function CharacterRelationshipsModal({
                           })}
                         </div>
                         <p 
-                          className="text-sm font-bold uppercase tracking-wider"
+                          className="text-xs sm:text-sm font-bold uppercase tracking-wider"
                           style={{ color: primaryConfig.color }}
                         >
                           {character.name} feels this way:
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2 mb-3">
+                      <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
                         {relData.outgoing.relationshipTypes.map((type) => (
                           <RelationshipTypeBadge key={type} type={type} />
                         ))}
                       </div>
                       {relData.outgoing.notes && (
                         <div 
-                          className="mt-3 pt-3 border-t"
+                          className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t"
                           style={{ borderColor: `${primaryConfig.borderColor}` }}
                         >
-                          <p className="text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
+                          <p className="text-xs sm:text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
                             {relData.outgoing.notes}
                           </p>
                         </div>
@@ -524,20 +524,20 @@ function CharacterRelationshipsModal({
                   const primaryConfig = getPrimaryRelationshipConfig(relData.incoming.relationshipTypes);
                   return (
                     <div 
-                      className="rounded-lg border-2 p-4 shadow-inner"
+                      className="rounded-lg border-2 p-3 sm:p-4 shadow-inner"
                       style={{
                         borderColor: `${primaryConfig.borderColor}`,
                         background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
                       }}
                     >
-                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
                         <div className="flex items-center gap-1.5">
                           {relData.incoming.relationshipTypes.map((type) => {
                             const config = RELATIONSHIP_CONFIG[type];
                             return (
                               <i 
                                 key={type}
-                                className={`fa-solid ${config.icon} text-lg`}
+                                className={`fa-solid ${config.icon} text-base sm:text-lg`}
                                 style={{ color: config.color }}
                                 title={config.label}
                               />
@@ -545,23 +545,23 @@ function CharacterRelationshipsModal({
                           })}
                         </div>
                         <p 
-                          className="text-sm font-bold uppercase tracking-wider"
+                          className="text-xs sm:text-sm font-bold uppercase tracking-wider"
                           style={{ color: primaryConfig.color }}
                         >
                           {relData.targetName} feels this way:
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2 mb-3">
+                      <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
                         {relData.incoming.relationshipTypes.map((type) => (
                           <RelationshipTypeBadge key={type} type={type} />
                         ))}
                       </div>
                       {relData.incoming.notes && (
                         <div 
-                          className="mt-3 pt-3 border-t"
+                          className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t"
                           style={{ borderColor: `${primaryConfig.borderColor}` }}
                         >
-                          <p className="text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
+                          <p className="text-xs sm:text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
                             {relData.incoming.notes}
                           </p>
                         </div>
@@ -893,25 +893,25 @@ function CreateRelationshipModal({
                     }
                   }}
                   placeholder="Search or select a character..."
-                  className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2 pr-10 text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                  className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2.5 sm:py-2 pr-12 sm:pr-10 text-sm sm:text-base text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none min-h-[44px] sm:min-h-0"
                 />
                 <button
                   type="button"
                   onClick={() => setCharacterBDropdownOpen(!characterBDropdownOpen)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[var(--botw-pale)] hover:text-[var(--totk-light-green)] transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 sm:p-2 text-[var(--botw-pale)] hover:text-[var(--totk-light-green)] transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                 >
                   <i className={`fa-solid ${characterBDropdownOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`} />
                 </button>
               </div>
             {characterBDropdownOpen && (loadingCharacters || loadingSearch) && (
-              <div className="absolute z-10 mt-1 w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
+              <div className="absolute z-10 mt-1 w-full max-w-[calc(100vw-2rem)] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
                 <p className="text-sm text-[var(--botw-pale)] opacity-75 text-center">
                   {loadingSearch ? "Searching..." : "Loading characters..."}
                 </p>
               </div>
             )}
             {characterBDropdownOpen && !loadingCharacters && !loadingSearch && filteredCharactersB.length > 0 && (
-              <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg">
+              <div className="absolute z-10 mt-1 max-h-60 w-full max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg">
                 {filteredCharactersB.map((char) => (
                   <button
                     key={char._id}
@@ -927,7 +927,7 @@ function CreateRelationshipModal({
                       // Prevent the click outside handler from firing
                       e.preventDefault();
                     }}
-                    className={`w-full px-4 py-2 text-left hover:bg-[var(--totk-dark-ocher)]/30 transition-colors ${
+                    className={`w-full px-4 py-3 sm:py-2 text-left hover:bg-[var(--totk-dark-ocher)]/30 transition-colors min-h-[44px] sm:min-h-0 ${
                       characterBId === char._id
                         ? "bg-[var(--totk-light-green)]/20 border-l-2 border-[var(--totk-light-green)]"
                         : ""
@@ -946,21 +946,21 @@ function CreateRelationshipModal({
               </div>
             )}
             {characterBDropdownOpen && !loadingCharacters && filteredCharactersB.length === 0 && characterBSearch && (
-              <div className="absolute z-10 mt-1 w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
+              <div className="absolute z-10 mt-1 w-full max-w-[calc(100vw-2rem)] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
                 <p className="text-sm text-[var(--botw-pale)] opacity-75 text-center">
                   No characters found matching "{characterBSearch}"
                 </p>
               </div>
             )}
             {characterBDropdownOpen && !loadingCharacters && !loadingSearch && filteredCharactersB.length === 0 && !characterBSearch && allCharacters.length === 0 && (
-              <div className="absolute z-10 mt-1 w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
+              <div className="absolute z-10 mt-1 w-full max-w-[calc(100vw-2rem)] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
                 <p className="text-sm text-[var(--botw-pale)] opacity-75 text-center">
                   Loading characters...
                 </p>
               </div>
             )}
             {characterBDropdownOpen && !loadingCharacters && !loadingSearch && filteredCharactersB.length === 0 && !characterBSearch && allCharacters.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
+              <div className="absolute z-10 mt-1 w-full max-w-[calc(100vw-2rem)] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 shadow-lg">
                 <p className="text-sm text-[var(--botw-pale)] opacity-75 text-center">
                   Start typing to search for characters...
                 </p>
@@ -982,7 +982,7 @@ function CreateRelationshipModal({
           <label className="block text-sm font-bold text-[var(--totk-light-green)] mb-3">
             Relationship Types * (Select one or more)
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
             {(Object.keys(RELATIONSHIP_CONFIG) as RelationshipType[]).map((type) => {
               const config = RELATIONSHIP_CONFIG[type];
               const isSelected = selectedTypes.includes(type);
@@ -991,7 +991,7 @@ function CreateRelationshipModal({
                   key={type}
                   type="button"
                   onClick={() => toggleRelationshipType(type)}
-                  className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-all ${
+                  className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2.5 sm:py-2 text-sm font-semibold transition-all min-h-[44px] sm:min-h-0 ${
                     isSelected
                       ? "shadow-lg"
                       : "border-[var(--totk-dark-ocher)]/60 hover:border-[var(--totk-dark-ocher)]"
@@ -1050,11 +1050,11 @@ function CreateRelationshipModal({
         )}
 
         {/* Submit Button */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-[var(--totk-dark-ocher)]/40">
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-[var(--totk-dark-ocher)]/40">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-md border-2 border-[var(--totk-dark-ocher)] bg-transparent px-4 py-2 text-sm font-bold text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/20 transition-colors"
+            className="w-full sm:w-auto rounded-md border-2 border-[var(--totk-dark-ocher)] bg-transparent px-4 py-2.5 sm:py-2 text-sm font-bold text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/20 transition-colors min-h-[44px] sm:min-h-0"
             disabled={submitting}
           >
             Cancel
@@ -1062,7 +1062,7 @@ function CreateRelationshipModal({
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-md bg-[var(--totk-light-green)] px-4 py-2 text-sm font-bold text-[var(--botw-warm-black)] hover:bg-[var(--totk-dark-green)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto rounded-md bg-[var(--totk-light-green)] px-4 py-2.5 sm:py-2 text-sm font-bold text-[var(--botw-warm-black)] hover:bg-[var(--totk-dark-green)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0"
           >
             {submitting ? (
               <>
@@ -1325,7 +1325,7 @@ function AllEntriesTabContent({
         className="mb-4"
         customContent={
           user ? (
-            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-[var(--botw-pale)] hover:text-[var(--totk-light-green)] transition-colors">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-[var(--botw-pale)] hover:text-[var(--totk-light-green)] transition-colors py-2">
               <input
                 type="checkbox"
                 checked={myCharactersOnly}
@@ -1333,7 +1333,7 @@ function AllEntriesTabContent({
                   setMyCharactersOnly(e.target.checked);
                   setCurrentPage(1);
                 }}
-                className="h-4 w-4 cursor-pointer accent-[var(--totk-light-green)]"
+                className="h-5 w-5 sm:h-4 sm:w-4 cursor-pointer accent-[var(--totk-light-green)]"
               />
               <span>My Characters Only</span>
             </label>
@@ -1341,8 +1341,8 @@ function AllEntriesTabContent({
         }
       />
 
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-[var(--botw-pale)]">
+      <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <p className="text-xs sm:text-sm text-[var(--botw-pale)]">
           Showing {paginatedRelationships.length} of {filteredAndSorted.length} relationships
         </p>
       </div>
@@ -1357,7 +1357,7 @@ function AllEntriesTabContent({
             </div>
             <button
               onClick={() => setDeleteError(null)}
-              className="text-[#ff6347] hover:text-[#ff6347]/80"
+              className="text-[#ff6347] hover:text-[#ff6347]/80 p-2 -mr-2 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
             >
               <i className="fa-solid fa-xmark" />
             </button>
@@ -1401,7 +1401,7 @@ function AllEntriesTabContent({
               return (
                 <div
                   key={relationship._id}
-                  className="relative rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/40 via-[var(--botw-warm-black)]/50 to-[var(--totk-brown)]/40 p-4 shadow-lg hover:border-[var(--totk-light-green)] transition-all"
+                  className="relative rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/40 via-[var(--botw-warm-black)]/50 to-[var(--totk-brown)]/40 p-3 sm:p-4 shadow-lg hover:border-[var(--totk-light-green)] transition-all"
                 >
                   {/* Edit and Delete Buttons */}
                   {isOwnRelationship && (
@@ -1411,10 +1411,10 @@ function AllEntriesTabContent({
                           e.stopPropagation();
                           onEditClick(relationship);
                         }}
-                        className="rounded-md border-2 border-[var(--totk-light-green)]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20 hover:border-[var(--totk-light-green)] transition-colors"
+                        className="rounded-md border-2 border-[var(--totk-light-green)]/60 bg-[var(--botw-warm-black)]/90 p-2 sm:p-1.5 text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/20 hover:border-[var(--totk-light-green)] transition-colors min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                         title="Edit relationship"
                       >
-                        <i className="fa-solid fa-pencil text-xs" />
+                        <i className="fa-solid fa-pencil text-sm sm:text-xs" />
                       </button>
                       <button
                         onClick={(e) => {
@@ -1422,25 +1422,25 @@ function AllEntriesTabContent({
                           handleDelete(relationship._id, relationship.characterName, relationship.targetCharacterName);
                         }}
                         disabled={isDeleting}
-                        className="rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-2 sm:p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                         title="Delete relationship"
                       >
                         {isDeleting ? (
-                          <i className="fa-solid fa-spinner fa-spin text-xs" />
+                          <i className="fa-solid fa-spinner fa-spin text-sm sm:text-xs" />
                         ) : (
-                          <i className="fa-solid fa-trash text-xs" />
+                          <i className="fa-solid fa-trash text-sm sm:text-xs" />
                         )}
                       </button>
                     </div>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4">
                     {/* Character A */}
-                    <div className="flex items-center gap-3 min-w-0 max-w-full sm:max-w-[200px] justify-self-start">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-full sm:max-w-[200px] justify-self-start">
                       <Link
                         href={`/characters/${charASlug}`}
-                        className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0 flex-1"
+                        className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity min-w-0 flex-1"
                       >
-                        <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
+                        <div className="relative h-12 w-12 sm:h-16 sm:w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
                           <Image
                             src={charAIconUrl}
                             alt={relationship.characterName}
@@ -1472,9 +1472,9 @@ function AllEntriesTabContent({
                     </div>
 
                     {/* Relationship Types & Info - Centered */}
-                    <div className="flex flex-col items-center justify-center gap-2.5 min-w-0 px-2 sm:px-4 order-first sm:order-none">
+                    <div className="flex flex-col items-center justify-center gap-2 sm:gap-2.5 min-w-0 px-2 sm:px-4 order-first sm:order-none">
                       {/* Direction label for mobile */}
-                      <div className="sm:hidden text-xs text-[var(--botw-pale)] opacity-75 mb-1">
+                      <div className="sm:hidden text-xs text-[var(--botw-pale)] opacity-75 mb-1 text-center px-2">
                         <span className="font-semibold text-[var(--totk-light-green)]">{relationship.characterName}</span>
                         {" "}feels this way about{" "}
                         <span className="font-semibold text-[var(--totk-light-green)]">{relationship.targetCharacterName}</span>
@@ -1486,7 +1486,7 @@ function AllEntriesTabContent({
                           return (
                             <i 
                               key={type}
-                              className={`fa-solid ${config.icon} text-xl`}
+                              className={`fa-solid ${config.icon} text-lg sm:text-xl`}
                               style={{ color: config.color }}
                               title={config.label}
                             />
@@ -1494,13 +1494,13 @@ function AllEntriesTabContent({
                         })}
                       </div>
                       {/* Relationship Type Badges */}
-                      <div className="flex flex-wrap items-center justify-center gap-2">
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                         {relationship.relationshipTypes.map((type) => (
                           <RelationshipTypeBadge key={type} type={type} />
                         ))}
                       </div>
                       {hasNotes && (
-                        <p className="text-xs text-[var(--botw-pale)] text-center break-words whitespace-pre-wrap max-w-2xl w-full">
+                        <p className="text-xs text-[var(--botw-pale)] text-center break-words whitespace-pre-wrap max-w-full sm:max-w-2xl w-full px-2">
                           {relationship.notes}
                         </p>
                       )}
@@ -1512,12 +1512,12 @@ function AllEntriesTabContent({
                     </div>
 
                     {/* Character B */}
-                    <div className="flex items-center gap-3 min-w-0 max-w-full sm:max-w-[200px] sm:flex-row-reverse justify-self-end">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 max-w-full sm:max-w-[200px] sm:flex-row-reverse justify-self-end">
                       <Link
                         href={`/characters/${charBSlug}`}
-                        className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0 flex-1 sm:flex-row-reverse"
+                        className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity min-w-0 flex-1 sm:flex-row-reverse"
                       >
-                        <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
+                        <div className="relative h-12 w-12 sm:h-16 sm:w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
                           <Image
                             src={charBIconUrl}
                             alt={relationship.targetCharacterName}
@@ -1906,8 +1906,8 @@ export default function RelationshipsPage() {
   const currentCharacters = activeTab === "my-relationships" ? myCharacters : allCharacters;
 
   return (
-    <main className="min-h-full p-4 sm:p-6 md:p-8">
-      <div className="mx-auto max-w-[90rem]">
+    <main className="min-h-full p-4 sm:p-6 md:p-8 overflow-x-hidden">
+      <div className="mx-auto max-w-[90rem] w-full">
         <header className="mb-6 sm:mb-8 flex flex-col items-center justify-center gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
             <img src="/Side=Left.svg" alt="" className="h-5 w-auto sm:h-6 md:h-8 opacity-80" aria-hidden="true" />
@@ -1934,15 +1934,15 @@ export default function RelationshipsPage() {
         </div>
 
         {error && (
-          <div className="mb-6 rounded-lg border-2 border-[#ff6347] bg-[var(--botw-warm-black)]/90 p-6 shadow-lg" role="alert">
-            <div className="flex items-start gap-4">
-              <i className="fa-solid fa-exclamation-triangle text-2xl text-[#ff6347]" aria-hidden="true" />
-              <div className="flex-1">
-                <h3 className="mb-2 text-lg font-bold text-[#ff6347]">Error</h3>
-                <p className="mb-4 text-sm text-[var(--botw-pale)]">{error}</p>
+          <div className="mb-6 rounded-lg border-2 border-[#ff6347] bg-[var(--botw-warm-black)]/90 p-4 sm:p-6 shadow-lg" role="alert">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <i className="fa-solid fa-exclamation-triangle text-xl sm:text-2xl text-[#ff6347] flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="flex-1 min-w-0">
+                <h3 className="mb-2 text-base sm:text-lg font-bold text-[#ff6347]">Error</h3>
+                <p className="mb-4 text-xs sm:text-sm text-[var(--botw-pale)] break-words">{error}</p>
                 <button
                   onClick={() => window.location.reload()}
-                  className="rounded-md bg-[var(--totk-mid-ocher)] px-4 py-2 text-sm font-bold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors"
+                  className="rounded-md bg-[var(--totk-mid-ocher)] px-4 py-2.5 sm:py-2 text-sm font-bold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors min-h-[44px] sm:min-h-0"
                 >
                   <i className="fa-solid fa-rotate-right mr-2" />
                   Try Again
@@ -1973,7 +1973,7 @@ export default function RelationshipsPage() {
                   <div className="mb-6 flex justify-end">
                     <button
                       onClick={() => setCreateModalOpen(true)}
-                      className="flex items-center gap-2 rounded-md bg-[var(--totk-light-green)] px-4 py-2 text-sm font-bold text-[var(--botw-warm-black)] hover:bg-[var(--totk-dark-green)] transition-colors shadow-lg"
+                      className="flex items-center gap-2 rounded-md bg-[var(--totk-light-green)] px-4 py-2.5 sm:py-2 text-sm font-bold text-[var(--botw-warm-black)] hover:bg-[var(--totk-dark-green)] transition-colors shadow-lg min-h-[44px] sm:min-h-0"
                     >
                       <i className="fa-solid fa-heart-circle-plus" />
                       Create New Relationship

@@ -32,10 +32,10 @@ interface ModalProps {
 /* [modal.tsx]✨ Class maps - */
 const sizeClasses = {
   full: "w-[100vw] h-[100vh] max-w-none max-h-none rounded-none",
-  lg: "max-w-2xl",
-  md: "max-w-lg",
-  sm: "max-w-md",
-  xl: "max-w-4xl",
+  lg: "max-w-[95vw] sm:max-w-2xl",
+  md: "max-w-[95vw] sm:max-w-lg",
+  sm: "max-w-[95vw] sm:max-w-md",
+  xl: "max-w-[95vw] sm:max-w-4xl",
 };
 
 const styles = {
@@ -75,8 +75,8 @@ export function Modal({
         <Dialog.Content
           className={clsx(
             size === "full"
-              ? "fixed inset-0 z-50 w-full h-full border-0 p-6 shadow-2xl animate-in fade-in duration-200"
-              : "fixed left-1/2 top-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200",
+              ? "fixed inset-0 z-50 w-full h-full border-0 p-4 sm:p-6 shadow-2xl animate-in fade-in duration-200"
+              : "fixed left-1/2 top-4 sm:top-1/2 z-50 w-full -translate-x-1/2 translate-y-0 sm:-translate-y-1/2 rounded-xl border-2 p-4 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200",
             sizeClasses[size],
             className
           )}
@@ -84,7 +84,7 @@ export function Modal({
         >
           {title && (
             <Dialog.Title
-              className="mb-2 text-2xl font-bold"
+              className="mb-2 text-xl sm:text-2xl font-bold pr-10 sm:pr-0"
               style={{ color: "var(--totk-light-ocher)" }}
             >
               {title}
@@ -98,15 +98,15 @@ export function Modal({
               {description}
             </Dialog.Description>
           )}
-          <div className={size === "full" ? "h-[calc(100vh-8rem)] overflow-y-auto" : "max-h-[80vh] overflow-y-auto"}>{children}</div>
+          <div className={size === "full" ? "h-[calc(100vh-8rem)] overflow-y-auto" : "max-h-[90vh] sm:max-h-[80vh] overflow-y-auto"}>{children}</div>
           <Dialog.Close asChild>
             <button
               type="button"
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]"
+              className="absolute right-3 top-3 sm:right-4 sm:top-4 flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]"
               style={{ color: "var(--botw-pale)" }}
               aria-label="Close"
             >
-              <i aria-hidden className="fa-solid fa-xmark" />
+              <i aria-hidden className="fa-solid fa-xmark text-base sm:text-sm" />
             </button>
           </Dialog.Close>
         </Dialog.Content>
