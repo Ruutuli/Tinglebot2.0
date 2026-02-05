@@ -193,6 +193,8 @@ function CharacterRelationshipsModal({
   open,
   onOpenChange,
   loading,
+  user,
+  onRefresh,
 }: {
   character: Character | null;
   outgoingRelationships: Relationship[];
@@ -200,8 +202,50 @@ function CharacterRelationshipsModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loading: boolean;
+  user: { id: string } | null;
+  onRefresh: () => void;
 }) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   if (!character) return null;
+
+  const handleDelete = useCallback(async (relationshipId: string, characterName: string, targetName: string) => {
+    // Confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the relationship between ${characterName} and ${targetName}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(relationshipId);
+      setDeleteError(null);
+
+      const res = await fetch("/api/characters/relationships", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ relationshipId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete relationship");
+      }
+
+      // Refresh the relationships
+      onRefresh();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to delete relationship";
+      setDeleteError(errorMessage);
+      console.error("[CharacterRelationshipsModal] Failed to delete relationship:", err);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [onRefresh]);
 
   // Group relationships by target character
   const relationshipMap = useMemo(() => {
@@ -269,6 +313,24 @@ function CharacterRelationshipsModal({
         </div>
       ) : (
         <div className="space-y-5">
+          {/* Delete Error Message */}
+          {deleteError && (
+            <div className="mb-4 rounded-lg border-2 border-[#ff6347] bg-[var(--botw-warm-black)]/90 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-exclamation-circle text-[#ff6347]" />
+                  <p className="text-sm text-[#ff6347]">{deleteError}</p>
+                </div>
+                <button
+                  onClick={() => setDeleteError(null)}
+                  className="text-[#ff6347] hover:text-[#ff6347]/80"
+                >
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {relationshipMap.map((relData, index) => {
             const targetChar = relData.targetChar;
             const targetIconUrl = targetChar?.icon ? normalizeImageUrl(targetChar.icon) : "/ankle_icon.png";
@@ -319,14 +381,35 @@ function CharacterRelationshipsModal({
                 {/* My character feels this way */}
                 {relData.outgoing && (() => {
                   const primaryConfig = getPrimaryRelationshipConfig(relData.outgoing.relationshipTypes);
+                  const isOwnRelationship = relData.outgoing.userId === user?.id;
+                  const isDeleting = deletingId === relData.outgoing._id;
+                  
                   return (
                     <div 
-                      className="mb-4 rounded-lg border-2 p-4 shadow-inner"
+                      className="relative mb-4 rounded-lg border-2 p-4 shadow-inner"
                       style={{
                         borderColor: `${primaryConfig.borderColor}`,
                         background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
                       }}
                     >
+                      {/* Delete Button */}
+                      {isOwnRelationship && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(relData.outgoing!._id, character.name, relData.targetName);
+                          }}
+                          disabled={isDeleting}
+                          className="absolute top-2 right-2 z-10 rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Delete relationship"
+                        >
+                          {isDeleting ? (
+                            <i className="fa-solid fa-spinner fa-spin text-xs" />
+                          ) : (
+                            <i className="fa-solid fa-trash text-xs" />
+                          )}
+                        </button>
+                      )}
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
                         <div className="flex items-center gap-1.5">
                           {relData.outgoing.relationshipTypes.map((type) => {
@@ -893,11 +976,13 @@ function CreateRelationshipModal({
 function AllEntriesTabContent({ 
   relationships, 
   user, 
-  myCharacters 
+  myCharacters,
+  onRefresh
 }: { 
   relationships: Relationship[]; 
   user: { id: string } | null;
   myCharacters: Character[];
+  onRefresh: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<RelationshipType[]>([]);
@@ -905,6 +990,8 @@ function AllEntriesTabContent({
   const [sortBy, setSortBy] = useState<string>("date-desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(24);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Create a Set of user's character IDs for efficient lookup
   const myCharacterIds = useMemo(() => {
@@ -1071,6 +1158,43 @@ function AllEntriesTabContent({
     setCurrentPage(page);
   }, []);
 
+  const handleDelete = useCallback(async (relationshipId: string, characterName: string, targetName: string) => {
+    // Confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the relationship between ${characterName} and ${targetName}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(relationshipId);
+      setDeleteError(null);
+
+      const res = await fetch("/api/characters/relationships", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ relationshipId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete relationship");
+      }
+
+      // Refresh the relationships list
+      onRefresh();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to delete relationship";
+      setDeleteError(errorMessage);
+      console.error("[AllEntriesTabContent] Failed to delete relationship:", err);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [onRefresh]);
+
   return (
     <div>
       <SearchFilterBar
@@ -1108,6 +1232,24 @@ function AllEntriesTabContent({
         </p>
       </div>
 
+      {/* Delete Error Message */}
+      {deleteError && (
+        <div className="mb-4 rounded-lg border-2 border-[#ff6347] bg-[var(--botw-warm-black)]/90 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <i className="fa-solid fa-exclamation-circle text-[#ff6347]" />
+              <p className="text-sm text-[#ff6347]">{deleteError}</p>
+            </div>
+            <button
+              onClick={() => setDeleteError(null)}
+              className="text-[#ff6347] hover:text-[#ff6347]/80"
+            >
+              <i className="fa-solid fa-xmark" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {paginatedRelationships.length === 0 ? (
         <div className={EMPTY_STATE_CLASS}>
           <div className="text-6xl mb-4">💝</div>
@@ -1138,11 +1280,32 @@ function AllEntriesTabContent({
               const charBSlug = createSlug(relationship.targetCharacterName);
               const hasNotes = relationship.notes && relationship.notes.trim().length > 0;
 
+              const isOwnRelationship = relationship.userId === user?.id;
+              const isDeleting = deletingId === relationship._id;
+
               return (
                 <div
                   key={relationship._id}
-                  className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/40 via-[var(--botw-warm-black)]/50 to-[var(--totk-brown)]/40 p-4 shadow-lg hover:border-[var(--totk-light-green)] transition-all"
+                  className="relative rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/40 via-[var(--botw-warm-black)]/50 to-[var(--totk-brown)]/40 p-4 shadow-lg hover:border-[var(--totk-light-green)] transition-all"
                 >
+                  {/* Delete Button */}
+                  {isOwnRelationship && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(relationship._id, relationship.characterName, relationship.targetCharacterName);
+                      }}
+                      disabled={isDeleting}
+                      className="absolute top-2 right-2 z-10 rounded-md border-2 border-[#ff6347]/60 bg-[var(--botw-warm-black)]/90 p-1.5 text-[#ff6347] hover:bg-[#ff6347]/20 hover:border-[#ff6347] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete relationship"
+                    >
+                      {isDeleting ? (
+                        <i className="fa-solid fa-spinner fa-spin text-xs" />
+                      ) : (
+                        <i className="fa-solid fa-trash text-xs" />
+                      )}
+                    </button>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
                     {/* Character A */}
                     <Link
@@ -1436,54 +1599,43 @@ export default function RelationshipsPage() {
   }, [activeTab]);
 
   // Fetch all relationships for all-entries tab
+  const fetchAllRelationships = useCallback(async () => {
+    if (activeTab !== "all-entries") return;
+
+    try {
+      setLoadingCharacters(true);
+      setError(null);
+
+      const res = await fetch("/api/characters/relationships/all");
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch all relationships: ${res.status} ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      setAllRelationships(data.relationships || []);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error("[relationships/page.tsx] ❌ Failed to load all relationships:", error);
+      setError(error.message);
+    } finally {
+      setLoadingCharacters(false);
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     if (activeTab !== "all-entries") return;
 
     const abortController = new AbortController();
-
-    const fetchAllRelationships = async () => {
-      try {
-        setLoadingCharacters(true);
-        setError(null);
-
-        const res = await fetch("/api/characters/relationships/all", {
-          signal: abortController.signal,
-        });
-
-        if (!res.ok) {
-          throw new Error(`Failed to fetch all relationships: ${res.status} ${res.statusText}`);
-        }
-
-        const data = await res.json();
-        if (!abortController.signal.aborted) {
-          setAllRelationships(data.relationships || []);
-        }
-      } catch (err) {
-        if (abortController.signal.aborted) return;
-        const error = err instanceof Error ? err : new Error(String(err));
-        console.error("[relationships/page.tsx] ❌ Failed to load all relationships:", error);
-        setError(error.message);
-      } finally {
-        if (!abortController.signal.aborted) {
-          setLoadingCharacters(false);
-        }
-      }
-    };
-
     fetchAllRelationships();
     return () => abortController.abort();
-  }, [activeTab]);
+  }, [activeTab, fetchAllRelationships]);
 
   // Fetch relationships for selected character
-  const handleCharacterClick = useCallback(async (character: Character) => {
-    setSelectedCharacter(character);
-    setModalOpen(true);
-    setLoadingRelationships(true);
-    setOutgoingRelationships([]);
-    setIncomingRelationships([]);
-
+  const fetchCharacterRelationships = useCallback(async (characterId: string) => {
     try {
-      const res = await fetch(`/api/characters/relationships/${character._id}`);
+      setLoadingRelationships(true);
+      const res = await fetch(`/api/characters/relationships/${characterId}`);
       if (!res.ok) {
         throw new Error(`Failed to fetch relationships: ${res.status}`);
       }
@@ -1497,6 +1649,14 @@ export default function RelationshipsPage() {
       setLoadingRelationships(false);
     }
   }, []);
+
+  const handleCharacterClick = useCallback(async (character: Character) => {
+    setSelectedCharacter(character);
+    setModalOpen(true);
+    setOutgoingRelationships([]);
+    setIncomingRelationships([]);
+    await fetchCharacterRelationships(character._id);
+  }, [fetchCharacterRelationships]);
 
   if (sessionLoading) {
     return (
@@ -1591,6 +1751,7 @@ export default function RelationshipsPage() {
                 relationships={allRelationships} 
                 user={user}
                 myCharacters={myCharacters}
+                onRefresh={fetchAllRelationships}
               />
             ) : (
               <>
@@ -1641,6 +1802,12 @@ export default function RelationshipsPage() {
           open={modalOpen}
           onOpenChange={setModalOpen}
           loading={loadingRelationships}
+          user={user}
+          onRefresh={() => {
+            if (selectedCharacter) {
+              fetchCharacterRelationships(selectedCharacter._id);
+            }
+          }}
         />
 
         {activeTab === "my-relationships" && (
