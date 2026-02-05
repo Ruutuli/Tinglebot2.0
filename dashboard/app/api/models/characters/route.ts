@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
       }
     }
     if (villages.length) {
-      const villageFilter = buildCaseInsensitiveFilter("currentVillage", villages);
+      const villageFilter = buildCaseInsensitiveFilter("homeVillage", villages);
       if (filter.$or || filter.$and) {
         // If we already have $or or $and, add to $and
         if (!filter.$and) filter.$and = [];
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
       }
     }
     if (villages.length) {
-      const villageFilter = buildCaseInsensitiveFilter("currentVillage", villages);
+      const villageFilter = buildCaseInsensitiveFilter("homeVillage", villages);
       if (modFilter.$or || modFilter.$and) {
         // If we already have $or or $and, add to $and
         if (!modFilter.$and) modFilter.$and = [];

@@ -5,7 +5,7 @@
 /* ============================================================================ */
 
 /* [search-filter-bar.tsx]✨ Core deps - */
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 
 /* ============================================================================ */
 /* ------------------- Types ------------------- */
@@ -36,6 +36,7 @@ export type SearchFilterBarProps = {
   onFilterChange?: (groupId: string, optionId: string, active: boolean) => void;
   onClearAll?: () => void;
   className?: string;
+  customContent?: React.ReactNode;
 };
 
 /* ============================================================================ */
@@ -51,6 +52,7 @@ export function SearchFilterBar({
   onFilterChange,
   onClearAll,
   className = "",
+  customContent,
 }: SearchFilterBarProps) {
   const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
 
@@ -174,9 +176,15 @@ export function SearchFilterBar({
       </div>
 
       {/* Filter Bar */}
-      {filterGroups.length > 0 && (
+      {(filterGroups.length > 0 || customContent) && (
         <div className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-3 sm:p-4 shadow-lg">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Custom Content */}
+            {customContent && (
+              <div className="flex items-center">
+                {customContent}
+              </div>
+            )}
             {/* Filter Groups */}
             <div className="flex flex-wrap gap-2 flex-1 min-w-0">
               {filterGroups.map((group) => {
