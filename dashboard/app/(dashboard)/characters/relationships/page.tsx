@@ -188,8 +188,8 @@ function CharacterCard({
 
 function CharacterRelationshipsModal({
   character,
-  outgoingRelationships,
-  incomingRelationships,
+  outgoingRelationships: initialOutgoingRelationships,
+  incomingRelationships: initialIncomingRelationships,
   open,
   onOpenChange,
   loading,
@@ -205,8 +205,18 @@ function CharacterRelationshipsModal({
   user: { id: string } | null;
   onRefresh: () => void;
 }) {
+  // Use local state to allow optimistic updates
+  const [outgoingRelationships, setOutgoingRelationships] = useState<Relationship[]>(initialOutgoingRelationships);
+  const [incomingRelationships, setIncomingRelationships] = useState<Relationship[]>(initialIncomingRelationships);
+
+  // Update local state when props change (when modal opens or data refreshes)
+  useEffect(() => {
+    setOutgoingRelationships(initialOutgoingRelationships);
+    setIncomingRelationships(initialIncomingRelationships);
+  }, [initialOutgoingRelationships, initialIncomingRelationships]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
 
   const handleDelete = useCallback(async (relationshipId: string, characterName: string, targetName: string) => {
     // Confirmation dialog
@@ -219,6 +229,7 @@ function CharacterRelationshipsModal({
     try {
       setDeletingId(relationshipId);
       setDeleteError(null);
+      setDeleteSuccess(null);
 
       const res = await fetch("/api/characters/relationships", {
         method: "DELETE",
@@ -234,8 +245,23 @@ function CharacterRelationshipsModal({
         throw new Error(data.error || "Failed to delete relationship");
       }
 
-      // Refresh the relationships
-      onRefresh();
+      // Optimistically remove the relationship from the UI immediately
+      // This makes the UI feel more responsive while the refresh happens
+      setOutgoingRelationships(prev => prev.filter(rel => rel._id !== relationshipId));
+      setIncomingRelationships(prev => prev.filter(rel => rel._id !== relationshipId));
+
+      // Show success message
+      setDeleteSuccess(`Relationship between ${characterName} and ${targetName} deleted successfully`);
+
+      // Refresh the relationships to ensure we have the latest data
+      console.log("[CharacterRelationshipsModal] Refreshing relationships after delete...");
+      await onRefresh();
+      console.log("[CharacterRelationshipsModal] Relationships refreshed");
+
+      // Auto-clear success message after 3 seconds
+      setTimeout(() => {
+        setDeleteSuccess(null);
+      }, 3000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to delete relationship";
       setDeleteError(errorMessage);
@@ -291,6 +317,17 @@ function CharacterRelationshipsModal({
 
   const totalRelationships = relationshipMap.length;
 
+  // Auto-close modal if all relationships are deleted
+  useEffect(() => {
+    if (!loading && totalRelationships === 0 && deleteSuccess) {
+      // Close modal after showing success message for 2 seconds
+      const timer = setTimeout(() => {
+        onOpenChange(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, totalRelationships, deleteSuccess, onOpenChange]);
+
   if (!character) return null;
 
   return (
@@ -313,6 +350,24 @@ function CharacterRelationshipsModal({
         </div>
       ) : (
         <div className="space-y-5">
+          {/* Delete Success Message */}
+          {deleteSuccess && (
+            <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--botw-warm-black)]/90 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-check-circle text-[var(--totk-light-green)]" />
+                  <p className="text-sm text-[var(--totk-light-green)]">{deleteSuccess}</p>
+                </div>
+                <button
+                  onClick={() => setDeleteSuccess(null)}
+                  className="text-[var(--totk-light-green)] hover:text-[var(--totk-light-green)]/80"
+                >
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Delete Error Message */}
           {deleteError && (
             <div className="mb-4 rounded-lg border-2 border-[#ff6347] bg-[var(--botw-warm-black)]/90 p-4">
@@ -518,7 +573,7 @@ function CreateRelationshipModal({
   myCharacters: Character[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
 }) {
   const [characterAId, setCharacterAId] = useState<string>("");
   const [characterBId, setCharacterBId] = useState<string>("");
@@ -708,10 +763,12 @@ function CreateRelationshipModal({
       }
 
       setSuccess("Relationship created successfully!");
-      setTimeout(() => {
-        onSuccess();
-        onOpenChange(false);
-      }, 1000);
+      // Close modal immediately and refresh in background
+      onOpenChange(false);
+      // Refresh relationships after a brief delay to ensure API has processed
+      setTimeout(async () => {
+        await onSuccess();
+      }, 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create relationship");
     } finally {
@@ -1456,16 +1513,33 @@ export default function RelationshipsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  // Refresh relationships after creation
+  // Refresh relationships after creation or deletion
   const refreshRelationships = useCallback(async () => {
-    if (activeTab !== "my-relationships" && activeTab !== "all-relationships") return;
+    // Only refresh counts if we're on a tab that shows character cards with counts
+    if (activeTab !== "my-relationships" && activeTab !== "all-relationships") {
+      console.log("[relationships/page.tsx] Skipping refresh - not on my-relationships or all-relationships tab, current tab:", activeTab);
+      return;
+    }
 
+    console.log("[relationships/page.tsx] Starting refreshRelationships...");
     try {
-      const res = await fetch("/api/characters/relationships/all");
-      if (!res.ok) return;
+      // Add cache-busting timestamp to ensure we get fresh data
+      const timestamp = Date.now();
+      const res = await fetch(`/api/characters/relationships/all?t=${timestamp}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
+      if (!res.ok) {
+        console.error("[relationships/page.tsx] Failed to fetch relationships for counts:", res.status);
+        return;
+      }
 
       const data = await res.json();
       const relationships = data.relationships || [];
+      console.log("[relationships/page.tsx] Fetched", relationships.length, "relationships");
+      
       const counts = new Map<string, number>();
 
       relationships.forEach((rel: Relationship) => {
@@ -1473,14 +1547,20 @@ export default function RelationshipsPage() {
         const targetId = getCharacterId(rel.targetCharacterId);
         
         if (charId) {
-          counts.set(charId, (counts.get(charId) || 0) + 1);
+          const currentCount = counts.get(charId) || 0;
+          counts.set(charId, currentCount + 1);
         }
         if (targetId) {
-          counts.set(targetId, (counts.get(targetId) || 0) + 1);
+          const currentCount = counts.get(targetId) || 0;
+          counts.set(targetId, currentCount + 1);
         }
       });
 
-      setRelationshipCounts(counts);
+      // Create a new Map instance to ensure React detects the change
+      const newCounts = new Map(counts);
+      console.log("[relationships/page.tsx] Setting relationship counts:", Array.from(newCounts.entries()));
+      setRelationshipCounts(newCounts);
+      console.log("[relationships/page.tsx] Refreshed relationship counts:", counts.size, "characters with relationships");
     } catch (err) {
       console.error("[relationships/page.tsx] ❌ Failed to refresh relationship counts:", err);
     }
@@ -1494,8 +1574,14 @@ export default function RelationshipsPage() {
 
     const fetchRelationshipsForCounts = async () => {
       try {
-        const res = await fetch("/api/characters/relationships/all", {
+        // Add cache-busting timestamp to ensure fresh data
+        const timestamp = Date.now();
+        const res = await fetch(`/api/characters/relationships/all?t=${timestamp}`, {
           signal: abortController.signal,
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
         });
 
         if (!res.ok) return;
@@ -1511,15 +1597,19 @@ export default function RelationshipsPage() {
           const targetId = getCharacterId(rel.targetCharacterId);
           
           if (charId) {
-            counts.set(charId, (counts.get(charId) || 0) + 1);
+            const currentCount = counts.get(charId) || 0;
+            counts.set(charId, currentCount + 1);
           }
           if (targetId) {
-            counts.set(targetId, (counts.get(targetId) || 0) + 1);
+            const currentCount = counts.get(targetId) || 0;
+            counts.set(targetId, currentCount + 1);
           }
         });
 
         if (!abortController.signal.aborted) {
-          setRelationshipCounts(counts);
+          // Create a new Map instance to ensure React detects the change
+          const newCounts = new Map(counts);
+          setRelationshipCounts(newCounts);
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
@@ -1584,17 +1674,40 @@ export default function RelationshipsPage() {
         setLoadingCharacters(true);
         setError(null);
 
-        const res = await fetch("/api/models/characters?limit=1000", {
-          signal: abortController.signal,
-        });
+        // Fetch all characters by paginating through all pages
+        // API has MAX_LIMIT of 100, so we need to fetch multiple pages
+        let allChars: Character[] = [];
+        let page = 1;
+        let hasMore = true;
+        const limit = 100; // API's MAX_LIMIT
 
-        if (!res.ok) {
-          throw new Error(`Failed to fetch all characters: ${res.status} ${res.statusText}`);
+        while (hasMore && !abortController.signal.aborted) {
+          const res = await fetch(`/api/models/characters?page=${page}&limit=${limit}`, {
+            signal: abortController.signal,
+          });
+
+          if (!res.ok) {
+            throw new Error(`Failed to fetch all characters: ${res.status} ${res.statusText}`);
+          }
+
+          const data = await res.json();
+          const pageData = data.data || [];
+          allChars = [...allChars, ...pageData];
+
+          // Check if there are more pages
+          hasMore = page < (data.totalPages || 1) && pageData.length === limit;
+          page++;
+
+          // Safety check to prevent infinite loops
+          if (page > 1000) {
+            console.warn("[relationships/page.tsx] Stopped fetching after 1000 pages to prevent infinite loop");
+            break;
+          }
         }
 
-        const data = await res.json();
         if (!abortController.signal.aborted) {
-          setAllCharacters(data.data || []);
+          console.log(`[relationships/page.tsx] Loaded ${allChars.length} total characters`);
+          setAllCharacters(allChars);
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
@@ -1649,11 +1762,22 @@ export default function RelationshipsPage() {
   const fetchCharacterRelationships = useCallback(async (characterId: string) => {
     try {
       setLoadingRelationships(true);
-      const res = await fetch(`/api/characters/relationships/${characterId}`);
+      // Add cache-busting to ensure fresh data
+      const timestamp = Date.now();
+      const res = await fetch(`/api/characters/relationships/${characterId}?t=${timestamp}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
       if (!res.ok) {
         throw new Error(`Failed to fetch relationships: ${res.status}`);
       }
       const data = await res.json();
+      console.log("[relationships/page.tsx] Fetched character relationships:", {
+        outgoing: data.outgoing?.length || 0,
+        incoming: data.incoming?.length || 0,
+      });
       setOutgoingRelationships(data.outgoing || []);
       setIncomingRelationships(data.incoming || []);
     } catch (err) {
@@ -1817,10 +1941,17 @@ export default function RelationshipsPage() {
           onOpenChange={setModalOpen}
           loading={loadingRelationships}
           user={user}
-          onRefresh={() => {
+          onRefresh={async () => {
+            console.log("[relationships/page.tsx] CharacterRelationshipsModal onRefresh called");
+            // Small delay to ensure API has processed the deletion
+            await new Promise(resolve => setTimeout(resolve, 100));
+            // Refresh relationship counts on character cards
+            await refreshRelationships();
+            // Refresh modal data
             if (selectedCharacter) {
-              fetchCharacterRelationships(selectedCharacter._id);
+              await fetchCharacterRelationships(selectedCharacter._id);
             }
+            console.log("[relationships/page.tsx] CharacterRelationshipsModal onRefresh completed");
           }}
         />
 
@@ -1829,7 +1960,11 @@ export default function RelationshipsPage() {
             myCharacters={myCharacters}
             open={createModalOpen}
             onOpenChange={setCreateModalOpen}
-            onSuccess={refreshRelationships}
+            onSuccess={async () => {
+              console.log("[relationships/page.tsx] CreateRelationshipModal onSuccess called");
+              await refreshRelationships();
+              console.log("[relationships/page.tsx] CreateRelationshipModal onSuccess completed");
+            }}
           />
         )}
       </div>
