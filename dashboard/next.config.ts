@@ -7,6 +7,7 @@ import webpack from "webpack";
 const projectRoot = path.resolve(process.cwd());
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   async rewrites() {
     return [
       // Allow using a non-API redirect URI in Discord settings/env while
