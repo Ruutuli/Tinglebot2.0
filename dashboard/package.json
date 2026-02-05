@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev -p 6001",
     "build": "next build",
-    "start": "node .next/standalone/server.js",
+    "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
