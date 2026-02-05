@@ -22,6 +22,7 @@ const { getNPCItems, NPCs, getStealFlavorText, getStealFailText } = require('../
 const ItemModel = require('@/models/ItemModel');
 const Character = require('@/models/CharacterModel');
 const User = require('@/models/UserModel');
+const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 const { hasPerk, getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
@@ -1617,35 +1618,22 @@ async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, inte
 
     // Infect the thief with blight
     try {
-        thiefCharacter.blighted = true;
-        thiefCharacter.blightedAt = new Date();
-        thiefCharacter.blightStage = 1; // Start at stage 1
-        thiefCharacter.blightPaused = false;
-        
-        // Set death deadline (7 days from now)
-        const deathDeadline = new Date();
-        deathDeadline.setDate(deathDeadline.getDate() + 7);
-        thiefCharacter.deathDeadline = deathDeadline;
-        
-        await thiefCharacter.save();
-        
-        // Assign blighted role
-        const guild = interaction.guild;
-        if (guild) {
-            const member = await guild.members.fetch(interaction.user.id);
-            await member.roles.add('798387447967910');
-        }
-        
-        // Update user's blightedcharacter status
-        const user = await User.findOne({ discordId: interaction.user.id });
-        if (user) {
-            user.blightedcharacter = true;
-            await user.save();
-        }
+        // Use shared finalize helper - each step has its own try/catch for resilience
+        // Note: deathDeadline is only set at stage 5, not stage 1, so we don't set it here
+        await finalizeBlightApplication(
+            thiefCharacter,
+            interaction.user.id,
+            {
+                client: interaction.client,
+                guild: interaction.guild,
+                source: `stealing from ${targetCharacter.name} (Stage ${targetCharacter.blightStage} blight)`,
+                alreadySaved: false
+            }
+        );
         
         return { 
             infected: true, 
-            message: `⚠️ **Blight Infection!** ${thiefCharacter.name} has been infected with blight while stealing from ${targetCharacter.name} (Stage ${targetCharacter.blightStage} blight).\n\n🦠 **Blight Stage:** 1\n⏰ **Death Deadline:** <t:${Math.floor(deathDeadline.getTime() / 1000)}:F>\n💊 **Seek healing immediately!**`
+            message: `⚠️ **Blight Infection!** ${thiefCharacter.name} has been infected with blight while stealing from ${targetCharacter.name} (Stage ${targetCharacter.blightStage} blight).\n\n🦠 **Blight Stage:** 1\n💊 **Seek healing immediately!**`
         };
     } catch (error) {
         logger.error('BLIGHT', `❌ Failed to infect ${thiefCharacter.name} with blight`, error);

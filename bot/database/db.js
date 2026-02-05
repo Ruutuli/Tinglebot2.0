@@ -250,7 +250,13 @@ const fetchBlightedCharactersByUserId = async (userId) => {
  try {
   await connectToTinglebot();
   trackDbOperation('queries');
-  return await Character.find({ userId, blighted: true }).lean().exec();
+  // Fetch blighted characters from both Character and ModCharacter collections
+  const [regularCharacters, modCharacters] = await Promise.all([
+    Character.find({ userId, blighted: true }).lean().exec(),
+    ModCharacter.find({ userId, blighted: true }).lean().exec()
+  ]);
+  // Merge and return both types
+  return [...regularCharacters, ...modCharacters];
  } catch (error) {
   handleError(error, "db.js");
   console.error(

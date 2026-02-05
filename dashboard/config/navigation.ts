@@ -35,6 +35,7 @@ export const navItems: NavItem[] = [
     icon: "fa-shield-halved",
     children: [
       { href: "/characters/moderation", label: "Approvals", icon: "fa-check-circle" },
+      { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
     ],
   },
 ];

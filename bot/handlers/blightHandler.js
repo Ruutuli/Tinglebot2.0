@@ -37,6 +37,8 @@ const {
 // ------------------- Database Models -------------------
 // Character model representing a user's character document
 const Character = require('@/models/CharacterModel');
+const ModCharacter = require('@/models/ModCharacterModel');
+const User = require('@/models/UserModel');
 
 // ------------------- Utilities -------------------
 const logger = require('@/utils/logger');
@@ -126,6 +128,151 @@ async function connectToInventories() {
     logger.error('BLIGHT', 'Error connecting to inventories database');
     throw error;
   }
+}
+
+// ============================================================================
+// ------------------- Shared Blight Finalization Helper -------------------
+// Centralized function to finalize blight application with defensive error handling
+// Each step is in its own try/catch so failures don't prevent other steps from running
+// ============================================================================
+
+// ------------------- Function: finalizeBlightApplication -------------------
+// Finalizes blight application: saves character, adds role, updates user flag, sends DM.
+// Designed to be resilient - if a command errors after calling this, the critical steps are done.
+// @param {Object} character - Character or ModCharacter document (must have userId, name, icon)
+// @param {string} userId - Discord user ID
+// @param {Object} options - Optional configuration
+//   - {Client} client - Discord client (required for DM)
+//   - {Guild} guild - Discord guild (required for role assignment)
+//   - {string} source - Source of blight (e.g. "Gloom Hands", "Blight Rain") for DM text
+//   - {boolean} alreadySaved - If true, skip character save (assumes caller already saved)
+// @returns {Promise<Object>} - Result object with success flags for each step
+async function finalizeBlightApplication(character, userId, options = {}) {
+  const { client, guild, source = 'unknown source', alreadySaved = false } = options;
+  const result = {
+    characterSaved: false,
+    roleAdded: false,
+    userFlagSet: false,
+    dmSent: false
+  };
+
+  const characterName = character.name || 'Unknown Character';
+  const BLIGHT_ROLE_ID = '798387447967907910';
+
+  // Step 1: Ensure character blight fields and save (if not already saved)
+  if (!alreadySaved) {
+    try {
+      character.blighted = true;
+      if (!character.blightedAt) {
+        character.blightedAt = new Date();
+      }
+      if (!character.blightStage || character.blightStage === 0) {
+        character.blightStage = 1;
+      }
+      character.blightPaused = false;
+      await character.save();
+      result.characterSaved = true;
+      logger.info('BLIGHT', `Saved blight status for ${characterName} (userId: ${userId})`);
+    } catch (error) {
+      handleError(error, 'blightHandler.js', {
+        operation: 'finalizeBlightApplication',
+        step: 'characterSave',
+        characterName,
+        userId
+      });
+      logger.error('BLIGHT', `Failed to save blight for ${characterName}: ${error.message}`);
+      // Continue to other steps even if save failed
+    }
+  } else {
+    result.characterSaved = true; // Already saved by caller
+  }
+
+  // Step 2: Add Discord blight role
+  if (guild) {
+    try {
+      const member = await guild.members.fetch(userId);
+      if (member) {
+        await member.roles.add(BLIGHT_ROLE_ID);
+        result.roleAdded = true;
+        logger.info('BLIGHT', `Added blight role to user ${userId} for character ${characterName}`);
+      }
+    } catch (error) {
+      // Handle specific Discord API errors gracefully
+      if (error.code === 10007) {
+        logger.info('BLIGHT', `User ${userId} not found in guild - cannot add role`);
+      } else if (error.code === 50013) {
+        logger.warn('BLIGHT', `Missing permissions to add role to user ${userId}`);
+      } else {
+        handleError(error, 'blightHandler.js', {
+          operation: 'finalizeBlightApplication',
+          step: 'roleAdd',
+          characterName,
+          userId
+        });
+        logger.error('BLIGHT', `Failed to add blight role to user ${userId}: ${error.message}`);
+      }
+      // Continue to other steps even if role add failed
+    }
+  } else {
+    logger.warn('BLIGHT', `No guild provided - cannot add blight role for ${characterName}`);
+  }
+
+  // Step 3: Set user.blightedcharacter flag and save
+  try {
+    const user = await User.findOne({ discordId: userId });
+    if (user) {
+      user.blightedcharacter = true;
+      await user.save();
+      result.userFlagSet = true;
+      logger.info('BLIGHT', `Set blightedcharacter flag for user ${userId}`);
+    } else {
+      logger.warn('BLIGHT', `User ${userId} not found in database - cannot set blightedcharacter flag`);
+    }
+  } catch (error) {
+    handleError(error, 'blightHandler.js', {
+      operation: 'finalizeBlightApplication',
+      step: 'userFlagSet',
+      characterName,
+      userId
+    });
+    logger.error('BLIGHT', `Failed to set blightedcharacter flag for user ${userId}: ${error.message}`);
+    // Continue to DM step even if user flag failed
+  }
+
+  // Step 4: Send DM to user
+  if (client) {
+    try {
+      // Create DM message based on source
+      let dmMessage = `<:blight_eye:805576955725611058> **Blight Infection Alert**\n\n`;
+      dmMessage += `◈ Your character **${characterName}** has been **blighted** by ${source}! ◈\n\n`;
+      dmMessage += `🏥 **Healing Available:** You can be healed by **Oracles, Sages & Dragons**\n`;
+      dmMessage += `📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n`;
+      dmMessage += `⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n`;
+      dmMessage += `🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n`;
+      dmMessage += `*You will not be penalized for missing today's blight roll if you were just infected.*`;
+
+      const dmSent = await sendUserDM(userId, dmMessage, client);
+      if (dmSent) {
+        result.dmSent = true;
+        logger.info('BLIGHT', `Sent blight DM to user ${userId} for character ${characterName}`);
+      } else {
+        logger.info('BLIGHT', `Could not send DM to user ${userId} (likely DMs disabled or user not found)`);
+      }
+    } catch (error) {
+      // sendUserDM already handles errors gracefully, but log if unexpected
+      handleError(error, 'blightHandler.js', {
+        operation: 'finalizeBlightApplication',
+        step: 'sendDM',
+        characterName,
+        userId
+      });
+      logger.error('BLIGHT', `Unexpected error sending DM to user ${userId}: ${error.message}`);
+    }
+  } else {
+    logger.warn('BLIGHT', `No client provided - cannot send DM for ${characterName}`);
+  }
+
+  return result;
 }
 
 // ============================================================================
@@ -598,6 +745,7 @@ async function healBlight(interaction, characterName, healerName) {
 
 // ------------------- Function: validateCharacterOwnership -------------------
 // Ensures a character belongs to the user making the interaction.
+// Supports both Character and ModCharacter collections.
 async function validateCharacterOwnership(interaction, characterName) {
   try {
     const userId = interaction.user.id;
@@ -605,15 +753,30 @@ async function validateCharacterOwnership(interaction, characterName) {
     // Extract just the character name if it includes additional information (e.g., "Rhifu | Vhintl | Graveskeeper")
     const cleanCharacterName = characterName.split('|')[0].trim();
     
-    const character = await Character.findOne({ 
+    // Try to find in Character collection first
+    let character = await Character.findOne({ 
       name: { $regex: new RegExp(`^${cleanCharacterName}$`, 'i') }, 
       userId 
     });
+    
+    // If not found, try ModCharacter collection
     if (!character) {
-      // Check if the character exists at all (for better error message)
-      const exists = await Character.findOne({ 
+      character = await ModCharacter.findOne({ 
+        name: { $regex: new RegExp(`^${cleanCharacterName}$`, 'i') }, 
+        userId 
+      });
+    }
+    
+    if (!character) {
+      // Check if the character exists at all (for better error message) - check both collections
+      const existsRegular = await Character.findOne({ 
         name: { $regex: new RegExp(`^${cleanCharacterName}$`, 'i') } 
       });
+      const existsMod = await ModCharacter.findOne({ 
+        name: { $regex: new RegExp(`^${cleanCharacterName}$`, 'i') } 
+      });
+      const exists = existsRegular || existsMod;
+      
       if (!exists) {
         const errorEmbed = new EmbedBuilder()
           .setColor('#FF0000')
@@ -1886,9 +2049,23 @@ async function rollForBlightProgression(interaction, characterName) {
       return;
     }
 
-    const character = await Character.findOne({ name: characterName });
+    // Try to find character in both Character and ModCharacter collections
+    let character = await Character.findOne({ name: characterName });
+    let isModCharacter = false;
+    
+    if (!character) {
+      character = await ModCharacter.findOne({ name: characterName });
+      isModCharacter = true;
+    }
+    
     if (!character) {
       await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, flags: [4096] });
+      return;
+    }
+    
+    // Verify ownership for mod characters (they might have different ownership model)
+    if (isModCharacter && character.userId !== interaction.user.id) {
+      await interaction.editReply({ content: `❌ You can only roll for your **own** characters!`, flags: [4096] });
       return;
     }
 
@@ -2126,7 +2303,10 @@ async function rollForBlightProgression(interaction, characterName) {
 async function postBlightRollCall(client) {
   try {
     const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
-    const roleId = process.env.BLIGHT_REMINDER_ROLE_ID;
+    // Use BLIGHT_REMINDER_ROLE_ID if set, otherwise fall back to the blighted character role ID
+    // This ensures users with blighted characters always get pinged
+    const BLIGHTED_ROLE_ID = '798387447967907910';
+    const roleId = process.env.BLIGHT_REMINDER_ROLE_ID || BLIGHTED_ROLE_ID;
 
     if (!client || !client.channels) {
       console.error('[blightHandler]: Invalid Discord client.');
@@ -2138,6 +2318,13 @@ async function postBlightRollCall(client) {
       console.error('[blightHandler]: BLIGHT_NOTIFICATIONS_CHANNEL_ID not set in environment variables.');
       logger.error('BLIGHT', 'BLIGHT_NOTIFICATIONS_CHANNEL_ID not configured');
       return;
+    }
+    
+    // Log which role ID is being used
+    if (process.env.BLIGHT_REMINDER_ROLE_ID) {
+      logger.info('BLIGHT', `Using BLIGHT_REMINDER_ROLE_ID: ${process.env.BLIGHT_REMINDER_ROLE_ID}`);
+    } else {
+      logger.info('BLIGHT', `BLIGHT_REMINDER_ROLE_ID not set, falling back to blighted character role: ${BLIGHTED_ROLE_ID}`);
     }
 
     const channel = client.channels.cache.get(channelId);
@@ -3234,9 +3421,17 @@ async function checkMissedRolls(client) {
       return;
     }
 
-    // ------------------- Fetch All Blighted Characters -------------------
-    const blightedCharacters = await Character.find({ blighted: true });
-    logger.info('BLIGHT', `Found ${blightedCharacters.length} blighted characters to check`);
+    // ------------------- Fetch All Blighted Characters (both Character and ModCharacter) -------------------
+    const blightedRegularCharacters = await Character.find({ blighted: true });
+    const blightedModCharacters = await ModCharacter.find({ blighted: true });
+    
+    // Merge into one list with model type flag
+    const blightedCharacters = [
+      ...blightedRegularCharacters.map(char => ({ ...char.toObject(), _isModCharacter: false })),
+      ...blightedModCharacters.map(char => ({ ...char.toObject(), _isModCharacter: true }))
+    ];
+    
+    logger.info('BLIGHT', `Found ${blightedRegularCharacters.length} regular and ${blightedModCharacters.length} mod blighted characters to check (total: ${blightedCharacters.length})`);
 
     const blightEmoji = '<:blight_eye:805576955725611058>';
     const stageDescriptions = {
@@ -3531,8 +3726,12 @@ async function checkMissedRolls(client) {
             icon: character.icon
           };
 
-          // Delete the character from the database
-          await Character.deleteOne({ _id: character._id });
+          // Delete the character from the database (use correct model)
+          if (character._isModCharacter) {
+            await ModCharacter.deleteOne({ _id: character._id });
+          } else {
+            await Character.deleteOne({ _id: character._id });
+          }
 
           // ------------------- Death Announcement Embed -------------------
           const embed = new EmbedBuilder()
@@ -3619,23 +3818,41 @@ async function checkMissedRolls(client) {
       
       if (shouldProgress) {
         console.log(`[blightHandler]: ⚠️ ${character.name} missed roll - Last roll: ${lastRollDate.toISOString()}, Previous boundary: ${previousBlightCall.toISOString()}, Current time: ${now.toISOString()}, Progressing from Stage ${character.blightStage}`);
-        character.blightStage += 1;
+        
+        // Fetch the actual document from the correct model to update and save
+        let characterDoc;
+        if (character._isModCharacter) {
+          characterDoc = await ModCharacter.findById(character._id);
+        } else {
+          characterDoc = await Character.findById(character._id);
+        }
+        
+        if (!characterDoc) {
+          console.error(`[blightHandler]: ❌ Character ${character.name} (${character._id}) not found in database - cannot progress blight`);
+          continue;
+        }
+        
+        characterDoc.blightStage += 1;
 
-        if (character.blightStage === 5) {
+        if (characterDoc.blightStage === 5) {
           const oneDayMs = 24 * 60 * 60 * 1000;
-          character.deathDeadline = new Date(Date.now() + 7 * oneDayMs);
-          console.log(`[blightHandler]: ${character.name} reached Stage 5 - Death deadline set to ${character.deathDeadline.toISOString()}`);
+          characterDoc.deathDeadline = new Date(Date.now() + 7 * oneDayMs);
+          console.log(`[blightHandler]: ${characterDoc.name} reached Stage 5 - Death deadline set to ${characterDoc.deathDeadline.toISOString()}`);
         }
 
         // Update blight effects based on new stage
-        character.blightEffects = {
-          rollMultiplier: character.blightStage === 2 ? 1.5 : 1.0,
-          noMonsters: character.blightStage >= 3,
-          noGathering: character.blightStage >= 4
+        characterDoc.blightEffects = {
+          rollMultiplier: characterDoc.blightStage === 2 ? 1.5 : 1.0,
+          noMonsters: characterDoc.blightStage >= 3,
+          noGathering: characterDoc.blightStage >= 4
         };
 
-        await character.save();
-        console.log(`[blightHandler]: Saved progression for ${character.name} to Stage ${character.blightStage}`);
+        await characterDoc.save();
+        console.log(`[blightHandler]: Saved progression for ${characterDoc.name} to Stage ${characterDoc.blightStage}`);
+        
+        // Update local character object for embed display
+        character.blightStage = characterDoc.blightStage;
+        character.deathDeadline = characterDoc.deathDeadline;
 
         const stageInfo = stageDescriptions[character.blightStage] || { 
           title: 'Unknown Stage', 
@@ -3721,6 +3938,7 @@ async function getCharacterBlightHistory(characterId, limit = 10) {
 module.exports = {
   loadBlightSubmissions,
   saveBlightSubmissions,
+  finalizeBlightApplication,
   healBlight,
   submitHealingTask,
   rollForBlightProgression,

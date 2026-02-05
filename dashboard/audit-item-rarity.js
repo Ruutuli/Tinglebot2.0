@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
 const Item = require("./models/ItemModel.js");
-const { jobPerks } = require("./data/jobData.js");
+const { jobPerks } = require("./data/jobData");
 
 // ============================================================================
 // ------------------- Logging & Process Safety -------------------

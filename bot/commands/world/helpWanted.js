@@ -8,6 +8,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { escapeRegExp, logItemAcquisitionToDatabase } = require('@/utils/inventoryUtils');
 const User = require('@/models/UserModel');
 const Character = require('@/models/CharacterModel');
+const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
 const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
 const { getWeatherWithoutGeneration } = require('@/services/weatherService');
@@ -1430,24 +1431,17 @@ async function handleMonsterHunt(interaction, questId, characterName) {
           "📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n" +
           "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
           "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
-        // Update character in DB
-        character.blighted = true;
-        character.blightedAt = new Date();
-        character.blightStage = 1;
-        await character.save();
-        // Assign blighted role
-        const guild = interaction.guild;
-        if (guild) {
-          const member = await guild.members.fetch(interaction.user.id);
-          await member.roles.add('798387447967907910');
-        }
-        
-        // Update user's blightedcharacter status
-        const user = await User.findOne({ discordId: interaction.user.id });
-        if (user) {
-          user.blightedcharacter = true;
-          await user.save();
-        }
+        // Use shared finalize helper - each step has its own try/catch for resilience
+        await finalizeBlightApplication(
+          character,
+          interaction.user.id,
+          {
+            client: interaction.client,
+            guild: interaction.guild,
+            source: 'Blight Rain during Help Wanted quest',
+            alreadySaved: false
+          }
+        );
       } else {
         blightRainMessage = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
         
@@ -2016,24 +2010,17 @@ module.exports = {
                 "📋 **Blight Information:** [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n" +
                 "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
                 "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
-              // Update character in DB
-              character.blighted = true;
-              character.blightedAt = new Date();
-              character.blightStage = 1;
-              await character.save();
-              // Assign blighted role
-              const guild = interaction.guild;
-              if (guild) {
-                const member = await guild.members.fetch(interaction.user.id);
-                await member.roles.add('798387447967907910');
-              }
-              
-              // Update user's blightedcharacter status
-              const user = await User.findOne({ discordId: interaction.user.id });
-              if (user) {
-                user.blightedcharacter = true;
-                await user.save();
-              }
+              // Use shared finalize helper - each step has its own try/catch for resilience
+              await finalizeBlightApplication(
+                character,
+                interaction.user.id,
+                {
+                  client: interaction.client,
+                  guild: interaction.guild,
+                  source: 'Blight Rain during Help Wanted quest',
+                  alreadySaved: false
+                }
+              );
             } else {
               blightRainMessage = "<:blight_eye:805576955725611058> **Blight Rain!**\n\n";
               

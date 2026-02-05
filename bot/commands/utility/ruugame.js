@@ -120,7 +120,7 @@ module.exports = {
 
   // ============================================================================
   // ------------------- Validate user setup -------------------
-  // Checks if user has proper character setup and synced data
+  // Checks if user has proper character setup
   // ============================================================================
   async validateUserSetup(interaction) {
     const userId = interaction.user.id;
@@ -131,18 +131,13 @@ module.exports = {
       return { valid: false, message: '❌ User not found.' };
     }
     
-    // Check if user has at least one character with synced inventory
+    // Check if user has at least one character
     const characters = await Character.find({ userId: userId });
     if (characters.length === 0) {
       return { valid: false, message: '❌ You need to have at least one character to play RuuGame.' };
     }
     
-    const syncedCharacters = characters.filter(char => char.inventorySynced);
-    if (syncedCharacters.length === 0) {
-      return { valid: false, message: '❌ You need to have at least one character with a synced inventory to play RuuGame.' };
-    }
-    
-    return { valid: true, characters: syncedCharacters };
+    return { valid: true, characters };
   },
 
   // ============================================================================
@@ -596,7 +591,7 @@ module.exports = {
       // Create embed with nice formatting (like ruugame)
       const embed = new EmbedBuilder()
         .setTitle('🎁 Chest - Roll a 5 to claim!')
-        .setDescription(`**Roll a 5 to claim one of the items!*\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+        .setDescription(`**Roll a 5 to claim one of the items!**\n*Item will be added to a random character's inventory!*`)
         .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
         .setColor(0xFFD700) // Gold color
@@ -703,7 +698,7 @@ module.exports = {
 // Awards Mock Fairy pity prize to players who roll a 1
 async function awardRuuGamePityPrize(session, userId, interaction) {
   try {
-    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    const characters = await Character.find({ userId: userId });
     if (characters.length > 0) {
       const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
 

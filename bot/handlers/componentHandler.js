@@ -35,6 +35,7 @@ const ItemModel = require('@/models/ItemModel');
 const RuuGame = require('@/models/RuuGameModel');
 const Character = require('@/models/CharacterModel');
 const { Village } = require('@/models/VillageModel');
+const { finalizeBlightApplication } = require('./blightHandler');
 
 // ------------------- Embed and Command Imports -------------------
 const {
@@ -1579,7 +1580,7 @@ function getRuuGameStatusColor(status) {
 // Shared function to award prizes to RuuGame winners
 async function awardRuuGamePrize(session, userId, interaction) {
   try {
-    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    const characters = await Character.find({ userId: userId });
     if (characters.length > 0) {
       const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
       const prize = PRIZES[session.prizeType];
@@ -1620,7 +1621,7 @@ async function awardRuuGamePrize(session, userId, interaction) {
 // Awards Mock Fairy pity prize to players who roll a 1
 async function awardRuuGamePityPrize(session, userId, interaction) {
   try {
-    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    const characters = await Character.find({ userId: userId });
     if (characters.length > 0) {
       const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
 
@@ -2810,10 +2811,10 @@ async function handleChestClaim(interaction) {
       });
     }
 
-    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    const characters = await Character.find({ userId: userId });
     if (characters.length === 0) {
       return await interaction.reply({
-        content: '❌ You need to have at least one character with a synced inventory to claim items.',
+        content: '❌ You need to have at least one character to claim items.',
         flags: 64,
         ephemeral: true
       });
@@ -3014,27 +3015,19 @@ async function handleChestClaim(interaction) {
           // 1% chance to get blighted from opening a chest
           if (!randomCharacter.blighted && !randomCharacter.isModCharacter && Math.random() < 0.01) {
             try {
-              // Apply blight to character
-              randomCharacter.blighted = true;
-              randomCharacter.blightedAt = new Date();
-              randomCharacter.blightStage = 1;
-              randomCharacter.blightPaused = false;
-              await randomCharacter.save();
+              // Use shared finalize helper - each step has its own try/catch for resilience
+              const finalizeResult = await finalizeBlightApplication(
+                randomCharacter,
+                randomCharacter.userId,
+                {
+                  client: interaction.client,
+                  guild: interaction.guild,
+                  source: 'opening a chest',
+                  alreadySaved: false
+                }
+              );
               
-              // Assign blight role to character owner
-              const guild = interaction.guild;
-              if (guild) {
-                const member = await guild.members.fetch(randomCharacter.userId);
-                await member.roles.add('798387447967907910');
-                console.log(`[componentHandler.js]: ✅ Added blight role to user ${randomCharacter.userId} for character ${randomCharacter.name} (chest blight effect)`);
-              }
-              
-              // Update user's blightedcharacter status
-              const user = await User.findOne({ discordId: randomCharacter.userId });
-              if (user) {
-                user.blightedcharacter = true;
-                await user.save();
-              }
+              console.log(`[componentHandler.js]: ✅ Blight applied to ${randomCharacter.name} (chest blight effect) - Saved: ${finalizeResult.characterSaved}, Role: ${finalizeResult.roleAdded}, User: ${finalizeResult.userFlagSet}, DM: ${finalizeResult.dmSent}`);
               
               blightMessage = 
                 "\n\n<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
@@ -3102,7 +3095,7 @@ async function handleChestClaim(interaction) {
     const rollEmojis = getRollEmojis(roll);
     const rollEmbed = new EmbedBuilder()
       .setTitle(`🎲 Chest - ${username} rolled a ${rollEmojis}!`)
-      .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+      .setDescription(`**Roll a 5 to claim one of the items!**\n*Item will be added to a random character's inventory!*`)
       .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // User's avatar for roll results
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setColor(roll === 5 ? 0x00FF00 : 0xFFD700) // Green for 5, gold for other rolls
@@ -3251,7 +3244,7 @@ async function handleChestClaim(interaction) {
           // Update main embed with updated items list (only when item is claimed)
           const mainEmbed = new EmbedBuilder()
             .setTitle('🎁 Chest - Roll a 5 to claim!')
-            .setDescription(`**Roll a 5 to claim one of the items!**\n\n*Only members with synced characters can roll!*\n*Item will be added to a random character's inventory!*`)
+            .setDescription(`**Roll a 5 to claim one of the items!**\n*Item will be added to a random character's inventory!*`)
             .setThumbnail('https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413')
             .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
             .setColor(0xFFD700) // Gold color

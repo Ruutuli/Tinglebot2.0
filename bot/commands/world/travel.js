@@ -39,6 +39,9 @@ const {
 const User = require('@/models/UserModel.js');
 const Character = require('@/models/CharacterModel.js');
 
+// ------------------- Blight Handler -------------------
+const { finalizeBlightApplication } = require('../../handlers/blightHandler');
+
 // ------------------- Embeds -------------------
 const {
   createInitialTravelEmbed,
@@ -378,24 +381,18 @@ module.exports = {
               .setTimestamp();
 
             await interaction.editReply({ embeds: [blightEmbed], ephemeral: false });
-            // Update character in DB
-            character.blighted = true;
-            character.blightedAt = new Date();
-            character.blightStage = 1;
-            await character.save();
-            // Assign blighted role
-            const guild = interaction.guild;
-            if (guild) {
-              const member = await guild.members.fetch(interaction.user.id);
-              await member.roles.add('798387447967907910');
-            }
             
-            // Update user's blightedcharacter status
-            const user = await User.findOne({ discordId: interaction.user.id });
-            if (user) {
-              user.blightedcharacter = true;
-              await user.save();
-            }
+            // Use shared finalize helper - each step has its own try/catch for resilience
+            await finalizeBlightApplication(
+              character,
+              interaction.user.id,
+              {
+                client: interaction.client,
+                guild: interaction.guild,
+                source: `Blight Rain in ${capitalizeFirstLetter(startingVillage)}`,
+                alreadySaved: false
+              }
+            );
             
             // Add to character's travel log
             character.travelLog = character.travelLog || [];
@@ -956,24 +953,18 @@ async function processTravelDay(day, context) {
             .setTimestamp();
 
           await finalChannel.send({ embeds: [blightEmbed], ephemeral: false });
-          // Update character in DB
-          character.blighted = true;
-          character.blightedAt = new Date();
-          character.blightStage = 1;
-          await character.save();
-          // Assign blighted role
-          const guild = interaction.guild;
-          if (guild) {
-            const member = await guild.members.fetch(interaction.user.id);
-            await member.roles.add('798387447967907910');
-          }
           
-          // Update user's blightedcharacter status
-          const user = await User.findOne({ discordId: interaction.user.id });
-          if (user) {
-            user.blightedcharacter = true;
-            await user.save();
-          }
+          // Use shared finalize helper - each step has its own try/catch for resilience
+          await finalizeBlightApplication(
+            character,
+            interaction.user.id,
+            {
+              client: interaction.client,
+              guild: interaction.guild,
+              source: `Blight Rain in ${capitalizeFirstLetter(destination)}`,
+              alreadySaved: false
+            }
+          );
           
           // Add to travel log
           context.travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(destination)}**!`);
@@ -1083,24 +1074,18 @@ async function processTravelDay(day, context) {
               .setTimestamp();
 
             await finalChannel.send({ embeds: [blightEmbed], ephemeral: false });
-            // Update character in DB
-            character.blighted = true;
-            character.blightedAt = new Date();
-            character.blightStage = 1;
-            await character.save();
-            // Assign blighted role
-            const guild = interaction.guild;
-            if (guild) {
-              const member = await guild.members.fetch(interaction.user.id);
-              await member.roles.add('798387447967907910');
-            }
             
-            // Update user's blightedcharacter status
-            const user = await User.findOne({ discordId: interaction.user.id });
-            if (user) {
-              user.blightedcharacter = true;
-              await user.save();
-            }
+            // Use shared finalize helper - each step has its own try/catch for resilience
+            await finalizeBlightApplication(
+              character,
+              interaction.user.id,
+              {
+                client: interaction.client,
+                guild: interaction.guild,
+                source: `Blight Rain when departing from ${capitalizeFirstLetter(startingVillage)}`,
+                alreadySaved: false
+              }
+            );
             
             // Add to travel log
             context.travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight when departing from **${capitalizeFirstLetter(startingVillage)}**!`);

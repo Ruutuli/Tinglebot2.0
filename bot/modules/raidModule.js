@@ -19,6 +19,7 @@ const { getVillageEmojiByName } = require('./locationsModule');
 const { capitalizeVillageName } = require('@/utils/stringUtils');
 const { monsterMapping } = require('@/models/MonsterModel');
 const Raid = require('@/models/RaidModel');
+const { finalizeBlightApplication } = require('../handlers/blightHandler');
 
 // ============================================================================
 // ---- Constants ----
@@ -477,7 +478,10 @@ async function startRaid(monster, village, interaction = null) {
 
 // ---- Function: joinRaid ----
 // Allows a character to join an active raid after validation checks
-async function joinRaid(character, raidId) {
+// @param {Object} character - Character document
+// @param {string} raidId - Raid ID to join
+// @param {Object} options - Optional: { client, guild } for blight finalization
+async function joinRaid(character, raidId, options = {}) {
   try {
     // Retrieve raid from database
     const raid = await Raid.findOne({ raidId: raidId });
@@ -573,19 +577,19 @@ async function joinRaid(character, raidId) {
           
           console.log(`[raidModule.js]: 💀 Character ${character.name} infected with blight during raid join`);
           
-          // Update character in DB
-          character.blighted = true;
-          character.blightedAt = new Date();
-          character.blightStage = 1;
-          await character.save();
+          // Use shared finalize helper - each step has its own try/catch for resilience
+          const finalizeResult = await finalizeBlightApplication(
+            character,
+            character.userId,
+            {
+              client: options.client,
+              guild: options.guild,
+              source: 'Blight Rain during raid',
+              alreadySaved: false
+            }
+          );
           
-          // Assign blighted role
-          const User = require('@/models/UserModel');
-          const user = await User.findOne({ discordId: character.userId });
-          if (user) {
-            user.blightedcharacter = true;
-            await user.save();
-          }
+          console.log(`[raidModule.js]: Blight finalize result for ${character.name} - Saved: ${finalizeResult.characterSaved}, Role: ${finalizeResult.roleAdded}, User: ${finalizeResult.userFlagSet}, DM: ${finalizeResult.dmSent}`);
         } else {
           blightRainMessage = 
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
@@ -1142,7 +1146,10 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     if (character) {
       try {
         console.log(`[raidModule.js]: 👤 Auto-adding character ${character.name} to raid ${raidId}`);
-        await joinRaid(character, raidId);
+        await joinRaid(character, raidId, {
+          client: interaction.client,
+          guild: interaction.guild
+        });
         console.log(`[raidModule.js]: ✅ Successfully auto-added ${character.name} to raid ${raidId}`);
       } catch (joinError) {
         console.warn(`[raidModule.js]: ⚠️ Failed to auto-add character ${character.name} to raid: ${joinError.message}`);

@@ -7,6 +7,7 @@ const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed } = require('../../embeds/embeds.js');
 const Raid = require('@/models/RaidModel');
+const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 
 // ============================================================================
 // ---- Import Loot Functions ----
@@ -196,7 +197,10 @@ module.exports = {
       let blightRainMessage = null;
       if (!existingParticipant) {
         try {
-          const joinResult = await joinRaid(character, raidId);
+          const joinResult = await joinRaid(character, raidId, {
+            client: interaction.client,
+            guild: interaction.guild
+          });
           updatedRaidData = joinResult.raidData;
           blightRainMessage = joinResult.blightRainMessage;
         } catch (joinError) {
@@ -602,34 +606,24 @@ async function handleRaidVictory(interaction, raidData, monster) {
         if (monster.nameMapping === 'gloomHands' && Math.random() < 0.25) {
           // Only apply blight if character isn't already blighted
           if (!character.blighted) {
-            try {
-              // Apply blight to character
-              character.blighted = true;
-              character.blightedAt = new Date();
-              character.blightStage = 1;
-              character.blightPaused = false;
-              await character.save();
-              
-              // Assign blight role to character owner
-              const guild = interaction.guild;
-              if (guild) {
-                const member = await guild.members.fetch(character.userId);
-                await member.roles.add('798387447967907910');
-                console.log(`[raid.js]: ✅ Added blight role to user ${character.userId} for character ${character.name} (Gloom Hands effect)`);
+            // Use shared finalize helper - each step has its own try/catch for resilience
+            const finalizeResult = await finalizeBlightApplication(
+              character,
+              character.userId,
+              {
+                client: interaction.client,
+                guild: interaction.guild,
+                source: 'Gloom Hands encounter',
+                alreadySaved: false
               }
-              
-              // Update user's blightedcharacter status
-              const user = await User.findOne({ discordId: character.userId });
-              if (user) {
-                user.blightedcharacter = true;
-                await user.save();
-              }
-              
+            );
+            
+            if (finalizeResult.characterSaved) {
               blightedCharacters.push(character.name);
               console.log(`[raid.js]: 🧿 Character ${character.name} was blighted by Gloom Hands effect`);
-              
-            } catch (blightError) {
-              console.error(`[raid.js]: ❌ Error applying blight to ${character.name}:`, blightError);
+              console.log(`[raid.js]: Finalize result - Saved: ${finalizeResult.characterSaved}, Role: ${finalizeResult.roleAdded}, User: ${finalizeResult.userFlagSet}, DM: ${finalizeResult.dmSent}`);
+            } else {
+              console.error(`[raid.js]: ❌ Failed to save blight for ${character.name} - character may not be properly blighted`);
             }
           } else {
             console.log(`[raid.js]: ⚠️ Character ${character.name} is already blighted, skipping Gloom Hands blight effect`);
