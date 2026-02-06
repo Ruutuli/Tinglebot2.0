@@ -12,6 +12,7 @@ import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
 import { FIELD_OPTIONS } from "@/app/(dashboard)/admin/database/constants/field-options";
+import { getModelConfig } from "@/app/(dashboard)/admin/database/config/model-configs";
 
 // ============================================================================
 // ------------------- Types -------------------
@@ -85,22 +86,57 @@ export async function GET(req: NextRequest) {
     // ------------------- Connect to Database -------------------
     await connect();
 
+    // ------------------- Get Model Configuration -------------------
+    const modelConfig = getModelConfig(modelName);
+    if (!modelConfig) {
+      return NextResponse.json(
+        { error: "Invalid model", message: `Model "${modelName}" is not supported` },
+        { status: 400 }
+      );
+    }
+
     // ------------------- Get Model -------------------
     let Model: Model<unknown>;
-    let sortField = "itemName";
+    const sortField = modelConfig.sortField;
 
     if (modelName === "Item") {
-      // Check if already compiled to avoid recompilation error
       if (mongoose.models.Item) {
         Model = mongoose.models.Item;
       } else {
         const { default: ItemModel } = await import("@/models/ItemModel.js");
         Model = ItemModel as unknown as Model<unknown>;
       }
-      sortField = "itemName";
+    } else if (modelName === "Monster") {
+      if (mongoose.models.Monster) {
+        Model = mongoose.models.Monster;
+      } else {
+        const { default: MonsterModel } = await import("@/models/MonsterModel.js");
+        Model = MonsterModel as unknown as Model<unknown>;
+      }
+    } else if (modelName === "Pet") {
+      if (mongoose.models.Pet) {
+        Model = mongoose.models.Pet;
+      } else {
+        const { default: PetModel } = await import("@/models/PetModel.js");
+        Model = PetModel as unknown as Model<unknown>;
+      }
+    } else if (modelName === "Character") {
+      if (mongoose.models.Character) {
+        Model = mongoose.models.Character;
+      } else {
+        const { default: CharacterModel } = await import("@/models/CharacterModel.js");
+        Model = CharacterModel as unknown as Model<unknown>;
+      }
+    } else if (modelName === "Village") {
+      if (mongoose.models.Village) {
+        Model = mongoose.models.Village;
+      } else {
+        const { Village } = await import("@/models/VillageModel.js");
+        Model = Village as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
-        { error: "Invalid model", message: `Model "${modelName}" is not supported yet` },
+        { error: "Invalid model", message: `Model "${modelName}" is not supported` },
         { status: 400 }
       );
     }
@@ -111,29 +147,51 @@ export async function GET(req: NextRequest) {
       .sort({ [sortField]: 1 })
       .lean()) as unknown as ItemLean[];
 
+    // Convert Map objects to plain objects for JSON serialization
+    const convertMapsToObjects = (obj: unknown): unknown => {
+      if (obj instanceof Map) {
+        return Object.fromEntries(obj);
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(convertMapsToObjects);
+      }
+      if (obj !== null && typeof obj === "object") {
+        const converted: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(obj)) {
+          converted[key] = convertMapsToObjects(value);
+        }
+        return converted;
+      }
+      return obj;
+    };
+
+    const convertedRecords = records.map(convertMapsToObjects) as unknown as ItemLean[];
+
     logger.info(
       "api/admin/database/items GET",
-      `Fetched ${records.length} ${modelName} records`
+      `Fetched ${convertedRecords.length} ${modelName} records`
     );
 
     // ------------------- Build Filter Options -------------------
-    // Extract unique values from records for dynamic filters
-    const raritySet = new Set<number>();
-    records.forEach((record) => {
-      if (typeof record.itemRarity === "number" && !Number.isNaN(record.itemRarity)) {
-        raritySet.add(record.itemRarity);
-      }
-    });
-    const rarityOpts = Array.from(raritySet).sort((a, b) => a - b);
+    const filterOptions: Record<string, (string | number)[]> = {};
 
-    const filterOptions: Record<string, (string | number)[]> = {
-      category: FIELD_OPTIONS.category,
-      type: FIELD_OPTIONS.type,
-      categoryGear: FIELD_OPTIONS.categoryGear,
-      subtype: FIELD_OPTIONS.subtype,
-      rarity: rarityOpts,
-      source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Special Weather", "Pet Perk"],
-      location: [
+    if (modelName === "Item") {
+      // Extract unique values from convertedRecords for dynamic filters
+      const raritySet = new Set<number>();
+      convertedRecords.forEach((record) => {
+        if (typeof (record as { itemRarity?: number }).itemRarity === "number" && !Number.isNaN((record as { itemRarity?: number }).itemRarity)) {
+          raritySet.add((record as { itemRarity?: number }).itemRarity!);
+        }
+      });
+      const rarityOpts = Array.from(raritySet).sort((a, b) => a - b);
+
+      filterOptions.category = FIELD_OPTIONS.category;
+      filterOptions.type = FIELD_OPTIONS.type;
+      filterOptions.categoryGear = FIELD_OPTIONS.categoryGear;
+      filterOptions.subtype = FIELD_OPTIONS.subtype;
+      filterOptions.rarity = rarityOpts;
+      filterOptions.source = ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Special Weather", "Pet Perk"];
+      filterOptions.location = [
         "Central Hyrule",
         "Eldin",
         "Faron",
@@ -142,8 +200,8 @@ export async function GET(req: NextRequest) {
         "Lanayru",
         "Path of Scarlet Leaves",
         "Leaf Dew Way",
-      ],
-      job: [
+      ];
+      filterOptions.job = [
         "Farmer",
         "Forager",
         "Rancher",
@@ -166,18 +224,77 @@ export async function GET(req: NextRequest) {
         "Scout",
         "Weaver",
         "Witch",
-      ],
-      craftable: ["true", "false"],
-      stackable: ["true", "false"],
-    };
+      ];
+      filterOptions.craftable = ["true", "false"];
+      filterOptions.stackable = ["true", "false"];
+    } else if (modelName === "Monster") {
+      // Extract distinct values for Monster filters
+      const speciesSet = new Set<string>();
+      const typeSet = new Set<string>();
+      const tierSet = new Set<number>();
+      
+      convertedRecords.forEach((record) => {
+        const r = record as { species?: string; type?: string; tier?: number };
+        if (r.species) speciesSet.add(r.species);
+        if (r.type) typeSet.add(r.type);
+        if (typeof r.tier === "number" && !Number.isNaN(r.tier)) tierSet.add(r.tier);
+      });
+
+      filterOptions.species = Array.from(speciesSet).sort();
+      filterOptions.type = Array.from(typeSet).sort();
+      filterOptions.tier = Array.from(tierSet).sort((a, b) => a - b);
+    } else if (modelName === "Pet") {
+      // Extract distinct values for Pet filters
+      const statusSet = new Set<string>();
+      const speciesSet = new Set<string>();
+      const petTypeSet = new Set<string>();
+      
+      convertedRecords.forEach((record) => {
+        const r = record as { status?: string; species?: string; petType?: string };
+        if (r.status) statusSet.add(r.status);
+        if (r.species) speciesSet.add(r.species);
+        if (r.petType) petTypeSet.add(r.petType);
+      });
+
+      filterOptions.status = Array.from(statusSet).sort();
+      filterOptions.species = Array.from(speciesSet).sort();
+      filterOptions.petType = Array.from(petTypeSet).sort();
+    } else if (modelName === "Character") {
+      // Extract distinct values for Character filters
+      const raceSet = new Set<string>();
+      const villageSet = new Set<string>();
+      const jobSet = new Set<string>();
+      
+      convertedRecords.forEach((record) => {
+        const r = record as { race?: string; homeVillage?: string; currentVillage?: string; job?: string };
+        if (r.race) raceSet.add(r.race);
+        if (r.homeVillage) villageSet.add(r.homeVillage);
+        if (r.currentVillage) villageSet.add(r.currentVillage);
+        if (r.job) jobSet.add(r.job);
+      });
+
+      filterOptions.race = Array.from(raceSet).sort();
+      filterOptions.village = Array.from(villageSet).sort();
+      filterOptions.job = Array.from(jobSet).sort();
+    } else if (modelName === "Village") {
+      // Extract distinct values for Village filters
+      const regionSet = new Set<string>();
+      
+      convertedRecords.forEach((record) => {
+        const r = record as { region?: string };
+        if (r.region) regionSet.add(r.region);
+      });
+
+      filterOptions.region = Array.from(regionSet).sort();
+    }
 
     // ------------------- Return Response -------------------
     return NextResponse.json({
-      items: records,
+      items: convertedRecords,
       filterOptions,
       meta: {
         model: modelName,
-        totalFetched: records.length,
+        totalFetched: convertedRecords.length,
       },
     });
   } catch (e) {
@@ -231,9 +348,10 @@ export async function PUT(req: NextRequest) {
 
     // ------------------- Parse Request Body -------------------
     const body = await req.json().catch(() => ({}));
-    const { itemId, updates } = body as {
+    const { itemId, updates, model: modelName } = body as {
       itemId?: string;
       updates?: Record<string, unknown>;
+      model?: string;
     };
 
     if (!itemId || typeof itemId !== "string") {
@@ -250,34 +368,81 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    const model = modelName || "Item";
+
     // ------------------- Connect to Database -------------------
     await connect();
 
-    // ------------------- Get Item Model -------------------
-    let Item: Model<unknown>;
-    if (mongoose.models.Item) {
-      Item = mongoose.models.Item;
-    } else {
-      const { default: ItemModel } = await import("@/models/ItemModel.js");
-      Item = ItemModel as unknown as Model<unknown>;
+    // ------------------- Get Model Configuration -------------------
+    const modelConfig = getModelConfig(model);
+    if (!modelConfig) {
+      return NextResponse.json(
+        { error: "Invalid model", message: `Model "${model}" is not supported` },
+        { status: 400 }
+      );
     }
 
-    // ------------------- Find Item by ID -------------------
-    const item = (await Item.findById(itemId)) as ItemDoc | null;
-    if (!item) {
+    // ------------------- Get Model -------------------
+    let Model: Model<unknown>;
+    if (model === "Item") {
+      if (mongoose.models.Item) {
+        Model = mongoose.models.Item;
+      } else {
+        const { default: ItemModel } = await import("@/models/ItemModel.js");
+        Model = ItemModel as unknown as Model<unknown>;
+      }
+    } else if (model === "Monster") {
+      if (mongoose.models.Monster) {
+        Model = mongoose.models.Monster;
+      } else {
+        const { default: MonsterModel } = await import("@/models/MonsterModel.js");
+        Model = MonsterModel as unknown as Model<unknown>;
+      }
+    } else if (model === "Pet") {
+      if (mongoose.models.Pet) {
+        Model = mongoose.models.Pet;
+      } else {
+        const { default: PetModel } = await import("@/models/PetModel.js");
+        Model = PetModel as unknown as Model<unknown>;
+      }
+    } else if (model === "Character") {
+      if (mongoose.models.Character) {
+        Model = mongoose.models.Character;
+      } else {
+        const { default: CharacterModel } = await import("@/models/CharacterModel.js");
+        Model = CharacterModel as unknown as Model<unknown>;
+      }
+    } else if (model === "Village") {
+      if (mongoose.models.Village) {
+        Model = mongoose.models.Village;
+      } else {
+        const { Village } = await import("@/models/VillageModel.js");
+        Model = Village as unknown as Model<unknown>;
+      }
+    } else {
       return NextResponse.json(
-        { error: "Item not found" },
+        { error: "Invalid model", message: `Model "${model}" is not supported` },
+        { status: 400 }
+      );
+    }
+
+    // ------------------- Find Record by ID -------------------
+    const record = (await Model.findById(itemId)) as ItemDoc | null;
+    if (!record) {
+      return NextResponse.json(
+        { error: "Record not found" },
         { status: 404 }
       );
     }
 
-    // Item validation - all items can be edited
-
-    // ------------------- Update Item Fields -------------------
+    // ------------------- Update Record Fields -------------------
     // Only update fields that are provided in updates object
-    // For Item model, allow all fields from ItemModel.js
-    // Sanitize and validate field values
-    const allowedFields = [
+    // For Item model, use specific allowed fields
+    // For other models, allow all fields (can be refined later)
+    let allowedFields: string[] = [];
+    
+    if (model === "Item") {
+      allowedFields = [
       // Identity & Display
       "itemName", "image", "imageType", "emoji",
       // Classification
@@ -327,7 +492,11 @@ export async function PUT(req: NextRequest) {
       "mothGibdo", "littleFrox", "yigaBlademaster", "yigaFootsoldier",
       "normalBokoblin", "normalGibdo", "normalHinox", "normalHorriblin",
       "normalKeese", "normalLizalfos", "normalLynel", "normalMoblin",
-    ];
+      ];
+    } else {
+      // For other models, allow all fields (can be refined per model later)
+      allowedFields = Object.keys(updates);
+    }
 
     // ------------------- Update Item Fields -------------------
     // Only update fields that are provided in updates object
@@ -384,23 +553,26 @@ export async function PUT(req: NextRequest) {
 
     // ------------------- Apply Updates -------------------
     if (Object.keys(updateData).length > 0) {
-      item.set(updateData);
-      await item.save();
+      record.set(updateData);
+      await record.save();
+      
+      const nameField = modelConfig.nameField;
+      const recordName = (record as Record<string, unknown>)[nameField] || itemId;
       
       logger.info(
         "api/admin/database/items PUT",
-        `Updated item ${itemId} (${item.itemName}): ${Object.keys(updateData).join(", ")}`
+        `Updated ${model} ${itemId} (${recordName}): ${Object.keys(updateData).join(", ")}`
       );
     }
 
-    // ------------------- Return Updated Item -------------------
-    const updatedItem = typeof item.toObject === "function" 
-      ? item.toObject() 
-      : (item as unknown as Record<string, unknown>);
+    // ------------------- Return Updated Record -------------------
+    const updatedRecord = typeof record.toObject === "function" 
+      ? record.toObject() 
+      : (record as unknown as Record<string, unknown>);
 
     return NextResponse.json({
-      item: updatedItem,
-      message: "Item updated successfully",
+      item: updatedRecord,
+      message: `${model} updated successfully`,
     });
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
@@ -413,7 +585,7 @@ export async function PUT(req: NextRequest) {
     
     return NextResponse.json(
       {
-        error: "Failed to update item",
+        error: "Failed to update record",
         message: errorMessage,
         details: process.env.NODE_ENV === "development" ? {
           message: errorMessage,

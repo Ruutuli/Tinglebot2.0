@@ -89,14 +89,21 @@ export function MultiSelectField({
                 className="inline-flex items-center gap-1 px-2 py-0.5 bg-[var(--totk-light-green)]/20 border border-[var(--totk-light-green)]/50 rounded text-sm text-[var(--totk-light-green)]"
               >
                 {val}
-                <button
-                  type="button"
+                <span
                   onClick={(e) => removeOption(val, e)}
-                  className="hover:text-[var(--totk-light-green)]/70 focus:outline-none"
+                  className="hover:text-[var(--totk-light-green)]/70 focus:outline-none cursor-pointer"
+                  role="button"
+                  tabIndex={0}
                   aria-label={`Remove ${val}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      removeOption(val, e as unknown as React.MouseEvent);
+                    }
+                  }}
                 >
                   <i className="fa-solid fa-times text-xs" aria-hidden="true" />
-                </button>
+                </span>
               </span>
             ))
           )}

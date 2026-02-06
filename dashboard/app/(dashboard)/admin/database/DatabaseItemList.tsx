@@ -178,9 +178,11 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((item) => (
+              {sortedItems.map((item) => {
+                const itemId = typeof item._id === "string" ? item._id : String(item._id);
+                return (
                 <tr
-                  key={item._id}
+                  key={itemId}
                   className="border-b border-[var(--totk-dark-ocher)]/50 hover:bg-[var(--totk-dark-ocher)]/10 transition-colors"
                 >
                   <td className="px-4 py-3">
@@ -201,14 +203,18 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
                   <td className="px-4 py-3">
                     {item.category && item.category.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {item.category.slice(0, 2).map((cat, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-0.5 rounded bg-[var(--totk-dark-ocher)]/30 text-xs text-[var(--botw-pale)]"
-                          >
-                            {cat}
-                          </span>
-                        ))}
+                        {item.category.slice(0, 2).map((cat, idx) => {
+                          const catStr = typeof cat === "string" ? cat : String(cat);
+                          const itemId = typeof item._id === "string" ? item._id : String(item._id);
+                          return (
+                            <span
+                              key={`${itemId}-cat-${idx}-${catStr}`}
+                              className="px-2 py-0.5 rounded bg-[var(--totk-dark-ocher)]/30 text-xs text-[var(--botw-pale)]"
+                            >
+                              {catStr}
+                            </span>
+                          );
+                        })}
                         {item.category.length > 2 && (
                           <span className="px-2 py-0.5 text-xs text-[var(--totk-grey-200)]">
                             +{item.category.length - 2}
@@ -252,16 +258,19 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       ) : (
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sortedItems.map((item) => (
+            {sortedItems.map((item) => {
+              const itemId = typeof item._id === "string" ? item._id : String(item._id);
+              return (
               <div
-                key={item._id}
+                key={itemId}
                 className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 hover:border-[var(--totk-light-green)] transition-colors"
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -314,7 +323,8 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
                   Edit
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -13,9 +13,12 @@ import { SearchFilterBar, type FilterGroup } from "@/components/ui/search-filter
 import Link from "next/link";
 import { DatabaseItemList } from "./DatabaseItemList";
 import { ItemEditorForm } from "./ItemEditorForm";
+import { GenericEditorForm } from "./components/GenericEditorForm";
+import { ModelItemList } from "./components/ModelItemList";
 import { MessageBanner } from "./components/MessageBanner";
 import { ModelSelector } from "./components/ModelSelector";
 import { FIELD_OPTIONS } from "./constants/field-options";
+import { MODEL_CONFIGS, getModelConfig } from "./config/model-configs";
 import { capitalize } from "@/lib/string-utils";
 
 // ============================================================================
@@ -28,66 +31,15 @@ type AvailableModel = {
   icon: string;
 };
 
-const AVAILABLE_MODELS: AvailableModel[] = [
-  { name: "Item", displayName: "Items", icon: "fa-cube" },
-  // More models will be added here in the future
-];
+const AVAILABLE_MODELS: AvailableModel[] = Object.values(MODEL_CONFIGS).map((config) => ({
+  name: config.name,
+  displayName: config.displayName,
+  icon: config.icon,
+}));
 
-type Item = {
+type DatabaseRecord = Record<string, unknown> & {
   _id: string;
-  itemName: string;
-  image?: string;
-  emoji?: string;
-  itemRarity?: number;
-  category?: string[];
-  type?: string[];
-  categoryGear?: string | string[];
-  subtype?: string[];
-  buyPrice?: number;
-  sellPrice?: number;
-  stackable?: boolean;
-  crafting?: boolean;
-  gathering?: boolean;
-  looting?: boolean;
-  traveling?: boolean;
-  exploring?: boolean;
-  vending?: boolean;
-  specialWeather?: boolean;
-  petPerk?: boolean;
-  centralHyrule?: boolean;
-  eldin?: boolean;
-  faron?: boolean;
-  gerudo?: boolean;
-  hebra?: boolean;
-  lanayru?: boolean;
-  pathOfScarletLeaves?: boolean;
-  leafDewWay?: boolean;
-  farmer?: boolean;
-  forager?: boolean;
-  rancher?: boolean;
-  herbalist?: boolean;
-  adventurer?: boolean;
-  artist?: boolean;
-  beekeeper?: boolean;
-  blacksmith?: boolean;
-  cook?: boolean;
-  craftsman?: boolean;
-  fisherman?: boolean;
-  gravekeeper?: boolean;
-  guard?: boolean;
-  maskMaker?: boolean;
-  hunter?: boolean;
-  hunterLooting?: boolean;
-  mercenary?: boolean;
-  miner?: boolean;
-  researcher?: boolean;
-  scout?: boolean;
-  weaver?: boolean;
-  witch?: boolean;
-  [key: string]: unknown;
 };
-
-type ItemFormData = Partial<Item>;
 
 // ============================================================================
 // ------------------- Main Page Component -------------------
@@ -96,15 +48,16 @@ type ItemFormData = Partial<Item>;
 export default function AdminDatabasePage() {
   const { user, isAdmin, loading: sessionLoading } = useSession();
   const [selectedModel, setSelectedModel] = useState<string>("Item");
-  const [items, setItems] = useState<Item[]>([]);
-  const [filteredItems, setFilteredItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<DatabaseRecord[]>([]);
+  const [filteredItems, setFilteredItems] = useState<DatabaseRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
-  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editingItem, setEditingItem] = useState<DatabaseRecord | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const modelConfig = useMemo(() => getModelConfig(selectedModel), [selectedModel]);
   const [fieldOptions, setFieldOptions] = useState<{
     category: string[];
     type: string[];
@@ -176,12 +129,20 @@ export default function AdminDatabasePage() {
     let filtered = [...items];
 
     // Apply search filter
-    if (searchQuery.trim()) {
+    if (searchQuery.trim() && modelConfig) {
       const query = searchQuery.toLowerCase().trim();
+      const nameField = modelConfig.nameField;
       filtered = filtered.filter((item) => {
-        const nameMatch = item.itemName?.toLowerCase().includes(query);
-        const categoryMatch = item.category?.some((cat) => cat.toLowerCase().includes(query));
-        return nameMatch || categoryMatch;
+        const nameValue = item[nameField];
+        const nameMatch = nameValue && String(nameValue).toLowerCase().includes(query);
+        // For Items, also search category
+        if (selectedModel === "Item") {
+          const categoryMatch = Array.isArray(item.category) && item.category.some((cat: unknown) => 
+            String(cat).toLowerCase().includes(query)
+          );
+          return nameMatch || categoryMatch;
+        }
+        return nameMatch;
       });
     }
 
@@ -283,7 +244,7 @@ export default function AdminDatabasePage() {
     setFilteredItems(filtered);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [searchQuery, items, filters]);
+  }, [searchQuery, items, filters, selectedModel, modelConfig]);
 
   // ------------------- Paginate Filtered Items -------------------
   const paginatedItems = useMemo(() => {
@@ -365,7 +326,7 @@ export default function AdminDatabasePage() {
       }
 
       const response = (await res.json()) as { 
-        items?: Item[];
+        items?: DatabaseRecord[];
         filterOptions?: Record<string, (string | number)[]>;
       };
       if (signal.aborted) return;
@@ -376,15 +337,19 @@ export default function AdminDatabasePage() {
 
       setItems(response.items);
       
-      // Use filterOptions from API if available, otherwise keep hardcoded defaults
+      // Use filterOptions from API if available
       if (response.filterOptions) {
-        setFieldOptions({
-          category: (response.filterOptions.category || []) as string[],
-          type: (response.filterOptions.type || []) as string[],
-          categoryGear: (response.filterOptions.categoryGear || []) as string[],
-          subtype: (response.filterOptions.subtype || []) as string[],
-        });
         setFilterOptions(response.filterOptions);
+        
+        // Update fieldOptions for Item model only
+        if (selectedModel === "Item") {
+          setFieldOptions({
+            category: (response.filterOptions.category || []) as string[],
+            type: (response.filterOptions.type || []) as string[],
+            categoryGear: (response.filterOptions.categoryGear || []) as string[],
+            subtype: (response.filterOptions.subtype || []) as string[],
+          });
+        }
       }
     } catch (e) {
       if (fetchAbortControllerRef.current?.signal.aborted) return;
@@ -402,13 +367,13 @@ export default function AdminDatabasePage() {
   // ------------------- Save Item -------------------
   // JSON.stringify preserves all special characters (<, :, etc.) correctly
   // No data modification occurs during serialization - values are passed through as-is
-  const handleSaveItem = useCallback(async (itemId: string, updates: Partial<ItemFormData>) => {
+  const handleSaveItem = useCallback(async (itemId: string, updates: Record<string, unknown>) => {
     setSavingItemId(itemId);
     try {
       const res = await fetch("/api/admin/database/items", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, updates }),
+        body: JSON.stringify({ itemId, updates, model: selectedModel }),
       });
 
       if (!res.ok) {
@@ -421,7 +386,9 @@ export default function AdminDatabasePage() {
       }
 
       const item = items.find((i) => i._id === itemId);
-      setSuccessMessage(`✓ Successfully saved "${item?.itemName || "item"}"!`);
+      const nameField = modelConfig?.nameField || "name";
+      const itemName = item?.[nameField] || "item";
+      setSuccessMessage(`✓ Successfully saved "${String(itemName)}"!`);
       
       // Clear success message after 5 seconds
       if (successTimeoutRef.current) {
@@ -439,7 +406,7 @@ export default function AdminDatabasePage() {
     } finally {
       setSavingItemId(null);
     }
-  }, [items, fetchItems]);
+  }, [items, fetchItems, selectedModel, modelConfig]);
 
   // ------------------- Effects -------------------
   useEffect(() => {
@@ -558,7 +525,7 @@ export default function AdminDatabasePage() {
                       {filteredItems.length > 0 
                         ? `Showing ${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, filteredItems.length)} of ${filteredItems.length}`
                         : '0'
-                      } {filteredItems.length === 1 ? 'item' : 'items'}
+                      } {filteredItems.length === 1 ? (modelConfig?.displayName.toLowerCase().slice(0, -1) || 'item') : (modelConfig?.displayName.toLowerCase() || 'items')}
                       {filteredItems.length !== items.length && ` (${items.length} total)`}
                     </span>
                   </div>
@@ -570,7 +537,7 @@ export default function AdminDatabasePage() {
                 <SearchFilterBar
                   searchValue={searchQuery}
                   onSearchChange={setSearchQuery}
-                  searchPlaceholder="Search by name or category..."
+                  searchPlaceholder={modelConfig ? `Search ${modelConfig.displayName.toLowerCase()} by name...` : "Search..."}
                   filterGroups={filterGroups}
                   onFilterChange={handleFilterChange}
                   onClearAll={handleClearAll}
@@ -644,13 +611,24 @@ export default function AdminDatabasePage() {
         ) : (
           <>
             <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] shadow-lg overflow-hidden">
-              <DatabaseItemList
-                items={paginatedItems}
-                onEdit={(item) => {
-                  setEditingItem(item);
-                  setShowEditModal(true);
-                }}
-              />
+              {selectedModel === "Item" && modelConfig ? (
+                <DatabaseItemList
+                  items={paginatedItems as unknown as Parameters<typeof DatabaseItemList>[0]['items']}
+                  onEdit={(item) => {
+                    setEditingItem(item as DatabaseRecord);
+                    setShowEditModal(true);
+                  }}
+                />
+              ) : modelConfig ? (
+                <ModelItemList
+                  items={paginatedItems}
+                  modelConfig={modelConfig}
+                  onEdit={(item) => {
+                    setEditingItem(item);
+                    setShowEditModal(true);
+                  }}
+                />
+              ) : null}
             </div>
             {filteredItems.length > itemsPerPage && (
               <div className="mt-6 flex justify-center">
@@ -666,7 +644,7 @@ export default function AdminDatabasePage() {
         )}
 
         {/* Edit Modal */}
-        {editingItem && (
+        {editingItem && modelConfig && (
           <Modal
             open={showEditModal}
             onOpenChange={(open) => {
@@ -675,26 +653,50 @@ export default function AdminDatabasePage() {
                 setEditingItem(null);
               }
             }}
-            title={`Edit: ${editingItem.itemName || "Item"}`}
-            description="Edit item properties"
+            title={`Edit: ${String(editingItem[modelConfig.nameField] || "Item")}`}
+            description={`Edit ${modelConfig.displayName.toLowerCase()} properties`}
             hideTitle={true}
             size="full"
           >
-            <ItemEditorForm
-              item={editingItem as unknown as Parameters<typeof ItemEditorForm>[0]['item']}
-              items={items.map((item) => ({ _id: item._id, itemName: item.itemName }))}
-              fieldOptions={fieldOptions}
-              onSave={async (itemId, updates) => {
-                await handleSaveItem(itemId, updates as Partial<ItemFormData>);
-                setShowEditModal(false);
-                setEditingItem(null);
-              }}
-              saving={savingItemId === editingItem._id}
-              onClose={() => {
-                setShowEditModal(false);
-                setEditingItem(null);
-              }}
-            />
+            {selectedModel === "Item" ? (
+              <ItemEditorForm
+                item={editingItem as unknown as Parameters<typeof ItemEditorForm>[0]['item']}
+                items={items.map((item) => ({ 
+                  _id: item._id, 
+                  itemName: String(item.itemName || item[modelConfig.nameField] || "") 
+                }))}
+                fieldOptions={fieldOptions}
+                onSave={async (itemId, updates) => {
+                  await handleSaveItem(itemId, updates as Record<string, unknown>);
+                  setShowEditModal(false);
+                  setEditingItem(null);
+                }}
+                saving={savingItemId === editingItem._id}
+                onClose={() => {
+                  setShowEditModal(false);
+                  setEditingItem(null);
+                }}
+              />
+            ) : (
+              <GenericEditorForm
+                item={editingItem}
+                modelConfig={modelConfig}
+                items={selectedModel === "Item" ? items.map((item) => ({ 
+                  _id: item._id, 
+                  itemName: String(item.itemName || item[modelConfig.nameField] || "") 
+                })) : []}
+                onSave={async (itemId, updates) => {
+                  await handleSaveItem(itemId, updates);
+                  setShowEditModal(false);
+                  setEditingItem(null);
+                }}
+                saving={savingItemId === editingItem._id}
+                onClose={() => {
+                  setShowEditModal(false);
+                  setEditingItem(null);
+                }}
+              />
+            )}
           </Modal>
         )}
       </div>

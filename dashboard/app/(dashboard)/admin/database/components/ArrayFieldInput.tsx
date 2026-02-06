@@ -21,7 +21,7 @@ export function ArrayFieldInput({ label, value, onChange, helpText, isChanged, e
   }, [value]);
 
   const handleBlur = () => {
-    if (readOnly) return;
+    if (readOnly || autoPopulated) return;
     // Parse comma-separated values
     // Note: Trimming is intentional here to clean up user input when parsing comma-separated lists
     // Special characters within values (like <, :, etc.) are preserved - only leading/trailing whitespace is removed
@@ -33,6 +33,7 @@ export function ArrayFieldInput({ label, value, onChange, helpText, isChanged, e
     setInputValue(parsed.join(", "));
   };
 
+  // If readOnly OR autoPopulated, show as read-only display
   if (readOnly || autoPopulated) {
     return (
       <div className="mb-4">
