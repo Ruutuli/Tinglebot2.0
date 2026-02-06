@@ -178,8 +178,16 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((item) => {
-                const itemId = typeof item._id === "string" ? item._id : String(item._id);
+              {sortedItems.map((item, index) => {
+                // Safely extract ID - handle both string IDs and MongoDB ObjectIds
+                let itemId: string;
+                if (typeof item._id === "string") {
+                  itemId = item._id;
+                } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
+                  itemId = (item._id as { toString: () => string }).toString();
+                } else {
+                  itemId = String(item._id || `item-${index}`);
+                }
                 return (
                 <tr
                   key={itemId}
@@ -205,7 +213,6 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
                       <div className="flex flex-wrap gap-1">
                         {item.category.slice(0, 2).map((cat, idx) => {
                           const catStr = typeof cat === "string" ? cat : String(cat);
-                          const itemId = typeof item._id === "string" ? item._id : String(item._id);
                           return (
                             <span
                               key={`${itemId}-cat-${idx}-${catStr}`}
@@ -266,8 +273,16 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
       ) : (
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sortedItems.map((item) => {
-              const itemId = typeof item._id === "string" ? item._id : String(item._id);
+            {sortedItems.map((item, index) => {
+              // Safely extract ID - handle both string IDs and MongoDB ObjectIds
+              let itemId: string;
+              if (typeof item._id === "string") {
+                itemId = item._id;
+              } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
+                itemId = (item._id as { toString: () => string }).toString();
+              } else {
+                itemId = String(item._id || `item-${index}`);
+              }
               return (
               <div
                 key={itemId}

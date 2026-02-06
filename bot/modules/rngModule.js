@@ -142,7 +142,12 @@ function createWeightedItemList(items, fv, job, villageLevel = 1) {
   }
 
   const adjustedWeights = adjustRarityWeights(fv, villageLevel);
-  const validItems = items.filter(item => item.itemRarity && adjustedWeights[item.itemRarity] > 0);
+  // Normalize itemRarity to string to match adjustedWeights keys (which are strings like '1', '2', etc.)
+  const validItems = items.filter(item => {
+    if (!item.itemRarity) return false;
+    const normalizedRarity = String(item.itemRarity);
+    return adjustedWeights[normalizedRarity] > 0;
+  });
   if (validItems.length === 0) {
     return [];
   }
@@ -150,7 +155,9 @@ function createWeightedItemList(items, fv, job, villageLevel = 1) {
   const weightedList = [];
   const honeyBoostLog = [];
   validItems.forEach(item => {
-    let weight = adjustedWeights[item.itemRarity];
+    // Normalize itemRarity to string to match adjustedWeights keys
+    const normalizedRarity = String(item.itemRarity);
+    let weight = adjustedWeights[normalizedRarity];
     // Boost honey items for Beekeeper job
     let honeyBoosted = false;
     if (
@@ -161,7 +168,7 @@ function createWeightedItemList(items, fv, job, villageLevel = 1) {
     ) {
       honeyBoosted = true;
       weight *= 5;
-      honeyBoostLog.push({ item: item.itemName, originalWeight: adjustedWeights[item.itemRarity], boostedWeight: weight });
+      honeyBoostLog.push({ item: item.itemName, originalWeight: adjustedWeights[normalizedRarity], boostedWeight: weight });
     }
     for (let i = 0; i < weight; i++) {
       weightedList.push(item);

@@ -186,10 +186,19 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((item) => {
-                const itemId = String(item._id || "");
+              {sortedItems.map((item, index) => {
+                // Safely extract ID - handle both string IDs and MongoDB ObjectIds
+                let itemId: string;
+                if (typeof item._id === "string") {
+                  itemId = item._id;
+                } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
+                  itemId = (item._id as { toString: () => string }).toString();
+                } else {
+                  itemId = String(item._id || `item-${index}`);
+                }
                 const itemName = String(item[nameField] || "Unnamed");
-                const image = item.image || item.imageUrl || item.icon;
+                const imageValue = item.image || item.imageUrl || item.icon;
+                const image = imageValue && typeof imageValue === "string" ? imageValue : undefined;
 
                 return (
                   <tr
@@ -198,9 +207,9 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {image && (
+                        {image && typeof image === "string" && (
                           <img 
-                            src={String(image)} 
+                            src={image} 
                             alt={itemName} 
                             className="w-8 h-8 object-contain rounded"
                             onError={(e) => {
@@ -221,14 +230,18 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
                           }`}>
                             {field.type === "array" && Array.isArray(item[field.key]) ? (
                               <>
-                                {(item[field.key] as unknown[]).slice(0, 2).map((val, idx) => (
+                                {(item[field.key] as unknown[]).slice(0, 2).map((val, idx) => {
+                                  const itemId = typeof item._id === "string" ? item._id : (item._id && typeof item._id === "object" && "toString" in item._id ? (item._id as { toString: () => string }).toString() : String(item._id || idx));
+                                  const valStr = String(val);
+                                  return (
                                   <span
-                                    key={idx}
+                                    key={`${itemId}-${field.key}-${idx}-${valStr}`}
                                     className="px-2 py-0.5 rounded bg-[var(--totk-dark-ocher)]/30 text-xs text-[var(--botw-pale)]"
                                   >
-                                    {String(val)}
+                                    {valStr}
                                   </span>
-                                ))}
+                                  );
+                                })}
                                 {(item[field.key] as unknown[]).length > 2 && (
                                   <span className="px-2 py-0.5 text-xs text-[var(--totk-grey-200)]">
                                     +{(item[field.key] as unknown[]).length - 2}
@@ -264,10 +277,19 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
       ) : (
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sortedItems.map((item) => {
-              const itemId = String(item._id || "");
+            {sortedItems.map((item, index) => {
+              // Safely extract ID - handle both string IDs and MongoDB ObjectIds
+              let itemId: string;
+              if (typeof item._id === "string") {
+                itemId = item._id;
+              } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
+                itemId = (item._id as { toString: () => string }).toString();
+              } else {
+                itemId = String(item._id || `item-${index}`);
+              }
               const itemName = String(item[nameField] || "Unnamed");
-              const image = item.image || item.imageUrl || item.icon;
+              const imageValue = item.image || item.imageUrl || item.icon;
+              const image = imageValue && typeof imageValue === "string" ? imageValue : undefined;
 
               return (
                 <div
@@ -277,16 +299,16 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2">
-                        {image && (
+                        {image ? (
                           <img 
-                            src={String(image)} 
+                            src={image} 
                             alt={itemName} 
                             className="w-10 h-10 object-contain rounded flex-shrink-0"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                             }}
                           />
-                        )}
+                        ) : null}
                         <h3 className="text-lg font-bold text-[var(--totk-light-ocher)] truncate">
                           {itemName}
                         </h3>

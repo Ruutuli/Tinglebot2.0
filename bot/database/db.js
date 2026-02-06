@@ -1062,8 +1062,8 @@ async function fetchItemByName(itemName, context = {}) {
         }
         
         const normalizedItemName = itemName.trim();
-        // Note: We don't escape the + character as it's commonly used in item names
-        const escapedName = normalizedItemName.replace(/[-\/\\^$*?.()|[\]{}]/g, "\\$&");
+        // Properly escape all regex special characters including + (required for names like "Guardian Spear++")
+        const escapedName = normalizedItemName.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
         const item = await db.collection("items").findOne({
             itemName: new RegExp(`^${escapedName}$`, "i"),
         });

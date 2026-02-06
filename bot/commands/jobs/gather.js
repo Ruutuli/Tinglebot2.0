@@ -982,6 +982,15 @@ module.exports = {
           weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job, villageLevel);
         }
         
+        // Guard: Check if weightedItems is empty (can happen if all items filtered out or have zero weight)
+        if (!weightedItems || weightedItems.length === 0) {
+          logger.warn('GATHER', `No valid items available after weighting - availableItems: ${boostedAvailableItems.length}, weightedItems: 0`);
+          await safeReply({
+            content: `⚠️ **No items available to gather here with the current boost and job combination.**`,
+          });
+          return;
+        }
+        
         // Calculate total weight for selection
         // For Fortune Teller boost, each item represents its weight (no individual weight property)
         // For normal boosts, use the weight property
@@ -1037,6 +1046,15 @@ module.exports = {
         if (!randomItem) {
           const randomIndex = Math.floor(Math.random() * weightedItems.length);
           randomItem = weightedItems[randomIndex];
+        }
+        
+        // Defensive check: Ensure randomItem is defined before using it
+        if (!randomItem) {
+          logger.error('GATHER', `Failed to select random item - weightedItems.length: ${weightedItems.length}`);
+          await safeReply({
+            content: `❌ **Error: Unable to select an item to gather. Please try again.**`,
+          });
+          return;
         }
         
         const isFortuneTellerBoost = character.boostedBy && boosterCharacter && boosterCharacter.job?.toLowerCase() === 'fortune teller';
