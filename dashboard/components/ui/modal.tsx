@@ -18,6 +18,7 @@ interface ModalProps {
   children: ReactNode;
   className?: string;
   description?: string;
+  hideTitle?: boolean;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   size?: "full" | "lg" | "md" | "sm" | "xl";
@@ -58,6 +59,7 @@ export function Modal({
   children,
   className,
   description,
+  hideTitle = false,
   onOpenChange,
   open,
   size = "md",
@@ -75,21 +77,33 @@ export function Modal({
         <Dialog.Content
           className={clsx(
             size === "full"
-              ? "fixed inset-0 z-50 w-full h-full border-0 p-4 sm:p-6 shadow-2xl animate-in fade-in duration-200"
-              : "fixed left-1/2 top-4 sm:top-1/2 z-50 w-full -translate-x-1/2 translate-y-0 sm:-translate-y-1/2 rounded-xl border-2 p-4 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200",
+              ? "fixed inset-0 z-50 w-full h-full border-0 p-4 sm:p-6 shadow-2xl animate-in fade-in duration-200 overflow-hidden"
+              : "fixed left-1/2 top-4 sm:top-1/2 z-50 w-full -translate-x-1/2 translate-y-0 sm:-translate-y-1/2 rounded-xl border-2 p-4 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden",
             sizeClasses[size],
             className
           )}
           style={styles.content}
         >
-          {title && (
-            <Dialog.Title
-              className="mb-2 text-xl sm:text-2xl font-bold pr-10 sm:pr-0"
-              style={{ color: "var(--totk-light-ocher)" }}
-            >
-              {title}
-            </Dialog.Title>
-          )}
+          <Dialog.Title
+            className={hideTitle || !title ? "sr-only" : "mb-2 text-xl sm:text-2xl font-bold pr-10 sm:pr-0"}
+            style={
+              hideTitle || !title
+                ? {
+                    position: "absolute",
+                    width: "1px",
+                    height: "1px",
+                    padding: "0",
+                    margin: "-1px",
+                    overflow: "hidden",
+                    clip: "rect(0, 0, 0, 0)",
+                    whiteSpace: "nowrap",
+                    borderWidth: "0",
+                  }
+                : { color: "var(--totk-light-ocher)" }
+            }
+          >
+            {title || "Dialog"}
+          </Dialog.Title>
           {description && (
             <Dialog.Description
               className="mb-4 text-sm"
@@ -98,7 +112,7 @@ export function Modal({
               {description}
             </Dialog.Description>
           )}
-          <div className={size === "full" ? "h-[calc(100vh-8rem)] overflow-y-auto" : "max-h-[90vh] sm:max-h-[80vh] overflow-y-auto"}>{children}</div>
+          <div className={size === "full" ? "h-[calc(100vh-8rem)] overflow-y-auto overflow-x-hidden" : "max-h-[90vh] sm:max-h-[80vh] overflow-y-auto overflow-x-hidden"}>{children}</div>
           <Dialog.Close asChild>
             <button
               type="button"

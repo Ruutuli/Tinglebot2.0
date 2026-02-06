@@ -268,7 +268,7 @@ export async function GET(req: NextRequest) {
     // - category (for filtering)
     // - type (for filtering)
     // - itemRarity (for filtering)
-    const [data, total, categoryOpts, typeOpts, rarityOpts] = await Promise.all([
+    const [data, total, categoryOpts, typeOpts, rarityOpts, categoryGearOpts, subtypeOpts] = await Promise.all([
       Item.find(finalFilter)
         .select(
           "itemName image imageType emoji type subtype category categoryGear buyPrice sellPrice stackable maxStackSize itemRarity " +
@@ -287,6 +287,8 @@ export async function GET(req: NextRequest) {
       Item.distinct("category"),
       Item.distinct("type"),
       Item.distinct("itemRarity"),
+      Item.distinct("categoryGear"),
+      Item.distinct("subtype"),
     ]);
 
     // ------------------- Build Filter Options -------------------
@@ -294,6 +296,8 @@ export async function GET(req: NextRequest) {
       category: flatFilterOptions(categoryOpts as unknown[]),
       type: flatFilterOptions(typeOpts as unknown[]),
       rarity: (rarityOpts as number[]).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b),
+      categoryGear: flatFilterOptions(categoryGearOpts as unknown[]),
+      subtype: flatFilterOptions(subtypeOpts as unknown[]),
       source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Special Weather", "Pet Perk"],
       location: [
         "Central Hyrule",

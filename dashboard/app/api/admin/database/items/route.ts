@@ -1,6 +1,6 @@
 // ============================================================================
 // ------------------- Admin Database API -------------------
-// GET /api/admin/database/items?model=Item - Fetch first 10 items (testing mode)
+// GET /api/admin/database/items?model=Item - Fetch all items
 // PUT /api/admin/database/items - Update an item by ID
 // Admin-only access required
 // Supports multiple models, currently: Item
@@ -11,6 +11,7 @@ import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
+import { FIELD_OPTIONS } from "@/app/(dashboard)/admin/database/constants/field-options";
 
 // ============================================================================
 // ------------------- Types -------------------
@@ -87,7 +88,6 @@ export async function GET(req: NextRequest) {
     // ------------------- Get Model -------------------
     let Model: Model<unknown>;
     let sortField = "itemName";
-    let limit = 10;
 
     if (modelName === "Item") {
       // Check if already compiled to avoid recompilation error
@@ -98,7 +98,6 @@ export async function GET(req: NextRequest) {
         Model = ItemModel as unknown as Model<unknown>;
       }
       sortField = "itemName";
-      limit = 10; // First 10 items for testing
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${modelName}" is not supported yet` },
@@ -106,26 +105,79 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // ------------------- Fetch First 10 Records (TESTING MODE) -------------------
-    // Strictly limit to 10 records for testing - sorted for consistency
+    // ------------------- Fetch All Records -------------------
+    // Fetch all records sorted by itemName for consistency
     const records = (await Model.find({})
       .sort({ [sortField]: 1 })
-      .limit(limit)
       .lean()) as unknown as ItemLean[];
 
     logger.info(
       "api/admin/database/items GET",
-      `Fetched ${records.length} ${modelName} records (testing mode: first ${limit} records only)`
+      `Fetched ${records.length} ${modelName} records`
     );
+
+    // ------------------- Build Filter Options -------------------
+    // Extract unique values from records for dynamic filters
+    const raritySet = new Set<number>();
+    records.forEach((record) => {
+      if (typeof record.itemRarity === "number" && !Number.isNaN(record.itemRarity)) {
+        raritySet.add(record.itemRarity);
+      }
+    });
+    const rarityOpts = Array.from(raritySet).sort((a, b) => a - b);
+
+    const filterOptions: Record<string, (string | number)[]> = {
+      category: FIELD_OPTIONS.category,
+      type: FIELD_OPTIONS.type,
+      categoryGear: FIELD_OPTIONS.categoryGear,
+      subtype: FIELD_OPTIONS.subtype,
+      rarity: rarityOpts,
+      source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Special Weather", "Pet Perk"],
+      location: [
+        "Central Hyrule",
+        "Eldin",
+        "Faron",
+        "Gerudo",
+        "Hebra",
+        "Lanayru",
+        "Path of Scarlet Leaves",
+        "Leaf Dew Way",
+      ],
+      job: [
+        "Farmer",
+        "Forager",
+        "Rancher",
+        "Herbalist",
+        "Adventurer",
+        "Artist",
+        "Beekeeper",
+        "Blacksmith",
+        "Cook",
+        "Craftsman",
+        "Fisherman",
+        "Gravekeeper",
+        "Guard",
+        "Mask Maker",
+        "Hunter",
+        "Hunter (Looting)",
+        "Mercenary",
+        "Miner",
+        "Researcher",
+        "Scout",
+        "Weaver",
+        "Witch",
+      ],
+      craftable: ["true", "false"],
+      stackable: ["true", "false"],
+    };
 
     // ------------------- Return Response -------------------
     return NextResponse.json({
       items: records,
+      filterOptions,
       meta: {
         model: modelName,
-        testingMode: true,
         totalFetched: records.length,
-        message: `Testing mode: Only first ${limit} ${modelName} records are editable`,
       },
     });
   } catch (e) {
@@ -219,32 +271,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // ------------------- Validate Item is in First 10 (Testing Mode) -------------------
-    // Check if this item is in the first 10 items
-    const firstTenItems = (await Item.find({})
-      .sort({ itemName: 1 })
-      .limit(10)
-      .select("_id")
-      .lean()) as Array<{ _id: unknown }>;
-    
-    const itemIdStr = String(item._id);
-    const isInFirstTen = firstTenItems.some(
-      (i) => String(i._id) === itemIdStr
-    );
-
-    if (!isInFirstTen) {
-      logger.warn(
-        "api/admin/database/items PUT",
-        `Attempted to update item ${itemId} which is not in first 10 items (testing mode)`
-      );
-      return NextResponse.json(
-        {
-          error: "Forbidden",
-          message: "Only the first 10 items can be edited in testing mode",
-        },
-        { status: 403 }
-      );
-    }
+    // Item validation - all items can be edited
 
     // ------------------- Update Item Fields -------------------
     // Only update fields that are provided in updates object
@@ -302,11 +329,16 @@ export async function PUT(req: NextRequest) {
       "normalKeese", "normalLizalfos", "normalLynel", "normalMoblin",
     ];
 
+    // ------------------- Update Item Fields -------------------
+    // Only update fields that are provided in updates object
+    // Data integrity: Preserve special characters (<, :, etc.) and only trim where necessary
+    // Arrays and objects are passed through unchanged to maintain structure
     const updateData: Record<string, unknown> = {};
     
     for (const [key, value] of Object.entries(updates)) {
       if (allowedFields.includes(key)) {
         // Type validation and conversion based on field type
+        // Only trim specific user-input fields that should not have leading/trailing whitespace
         if (key === "itemName" && typeof value === "string") {
           updateData[key] = value.trim();
         } else if (key === "image" && typeof value === "string") {
@@ -315,6 +347,9 @@ export async function PUT(req: NextRequest) {
           updateData[key] = value.trim();
         } else if (key === "emoji" && typeof value === "string") {
           updateData[key] = value.trim();
+        } else if (key === "categoryGear" && typeof value === "string") {
+          // categoryGear comes from dropdown - preserve as-is (no trimming needed)
+          updateData[key] = value;
         } else if (key === "itemRarity" && typeof value === "number") {
           updateData[key] = Math.max(1, Math.min(5, value)); // Clamp between 1-5
         } else if ((key === "buyPrice" || key === "sellPrice") && typeof value === "number") {
@@ -322,13 +357,13 @@ export async function PUT(req: NextRequest) {
         } else if (key === "maxStackSize" && typeof value === "number") {
           updateData[key] = Math.max(1, value); // At least 1
         } else if (key === "specialWeather" && typeof value === "object" && value !== null) {
-          // Handle nested specialWeather object
+          // Handle nested specialWeather object - preserve structure
           updateData[key] = value;
         } else if (key === "craftingMaterial" && Array.isArray(value)) {
-          // Handle craftingMaterial array
+          // Handle craftingMaterial array - preserve array structure and all special characters
           updateData[key] = value;
         } else if (Array.isArray(value)) {
-          // Handle array fields (category, type, subtype, etc.)
+          // Handle array fields (category, type, subtype, etc.) - preserve all elements and special characters
           updateData[key] = value;
         } else if (typeof value === "boolean") {
           // Handle boolean fields
@@ -337,8 +372,9 @@ export async function PUT(req: NextRequest) {
           // Handle number fields
           updateData[key] = value;
         } else if (typeof value === "string") {
-          // Handle string fields
-          updateData[key] = value.trim();
+          // Handle other string fields - preserve as-is (no trimming) to maintain special characters
+          // Only itemName, image, imageType, and emoji are trimmed above
+          updateData[key] = value;
         } else if (value === null || value === undefined) {
           // Allow null/undefined for optional fields
           updateData[key] = value;
