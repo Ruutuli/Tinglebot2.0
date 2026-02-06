@@ -131,7 +131,7 @@ async function handleItemLookup(interaction, itemName) {
   const craftingMaterialText = craftingMaterials.filter(mat => mat !== null).map(mat => `> ${mat}`).join('\n');
 
 
-  const sourceText = item.obtain?.length > 0 ? item.obtain : [];
+  const sourceText = item.obtain || [];
   const jobText = item.allJobs?.length > 0 ? item.allJobs : ['None'];
   const locationsFormatted = (item.locations || []).join(', ') || 'None';
   const sourceFormatted = sourceText.map(source => String(source || 'Unknown')).join('\n');

@@ -848,11 +848,15 @@ async function applyEntertainerGatheringBoost(regionItems) {
  // Start with filtered region items (only those with entertainerItems: true)
  const mergedItems = [...filteredRegionItems];
  const existingNames = new Set(filteredRegionItems.map((item) => item.itemName));
+ const regionItemNames = new Set(regionItems.map((item) => item.itemName));
 
- // Add any additional entertainer items that match the job/region but weren't in the filtered list
+ // Only add global entertainer items that are already in the current job+region table.
+ // This prevents weapons/other items with entertainerItems: true from appearing in the
+ // wrong gather table (e.g. Boko Bow in Vhintl Forager).
  entertainerItems.forEach((item) => {
-  if (!existingNames.has(item.itemName)) {
-   mergedItems.push(item);
+  if (!existingNames.has(item.itemName) && regionItemNames.has(item.itemName)) {
+   const fromRegion = regionItems.find((r) => r.itemName === item.itemName);
+   mergedItems.push(fromRegion || item);
   }
  });
 

@@ -737,9 +737,16 @@ module.exports = {
                 const entertainerItems = await applyGatheringBoost(character.name, availableForBonus);
                 // Entertainer boosts augment (not replace) the filtered pool—fallback to the
                 // original selection if no dedicated bonus items are configured.
-                const entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
+                let entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
                   ? entertainerItems
                   : availableForBonus;
+
+                // Defensive filter: Remove weapons from bonus pool
+                entertainerBonusPool = entertainerBonusPool.filter((item) => {
+                  if (item.categoryGear === 'Weapon') return false;
+                  if (Array.isArray(item.category) && item.category.includes('Weapon')) return false;
+                  return true;
+                });
 
                 if (entertainerBonusPool.length > 0) {
                   const bonusIndex = Math.floor(Math.random() * entertainerBonusPool.length);
@@ -917,11 +924,10 @@ module.exports = {
         let isEntertainerBoost = false;
         
         if (character.boostedBy && boosterCharacter) {
-          // Special handling for Entertainer boost (filters items to only entertainerItems: true)
+          // Entertainer: main item stays from normal table; bonus item is from entertainer pool (see below).
           if (boosterCharacter.job === 'Entertainer') {
             isEntertainerBoost = true;
-            // Apply Entertainer boost to filter main item pool to only entertainer items
-            boostedAvailableItems = await applyGatheringBoost(character.name, availableItems);
+            // Do not replace main pool—Entertainer grants a bonus themed item in addition to normal gather.
           } else if (boosterCharacter.job !== 'Scholar') {
             // Normal boost application for all other jobs (including Priest) - apply to available items
             // Skip Scholar since we already handled the region change above
@@ -929,10 +935,29 @@ module.exports = {
           }
         }
 
-        // ------------------- Create Weighted Item List ------------------
+        // ------------------- Defensive Filter: Prevent Weapons from Gather Pool ------------------
         // Safety check: ensure boostedAvailableItems is an array
         if (!Array.isArray(boostedAvailableItems)) {
           boostedAvailableItems = availableItems; // Fallback to original items
+        }
+        
+        // Filter out weapons from the gather pool as a safety measure
+        // Weapons should only be obtained through looting, not gathering
+        const beforeWeaponFilter = boostedAvailableItems.length;
+        boostedAvailableItems = boostedAvailableItems.filter((item) => {
+          // Exclude items marked as weapons
+          if (item.categoryGear === 'Weapon') {
+            return false;
+          }
+          // Also check category array for weapon classification
+          if (Array.isArray(item.category) && item.category.includes('Weapon')) {
+            return false;
+          }
+          return true;
+        });
+        
+        if (beforeWeaponFilter > boostedAvailableItems.length) {
+          logger.warn('GATHER', `Filtered out ${beforeWeaponFilter - boostedAvailableItems.length} weapon(s) from gather pool (defensive filter)`);
         }
         
         let weightedItems;
@@ -1066,9 +1091,16 @@ module.exports = {
         if (isEntertainerBoost) {
           const entertainerItems = await applyGatheringBoost(character.name, availableItems);
           // Preserve the filtered list if no Entertainer-specific items are available.
-          const entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
+          let entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
             ? entertainerItems
             : availableItems;
+
+          // Defensive filter: Remove weapons from bonus pool
+          entertainerBonusPool = entertainerBonusPool.filter((item) => {
+            if (item.categoryGear === 'Weapon') return false;
+            if (Array.isArray(item.category) && item.category.includes('Weapon')) return false;
+            return true;
+          });
 
           if (entertainerBonusPool.length > 0) {
             // Select a random entertainer item as bonus
