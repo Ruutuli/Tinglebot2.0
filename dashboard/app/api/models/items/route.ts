@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
       filter.itemRarity = { $in: rarities };
     }
     
-    // Source filters (gathering, looting, traveling, exploring, vending)
+    // Source filters (gathering, looting, traveling, exploring, vending, crafting, pet perk)
     if (sources.length) {
       const sourceConditions: Record<string, boolean>[] = [];
       sources.forEach((source) => {
@@ -126,6 +126,8 @@ export async function GET(req: NextRequest) {
         else if (normalizedSource === "traveling") sourceConditions.push({ traveling: true });
         else if (normalizedSource === "exploring") sourceConditions.push({ exploring: true });
         else if (normalizedSource === "vending") sourceConditions.push({ vending: true });
+        else if (normalizedSource === "crafting") sourceConditions.push({ crafting: true });
+        else if (normalizedSource === "pet perk" || normalizedSource === "petperk") sourceConditions.push({ petPerk: true });
       });
       if (sourceConditions.length) {
         orConditions.push({ $or: sourceConditions });
@@ -257,7 +259,7 @@ export async function GET(req: NextRequest) {
       Item.find(finalFilter)
         .select(
           "itemName image imageType emoji type subtype category categoryGear buyPrice sellPrice stackable maxStackSize itemRarity " +
-          "gathering looting traveling exploring vending " +
+          "gathering looting traveling exploring vending crafting petPerk " +
           "locations centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay " +
           "allJobs farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
           "fisherman gravekeeper guard maskMaker hunter hunterLooting mercenary miner researcher scout weaver witch " +
@@ -279,7 +281,7 @@ export async function GET(req: NextRequest) {
       category: flatFilterOptions(categoryOpts as unknown[]),
       type: flatFilterOptions(typeOpts as unknown[]),
       rarity: (rarityOpts as number[]).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b),
-      source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending"],
+      source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Pet Perk"],
       location: [
         "Central Hyrule",
         "Eldin",

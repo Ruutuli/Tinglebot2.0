@@ -63,7 +63,7 @@ Use concise, emoji-based status indicators:
 
 ⚠️ Error & Logging Analogy
 
-Since markup doesn’t log, use dev-friendly comment markers near risky code:
+Since markup doesn't log, use dev-friendly comment markers near risky code:
 
 /* [DashboardHeader.tsx]❌ TODO: Confirm focus order after refactor */
 /* [ProfileCard.tsx]❌ TODO: Ensure CSS selector `.card > .title` still matches */
@@ -71,7 +71,7 @@ Since markup doesn’t log, use dev-friendly comment markers near risky code:
 🧼 Clean Code Rules
 
 Keep render output identical:
-- same elements in the same order unless you are 100% sure CSS/tests don’t rely on it
+- same elements in the same order unless you are 100% sure CSS/tests don't rely on it
 - preserve wrapper elements that CSS might target
 - preserve data-* attributes and aria-* attributes
 - preserve key props on lists (never change identity rules)
@@ -96,9 +96,9 @@ Always sort:
 - JSX attributes: consistent order (see Formatting Rules)
 
 Do not change behavior:
-- Don’t change event handler signatures
-- Don’t change controlled/uncontrolled inputs behavior
-- Don’t change default values unless they were already implied
+- Don't change event handler signatures
+- Don't change controlled/uncontrolled inputs behavior
+- Don't change default values unless they were already implied
 
 📐 Formatting Rules
 
@@ -143,7 +143,7 @@ Never change a Server Component into a Client Component (or vice versa) unless e
 - Keep "use client" exactly as-is unless told otherwise.
 
 Avoid creating new re-renders:
-- Don’t inline object/array literals into props when easily avoidable
+- Don't inline object/array literals into props when easily avoidable
 - Memoize only when proven needed; otherwise keep it simple
 
 Keep keys stable:
@@ -152,7 +152,7 @@ Keep keys stable:
 ♿ Accessibility Rules
 
 Preserve semantics:
-- Don’t replace <button> with <div> (or vice versa)
+- Don't replace <button> with <div> (or vice versa)
 - Keep labels connected: `htmlFor` + `id`
 - Maintain keyboard behavior (tab order, focus)
 

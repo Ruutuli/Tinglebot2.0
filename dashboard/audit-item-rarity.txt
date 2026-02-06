@@ -1,0 +1,745 @@
+ITEM RARITY AUDIT REPORT
+Generated: 2026-02-06T07:41:13.558Z
+Total Items: 717
+Non-Crafted Items: 323 (34 with changes)
+Crafted Items: 394 (346 with changes)
+
+================================================================================
+NON-CRAFTED ITEMS - WITH CHANGES
+================================================================================
+
+Ancient Flower - 7 | 9 ↑
+Blue Bird Feather - 5 | 7 ↑
+Bokoblin Fang - 3 | 4 ↑
+Bokoblin Horn - 3 | 4 ↑
+Brightbloom Seed - 8 | 7 ↓
+Chillfin Trout - 5 | 7 ↑
+Cold Darner - 3 | 4 ↑
+Cool Safflina - 4 | 6 ↑
+Electric Safflina - 4 | 6 ↑
+Emerald - 5 | 4 ↓
+Endura Shroom - 4 | 6 ↑
+Gerudo Dragonfly - 4 | 6 ↑
+Hearty Salmon - 5 | 7 ↑
+Hearty Truffle - 4 | 6 ↑
+Hylian Rice - 4 | 6 ↑
+Keese Eyeball - 3 | 4 ↑
+Lava Drop - 5 | 4 ↓
+Monster Claw - 3 | 4 ↑
+Muddle Bud - 3 | 4 ↑
+Octo Balloon - 3 | 4 ↑
+Octorok Eyeball - 3 | 4 ↑
+Octorok Tentacle - 3 | 4 ↑
+Rushroom - 4 | 6 ↑
+Sand Cicada - 4 | 6 ↑
+Sandy Ribbon - 7 | 9 ↑
+Sky Stag Beetle - 4 | 6 ↑
+Skyloft Mantis - 3 | 5 ↑
+Stamella Shroom - 4 | 6 ↑
+Swift Violet - 4 | 6 ↑
+Tabantha Wheat - 4 | 6 ↑
+Topaz - 5 | 4 ↓
+Warm Safflina - 4 | 6 ↑
+Wild berry - 4 | 6 ↑
+Winterwing Butterfly - 4 | 6 ↑
+
+
+================================================================================
+NON-CRAFTED ITEMS - NO CHANGES
+================================================================================
+
+Acorn - 1 | 1
+Amber - 3 | 3
+Amber Relic - 4 | 4
+Amethyst - 3 | 3
+Ancient Arowana - 4 | 4
+Ancient Arrow - 5 | 5
+Ancient Battle Axe - 6 | 6
+Ancient Bladesaw - 9 | 9
+Ancient Bow - 10 | 10
+Ancient Core - 3 | 3
+Ancient Gear - 2 | 2
+Ancient Screw - 1 | 1
+Ancient Shaft - 2 | 2
+Ancient Shield - 10 | 10
+Ancient Short Sword - 10 | 10
+Ancient Spear - 10 | 10
+Ancient Spring - 2 | 2
+Apple - 2 | 2
+Armoranth - 2 | 2
+Armored Carp - 3 | 3
+Armored Porgy - 3 | 3
+Arrow - 4 | 4
+Aurora Stone - 10 | 10
+Bird Egg - 2 | 2
+Bird Feather - 2 | 2
+Bladed Rhino Beetle - 2 | 2
+Blessed Butterfly - 4 | 4
+Blight Geodes - 6 | 6
+Blin Bling - 6 | 6
+Blizzard Rod - 7 | 7
+Blue Nightshade - 2 | 2
+Blueprint Voucher - 4 | 4
+Boko Bat - 5 | 5
+Boko Bow - 5 | 5
+Boko Club - 5 | 5
+Boko Shield - 5 | 5
+Boko Spear - 5 | 5
+Bokoblin Arm - 5 | 5
+Bokoblin Guts - 4 | 4
+Bright-Eyed Crab - 2 | 2
+Brightcap - 4 | 4
+Cane Sugar - 2 | 2
+Carmine Pearl - 6 | 6
+Carrumpkin - 8 | 8
+Character Slot Voucher - 4 | 4
+Chickaloo Tree Nut - 1 | 1
+Chill Stone - 8 | 8
+Chillshroom - 2 | 2
+Chuchu Egg - 10 | 10
+Chuchu Jelly - 2 | 2
+Cotton - 3 | 3
+Courser Bee Honey - 2 | 2
+Crystal Skull - 6 | 6
+Cucco Feathers - 5 | 5
+Dazzlefruit - 4 | 4
+Deep Firefly - 6 | 6
+Deku Hornet - 2 | 2
+Demon Carver - 8 | 8
+Demon Fossil - 6 | 6
+Diamond - 6 | 6
+Dinraal's Claw - 10 | 10
+Dinraal's Scale - 10 | 10
+Dragon Bone Boko Bow - 6 | 6
+Dragonbone Boko Bat - 6 | 6
+Dragonbone Boko Club - 6 | 6
+Dragonbone Boko Shield - 6 | 6
+Dragonbone Boko Spear - 6 | 6
+Dragonbone Moblin Club - 8 | 8
+Dragonbone Moblin Spear - 8 | 8
+Duplex Bow - 5 | 5
+Dusk Relic - 6 | 6
+Eldin Ore - 4 | 4
+Eldin Roller - 2 | 2
+Electric Darner - 2 | 2
+Electric Keese Wing - 2 | 2
+Endura Carrot - 2 | 2
+Energetic Rhino Beetle - 2 | 2
+Enhanced Lizal Spear - 6 | 6
+Fabled Butterfly - 6 | 6
+Fairy - 1 | 1
+Fairy Dust - 2 | 2
+Faron Grasshopper - 2 | 2
+Farosh's Claw - 10 | 10
+Farosh's Scale - 10 | 10
+Fire Fruit - 4 | 4
+Fire Keese Wing - 2 | 2
+Fire Rod - 5 | 5
+Fireproof Lizard - 2 | 2
+Fleet-Lotus Seeds - 2 | 2
+Flint - 2 | 2
+Forked Lizal Spear - 6 | 6
+Fortified Pumpkin - 2 | 2
+Freezard Water - 8 | 8
+Fresh Milk - 2 | 2
+Giant Ancient Core - 4 | 4
+Gibdo Bandage - 4 | 4
+Gibdo Bone - 10 | 10
+Gibdo Guts - 9 | 9
+Gibdo Wing - 10 | 10
+Glowing Cave Fish - 4 | 4
+Goat Butter - 2 | 2
+Goddess Plume - 10 | 10
+Gold Dust - 2 | 2
+Gold Ore - 3 | 3
+Golden Apple - 4 | 4
+Golden Insect - 6 | 6
+Golden Skull - 4 | 4
+Goron Ore - 3 | 3
+Guardian Shield - 6 | 6
+Guardian Spear - 6 | 6
+Guardian Sword - 6 | 6
+Hearty Bass - 3 | 3
+Hearty Blueshell Snail - 2 | 2
+Hearty Durian - 2 | 2
+Hearty Lizard - 2 | 2
+Hearty Radish - 2 | 2
+Hightail Lizard - 2 | 2
+Hinox Guts - 4 | 4
+Hinox Toenail - 5 | 5
+Hinox Tooth - 5 | 5
+Hornet Larvae - 2 | 2
+Horriblin Claw - 6 | 6
+Horriblin Guts - 6 | 6
+Horriblin Horn - 6 | 6
+Hot-Footed Frog - 2 | 2
+Hydromelon - 2 | 2
+Hylian Shroom - 1 | 1
+Hylian Tomato - 3 | 3
+Hyrule Bass - 3 | 3
+Hyrule Herb - 1 | 1
+Ice Fruit - 4 | 4
+Ice Keese Wing - 2 | 2
+Ice Rod - 5 | 5
+Ice Rose - 10 | 10
+Icy Lizalfos Tail - 4 | 4
+Insect Parts - 1 | 1
+Ironshell Crab - 2 | 2
+Ironshroom - 2 | 2
+Jade Relic - 10 | 10
+Job Voucher - 4 | 4
+Keese Wing - 2 | 2
+Kelp - 2 | 2
+Korok Leaf - 3 | 3
+Lanayru Ant - 2 | 2
+Leather - 4 | 4
+Lightning Rod - 5 | 5
+Like Like Stone - 6 | 6
+Lizal Boomerang - 5 | 5
+Lizal Bow - 5 | 5
+Lizal Forked Boomerang - 6 | 6
+Lizal Shield - 5 | 5
+Lizal Spear - 5 | 5
+Lizal Tri-Boomerang - 8 | 8
+Lizalfos Arm - 5 | 5
+Lizalfos Horn - 4 | 4
+Lizalfos Tail - 4 | 4
+Lizalfos Talon - 4 | 4
+Lizard Tail - 2 | 2
+Luminous Stone - 3 | 3
+Lynel Bow - 5 | 5
+Lynel Crusher - 6 | 6
+Lynel Guts - 4 | 4
+Lynel Hoof - 4 | 4
+Lynel Horn - 4 | 4
+Lynel Shield - 6 | 6
+Lynel Spear - 6 | 6
+Lynel Sword - 6 | 6
+Meteor Rod - 7 | 7
+Mighty Bananas - 2 | 2
+Mighty Carp - 3 | 3
+Mighty Lynel Bow - 7 | 7
+Mighty Lynel Crusher - 8 | 8
+Mighty Lynel Shield - 8 | 8
+Mighty Lynel Spear - 8 | 8
+Mighty Lynel Sword - 8 | 8
+Mighty Porgy - 3 | 3
+Mighty Thistle - 2 | 2
+Moblin Arm - 5 | 5
+Moblin Club - 5 | 5
+Moblin Fang - 4 | 4
+Moblin Guts - 4 | 4
+Moblin Horn - 4 | 4
+Moblin Spear - 5 | 5
+Mock Fairy - 6 | 6
+Molduga Fin - 7 | 7
+Molduga Guts - 7 | 7
+Monster Extract - 4 | 4
+Monster Fur - 5 | 5
+Monster Horn - 2 | 2
+Naydra's Claw - 10 | 10
+Naydra's Scale - 10 | 10
+Old Shirt - 4 | 4
+Opal - 4 | 4
+Ornamental Skull - 2 | 2
+Palm Fruit - 2 | 2
+Papyrus - 5 | 5
+Poe Soul - 4 | 4
+Pretty Plume - 4 | 4
+Puffshroom - 4 | 4
+Rainbow Coral - 10 | 10
+Raw Bird Drumstick - 2 | 2
+Raw Bird Thigh - 2 | 2
+Raw Gourmet Meat - 3 | 3
+Raw Meat - 2 | 2
+Raw Prime Meat - 2 | 2
+Raw Whole Bird - 3 | 3
+Razorclaw Crab - 2 | 2
+Razorshroom - 2 | 2
+Red Chuchu Jelly - 2 | 2
+Red Lizalfos Tail - 4 | 4
+Reinforced Lizal Shield - 6 | 6
+Restless Cricket - 2 | 2
+Rock Salt - 2 | 2
+Ruby - 6 | 6
+Rugged Horn - 4 | 4
+Rugged Rhino Beetle - 2 | 2
+Sanke Carp - 3 | 3
+Sapphire - 6 | 6
+Savage Lynel Bow - 8 | 8
+Savage Lynel Crusher - 9 | 9
+Savage Lynel Shield - 9 | 9
+Savage Lynel Spear - 9 | 9
+Savage Lynel Sword - 9 | 9
+Serpent Fangs - 4 | 4
+Shard of Dinraal's Fang - 10 | 10
+Shard of Dinraal's Horn - 10 | 10
+Shard of Farosh's Fang - 10 | 10
+Shard of Farosh's Horn - 10 | 10
+Shard of Naydra's Fang - 10 | 10
+Shard of Naydra's Horn - 10 | 10
+Shock Fruit - 4 | 4
+Silent Princess - 2 | 2
+Silent Shroom - 2 | 2
+Silver Dust - 2 | 2
+Silver Ore - 3 | 3
+Sizzlefin Trout - 3 | 3
+Skyshroom - 4 | 4
+Smotherwing Butterfly - 2 | 2
+Sneaky River Snail - 2 | 2
+Spicy Pepper - 2 | 2
+Spider Silk - 2 | 2
+Spider's Eye - 5 | 5
+Spiked Boko Bat - 5 | 5
+Spiked Boko Bow - 5 | 5
+Spiked Boko Club - 5 | 5
+Spiked Boko Shield - 5 | 5
+Spiked Boko Spear - 5 | 5
+Spiked Moblin Club - 6 | 6
+Spiked Moblin Spear - 6 | 6
+Spirit Orb - 4 | 4
+Splash Fruit - 4 | 4
+Spring-Loaded Hammer - 5 | 5
+Stal Skull - 6 | 6
+Stambulb - 3 | 3
+Staminoka Bass - 3 | 3
+Star Fragment - 7 | 7
+Starry Firefly - 2 | 2
+Stealthfin Trout - 3 | 3
+Steel Lizal Bow - 8 | 8
+Steel Lizal Shield - 8 | 8
+Sticky Frog - 4 | 4
+Sticky Lizard - 3 | 3
+Strengthened Lizal Bow - 6 | 6
+Summerwing Butterfly - 2 | 2
+Sundelion - 4 | 4
+Sunset Firefly - 2 | 2
+Sunshroom - 2 | 2
+Sweet Shroom - 4 | 4
+Swift Carrot - 2 | 2
+Thornberry - 2 | 2
+Thunderstorm Rod - 7 | 7
+Thunderwing Butterfly - 2 | 2
+Tireless Frog - 2 | 2
+Tree Branch - 3 | 3
+Vicious Sickle - 6 | 6
+Volcanic Ladybug - 2 | 2
+Voltfin Trout - 3 | 3
+Voltfruit - 2 | 2
+Warm Darner - 2 | 2
+Well-Worn Trousers - 4 | 4
+White Chuchu Jelly - 2 | 2
+Windcleaver - 8 | 8
+Wood - 2 | 2
+Woodland Rhino Beetle - 2 | 2
+Wool - 6 | 6
+Yellow Chuchu Jelly - 2 | 2
+Yellow Lizalfos Tail - 4 | 4
+Zapshroom - 2 | 2
+Zora Scale - 4 | 4
+
+
+================================================================================
+CRAFTED ITEMS - WITH CHANGES
+================================================================================
+
+Akkala Buns - 3 | 5 ↑
+Amber Earrings - 3 | 5 ↑
+Ancient Battle Axe+ - 9 | 10 ↑
+Ancient Battle Axe++ - 8 | 10 ↑
+Ancient Cuirass - 3 | 10 ↑
+Ancient Greaves - 3 | 10 ↑
+Ancient Helm - 3 | 10 ↑
+Archaic Legwear - 6 | 7 ↑
+Archaic Tunic - 7 | 10 ↑
+Archaic Warm Greaves - 5 | 6 ↑
+Baked Apple - 2 | 5 ↑
+Baked Fortified Pumpkin - 2 | 5 ↑
+Baked Palm Fruit - 2 | 5 ↑
+Barbarian Armor - 4 | 10 ↑
+Barbarian Helm - 4 | 6 ↑
+Barbarian Leg Wraps - 3 | 6 ↑
+Blackened Crab - 2 | 5 ↑
+Blueshell Escargot - 2 | 5 ↑
+Boat Oar - 1 | 5 ↑
+Bokoblin Mask - 1 | 5 ↑
+Bomb Arrow - 1 | 5 ↑
+Boomerang - 2 | 5 ↑
+Buttered Stambulb - 4 | 5 ↑
+Campfire Egg - 3 | 5 ↑
+Cap of the Wild - 1 | 7 ↑
+Champion's Tunic - 2 | 8 ↑
+Charged Headdress - 9 | 10 ↑
+Charged Shirt - 9 | 10 ↑
+Charged Trousers - 9 | 10 ↑
+Charred Pepper - 2 | 5 ↑
+Cheesy Baked Fish - 4 | 5 ↑
+Cheesy Meat Bowl - 6 | 5 ↓
+Chilly Elixir - 7 | 5 ↓
+Climber's Bandanna - 2 | 5 ↑
+Climbing Boots - 2 | 5 ↑
+Climbing Gear - 2 | 5 ↑
+Cobble Crusher - 4 | 5 ↑
+Cooked Stambulb - 3 | 5 ↑
+Copious Fish Skewers - 2 | 5 ↑
+Copious Fried Wild Greens - 3 | 5 ↑
+Copious Meat Skewers - 2 | 5 ↑
+Copious Mushroom Skewers - 2 | 5 ↑
+Copious Simmered Fruit - 2 | 5 ↑
+Cream Of Mushroom Soup - 6 | 5 ↓
+Creamy Seafood Soup - 6 | 5 ↓
+Curry Pilaf - 6 | 5 ↓
+Curry Rice - 5 | 6 ↑
+Deep-Fried Bird Roast - 4 | 5 ↑
+Deep-Fried Drumstick - 3 | 5 ↑
+Deep-Fried Thigh - 3 | 5 ↑
+Desert Voe Headband - 1 | 7 ↑
+Desert Voe Spaulder - 1 | 7 ↑
+Desert Voe Trousers - 1 | 7 ↑
+Diamond Circlet - 4 | 10 ↑
+Double Axe - 3 | 5 ↑
+Edge of Duality - 2 | 10 ↑
+Egg Pudding - 4 | 5 ↑
+Eightfold Blade - 9 | 10 ↑
+Eightfold Longblade - 8 | 10 ↑
+Electro Elixir - 7 | 5 ↓
+Ember Headdress - 9 | 10 ↑
+Ember Shirt - 9 | 10 ↑
+Ember Trousers - 9 | 10 ↑
+Emblazoned Shield - 2 | 5 ↑
+Enduring Elixir - 7 | 5 ↓
+Energizing Elixir - 7 | 5 ↓
+Fairy Tonic - 7 | 5 ↓
+Falcon Bow - 2 | 5 ↑
+Fancy Fabric - 8 | 6 ↓
+Farmer's Pitchfork - 3 | 5 ↑
+Farming Hoe - 3 | 5 ↑
+Feathered Edge - 3 | 5 ↑
+Feathered Spear - 3 | 5 ↑
+Fire Arrow - 3 | 7 ↑
+Fireproof Elixir - 7 | 5 ↓
+Fish And Mushroom Skewer - 3 | 5 ↑
+Fish Skewer - 2 | 5 ↑
+Fisherman's Shield - 2 | 4 ↑
+Fishing Harpoon - 3 | 4 ↑
+Flameblade - 8 | 10 ↑
+Flamebreaker Armor - 2 | 6 ↑
+Flamebreaker Boots - 2 | 6 ↑
+Flamebreaker Helm - 2 | 6 ↑
+Flamespear - 8 | 10 ↑
+Forest Dweller's Bow - 2 | 5 ↑
+Forest Dweller's Sword - 4 | 5 ↑
+Fragrant Seafood Stew - 6 | 5 ↓
+Fried Bananas - 4 | 5 ↑
+Fried Egg And Rice - 3 | 5 ↑
+Fried Wild Greens - 3 | 5 ↑
+Frilly Fabric - 8 | 3 ↓
+Froggy Hood - 4 | 10 ↑
+Froggy Leggings - 4 | 10 ↑
+Froggy Sleeve - 4 | 10 ↑
+Frostbite Headdress - 9 | 10 ↑
+Frostbite Shirt - 9 | 10 ↑
+Frostbite Trousers - 9 | 10 ↑
+Frostblade - 8 | 10 ↑
+Frostspear - 8 | 10 ↑
+Fruit And Mushroom Mix - 3 | 5 ↑
+Gerudo Claymore - 9 | 10 ↑
+Gerudo Scimitar - 9 | 10 ↑
+Gerudo Shield - 10 | 9 ↓
+Gerudo Sirwal - 3 | 5 ↑
+Gerudo Spear - 9 | 10 ↑
+Gerudo Top - 3 | 5 ↑
+Gerudo Veil - 3 | 5 ↑
+Giant Boomerang - 4 | 5 ↑
+Glazed Meat - 3 | 5 ↑
+Glazed Mushrooms - 3 | 5 ↑
+Glazed Seafood - 3 | 5 ↑
+Glazed Veggies - 4 | 5 ↑
+Gold Bar - 9 | 4 ↓
+Goron Spice - 5 | 4 ↓
+Gourmet Meat And Seafood Fry - 4 | 5 ↑
+Gourmet Meat Curry - 7 | 5 ↓
+Gourmet Meat Stew - 6 | 5 ↓
+Gourmet Poultry Curry - 7 | 5 ↓
+Gourmet Poultry Pilaf - 6 | 5 ↓
+Gourmet Spiced Meat Skewer - 6 | 5 ↓
+Great Flameblade - 6 | 9 ↑
+Great Frostblade - 6 | 9 ↑
+Great Thunderblade - 6 | 9 ↑
+Guardian Shield+ - 9 | 10 ↑
+Guardian Shield++ - 8 | 10 ↑
+Guardian Spear+ - 9 | 10 ↑
+Guardian Spear++ - 8 | 10 ↑
+Guardian Sword+ - 9 | 10 ↑
+Guardian Sword++ - 9 | 10 ↑
+Hard-boiled Egg - 2 | 5 ↑
+Hasty Elixir - 7 | 5 ↓
+Hateno Cheese - 3 | 4 ↑
+Hearty Elixir - 7 | 5 ↓
+Herb Saute - 6 | 5 ↓
+Honey Candy - 2 | 5 ↑
+Honey Crepe - 6 | 5 ↓
+Honeyed Apple - 3 | 5 ↑
+Honeyed Fruits - 3 | 5 ↑
+Hot Buttered Apple - 3 | 5 ↑
+Hunter's Shield - 2 | 5 ↑
+Hylian Hood - 4 | 7 ↑
+Hylian Tomato Pizza - 6 | 5 ↓
+Hylian Trousers - 4 | 7 ↑
+Hylian Tunic - 5 | 7 ↑
+Ice Arrow - 3 | 7 ↑
+Iron bar - 9 | 4 ↓
+Iron Sledgehammer - 3 | 5 ↑
+Island Lobster Shirt - 3 | 5 ↑
+Kite Shield - 1 | 5 ↑
+Knight's Bow - 2 | 5 ↑
+Knight's Claymore - 8 | 10 ↑
+Knight's Halberd - 3 | 5 ↑
+Knight's Shield - 3 | 5 ↑
+Korok Mask - 2 | 5 ↑
+Lace - 8 | 5 ↓
+Lizalfos Mask - 2 | 5 ↑
+Lynel Mask - 2 | 5 ↑
+Mabe Soufflé - 4 | 5 ↑
+Meat & Mushroom Skewer - 3 | 5 ↑
+Meat And Rice Bowl - 4 | 5 ↑
+Meat And Seafood Fry - 3 | 5 ↑
+Meat Curry - 6 | 5 ↓
+Meat Skewer - 2 | 5 ↑
+Meat-stuffed Pumpkins - 3 | 5 ↑
+Meaty Rice Balls - 3 | 5 ↑
+Melty Cheesy Bread - 4 | 5 ↑
+Mighty Elixir - 7 | 5 ↓
+Miner's Mask - 8 | 10 ↑
+Miner's Top - 8 | 10 ↑
+Miner's Trousers - 7 | 10 ↑
+Moblin Mask - 2 | 5 ↑
+Monster Cake - 7 | 5 ↓
+Monster Curry - 8 | 6 ↓
+Monster Rice Balls - 6 | 5 ↓
+Monster Soup - 7 | 5 ↓
+Monster Stew - 6 | 5 ↓
+Mushroom Rice Balls - 3 | 5 ↑
+Mushroom Skewer - 2 | 5 ↑
+Mystic Headpiece - 9 | 10 ↑
+Mystic Robe - 8 | 10 ↑
+Mystic Trousers - 8 | 10 ↑
+Nut Cake - 4 | 5 ↑
+Oil Jar - 2 | 5 ↑
+Omelet - 2 | 5 ↑
+Opal Earrings - 3 | 5 ↑
+Pepper Seafood - 3 | 5 ↑
+Phrenic Bow - 2 | 8 ↑
+Plain Crepe - 6 | 5 ↓
+Porgy Meunière - 4 | 5 ↑
+Pot Lid - 1 | 5 ↑
+Poultry Curry - 4 | 5 ↑
+Prime Meat And Rice Bowl - 4 | 5 ↑
+Prime Meat And Seafood Fry - 3 | 5 ↑
+Prime Meat Curry - 6 | 5 ↓
+Prime Poultry Curry - 6 | 5 ↓
+Radiant Mask - 2 | 5 ↑
+Radiant Shield - 3 | 10 ↑
+Radiant Shirt - 2 | 5 ↑
+Radiant Tights - 2 | 5 ↑
+Roasted Acorn - 1 | 4 ↑
+Roasted Armoranth - 2 | 5 ↑
+Roasted Bass - 2 | 5 ↑
+Roasted Bird Drumstick - 2 | 5 ↑
+Roasted Bird Thigh - 2 | 5 ↑
+Roasted Carp - 2 | 5 ↑
+Roasted Endura Carrot - 2 | 5 ↑
+Roasted Hearty Bass - 3 | 5 ↑
+Roasted Hearty Durian - 2 | 5 ↑
+Roasted Hearty Salmon - 3 | 5 ↑
+Roasted Hydromelon - 2 | 5 ↑
+Roasted Lotus Seeds - 2 | 5 ↑
+Roasted Mighty Bananas - 2 | 5 ↑
+Roasted Mighty Thistle - 2 | 5 ↑
+Roasted Porgy - 2 | 5 ↑
+Roasted Radish - 2 | 5 ↑
+Roasted Swift Carrot - 2 | 5 ↑
+Roasted Tree Nut - 1 | 4 ↑
+Roasted Trout - 2 | 5 ↑
+Roasted Voltfruit - 2 | 5 ↑
+Roasted Whole Bird - 3 | 5 ↑
+Roasted Wildberry - 2 | 5 ↑
+Rock-hard Food - 3 | 5 ↑
+Royal Bow - 1 | 10 ↑
+Royal Broadsword - 10 | 9 ↓
+Royal Claymore - 10 | 9 ↓
+Royal Guard Boots - 3 | 9 ↑
+Royal Guard Cap - 3 | 9 ↑
+Royal Guard Uniform - 4 | 9 ↑
+Royal Guard's Claymore - 9 | 10 ↑
+Royal Guard's Shield - 3 | 10 ↑
+Royal Guard's Spear - 6 | 10 ↑
+Royal Guard's Sword - 9 | 10 ↑
+Royal Halberd - 8 | 10 ↑
+Royal Shield - 5 | 10 ↑
+Rubber Armor - 3 | 5 ↑
+Rubber Helm - 3 | 5 ↑
+Rubber Tights - 3 | 5 ↑
+Rusty Broadsword - 2 | 5 ↑
+Rusty Claymore - 2 | 5 ↑
+Rusty Halberd - 3 | 5 ↑
+Rusty Shield - 3 | 5 ↑
+Salmon Risotto - 6 | 5 ↓
+Salt-grilled Crab - 3 | 5 ↑
+Salt-grilled Fish - 3 | 5 ↑
+Salt-grilled Gourmet Meat - 4 | 5 ↑
+Salt-grilled Greens - 4 | 5 ↑
+Salt-grilled Meat - 3 | 5 ↑
+Salt-grilled Mushrooms - 3 | 5 ↑
+Salt-grilled Prime Meat - 3 | 5 ↑
+Salvager Headwear - 8 | 10 ↑
+Salvager Trousers - 8 | 10 ↑
+Salvager Vest - 8 | 10 ↑
+Sand Boots - 3 | 8 ↑
+Sapphire Circlet - 3 | 6 ↑
+Sautéed Nuts - 1 | 4 ↑
+Sea-Breeze Boomerang - 2 | 7 ↑
+Seafood Fried Rice - 4 | 5 ↑
+Seafood Meunière - 4 | 5 ↑
+Seafood Paella - 6 | 5 ↓
+Seafood Rice Balls - 3 | 5 ↑
+Seafood Skewer - 2 | 5 ↑
+Seared Gourmet Steak - 3 | 5 ↑
+Seared Prime Steak - 2 | 4 ↑
+Seared Steak - 2 | 4 ↑
+Serpentine Spear - 3 | 5 ↑
+Shield of the Mind's Eye - 2 | 5 ↑
+Shock Arrow - 3 | 6 ↑
+Silk - 5 | 2 ↓
+Silver Bar - 9 | 4 ↓
+Silver Bow - 4 | 5 ↑
+Silver Longsword - 3 | 10 ↑
+Silver Shield - 3 | 5 ↑
+Silver Thread - 4 | 2 ↓
+Silverscale Spear - 4 | 5 ↑
+Simmered Fruit - 2 | 5 ↑
+Simmered Tomato - 3 | 5 ↑
+Sneaky Elixir - 7 | 5 ↓
+Sneaky River Escargot - 2 | 5 ↑
+Snow Boots - 6 | 10 ↑
+Snowquill Headdress - 3 | 10 ↑
+Snowquill Trousers - 3 | 10 ↑
+Snowquill Tunic - 3 | 10 ↑
+Soldier's Armor - 3 | 10 ↑
+Soldier's Bow - 3 | 5 ↑
+Soldier's Greaves - 3 | 10 ↑
+Soldier's Helm - 7 | 10 ↑
+Soldier's Shield - 2 | 5 ↑
+Soldier's Spear - 4 | 5 ↑
+Soup Ladle - 1 | 5 ↑
+Spicy Elixir - 7 | 5 ↓
+Spicy Sautéed Peppers - 2 | 5 ↑
+Stealth Chest Guard - 2 | 5 ↑
+Stealth Mask - 2 | 5 ↑
+Stealth Tights - 2 | 5 ↑
+Steamed Fish - 4 | 5 ↑
+Steamed Fruit - 4 | 5 ↑
+Steamed Meat - 2 | 3 ↑
+Stone Smasher - 4 | 6 ↑
+Swallow Bow - 1 | 5 ↑
+Sword - 5 | 7 ↑
+Tabantha Bake - 3 | 5 ↑
+Throwing Spear - 3 | 5 ↑
+Thunderblade - 8 | 10 ↑
+Thunderspear - 8 | 10 ↑
+Tingle's Hood - 5 | 7 ↑
+Tingle's Shirt - 5 | 7 ↑
+Tingle's Tights - 5 | 7 ↑
+Toasted Hearty Truffle - 2 | 5 ↑
+Toasty Chillshroom - 2 | 5 ↑
+Toasty Endura Shroom - 2 | 5 ↑
+Toasty Hylian Shroom - 1 | 4 ↑
+Toasty Ironshroom - 2 | 5 ↑
+Toasty Razorshroom - 2 | 5 ↑
+Toasty Rushroom - 2 | 5 ↑
+Toasty Silent Shroom - 2 | 5 ↑
+Toasty Skyshroom - 3 | 5 ↑
+Toasty Stamella Shroom - 2 | 5 ↑
+Toasty Sunshroom - 2 | 5 ↑
+Toasty Zapshroom - 2 | 5 ↑
+Tomato Mushroom Stew - 4 | 5 ↑
+Tomato Seafood Soup - 4 | 5 ↑
+Torch - 2 | 5 ↑
+Tough Elixir - 7 | 5 ↓
+Traveler's Bow - 2 | 5 ↑
+Traveler's Claymore - 2 | 5 ↑
+Traveler's Shield - 2 | 5 ↑
+Traveler's Spear - 3 | 5 ↑
+Traveler's Sword - 2 | 5 ↑
+Trousers of the Wild - 2 | 7 ↑
+Tunic of the Wild - 2 | 7 ↑
+Vegetable Curry - 7 | 6 ↓
+Vegetable Omelet - 6 | 5 ↓
+Veggie Rice Balls - 4 | 5 ↑
+Vintage Linen - 9 | 5 ↓
+Warm Doublet - 7 | 6 ↓
+Warm Milk - 2 | 5 ↑
+Wheat Bread - 3 | 5 ↑
+Wildberry Crepe - 6 | 5 ↓
+Woodcutter's Axe - 2 | 5 ↑
+Wooden Bow - 1 | 5 ↑
+Wooden Mop - 2 | 5 ↑
+Wooden Shield - 1 | 5 ↑
+Zora Armor - 4 | 5 ↑
+Zora Greaves - 4 | 5 ↑
+Zora Helm - 4 | 5 ↑
+Zora Spear - 3 | 5 ↑
+
+
+================================================================================
+CRAFTED ITEMS - NO CHANGES
+================================================================================
+
+Apple Pie - 5 | 5
+Carrot Cake - 5 | 5
+Carrot Stew - 5 | 5
+Cheesy Tomato - 5 | 5
+Clam Chowder - 5 | 5
+Crab Omelet With Rice - 5 | 5
+Crab Risotto - 5 | 5
+Crab Stir-fry - 5 | 5
+Cream Of Vegetable Soup - 5 | 5
+Creamy Heart Soup - 5 | 5
+Creamy Meat Soup - 5 | 5
+Drillshaft - 5 | 5
+Egg Tart - 5 | 5
+Fish Pie - 5 | 5
+Forest Dweller's Shield - 5 | 5
+Forest Dweller's Spear - 5 | 5
+Fragrant Mushroom Sauté - 5 | 5
+Fruit Cake - 5 | 5
+Fruit Pie - 5 | 5
+Gerudo Bow - 10 | 10
+Gourmet Meat And Rice Bowl - 5 | 5
+Knight's Broadsword - 5 | 5
+Meat Pie - 5 | 5
+Meat Stew - 5 | 5
+Moonlight Scimitar - 9 | 9
+Mushroom Omelet - 5 | 5
+Mushroom Risotto - 5 | 5
+Noble Pursuit - 5 | 5
+Pepper Steak - 5 | 5
+Poultry Pilaf - 5 | 5
+Prime Meat Stew - 5 | 5
+Prime Poultry Pilaf - 5 | 5
+Prime Spiced Meat Skewer - 5 | 5
+Pumpkin Pie - 5 | 5
+Pumpkin Stew - 5 | 5
+Royal Guard's Bow - 10 | 10
+Ruby Circlet - 6 | 6
+Salmon Meunière - 5 | 5
+Seafood Curry - 6 | 6
+Soldier's Broadsword - 5 | 5
+Soldier's Claymore - 5 | 5
+Spiced Meat Skewer - 5 | 5
+Steamed Mushrooms - 6 | 6
+Tomato Stew - 5 | 5
+Topaz Earrings - 5 | 5
+Vegetable Risotto - 5 | 5
+Veggie Cream Soup - 5 | 5
+Zora Sword - 5 | 5

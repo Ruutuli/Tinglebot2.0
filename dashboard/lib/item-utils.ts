@@ -9,6 +9,8 @@ export type ItemData = {
   traveling?: boolean;
   exploring?: boolean;
   vending?: boolean;
+  crafting?: boolean;
+  petPerk?: boolean;
   centralHyrule?: boolean;
   eldin?: boolean;
   faron?: boolean;
@@ -56,15 +58,47 @@ export type ItemData = {
 };
 
 /**
- * Format sources array from boolean flags
+ * Format sources array from boolean flags and job flags
+ * Determines obtain methods based on:
+ * - Gathering: if any gathering job is true
+ * - Looting: if any looting job is true (monster flags checked in backfill script)
+ * - Crafting: if any crafting job is true (or has crafting materials + crafting job)
+ * - Vending, Traveling, Exploring: from boolean flags
+ * - Special Weather: from specialWeather flags
+ * - Pet Perk: from petPerk flag
  */
 export function formatSources(item: ItemData): string[] {
   const sources: string[] = [];
-  if (item.gathering) sources.push("Gathering");
-  if (item.looting) sources.push("Looting");
+  
+  // Gathering: check if any gathering job is true
+  // Gathering jobs: Farmer, Forager, Herbalist, Rancher, Miner, Beekeeper, Fisherman, Hunter
+  const hasGatheringJob = item.farmer || item.forager || item.herbalist || item.rancher || 
+                          item.miner || item.beekeeper || item.fisherman || item.hunter;
+  if (hasGatheringJob) {
+    sources.push("Gathering");
+  }
+  
+  // Looting: check if any looting job is true
+  // Looting jobs: Adventurer, Graveskeeper, Guard, Mercenary, Scout, Hunter, Hunter (Looting)
+  const hasLootingJob = item.adventurer || item.gravekeeper || item.guard || item.mercenary || 
+                        item.scout || item.hunter || item.hunterLooting;
+  if (hasLootingJob) {
+    sources.push("Looting");
+  }
+  
+  // Crafting: check if any crafting job is true (or has crafting materials + crafting job)
+  // Crafting jobs: Cook, Blacksmith, Craftsman, Mask Maker, Researcher, Weaver, Artist, Witch
+  const hasCraftingMaterials = item.craftingMaterial && item.craftingMaterial.length > 0;
+  const hasCraftingJob = item.cook || item.blacksmith || item.craftsman || item.maskMaker || 
+                         item.researcher || item.weaver || item.artist || item.witch;
+  if (hasCraftingJob || (hasCraftingMaterials && hasCraftingJob)) {
+    sources.push("Crafting");
+  }
+  
+  // Vending, Traveling, Exploring: from boolean flags
+  if (item.vending) sources.push("Vending");
   if (item.traveling) sources.push("Traveling");
   if (item.exploring) sources.push("Exploring");
-  if (item.vending) sources.push("Vending");
   
   // Check if any special weather is active
   if (item.specialWeather) {
@@ -73,6 +107,8 @@ export function formatSources(item: ItemData): string[] {
       sources.push("Special Weather");
     }
   }
+  
+  if (item.petPerk) sources.push("Pet Perk");
   
   return sources.length > 0 ? sources : ["None"];
 }
