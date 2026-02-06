@@ -116,9 +116,9 @@ export async function GET(req: NextRequest) {
       filter.itemRarity = { $in: rarities };
     }
     
-    // Source filters (gathering, looting, traveling, exploring, vending, crafting, pet perk)
+    // Source filters (gathering, looting, traveling, exploring, vending, crafting, special weather, pet perk)
     if (sources.length) {
-      const sourceConditions: Record<string, boolean>[] = [];
+      const sourceConditions: Record<string, unknown>[] = [];
       sources.forEach((source) => {
         const normalizedSource = source.toLowerCase();
         if (normalizedSource === "gathering") sourceConditions.push({ gathering: true });
@@ -127,7 +127,20 @@ export async function GET(req: NextRequest) {
         else if (normalizedSource === "exploring") sourceConditions.push({ exploring: true });
         else if (normalizedSource === "vending") sourceConditions.push({ vending: true });
         else if (normalizedSource === "crafting") sourceConditions.push({ crafting: true });
-        else if (normalizedSource === "pet perk" || normalizedSource === "petperk") sourceConditions.push({ petPerk: true });
+        else if (normalizedSource === "special weather" || normalizedSource === "specialweather") {
+          // Special Weather: check if any special weather flag is true
+          sourceConditions.push({
+            $or: [
+              { "specialWeather.muggy": true },
+              { "specialWeather.flowerbloom": true },
+              { "specialWeather.fairycircle": true },
+              { "specialWeather.jubilee": true },
+              { "specialWeather.meteorShower": true },
+              { "specialWeather.rockslide": true },
+              { "specialWeather.avalanche": true },
+            ],
+          });
+        } else if (normalizedSource === "pet perk" || normalizedSource === "petperk") sourceConditions.push({ petPerk: true });
       });
       if (sourceConditions.length) {
         orConditions.push({ $or: sourceConditions });
@@ -281,7 +294,7 @@ export async function GET(req: NextRequest) {
       category: flatFilterOptions(categoryOpts as unknown[]),
       type: flatFilterOptions(typeOpts as unknown[]),
       rarity: (rarityOpts as number[]).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b),
-      source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Pet Perk"],
+      source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Special Weather", "Pet Perk"],
       location: [
         "Central Hyrule",
         "Eldin",
