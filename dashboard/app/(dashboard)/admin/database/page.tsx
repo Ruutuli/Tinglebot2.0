@@ -152,20 +152,24 @@ export default function AdminDatabasePage() {
 
       filtered = filtered.filter((item) => {
         if (key === "category") {
-          return item.category?.some((cat) => selectedValues.includes(cat));
+          const category = item.category;
+          return Array.isArray(category) && category.some((cat: string) => selectedValues.includes(cat));
         }
         if (key === "type") {
-          return item.type?.some((t) => selectedValues.includes(t));
+          const type = item.type;
+          return Array.isArray(type) && type.some((t: string) => selectedValues.includes(t));
         }
         if (key === "categoryGear") {
           const categoryGear = Array.isArray(item.categoryGear) ? item.categoryGear : item.categoryGear ? [item.categoryGear] : [];
           return categoryGear.length > 0 && selectedValues.some((v) => categoryGear.includes(v as string));
         }
         if (key === "subtype") {
-          return item.subtype?.some((st) => selectedValues.includes(st));
+          const subtype = item.subtype;
+          return Array.isArray(subtype) && subtype.some((st: string) => selectedValues.includes(st));
         }
         if (key === "rarity") {
-          return item.itemRarity !== undefined && selectedValues.includes(item.itemRarity);
+          const rarity = item.itemRarity;
+          return rarity !== undefined && rarity !== null && selectedValues.includes(rarity as string | number | boolean);
         }
         if (key === "stackable") {
           const isStackable = item.stackable === true;
@@ -624,7 +628,7 @@ export default function AdminDatabasePage() {
                   items={paginatedItems}
                   modelConfig={modelConfig}
                   onEdit={(item) => {
-                    setEditingItem(item);
+                    setEditingItem(item as DatabaseRecord);
                     setShowEditModal(true);
                   }}
                 />

@@ -250,7 +250,7 @@ function ContributorItem({
                         value={contributorData.tokens || 0}
                         onChange={(e) => {
                           const val = parseInt(e.target.value, 10) || 0;
-                          updateTokens(contributorId, val);
+                          onUpdateTokens(contributorId, val);
                         }}
                         className="w-24 px-2 py-1 bg-[var(--botw-black)] border border-[var(--totk-dark-ocher)] rounded text-sm text-[var(--botw-pale)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-ocher)]/50"
                       />
@@ -258,7 +258,7 @@ function ContributorItem({
                   </div>
                   <button
                     type="button"
-                    onClick={() => removeContributor(contributorId)}
+                    onClick={() => onRemove(contributorId)}
                     className="px-3 py-1 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded transition-colors"
                     aria-label={`Remove contributor ${contributorId}`}
                   >

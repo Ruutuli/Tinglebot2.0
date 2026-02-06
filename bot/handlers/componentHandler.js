@@ -35,7 +35,7 @@ const ItemModel = require('@/models/ItemModel');
 const RuuGame = require('@/models/RuuGameModel');
 const Character = require('@/models/CharacterModel');
 const { Village } = require('@/models/VillageModel');
-const { finalizeBlightApplication } = require('./blightHandler');
+const { finalizeBlightApplication, completeBlightHealing } = require('./blightHandler');
 
 // ------------------- Embed and Command Imports -------------------
 const {
@@ -2114,6 +2114,76 @@ async function handleRestSpotChoice(interaction) {
     character.markModified('dailyRoll'); // Required for Mongoose to track Map changes
     await character.save();
 
+    // ------------------- Level 3 Rest Spot Special Effects -------------------
+    // Debuff Removal: Level 3 rest spots automatically remove active debuffs
+    let debuffRemoved = false;
+    if (character.debuff?.active) {
+      character.debuff.active = false;
+      character.debuff.endDate = null;
+      debuffRemoved = true;
+      await character.save();
+    }
+
+    // Blight Blessing: 25% chance to reduce blight stage by 1 or completely heal it
+    let blightBlessingResult = null;
+    if (character.blighted && character.blightStage > 0) {
+      const blessingRoll = Math.random();
+      if (blessingRoll < 0.25) {
+        // 25% chance triggered - decide between reduce stage or full heal (50/50)
+        const healOrReduce = Math.random();
+        if (healOrReduce < 0.5 || character.blightStage === 1) {
+          // Full heal (or stage 1 -> 0)
+          try {
+            const { client } = require('../index.js');
+            await completeBlightHealing(character, interaction, client);
+            blightBlessingResult = { type: 'healed', stage: 0 };
+          } catch (healError) {
+            console.error(`[componentHandler.js]: ❌ Error in completeBlightHealing: ${healError.message}`);
+            // Fallback: manually set blight to false
+            character.blighted = false;
+            character.blightStage = 0;
+            character.blightEffects = {
+              rollMultiplier: 1.0,
+              noMonsters: false,
+              noGathering: false
+            };
+            await character.save();
+            blightBlessingResult = { type: 'healed', stage: 0 };
+          }
+        } else {
+          // Reduce stage by 1
+          const previousStage = character.blightStage;
+          character.blightStage -= 1;
+          
+          // Update blight effects based on new stage
+          character.blightEffects = {
+            rollMultiplier: character.blightStage === 2 ? 1.5 : 1.0,
+            noMonsters: character.blightStage >= 3,
+            noGathering: character.blightStage >= 4
+          };
+          
+          // If stage reached 0, fully remove blight using completeBlightHealing for proper cleanup
+          if (character.blightStage === 0) {
+            try {
+              const { client } = require('../index.js');
+              await completeBlightHealing(character, interaction, client);
+              blightBlessingResult = { type: 'healed', stage: 0 };
+            } catch (healError) {
+              console.error(`[componentHandler.js]: ❌ Error in completeBlightHealing after stage reduction: ${healError.message}`);
+              // Fallback: manually set blight to false
+              character.blighted = false;
+              character.blightedAt = null;
+              await character.save();
+              blightBlessingResult = { type: 'healed', stage: 0 };
+            }
+          } else {
+            blightBlessingResult = { type: 'reduced', previousStage, newStage: character.blightStage };
+            await character.save();
+          }
+        }
+      }
+    }
+
     // Get theme and images
     const VILLAGE_IMAGES = {
       Rudania: {
@@ -2137,19 +2207,34 @@ async function handleRestSpotChoice(interaction) {
     // Refresh character to get updated values
     const updatedCharacter = await fetchCharacterById(characterId);
 
+    // Build description with all effects
+    let description = success
+      ? `**${updatedCharacter.name}** rests in the ${theme.description}...\n\n` +
+        `${restoreEmoji} **+${restored} ${restoreType} restored!**\n` +
+        `**Current ${restoreType === 'stamina' ? 'Stamina' : 'Hearts'}:** ${restoreType === 'stamina' ? updatedCharacter.currentStamina : updatedCharacter.currentHearts}/${restoreType === 'stamina' ? updatedCharacter.maxStamina : updatedCharacter.maxHearts}`
+      : `**${updatedCharacter.name}** rests in the ${theme.description}, but the restorative energies don't respond this time...\n\n` +
+        `❌ **No restoration occurred (50% chance failed).**`;
+
+    // Add debuff removal message
+    if (debuffRemoved) {
+      description += `\n\n💧 **The sacred waters cleanse all afflictions.**\n✅ **Debuff removed!**`;
+    }
+
+    // Add blight blessing message
+    if (blightBlessingResult) {
+      if (blightBlessingResult.type === 'healed') {
+        description += `\n\n✨ **The dragon/oracle has blessed this place.**\n🩹 **Blight fully healed!** Your character is no longer blighted.`;
+      } else if (blightBlessingResult.type === 'reduced') {
+        description += `\n\n✨ **The dragon/oracle has blessed this place.**\n📉 **Blight stage reduced!** Stage ${blightBlessingResult.previousStage} → Stage ${blightBlessingResult.newStage}`;
+      }
+    }
+
+    description += `\n\n*You can use the rest spot again tomorrow at 8am EST.*`;
+
     // Create response embed
     const embed = new EmbedBuilder()
       .setTitle(`${theme.emoji} ${villageName} ${theme.name}`)
-      .setDescription(
-        success
-          ? `**${updatedCharacter.name}** rests in the ${theme.description}...\n\n` +
-            `${restoreEmoji} **+${restored} ${restoreType} restored!**\n` +
-            `**Current ${restoreType === 'stamina' ? 'Stamina' : 'Hearts'}:** ${restoreType === 'stamina' ? updatedCharacter.currentStamina : updatedCharacter.currentHearts}/${restoreType === 'stamina' ? updatedCharacter.maxStamina : updatedCharacter.maxHearts}\n\n` +
-            `*You can use the rest spot again tomorrow at 8am EST.*`
-          : `**${updatedCharacter.name}** rests in the ${theme.description}, but the restorative energies don't respond this time...\n\n` +
-            `❌ **No restoration occurred (50% chance failed).**\n\n` +
-            `*You can use the rest spot again tomorrow at 8am EST.*`
-      )
+      .setDescription(description)
       .setColor(village.color)
       .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');

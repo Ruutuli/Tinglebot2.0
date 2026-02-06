@@ -5,13 +5,15 @@
 // ============================================================================
 // [page.tsx]✨ External dependencies and internal imports -
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo, type ReactNode } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { Loading } from "@/components/ui";
 import { useSession } from "@/hooks/use-session";
 import { capitalize, createSlug } from "@/lib/string-utils";
+import { RELATIONSHIP_CONFIG, type RelationshipType } from "@/data/relationshipConfig";
 import {
   type Character,
   type GearItem,
@@ -21,6 +23,7 @@ import {
   getVillageBorderClass,
   getVillageBorderStyle,
   getVillageTextStyle,
+  getVillageCrestIcon,
   VILLAGE_COLORS,
   MOD_CHARACTER_GOLD,
 } from "@/app/(dashboard)/models/characters/page";
@@ -136,6 +139,29 @@ type CharacterDetail = Character & {
     status?: string;
     imageUrl?: string;
   } | null;
+};
+
+type CharacterRef = {
+  _id: string;
+  name: string;
+  race?: string;
+  job?: string;
+  currentVillage?: string;
+  homeVillage?: string;
+  icon?: string;
+};
+
+type Relationship = {
+  _id: string;
+  userId: string;
+  characterId: CharacterRef | string;
+  targetCharacterId: CharacterRef | string;
+  characterName: string;
+  targetCharacterName: string;
+  relationshipTypes: RelationshipType[];
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 // ============================================================================
@@ -648,6 +674,50 @@ function StatusBadge({ type }: StatusBadgeProps) {
   );
 }
 
+function RelationshipTypeBadge({ type }: { type: RelationshipType }) {
+  const config = RELATIONSHIP_CONFIG[type];
+  return (
+    <span
+      className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold shadow-sm"
+      style={{
+        color: config.color,
+        backgroundColor: config.bgColor,
+        borderColor: config.borderColor,
+      }}
+    >
+      <i className={`fa-solid ${config.icon} mr-1`} aria-hidden="true" />
+      {config.label}
+    </span>
+  );
+}
+
+const normalizeImageUrl = (imageUrl: string | undefined): string => {
+  if (!imageUrl) return "/ankle_icon.png";
+  if (imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")) {
+    return `/api/images/${imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`;
+  }
+  return imageUrl;
+};
+
+const getCharacter = (char: CharacterRef | string): CharacterRef | null => {
+  if (typeof char === "string") return null;
+  return char;
+};
+
+const getCharacterId = (char: CharacterRef | string | null | undefined): string | null => {
+  if (!char) return null;
+  if (typeof char === "string") return char;
+  if (typeof char === "object" && char !== null && "_id" in char) {
+    return typeof char._id === "string" ? char._id : String(char._id);
+  }
+  return null;
+};
+
+const getPrimaryRelationshipConfig = (types: RelationshipType[]) => {
+  if (types.length === 0) return RELATIONSHIP_CONFIG.NEUTRAL;
+  return RELATIONSHIP_CONFIG[types[0]];
+};
+
 interface CardSectionProps {
   icon: string;
   title: string;
@@ -965,6 +1035,12 @@ export default function OCDetailPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const submitSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [relationships, setRelationships] = useState<{ outgoing: Relationship[]; incoming: Relationship[] }>({
+    outgoing: [],
+    incoming: [],
+  });
+  const [relationshipsLoading, setRelationshipsLoading] = useState(false);
+  const [relationshipsError, setRelationshipsError] = useState<string | null>(null);
 
   const characterId = typeof params.id === "string" ? params.id : null;
 
@@ -1077,6 +1153,31 @@ export default function OCDetailPage() {
     }
   }, []);
 
+  const fetchRelationships = useCallback(async (characterId: string) => {
+    if (!characterId) return;
+
+    setRelationshipsLoading(true);
+    setRelationshipsError(null);
+    try {
+      const res = await fetch(`/api/characters/relationships/${characterId}`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch relationships: ${res.status}`);
+      }
+      const data = (await res.json()) as { outgoing?: Relationship[]; incoming?: Relationship[] };
+      setRelationships({
+        outgoing: data.outgoing || [],
+        incoming: data.incoming || [],
+      });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error("[OCDetailPage] Failed to fetch relationships:", error);
+      setRelationshipsError(error.message);
+      setRelationships({ outgoing: [], incoming: [] });
+    } finally {
+      setRelationshipsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const abortController = new AbortController();
     const fetchWithAbort = async () => {
@@ -1151,8 +1252,13 @@ export default function OCDetailPage() {
   useEffect(() => {
     if (character) {
       fetchGearImages(character);
+      // Fetch relationships when character is loaded and has _id
+      if (character._id) {
+        const charId = typeof character._id === "string" ? character._id : String(character._id);
+        fetchRelationships(charId);
+      }
     }
-  }, [character, fetchGearImages]);
+  }, [character, fetchGearImages, fetchRelationships]);
 
   useLayoutEffect(() => {
     const mainElement = document.querySelector("main");
@@ -1222,6 +1328,58 @@ export default function OCDetailPage() {
       setSubmitting(false);
     }
   }, [characterId, character, fetchCharacter]);
+
+  // Merge outgoing and incoming relationships by the "other" character
+  // This must be called before any conditional returns to follow Rules of Hooks
+  const mergedRelationships = useMemo(() => {
+    const map = new Map<string, {
+      targetChar: CharacterRef | null;
+      targetName: string;
+      relationshipTypes: RelationshipType[];
+      outgoing?: Relationship;
+      incoming?: Relationship;
+    }>();
+
+    // Add outgoing relationships
+    relationships.outgoing.forEach((rel) => {
+      const targetId = getCharacterId(rel.targetCharacterId);
+      if (!targetId) return;
+      
+      const targetChar = getCharacter(rel.targetCharacterId);
+      
+      if (!map.has(targetId)) {
+        map.set(targetId, {
+          targetChar,
+          targetName: rel.targetCharacterName,
+          relationshipTypes: [],
+        });
+      }
+      const entry = map.get(targetId)!;
+      entry.outgoing = rel;
+      entry.relationshipTypes = [...new Set([...entry.relationshipTypes, ...rel.relationshipTypes])];
+    });
+
+    // Add incoming relationships
+    relationships.incoming.forEach((rel) => {
+      const sourceId = getCharacterId(rel.characterId);
+      if (!sourceId) return;
+      
+      const sourceChar = getCharacter(rel.characterId);
+      
+      if (!map.has(sourceId)) {
+        map.set(sourceId, {
+          targetChar: sourceChar,
+          targetName: rel.characterName,
+          relationshipTypes: [],
+        });
+      }
+      const entry = map.get(sourceId)!;
+      entry.incoming = rel;
+      entry.relationshipTypes = [...new Set([...entry.relationshipTypes, ...rel.relationshipTypes])];
+    });
+
+    return Array.from(map.values());
+  }, [relationships]);
 
   if (loading) {
     return (
@@ -2087,47 +2245,201 @@ export default function OCDetailPage() {
               </CardSection>
             )}
 
-            {/* Travel Log */}
-            {character.travelLog && character.travelLog.length > 0 && (
-              <CardSection icon="fa-route" title="Travel Log">
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {character.travelLog
-                    .slice(-10)
-                    .reverse()
-                    .map((travel, idx) => {
-                      const travelKey = travel.date 
-                        ? `${travel.from || 'unknown'}-${travel.to || 'unknown'}-${travel.date}-${idx}`
-                        : `travel-${idx}`;
-                      return (
-                      <div
-                        key={travelKey}
-                        className="rounded border border-[var(--totk-green)] bg-[var(--totk-ocher)]/10 px-3 py-2 text-sm"
-                      >
-                        <div className="flex items-center gap-2 text-[var(--botw-pale)]">
-                          <i
-                            className={`fa-solid ${
-                              travel.success
-                                ? "fa-check-circle text-[var(--totk-light-green)]"
-                                : "fa-times-circle text-[#ff6347]"
-                            }`}
-                            aria-hidden="true"
-                          />
-                          <span>
-                            {travel.from && capitalize(travel.from)} →{" "}
-                            {travel.to && capitalize(travel.to)}
-                          </span>
-                        </div>
-                        {travel.date && (
-                          <div className="mt-1 text-xs text-[var(--totk-grey-200)]">
-                            {formatDate(travel.date)}
-                          </div>
-                        )}
-                      </div>
-                      );
-                    })}
+            {/* Relationships */}
+            <CardSection icon="fa-heart" title="Relationships">
+              {relationshipsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loading message="Loading relationships..." variant="inline" size="md" />
                 </div>
-              </CardSection>
-            )}
+              ) : relationshipsError ? (
+                <div className="rounded border border-[#ff6347] bg-[#ff6347]/10 px-3 py-2 text-sm text-[#ff6347]">
+                  <i className="fa-solid fa-exclamation-circle mr-2" aria-hidden="true" />
+                  {relationshipsError}
+                </div>
+              ) : mergedRelationships.length === 0 ? (
+                <div className="py-8 text-center">
+                  <div className="text-4xl mb-2">💝</div>
+                  <p className="text-sm text-[var(--botw-pale)] opacity-60 italic mb-3">
+                    {character.name} doesn't have any relationships yet.
+                  </p>
+                  <Link
+                    href="/characters/relationships"
+                    className="inline-flex items-center gap-2 text-sm text-[var(--botw-blue)] hover:text-[var(--totk-light-green)] underline"
+                  >
+                    <i className="fa-solid fa-heart" aria-hidden="true" />
+                    View all relationships
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2" style={{ overscrollBehavior: 'contain' }}>
+                  {mergedRelationships.map((relData, idx) => {
+                    const targetChar = relData.targetChar;
+                    const targetIconUrl = targetChar?.icon ? normalizeImageUrl(targetChar.icon) : "/ankle_icon.png";
+                    const targetVillage = targetChar?.homeVillage || targetChar?.currentVillage || "";
+                    const targetVillageCrestIcon = targetVillage ? getVillageCrestIcon(targetVillage) : null;
+                    const targetSlug = createSlug(relData.targetName);
+
+                    return (
+                      <div
+                        key={`${relData.targetName}-${idx}`}
+                        className="rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)]/80 to-[var(--totk-brown)]/40 p-4 shadow-lg"
+                      >
+                        {/* Character Header */}
+                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-4 mb-4 pb-3 border-b-2 border-[var(--totk-dark-ocher)]/40">
+                          <Link
+                            href={`/characters/${targetSlug}`}
+                            className="flex flex-col sm:flex-row items-center sm:items-center gap-3 hover:opacity-80 transition-opacity w-full sm:w-auto"
+                          >
+                            <div className="relative h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-lg border-2 border-[var(--totk-light-green)]/50 bg-[var(--botw-warm-black)] shadow-lg ring-2 ring-[var(--totk-light-green)]/20">
+                              <Image
+                                src={targetIconUrl}
+                                alt={relData.targetName}
+                                fill
+                                className="object-cover"
+                                unoptimized
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "/ankle_icon.png";
+                                }}
+                              />
+                            </div>
+                            <div className="text-center sm:text-left">
+                              <h4 className="text-base sm:text-lg font-bold text-[var(--totk-light-green)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                                {relData.targetName}
+                              </h4>
+                              {targetChar?.race && (
+                                <p className="text-xs text-[var(--botw-pale)] opacity-90">
+                                  {capitalize(targetChar.race)}
+                                </p>
+                              )}
+                              {targetVillageCrestIcon && (
+                                <img
+                                  src={targetVillageCrestIcon}
+                                  alt={`${targetVillage} crest`}
+                                  className="h-6 w-6 object-contain opacity-90 mt-1 mx-auto sm:mx-0"
+                                />
+                              )}
+                            </div>
+                          </Link>
+                        </div>
+
+                        {/* My character feels this way */}
+                        {relData.outgoing && (() => {
+                          const primaryConfig = getPrimaryRelationshipConfig(relData.outgoing.relationshipTypes);
+                          return (
+                            <div 
+                              className="relative mb-3 rounded-lg border-2 p-3 sm:p-4 shadow-inner"
+                              style={{
+                                borderColor: `${primaryConfig.borderColor}`,
+                                background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
+                              }}
+                            >
+                              <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
+                                <div className="flex items-center gap-1.5">
+                                  {relData.outgoing.relationshipTypes.map((type) => {
+                                    const config = RELATIONSHIP_CONFIG[type];
+                                    return (
+                                      <i 
+                                        key={type}
+                                        className={`fa-solid ${config.icon} text-base sm:text-lg`}
+                                        style={{ color: config.color }}
+                                        title={config.label}
+                                        aria-hidden="true"
+                                      />
+                                    );
+                                  })}
+                                </div>
+                                <p 
+                                  className="text-xs sm:text-sm font-bold uppercase tracking-wider"
+                                  style={{ color: primaryConfig.color }}
+                                >
+                                  {character.name} feels this way:
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                                {relData.outgoing.relationshipTypes.map((type) => (
+                                  <RelationshipTypeBadge key={type} type={type} />
+                                ))}
+                              </div>
+                              {relData.outgoing.notes && (
+                                <div 
+                                  className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t"
+                                  style={{ borderColor: `${primaryConfig.borderColor}` }}
+                                >
+                                  <p className="text-xs sm:text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
+                                    {relData.outgoing.notes}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* This character feels this way */}
+                        {relData.incoming && (() => {
+                          const primaryConfig = getPrimaryRelationshipConfig(relData.incoming.relationshipTypes);
+                          return (
+                            <div 
+                              className="rounded-lg border-2 p-3 sm:p-4 shadow-inner"
+                              style={{
+                                borderColor: `${primaryConfig.borderColor}`,
+                                background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
+                              }}
+                            >
+                              <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
+                                <div className="flex items-center gap-1.5">
+                                  {relData.incoming.relationshipTypes.map((type) => {
+                                    const config = RELATIONSHIP_CONFIG[type];
+                                    return (
+                                      <i 
+                                        key={type}
+                                        className={`fa-solid ${config.icon} text-base sm:text-lg`}
+                                        style={{ color: config.color }}
+                                        title={config.label}
+                                        aria-hidden="true"
+                                      />
+                                    );
+                                  })}
+                                </div>
+                                <p 
+                                  className="text-xs sm:text-sm font-bold uppercase tracking-wider"
+                                  style={{ color: primaryConfig.color }}
+                                >
+                                  {relData.targetName} feels this way:
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                                {relData.incoming.relationshipTypes.map((type) => (
+                                  <RelationshipTypeBadge key={type} type={type} />
+                                ))}
+                              </div>
+                              {relData.incoming.notes && (
+                                <div 
+                                  className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t"
+                                  style={{ borderColor: `${primaryConfig.borderColor}` }}
+                                >
+                                  <p className="text-xs sm:text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
+                                    {relData.incoming.notes}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })}
+                  <div className="pt-3 border-t border-[var(--totk-green)]/30">
+                    <Link
+                      href="/characters/relationships"
+                      className="inline-flex items-center gap-2 text-sm text-[var(--botw-blue)] hover:text-[var(--totk-light-green)] underline font-medium"
+                    >
+                      <i className="fa-solid fa-heart" aria-hidden="true" />
+                      View all relationships
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </CardSection>
 
             {/* Application Art */}
             {character.appArt && (
