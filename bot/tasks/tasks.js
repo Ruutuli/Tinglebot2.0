@@ -43,6 +43,7 @@ const {
 const { generateDailyQuests: runHelpWantedGeneration } = require('@/modules/helpWantedModule');
 const { updateSubmissionData } = require('@/utils/storage');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { fetchAllCharacters, getCharacterInventoryCollection, connectToInventoriesNative } = require('@/database/db');
 
 const APPROVAL_CHANNEL_ID = '1381479893090566144';
 const COMMUNITY_BOARD_CHANNEL_ID = process.env.COMMUNITY_BOARD_CHANNEL_ID || '651614266046152705';
@@ -823,11 +824,47 @@ async function weeklyPetRollsReset(_client, _data = {}) {
 async function weeklyInventorySnapshot(_client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'weekly-inventory-snapshot: starting');
-    
-    // Weekly inventory snapshot logic would go here
-    // This can be implemented when inventory snapshot system is ready
-    
-    logger.info('SCHEDULED', 'weekly-inventory-snapshot: done (snapshot system not yet implemented)');
+
+    const characters = await fetchAllCharacters();
+    if (!characters || characters.length === 0) {
+      logger.info('SCHEDULED', 'weekly-inventory-snapshot: no characters found, skipping');
+      return;
+    }
+
+    const db = await connectToInventoriesNative();
+    const snapshotsColl = db.collection('inventory_snapshots');
+    const snapshotAt = new Date();
+    let saved = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const character of characters) {
+      try {
+        const collection = await getCharacterInventoryCollection(character.name);
+        const items = await collection.find({}).toArray();
+        // Optional: strip _id from item copies so snapshot docs are self-contained and no ID clashes
+        const itemsCopy = items.map(({ _id, ...item }) => ({ ...item }));
+
+        await snapshotsColl.insertOne({
+          characterId: character._id,
+          characterName: character.name,
+          snapshotAt,
+          items: itemsCopy,
+          itemCount: itemsCopy.length
+        });
+        saved++;
+      } catch (err) {
+        // Collection might not exist yet for new characters, or name might be invalid
+        if (err.message && (err.message.includes('not found') || err.message.includes('collection'))) {
+          skipped++;
+        } else {
+          failed++;
+          logger.warn('SCHEDULED', `weekly-inventory-snapshot: failed for ${character.name}: ${err.message}`);
+        }
+      }
+    }
+
+    logger.success('SCHEDULED', `weekly-inventory-snapshot: done (saved=${saved}, skipped=${skipped}, failed=${failed})`);
   } catch (err) {
     logger.error('SCHEDULED', `weekly-inventory-snapshot: ${err.message}`);
   }

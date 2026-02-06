@@ -51,7 +51,6 @@ const ItemSchema = new Schema(
     staminaToCraft: { type: Schema.Types.Mixed, default: null },
     crafting: { type: Boolean, default: false },
     craftingJobs: { type: [String], default: [] },
-    craftingTags: { type: [String], default: [] },
 
     // ------------------- Activities & Obtain -------------------
     gathering: { type: Boolean, default: false },
@@ -60,11 +59,8 @@ const ItemSchema = new Schema(
     traveling: { type: Boolean, default: false },
     exploring: { type: Boolean, default: false },
     obtain: { type: [String], default: [] },
-    obtainTags: { type: [String], default: [] },
     gatheringJobs: { type: [String], default: [] },
-    gatheringTags: { type: [String], default: [] },
     lootingJobs: { type: [String], default: [] },
-    lootingTags: { type: [String], default: [] },
 
     // ------------------- Weather (special conditions) -------------------
     specialWeather: {
@@ -91,7 +87,6 @@ const ItemSchema = new Schema(
 
     // ------------------- Location Metadata -------------------
     locations: { type: [String], default: [] },
-    locationsTags: { type: [String], default: [] },
     centralHyrule: { type: Boolean, default: false },
     eldin: { type: Boolean, default: false },
     faron: { type: Boolean, default: false },
@@ -127,7 +122,6 @@ const ItemSchema = new Schema(
 
     // ------------------- Boost/Item Tags -------------------
     allJobs: { type: [String], default: ['None'] },
-    allJobsTags: { type: [String], default: ['None'] },
     entertainerItems: { type: Boolean, default: false },
     divineItems: { type: Boolean, default: false },
 

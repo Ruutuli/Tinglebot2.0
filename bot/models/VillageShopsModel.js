@@ -78,7 +78,6 @@ const VillageShopItemSchema = new Schema({
   modifierHearts: { type: Number, default: 0 },
   staminaRecovered: { type: Number, default: 0 },
   obtain: { type: [String], default: [] },
-  obtainTags: { type: [String], default: [] },
   crafting: { type: Boolean, default: false },
   gathering: { type: Boolean, default: false },
   looting: { type: Boolean, default: false },
@@ -104,7 +103,6 @@ const VillageShopItemSchema = new Schema({
   petPerk: { type: Boolean, default: false },
   exploring: { type: Boolean, default: false },
   craftingJobs: { type: [String], default: [] },
-  craftingTags: { type: [String], default: [] },
   artist: { type: Boolean, default: false },
   blacksmith: { type: Boolean, default: false },
   cook: { type: Boolean, default: false },
@@ -114,10 +112,8 @@ const VillageShopItemSchema = new Schema({
   weaver: { type: Boolean, default: false },
   witch: { type: Boolean, default: false },
   locations: { type: [String], default: [] },
-  locationsTags: { type: [String], default: [] },
   emoji: { type: String, default: '' },
   allJobs: { type: [String], default: ['None'] },
-  allJobsTags: { type: [String], default: ['None'] },
   stock: { type: Number, required: true },
 }, { collection: 'villageShops', timestamps: true, strict: true }); // strict:true ensures only defined fields are saved
 
@@ -151,8 +147,8 @@ VillageShopItemSchema.pre('validate', function(next) {
     }
     
     // Ensure all array fields are properly formatted
-    const arrayFields = ['category', 'type', 'subtype', 'recipeTag', 'obtain', 'obtainTags', 
-                        'craftingJobs', 'craftingTags', 'locations', 'locationsTags', 'allJobs', 'allJobsTags'];
+    const arrayFields = ['category', 'type', 'subtype', 'recipeTag', 'obtain', 
+                        'craftingJobs', 'locations', 'allJobs'];
     
     for (const field of arrayFields) {
       if (this[field] && !Array.isArray(this[field])) {

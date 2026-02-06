@@ -50,10 +50,10 @@ export async function GET(req: NextRequest) {
         .select(
           "itemName image imageType emoji type subtype category categoryGear buyPrice sellPrice stackable maxStackSize itemRarity " +
           "gathering looting traveling exploring vending " +
-          "locations locationsTags centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay " +
-          "allJobs allJobsTags farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
+          "locations centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay " +
+          "allJobs farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
           "fisherman gravekeeper guard maskMaker hunter hunterLooting mercenary miner researcher scout weaver witch " +
-          "craftingMaterial crafting staminaToCraft craftingJobs craftingTags " +
+          "craftingMaterial crafting staminaToCraft craftingJobs " +
           "specialWeather modifierHearts staminaRecovered"
         )
         .sort(sortQuery)

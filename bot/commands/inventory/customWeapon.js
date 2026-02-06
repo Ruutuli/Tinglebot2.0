@@ -1965,7 +1965,7 @@ try {
                 craftingMaterial: craftingMaterials,
                 staminaToCraft: weaponSubmission.staminaToCraft,
                 itemRarity: 10,
-                obtainTags: ['Custom Weapon'],
+                obtain: ['Custom Weapon'],
                 modifierHearts: parseInt(weaponSubmission.modifiers, 10),
                 crafting: false,
             });

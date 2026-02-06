@@ -262,17 +262,17 @@ export async function PUT(req: NextRequest) {
       // Stack Rules
       "stackable", "maxStackSize",
       // Crafting
-      "craftingMaterial", "staminaToCraft", "crafting", "craftingJobs", "craftingTags",
+      "craftingMaterial", "staminaToCraft", "crafting", "craftingJobs",
       // Activities & Obtain
       "gathering", "looting", "vending", "traveling", "exploring",
-      "obtain", "obtainTags", "gatheringJobs", "gatheringTags", "lootingJobs", "lootingTags",
+      "obtain", "gatheringJobs", "lootingJobs",
       // Weather
       "specialWeather",
       // Pet Perks
       "petPerk", "petperkobtain", "petprey", "petforage", "lgpetprey",
       "petmon", "petchu", "petfirechu", "peticechu", "petelectricchu",
       // Location Metadata
-      "locations", "locationsTags", "centralHyrule", "eldin", "faron", "gerudo",
+      "locations", "centralHyrule", "eldin", "faron", "gerudo",
       "hebra", "lanayru", "pathOfScarletLeaves", "leafDewWay",
       // Job Flags (all 20+ job flags)
       "adventurer", "artist", "beekeeper", "blacksmith", "cook", "craftsman",
@@ -280,7 +280,7 @@ export async function PUT(req: NextRequest) {
       "rancher", "herbalist", "hunter", "hunterLooting", "mercenary", "miner",
       "researcher", "scout", "weaver", "witch",
       // Boost/Item Tags
-      "allJobs", "allJobsTags", "entertainerItems", "divineItems",
+      "allJobs", "entertainerItems", "divineItems",
       // Monsters
       "monsterList", "blackBokoblin", "blueBokoblin", "cursedBokoblin", "goldenBokoblin",
       "silverBokoblin", "bokoblin", "electricChuchuLarge", "fireChuchuLarge", "iceChuchuLarge",

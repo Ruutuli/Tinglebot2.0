@@ -39,9 +39,7 @@ type Item = ItemFlipCardProps & {
   pathOfScarletLeaves?: boolean;
   leafDewWay?: boolean;
   locations?: string[];
-  locationsTags?: string[];
   allJobs?: string[];
-  allJobsTags?: string[];
   farmer?: boolean;
   forager?: boolean;
   rancher?: boolean;

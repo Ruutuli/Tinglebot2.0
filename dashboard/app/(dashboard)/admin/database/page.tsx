@@ -56,7 +56,6 @@ type Item = {
   staminaToCraft?: number | null;
   crafting?: boolean;
   craftingJobs?: string[];
-  craftingTags?: string[];
   // Activities & Obtain
   gathering?: boolean;
   looting?: boolean;
@@ -64,11 +63,8 @@ type Item = {
   traveling?: boolean;
   exploring?: boolean;
   obtain?: string[];
-  obtainTags?: string[];
   gatheringJobs?: string[];
-  gatheringTags?: string[];
   lootingJobs?: string[];
-  lootingTags?: string[];
   // Weather
   specialWeather?: {
     muggy?: boolean;
@@ -92,7 +88,6 @@ type Item = {
   petelectricchu?: boolean;
   // Location Metadata
   locations?: string[];
-  locationsTags?: string[];
   centralHyrule?: boolean;
   eldin?: boolean;
   faron?: boolean;
@@ -126,7 +121,6 @@ type Item = {
   witch?: boolean;
   // Boost/Item Tags
   allJobs?: string[];
-  allJobsTags?: string[];
   entertainerItems?: boolean;
   divineItems?: boolean;
   // Monsters
@@ -694,18 +688,14 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
     staminaToCraft: item.staminaToCraft ?? null,
     crafting: item.crafting ?? false,
     craftingJobs: item.craftingJobs || [],
-    craftingTags: item.craftingTags || [],
     gathering: item.gathering ?? false,
     looting: item.looting ?? false,
     vending: item.vending ?? false,
     traveling: item.traveling ?? false,
     exploring: item.exploring ?? false,
     obtain: item.obtain || [],
-    obtainTags: item.obtainTags || [],
     gatheringJobs: item.gatheringJobs || [],
-    gatheringTags: item.gatheringTags || [],
     lootingJobs: item.lootingJobs || [],
-    lootingTags: item.lootingTags || [],
     specialWeather: item.specialWeather || {
       muggy: false,
       flowerbloom: false,
@@ -726,7 +716,6 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
     peticechu: item.peticechu ?? false,
     petelectricchu: item.petelectricchu ?? false,
     locations: item.locations || [],
-    locationsTags: item.locationsTags || [],
     centralHyrule: item.centralHyrule ?? false,
     eldin: item.eldin ?? false,
     faron: item.faron ?? false,
@@ -758,7 +747,6 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
     weaver: item.weaver ?? false,
     witch: item.witch ?? false,
     allJobs: item.allJobs || [],
-    allJobsTags: item.allJobsTags || [],
     entertainerItems: item.entertainerItems ?? false,
     divineItems: item.divineItems ?? false,
     monsterList: item.monsterList || [],
@@ -990,18 +978,14 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
       staminaToCraft: "Stamina to Craft",
       crafting: "Craftable",
       craftingJobs: "Crafting Jobs",
-      craftingTags: "Crafting Tags",
       gathering: "Gathering",
       looting: "Looting",
       vending: "Vending",
       traveling: "Traveling",
       exploring: "Exploring",
       obtain: "Obtain Methods",
-      obtainTags: "Obtain Tags",
       gatheringJobs: "Gathering Jobs",
-      gatheringTags: "Gathering Tags",
       lootingJobs: "Looting Jobs",
-      lootingTags: "Looting Tags",
       specialWeather: "Special Weather",
       petPerk: "Pet Perk",
       petperkobtain: "Pet Perk Obtain",
@@ -1014,7 +998,6 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
       peticechu: "Pet Ice Chuchu",
       petelectricchu: "Pet Electric Chuchu",
       locations: "Locations",
-      locationsTags: "Location Tags",
       centralHyrule: "Central Hyrule",
       eldin: "Eldin",
       faron: "Faron",
@@ -1024,7 +1007,6 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
       pathOfScarletLeaves: "Path of Scarlet Leaves",
       leafDewWay: "Leaf Dew Way",
       allJobs: "All Jobs",
-      allJobsTags: "All Jobs Tags",
       entertainerItems: "Entertainer Items",
       divineItems: "Divine Items",
       monsterList: "Monster List",
@@ -1240,15 +1222,6 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
             autoPopulated={true}
             readOnly={true}
           />
-          <ArrayFieldInput
-            label="Crafting Tags"
-            value={formData.craftingTags || []}
-            onChange={(v) => handleFieldChange("craftingTags", v)}
-            helpText="Crafting tags (auto-populated from job flags)"
-            isChanged={!!changes.craftingTags}
-            autoPopulated={true}
-            readOnly={true}
-          />
         </div>
         <div className="mt-4 p-3 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/50">
           <p className="text-xs text-[var(--totk-grey-200)]">
@@ -1323,15 +1296,6 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
             onChange={(v) => handleFieldChange("obtain", v)}
             helpText="Ways to obtain this item (auto-populated from activity flags)"
             isChanged={!!changes.obtain}
-            autoPopulated={true}
-            readOnly={true}
-          />
-          <ArrayFieldInput
-            label="Obtain Tags"
-            value={formData.obtainTags || []}
-            onChange={(v) => handleFieldChange("obtainTags", v)}
-            helpText="Tags for obtaining this item (auto-populated from activity flags)"
-            isChanged={!!changes.obtainTags}
             autoPopulated={true}
             readOnly={true}
           />
@@ -1580,15 +1544,6 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
             autoPopulated={true}
             readOnly={true}
           />
-          <ArrayFieldInput
-            label="Location Tags"
-            value={formData.locationsTags || []}
-            onChange={(v) => handleFieldChange("locationsTags", v)}
-            helpText="Tags for locations (auto-populated from location flags)"
-            isChanged={!!changes.locationsTags}
-            autoPopulated={true}
-            readOnly={true}
-          />
         </div>
       </CollapsibleSection>
 
@@ -1650,29 +1605,11 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
               readOnly={true}
             />
             <ArrayFieldInput
-              label="All Jobs Tags"
-              value={formData.allJobsTags || []}
-              onChange={(v) => handleFieldChange("allJobsTags", v)}
-              helpText="Tags for all jobs (auto-populated from job flags)"
-              isChanged={!!changes.allJobsTags}
-              autoPopulated={true}
-              readOnly={true}
-            />
-            <ArrayFieldInput
               label="Gathering Jobs"
               value={formData.gatheringJobs || []}
               onChange={(v) => handleFieldChange("gatheringJobs", v)}
               helpText="Jobs that can gather this item (auto-populated from job flags)"
               isChanged={!!changes.gatheringJobs}
-              autoPopulated={true}
-              readOnly={true}
-            />
-            <ArrayFieldInput
-              label="Gathering Tags"
-              value={formData.gatheringTags || []}
-              onChange={(v) => handleFieldChange("gatheringTags", v)}
-              helpText="Tags for gathering this item (auto-populated from job flags)"
-              isChanged={!!changes.gatheringTags}
               autoPopulated={true}
               readOnly={true}
             />
@@ -1686,29 +1623,11 @@ function ItemEditor({ item, onSave, saving, onClose }: ItemEditorProps) {
               readOnly={true}
             />
             <ArrayFieldInput
-              label="Looting Tags"
-              value={formData.lootingTags || []}
-              onChange={(v) => handleFieldChange("lootingTags", v)}
-              helpText="Tags for looting this item (auto-populated from job flags)"
-              isChanged={!!changes.lootingTags}
-              autoPopulated={true}
-              readOnly={true}
-            />
-            <ArrayFieldInput
               label="Crafting Jobs"
               value={formData.craftingJobs || []}
               onChange={(v) => handleFieldChange("craftingJobs", v)}
               helpText="Jobs that can craft this item (auto-populated from job flags)"
               isChanged={!!changes.craftingJobs}
-              autoPopulated={true}
-              readOnly={true}
-            />
-            <ArrayFieldInput
-              label="Crafting Tags"
-              value={formData.craftingTags || []}
-              onChange={(v) => handleFieldChange("craftingTags", v)}
-              helpText="Tags for crafting this item (auto-populated from job flags)"
-              isChanged={!!changes.craftingTags}
               autoPopulated={true}
               readOnly={true}
             />

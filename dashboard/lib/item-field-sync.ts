@@ -36,18 +36,12 @@ export type ItemFormData = {
   witch?: boolean;
   // Arrays
   gatheringJobs?: string[];
-  gatheringTags?: string[];
   lootingJobs?: string[];
-  lootingTags?: string[];
   craftingJobs?: string[];
-  craftingTags?: string[];
   obtain?: string[];
-  obtainTags?: string[];
   locations?: string[];
-  locationsTags?: string[];
   petperkobtain?: string[];
   allJobs?: string[];
-  allJobsTags?: string[];
   // Booleans
   gathering?: boolean;
   looting?: boolean;
@@ -181,17 +175,12 @@ export function syncJobFlags(
 
   // Initialize arrays if they don't exist
   const gatheringJobs = item.gatheringJobs || [];
-  const gatheringTags = item.gatheringTags || [];
   const lootingJobs = item.lootingJobs || [];
-  const lootingTags = item.lootingTags || [];
   const craftingJobs = item.craftingJobs || [];
-  const craftingTags = item.craftingTags || [];
   const obtain = item.obtain || [];
-  const obtainTags = item.obtainTags || [];
   
   // Use current arrays, updating them as we go
   let allJobs = [...(item.allJobs || [])];
-  let allJobsTags = [...(item.allJobsTags || [])];
 
   // Track which activities should be enabled
   const hasGatheringJobs: string[] = [];
@@ -211,16 +200,9 @@ export function syncJobFlags(
     const perkUpper = jobPerk.perk.toUpperCase();
 
     if (jobValue === true) {
-      // Job is enabled - add to allJobs and allJobsTags
+      // Job is enabled - add to allJobs
       if (!allJobs.includes(jobDisplayName)) {
         allJobs = addToArray(allJobs, jobDisplayName);
-        updated = true;
-      }
-      
-      // Add job tag (uppercase version of job name)
-      const jobTag = jobDisplayName.toUpperCase().replace(/\s+/g, "_");
-      if (!allJobsTags.includes(jobTag)) {
-        allJobsTags = addToArray(allJobsTags, jobTag);
         updated = true;
       }
       
@@ -234,24 +216,10 @@ export function syncJobFlags(
           };
           updated = true;
         }
-        if (!gatheringTags.includes("GATHERING")) {
-          changes[`gatheringTags`] = {
-            from: gatheringTags,
-            to: addToArray(gatheringTags, "GATHERING")
-          };
-          updated = true;
-        }
         if (!obtain.includes("Gathering")) {
           changes[`obtain`] = {
             from: obtain,
             to: addToArray(obtain, "Gathering")
-          };
-          updated = true;
-        }
-        if (!obtainTags.includes("GATHERING")) {
-          changes[`obtainTags`] = {
-            from: obtainTags,
-            to: addToArray(obtainTags, "GATHERING")
           };
           updated = true;
         }
@@ -266,24 +234,10 @@ export function syncJobFlags(
           };
           updated = true;
         }
-        if (!lootingTags.includes("LOOTING")) {
-          changes[`lootingTags`] = {
-            from: lootingTags,
-            to: addToArray(lootingTags, "LOOTING")
-          };
-          updated = true;
-        }
         if (!obtain.includes("Looting")) {
           changes[`obtain`] = {
             from: obtain,
             to: addToArray(obtain, "Looting")
-          };
-          updated = true;
-        }
-        if (!obtainTags.includes("LOOTING")) {
-          changes[`obtainTags`] = {
-            from: obtainTags,
-            to: addToArray(obtainTags, "LOOTING")
           };
           updated = true;
         }
@@ -298,24 +252,10 @@ export function syncJobFlags(
           };
           updated = true;
         }
-        if (!craftingTags.includes("CRAFTING")) {
-          changes[`craftingTags`] = {
-            from: craftingTags,
-            to: addToArray(craftingTags, "CRAFTING")
-          };
-          updated = true;
-        }
         if (!obtain.includes("Crafting")) {
           changes[`obtain`] = {
             from: obtain,
             to: addToArray(obtain, "Crafting")
-          };
-          updated = true;
-        }
-        if (!obtainTags.includes("CRAFTING")) {
-          changes[`obtainTags`] = {
-            from: obtainTags,
-            to: addToArray(obtainTags, "CRAFTING")
           };
           updated = true;
         }
@@ -389,21 +329,12 @@ export function syncJobFlags(
     updated = true;
   }
 
-  // Update allJobs and allJobsTags if changed
+  // Update allJobs if changed
   if (allJobs.length !== (item.allJobs || []).length || 
       JSON.stringify([...allJobs].sort()) !== JSON.stringify([...(item.allJobs || [])].sort())) {
     changes["allJobs"] = {
       from: item.allJobs || [],
       to: allJobs
-    };
-    updated = true;
-  }
-  
-  if (allJobsTags.length !== (item.allJobsTags || []).length ||
-      JSON.stringify([...allJobsTags].sort()) !== JSON.stringify([...(item.allJobsTags || [])].sort())) {
-    changes["allJobsTags"] = {
-      from: item.allJobsTags || [],
-      to: allJobsTags
     };
     updated = true;
   }
@@ -544,116 +475,43 @@ export function syncActivityFlags(
 
   // Use current arrays, updating them as we go
   let obtain = item.obtain || [];
-  let obtainTags = item.obtainTags || [];
 
   // Map activity flags to their obtain method names
-  const activityMap: Record<string, { obtain: string; tag: string }> = {
-    gathering: { obtain: "Gathering", tag: "GATHERING" },
-    looting: { obtain: "Looting", tag: "LOOTING" },
-    crafting: { obtain: "Crafting", tag: "CRAFTING" },
-    vending: { obtain: "Vending", tag: "VENDING" },
-    traveling: { obtain: "Travel", tag: "TRAVEL" },
-    exploring: { obtain: "Exploring", tag: "EXPLORING" },
+  const activityMap: Record<string, string> = {
+    gathering: "Gathering",
+    looting: "Looting",
+    crafting: "Crafting",
+    vending: "Vending",
+    traveling: "Travel",
+    exploring: "Exploring",
   };
 
   // Process each activity flag
-  for (const [fieldName, mapping] of Object.entries(activityMap)) {
+  for (const [fieldName, obtainName] of Object.entries(activityMap)) {
     const activityValue = item[fieldName] as boolean | undefined;
     if (activityValue === undefined) continue;
 
     if (activityValue === true) {
-      // Add to obtain and obtainTags if not present
-      if (!obtain.includes(mapping.obtain)) {
-        obtain = addToArray(obtain, mapping.obtain);
+      // Add to obtain if not present
+      if (!obtain.includes(obtainName)) {
+        obtain = addToArray(obtain, obtainName);
         changes["obtain"] = {
           from: item.obtain || [],
           to: obtain
-        };
-        updated = true;
-      }
-      if (!obtainTags.includes(mapping.tag)) {
-        obtainTags = addToArray(obtainTags, mapping.tag);
-        changes["obtainTags"] = {
-          from: item.obtainTags || [],
-          to: obtainTags
         };
         updated = true;
       }
     } else if (activityValue === false) {
-      // Remove from obtain and obtainTags if present
-      if (obtain.includes(mapping.obtain)) {
-        obtain = removeFromArray(obtain, mapping.obtain);
+      // Remove from obtain if present
+      if (obtain.includes(obtainName)) {
+        obtain = removeFromArray(obtain, obtainName);
         changes["obtain"] = {
           from: item.obtain || [],
           to: obtain
         };
         updated = true;
       }
-      if (obtainTags.includes(mapping.tag)) {
-        obtainTags = removeFromArray(obtainTags, mapping.tag);
-        changes["obtainTags"] = {
-          from: item.obtainTags || [],
-          to: obtainTags
-        };
-        updated = true;
-      }
     }
-  }
-
-  return { updated, changes };
-}
-
-/**
- * Sync location flags with locationsTags array
- */
-export function syncLocationTags(
-  item: ItemFormData,
-  changedField?: string,
-  newValue?: boolean
-): SyncResult {
-  const changes: Record<string, { from: unknown; to: unknown }> = {};
-  let updated = false;
-
-  const locationFields = [
-    "centralHyrule",
-    "eldin",
-    "faron",
-    "gerudo",
-    "hebra",
-    "lanayru",
-    "pathOfScarletLeaves",
-    "leafDewWay"
-  ];
-
-  // Use current array, updating it as we go - use display names (same as locations array)
-  let locationsTags = [...(item.locationsTags || [])];
-
-  // Sync based on current flag states - use display names, not uppercase/underscore format
-  for (const fieldName of locationFields) {
-    const locationValue = item[fieldName] as boolean | undefined;
-    if (locationValue === undefined) continue;
-
-    const locationDisplayName = normalizeLocationName(fieldName);
-
-    if (locationValue === true) {
-      if (!locationsTags.includes(locationDisplayName)) {
-        locationsTags = addToArray(locationsTags, locationDisplayName);
-        updated = true;
-      }
-    } else if (locationValue === false) {
-      if (locationsTags.includes(locationDisplayName)) {
-        locationsTags = removeFromArray(locationsTags, locationDisplayName);
-        updated = true;
-      }
-    }
-  }
-
-  // Only add change if we actually updated something
-  if (updated) {
-    changes["locationsTags"] = {
-      from: item.locationsTags || [],
-      to: locationsTags
-    };
   }
 
   return { updated, changes };
@@ -673,57 +531,40 @@ export function syncSpecialWeather(
   const specialWeather = item.specialWeather || {};
   // Use current arrays, updating them as we go
   let obtain = item.obtain || [];
-  let obtainTags = item.obtainTags || [];
 
   // Map weather fields to their display names
-  const weatherMap: Record<string, { obtain: string; tag: string }> = {
-    muggy: { obtain: "Muggy Weather", tag: "MUGGY" },
-    flowerbloom: { obtain: "Flower Bloom", tag: "FLOWERBLOOM" },
-    fairycircle: { obtain: "Fairy Circle", tag: "FAIRYCIRCLE" },
-    jubilee: { obtain: "Jubilee", tag: "JUBILEE" },
-    meteorShower: { obtain: "Meteor Shower", tag: "METEOR_SHOWER" },
-    rockslide: { obtain: "Rockslide", tag: "ROCKSLIDE" },
-    avalanche: { obtain: "Avalanche", tag: "AVALANCHE" },
+  const weatherMap: Record<string, string> = {
+    muggy: "Muggy Weather",
+    flowerbloom: "Flower Bloom",
+    fairycircle: "Fairy Circle",
+    jubilee: "Jubilee",
+    meteorShower: "Meteor Shower",
+    rockslide: "Rockslide",
+    avalanche: "Avalanche",
   };
 
   // Process each weather field
-  for (const [fieldName, mapping] of Object.entries(weatherMap)) {
+  for (const [fieldName, obtainName] of Object.entries(weatherMap)) {
     const weatherValue = specialWeather[fieldName as keyof typeof specialWeather] as boolean | undefined;
     if (weatherValue === undefined) continue;
 
     if (weatherValue === true) {
-      // Add to obtain and obtainTags if not present
-      if (!obtain.includes(mapping.obtain)) {
-        obtain = addToArray(obtain, mapping.obtain);
+      // Add to obtain if not present
+      if (!obtain.includes(obtainName)) {
+        obtain = addToArray(obtain, obtainName);
         changes["obtain"] = {
           from: item.obtain || [],
           to: obtain
-        };
-        updated = true;
-      }
-      if (!obtainTags.includes(mapping.tag)) {
-        obtainTags = addToArray(obtainTags, mapping.tag);
-        changes["obtainTags"] = {
-          from: item.obtainTags || [],
-          to: obtainTags
         };
         updated = true;
       }
     } else if (weatherValue === false) {
-      // Remove from obtain and obtainTags if present
-      if (obtain.includes(mapping.obtain)) {
-        obtain = removeFromArray(obtain, mapping.obtain);
+      // Remove from obtain if present
+      if (obtain.includes(obtainName)) {
+        obtain = removeFromArray(obtain, obtainName);
         changes["obtain"] = {
           from: item.obtain || [],
           to: obtain
-        };
-        updated = true;
-      }
-      if (obtainTags.includes(mapping.tag)) {
-        obtainTags = removeFromArray(obtainTags, mapping.tag);
-        changes["obtainTags"] = {
-          from: item.obtainTags || [],
-          to: obtainTags
         };
         updated = true;
       }
@@ -874,20 +715,8 @@ export function syncAllFields(
   if (changedField && locationFields.includes(changedField)) {
     const locationResult = syncLocationFlags(item, changedField, newValue as boolean);
     
-    // Apply location changes to item before syncing tags, so tags sync works with updated locations
-    const itemWithLocationUpdates = { ...item };
-    if (locationResult.updated && locationResult.changes.locations) {
-      itemWithLocationUpdates.locations = locationResult.changes.locations.to as string[];
-    }
-    
-    const locationTagsResult = syncLocationTags(itemWithLocationUpdates, changedField, newValue as boolean);
-    
     if (locationResult.updated) {
       Object.assign(allChanges, locationResult.changes);
-      anyUpdated = true;
-    }
-    if (locationTagsResult.updated) {
-      Object.assign(allChanges, locationTagsResult.changes);
       anyUpdated = true;
     }
   }
@@ -932,7 +761,6 @@ export function syncAllFields(
   if (!changedField) {
     const jobResult = syncJobFlags(item);
     const locationResult = syncLocationFlags(item);
-    const locationTagsResult = syncLocationTags(item);
     const monsterResult = syncMonsterFlags(item);
     const activityResult = syncActivityFlags(item);
     const weatherResult = syncSpecialWeather(item);
@@ -944,10 +772,6 @@ export function syncAllFields(
     }
     if (locationResult.updated) {
       Object.assign(allChanges, locationResult.changes);
-      anyUpdated = true;
-    }
-    if (locationTagsResult.updated) {
-      Object.assign(allChanges, locationTagsResult.changes);
       anyUpdated = true;
     }
     if (monsterResult.updated) {

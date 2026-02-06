@@ -40,9 +40,7 @@ export type ItemData = {
   weaver?: boolean;
   witch?: boolean;
   allJobs?: string[];
-  allJobsTags?: string[];
   locations?: string[];
-  locationsTags?: string[];
   craftingMaterial?: Array<{ itemName: string; quantity: number }>;
   specialWeather?: {
     muggy?: boolean;
@@ -85,10 +83,7 @@ export function formatSources(item: ItemData): string[] {
 export function formatLocations(item: ItemData): string[] {
   const locations: string[] = [];
   
-  // Use locationsTags or locations array if available
-  if (item.locationsTags && item.locationsTags.length > 0) {
-    return item.locationsTags.filter(Boolean);
-  }
+  // Use locations array if available
   if (item.locations && item.locations.length > 0) {
     return item.locations.filter(Boolean);
   }
@@ -112,10 +107,7 @@ export function formatLocations(item: ItemData): string[] {
 export function formatJobs(item: ItemData): string[] {
   const jobs: string[] = [];
   
-  // Use allJobsTags or allJobs array if available
-  if (item.allJobsTags && item.allJobsTags.length > 0 && !item.allJobsTags.includes("None")) {
-    return item.allJobsTags.filter(Boolean);
-  }
+  // Use allJobs array if available
   if (item.allJobs && item.allJobs.length > 0 && !item.allJobs.includes("None")) {
     return item.allJobs.filter(Boolean);
   }

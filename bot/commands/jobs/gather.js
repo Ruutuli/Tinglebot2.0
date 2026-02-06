@@ -729,7 +729,7 @@ module.exports = {
                 const regionKeyForBonus = region.toLowerCase();
 
                 const availableForBonus = itemsForBonus.filter(item => {
-                  const isJobMatch = item.allJobsTags?.some(j => normalizeJobName(j) === jobNormalized) || false;
+                  const isJobMatch = item.allJobs?.some(j => normalizeJobName(j) === jobNormalized) || false;
                   const isRegionMatch = item[regionKeyForBonus];
                   return isJobMatch && isRegionMatch;
                 });
@@ -888,8 +888,8 @@ module.exports = {
           // Use the normalizeJobName function from jobsModule
           const normalizedInputJob = normalizeJobName(job);
           
-          // Use allJobsTags which is already an array of job names
-          const isJobMatch = item.allJobsTags?.some(j => 
+          // Use allJobs which is already an array of job names
+          const isJobMatch = item.allJobs?.some(j => 
             normalizeJobName(j) === normalizedInputJob
           ) || false;
           

@@ -3936,7 +3936,6 @@ async function handleShopAdd(interaction) {
         modifierHearts: item.modifierHearts || 0,
         staminaRecovered: item.staminaRecovered || 0,
         obtain: item.obtain || [],
-        obtainTags: item.obtainTags || [],
         crafting: item.crafting || false,
         gathering: item.gathering || false,
         looting: item.looting || false,
@@ -3948,7 +3947,6 @@ async function handleShopAdd(interaction) {
         petPerk: item.petPerk || false,
         exploring: item.exploring || false,
         craftingJobs: item.craftingJobs || [],
-        craftingTags: item.craftingTags || [],
         artist: item.artist || false,
         blacksmith: item.blacksmith || false,
         cook: item.cook || false,
@@ -3958,10 +3956,8 @@ async function handleShopAdd(interaction) {
         weaver: item.weaver || false,
         witch: item.witch || false,
         locations: item.locations || [],
-        locationsTags: item.locationsTags || [],
         emoji: item.emoji || '',
         allJobs: item.allJobs || ['None'],
-        allJobsTags: item.allJobsTags || ['None'],
         stock: stock
       });
 

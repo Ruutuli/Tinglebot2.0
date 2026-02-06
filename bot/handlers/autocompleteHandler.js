@@ -1669,7 +1669,7 @@ async function handleCraftingAutocomplete(interaction, focusedOption) {
         Item.find({
           crafting: true
         })
-        .select('itemName craftingTags craftingMaterial cook blacksmith craftsman maskMaker researcher weaver artist witch staminaToCraft')
+        .select('itemName craftingJobs craftingMaterial cook blacksmith craftsman maskMaker researcher weaver artist witch staminaToCraft')
         .lean(),
         DatabaseConnectionManager.getInventoryCollection(characterName)
       ]);

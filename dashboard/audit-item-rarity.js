@@ -391,10 +391,6 @@ const JOB_FIELDS = [
 ];
 
 function extractJobs(item) {
-  if (Array.isArray(item?.allJobsTags) && item.allJobsTags.length > 0 && !item.allJobsTags.includes("None")) {
-    return uniq(item.allJobsTags);
-  }
-
   if (Array.isArray(item?.allJobs) && item.allJobs.length > 0 && !item.allJobs.includes("None")) {
     return uniq(item.allJobs);
   }
@@ -414,8 +410,8 @@ function extractJobs(item) {
 function extractLocations(item) {
   const filterNone = (x) => String(x).toLowerCase() !== "none";
 
-  if (Array.isArray(item?.locationsTags) && item.locationsTags.length > 0) {
-    const filtered = item.locationsTags.filter(Boolean).filter(filterNone);
+  if (Array.isArray(item?.locations) && item.locations.length > 0) {
+    const filtered = item.locations.filter(Boolean).filter(filterNone);
     if (filtered.length) return uniq(filtered);
   }
 
