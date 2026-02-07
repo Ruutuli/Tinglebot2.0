@@ -72,6 +72,30 @@ function getNextDonationReset() {
 // ---- Helper Functions ----
 // ============================================================================
 
+// ------------------- Function: validateVillageChannel -------------------
+// Validates that the command is being used in the correct town hall channel
+function validateVillageChannel(villageName, interaction) {
+    const testingChannelId = '1391812848099004578';
+    const isTestingChannel = interaction.channelId === testingChannelId;
+    
+    const villageChannelMap = {
+        'Rudania': process.env.RUDANIA_TOWNHALL,
+        'Inariko': process.env.INARIKO_TOWNHALL,
+        'Vhintl': process.env.VHINTL_TOWNHALL
+    };
+    
+    const allowedChannel = villageChannelMap[villageName];
+    if (!allowedChannel || (interaction.channelId !== allowedChannel && !isTestingChannel)) {
+        const channelMention = allowedChannel ? `<#${allowedChannel}>` : 'the village town hall';
+        return { 
+            valid: false, 
+            error: `❌ **This command can only be used in ${channelMention}.**` 
+        };
+    }
+    
+    return { valid: true };
+}
+
 // ------------------- Function: formatMaterials -------------------
 // Formats required materials for display with progress bars and quantities
 async function formatMaterials(requiredMaterials, villageMaterials) {
@@ -1331,6 +1355,15 @@ module.exports = {
 
             // ------------------- Subcommand: View -------------------
             if (subcommand === 'view') {
+                // Validate channel
+                const channelCheck = validateVillageChannel(villageName, interaction);
+                if (!channelCheck.valid) {
+                    return interaction.reply({ 
+                        content: channelCheck.error, 
+                        ephemeral: true 
+                    });
+                }
+                
                 // Check for auto-level up when viewing (requirements might already be met)
                 // This ensures villages auto-level even if requirements were met before viewing
                 let villageToDisplay = village;
@@ -1522,6 +1555,15 @@ module.exports = {
 
             // ------------------- Subcommand: Donate -------------------
             if (subcommand === 'donate') {
+                // Validate channel
+                const channelCheck = validateVillageChannel(villageName, interaction);
+                if (!channelCheck.valid) {
+                    return interaction.reply({ 
+                        content: channelCheck.error, 
+                        ephemeral: true 
+                    });
+                }
+                
                 // Check if village is at max level
                 if (village.level >= 3 && village.status === 'max') {
                     const maxHealth = village.levelHealth instanceof Map 
@@ -1698,6 +1740,15 @@ module.exports = {
 
             // ------------------- Subcommand: Contributors -------------------
             if (subcommand === 'contributors') {
+                // Validate channel
+                const channelCheck = validateVillageChannel(villageName, interaction);
+                if (!channelCheck.valid) {
+                    return interaction.reply({ 
+                        content: channelCheck.error, 
+                        ephemeral: true 
+                    });
+                }
+                
                 const contributorsEmbed = await generateContributorsEmbed(village);
                 return interaction.reply({ embeds: [contributorsEmbed] });
             }
