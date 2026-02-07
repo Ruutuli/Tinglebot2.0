@@ -63,6 +63,8 @@ const QUEST_TYPE_EMOJIS = {
   'writing': '📝'
 };
 
+const { VILLAGE_BANNERS } = require('@/database/db');
+
 const VILLAGE_COLORS = {
   Rudania: '#d7342a',
   Inariko: '#277ecd',
@@ -70,9 +72,9 @@ const VILLAGE_COLORS = {
 };
 
 const VILLAGE_IMAGES = {
-  Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
-  Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
-  Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
+  Rudania: VILLAGE_BANNERS.Rudania,
+  Inariko: VILLAGE_BANNERS.Inariko,
+  Vhintl: VILLAGE_BANNERS.Vhintl
 };
 
 // Quest generation parameters

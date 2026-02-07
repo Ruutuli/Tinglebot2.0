@@ -6,7 +6,7 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 // ============================================================================
 // ---- Database Services ----
 // ============================================================================
-const { fetchCharacterByName, fetchCharacterById, getOrCreateToken, updateTokenBalance } = require('@/database/db');
+const { fetchCharacterByName, fetchCharacterById, getOrCreateToken, updateTokenBalance, VILLAGE_BANNERS } = require('@/database/db');
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -30,14 +30,17 @@ const VILLAGE_IMAGES = {
     Rudania: {
         main: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_red_bottom.png',
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_rudania_.png',
+        banner: VILLAGE_BANNERS.Rudania,
     },
     Inariko: {
         main: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_blue_bottom.png',
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_inariko_.png',
+        banner: VILLAGE_BANNERS.Inariko,
     },
     Vhintl: {
         main: 'https://storage.googleapis.com/tinglebot/Graphics/ROTW_border_green_bottom.png',
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png',
+        banner: VILLAGE_BANNERS.Vhintl,
     },
 };
 
@@ -222,7 +225,7 @@ async function processItemContribution(village, interaction, itemName, qty, char
         )
         .setColor(village.color)
         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-        .setImage(BORDER_IMAGE);
+        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
     return { success: true, embed };
 }
@@ -320,7 +323,7 @@ async function processTokenContribution(village, interaction, qty, characterName
         )
         .setColor(village.color)
         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-        .setImage(BORDER_IMAGE);
+        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
     return { success: true, embed };
 }
@@ -470,7 +473,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                         )
                         .setColor(village.color)
                         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-                        .setImage(BORDER_IMAGE);
+                        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
                     
                     return { success: true, embed };
                 }
@@ -506,7 +509,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                     )
                     .setColor(village.color)
                     .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-                    .setImage(BORDER_IMAGE);
+                    .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
                 
                 if (!repairComplete && maxTokensNeeded - tokensForRepair > 0) {
                     embed.addFields(
@@ -669,7 +672,7 @@ async function processRepair(village, interaction, qty, characterName) {
             )
             .setColor(village.color)
             .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-            .setImage(BORDER_IMAGE);
+            .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
         if (!isComplete && tokensRemaining > 0) {
             embed.addFields(
@@ -761,7 +764,7 @@ async function generateProgressEmbed(village) {
         )
         .setColor(village.color)
         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-        .setImage(BORDER_IMAGE);
+        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
     // Add materials field only if not at max level
     if (village.level < 3 && formattedMaterials.length > 0) {
@@ -788,9 +791,9 @@ async function generateContributorsEmbed(village) {
         const embed = new EmbedBuilder()
             .setTitle(`${village.name} Contributors`)
             .setDescription('📭 **No contributions yet.**\nBe the first to contribute to this village!')
-            .setColor(village.color)
-            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-            .setImage(BORDER_IMAGE);
+        .setColor(village.color)
+        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
         return embed;
     }
 
@@ -883,7 +886,7 @@ async function generateContributorsEmbed(village) {
         .setDescription(`📊 **Total Contributors:** ${contributorList.length}\n\nView all contributions to ${village.name}!`)
         .setColor(village.color)
         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-        .setImage(BORDER_IMAGE);
+        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
     
     // Add all fields
     for (const field of fields) {
@@ -945,7 +948,7 @@ async function sendLevelUpAnnouncement(village, client) {
             )
             .setColor(village.color)
             .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-            .setImage(BORDER_IMAGE)
+            .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE)
             .setTimestamp();
 
         await announcementChannel.send({ embeds: [announcementEmbed] });
@@ -1464,7 +1467,7 @@ module.exports = {
                     )
                     .setColor(villageToDisplay.color)
                     .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
-                    .setImage(BORDER_IMAGE);
+                    .setImage(VILLAGE_IMAGES[villageName]?.banner || BORDER_IMAGE);
 
                 // Add next level requirements if not at max level
                 if (villageToDisplay.level < 3) {
@@ -1668,7 +1671,7 @@ module.exports = {
                             )
                             .setColor(village.color)
                             .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-                            .setImage(BORDER_IMAGE);
+                            .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
                         
                         return interaction.reply({ embeds: [cooldownEmbed] });
                     }
@@ -1743,7 +1746,7 @@ module.exports = {
                         )
                         .setColor(village.color)
                         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-                        .setImage(BORDER_IMAGE);
+                        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
                     return interaction.reply({ embeds: [embed] });
                 } else if (village.level === 3) {
@@ -1795,7 +1798,7 @@ module.exports = {
                         )
                         .setColor(village.color)
                         .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
-                        .setImage(BORDER_IMAGE);
+                        .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
                     return interaction.reply({ embeds: [embed], components: [buttons] });
                 }

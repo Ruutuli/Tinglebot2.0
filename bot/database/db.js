@@ -140,6 +140,12 @@ const VILLAGE_ICONS = {
    "https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png",
  };
 
+const VILLAGE_BANNERS = {
+  Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/rudania_village_banner.png',
+  Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/inariko_village_banner.png',
+  Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/vhintl_village_banner.png',
+};
+
 // ------------------- connectToTinglebot -------------------
 async function connectToTinglebot() {
   try {
@@ -2463,9 +2469,10 @@ module.exports = {
  getLimitedItems,
  updateItemStockByName,
  updateVendingStock,
- VILLAGE_IMAGES,
- VILLAGE_ICONS,
- connectToInventoriesForItems,
+  VILLAGE_IMAGES,
+  VILLAGE_ICONS,
+  VILLAGE_BANNERS,
+  connectToInventoriesForItems,
  checkMaterialAvailability,
  checkMaterial,
  recordBlightRoll,

@@ -27,7 +27,8 @@ const {
   fetchCharacterById,
   fetchModCharacterById,
   getUserById,
-  fetchCharacterByName
+  fetchCharacterByName,
+  VILLAGE_BANNERS
 } = require('@/database/db');
 
 // ------------------- Database Models -------------------
@@ -2188,12 +2189,15 @@ async function handleRestSpotChoice(interaction) {
     const VILLAGE_IMAGES = {
       Rudania: {
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_rudania_.png',
+        banner: VILLAGE_BANNERS.Rudania,
       },
       Inariko: {
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_inariko_.png',
+        banner: VILLAGE_BANNERS.Inariko,
       },
       Vhintl: {
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png',
+        banner: VILLAGE_BANNERS.Vhintl,
       },
     };
 
@@ -2237,7 +2241,7 @@ async function handleRestSpotChoice(interaction) {
       .setDescription(description)
       .setColor(village.color)
       .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+      .setImage(VILLAGE_IMAGES[villageName]?.banner || 'https://storage.googleapis.com/tinglebot/Graphics/border.png');
 
     return interaction.update({ embeds: [embed], components: [] });
   } catch (error) {

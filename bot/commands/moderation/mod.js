@@ -19,7 +19,8 @@ const {
 const logger = require('@/utils/logger');
 const {
   connectToInventories,
-  connectToTinglebot
+  connectToTinglebot,
+  VILLAGE_BANNERS
 } = require('@/database/db');
 
 // ------------------- Database Services -------------------
@@ -6529,12 +6530,15 @@ async function handleVillageDamage(interaction) {
     const VILLAGE_IMAGES = {
       Rudania: {
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_rudania_.png',
+        banner: VILLAGE_BANNERS.Rudania,
       },
       Inariko: {
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_inariko_.png',
+        banner: VILLAGE_BANNERS.Inariko,
       },
       Vhintl: {
         thumbnail: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20village%20crest_vhintl_.png',
+        banner: VILLAGE_BANNERS.Vhintl,
       },
     };
 
@@ -6556,10 +6560,12 @@ async function handleVillageDamage(interaction) {
     
     if (VILLAGE_IMAGES[villageName]) {
       moderatorEmbed.setThumbnail(VILLAGE_IMAGES[villageName].thumbnail);
+      moderatorEmbed.setImage(VILLAGE_IMAGES[villageName].banner || 'https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    } else {
+      moderatorEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
     }
     
-    moderatorEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setTimestamp()
+    moderatorEmbed.setTimestamp()
       .setFooter({ text: `Applied by ${interaction.user.username}` });
 
     // Create embed for town hall announcement (public)
@@ -6580,10 +6586,12 @@ async function handleVillageDamage(interaction) {
     
     if (VILLAGE_IMAGES[villageName]) {
       townHallEmbed.setThumbnail(VILLAGE_IMAGES[villageName].thumbnail);
+      townHallEmbed.setImage(VILLAGE_IMAGES[villageName].banner || 'https://storage.googleapis.com/tinglebot/Graphics/border.png');
+    } else {
+      townHallEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
     }
     
-    townHallEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setTimestamp();
+    townHallEmbed.setTimestamp();
 
     // Create "OH NO!" level loss announcement if level was dropped
     let levelLossEmbed = null;
@@ -6601,9 +6609,10 @@ async function handleVillageDamage(interaction) {
       
       if (VILLAGE_IMAGES[villageName]) {
         levelLossEmbed.setThumbnail(VILLAGE_IMAGES[villageName].thumbnail);
+        levelLossEmbed.setImage(VILLAGE_IMAGES[villageName].banner || 'https://storage.googleapis.com/tinglebot/Graphics/border.png');
+      } else {
+        levelLossEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
       }
-      
-      levelLossEmbed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
     }
 
     // Send to moderator (ephemeral)

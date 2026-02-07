@@ -41,7 +41,8 @@ const {
   getTokenBalance,
   updateTokenBalance, 
   fetchItemByName,
-  addItemToInventory
+  addItemToInventory,
+  VILLAGE_BANNERS
 } = require('@/database/db.js');
 
 // ------------------- Utility Functions -------------------
@@ -151,6 +152,7 @@ function createVendingEmbed(type, options = {}) {
     fields = [],
     color,
     thumbnail,
+    image,
     footer,
     character,
     timestamp = true
@@ -188,7 +190,7 @@ function createVendingEmbed(type, options = {}) {
 
   const embed = new EmbedBuilder()
     .setColor(embedColor)
-    .setImage(DEFAULT_IMAGE_URL);
+    .setImage(image || DEFAULT_IMAGE_URL);
 
   if (title) embed.setTitle(title);
   if (description) embed.setDescription(description);
@@ -4697,15 +4699,18 @@ async function handleVendingViewVillage(interaction, villageKey) {
     const villageSettings = {
       rudania: {
         emoji: '<:rudania:899492917452890142>',
-        color: '#d93e3e'
+        color: '#d93e3e',
+        banner: VILLAGE_BANNERS.Rudania
       },
       inariko: {
         emoji: '<:inariko:899493009073274920>',
-        color: '#3e7ed9'
+        color: '#3e7ed9',
+        banner: VILLAGE_BANNERS.Inariko
       },
       vhintl: {
         emoji: '<:vhintl:899492879205007450>',
-        color: '#3ed96a'
+        color: '#3ed96a',
+        banner: VILLAGE_BANNERS.Vhintl
       },
       limited: {
         emoji: '🎁',
@@ -4721,7 +4726,8 @@ async function handleVendingViewVillage(interaction, villageKey) {
     if (villageKey === 'limited') {
       const embed = createVendingEmbed('info', {
         title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
-        color: settings.color
+        color: settings.color,
+        image: settings.banner
       });
       embed.setDescription(
         limitedItems.map(i =>
@@ -4750,7 +4756,8 @@ async function handleVendingViewVillage(interaction, villageKey) {
     if (!items || items.length === 0) {
       const embed = createVendingEmbed('info', {
         title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
-        color: settings.color
+        color: settings.color,
+        image: settings.banner
       });
       embed.setDescription('*No items found*');
       return interaction.update({
@@ -4779,7 +4786,8 @@ async function handleVendingViewVillage(interaction, villageKey) {
       
       const typeEmbed = createVendingEmbed('info', {
         title: `${settings.emoji} ${typeName} Items — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
-        color: settings.color
+        color: settings.color,
+        image: settings.banner
       });
       
       // Split items into two columns
@@ -4822,7 +4830,8 @@ async function handleVendingViewVillage(interaction, villageKey) {
       embeds: embeds.length > 0 ? embeds : [createVendingEmbed('info', {
         title: `${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)} — ${monthName}`,
         description: '*No items found*',
-        color: settings.color
+        color: settings.color,
+        image: settings.banner
       })],
       components: [
         generateVillageButtonRow(villageKey),

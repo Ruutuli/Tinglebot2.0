@@ -17,6 +17,7 @@ const {
     Village,
     VILLAGE_CONFIG
 } = require('@/models/VillageModel');
+const { VILLAGE_BANNERS } = require('@/database/db');
 const ItemModel = require('@/models/ItemModel');
 
 // ============================================================================
@@ -400,13 +401,8 @@ async function damageVillage(villageName, damageAmount) {
                         // Convert hex color to integer for Discord embed
                         const embedColor = parseInt(villageColor.replace('#', ''), 16) || 0xFF4444;
                         
-                        // Village-specific border images
-                        const VILLAGE_BORDER_IMAGES = {
-                            Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
-                            Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
-                            Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
-                        };
-                        const villageBorderImage = VILLAGE_BORDER_IMAGES[village.name] || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+                        // Village-specific banner images
+                        const villageBannerImage = VILLAGE_BANNERS[village.name] || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
                         
                         // Helper function to create progress bar
                         const createProgressBar = (current, max, length = 10) => {
@@ -447,7 +443,7 @@ async function damageVillage(villageName, damageAmount) {
                                     inline: true
                                 }
                             )
-                            .setImage(villageBorderImage)
+                            .setImage(villageBannerImage)
                             .setTimestamp();
                         
                         // Add materials lost field if any materials were lost

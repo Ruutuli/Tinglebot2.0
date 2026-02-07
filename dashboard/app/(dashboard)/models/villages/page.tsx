@@ -90,10 +90,12 @@ function formatCooldownKey(key: string): string {
 }
 
 function getVillageBannerSrc(name: string, level?: number): string {
-  const safeName = String(name || "").replace(/[^a-zA-Z]/g, "");
-  const lvl = Math.min(3, Math.max(1, level ?? 1));
-  const filename = `${safeName}${lvl}.png`;
-  return `/assets/banners/${filename}`;
+  const villageBanners: Record<string, string> = {
+    Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/rudania_village_banner.png',
+    Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/inariko_village_banner.png',
+    Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/vhintl_village_banner.png',
+  };
+  return villageBanners[name] || `/assets/banners/${String(name || "").replace(/[^a-zA-Z]/g, "")}${Math.min(3, Math.max(1, level ?? 1))}.png`;
 }
 
 function ProgressBar({ value, max, colorClass = "bg-[var(--totk-light-green)]" }: { value: number; max: number; colorClass?: string }) {

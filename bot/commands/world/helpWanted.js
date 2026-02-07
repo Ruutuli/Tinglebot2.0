@@ -714,10 +714,11 @@ function createQuestCompletionEmbed(character, quest, userId) {
 
   // Add village image
   try {
+    const { VILLAGE_BANNERS } = require('@/database/db');
     const VILLAGE_IMAGES = {
-      Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
-      Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
-      Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
+      Rudania: VILLAGE_BANNERS.Rudania,
+      Inariko: VILLAGE_BANNERS.Inariko,
+      Vhintl: VILLAGE_BANNERS.Vhintl
     };
     
     const villageImage = VILLAGE_IMAGES[quest.village];
