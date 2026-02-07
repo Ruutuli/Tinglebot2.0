@@ -1,6 +1,7 @@
 // ============================================================================
 // ---- Standard Libraries ----
 // ============================================================================
+const { ChannelType } = require('discord.js');
 const { handleError } = require('@/utils/globalErrorHandler');
 const logger = require('@/utils/logger');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
@@ -259,6 +260,14 @@ async function createWaveThread(message, wave) {
     // Ensure message has channel context before creating thread
     if (!message.channel) {
       throw new Error('Message does not have channel context required for thread creation');
+    }
+
+    // Threads are only allowed in guild text or announcement (news) channels
+    const channelType = message.channel.type;
+    const supportsThreads = channelType === ChannelType.GuildText || channelType === ChannelType.GuildAnnouncement;
+    if (!supportsThreads) {
+      console.log(`[waveModule.js]: ⚠️ Skipping thread creation - channel type ${channelType} does not support threads (need GuildText or GuildAnnouncement)`);
+      return null;
     }
 
     // Create the thread from the message
