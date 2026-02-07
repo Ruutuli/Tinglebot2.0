@@ -16,9 +16,13 @@ import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
 
 // Helper function to create case-insensitive filter conditions for string arrays
+// For array fields (type, category, subtype), MongoDB will match if any element matches the regex
+// For single string fields (categoryGear), MongoDB will match the field value directly
 function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
   const conditions = values.map(value => {
     const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Use regex with anchors for exact case-insensitive matching
+    // MongoDB will automatically match array elements when field is an array
     return { [field]: new RegExp(`^${escaped}$`, "i") };
   });
   return { $or: conditions };
@@ -50,6 +54,8 @@ export async function GET(req: NextRequest) {
     const params = req.nextUrl.searchParams;
     const categories = getFilterParamMultiple(params, "category");
     const types = getFilterParamMultiple(params, "type");
+    const categoryGears = getFilterParamMultiple(params, "categoryGear");
+    const subtypes = getFilterParamMultiple(params, "subtype");
     const rarities = getFilterParamNumeric(params, "rarity");
     const sources = getFilterParamMultiple(params, "source");
     const locations = getFilterParamMultiple(params, "location");
@@ -109,6 +115,20 @@ export async function GET(req: NextRequest) {
       const typeFilter = buildCaseInsensitiveFilter("type", types);
       // Add to orConditions array which will be combined with $and at the end
       orConditions.push(typeFilter);
+    }
+    
+    // CategoryGear filter (case-insensitive, single string field)
+    if (categoryGears.length) {
+      const categoryGearFilter = buildCaseInsensitiveFilter("categoryGear", categoryGears);
+      // Add to orConditions array which will be combined with $and at the end
+      orConditions.push(categoryGearFilter);
+    }
+    
+    // Subtype filter (case-insensitive, array field)
+    if (subtypes.length) {
+      const subtypeFilter = buildCaseInsensitiveFilter("subtype", subtypes);
+      // Add to orConditions array which will be combined with $and at the end
+      orConditions.push(subtypeFilter);
     }
     
     // Rarity filter

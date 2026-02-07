@@ -24,7 +24,9 @@ const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
   characters: { race: "Race", village: "Village", job: "Job" },
   items: { 
     category: "Category", 
-    type: "Type", 
+    type: "Type",
+    categoryGear: "Gear Type",
+    subtype: "Subtype",
     rarity: "Rarity",
     source: "Source",
     location: "Location",
