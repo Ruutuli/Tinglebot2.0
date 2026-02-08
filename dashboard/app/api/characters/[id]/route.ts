@@ -594,10 +594,11 @@ export async function PUT(
 
     // Only run additional validations if this is NOT a gear-only update
     if (!isGearOnlyUpdate) {
-      const [raceOpts] = await Promise.all([
+      const [charRaces, modRaces] = await Promise.all([
         (Character as { distinct: (f: string) => Promise<string[]> }).distinct("race"),
+        (ModCharacter as { distinct: (f: string) => Promise<string[]> }).distinct("race"),
       ]);
-      const races = (raceOpts ?? []).filter(Boolean).sort();
+      const races = [...new Set([...(charRaces ?? []), ...(modRaces ?? [])])].filter(Boolean).sort();
       // Use ALL_JOBS from static data instead of database distinct jobs
       // This ensures validation matches what the form shows
       const jobs = [...ALL_JOBS].sort();

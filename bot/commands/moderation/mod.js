@@ -6499,8 +6499,9 @@ async function handleVillageDamage(interaction) {
     const healthBefore = village.health;
     const levelBefore = village.level;
 
+    const damageCause = `Moderator: ${reason}`;
     // Apply damage
-    const { village: updatedVillage, removedResources } = await damageVillage(villageName, damageAmount);
+    const { village: updatedVillage, removedResources } = await damageVillage(villageName, damageAmount, damageCause);
 
     // Get state after damage
     const healthAfter = updatedVillage.health;

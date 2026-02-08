@@ -1648,7 +1648,8 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       const { damageVillage } = require('../../modules/villageModule');
       const logger = require('@/utils/logger');
       logger.info('HELPWANTED', `[VILLAGE_DAMAGE_FINAL] Applying total village damage of ${totalVillageDamage} HP to ${character.currentVillage} at end of hunt`);
-      await damageVillage(character.currentVillage, totalVillageDamage);
+      const damageCause = `Monster Hunt (monsters followed **${character.name}** back to the village)`;
+      await damageVillage(character.currentVillage, totalVillageDamage, damageCause);
       logger.info('HELPWANTED', `[VILLAGE_DAMAGE_FINAL] ✅ Applied ${totalVillageDamage} HP damage to ${character.currentVillage}`);
     } catch (damageError) {
       const logger = require('@/utils/logger');

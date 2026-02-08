@@ -771,11 +771,18 @@ async function handleChangeJob(interaction) {
   const jobValidation = await canChangeJob(character, newJob);
   
   if (!jobValidation.valid) {
-    console.log(`[handleChangeJob] Validation failed: ${jobValidation.message}`);
-    await interaction.followUp({
-      content: jobValidation.message,
-      ephemeral: true
-    });
+    console.log(`[handleChangeJob] Validation failed`);
+    if (typeof jobValidation.message === 'string') {
+      await interaction.followUp({
+        content: jobValidation.message,
+        ephemeral: true
+      });
+    } else {
+      await interaction.followUp({
+        embeds: [jobValidation.message],
+        ephemeral: true
+      });
+    }
     return;
   }
 

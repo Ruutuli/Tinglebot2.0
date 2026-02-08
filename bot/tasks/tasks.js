@@ -38,7 +38,9 @@ const {
 const {
   sendBloodMoonAnnouncement,
   sendBloodMoonEndAnnouncement,
-  cleanupOldTrackingData
+  cleanupOldTrackingData,
+  renameChannels,
+  revertChannelNames
 } = require('@/scripts/bloodmoon');
 const { generateDailyQuests: runHelpWantedGeneration } = require('@/modules/helpWantedModule');
 const { updateSubmissionData } = require('@/utils/storage');
@@ -102,6 +104,24 @@ function hasScheduledTimePassed(scheduledPostTime) {
 // ------------------- Weather Tasks -------------------
 // ============================================================================
 
+// Build a readable damage cause string from weather and damage breakdown
+function buildWeatherDamageCause(weather, damageBreakdown) {
+  if (!weather || !damageBreakdown || damageBreakdown.total === 0) return 'Weather';
+  const parts = [];
+  if (damageBreakdown.special > 0 && weather.special?.label) {
+    parts.push(weather.special.label);
+  }
+  if (damageBreakdown.precipitation > 0 && weather.precipitation?.label) {
+    parts.push(weather.precipitation.label);
+  }
+  if (damageBreakdown.wind > 0 && weather.wind?.label) {
+    const windLabel = weather.wind.label;
+    const match = windLabel?.match(/\/\/\s*(.+)$/);
+    parts.push(match ? match[1].trim() : windLabel);
+  }
+  return parts.length > 0 ? `Weather: **${parts.join(', ')}**` : 'Weather';
+}
+
 // ------------------- daily-weather (1pm UTC = 13:00 UTC) -------------------
 async function dailyWeather(client, _data = {}) {
   if (!client?.channels) {
@@ -141,7 +161,8 @@ async function dailyWeather(client, _data = {}) {
           const damageAmount = damageBreakdown.total;
           
           if (damageAmount > 0) {
-            await damageVillage(village, damageAmount);
+            const weatherCause = buildWeatherDamageCause(weather, damageBreakdown);
+            await damageVillage(village, damageAmount, weatherCause);
             logger.success('SCHEDULED', `Weather damage: ${village} took ${damageAmount} HP damage (Wind: ${damageBreakdown.wind}, Precipitation: ${damageBreakdown.precipitation}, Special: ${damageBreakdown.special})`);
           } else {
             logger.info('SCHEDULED', `Weather damage: ${village} - no damage conditions met`);
@@ -280,6 +301,8 @@ async function bloodmoonStartAnnouncement(client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'bloodmoon-start-announcement: starting');
     
+    await renameChannels(client);
+    
     for (const village of VILLAGES) {
       const channelId = VILLAGE_CHANNELS[village];
       if (!channelId) {
@@ -333,6 +356,21 @@ async function bloodmoonCleanup(_client, _data = {}) {
     logger.success('SCHEDULED', 'bloodmoon-cleanup: done');
   } catch (err) {
     logger.error('SCHEDULED', `bloodmoon-cleanup: ${err.message}`);
+  }
+}
+
+// ------------------- bloodmoon-channel-revert (8am EST = 13:00 UTC) -------------------
+async function bloodmoonChannelRevert(client, _data = {}) {
+  if (!client?.channels) {
+    logger.error('SCHEDULED', 'bloodmoon-channel-revert: Discord client not available');
+    return;
+  }
+  try {
+    logger.info('SCHEDULED', 'bloodmoon-channel-revert: starting');
+    await revertChannelNames(client);
+    logger.success('SCHEDULED', 'bloodmoon-channel-revert: done');
+  } catch (err) {
+    logger.error('SCHEDULED', `bloodmoon-channel-revert: ${err.message}`);
   }
 }
 
@@ -1746,6 +1784,7 @@ const TASKS = [
   // Blood Moon Tasks
   { name: 'bloodmoon-start-announcement', cron: '0 1 * * *', handler: bloodmoonStartAnnouncement }, // 8pm EST = 01:00 UTC
   { name: 'bloodmoon-end-announcement', cron: '0 5 * * *', handler: bloodmoonEndAnnouncement }, // 12am EST = 05:00 UTC
+  { name: 'bloodmoon-channel-revert', cron: '0 13 * * *', handler: bloodmoonChannelRevert }, // 8am EST = 13:00 UTC
   { name: 'bloodmoon-cleanup', cron: '0 6 * * *', handler: bloodmoonCleanup }, // 1am EST = 06:00 UTC
   
   // Blight Tasks

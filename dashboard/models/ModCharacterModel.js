@@ -36,6 +36,18 @@ const modCharacterSchema = new Schema({
   icon: { type: String, required: true },
   birthday: { type: String, default: '' },
 
+  // ------------------- Biography Information -------------------
+  gender: { type: String, default: '' }, // Includes pronouns, e.g., "Female | she/her"
+  virtue: {
+    type: String,
+    enum: ['power', 'wisdom', 'courage', 'TBA', 'tba'],
+    default: 'TBA'
+  },
+  personality: { type: String, default: '' }, // Suggestion: at least 5 sentences
+  history: { type: String, default: '' }, // Suggestion: at least 5 sentences
+  extras: { type: String, default: '' }, // Optional
+  appArt: { type: String, default: '' }, // URL to application art image
+
   // ------------------- Mod Character Special Properties -------------------
   isModCharacter: { type: Boolean, default: true },
   modTitle: { type: String, required: true }, // Oracle, Dragon, Sage, etc.

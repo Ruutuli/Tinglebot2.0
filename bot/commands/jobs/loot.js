@@ -1462,8 +1462,9 @@ async function processLootingLogic(
         
         logger.info('LOOT', `[VILLAGE_DAMAGE_CHECK] 🎲 Damage chance triggered! Applying ${damageAmount} HP to ${character.currentVillage}`);
         
+        const damageCause = `Monster: **${encounteredMonster.name}** (followed ${character.name} back from looting)`;
         // Apply village damage
-        await damageVillage(character.currentVillage, damageAmount);
+        await damageVillage(character.currentVillage, damageAmount, damageCause);
         
         logger.info('LOOT', `✅ Monster encounter damage: ${character.currentVillage} took ${damageAmount} HP damage from ${encounteredMonster.name} (Tier ${encounteredMonster.tier}) following ${character.name}`);
         

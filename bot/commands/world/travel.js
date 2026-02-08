@@ -297,9 +297,17 @@ module.exports = {
         const villageStatus = await checkVillageStatus(startingVillage);
         if (villageStatus === 'damaged') {
           const capitalizedStartingVillage = capitalizeFirstLetter(startingVillage);
-          return interaction.editReply({
-            content: `❌ **${character.name}** cannot travel because **${capitalizedStartingVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens using </village donate:1324300899585363968>.`
-          });
+          const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Village Repair Required')
+            .setDescription(`**${character.name}** cannot travel because **${capitalizedStartingVillage}** is damaged and needs repair.`)
+            .addFields(
+              { name: 'What to do', value: 'Please help repair the village first by contributing tokens using </village donate>.', inline: false }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setFooter({ text: 'Repair the village to unlock travel' })
+            .setTimestamp();
+          return interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
         }
       }
       

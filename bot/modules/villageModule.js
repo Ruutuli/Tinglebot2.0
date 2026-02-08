@@ -189,7 +189,8 @@ async function checkVillageStatus(villageName) {
 }
 
 // ------------------- Handle Village Damage -------------------
-async function damageVillage(villageName, damageAmount) {
+// damageCause: optional string describing what caused the damage (e.g. "Monster: Stalkoblin", "Weather", "Moderator: Event")
+async function damageVillage(villageName, damageAmount, damageCause = null) {
     try {
         const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
         if (!village) {
@@ -427,6 +428,11 @@ async function damageVillage(villageName, damageAmount) {
                             .setDescription(`**${village.name}** has taken damage!\n\n[View Villages Dashboard](https://tinglebot.xyz/models/villages)`)
                             .setColor(embedColor)
                             .addFields(
+                                ...(damageCause ? [{
+                                    name: '__⚔️ Damage Source__',
+                                    value: `> ${damageCause}`,
+                                    inline: false
+                                }] : []),
                                 {
                                     name: '__❤️ Health__',
                                     value: healthValue,
@@ -505,8 +511,9 @@ async function applyVillageDamage(villageName, monster, thread) {
         const damageAmount = tierDamageMap[monster.tier] || Math.ceil(monster.tier * 1.5); // Fallback for unexpected tiers
         console.log(`[applyVillageDamage] Calculated damage: ${damageAmount} HP (Monster Tier: ${monster.tier})`);
 
+        const damageCause = `Monster: **${monster.name}** (Failed raid - Tier ${monster.tier})`;
         // Apply damage to the village
-        const { village: updatedVillage, removedResources } = await damageVillage(villageName, damageAmount);
+        const { village: updatedVillage, removedResources } = await damageVillage(villageName, damageAmount, damageCause);
 
         const tokensRemaining = updatedVillage.currentTokens || 0;
 

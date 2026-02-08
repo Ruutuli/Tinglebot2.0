@@ -153,9 +153,20 @@ async function canChangeVillage(character, newVillage) {
         const villageStatus = await checkVillageStatus(character.currentVillage);
         if (villageStatus === 'damaged') {
             const capitalizedCurrentVillage = capitalizeFirstLetter(character.currentVillage);
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('❌ Village Repair Required')
+                .setDescription(`**${character.name}** cannot move villages because **${capitalizedCurrentVillage}** is damaged and needs repair.`)
+                .addFields(
+                    { name: 'What to do', value: 'Please help repair the village first by contributing tokens using the </village donate> command.', inline: false }
+                )
+                .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                .setFooter({ text: 'Repair the village to unlock travel and village changes' })
+                .setTimestamp();
+
             return {
                 valid: false,
-                message: `❌ **${character.name}** cannot move villages because **${capitalizedCurrentVillage}** is damaged and needs repair. Please help repair the village first by contributing tokens.`
+                message: errorEmbed
             };
         }
     }
@@ -164,10 +175,22 @@ async function canChangeVillage(character, newVillage) {
     const capitalizedVillageJob = capitalizeVillageName(villageJob);
     const capitalizedNewVillage = capitalizeVillageName(newVillage);
 
-    return villageJob && villageJob.toLowerCase() !== newVillage.toLowerCase() ? {
-        valid: false,
-        message: `⚠️ **${character.name}** cannot change their village to **${capitalizedNewVillage}** because the job **${character.job}** is exclusive to **${capitalizedVillageJob}** village.`
-    } : { valid: true, message: '' };
+    if (villageJob && villageJob.toLowerCase() !== newVillage.toLowerCase()) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xFFA500)
+            .setTitle('⚠️ Village Change Restricted')
+            .setDescription(`**${character.name}** cannot change their village to **${capitalizedNewVillage}** because their job is exclusive to another village.`)
+            .addFields(
+                { name: 'Job', value: character.job, inline: true },
+                { name: 'Required Village', value: capitalizedVillageJob, inline: true },
+                { name: 'Attempted Village', value: capitalizedNewVillage, inline: true }
+            )
+            .setFooter({ text: 'Some jobs are exclusive to specific villages' })
+            .setTimestamp();
+
+        return { valid: false, message: errorEmbed };
+    }
+    return { valid: true, message: '' };
 }
 
 // ------------------- Job Change Validation -------------------
@@ -206,9 +229,20 @@ async function canChangeJob(character, newJob) {
     if (!character.currentVillage || character.currentVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
         const capitalizedHomeVillage = capitalizeFirstLetter(character.homeVillage);
         const capitalizedCurrentVillage = character.currentVillage ? capitalizeFirstLetter(character.currentVillage) : 'Unknown';
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Wrong Location')
+            .setDescription(`**${character.name}** must be in their home village to change jobs.`)
+            .addFields(
+                { name: 'Home Village', value: capitalizedHomeVillage, inline: true },
+                { name: 'Current Location', value: capitalizedCurrentVillage, inline: true }
+            )
+            .setFooter({ text: 'Travel to your home village first' })
+            .setTimestamp();
+
         return {
             valid: false,
-            message: `❌ **${character.name}** must be in their home village (**${capitalizedHomeVillage}**) to change jobs. Currently in: **${capitalizedCurrentVillage}**.`
+            message: errorEmbed
         };
     }
 
@@ -245,9 +279,21 @@ async function canChangeJob(character, newJob) {
 
     if (jobVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
         console.warn(`[validation.js]: Validation failed: Job exclusive to ${jobVillage}, character in ${character.homeVillage}`);
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Job Village Mismatch')
+            .setDescription(`**${character.name}** cannot have the job **${newJob}** because it is exclusive to a different village.`)
+            .addFields(
+                { name: 'Job', value: newJob, inline: true },
+                { name: 'Required Village', value: capitalizeFirstLetter(jobVillage), inline: true },
+                { name: "Character's Home Village", value: capitalizeFirstLetter(character.homeVillage), inline: true }
+            )
+            .setFooter({ text: 'This job is exclusive to a specific village' })
+            .setTimestamp();
+
         return {
             valid: false,
-            message: `❌ **${character.name}** cannot have the job **${newJob}**. **${newJob}** is exclusive to **${capitalizeFirstLetter(jobVillage)}**, but **${character.name}**'s home village is **${capitalizeFirstLetter(character.homeVillage)}**.`
+            message: errorEmbed
         };
     }
 
