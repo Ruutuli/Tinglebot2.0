@@ -52,8 +52,7 @@ const {
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 
 // ------------------- Utility Functions -------------------
-const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
-const { syncToInventoryDatabase, SOURCE_TYPES } = require('@/utils/inventoryUtils');
+const { addItemInventoryDatabase, logItemAcquisitionToDatabase, syncToInventoryDatabase, SOURCE_TYPES } = require('@/utils/inventoryUtils');
 // Google Sheets functionality removed
 const { handleError } = require('@/utils/globalErrorHandler');
 const { info, success, warn, error, debug } = require('@/utils/logger');
@@ -511,6 +510,17 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       };
 
       await syncToInventoryDatabase(character, formattedItem, interaction);
+      try {
+        const interactionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+        await logItemAcquisitionToDatabase(character, formattedItem, {
+          quantity: formattedItem.quantity || 1,
+          obtain: 'Travel',
+          location: character.currentVillage || character.homeVillage || 'Travel',
+          link: interactionUrl
+        });
+      } catch (logError) {
+        warn('TRAVEL', `Failed to log travel gather to InventoryLog: ${logError.message}`);
+      }
       
       outcomeMessage = `Gathered ${formattedItem.quantity}× ${formattedItem.itemName}.`;
 
@@ -532,6 +542,17 @@ async function handleGather(interaction, character, currentPath, encounterMessag
           };
 
           await syncToInventoryDatabase(character, formattedBonusItem, interaction);
+          try {
+            const bonusInteractionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+            await logItemAcquisitionToDatabase(character, formattedBonusItem, {
+              quantity: formattedBonusItem.quantity || 1,
+              obtain: 'Travel',
+              location: character.currentVillage || character.homeVillage || 'Travel',
+              link: bonusInteractionUrl
+            });
+          } catch (bonusLogError) {
+            warn('TRAVEL', `Failed to log scholar bonus to InventoryLog: ${bonusLogError.message}`);
+          }
           travelGuideSummary = `\n📚 Travel Guide: gained an extra ${formattedBonusItem.quantity}× ${formattedBonusItem.itemName}.`;
           travelContext.scholarTravelGuideTriggered = true;
         }
@@ -688,11 +709,19 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         }
 
         if (item) {
-          await syncToInventoryDatabase(character, {
-            ...item,
-            obtain: "Travel",
-            perk: "" // Explicitly set perk to empty for monster loot
-          }, interaction);
+          const lootItem = { ...item, obtain: "Travel", perk: "" }; // Explicitly set perk to empty for monster loot
+          await syncToInventoryDatabase(character, lootItem, interaction);
+          try {
+            const fightInteractionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+            await logItemAcquisitionToDatabase(character, lootItem, {
+              quantity: lootItem.quantity || 1,
+              obtain: 'Travel',
+              location: character.currentVillage || character.homeVillage || 'Travel',
+              link: fightInteractionUrl
+            });
+          } catch (lootLogError) {
+            warn('TRAVEL', `Failed to log travel loot to InventoryLog: ${lootLogError.message}`);
+          }
           lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
           travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
@@ -714,13 +743,25 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
             // Select completely random item (like travel chest)
             const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
             try {
-              await syncToInventoryDatabase(character, {
+              const chestItem = {
                 itemName: randomItem.itemName,
                 emoji: randomItem.emoji || '📦',
                 quantity: 1,
                 obtain: "Travel",
                 perk: ""
-              }, interaction);
+              };
+              await syncToInventoryDatabase(character, chestItem, interaction);
+              try {
+                const chestInteractionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+                await logItemAcquisitionToDatabase(character, chestItem, {
+                  quantity: 1,
+                  obtain: 'Travel',
+                  location: character.currentVillage || character.homeVillage || 'Travel',
+                  link: chestInteractionUrl
+                });
+              } catch (chestLogError) {
+                warn('TRAVEL', `Failed to log Like Like chest to InventoryLog: ${chestLogError.message}`);
+              }
               const itemEmoji = randomItem.emoji || '📦';
               outcomeMessage += `\n🎁 **Found a chest!** Received ${itemEmoji} ${randomItem.itemName}!`;
               travelLog.push(`chest: ${randomItem.itemName}`);
