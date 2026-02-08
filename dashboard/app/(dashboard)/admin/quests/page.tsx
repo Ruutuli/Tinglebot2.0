@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { useSession } from "@/hooks/use-session";
 import { Loading, Tabs } from "@/components/ui";
 
@@ -111,6 +112,13 @@ const RP_THREAD_CHANNELS: { id: string; name: string }[] = [
   { id: "717091108295016448", name: "⭐》casual-rp" },
 ];
 
+const DEFAULT_RP_RULES = `- 1-week signup window.
+- Stay in the quest village for the entire duration.
+- Posts: 20+ characters, meaningful content only.
+- Member-capped: max 15 participants. Only one member-capped quest per person.
+- Reward requirement: 15 posts.
+- Keep all replies to two paragraphs or less. Strictly enforced—going over the Discord character limit and posting twice is forbidden with the bot-driven quest system.`;
+
 type QuestRecord = {
   _id: string;
   title?: string;
@@ -126,6 +134,8 @@ type QuestRecord = {
   itemRewardQty?: number;
   tableRollName?: string;
   requiredRolls?: number;
+  participants?: Record<string, { userId?: string; characterName?: string; progress?: string; completedAt?: string; rewardedAt?: string; tokensEarned?: number; rpPostCount?: number }>;
+  participantCap?: number | null;
   [key: string]: unknown;
 };
 
@@ -167,7 +177,7 @@ type FormState = {
 const emptyForm: FormState = {
   title: "",
   description: "",
-  rules: "",
+  rules: DEFAULT_RP_RULES,
   date: "",
   questType: "RP",
   location: "",
@@ -407,13 +417,6 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
   const locationPreview = formatLocationPreview(effectiveLocation);
   const rewardsPreview = buildRewardsPreview(form);
 
-  const rulesLines = form.rules
-    .trim()
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => (line.startsWith("•") ? line : `• ${line}`));
-
   return (
     <div
       className="rounded overflow-hidden text-left shrink-0 w-full min-w-0"
@@ -463,8 +466,8 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
 
         <div className="text-sm">
           <span style={{ color: EMBED_LABEL }} className="font-semibold">📋 Rules</span>
-          <div style={{ color: EMBED_TEXT }} className="mt-1">
-            {rulesLines.length ? rulesLines.join("\n") : "—"}
+          <div style={{ color: EMBED_TEXT }} className="mt-1 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5">
+            {form.rules.trim() ? <ReactMarkdown>{form.rules.trim()}</ReactMarkdown> : "—"}
           </div>
         </div>
 
@@ -515,6 +518,12 @@ export default function AdminQuestsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<QuestTab>("create");
   const formSectionRef = useRef<HTMLElement | null>(null);
+  const [manageQuestId, setManageQuestId] = useState<string | null>(null);
+  const [manageQuest, setManageQuest] = useState<QuestRecord | null>(null);
+  const [manageParticipantsSaving, setManageParticipantsSaving] = useState(false);
+  const [manageParticipantsError, setManageParticipantsError] = useState<string | null>(null);
+  const [manageParticipantsSuccess, setManageParticipantsSuccess] = useState<string | null>(null);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
 
   const fetchQuests = useCallback(async () => {
     setLoading(true);
@@ -553,6 +562,68 @@ export default function AdminQuestsPage() {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
+
+  const openManageModal = useCallback(async (id: string) => {
+    setManageQuestId(id);
+    setManageQuest(null);
+    setManageParticipantsError(null);
+    setManageParticipantsSuccess(null);
+    setSelectedParticipantIds([]);
+    try {
+      const res = await fetch(`/api/admin/quests/${id}`);
+      if (!res.ok) throw new Error("Failed to load quest");
+      const q = (await res.json()) as QuestRecord;
+      setManageQuest(q);
+    } catch (e) {
+      setManageParticipantsError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  const closeManageModal = useCallback(() => {
+    setManageQuestId(null);
+    setManageQuest(null);
+    setManageParticipantsError(null);
+    setManageParticipantsSuccess(null);
+    setSelectedParticipantIds([]);
+  }, []);
+
+  const toggleParticipantSelected = useCallback((userId: string) => {
+    setSelectedParticipantIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  }, []);
+
+  const saveManageParticipants = useCallback(async () => {
+    if (!manageQuestId || selectedParticipantIds.length === 0) return;
+    setManageParticipantsSaving(true);
+    setManageParticipantsError(null);
+    setManageParticipantsSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/quests/${manageQuestId}/participants`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: selectedParticipantIds }),
+      });
+      const data = (await res.json()) as { updated?: number; rewarded?: string[]; error?: string; message?: string };
+      if (!res.ok) {
+        throw new Error(data.message ?? data.error ?? "Failed to update participants");
+      }
+      setManageParticipantsSuccess(
+        data.updated ? `Marked ${data.updated} participant(s) as completed and rewarded.` : "Saved."
+      );
+      setSelectedParticipantIds([]);
+      const refetchRes = await fetch(`/api/admin/quests/${manageQuestId}`);
+      if (refetchRes.ok) {
+        const q = (await refetchRes.json()) as QuestRecord;
+        setManageQuest(q);
+      }
+      await fetchQuests();
+    } catch (e) {
+      setManageParticipantsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setManageParticipantsSaving(false);
+    }
+  }, [manageQuestId, selectedParticipantIds, fetchQuests]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -752,7 +823,7 @@ export default function AdminQuestsPage() {
                   <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
                     Quest details
                   </p>
-                  <form onSubmit={handleSubmit} className="space-y-6 min-w-0">
+                  <form onSubmit={handleSubmit} className="admin-quests-form space-y-6 min-w-0">
                     {/* Basics */}
                     <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Basics</legend>
@@ -771,20 +842,28 @@ export default function AdminQuestsPage() {
                         </div>
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Quest Type *</label>
-                          <select value={form.questType} onChange={(e) => setField("questType", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]">
+                          <select
+                            value={form.questType}
+                            onChange={(e) => {
+                              const newType = e.target.value;
+                              setField("questType", newType);
+                              if (newType === "RP" && !form.rules.trim()) setField("rules", DEFAULT_RP_RULES);
+                            }}
+                            className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]"
+                          >
                             {QUEST_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Location *</label>
-                          <select value={form.location} onChange={(e) => setField("location", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]">
+                          <select value={form.location} onChange={(e) => setField("location", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
                             <option value="">—</option>
                             {LOCATION_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Time Limit *</label>
-                          <select value={form.timeLimit} onChange={(e) => setField("timeLimit", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]">
+                          <select value={form.timeLimit} onChange={(e) => setField("timeLimit", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
                             {TIME_LIMIT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
                             <option value="Custom">Custom</option>
                           </select>
@@ -801,18 +880,20 @@ export default function AdminQuestsPage() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Signup Deadline</label>
-                          <input type="date" value={form.signupDeadline} onChange={(e) => setField("signupDeadline", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                          <input type="date" value={form.signupDeadline} onChange={(e) => setField("signupDeadline", e.target.value)} className="quest-date-input w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                         </div>
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participant Cap</label>
                           <input type="number" min={0} value={form.participantCap} onChange={(e) => setField("participantCap", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                         </div>
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Status</label>
-                          <select value={form.status} onChange={(e) => setField("status", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]">
-                            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </div>
+                        {editingId && (
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Status</label>
+                            <select value={form.status} onChange={(e) => setField("status", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
+                              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                        )}
                         {editingId && form.questID && (
                           <p className="text-sm text-[var(--totk-grey-200)] sm:col-span-2">Quest ID: <span className="font-mono text-[var(--totk-ivory)]">{form.questID}</span></p>
                         )}
@@ -891,7 +972,7 @@ export default function AdminQuestsPage() {
                             </div>
                             <div className="sm:col-span-2">
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">RP Thread Parent Channel (Discord ID)</label>
-                              <select value={form.rpThreadParentChannel} onChange={(e) => setField("rpThreadParentChannel", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]">
+                              <select value={form.rpThreadParentChannel} onChange={(e) => setField("rpThreadParentChannel", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
                                 <option value="">—</option>
                                 {RP_THREAD_CHANNELS.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
                               </select>
@@ -923,6 +1004,7 @@ export default function AdminQuestsPage() {
                         </div>
                         <div className="sm:col-span-2">
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Rules</label>
+                          <p className="mb-1 text-xs text-[var(--totk-grey-200)]">Markdown supported (e.g. **bold**, - list).</p>
                           <textarea value={form.rules} onChange={(e) => setField("rules", e.target.value)} rows={3} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                         </div>
                         <div className="sm:col-span-2">
@@ -932,24 +1014,26 @@ export default function AdminQuestsPage() {
                       </div>
                     </fieldset>
 
-                    {/* Meta */}
-                    <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
-                      <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Meta</legend>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="flex items-center gap-2">
-                          <input type="checkbox" id="posted" checked={form.posted} onChange={(e) => setField("posted", e.target.checked)} className="rounded border-[var(--totk-dark-ocher)]" />
-                          <label htmlFor="posted" className="text-sm text-[var(--totk-ivory)]">Posted</label>
+                    {/* Meta (edit only) */}
+                    {editingId && (
+                      <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
+                        <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Meta</legend>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="flex items-center gap-2">
+                            <input type="checkbox" id="posted" checked={form.posted} onChange={(e) => setField("posted", e.target.checked)} className="rounded border-[var(--totk-dark-ocher)]" />
+                            <label htmlFor="posted" className="text-sm text-[var(--totk-ivory)]">Posted</label>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Posted at</label>
+                            <input type="datetime-local" value={form.postedAt} onChange={(e) => setField("postedAt", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Bot notes</label>
+                            <textarea value={form.botNotes} onChange={(e) => setField("botNotes", e.target.value)} rows={2} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                          </div>
                         </div>
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Posted at</label>
-                          <input type="datetime-local" value={form.postedAt} onChange={(e) => setField("postedAt", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Bot notes</label>
-                          <textarea value={form.botNotes} onChange={(e) => setField("botNotes", e.target.value)} rows={2} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
-                        </div>
-                      </div>
-                    </fieldset>
+                      </fieldset>
+                    )}
 
                     <div className="flex gap-3 pt-2">
                       <button
@@ -1011,13 +1095,22 @@ export default function AdminQuestsPage() {
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.status ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.posted ? "Yes" : "No"}</td>
                       <td className="py-3 pr-4">
-                        <button
-                          type="button"
-                          onClick={() => loadQuestForEdit(String(q._id))}
-                          className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => loadQuestForEdit(String(q._id))}
+                            className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openManageModal(String(q._id))}
+                            className="rounded-md bg-[var(--totk-dark-ocher)]/80 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors"
+                          >
+                            Manage
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1026,6 +1119,162 @@ export default function AdminQuestsPage() {
             </div>
           )}
           </section>
+        )}
+
+        {/* Manage participants modal */}
+        {manageQuestId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manage-participants-title"
+          >
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl flex flex-col">
+              <div className="border-b border-[var(--totk-dark-ocher)]/60 p-4 shrink-0">
+                <h2 id="manage-participants-title" className="text-lg font-semibold text-[var(--totk-ivory)]">
+                  Manage participants{manageQuest ? ` – ${manageQuest.title ?? "Quest"}` : ""}
+                </h2>
+                {manageQuest && (
+                  <p className="mt-1 text-sm text-[var(--totk-grey-200)]">
+                    Quest ID: <span className="font-mono text-[var(--totk-ivory)]">{manageQuest.questID ?? manageQuestId}</span>
+                    {manageQuest.participantCap != null && (
+                      <> · Cap: {manageQuest.participantCap}</>
+                    )}
+                  </p>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                {!manageQuest ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading message="Loading participants..." variant="inline" size="lg" />
+                  </div>
+                ) : (() => {
+                  const participants = manageQuest.participants ?? {};
+                  const entries = Object.entries(participants);
+                  return entries.length === 0 ? (
+                    <p className="text-[var(--totk-grey-200)]">No participants.</p>
+                  ) : (
+                    <>
+                      {manageParticipantsError && (
+                        <div className="mb-4 rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                          {manageParticipantsError}
+                        </div>
+                      )}
+                      {manageParticipantsSuccess && (
+                        <div className="mb-4 rounded-lg border border-[var(--totk-light-green)]/60 bg-[var(--totk-light-green)]/10 px-3 py-2 text-sm text-[var(--totk-light-green)]">
+                          {manageParticipantsSuccess}
+                        </div>
+                      )}
+                      <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
+                        Check &quot;Mark completed&quot; for participants who finished the quest, then click the button below to grant tokens and log completion.
+                      </p>
+                      <div className="overflow-x-auto rounded-lg border border-[var(--totk-dark-ocher)]/40">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-black)]/60">
+                              <th className="py-2 pl-3 pr-2 text-[var(--totk-grey-200)] font-semibold">Mark completed</th>
+                              <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Character</th>
+                              {manageQuest.questType === "RP" && (
+                                <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Posts (min)</th>
+                              )}
+                              <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Status</th>
+                              <th className="py-2 pr-3 text-[var(--totk-grey-200)] font-semibold">Tokens</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {entries.map(([userId, p]) => {
+                              const progress = (p?.progress ?? "active") as string;
+                              const canMark = progress !== "rewarded";
+                              const isSelected = selectedParticipantIds.includes(userId);
+                              return (
+                                <tr
+                                  key={userId}
+                                  className={`border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0 ${
+                                    progress === "failed" ? "bg-red-500/5" : "bg-[var(--botw-black)]/20"
+                                  }`}
+                                >
+                                  <td className="py-2 pl-3 pr-2">
+                                    {canMark ? (
+                                      <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => toggleParticipantSelected(userId)}
+                                          className="rounded border-[var(--totk-dark-ocher)]"
+                                        />
+                                        <span className="text-xs text-[var(--totk-grey-200)]">Mark</span>
+                                      </label>
+                                    ) : (
+                                      <span className="text-[var(--totk-grey-200)]">—</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 pr-3 font-medium text-[var(--totk-ivory)]">
+                                    {p?.characterName ?? "—"}
+                                  </td>
+                                  {manageQuest.questType === "RP" && (() => {
+                                    const current = p?.rpPostCount ?? 0;
+                                    const required = typeof manageQuest.postRequirement === "number" ? manageQuest.postRequirement : (manageQuest.postRequirement != null ? Number(manageQuest.postRequirement) : 15);
+                                    return (
+                                      <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
+                                        {current}/{required}
+                                      </td>
+                                    );
+                                  })()}
+                                  <td className="py-2 pr-3">
+                                    <span
+                                      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                                        progress === "rewarded"
+                                          ? "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
+                                          : progress === "failed"
+                                          ? "bg-red-500/20 text-red-200"
+                                          : progress === "completed"
+                                          ? "bg-amber-500/20 text-amber-200"
+                                          : progress === "disqualified"
+                                          ? "bg-red-500/10 text-red-300"
+                                          : "bg-[var(--totk-dark-ocher)]/30 text-[var(--totk-ivory)]"
+                                      }`}
+                                    >
+                                      {progress}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 pr-3 text-[var(--totk-grey-200)]">
+                                    {progress === "rewarded" && p?.tokensEarned != null && p.tokensEarned > 0 ? (
+                                      <span>{p.tokensEarned} tokens</span>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--totk-dark-ocher)]/60 p-4">
+                <button
+                  type="button"
+                  onClick={closeManageModal}
+                  className="rounded-md border border-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/20"
+                >
+                  Close
+                </button>
+                {manageQuest && Object.keys(manageQuest.participants ?? {}).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={saveManageParticipants}
+                    disabled={manageParticipantsSaving || selectedParticipantIds.length === 0}
+                    className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {manageParticipantsSaving ? "Saving..." : `Mark ${selectedParticipantIds.length} completed`}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

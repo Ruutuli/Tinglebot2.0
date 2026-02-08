@@ -219,6 +219,9 @@ const safeRespondWithValidation = safeAutocompleteResponse;
 
 async function safeRespondWithError(interaction, error) {
   try {
+    // Don't attempt respond if interaction was already acknowledged (40060)
+    if (error?.code === 40060) return;
+
     if (!interaction.responded && interaction.isAutocomplete()) {
       // Check if interaction is still valid before responding
       if (interaction.isRepliable()) {
@@ -227,8 +230,8 @@ async function safeRespondWithError(interaction, error) {
     }
   } catch (respondError) {
     // Log the specific error for debugging
-    if (respondError.code === 10062) {
-      logger.warn('INTERACTION', 'Interaction expired, ignoring response attempt');
+    if (respondError.code === 10062 || respondError.code === 40060) {
+      logger.warn('INTERACTION', 'Interaction expired or already acknowledged, ignoring response attempt');
     } else {
       logger.error('INTERACTION', 'Error in safeRespondWithError');
     }
@@ -2824,6 +2827,9 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
 // Provides autocomplete suggestions for items in a character's inventory.
 async function handleItemAutocomplete(interaction, focusedOption) {
   try {
+    // Skip if already responded (prevents 40060 from race conditions)
+    if (interaction.responded) return;
+
     // Check if interaction is still valid (3 second timeout)
     const interactionAge = Date.now() - interaction.createdTimestamp;
     if (interactionAge > 2500) { // 2.5 second safety margin
@@ -2935,9 +2941,11 @@ async function handleItemAutocomplete(interaction, focusedOption) {
 
     await interaction.respond(choices.slice(0, 25));
   } catch (error) {
-    // Handle "Unknown interaction" errors gracefully
-    if (error.code === 10062) {
-      console.log('[handleItemAutocomplete]: Interaction expired, ignoring response attempt');
+    // Handle "Unknown interaction" and "Already acknowledged" errors gracefully
+    if (error.code === 10062 || error.code === 40060) {
+      if (error.code === 10062) {
+        console.log('[handleItemAutocomplete]: Interaction expired, ignoring response attempt');
+      }
       return;
     }
     

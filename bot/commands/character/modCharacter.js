@@ -40,6 +40,7 @@ const {
   deleteModCharacterById,
   fetchModCharacterById,
 } = require('@/database/db');
+const { removeInitialItemIfSynced } = require('@/utils/inventoryUtils');
 const {
   getVillageColorByName,
   getVillageEmojiByName,
@@ -690,12 +691,14 @@ async function handleCreateModCharacter(interaction, subcommand) {
       currentStamina: 999
     };
 
-    await createModCharacter(modCharacterData);
+    const savedModCharacter = await createModCharacter(modCharacterData);
 
     // Create unique inventory collection for this mod character
     try {
-      await createCharacterInventory(inventoryCollectionName, null, characterData.job);
+      await createCharacterInventory(inventoryCollectionName, savedModCharacter._id, characterData.job);
       console.log(`[modCharacter.js]: Created inventory collection '${inventoryCollectionName}' for mod character '${characterData.name}'`);
+      // Remove Initial Item placeholder (mod chars have inventorySynced: true, so this runs)
+      await removeInitialItemIfSynced(savedModCharacter._id);
     } catch (error) {
       console.log(`[modCharacter.js]: Inventory collection '${inventoryCollectionName}' already exists or error creating: ${error.message}`);
     }

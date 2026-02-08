@@ -1514,7 +1514,12 @@ async function handleShopSell(interaction) {
     .replace(/\s*\(Qty:\s*\d+\)/i, '') // Remove quantity info
     .replace(/\s*-\s*Qty:\s*\d+/i, '') // Remove quantity info with dash format
     .replace(/\s*-\s*Sell:\s*[\d,]+/i, '') // Remove sell price info
-    .trim();
+    .trim()
+    .replace(/\s+/g, ' '); // Collapse multiple spaces so DB matches work
+
+  // Normalize item name for comparison (trim + collapse spaces) so DB "Ancient Battle Axe" matches
+  const normalizeItemNameForCompare = (name) =>
+    (name || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
   const user = await User.findOne({ discordId: interaction.user.id });
   if (!user) {
@@ -1537,7 +1542,10 @@ if (quantity <= 0) {
 
   logger.info('ECONOMY', `Starting sale: ${characterName} selling ${itemName} x${quantity}`);
 
-  const character = await fetchCharacterByName(characterName);
+  let character = await fetchCharacterByName(characterName);
+  if (!character) {
+    character = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+  }
   if (!character) {
    logger.error('CHARACTER', `Character not found: ${characterName}`);
    return interaction.editReply({
@@ -1590,15 +1598,16 @@ if (quantity <= 0) {
   
   // Get all inventory items to aggregate quantities from multiple stacks
   const inventoryItems = await inventoryCollection.find().toArray();
-  
-  // Sum up all quantities of the same item (case-insensitive)
+  const itemNameNorm = normalizeItemNameForCompare(itemName);
+
+  // Sum up all quantities of the same item (case-insensitive, normalized trim/collapse spaces)
   const totalQuantity = inventoryItems
-    .filter(invItem => invItem.itemName?.toLowerCase() === itemName.toLowerCase())
+    .filter(invItem => normalizeItemNameForCompare(invItem.itemName) === itemNameNorm)
     .reduce((sum, invItem) => sum + (invItem.quantity || 0), 0);
   
   // Find the first item entry for display purposes and crafting status
   const inventoryItem = inventoryItems.find(invItem =>
-    invItem.itemName?.toLowerCase() === itemName.toLowerCase()
+    normalizeItemNameForCompare(invItem.itemName) === itemNameNorm
   );
 
   // Get equipped items to check if we're trying to sell more than available non-equipped items
@@ -1610,8 +1619,10 @@ if (quantity <= 0) {
     character.gearShield?.name,
   ].filter(Boolean);
   
-  // Check if the item is equipped
-  const isEquipped = equippedItems.includes(itemName);
+  // Check if the item is equipped (normalized comparison so DB name matches)
+  const isEquipped = equippedItems.some(
+    (eq) => normalizeItemNameForCompare(eq) === itemNameNorm
+  );
   
   if (isEquipped) {
     const errorEmbed = createEquippedItemErrorEmbed(itemName);
@@ -1758,7 +1769,7 @@ if (quantity <= 0) {
   // We need to check which items will actually be sold (prioritize boosted items)
   // ============================================================================
   const allMatchingItems = inventoryItems
-    .filter(invItem => invItem.itemName?.toLowerCase() === itemName.toLowerCase())
+    .filter(invItem => normalizeItemNameForCompare(invItem.itemName) === itemNameNorm)
     .sort((a, b) => {
       // Prioritize boosted items (they should be sold first to maximize value)
       if (a.fortuneTellerBoost && !b.fortuneTellerBoost) return -1;

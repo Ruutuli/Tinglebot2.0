@@ -207,14 +207,14 @@ module.exports = {
       if (!isModCharacterUsingJobVoucher && (!ownedItem || totalQuantity < quantity)) {
         return void await interaction.editReply({
           embeds: [{
-            color: 0xAA926A,
-            title: '🎫 Job Voucher Usage',
+            color: 0xFF0000,
+            title: '❌ Insufficient Items',
             description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemNameForInventory)}" in their inventory.\n\n**Available:** ${totalQuantity}\n**Requested:** ${quantity}`,
             image: {
               url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
             },
             footer: {
-              text: 'Job Voucher System'
+              text: 'Inventory'
             }
           }],
           ephemeral: true

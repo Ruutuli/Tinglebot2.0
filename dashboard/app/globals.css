@@ -221,6 +221,13 @@ body::-webkit-scrollbar-thumb:hover {
   display: none !important;
 }
 
+/* Admin quests form: date picker icon visible on dark bg */
+.admin-quests-form input[type="date"].quest-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.4);
+  opacity: 1;
+  cursor: pointer;
+}
+
 /* ============================================================================ */
 /* ------------------- Utilities ------------------- */
 /* ============================================================================ */

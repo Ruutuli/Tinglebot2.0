@@ -295,6 +295,13 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       // Don't fail the main operation if logging fails
       logger.warn('INVENTORY', `Failed to log to InventoryLog: ${logError.message}`);
     }
+
+    // Ensure Initial Item placeholder is removed when adding real items
+    try {
+      await removeInitialItemIfSynced(characterId);
+    } catch (cleanupError) {
+      logger.warn('INVENTORY', `Failed to remove Initial Item: ${cleanupError.message}`);
+    }
     
     return true;
   } catch (error) {
@@ -1235,9 +1242,13 @@ async function removeInitialItemIfSynced(characterId) {
       console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
       
       const inventoryCollection = db.collection(collectionName);
+      // Match both characterId and null (mod chars may have been created with characterId: null)
       const initialItem = await inventoryCollection.findOne({
-        characterId: character._id,
         itemName: "Initial Item",
+        $or: [
+          { characterId: character._id },
+          { characterId: null },
+        ],
       });
       if (initialItem) {
         await inventoryCollection.deleteOne({ _id: initialItem._id });
