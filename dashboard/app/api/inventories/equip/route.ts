@@ -93,11 +93,15 @@ export async function POST(req: NextRequest) {
     // Get character's inventory collection
     const collectionName = character.name.toLowerCase();
     const collection = db.collection(collectionName);
+    const charId = typeof character._id === "string"
+      ? new mongoose.Types.ObjectId(character._id)
+      : character._id;
 
-    // Find the item in character's inventory
+    // Find the item in character's inventory (filter by characterId to match Bot behavior)
     const escapedItemName = escapeRegExp(itemName);
     const inventoryEntries = await collection
       .find({
+        characterId: charId,
         itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
         quantity: { $gt: 0 },
       })
@@ -130,6 +134,7 @@ export async function POST(req: NextRequest) {
       // This ensures no duplicate equipped entries exist
       await collection.updateMany(
         {
+          characterId: charId,
           itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
           Equipped: true,
         },
@@ -140,6 +145,7 @@ export async function POST(req: NextRequest) {
       // This handles edge cases where entries might have been modified
       const refreshedEntries = await collection
         .find({
+          characterId: charId,
           itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
           quantity: { $gt: 0 },
         })
@@ -187,7 +193,7 @@ export async function POST(req: NextRequest) {
             
             // Create a new entry with Equipped:true (its own slot)
             await collection.insertOne({
-              characterId: character._id,
+              characterId: charId,
               itemName: entryToEquip.itemName,
               itemId: entryToEquip.itemId,
               quantity: 1,
@@ -220,6 +226,7 @@ export async function POST(req: NextRequest) {
       // Final safeguard: Verify only one entry has Equipped:true
       const finalCheck = await collection
         .find({
+          characterId: charId,
           itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
           Equipped: true,
         })
@@ -248,6 +255,7 @@ export async function POST(req: NextRequest) {
         // SAFEGUARD: Check if there are any equipped entries (might be a different entry)
         const allEquippedEntries = await collection
           .find({
+            characterId: charId,
             itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
             Equipped: true,
           })

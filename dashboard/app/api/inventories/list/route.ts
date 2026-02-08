@@ -76,9 +76,14 @@ export async function GET(req: NextRequest) {
         try {
           const collectionName = character.name.toLowerCase();
           const collection = db.collection(collectionName);
-          
-          // Get all inventory items for this character
-          const inventoryItems = await collection.find({ quantity: { $gt: 0 } }).toArray();
+          const charId = typeof character._id === "string"
+            ? new mongoose.Types.ObjectId(character._id)
+            : character._id;
+
+          // Get all inventory items for this character (filter by characterId to match Bot behavior)
+          const inventoryItems = await collection
+            .find({ characterId: charId, quantity: { $gt: 0 } })
+            .toArray();
           
           // Calculate stats
           const totalItems = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0), 0);

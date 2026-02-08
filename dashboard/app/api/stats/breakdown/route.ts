@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
@@ -172,19 +173,20 @@ export async function GET(request: Request) {
         const slug = value.trim();
         const charDoc = await Character.findOne({ status: "accepted" })
           .or([{ publicSlug: new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }, { name: slug }])
-          .select("name publicSlug")
+          .select("_id name publicSlug")
           .lean();
-        const char = charDoc as { name?: string; publicSlug?: string } | null;
+        const char = charDoc as { _id?: unknown; name?: string; publicSlug?: string } | null;
         if (!char) {
           return NextResponse.json({ kind: "inventoryCharacter", type, value, characterName: null, slug: null, totalItems: 0, uniqueItems: 0 });
         }
         const name = char.name || "";
         const publicSlug = char.publicSlug || name.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
+        const charId = typeof char._id === "string" ? new mongoose.Types.ObjectId(char._id) : char._id;
         let totalItems = 0;
         let uniqueItems = 0;
         try {
           const collection = db.collection(name.toLowerCase());
-          const items = (await collection.find({ quantity: { $gt: 0 } }).toArray()) as Array<{ quantity?: number; itemName?: string }>;
+          const items = (await collection.find({ characterId: charId, quantity: { $gt: 0 } }).toArray()) as Array<{ quantity?: number; itemName?: string }>;
           totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
           uniqueItems = new Set(items.map((item) => item.itemName).filter(Boolean)).size;
         } catch {
@@ -204,14 +206,15 @@ export async function GET(request: Request) {
       // inventoryItem: find characters who have this item
       const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const itemRegex = new RegExp(`^${escaped}$`, "i");
-      const acceptedCharacters = await Character.find({ status: "accepted" }).select("name publicSlug").lean();
+      const acceptedCharacters = await Character.find({ status: "accepted" }).select("_id name publicSlug").lean();
       const charactersWithItem: Array<{ characterName: string; slug: string }> = [];
       for (const char of acceptedCharacters) {
         const name = (char.name as string) || "";
         const slug = (char.publicSlug as string) || name.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "");
+        const charId = typeof char._id === "string" ? new mongoose.Types.ObjectId(char._id) : char._id;
         try {
           const collection = db.collection(name.toLowerCase());
-          const hasItem = await collection.findOne({ itemName: { $regex: itemRegex }, quantity: { $gt: 0 } });
+          const hasItem = await collection.findOne({ characterId: charId, itemName: { $regex: itemRegex }, quantity: { $gt: 0 } });
           if (hasItem) charactersWithItem.push({ characterName: name, slug });
         } catch {
           // skip

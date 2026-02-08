@@ -97,11 +97,14 @@ export async function GET(
     // Connect to inventories database (using cached connection)
     const db = await getInventoriesDb();
 
-    // Get character's inventory
+    // Get character's inventory (filter by characterId to match Bot behavior)
     const collectionName = characterName.toLowerCase();
     const collection = db.collection(collectionName);
+    const charId = typeof characterDoc._id === "string"
+      ? new mongoose.Types.ObjectId(characterDoc._id)
+      : characterDoc._id;
     const inventoryItems = await collection
-      .find({ quantity: { $gt: 0 } })
+      .find({ characterId: charId, quantity: { $gt: 0 } })
       .sort({ itemName: 1 })
       .toArray();
 

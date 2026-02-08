@@ -384,10 +384,13 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      // Get character's inventory
+      // Get character's inventory (filter by characterId to match Bot behavior)
       const collectionName = character.name.toLowerCase();
       const collection = db.collection(collectionName);
-      const inventoryItems = await collection.find().toArray();
+      const charId = typeof character._id === "string"
+        ? new mongoose.Types.ObjectId(character._id)
+        : character._id;
+      const inventoryItems = await collection.find({ characterId: charId }).toArray();
       const inventory: InventoryItem[] = inventoryItems.map((item) => ({
         itemName: String(item.itemName || ""),
         quantity: Number(item.quantity) || 0,
@@ -430,7 +433,10 @@ export async function GET(req: NextRequest) {
         try {
           const collectionName = character.name.toLowerCase();
           const collection = db.collection(collectionName);
-          const inventoryItems = await collection.find().toArray();
+          const charId = typeof character._id === "string"
+            ? new mongoose.Types.ObjectId(character._id)
+            : character._id;
+          const inventoryItems = await collection.find({ characterId: charId }).toArray();
           const inventory: InventoryItem[] = inventoryItems.map((item) => ({
             itemName: String(item.itemName || ""),
             quantity: Number(item.quantity) || 0,

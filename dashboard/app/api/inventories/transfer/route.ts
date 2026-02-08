@@ -154,11 +154,15 @@ export async function POST(req: NextRequest) {
     // Get source character's inventory collection
     const sourceCollectionName = sourceChar.name.toLowerCase();
     const sourceCollection = db.collection(sourceCollectionName);
+    const sourceCharId = typeof sourceChar._id === "string"
+      ? new mongoose.Types.ObjectId(sourceChar._id)
+      : sourceChar._id;
 
-    // Find the item in source character's inventory
+    // Find the item in source character's inventory (filter by characterId to match Bot behavior)
     const escapedItemName = escapeRegExp(itemName);
     const sourceInventoryEntries = await sourceCollection
       .find({
+        characterId: sourceCharId,
         itemName: { $regex: new RegExp(`^${escapedItemName}$`, "i") },
         quantity: { $gt: 0 },
       })

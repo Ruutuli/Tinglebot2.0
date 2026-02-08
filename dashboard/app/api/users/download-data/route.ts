@@ -12,6 +12,7 @@
 
 import { NextResponse } from "next/server";
 import archiver from "archiver";
+import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { logger } from "@/utils/logger";
@@ -323,8 +324,16 @@ export async function GET() {
           const collectionName = typeof character.name === "string" ? character.name.toLowerCase() : undefined;
           if (!collectionName) return;
 
+          const charId = character._id;
+          if (!charId) return;
+
           const collection = db.collection(collectionName);
-          const inventoryItems = await collection.find({ quantity: { $gt: 0 } }).toArray();
+          const normalizedCharId = typeof charId === "string"
+            ? new mongoose.Types.ObjectId(charId)
+            : charId;
+          const inventoryItems = await collection
+            .find({ characterId: normalizedCharId, quantity: { $gt: 0 } })
+            .toArray();
           
           // Convert MongoDB documents to plain objects
           const inventoryData: InventoryItem[] = inventoryItems.map((item: unknown) => {

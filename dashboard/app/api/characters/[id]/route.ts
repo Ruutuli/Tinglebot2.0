@@ -367,10 +367,15 @@ export async function GET(
     // Derive spirit orbs from inventory (source of truth); character document may be stale
     try {
       const characterName = (char as { name?: string }).name;
-      if (characterName && typeof characterName === "string") {
+      const charId = (char as { _id?: unknown })._id;
+      if (characterName && typeof characterName === "string" && charId) {
         const db = await getInventoriesDb();
         const collection = db.collection(characterName.toLowerCase());
+        const normalizedCharId = typeof charId === "string"
+          ? new mongoose.Types.ObjectId(charId)
+          : charId;
         const spiritOrbEntry = await collection.findOne({
+          characterId: normalizedCharId,
           itemName: { $regex: /^spirit orb$/i },
         });
         out.spiritOrbs = spiritOrbEntry?.quantity ?? 0;

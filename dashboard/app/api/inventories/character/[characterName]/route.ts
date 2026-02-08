@@ -106,9 +106,12 @@ export async function GET(
     // Connect to inventories database (using cached connection)
     const db = await getInventoriesDb();
 
-    // Get character's inventory
+    // Get character's inventory (filter by characterId to match Bot behavior)
     const collection = db.collection(collectionName);
-    const inventoryItems = await collection.find().toArray();
+    const charId = typeof foundCharacter._id === "string"
+      ? new mongoose.Types.ObjectId(foundCharacter._id)
+      : foundCharacter._id;
+    const inventoryItems = await collection.find({ characterId: charId }).toArray();
 
     // Create a map of owned items and collect unique item names
     const ownedItemsMap = new Map<

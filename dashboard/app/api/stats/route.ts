@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { logger } from "@/utils/logger";
 import type { PipelineStage } from "mongoose";
@@ -538,16 +539,17 @@ export async function GET() {
     let topCharactersByItems: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }> = [];
     let topItemsByTotalQuantity: Array<{ itemName: string; totalQuantity: number }> = [];
     try {
-      const acceptedCharacters = await Character.find(characterFilter).select("name publicSlug").lean();
+      const acceptedCharacters = await Character.find(characterFilter).select("_id name publicSlug").lean();
       const db = await getInventoriesDb();
       const itemToTotalQuantity = new Map<string, number>();
       const characterStats: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }> = [];
       for (const char of acceptedCharacters) {
         const name = char.name as string;
         const slug = (char.publicSlug as string) || name.toLowerCase().replace(/\s+/g, "-");
+        const charId = typeof char._id === "string" ? new mongoose.Types.ObjectId(char._id) : char._id;
         try {
           const collection = db.collection(name.toLowerCase());
-          const items = await collection.find({ quantity: { $gt: 0 } }).toArray() as Array<{ quantity?: number; itemName?: string }>;
+          const items = await collection.find({ characterId: charId, quantity: { $gt: 0 } }).toArray() as Array<{ quantity?: number; itemName?: string }>;
           const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
           characterStats.push({ characterName: name, slug, totalItems, uniqueItems: new Set(items.map((item) => item.itemName).filter(Boolean)).size });
           for (const item of items) {

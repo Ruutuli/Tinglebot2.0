@@ -131,7 +131,12 @@ async function collectInventoryData(
     try {
       const collectionName = character.name.toLowerCase();
       const collection = db.collection(collectionName);
-      const inventoryItems = await collection.find({ quantity: { $gt: 0 } }).toArray();
+      const charId = typeof character._id === "string"
+        ? new mongoose.Types.ObjectId(character._id)
+        : character._id;
+      const inventoryItems = await collection
+        .find({ characterId: charId, quantity: { $gt: 0 } })
+        .toArray();
 
       for (const item of inventoryItems) {
         const itemName = String(item.itemName || "");
