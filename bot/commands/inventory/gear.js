@@ -137,22 +137,50 @@ module.exports = {
 
       // ------------------- Handle Unequipping Gear -------------------
       if (status === 'unequip') {
-        // Build the update object based on the gear slot.
+        let unequippedItemName = null;
         const update = {};
         if (['head', 'chest', 'legs'].includes(type)) {
-          update[`gearArmor.${type}`] = null;
+          unequippedItemName = character.gearArmor?.[type]?.name ?? null;
+          update[`gearArmor.${type}`] = 1;
         } else if (type === 'weapon') {
-          update['gearWeapon'] = null;
+          unequippedItemName = character.gearWeapon?.name ?? null;
+          update['gearWeapon'] = 1;
         } else if (type === 'shield') {
-          update['gearShield'] = null;
+          unequippedItemName = character.gearShield?.name ?? null;
+          update['gearShield'] = 1;
         }
 
-        // Use the appropriate update function based on character type
         const updateFunction = character.isModCharacter ? updateModCharacterById : updateCharacterById;
         await updateFunction(character._id, { $unset: update });
-        // Recalculate character stats after gear removal.
         await updateCharacterDefense(character._id);
         await updateCharacterAttack(character._id);
+
+        if (unequippedItemName) {
+          const unequipInvCollection = await getCharacterInventoryCollection(character.name);
+          const unequipCharFilter = {
+            $or: [
+              { characterId: character._id },
+              { characterId: null },
+              { characterId: { $exists: false } }
+            ]
+          };
+          const existingAfterUnequip = await unequipInvCollection.findOne({
+            $and: [
+              unequipCharFilter,
+              unequippedItemName.includes('+')
+                ? { itemName: unequippedItemName }
+                : { itemName: { $regex: new RegExp(`^${escapeRegExp(unequippedItemName)}$`, 'i') } },
+              { quantity: { $gt: 0 } }
+            ]
+          });
+          if (!existingAfterUnequip) {
+            try {
+              await addItemInventoryDatabase(character._id, unequippedItemName, 1, interaction, 'Unequipped (restored)');
+            } catch (addErr) {
+              logger.warn('GEAR', `Could not restore unequipped item ${unequippedItemName} to inventory: ${addErr.message}`);
+            }
+          }
+        }
 
         // Fetch the updated character details.
         let updatedCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
@@ -431,10 +459,52 @@ module.exports = {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
         logger.debug('CHARACTER', `Updating gearWeapon - Item: ${itemName}`);
         await updateFunction(character._id, { gearWeapon: { name: itemName, stats: { modifierHearts }, type: itemDetail.type } });
+        const charInvFilterWeapon = {
+          $or: [
+            { characterId: character._id },
+            { characterId: null },
+            { characterId: { $exists: false } }
+          ]
+        };
+        const existingWeapon = await inventoryCollection.findOne({
+          $and: [
+            charInvFilterWeapon,
+            itemName.includes('+') ? { itemName } : { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
+            { quantity: { $gt: 0 } }
+          ]
+        });
+        if (!existingWeapon) {
+          try {
+            await addItemInventoryDatabase(character._id, itemName, 1, interaction, 'Starting gear (restored)');
+          } catch (addErr) {
+            logger.warn('GEAR', `Could not ensure weapon ${itemName} in inventory: ${addErr.message}`);
+          }
+        }
       } else if (type === 'shield') {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
         logger.debug('CHARACTER', `Updating gearShield - Item: ${itemName}`);
         await updateFunction(character._id, { gearShield: { name: itemName, stats: { modifierHearts }, subtype: itemDetail.subtype } });
+        const charInvFilterShield = {
+          $or: [
+            { characterId: character._id },
+            { characterId: null },
+            { characterId: { $exists: false } }
+          ]
+        };
+        const existingShield = await inventoryCollection.findOne({
+          $and: [
+            charInvFilterShield,
+            itemName.includes('+') ? { itemName } : { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } },
+            { quantity: { $gt: 0 } }
+          ]
+        });
+        if (!existingShield) {
+          try {
+            await addItemInventoryDatabase(character._id, itemName, 1, interaction, 'Starting gear (restored)');
+          } catch (addErr) {
+            logger.warn('GEAR', `Could not ensure shield ${itemName} in inventory: ${addErr.message}`);
+          }
+        }
       }
 
       // ------------------- Recalculate Character Stats -------------------

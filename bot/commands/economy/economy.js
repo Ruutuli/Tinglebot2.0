@@ -785,9 +785,28 @@ for (const { name } of cleanedItems) {
   const formattedItems = [];
 
   for (const { name, quantity, canonicalName } of aggregatedItems) {
-   // Remove from source inventory first
    // Use canonicalName if available (from availability check), otherwise fall back to name
+   const itemNameToAdd = canonicalName || name;
    const itemNameToRemove = canonicalName || name;
+
+   // Add to recipient first so we never remove from sender without recipient having the item
+   const addResult = await addItemInventoryDatabase(
+    toCharacter._id,
+    itemNameToAdd,
+    quantity,
+    interaction,
+    'Gift from ' + fromCharacter.name
+   );
+
+   if (!addResult) {
+     await interaction.editReply({
+       content: `❌ Failed to add ${itemNameToAdd} to recipient's inventory. Please try again.`,
+       ephemeral: true
+     });
+     return;
+   }
+
+   // Remove from sender; on failure, roll back by removing from recipient
    const removeResult = await removeItemInventoryDatabase(
     fromCharacter._id,
     itemNameToRemove,
@@ -797,35 +816,20 @@ for (const { name } of cleanedItems) {
    );
 
    if (!removeResult) {
+     try {
+       await removeItemInventoryDatabase(
+        toCharacter._id,
+        itemNameToRemove,
+        quantity,
+        interaction,
+        'Rollback: gift remove failed'
+       );
+       logger.warn('ECONOMY', `Gift remove failed for ${itemNameToRemove}, rolled back add to ${toCharacter.name}`);
+     } catch (rollbackErr) {
+       logger.error('ECONOMY', `Gift remove failed and rollback failed for ${itemNameToRemove}: ${rollbackErr.message}`);
+     }
      await interaction.editReply({
-       content: `❌ Failed to remove ${itemNameToRemove} from your inventory. Please try again.`,
-       ephemeral: true
-     });
-     return;
-   }
-
-   // Add to target inventory
-   // Use canonicalName if available (from availability check), otherwise fall back to name
-   const itemNameToAdd = canonicalName || name;
-   const addResult = await addItemInventoryDatabase(
-    toCharacter._id, 
-    itemNameToAdd, 
-    quantity, 
-    interaction, 
-    'Gift from ' + fromCharacter.name
-   );
-
-   if (!addResult) {
-     // If adding to target fails, try to restore the item to source
-     await addItemInventoryDatabase(
-      fromCharacter._id,
-      itemNameToAdd,
-      quantity,
-      interaction,
-      'Restored after failed gift'
-     );
-     await interaction.editReply({
-       content: `❌ Failed to add ${itemNameToAdd} to recipient's inventory. The item has been restored to your inventory.`,
+       content: `❌ Failed to remove ${itemNameToRemove} from your inventory. The item has been removed from the recipient's inventory. Please try again.`,
        ephemeral: true
      });
      return;
@@ -1739,16 +1743,7 @@ if (quantity <= 0) {
    return interaction.editReply("❌ This item cannot be sold to the shop.");
   }
 
-  // Remove item from inventory using the proper function that handles Google Sheets logging
-  await removeItemInventoryDatabase(
-    character._id,
-    itemName,
-    quantity,
-    interaction,
-    'Sold to shop'
-  );
-  
-  // Update shop stock with correct item data
+  // Update shop stock first so we never remove from inventory without stock updated (avoids item loss if remove fails)
   if (itemName.includes('+')) {
     await ShopStock.updateOne(
      { itemName: itemName },
@@ -1784,6 +1779,15 @@ if (quantity <= 0) {
      { upsert: true }
     );
   }
+
+  // Remove item from inventory using the proper function that handles Google Sheets logging
+  await removeItemInventoryDatabase(
+    character._id,
+    itemName,
+    quantity,
+    interaction,
+    'Sold to shop'
+  );
 
   // ============================================================================
   // ------------------- Check for Fortune Teller Boost Tag on Items -------------------
@@ -2117,73 +2121,61 @@ for (const { quantity } of cleanedItems) {
   }
 
   // ------------------- NEW: Prevent using equipped items -------------------
-const equippedItems = [
-  fromCharacter.gearArmor?.head?.name,
-  fromCharacter.gearArmor?.chest?.name,
-  fromCharacter.gearArmor?.legs?.name,
-  fromCharacter.gearWeapon?.name,
-  fromCharacter.gearShield?.name,
-].filter(Boolean);
+  const normalizeItemNameForEquipped = (n) => (n || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const equippedNamesNormalized = new Set(
+    [
+      fromCharacter.gearArmor?.head?.name,
+      fromCharacter.gearArmor?.chest?.name,
+      fromCharacter.gearArmor?.legs?.name,
+      fromCharacter.gearWeapon?.name,
+      fromCharacter.gearShield?.name,
+    ].filter(Boolean).map(normalizeItemNameForEquipped)
+  );
 
-for (const { name } of cleanedItems) {
-  if (equippedItems.includes(name)) {
-    // ------------------- Check if character has enough items to unequip first -------------------
-    const fromInventoryCollection = await getCharacterInventoryCollectionWithModSupport(fromCharacter);
-    
-    // Find the canonical item name from the database
-    const baseItemName = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
-    let itemDetails;
-    if (baseItemName.includes('+')) {
-      itemDetails = await ItemModel.findOne({
-        itemName: baseItemName
-      }).exec();
+  for (const { name } of cleanedItems) {
+    const baseItemNameForEquipped = name.replace(/\s*\(Qty:\s*\d+\)\s*$/, '').trim();
+    let itemDetailsForEquipped;
+    if (baseItemNameForEquipped.includes('+')) {
+      itemDetailsForEquipped = await ItemModel.findOne({ itemName: baseItemNameForEquipped }).exec();
     } else {
-      itemDetails = await ItemModel.findOne({
-        itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemName)}$`, "i") }
+      itemDetailsForEquipped = await ItemModel.findOne({
+        itemName: { $regex: new RegExp(`^${escapeRegExp(baseItemNameForEquipped)}$`, "i") }
       }).exec();
     }
-    
-    let totalQuantity = 0;
-    if (itemDetails) {
-      const canonicalName = itemDetails.itemName;
-      let fromInventoryEntries;
-      if (canonicalName.includes('+')) {
-        fromInventoryEntries = await fromInventoryCollection
-          .find({ itemName: canonicalName })
-          .toArray();
-      } else {
-        fromInventoryEntries = await fromInventoryCollection
-          .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalName)}$`, "i") } })
-          .toArray();
+    const canonicalNameForEquipped = itemDetailsForEquipped?.itemName;
+    const isEquippedItem = canonicalNameForEquipped && equippedNamesNormalized.has(normalizeItemNameForEquipped(canonicalNameForEquipped));
+
+    if (isEquippedItem) {
+      const fromInventoryCollectionEquipped = await getCharacterInventoryCollectionWithModSupport(fromCharacter);
+      let totalQuantity = 0;
+      if (canonicalNameForEquipped) {
+        let fromInventoryEntries;
+        if (canonicalNameForEquipped.includes('+')) {
+          fromInventoryEntries = await fromInventoryCollectionEquipped
+            .find({ itemName: canonicalNameForEquipped })
+            .toArray();
+        } else {
+          fromInventoryEntries = await fromInventoryCollectionEquipped
+            .find({ itemName: { $regex: new RegExp(`^${escapeRegExp(canonicalNameForEquipped)}$`, "i") } })
+            .toArray();
+        }
+        totalQuantity = fromInventoryEntries.reduce((sum, entry) => sum + entry.quantity, 0);
       }
-      totalQuantity = fromInventoryEntries.reduce(
-        (sum, entry) => sum + entry.quantity,
-        0
-      );
+      logger.debug('INVENTORY', `Character ${fromCharacter.name} tried to transfer equipped item "${name}". Total quantity in inventory: ${totalQuantity}`);
+      if (totalQuantity <= 1) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Item Equipped',
+            description: `You cannot transfer \`${name}\` because it is currently equipped and you only have 1. Please unequip it first using the </gear:1372262090450141196> command.`,
+            image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+            footer: { text: 'Equipment Check' }
+          }],
+          ephemeral: true,
+        });
+        return;
+      }
     }
-    
-    logger.debug('INVENTORY', `Character ${fromCharacter.name} tried to transfer equipped item "${name}". Total quantity in inventory: ${totalQuantity}`);
-    
-    // Only block transfer if they have exactly 1 (unequipping would leave them with 0)
-    if (totalQuantity <= 1) {
-      await interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Item Equipped',
-          description: `You cannot transfer \`${name}\` because it is currently equipped and you only have 1. Please unequip it first using the </gear:1372262090450141196> command.`,
-          image: {
-            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-          },
-          footer: {
-            text: 'Equipment Check'
-          }
-        }],
-        ephemeral: true,
-      });
-      return;
-    }
-    // If they have 2 or more, allow the transfer to continue (they can unequip and still have items left)
-  }
   }
 
 
@@ -2258,8 +2250,10 @@ for (const { name } of cleanedItems) {
     (sum, entry) => sum + entry.quantity,
     0
    );
-   if (totalQuantity < quantity) {
-     unavailableItems.push(`${canonicalName} - QTY:${totalQuantity}`);
+   const isEquipped = equippedNamesNormalized.has(normalizeItemNameForEquipped(canonicalName));
+   const availableToTransfer = totalQuantity - (isEquipped ? 1 : 0);
+   if (quantity > availableToTransfer) {
+     unavailableItems.push(`${canonicalName} - QTY:${availableToTransfer}${isEquipped ? ' (1 equipped)' : ''}`);
      allItemsAvailable = false;
    }
   }
@@ -2528,11 +2522,9 @@ async function executeTrade(tradeData) {
 
   const uniqueSyncId = uuidv4();
 
-  // Process items for both parties
-  await Promise.all([
-    processTradeItems(initiatorChar, targetChar, initiator.items, uniqueSyncId),
-    processTradeItems(targetChar, initiatorChar, target.items, uniqueSyncId)
-  ]);
+  // Process items for both parties sequentially to avoid partial state on failure
+  await processTradeItems(initiatorChar, targetChar, initiator.items, uniqueSyncId);
+  await processTradeItems(targetChar, initiatorChar, target.items, uniqueSyncId);
 
   return true;
 }
@@ -2556,35 +2548,7 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
     const type = itemDetails?.type.join(", ") || "";
     const subtype = itemDetails?.subtype.join(", ") || "";
 
-    // Remove from sender
-    const removeData = {
-      characterId: fromChar._id,
-      itemName: item.name,
-      quantity: -item.quantity,
-      category,
-      type,
-      subtype,
-      obtain: `Trade to ${toChar.name}`,
-      date: new Date(),
-      synced: uniqueSyncId,
-      characterName: fromChar.name
-    };
-    await syncToInventoryDatabase(fromChar, removeData);
-
-    // Log removal to InventoryLog database collection
-    try {
-      await logItemRemovalToDatabase(fromChar, itemDetails || { itemName: item.name }, {
-        quantity: item.quantity,
-        obtain: 'Traded',
-        location: fromChar.currentVillage || fromChar.homeVillage || 'Unknown',
-        link: '' // No interaction link available in trade execution
-      });
-    } catch (logError) {
-      // Don't fail the trade if logging fails
-      console.error(`[economy.js] ⚠️ Failed to log item removal to InventoryLog:`, logError.message);
-    }
-
-    // Add to receiver
+    // Add to receiver first so we never remove from sender without receiver having the item
     const addData = {
       characterId: toChar._id,
       itemName: item.name,
@@ -2610,6 +2574,56 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
     } catch (logError) {
       // Don't fail the trade if logging fails
       console.error(`[economy.js] ⚠️ Failed to log item acquisition to InventoryLog:`, logError.message);
+    }
+
+    // Remove from sender; on failure, roll back by removing from receiver
+    const removeData = {
+      characterId: fromChar._id,
+      itemName: item.name,
+      quantity: -item.quantity,
+      category,
+      type,
+      subtype,
+      obtain: `Trade to ${toChar.name}`,
+      date: new Date(),
+      synced: uniqueSyncId,
+      characterName: fromChar.name
+    };
+    try {
+      await syncToInventoryDatabase(fromChar, removeData);
+    } catch (removeError) {
+      const rollbackData = {
+        characterId: toChar._id,
+        itemName: item.name,
+        quantity: -item.quantity,
+        category,
+        type,
+        subtype,
+        obtain: 'Rollback: trade remove failed',
+        date: new Date(),
+        synced: uniqueSyncId,
+        characterName: toChar.name
+      };
+      try {
+        await syncToInventoryDatabase(toChar, rollbackData);
+        logger.warn('ECONOMY', `Trade remove failed for ${item.name}, rolled back add to ${toChar.name}`);
+      } catch (rollbackErr) {
+        logger.error('ECONOMY', `Trade remove failed and rollback failed for ${item.name}: ${rollbackErr.message}`);
+      }
+      throw removeError;
+    }
+
+    // Log removal to InventoryLog database collection
+    try {
+      await logItemRemovalToDatabase(fromChar, itemDetails || { itemName: item.name }, {
+        quantity: item.quantity,
+        obtain: 'Traded',
+        location: fromChar.currentVillage || fromChar.homeVillage || 'Unknown',
+        link: '' // No interaction link available in trade execution
+      });
+    } catch (logError) {
+      // Don't fail the trade if logging fails
+      console.error(`[economy.js] ⚠️ Failed to log item removal to InventoryLog:`, logError.message);
     }
   }
 }

@@ -1122,7 +1122,7 @@ async function processCraftingTransaction(character, weaponSubmission, inventory
             if (weaponAdded) {
                 console.log(`[processCraftingTransaction]: 🔄 Rolling back weapon addition`);
                 // Remove weapon from inventory
-                await addItemInventoryDatabase(character._id, weaponSubmission.weaponName, -1, interaction, 'Rollback');
+                await removeItemInventoryDatabase(character._id, weaponSubmission.weaponName, 1, interaction, 'Rollback');
             }
 
             if (staminaDeducted) {
