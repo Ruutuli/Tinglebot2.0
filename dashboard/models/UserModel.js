@@ -1,7 +1,15 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { countUniqueQuestCompletions } = require('../utils/questTrackingUtils');
-const { logger } = require('../utils/logger');
+// Inline logger so we don't depend on require() resolution in Next.js bundle (file, message) => void
+const log = (level, file, message) => console.log(`[${new Date().toISOString()}] [${file}] ${level}: ${message}`);
+const logger = {
+  info: (file, message) => log('INFO', file, message),
+  success: (file, message) => log('SUCCESS', file, message),
+  warn: (file, message) => log('WARN', file, message),
+  error: (file, message) => log('ERROR', file, message),
+  debug: (file, message) => log('DEBUG', file, message),
+};
 // ------------------- Define the user schema -------------------
 const userSchema = new mongoose.Schema({
   discordId: { type: String, required: true, unique: true }, // Unique Discord ID of the user

@@ -131,6 +131,9 @@ export const logger = {
   debug: createLoggerMethod("debug"),
 };
 
+// Default export for CJS require() from .js models (e.g. UserModel.js)
+export default logger;
+
 // Configuration function
 export const configureLogger = (newConfig: Partial<LoggerConfig>): void => {
   config = { ...config, ...newConfig };

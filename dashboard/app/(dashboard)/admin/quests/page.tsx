@@ -443,7 +443,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
         </div>
 
         <div className="text-sm">
-          <span style={{ color: EMBED_LABEL }} className="font-semibold">📋 Details</span>
+          <span style={{ color: EMBED_LABEL }} className="font-semibold underline">📋 Details</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 space-y-0.5">
             <div>Type: {form.questType || "—"}</div>
             <div>ID: {questId}</div>
@@ -454,14 +454,14 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
         </div>
 
         <div className="text-sm">
-          <span style={{ color: EMBED_LABEL }} className="font-semibold">🏆 Rewards</span>
+          <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🏆 Rewards</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 whitespace-pre-wrap">
             {rewardsPreview}
           </div>
         </div>
 
         <div className="text-sm">
-          <span style={{ color: EMBED_LABEL }} className="font-semibold">🗓️ Participation</span>
+          <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🗓️ Participation</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 space-y-0.5">
             {form.minRequirements.trim() ? (
               <div>📝 Min requirement: {form.minRequirements.trim()}</div>
@@ -474,28 +474,28 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
         </div>
 
         <div className="text-sm">
-          <span style={{ color: EMBED_LABEL }} className="font-semibold">📋 Rules</span>
+          <span style={{ color: EMBED_LABEL }} className="font-semibold underline">📋 Rules</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5">
             {form.rules.trim() ? <ReactMarkdown>{form.rules.trim()}</ReactMarkdown> : "—"}
           </div>
         </div>
 
         <div className="text-sm">
-          <span style={{ color: EMBED_LABEL }} className="font-semibold">🎯 Join This Quest</span>
+          <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🎯 Join This Quest</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 font-mono text-xs">
             /quest join questid:{questId}
           </div>
         </div>
 
         <div className="text-sm">
-          <span style={{ color: EMBED_LABEL }} className="underline">👥 Participants ({participantStr})</span>
+          <span style={{ color: EMBED_LABEL }} className="font-semibold underline">👥 Participants ({participantStr})</span>
           <div style={{ color: EMBED_TEXT }} className="mt-0.5">
             None
           </div>
         </div>
 
         <div className="text-sm">
-          <span style={{ color: EMBED_LABEL }} className="font-semibold">📊 Recent Activity</span>
+          <span style={{ color: EMBED_LABEL }} className="font-semibold underline">📊 Recent Activity</span>
           <div style={{ color: EMBED_TEXT }} className="mt-0.5">
             —
           </div>
@@ -537,6 +537,34 @@ export default function AdminQuestsPage() {
   const [completeConfirmQuestId, setCompleteConfirmQuestId] = useState<string | null>(null);
   const [viewQuestId, setViewQuestId] = useState<string | null>(null);
   const [viewQuest, setViewQuest] = useState<QuestRecord | null>(null);
+  const [previewPosting, setPreviewPosting] = useState(false);
+
+  const handlePostPreview = useCallback(async () => {
+    if (!form.title.trim()) {
+      setError("Title is required for preview");
+      return;
+    }
+    setPreviewPosting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const body = formToBody(form, !!editingId);
+      const res = await fetch("/api/admin/quests/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) {
+        throw new Error((data as { message?: string }).message ?? data.error ?? "Failed to post preview");
+      }
+      setSuccess("Preview posted to Discord channel.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPreviewPosting(false);
+    }
+  }, [form, editingId]);
 
   const fetchQuests = useCallback(async () => {
     setLoading(true);
@@ -1120,10 +1148,23 @@ export default function AdminQuestsPage() {
                   </form>
                 </div>
                 <div className="min-w-0 lg:sticky lg:top-4">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
-                    Discord embed preview
-                  </p>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
+                      Discord embed preview
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handlePostPreview}
+                      disabled={previewPosting || !form.title.trim()}
+                      className="rounded-md border border-[var(--totk-mid-ocher)] bg-[var(--totk-mid-ocher)]/20 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-mid-ocher)]/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {previewPosting ? "Posting..." : "Post Preview"}
+                    </button>
+                  </div>
                   <QuestEmbedPreview form={form} />
+                  <p className="mt-1 text-[10px] text-[var(--totk-grey-200)]">
+                    Post Preview sends the embed to the preview channel only. Quest is not saved or made live.
+                  </p>
                 </div>
               </div>
             </section>
