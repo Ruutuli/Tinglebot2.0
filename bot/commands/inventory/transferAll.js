@@ -8,6 +8,7 @@ const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getChar
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { syncToInventoryDatabase } = require('@/utils/inventoryUtils');
 const { checkInventorySync } = require('@/utils/characterUtils');
+const logger = require('@/utils/logger');
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -161,23 +162,37 @@ module.exports = {
             ephemeral: true
           });
           try {
-            // Transfer each item
+            // Transfer each item: add to recipient first so we never remove without recipient having the item
             for (const item of inventoryItems) {
               // Ensure quantity is a number
               const itemQuantity = parseInt(item.quantity) || 0;
-              
-              // Remove from fromChar and log to Google Sheets
-              await syncToInventoryDatabase(fromChar, {
-                itemName: item.itemName,
-                quantity: -itemQuantity,
-                obtain: `Transfer to ${toChar.name}`
-              }, interaction);
-              // Add to toChar and log to Google Sheets
+
+              // Add to toChar first
               await syncToInventoryDatabase(toChar, {
                 itemName: item.itemName,
                 quantity: itemQuantity,
                 obtain: `Transfer from ${fromChar.name}`
               }, interaction);
+              // Remove from fromChar; on failure, roll back by removing from toChar
+              try {
+                await syncToInventoryDatabase(fromChar, {
+                  itemName: item.itemName,
+                  quantity: -itemQuantity,
+                  obtain: `Transfer to ${toChar.name}`
+                }, interaction);
+              } catch (removeError) {
+                try {
+                  await syncToInventoryDatabase(toChar, {
+                    itemName: item.itemName,
+                    quantity: -itemQuantity,
+                    obtain: 'Rollback: transfer remove failed'
+                  }, interaction);
+                  logger.warn('INVENTORY', `Transfer-all remove failed for ${item.itemName}, rolled back add to ${toChar.name}`);
+                } catch (rollbackErr) {
+                  logger.error('INVENTORY', `Transfer-all remove failed and rollback failed for ${item.itemName}: ${rollbackErr.message}`);
+                }
+                throw removeError;
+              }
             }
             // Edit the reply to show success
             await i.followUp({

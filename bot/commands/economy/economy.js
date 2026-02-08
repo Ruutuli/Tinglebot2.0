@@ -2337,21 +2337,7 @@ for (const { name } of cleanedItems) {
     const type = itemDetails?.type.join(", ") || "";
     const subtype = itemDetails?.subtype.join(", ") || "";
 
-    // Remove from source (fromCharacter)
-    const removeData = {
-      characterId: fromCharacter._id,
-      itemName: canonicalName,
-      quantity: -quantity,
-      category,
-      type,
-      subtype,
-      obtain: `Transfer to ${toCharacterName}`,
-      date: new Date(),
-      synced: uniqueSyncId
-    };
-    await syncToInventoryDatabase(fromCharacter, removeData);
-
-    // Add to target (toCharacter)
+    // Add to target first so we never remove from sender without recipient having the item
     const addData = {
       characterId: toCharacter._id,
       itemName: canonicalName,
@@ -2364,6 +2350,41 @@ for (const { name } of cleanedItems) {
       synced: uniqueSyncId
     };
     await syncToInventoryDatabase(toCharacter, addData);
+
+    // Remove from source (fromCharacter); on failure, roll back by removing from recipient
+    const removeData = {
+      characterId: fromCharacter._id,
+      itemName: canonicalName,
+      quantity: -quantity,
+      category,
+      type,
+      subtype,
+      obtain: `Transfer to ${toCharacterName}`,
+      date: new Date(),
+      synced: uniqueSyncId
+    };
+    try {
+      await syncToInventoryDatabase(fromCharacter, removeData);
+    } catch (removeError) {
+      const rollbackData = {
+        characterId: toCharacter._id,
+        itemName: canonicalName,
+        quantity: -quantity,
+        category,
+        type,
+        subtype,
+        obtain: `Rollback: transfer remove failed`,
+        date: new Date(),
+        synced: uniqueSyncId
+      };
+      try {
+        await syncToInventoryDatabase(toCharacter, rollbackData);
+        logger.warn('ECONOMY', `Transfer remove failed for ${canonicalName}, rolled back add to ${toCharacterName}`);
+      } catch (rollbackErr) {
+        logger.error('ECONOMY', `Transfer remove failed and rollback failed for ${canonicalName}: ${rollbackErr.message}`);
+      }
+      throw removeError;
+    }
 
     const itemIcon = itemDetails?.emoji || "🎁";
     formattedItems.push({ itemName: canonicalName, quantity, itemIcon });

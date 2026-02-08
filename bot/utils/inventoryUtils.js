@@ -179,7 +179,13 @@ async function syncToInventoryDatabase(character, item, interaction) {
       itemName: itemNameRegex
     });
 
-    if (existingItem) {
+    // If existing document has invalid (zero/negative) quantity, delete it and treat as new insert so transfer is never lost
+    if (existingItem && (existingItem.quantity || 0) <= 0) {
+      await inventoryCollection.deleteOne({ _id: existingItem._id });
+      logger.info('INVENTORY', `Sync: removed invalid entry ${existingItem.itemName} (qty <= 0), inserting fresh`);
+    }
+
+    if (existingItem && (existingItem.quantity || 0) > 0) {
       await inventoryCollection.updateOne(
         { _id: existingItem._id },
         { $inc: { quantity: quantity } }
@@ -192,7 +198,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
         logger.success('INVENTORY', `Updated item ${itemNameForQuery} in database (incremented quantity)`);
       }
     } else {
-      // Never insert with quantity <= 0 (already handled above)
+      // No existing item, or we just deleted an invalid one — insert with the new quantity
       const itemDetails = await dbFunctions.fetchItemByName(item.itemName);
       const itemId = itemDetails?._id || item.itemId || null;
       const category = Array.isArray(itemDetails?.category) ? itemDetails.category.join(", ") : (item.category || "");
