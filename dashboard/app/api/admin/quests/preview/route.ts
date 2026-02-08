@@ -105,8 +105,11 @@ const KNOWN_ITEM_EMOJIS: Record<string, string> = {
   "spirit orb": "<:spiritorb:1171310851748270121>",
 };
 
-/** Parse raw token string (flat:300 per_unit:200 etc) to human-readable display */
-function formatTokenRewardForDisplay(raw: string): string | null {
+/** Parse raw token string (flat:300 per_unit:200 etc) to human-readable display. Omit collab when collab not allowed and bonus is 0. */
+function formatTokenRewardForDisplay(
+  raw: string,
+  opts?: { collabAllowed?: boolean }
+): string | null {
   if (!raw?.trim() || raw === "N/A" || ["None", "No reward"].includes(raw)) return null;
   const s = String(raw).trim();
   const flat = s.match(/flat:(\d+)/i)?.[1];
@@ -117,7 +120,8 @@ function formatTokenRewardForDisplay(raw: string): string | null {
   const parts: string[] = [];
   if (flat) parts.push(`${flat} base`);
   if (perUnit) parts.push(max && unit ? `${perUnit} per ${unit} (cap ${max})` : unit ? `${perUnit} per ${unit}` : `${perUnit} per unit`);
-  if (collab) parts.push(`${collab} collab bonus`);
+  const showCollab = collab && (opts?.collabAllowed === true || (collab !== "0" && collab !== ""));
+  if (showCollab) parts.push(`${collab} collab bonus`);
   if (parts.length) return parts.join(" + ");
   return s;
 }
@@ -126,7 +130,8 @@ async function buildRewardsText(body: Record<string, unknown>): Promise<string> 
   const parts: string[] = [];
   const tokenReward = body.tokenReward;
   if (tokenReward && typeof tokenReward === "string") {
-    const display = formatTokenRewardForDisplay(tokenReward);
+    const collabAllowed = body.collabAllowed === true;
+    const display = formatTokenRewardForDisplay(tokenReward, { collabAllowed });
     if (display) parts.push(`💰 ${display} tokens`);
   }
   if (body.collabAllowed && body.collabRule) {

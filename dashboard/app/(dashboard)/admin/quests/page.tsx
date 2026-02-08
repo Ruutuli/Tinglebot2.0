@@ -469,7 +469,7 @@ function formatLocationPreview(location: string): string {
   return location.trim();
 }
 
-/** Format token reward for human-readable embed display */
+/** Format token reward for human-readable embed display. Omit collab when collab not allowed and bonus is 0. */
 function formatTokenRewardForDisplay(form: FormState): string | null {
   if (form.tokenRewardCustom.trim()) {
     const raw = form.tokenRewardCustom.trim();
@@ -481,7 +481,8 @@ function formatTokenRewardForDisplay(form: FormState): string | null {
     const customParts: string[] = [];
     if (flat) customParts.push(`${flat} base`);
     if (perUnit) customParts.push(max && unit ? `${perUnit} per ${unit} (cap ${max})` : unit ? `${perUnit} per ${unit}` : `${perUnit} per unit`);
-    if (collab) customParts.push(`${collab} collab bonus`);
+    const showCollab = collab && (form.collabAllowed || (collab !== "0" && collab !== ""));
+    if (showCollab) customParts.push(`${collab} collab bonus`);
     if (customParts.length) return customParts.join(" + ");
     return raw;
   }
@@ -492,7 +493,8 @@ function formatTokenRewardForDisplay(form: FormState): string | null {
     const cap = form.tokenMax.trim();
     tokenParts.push(cap ? `${form.tokenPerUnit.trim()} per ${unit} (cap ${cap})` : `${form.tokenPerUnit.trim()} per ${unit}`);
   }
-  if (form.tokenCollabBonus.trim()) tokenParts.push(`${form.tokenCollabBonus.trim()} collab bonus`);
+  const showCollab = form.collabAllowed || (form.tokenCollabBonus.trim() !== "0" && form.tokenCollabBonus.trim() !== "");
+  if (showCollab && form.tokenCollabBonus.trim()) tokenParts.push(`${form.tokenCollabBonus.trim()} collab bonus`);
   if (tokenParts.length) return tokenParts.join(" + ");
   return null;
 }
