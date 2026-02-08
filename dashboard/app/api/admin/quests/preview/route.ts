@@ -140,7 +140,7 @@ async function buildRewardsText(body: Record<string, unknown>): Promise<string> 
         const emoji = emojiMap[r.name.toLowerCase()]?.trim();
         return emoji ? `${emoji} ${r.name} x${r.quantity ?? 1}` : `${r.name} x${r.quantity ?? 1}`;
       });
-    if (items.length) parts.push(items.join(", "));
+    if (items.length) parts.push(items.map((i) => `> ${i}`).join("\n"));
   }
   return parts.length ? parts.join("\n") : "—";
 }

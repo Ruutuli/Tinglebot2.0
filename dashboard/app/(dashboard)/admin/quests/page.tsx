@@ -548,7 +548,7 @@ function buildRewardsPreview(form: FormState, emojiMap?: Record<string, string>)
       const prefix = emoji ? `${emoji} ` : "";
       return `${prefix}${r.name} x${r.quantity || 1}`;
     });
-  if (items.length) parts.push(items.join(", "));
+  if (items.length) parts.push(items.map((i) => `> ${i}`).join("\n"));
   return parts.length ? parts.join("\n") : "—";
 }
 
@@ -622,9 +622,15 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
         <div className="text-sm">
           <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🏆 Rewards</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 whitespace-pre-wrap [&_img]:mx-0.5">
-            {rewardsPreview.split("\n").map((line, i) => (
-              <div key={i}>{renderWithDiscordEmojis(line)}</div>
-            ))}
+            {rewardsPreview.split("\n").map((line, i) =>
+              line.startsWith("> ") ? (
+                <div key={i} className="border-l-2 border-[var(--totk-mid-ocher)]/60 pl-3 my-0.5 italic">
+                  {renderWithDiscordEmojis(line.slice(2))}
+                </div>
+              ) : (
+                <div key={i}>{renderWithDiscordEmojis(line)}</div>
+              )
+            )}
           </div>
         </div>
 
