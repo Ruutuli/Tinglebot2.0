@@ -321,7 +321,7 @@ async function bloodmoonStartAnnouncement(client, _data = {}) {
   }
 }
 
-// ------------------- bloodmoon-end-announcement (12am EST = 05:00 UTC) -------------------
+// ------------------- bloodmoon-end-announcement (8am EST = 13:00 UTC, day after blood moon) -------------------
 async function bloodmoonEndAnnouncement(client, _data = {}) {
   if (!client?.channels) {
     logger.error('SCHEDULED', 'bloodmoon-end-announcement: Discord client not available');
@@ -1796,7 +1796,7 @@ const TASKS = [
   
   // Blood Moon Tasks
   { name: 'bloodmoon-start-announcement', cron: '0 1 * * *', handler: bloodmoonStartAnnouncement }, // 8pm EST = 01:00 UTC
-  { name: 'bloodmoon-end-announcement', cron: '0 5 * * *', handler: bloodmoonEndAnnouncement }, // 12am EST = 05:00 UTC
+  { name: 'bloodmoon-end-announcement', cron: '0 13 * * *', handler: bloodmoonEndAnnouncement }, // 8am EST = 13:00 UTC (day after blood moon)
   { name: 'bloodmoon-channel-revert', cron: '0 13 * * *', handler: bloodmoonChannelRevert }, // 8am EST = 13:00 UTC
   { name: 'bloodmoon-cleanup', cron: '0 6 * * *', handler: bloodmoonCleanup }, // 1am EST = 06:00 UTC
   

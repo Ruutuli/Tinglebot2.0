@@ -206,6 +206,7 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
 
 // ------------------- sendBloodMoonEndAnnouncement -------------------
 // Sends an embed message announcing the end of the Blood Moon event.
+// Only runs at 8am EST on the day AFTER the blood moon date (scheduled task runs at 13:00 UTC).
 async function sendBloodMoonEndAnnouncement(client, channelId) {
   try {
     // Check if end announcement was already sent today
@@ -213,42 +214,35 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
       return;
     }
 
-    // Determine the correct date for the Blood Moon end announcement
+    // Use EST date so we only send when today is the day-after-blood-moon (8am EST)
     const now = new Date();
-    const today = normalizeDate(now);
+    const estOffset = 5 * 60 * 60 * 1000; // EST = UTC-5
+    const estTime = new Date(now.getTime() - estOffset);
+    const todayEst = normalizeDate(new Date(estTime.getUTCFullYear(), estTime.getUTCMonth(), estTime.getUTCDate()));
     
-    // Find which Blood Moon period we're transitioning from and determine the correct date to show
+    // Only send when today (EST) is exactly the day AFTER a blood moon date
     let bloodMoonDate = null;
-    let foundBloodMoonPeriod = false;
     
     for (const { realDate } of bloodmoonDates) {
       const [month, day] = realDate.split('-').map(Number);
-      const currentBloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
-      const dayBefore = new Date(currentBloodMoonDate);
-      dayBefore.setDate(currentBloodMoonDate.getDate() - 1);
+      const currentBloodMoonDate = normalizeDate(new Date(todayEst.getFullYear(), month - 1, day));
       const dayAfter = new Date(currentBloodMoonDate);
       dayAfter.setDate(currentBloodMoonDate.getDate() + 1);
       
-      // Check if yesterday was within this Blood Moon period
-      const yesterday = new Date(today);
-      yesterday.setDate(today.getDate() - 1);
-      
-      if (yesterday >= dayBefore && yesterday <= dayAfter) {
-        // Yesterday was in a Blood Moon period, so we're transitioning out
-        foundBloodMoonPeriod = true;
+      if (todayEst.getTime() === dayAfter.getTime()) {
         bloodMoonDate = currentBloodMoonDate;
+        logger.info('BLOODMOON', `Today (EST) is day after Blood Moon ${realDate} - sending end announcement`);
         break;
       }
     }
     
-    // Additional safety check: Only send if we actually found a Blood Moon period that ended
-    if (!foundBloodMoonPeriod) {
-      logger.info('BLOODMOON', 'No Blood Moon period found for yesterday - skipping end announcement');
+    if (!bloodMoonDate) {
+      logger.info('BLOODMOON', 'Today (EST) is not the day after a Blood Moon - skipping end announcement');
       return;
     }
     
-    // Use current date for the announcement (when the announcement is posted)
-    const announcementDate = today;
+    // Use current EST date for the announcement (when the announcement is posted)
+    const announcementDate = todayEst;
     const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const hyruleanDate = convertToHyruleanDate(announcementDate);
     
@@ -509,31 +503,6 @@ async function revertChannelNames(client) {
   
   const channelMappings = getChannelMappings();
 
-  // Check if we're at 8 PM EST and transitioning out of a Blood Moon period
-  const now = new Date();
-  
-  // Proper EST time calculation
-  const estHour = parseInt(now.toLocaleString('en-US', { 
-    timeZone: 'America/New_York',
-    hour: 'numeric',
-    hour12: false
-  }));
-  const is8PM = estHour === 20;
-  
-  // Check if yesterday was within any Blood Moon period
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  const wasBloodMoonPeriodYesterday = bloodmoonDates.some(({ realDate }) => {
-    const [month, day] = realDate.split('-').map(Number);
-    const bloodMoonDate = normalizeDate(new Date(yesterday.getFullYear(), month - 1, day));
-    const dayBefore = new Date(bloodMoonDate);
-    dayBefore.setDate(bloodMoonDate.getDate() - 1);
-    const dayAfter = new Date(bloodMoonDate);
-    dayAfter.setDate(bloodMoonDate.getDate() + 1);
-    return yesterday >= dayBefore && yesterday <= dayAfter;
-  });
-
   // Track successful channel changes
   const successfulChannels = new Set();
 
@@ -546,18 +515,7 @@ async function revertChannelNames(client) {
     }
   }
 
-  // Only send end announcements at 8 PM if we're transitioning out of a Blood Moon period
-  if (is8PM && wasBloodMoonPeriodYesterday) {
-    logger.info('BLOODMOON', `Sending end announcements to ${successfulChannels.size} channels`);
-    for (const channelId of successfulChannels) {
-      try {
-        await sendBloodMoonEndAnnouncement(client, channelId);
-      } catch (error) {
-        logger.error('BLOODMOON', `Failed to send end announcement to channel ${channelId}: ${error.message}`, error);
-      }
-    }
-  }
-  
+  // End announcement is sent only by the scheduled task at 8am EST on the day after blood moon (see sendBloodMoonEndAnnouncement)
   if (successfulChannels.size > 0) {
     logger.info('BLOODMOON', `Reverted ${successfulChannels.size} channel names`);
   }
