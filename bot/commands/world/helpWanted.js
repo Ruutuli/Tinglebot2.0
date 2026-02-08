@@ -8,6 +8,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { escapeRegExp, logItemAcquisitionToDatabase } = require('@/utils/inventoryUtils');
 const User = require('@/models/UserModel');
 const Character = require('@/models/CharacterModel');
+const ModCharacter = require('@/models/ModCharacterModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 const { getTodaysQuests, hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit, updateQuestEmbed } = require('../../modules/helpWantedModule');
 const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
@@ -37,6 +38,25 @@ const VILLAGE_SHOP_SPECIAL_WEATHER_MAX_RETRY = 1;
 // ============================================================================
 // ------------------- Helper Functions -------------------
 // ============================================================================
+
+/**
+ * Finds a character by name for a user (case-insensitive).
+ * Checks both Character and ModCharacter. Trims input and supports "Name | Village" format.
+ * @param {string} userId - Discord user ID
+ * @param {string} characterName - Character name (or "Name | ...")
+ * @returns {Promise<Object|null>} Character or ModCharacter document, or null
+ */
+async function findCharacterByNameForUser(userId, characterName) {
+  const raw = (characterName || '').trim();
+  const name = raw.includes('|') ? raw.split('|')[0].trim() : raw;
+  if (!name) return null;
+  const pattern = new RegExp(`^${escapeRegExp(name)}$`, 'i');
+  let character = await Character.findOne({ userId, name: { $regex: pattern } });
+  if (!character) {
+    character = await ModCharacter.findOne({ userId, name: { $regex: pattern } });
+  }
+  return character || null;
+}
 
 /**
  * Creates an embed for blight rejection with NPC icon and message
@@ -675,7 +695,7 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
         content: cooldownCheck.message || undefined
       });
     }
-    const character = await Character.findOne({ userId, name: characterName });
+    const character = await findCharacterByNameForUser(userId, characterName);
     if (!character) {
       return await interaction.editReply({ content: `❌ Character "${characterName}" not found.` });
     }
@@ -1468,8 +1488,8 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     return await interaction.editReply({ content: '❌ No monsters specified for this quest.' });
   }
   
-  // Fetch character
-  const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+  // Fetch character (case-insensitive, checks both Character and ModCharacter)
+  const character = await findCharacterByNameForUser(interaction.user.id, characterName);
   if (!character) {
     return await interaction.editReply({ content: '❌ Character not found.' });
   }
@@ -2049,8 +2069,8 @@ module.exports = {
           return await interaction.editReply({ content: expirationCheck.message });
         }
 
-        // Fetch character and user
-        const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+        // Fetch character and user (case-insensitive, checks both Character and ModCharacter)
+        const character = await findCharacterByNameForUser(interaction.user.id, characterName);
         if (!character) {
           return await interaction.editReply({ content: '❌ Character not found.' });
         }
@@ -2271,7 +2291,7 @@ module.exports = {
       await interaction.deferReply();
       
       try {
-        const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+        const character = await findCharacterByNameForUser(interaction.user.id, characterName);
         if (!character) {
           return await interaction.editReply({ content: '❌ Character not found.' });
         }
