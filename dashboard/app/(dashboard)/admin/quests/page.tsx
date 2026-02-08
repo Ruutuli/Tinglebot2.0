@@ -101,6 +101,63 @@ const STATUSES = ["active", "completed"] as const;
 
 const LOCATION_PRESETS = ["Rudania", "Inariko", "Vhintl", "ALL"] as const;
 const TIME_LIMIT_PRESETS = ["1 week", "2 weeks", "1 month", "2 months"] as const;
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** Parse stored date (e.g. "January 2026" or "2026-01") to YYYY-MM for month input */
+function parseDateToYYYYMM(s: string): string {
+  const trimmed = String(s ?? "").trim();
+  if (!trimmed) return "";
+  const yyyyMm = trimmed.match(/^(\d{4})-(\d{2})$/);
+  if (yyyyMm) return `${yyyyMm[1]}-${yyyyMm[2]}`;
+  const monthMatch = trimmed.match(/^(\w+)\s+(\d{4})$/i);
+  if (monthMatch) {
+    const idx = MONTH_NAMES.findIndex((m) => m.toLowerCase() === monthMatch[1].toLowerCase());
+    if (idx >= 0) return `${monthMatch[2]}-${String(idx + 1).padStart(2, "0")}`;
+  }
+  return trimmed;
+}
+
+/** Convert YYYY-MM to "January 2026" for API storage */
+function yyyyMmToDisplay(ym: string): string {
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym;
+  const [y, m] = ym.split("-");
+  const monthIdx = parseInt(m, 10) - 1;
+  if (monthIdx < 0 || monthIdx > 11) return ym;
+  return `${MONTH_NAMES[monthIdx]} ${y}`;
+}
+
+/** Calculate end date from start (YYYY-MM, first of month) + duration string */
+function getEndDateFromDuration(startYYYYMM: string, duration: string): Date | null {
+  if (!startYYYYMM || !/^\d{4}-\d{2}$/.test(startYYYYMM)) return null;
+  const [y, m] = startYYYYMM.split("-").map(Number);
+  const start = new Date(y, m - 1, 1);
+  if (Number.isNaN(start.getTime())) return null;
+  const d = String(duration).toLowerCase();
+  let end: Date;
+  const weekMatch = d.match(/(\d+)\s*week/);
+  const monthMatch = d.match(/(\d+)\s*month/);
+  const dayMatch = d.match(/(\d+)\s*day/);
+  if (weekMatch) {
+    end = new Date(start);
+    end.setDate(end.getDate() + parseInt(weekMatch[1], 10) * 7);
+  } else if (monthMatch) {
+    end = new Date(start);
+    end.setMonth(end.getMonth() + parseInt(monthMatch[1], 10));
+  } else if (dayMatch) {
+    end = new Date(start);
+    end.setDate(end.getDate() + parseInt(dayMatch[1], 10));
+  } else if (duration === "Custom") {
+    return null;
+  } else {
+    end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+  }
+  return end;
+}
+
+function formatEndDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
 
 const RP_THREAD_CHANNELS: { id: string; name: string }[] = [
   { id: "629027808274022410", name: "🔥》rudania" },
@@ -183,11 +240,16 @@ type FormState = {
   botNotes: string;
 };
 
+function getDefaultDateYYYYMM(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 const emptyForm: FormState = {
   title: "",
   description: "",
   rules: DEFAULT_RP_RULES,
-  date: "",
+  date: getDefaultDateYYYYMM(),
   questType: "RP",
   location: "",
   locationOther: "",
@@ -278,7 +340,7 @@ function questToForm(q: QuestRecord): FormState {
     title: String(q.title ?? ""),
     description: String(q.description ?? ""),
     rules: String(q.rules ?? ""),
-    date: String(q.date ?? ""),
+    date: parseDateToYYYYMM(String(q.date ?? "")) || String(q.date ?? ""),
     questType: String(q.questType ?? "RP"),
     location,
     locationOther,
@@ -336,11 +398,12 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
   const locationValue = f.location === "ALL" ? "Rudania, Inariko, Vhintl" : f.location ? String(f.location).trim() : "";
   const timeLimitValue = f.timeLimit === "Custom" ? f.timeLimitCustom.trim() : f.timeLimit;
   const tokenReward = buildTokenRewardFromForm(f);
+  const dateForApi = /^\d{4}-\d{2}$/.test(f.date.trim()) ? yyyyMmToDisplay(f.date.trim()) : f.date.trim();
   const body: Record<string, unknown> = {
     title: f.title.trim(),
     description: f.description.trim(),
     rules: f.rules.trim() || null,
-    date: f.date.trim(),
+    date: dateForApi,
     questType: f.questType,
     location: locationValue,
     timeLimit: timeLimitValue,
@@ -393,11 +456,39 @@ function formatLocationPreview(location: string): string {
   return location.trim();
 }
 
+/** Format token reward for human-readable embed display */
+function formatTokenRewardForDisplay(form: FormState): string | null {
+  if (form.tokenRewardCustom.trim()) {
+    const raw = form.tokenRewardCustom.trim();
+    const flat = raw.match(/flat:(\d+)/i)?.[1];
+    const perUnit = raw.match(/per_unit:(\d+)/i)?.[1];
+    const unit = raw.match(/unit:(\S+)/i)?.[1];
+    const max = raw.match(/max:(\d+)/i)?.[1];
+    const collab = raw.match(/collab_bonus:(\d+)/i)?.[1];
+    const customParts: string[] = [];
+    if (flat) customParts.push(`${flat} base`);
+    if (perUnit) customParts.push(max && unit ? `${perUnit} per ${unit} (cap ${max})` : unit ? `${perUnit} per ${unit}` : `${perUnit} per unit`);
+    if (collab) customParts.push(`${collab} collab bonus`);
+    if (customParts.length) return customParts.join(" + ");
+    return raw;
+  }
+  const tokenParts: string[] = [];
+  if (form.tokenFlat.trim()) tokenParts.push(`${form.tokenFlat.trim()} base`);
+  if (form.tokenPerUnit.trim()) {
+    const unit = form.tokenUnit.trim() || "unit";
+    const cap = form.tokenMax.trim();
+    tokenParts.push(cap ? `${form.tokenPerUnit.trim()} per ${unit} (cap ${cap})` : `${form.tokenPerUnit.trim()} per ${unit}`);
+  }
+  if (form.tokenCollabBonus.trim()) tokenParts.push(`${form.tokenCollabBonus.trim()} collab bonus`);
+  if (tokenParts.length) return tokenParts.join(" + ");
+  return null;
+}
+
 function buildRewardsPreview(form: FormState): string {
   const parts: string[] = [];
-  const built = buildTokenRewardFromForm(form);
-  if (built && built !== "N/A" && !["None", "No reward"].includes(built)) {
-    parts.push(`💰 ${built}`);
+  const tokenDisplay = formatTokenRewardForDisplay(form);
+  if (tokenDisplay) {
+    parts.push(`💰 ${tokenDisplay} tokens`);
   }
   if (form.collabAllowed && form.collabRule?.trim()) {
     parts.push(`(${form.collabRule.trim()})`);
@@ -449,7 +540,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
             <div>ID: {questId}</div>
             <div>Location: {locationPreview}</div>
             <div>Duration: {effectiveTimeLimit.trim() || "—"}</div>
-            <div>Date: {form.date.trim() || "—"}</div>
+            <div>Date: {form.date ? (yyyyMmToDisplay(form.date) || form.date) : "—"}</div>
           </div>
         </div>
 
@@ -929,8 +1020,8 @@ export default function AdminQuestsPage() {
                           <textarea value={form.description} onChange={(e) => setField("description", e.target.value)} rows={4} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" required />
                         </div>
                         <div>
-                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Date *</label>
-                          <input type="text" value={form.date} onChange={(e) => setField("date", e.target.value)} placeholder="e.g. January 2026" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" required />
+                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Month & Year *</label>
+                          <input type="month" value={form.date} onChange={(e) => setField("date", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" required />
                         </div>
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Quest Type *</label>
@@ -954,7 +1045,7 @@ export default function AdminQuestsPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Time Limit *</label>
+                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Duration *</label>
                           <select value={form.timeLimit} onChange={(e) => setField("timeLimit", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
                             {TIME_LIMIT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
                             <option value="Custom">Custom</option>
@@ -962,6 +1053,15 @@ export default function AdminQuestsPage() {
                           {form.timeLimit === "Custom" && (
                             <input type="text" value={form.timeLimitCustom} onChange={(e) => setField("timeLimitCustom", e.target.value)} placeholder="e.g. 3 weeks" className="mt-2 w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                           )}
+                          {form.date && form.timeLimit !== "Custom" && (() => {
+                            const endDate = getEndDateFromDuration(form.date, form.timeLimit);
+                            if (!endDate) return null;
+                            return (
+                              <p className="mt-1.5 text-xs text-[var(--totk-grey-200)]">
+                                {form.timeLimit} | Ends on {formatEndDate(endDate)}
+                              </p>
+                            );
+                          })()}
                         </div>
                       </div>
                     </fieldset>

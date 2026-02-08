@@ -71,8 +71,15 @@ module.exports = {
 
       // ------------------- Retrieve Inventory Items -------------------
       // Fetch the updated inventory collection and convert to an array.
+      // Include items without characterId (legacy items - collection is per-character so all items belong to this char)
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
-      const inventoryItems = await inventoryCollection.find({ characterId }).toArray();
+      const inventoryItems = await inventoryCollection.find({
+        $or: [
+          { characterId },
+          { characterId: null },
+          { characterId: { $exists: false } }
+        ]
+      }).toArray();
 
       if (!inventoryItems.length) {
         await interaction.reply({ content: `❌ **No inventory items found for character ${characterName}.**`, flags: [4096] });

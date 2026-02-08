@@ -24,11 +24,29 @@ function formatLocation(location: string): string {
   return location.trim();
 }
 
+/** Parse raw token string (flat:300 per_unit:200 etc) to human-readable display */
+function formatTokenRewardForDisplay(raw: string): string | null {
+  if (!raw?.trim() || raw === "N/A" || ["None", "No reward"].includes(raw)) return null;
+  const s = String(raw).trim();
+  const flat = s.match(/flat:(\d+)/i)?.[1];
+  const perUnit = s.match(/per_unit:(\d+)/i)?.[1];
+  const unit = s.match(/unit:(\S+)/i)?.[1];
+  const max = s.match(/max:(\d+)/i)?.[1];
+  const collab = s.match(/collab_bonus:(\d+)/i)?.[1];
+  const parts: string[] = [];
+  if (flat) parts.push(`${flat} base`);
+  if (perUnit) parts.push(max && unit ? `${perUnit} per ${unit} (cap ${max})` : unit ? `${perUnit} per ${unit}` : `${perUnit} per unit`);
+  if (collab) parts.push(`${collab} collab bonus`);
+  if (parts.length) return parts.join(" + ");
+  return s;
+}
+
 function buildRewardsText(body: Record<string, unknown>): string {
   const parts: string[] = [];
   const tokenReward = body.tokenReward;
-  if (tokenReward && typeof tokenReward === "string" && tokenReward !== "N/A" && !["None", "No reward"].includes(tokenReward)) {
-    parts.push(`💰 ${tokenReward}`);
+  if (tokenReward && typeof tokenReward === "string") {
+    const display = formatTokenRewardForDisplay(tokenReward);
+    if (display) parts.push(`💰 ${display} tokens`);
   }
   if (body.collabAllowed && body.collabRule) {
     parts.push(`(${String(body.collabRule).trim()})`);

@@ -3400,30 +3400,40 @@ async function handleGearAutocomplete(interaction, focusedOption) {
   );
   const characterInventory = await inventoryCollection.find().toArray();
 
+  // Build item details map (inventory may lack category/type for legacy items - look up from Item model)
+  const itemNames = [...new Set(characterInventory.filter(i => i.quantity > 0 && i.itemName).map(i => i.itemName))];
+  const itemDetailsMap = new Map();
+  if (itemNames.length > 0) {
+    const itemDocs = await Item.find({ itemName: { $in: itemNames } }).select('itemName category type subtype').lean();
+    for (const doc of itemDocs || []) {
+      itemDetailsMap.set(doc.itemName, doc);
+    }
+  }
+
   const filteredItems = characterInventory.filter((item) => {
    // Only show items with quantity > 0
    if (item.quantity <= 0) return false;
-   
-   // Handle category - could be string or array
-   const categories = Array.isArray(item.category) 
-     ? item.category 
-     : (typeof item.category === 'string' ? item.category.split(",").map(cat => cat.trim().toLowerCase()) : []);
-   
-   // Handle subtype - could be string or array
-   const subtypes = Array.isArray(item.subtype)
-     ? item.subtype.map(st => st.trim().toLowerCase())
-     : (typeof item.subtype === 'string' ? [item.subtype.trim().toLowerCase()] : []);
+
+   // Use Item model data if inventory doc lacks category/type (legacy items)
+   const details = itemDetailsMap.get(item.itemName) || item;
+   const categories = Array.isArray(details.category)
+     ? details.category.map(c => String(c).trim().toLowerCase())
+     : (typeof details.category === 'string' ? details.category.split(",").map(cat => cat.trim().toLowerCase()) : []);
+   const itemType = typeof details.type === 'string' ? details.type : (Array.isArray(details.type) ? details.type[0] : '') || '';
+   const subtypes = Array.isArray(details.subtype)
+     ? details.subtype.map(st => String(st).trim().toLowerCase())
+     : (typeof details.subtype === 'string' ? [details.subtype.trim().toLowerCase()] : []);
 
    if (type === "weapon") {
     return categories.includes("weapon") && !subtypes.includes("shield");
    } else if (type === "shield") {
     return subtypes.includes("shield");
    } else if (type === "head") {
-    return categories.includes("armor") && item.type?.toLowerCase()?.includes("head");
+    return categories.includes("armor") && itemType.toLowerCase().includes("head");
    } else if (type === "chest") {
-    return categories.includes("armor") && item.type?.toLowerCase()?.includes("chest");
+    return categories.includes("armor") && itemType.toLowerCase().includes("chest");
    } else if (type === "legs") {
-    return categories.includes("armor") && item.type?.toLowerCase()?.includes("legs");
+    return categories.includes("armor") && itemType.toLowerCase().includes("legs");
    }
    return false;
   });

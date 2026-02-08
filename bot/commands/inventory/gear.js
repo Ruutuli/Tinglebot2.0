@@ -263,19 +263,28 @@ module.exports = {
       logger.debug('GEAR', `itemName char codes: ${itemName ? Array.from(itemName).map(c => c.charCodeAt(0)).join(', ') : 'null'}`);
       
       // Retrieve character inventory and ensure the item exists.
+      // Include items without characterId (legacy items - collection is per-character so all items belong to this char)
+      const charInventoryFilter = {
+        $or: [
+          { characterId: character._id },
+          { characterId: null },
+          { characterId: { $exists: false } }
+        ]
+      };
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       let inventoryItems;
       if (itemName.includes('+')) {
         logger.debug('INVENTORY', `Using exact match for itemName with +: "${itemName}"`);
-        inventoryItems = await inventoryCollection.find({ 
-          characterId: character._id, 
-          itemName: itemName
+        inventoryItems = await inventoryCollection.find({
+          $and: [charInventoryFilter, { itemName: itemName }]
         }).toArray();
       } else {
         logger.debug('INVENTORY', `Using regex match for itemName without +: "${itemName}"`);
-        inventoryItems = await inventoryCollection.find({ 
-          characterId: character._id, 
-          itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') }
+        inventoryItems = await inventoryCollection.find({
+          $and: [
+            charInventoryFilter,
+            { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, 'i') } }
+          ]
         }).toArray();
       }
       if (!inventoryItems.length) {
@@ -389,13 +398,22 @@ module.exports = {
         };
 
         // Ensure all equipped armor exists in inventory (fixes "armor equipped but not in inventory")
+        const charInvFilter = {
+          $or: [
+            { characterId: character._id },
+            { characterId: null },
+            { characterId: { $exists: false } }
+          ]
+        };
         for (const slot of ['head', 'chest', 'legs']) {
           const armorItem = updatedGearArmor[slot];
           if (armorItem?.name) {
             const existingInInventory = await inventoryCollection.findOne({
-              characterId: character._id,
-              itemName: { $regex: new RegExp(`^${escapeRegExp(armorItem.name)}$`, 'i') },
-              quantity: { $gt: 0 },
+              $and: [
+                charInvFilter,
+                { itemName: { $regex: new RegExp(`^${escapeRegExp(armorItem.name)}$`, 'i') } },
+                { quantity: { $gt: 0 } }
+              ]
             });
             if (!existingInInventory) {
               try {
