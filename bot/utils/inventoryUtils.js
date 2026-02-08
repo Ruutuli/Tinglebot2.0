@@ -122,7 +122,7 @@ function shouldLogError(error) {
 // ============================================================================
 
 // ---- Function: syncToInventoryDatabase ----
-// Syncs item changes to database
+// Syncs item changes to database. Never inserts or leaves negative quantity; uses case-insensitive itemName.
 async function syncToInventoryDatabase(character, item, interaction) {
   try {
     if (!dbFunctions.connectToInventories) {
@@ -136,51 +136,93 @@ async function syncToInventoryDatabase(character, item, interaction) {
     
     const inventoryCollection = db.collection(collectionName);
 
-    // Fetch item details for required fields
-    const itemDetails = await dbFunctions.fetchItemByName(item.itemName);
-    const itemId = itemDetails?._id || item.itemId || null;
-    const category = Array.isArray(itemDetails?.category) ? itemDetails.category.join(", ") : (item.category || "");
-    const type = Array.isArray(itemDetails?.type) ? itemDetails.type.join(", ") : (item.type || "");
-    const subtype = Array.isArray(itemDetails?.subtype) ? itemDetails.subtype : (Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []));
-    const job = character.job || "";
-    const perk = item.perk !== undefined ? item.perk : (character.perk || "");
-    const location = character.currentLocation || character.homeVillage || character.currentVillage || "";
-    const link = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : (item.link || "");
-    const date = item.date || new Date();
-    const obtain = item.obtain !== undefined ? item.obtain : "Manual Sync";
-    const synced = item.synced || "";
+    const itemNameForQuery = (item.itemName || '').trim();
+    const itemNameRegex = new RegExp(`^${escapeRegExp(itemNameForQuery)}$`, 'i');
+    const quantity = typeof item.quantity === 'number' ? item.quantity : 0;
 
-    const dbDoc = {
-      characterId: character._id,
-      itemId,
-      itemName: item.itemName,
-      quantity: item.quantity,
-      category,
-      type,
-      subtype,
-      job,
-      perk,
-      location,
-      link,
-      date,
-      obtain,
-      synced
-    };
+    // ---- Removal (quantity <= 0): deduct from existing docs only, never insert ----
+    if (quantity <= 0) {
+      const toRemove = Math.abs(quantity);
+      if (toRemove <= 0) return;
 
+      const allEntries = await inventoryCollection
+        .find({ characterId: character._id, itemName: itemNameRegex })
+        .toArray();
+      const positiveEntries = allEntries.filter((e) => (e.quantity || 0) > 0);
+      const totalAvailable = positiveEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
+
+      if (totalAvailable < toRemove) {
+        logger.warn('INVENTORY', `Sync removal: only ${totalAvailable} ${itemNameForQuery} available, requested ${toRemove}; deducting ${totalAvailable}`);
+      }
+      let remaining = toRemove;
+      for (const entry of positiveEntries) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, entry.quantity || 0);
+        const newQty = (entry.quantity || 0) - take;
+        if (newQty <= 0) {
+          await inventoryCollection.deleteOne({ _id: entry._id });
+          logger.info('INVENTORY', `Sync removal: deleted entry ${entry.itemName} (was ${entry.quantity})`);
+        } else {
+          await inventoryCollection.updateOne(
+            { _id: entry._id },
+            { $inc: { quantity: -take } }
+          );
+        }
+        remaining -= take;
+      }
+      return;
+    }
+
+    // ---- Addition (quantity > 0): find one existing (case-insensitive), $inc or insert ----
     const existingItem = await inventoryCollection.findOne({
       characterId: character._id,
-      itemName: dbDoc.itemName
+      itemName: itemNameRegex
     });
 
     if (existingItem) {
       await inventoryCollection.updateOne(
-        { characterId: character._id, itemName: dbDoc.itemName },
-        { $inc: { quantity: dbDoc.quantity } }
+        { _id: existingItem._id },
+        { $inc: { quantity: quantity } }
       );
-      logger.success('INVENTORY', `Updated item ${dbDoc.itemName} in database (incremented quantity)`);
+      const updated = await inventoryCollection.findOne({ _id: existingItem._id });
+      if (updated && (updated.quantity || 0) <= 0) {
+        await inventoryCollection.deleteOne({ _id: existingItem._id });
+        logger.info('INVENTORY', `Sync: deleted ${existingItem.itemName} after inc (qty <= 0)`);
+      } else {
+        logger.success('INVENTORY', `Updated item ${itemNameForQuery} in database (incremented quantity)`);
+      }
     } else {
-      await inventoryCollection.insertOne(dbDoc);
-      logger.success('INVENTORY', `Added new item ${dbDoc.itemName} to database`);
+      // Never insert with quantity <= 0 (already handled above)
+      const itemDetails = await dbFunctions.fetchItemByName(item.itemName);
+      const itemId = itemDetails?._id || item.itemId || null;
+      const category = Array.isArray(itemDetails?.category) ? itemDetails.category.join(", ") : (item.category || "");
+      const type = Array.isArray(itemDetails?.type) ? itemDetails.type.join(", ") : (item.type || "");
+      const subtype = Array.isArray(itemDetails?.subtype) ? itemDetails.subtype : (Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []));
+      const job = character.job || "";
+      const perk = item.perk !== undefined ? item.perk : (character.perk || "");
+      const location = character.currentLocation || character.homeVillage || character.currentVillage || "";
+      const link = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : (item.link || "");
+      const date = item.date || new Date();
+      const obtain = item.obtain !== undefined ? item.obtain : "Manual Sync";
+      const synced = item.synced || "";
+
+      await inventoryCollection.insertOne({
+        characterId: character._id,
+        itemId,
+        itemName: item.itemName || itemNameForQuery,
+        quantity,
+        category,
+        type,
+        subtype,
+        job,
+        perk,
+        location,
+        link,
+        date,
+        obtain,
+        synced
+      });
+      logger.success('INVENTORY', `Added new item ${itemNameForQuery} to database`);
     }
   } catch (error) {
     if (shouldLogError(error)) {
@@ -192,12 +234,15 @@ async function syncToInventoryDatabase(character, item, interaction) {
 }
 
 // ---- Function: addItemInventoryDatabase ----
-// Adds a single item to inventory database
+// Adds a single item to inventory database. Never leaves negative quantity; after $inc deletes if qty <= 0.
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "") {
   try {
     const allowedNullInteractionObtain = ['Trade', 'Character Birthday'];
     if (!interaction && !allowedNullInteractionObtain.includes(obtain)) {
       throw new Error("Interaction object is undefined.");
+    }
+    if (typeof quantity !== 'number' || isNaN(quantity) || quantity <= 0) {
+      throw new Error(`Invalid quantity for addItemInventoryDatabase: ${quantity}`);
     }
 
     if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories || !dbFunctions.fetchItemByName) {
@@ -258,7 +303,17 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         { characterId, itemName: inventoryItem.itemName, obtain: obtainValue },
         { $inc: { quantity: quantity } }
       );
-      logger.success('INVENTORY', `Updated ${itemName} quantity (incremented by ${quantity})`);
+      const updated = await inventoryCollection.findOne({
+        characterId,
+        itemName: inventoryItem.itemName,
+        obtain: obtainValue
+      });
+      if (updated && (updated.quantity || 0) <= 0) {
+        await inventoryCollection.deleteOne({ _id: inventoryItem._id });
+        logger.info('INVENTORY', `Deleted ${itemName} after add (qty <= 0)`);
+      } else {
+        logger.success('INVENTORY', `Updated ${itemName} quantity (incremented by ${quantity})`);
+      }
     } else {
       // Item doesn't exist with this obtain method - create new entry
       // This allows items with different obtain methods (crafting, trading, etc.) to be tracked separately
@@ -345,17 +400,16 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
 
     // Handle items with + in their names by using exact match instead of regex
     // Use find().toArray() to get all matching entries and aggregate quantities
-    // This matches the availability check logic in handleGift
-    let inventoryEntries;
+    let allEntries;
     if (itemName.includes('+')) {
-      inventoryEntries = await inventoryCollection
+      allEntries = await inventoryCollection
         .find({ 
           characterId: character._id,
           itemName: itemName.trim()
         })
         .toArray();
     } else {
-      inventoryEntries = await inventoryCollection
+      allEntries = await inventoryCollection
         .find({ 
           characterId: character._id,
           itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
@@ -363,12 +417,20 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         .toArray();
     }
 
+    // Delete any entries with quantity <= 0 (invalid/corrupt) and exclude from removal logic
+    const negativeOrZero = (allEntries || []).filter((e) => (e.quantity || 0) <= 0);
+    for (const entry of negativeOrZero) {
+      await inventoryCollection.deleteOne({ _id: entry._id });
+      logger.info('INVENTORY', `Deleted invalid entry ${entry.itemName} (quantity ${entry.quantity})`);
+    }
+    const inventoryEntries = (allEntries || []).filter((e) => (e.quantity || 0) > 0);
+
     if (!inventoryEntries || inventoryEntries.length === 0) {
       logger.error('INVENTORY', `Item "${itemName}" not found in ${character.name}'s inventory`);
       return false;
     }
 
-    // Sum quantities from all matching entries (handles multiple inventory entries for same item)
+    // Sum quantities from positive entries only
     const totalQuantity = inventoryEntries.reduce(
       (sum, entry) => sum + (entry.quantity || 0),
       0
@@ -528,7 +590,7 @@ const createRemovedItemDatabase = (character, item, quantity, interaction, obtai
 // ============================================================================
 
 // ---- Function: addItemsToDatabase ----
-// Adds multiple items to inventory database
+// Adds multiple items to inventory database. Never inserts or leaves quantity <= 0; after $inc deletes if qty <= 0.
 const addItemsToDatabase = async (character, items, interaction) => {
   try {
     if (!dbFunctions.connectToInventories) {
@@ -543,6 +605,9 @@ const addItemsToDatabase = async (character, items, interaction) => {
     const inventoryCollection = db.collection(collectionName);
 
     for (const item of items) {
+      const qty = typeof item.quantity === 'number' && !isNaN(item.quantity) ? item.quantity : 0;
+      if (qty <= 0) continue;
+
       const itemName = String(item.itemName).trim().toLowerCase();
       const existingItem = await inventoryCollection.findOne({
         characterId: character._id,
@@ -551,14 +616,23 @@ const addItemsToDatabase = async (character, items, interaction) => {
       if (existingItem) {
         await inventoryCollection.updateOne(
           { characterId: character._id, itemName },
-          { $inc: { quantity: item.quantity } }
+          { $inc: { quantity: qty } }
         );
+        const updated = await inventoryCollection.findOne({
+          characterId: character._id,
+          itemName,
+        });
+        if (updated && (updated.quantity || 0) <= 0) {
+          await inventoryCollection.deleteOne({ _id: existingItem._id });
+          logger.info('INVENTORY', `addItemsToDatabase: deleted ${itemName} after inc (qty <= 0)`);
+        }
       } else {
         await inventoryCollection.insertOne({
           ...item,
           characterId: character._id,
           characterName: character.name,
           date: new Date(),
+          quantity: qty,
         });
       }
     }

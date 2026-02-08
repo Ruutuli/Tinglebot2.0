@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { countUniqueQuestCompletions } = require('../utils/questTrackingUtils');
-const logger = require('../utils/logger');
+const { logger } = require('../utils/logger');
 // ------------------- Define the user schema -------------------
 const userSchema = new mongoose.Schema({
   discordId: { type: String, required: true, unique: true }, // Unique Discord ID of the user

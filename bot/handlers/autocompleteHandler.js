@@ -2923,13 +2923,15 @@ async function handleItemAutocomplete(interaction, focusedOption) {
       }
     } else {
       // If we're not focusing itemname, don't do anything fancy
-      // --- Aggregate item quantities by item name (case-insensitive) ---
+      // --- Aggregate item quantities by item name (case-insensitive); only count positive qty ---
       const itemTotals = {};
       for (const item of inventoryItems) {
         const name = item.itemName?.toLowerCase();
         if (!name) continue;
+        const qty = (item.quantity != null && item.quantity > 0) ? item.quantity : 0;
+        if (qty <= 0) continue;
         if (!itemTotals[name]) itemTotals[name] = 0;
-        itemTotals[name] += item.quantity;
+        itemTotals[name] += qty;
       }
       choices = Object.entries(itemTotals)
         .filter(([name]) => name.includes(searchQuery))

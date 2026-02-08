@@ -28,6 +28,7 @@ const { createCharacterGearEmbed } = require('../../embeds/embeds.js');
 // Import character stats modules for updating defense and attack.
 const { updateCharacterDefense, updateCharacterAttack } = require('../../modules/characterStatsModule.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
+const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
 const logger = require('@/utils/logger');
 
 
@@ -379,7 +380,33 @@ module.exports = {
       // Use the appropriate update function based on character type
       if (['head', 'chest', 'legs'].includes(type)) {
         const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        const updatedGearArmor = { ...(character.gearArmor || {}), [type]: { name: itemName, stats: { modifierHearts } } };
+        // Explicitly preserve other slots (Mongoose subdocs may not spread correctly)
+        const ga = character.gearArmor || {};
+        const updatedGearArmor = {
+          head: type === 'head' ? { name: itemName, stats: { modifierHearts } } : (ga.head ? { name: ga.head.name, stats: ga.head.stats || {} } : null),
+          chest: type === 'chest' ? { name: itemName, stats: { modifierHearts } } : (ga.chest ? { name: ga.chest.name, stats: ga.chest.stats || {} } : null),
+          legs: type === 'legs' ? { name: itemName, stats: { modifierHearts } } : (ga.legs ? { name: ga.legs.name, stats: ga.legs.stats || {} } : null),
+        };
+
+        // Ensure all equipped armor exists in inventory (fixes "armor equipped but not in inventory")
+        for (const slot of ['head', 'chest', 'legs']) {
+          const armorItem = updatedGearArmor[slot];
+          if (armorItem?.name) {
+            const existingInInventory = await inventoryCollection.findOne({
+              characterId: character._id,
+              itemName: { $regex: new RegExp(`^${escapeRegExp(armorItem.name)}$`, 'i') },
+              quantity: { $gt: 0 },
+            });
+            if (!existingInInventory) {
+              try {
+                await addItemInventoryDatabase(character._id, armorItem.name, 1, interaction, 'Starting gear (restored)');
+              } catch (addErr) {
+                logger.warn('GEAR', `Could not ensure armor ${armorItem.name} in inventory: ${addErr.message}`);
+              }
+            }
+          }
+        }
+
         logger.debug('CHARACTER', `Updating gearArmor - Slot: ${type}, Item: ${itemName}`);
         await updateFunction(character._id, { gearArmor: updatedGearArmor });
       } else if (type === 'weapon') {

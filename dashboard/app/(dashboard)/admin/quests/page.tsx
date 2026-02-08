@@ -139,6 +139,15 @@ type QuestRecord = {
   [key: string]: unknown;
 };
 
+function isQuestPosted(q: QuestRecord): boolean {
+  if (q.posted === true) return true;
+  const messageID = q.messageID ?? (q as Record<string, unknown>).messageID;
+  if (messageID && String(messageID).trim()) return true;
+  const postedAt = q.postedAt ?? (q as Record<string, unknown>).postedAt;
+  if (postedAt) return true;
+  return false;
+}
+
 type ItemRewardRow = { name: string; quantity: number };
 
 type FormState = {
@@ -524,6 +533,10 @@ export default function AdminQuestsPage() {
   const [manageParticipantsError, setManageParticipantsError] = useState<string | null>(null);
   const [manageParticipantsSuccess, setManageParticipantsSuccess] = useState<string | null>(null);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [completingQuestId, setCompletingQuestId] = useState<string | null>(null);
+  const [completeConfirmQuestId, setCompleteConfirmQuestId] = useState<string | null>(null);
+  const [viewQuestId, setViewQuestId] = useState<string | null>(null);
+  const [viewQuest, setViewQuest] = useState<QuestRecord | null>(null);
 
   const fetchQuests = useCallback(async () => {
     setLoading(true);
@@ -587,11 +600,64 @@ export default function AdminQuestsPage() {
     setSelectedParticipantIds([]);
   }, []);
 
+  const openViewModal = useCallback(async (id: string) => {
+    setViewQuestId(id);
+    setViewQuest(null);
+    try {
+      const res = await fetch(`/api/admin/quests/${id}`);
+      if (!res.ok) throw new Error("Failed to load quest");
+      const q = (await res.json()) as QuestRecord;
+      setViewQuest(q);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setViewQuestId(null);
+    }
+  }, []);
+
+  const closeViewModal = useCallback(() => {
+    setViewQuestId(null);
+    setViewQuest(null);
+  }, []);
+
   const toggleParticipantSelected = useCallback((userId: string) => {
     setSelectedParticipantIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
   }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setError(null);
+    setSuccess(null);
+  }, []);
+
+  const confirmCompleteQuest = useCallback(
+    async (questId: string) => {
+      setCompletingQuestId(questId);
+      setError(null);
+      setSuccess(null);
+      try {
+        const res = await fetch(`/api/admin/quests/${questId}/complete`, { method: "POST" });
+        const data = (await res.json()) as { rewarded?: number; error?: string; message?: string };
+        if (!res.ok) {
+          throw new Error(data.message ?? data.error ?? "Failed to complete quest");
+        }
+        setCompleteConfirmQuestId(null);
+        setSuccess(
+          data.rewarded != null && data.rewarded > 0
+            ? `Quest marked completed. ${data.rewarded} participant(s) rewarded.`
+            : "Quest marked as completed."
+        );
+        await fetchQuests();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setCompletingQuestId(null);
+      }
+    },
+    [fetchQuests]
+  );
 
   const saveManageParticipants = useCallback(async () => {
     if (!manageQuestId || selectedParticipantIds.length === 0) return;
@@ -806,17 +872,15 @@ export default function AdminQuestsPage() {
                   <span className="font-mono text-[var(--totk-ivory)]">{form.questID || "—"}</span>)
                 </p>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setForm(emptyForm);
-                  setError(null);
-                }}
-                className="mb-4 text-sm text-[var(--totk-light-green)] hover:underline"
-              >
-                {editingId ? "Cancel edit" : "Clear form"}
-              </button>
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={editingId ? cancelEdit : () => { setForm(emptyForm); setError(null); setSuccess(null); }}
+                  className="text-sm text-[var(--totk-light-green)] hover:underline"
+                >
+                  {editingId ? "Cancel and start new quest" : "Clear form"}
+                </button>
+              </div>
 
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div className="min-w-0">
@@ -1035,7 +1099,7 @@ export default function AdminQuestsPage() {
                       </fieldset>
                     )}
 
-                    <div className="flex gap-3 pt-2">
+                    <div className="flex flex-wrap gap-3 pt-2">
                       <button
                         type="submit"
                         disabled={submitting}
@@ -1043,6 +1107,15 @@ export default function AdminQuestsPage() {
                       >
                         {submitting ? "Saving..." : editingId ? "Update Quest" : "Create Quest"}
                       </button>
+                      {editingId && (
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2 font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/30"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </form>
                 </div>
@@ -1088,12 +1161,20 @@ export default function AdminQuestsPage() {
                 <tbody>
                   {quests.map((q) => (
                     <tr key={String(q._id)} className="border-b border-[var(--totk-dark-ocher)]/30 hover:bg-[var(--totk-dark-ocher)]/10 transition-colors">
-                      <td className="py-3 pl-4 pr-3 text-[var(--botw-pale)]">{q.title ?? "—"}</td>
+                      <td className="py-3 pl-4 pr-3">
+                        <button
+                          type="button"
+                          onClick={() => openViewModal(String(q._id))}
+                          className="text-left font-medium text-[var(--botw-pale)] hover:text-[var(--totk-ivory)] hover:underline"
+                        >
+                          {q.title ?? "—"}
+                        </button>
+                      </td>
                       <td className="py-3 pr-3 font-mono text-[var(--totk-ivory)] text-xs">{q.questID ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.date ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.questType ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.status ?? "—"}</td>
-                      <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.posted ? "Yes" : "No"}</td>
+                      <td className="py-3 pr-3 text-[var(--botw-pale)]">{isQuestPosted(q) ? "Yes" : "No"}</td>
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -1110,6 +1191,16 @@ export default function AdminQuestsPage() {
                           >
                             Manage
                           </button>
+                          {q.status !== "completed" && (
+                            <button
+                              type="button"
+                              onClick={() => setCompleteConfirmQuestId(String(q._id))}
+                              disabled={completingQuestId === String(q._id)}
+                              className="rounded-md bg-[var(--totk-light-green)]/30 px-3 py-1.5 text-xs font-semibold text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/50 disabled:opacity-50 transition-colors"
+                            >
+                              {completingQuestId === String(q._id) ? "Completing..." : "Mark completed"}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1271,6 +1362,157 @@ export default function AdminQuestsPage() {
                   >
                     {manageParticipantsSaving ? "Saving..." : `Mark ${selectedParticipantIds.length} completed`}
                   </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mark quest completed confirmation modal */}
+        {completeConfirmQuestId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complete-confirm-title"
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl">
+              <div className="p-5">
+                <h2 id="complete-confirm-title" className="text-lg font-bold text-[var(--totk-ivory)]">
+                  Mark quest as completed?
+                </h2>
+                {(() => {
+                  const quest = quests.find((q) => String(q._id) === completeConfirmQuestId);
+                  return quest?.title ? (
+                    <p className="mt-2 text-sm font-medium text-[var(--botw-pale)]">{quest.title}</p>
+                  ) : null;
+                })()}
+                <p className="mt-3 text-sm leading-relaxed text-[var(--totk-grey-200)]">
+                  This will set the quest status to completed and reward all participants who have not been rewarded yet.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--totk-dark-ocher)]/60 p-4">
+                <button
+                  type="button"
+                  onClick={() => setCompleteConfirmQuestId(null)}
+                  disabled={completingQuestId === completeConfirmQuestId}
+                  className="rounded-md border border-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/20 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => completeConfirmQuestId && confirmCompleteQuest(completeConfirmQuestId)}
+                  disabled={completingQuestId === completeConfirmQuestId}
+                  className="rounded-md bg-[var(--totk-light-green)]/30 px-4 py-2 text-sm font-semibold text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/50 disabled:opacity-50"
+                >
+                  {completingQuestId === completeConfirmQuestId ? "Completing..." : "Mark completed"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* View quest details modal */}
+        {viewQuestId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="view-quest-title"
+          >
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl flex flex-col">
+              <div className="border-b border-[var(--totk-dark-ocher)]/60 px-5 py-4 shrink-0">
+                <h2 id="view-quest-title" className="text-xl font-bold text-[var(--totk-ivory)] leading-tight">
+                  {viewQuest ? (viewQuest.title ?? "Quest") : "Quest details"}
+                </h2>
+                {viewQuest?.questID && (
+                  <p className="mt-2 text-xs font-mono text-[var(--totk-grey-200)] tracking-wide">ID: {viewQuest.questID}</p>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                {!viewQuest ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading message="Loading..." variant="inline" size="lg" />
+                  </div>
+                ) : (
+                  <>
+                    <section className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/40 p-4">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">Details</h3>
+                      <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
+                        <div><dt className="text-[var(--totk-grey-200)]">Date</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.date ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Type</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.questType ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Status</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.status ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Location</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { location?: string }).location ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Time limit</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { timeLimit?: string }).timeLimit ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Signup deadline</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { signupDeadline?: string }).signupDeadline ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Participant cap</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.participantCap != null ? viewQuest.participantCap : "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Participants</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{Object.keys(viewQuest.participants ?? {}).length}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Posted</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{isQuestPosted(viewQuest) ? "Yes" : "No"}</dd></div>
+                        {Boolean(viewQuest.postedAt ?? (viewQuest as Record<string, unknown>).postedAt) && (
+                          <div className="col-span-2"><dt className="text-[var(--totk-grey-200)]">Posted at</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{String((viewQuest as Record<string, unknown>).postedAt ?? viewQuest.postedAt ?? "")}</dd></div>
+                        )}
+                      </dl>
+                    </section>
+                    {(viewQuest as QuestRecord & { description?: string }).description && (
+                      <section className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/40 p-4">
+                        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">Description</h3>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--botw-pale)]">{(viewQuest as QuestRecord & { description?: string }).description}</p>
+                      </section>
+                    )}
+                    {(viewQuest as QuestRecord & { rules?: string }).rules && (
+                      <section className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/40 p-4">
+                        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">Rules</h3>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--botw-pale)]">{(viewQuest as QuestRecord & { rules?: string }).rules}</p>
+                      </section>
+                    )}
+                    <section className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-black)]/40 p-4">
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">Rewards</h3>
+                      <ul className="space-y-1 text-sm text-[var(--botw-pale)]">
+                        <li><span className="text-[var(--totk-grey-200)]">Tokens:</span> {viewQuest.tokenReward != null ? String(viewQuest.tokenReward) : "—"}</li>
+                        {(viewQuest.itemRewards && viewQuest.itemRewards.length > 0) ? (
+                          viewQuest.itemRewards.map((i, idx) => (
+                            <li key={idx}><span className="text-[var(--totk-grey-200)]">Item:</span> {i.name} ×{i.quantity ?? 1}</li>
+                          ))
+                        ) : viewQuest.itemReward ? (
+                          <li><span className="text-[var(--totk-grey-200)]">Item:</span> {viewQuest.itemReward} ×{viewQuest.itemRewardQty ?? 1}</li>
+                        ) : null}
+                      </ul>
+                    </section>
+                    {(viewQuest as QuestRecord & { botNotes?: string }).botNotes && (
+                      <section className="rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-black)]/30 p-4">
+                        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">Bot notes</h3>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--totk-grey-200)]">{(viewQuest as QuestRecord & { botNotes?: string }).botNotes}</p>
+                      </section>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--totk-dark-ocher)]/60 px-5 py-4">
+                <button
+                  type="button"
+                  onClick={closeViewModal}
+                  className="rounded-md border border-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/20"
+                >
+                  Close
+                </button>
+                {viewQuest && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { closeViewModal(); openManageModal(viewQuestId!); }}
+                      className="rounded-md bg-[var(--totk-dark-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]"
+                    >
+                      Manage
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { closeViewModal(); loadQuestForEdit(viewQuestId!); }}
+                      className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]"
+                    >
+                      Edit
+                    </button>
+                  </>
                 )}
               </div>
             </div>

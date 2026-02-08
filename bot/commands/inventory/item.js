@@ -191,14 +191,14 @@ module.exports = {
       // Use the already cleaned item name for inventory lookup
       const cleanItemNameForInventory = cleanItemName.toLowerCase();
       
-      // Sum up all quantities of the same item (case-insensitive)
+      // Sum only positive quantities (ignore invalid/negative entries)
       const totalQuantity = inventoryItems
         .filter(invItem => invItem.itemName?.toLowerCase() === cleanItemNameForInventory)
-        .reduce((sum, invItem) => sum + (invItem.quantity || 0), 0);
+        .reduce((sum, invItem) => sum + Math.max(0, invItem.quantity || 0), 0);
       
-      // Find the first item entry for display purposes
+      // Find the first item entry with positive quantity for display/checks (ignore negative rows)
       const ownedItem = inventoryItems.find(invItem =>
-        invItem.itemName?.toLowerCase() === cleanItemNameForInventory
+        invItem.itemName?.toLowerCase() === cleanItemNameForInventory && (invItem.quantity || 0) > 0
       );
       
       // Skip inventory check for mod characters using job vouchers
