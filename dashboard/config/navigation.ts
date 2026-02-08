@@ -36,6 +36,7 @@ export const navItems: NavItem[] = [
     children: [
       { href: "/characters/moderation", label: "Approvals", icon: "fa-check-circle" },
       { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
+      { href: "/admin/quests", label: "Quests", icon: "fa-scroll" },
     ],
   },
 ];

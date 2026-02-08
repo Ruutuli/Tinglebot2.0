@@ -1218,18 +1218,6 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
 
       console.log(`[raidModule.js]: 🧵 Thread created with ID: ${thread.id}`);
       console.log(`[raidModule.js]: 📝 Thread name: ${thread.name}`);
-      console.log(`[raidModule.js]: 📍 Thread parent message ID: ${thread.parentId}`);
-      console.log(`[raidModule.js]: 📍 Raid message ID: ${freshMessage.id}`);
-      console.log(`[raidModule.js]: 📍 Thread parent ID type: ${typeof thread.parentId}`);
-      console.log(`[raidModule.js]: 📍 Raid message ID type: ${typeof freshMessage.id}`);
-      
-      // Verify the thread is properly connected to the raid message
-      if (thread.parentId !== freshMessage.id) {
-        console.warn(`[raidModule.js]: ⚠️ Thread parent ID (${thread.parentId}) doesn't match raid message ID (${freshMessage.id})`);
-        console.warn(`[raidModule.js]: ⚠️ This might be a Discord.js caching issue - thread should still work correctly`);
-      } else {
-        console.log(`[raidModule.js]: ✅ Thread created successfully on raid message`);
-      }
       
       // Send initial thread message with raid ID - use universal raid role for all villages
       const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;

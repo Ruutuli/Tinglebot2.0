@@ -38,6 +38,49 @@ const { enforceJail } = require('@/utils/jailCheck');
 // ============================================================================
 // ---- Constants ----
 // ============================================================================
+// Discord embed field limits (characters)
+const EMBED_FIELD_VALUE_MAX = 1024;
+const EMBED_FIELD_NAME_MAX = 256;
+
+/** Truncates a string for embed field value/name to prevent Discord API validation errors */
+function truncateEmbedField(str, maxLen = EMBED_FIELD_VALUE_MAX) {
+  if (str == null || str === '') return '\u200b'; // Zero-width space for empty
+  const s = String(str);
+  return s.length > maxLen ? s.slice(0, maxLen - 3) + '...' : s;
+}
+
+/** Splits long text into multiple embed fields (max 1024 chars each). Splits on newlines when possible. */
+function splitIntoEmbedFields(text, baseName, maxLen = EMBED_FIELD_VALUE_MAX) {
+  if (text == null || text === '') return [{ name: baseName, value: '\u200b', inline: false }];
+  const s = String(text);
+  if (s.length <= maxLen) return [{ name: baseName, value: s, inline: false }];
+  const lines = s.split('\n');
+  const chunks = [];
+  let current = '';
+  for (const line of lines) {
+    const candidate = current ? current + '\n' + line : line;
+    if (candidate.length <= maxLen) {
+      current = candidate;
+    } else {
+      if (current) chunks.push(current);
+      // If single line exceeds maxLen, hard-split it
+      if (line.length > maxLen) {
+        for (let i = 0; i < line.length; i += maxLen) {
+          chunks.push(line.slice(i, i + maxLen));
+        }
+        current = '';
+      } else {
+        current = line;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.map((value, i) => ({
+    name: chunks.length > 1 ? `${baseName} (${i + 1}/${chunks.length})` : baseName,
+    value,
+    inline: false
+  }));
+}
 // Village resident role IDs
 const VILLAGE_RESIDENT_ROLES = {
   'Rudania': '907344585238409236',
@@ -153,16 +196,78 @@ module.exports = {
       }
 
       if (raidData.status !== 'active') {
+        const raidInactiveEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle(`❌ Raid ${raidId} is no longer active!`)
+          .addFields(
+            {
+              name: '__Status__',
+              value: raidData.status,
+              inline: false
+            },
+            {
+              name: '__Possible reasons__',
+              value: '• The raid has been completed by other players\n• The raid has expired (20-minute time limit)\n• The raid was manually ended by a moderator',
+              inline: false
+            },
+            {
+              name: '__To join a new raid__',
+              value: '• Wait for a new raid announcement\n• Check the village town hall for active raids\n• Use the raid ID from the most recent announcement',
+              inline: false
+            }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Raid System' })
+          .setTimestamp();
         return interaction.editReply({
-          content: `❌ **Raid ${raidId} is no longer active!**\n\n**Status:** ${raidData.status}\n\n**Possible reasons:**\n• The raid has been completed by other players\n• The raid has expired (20-minute time limit)\n• The raid was manually ended by a moderator\n\n**To join a new raid:**\n• Wait for a new raid announcement\n• Check the village town hall for active raids\n• Use the raid ID from the most recent announcement`,
+          embeds: [raidInactiveEmbed],
           ephemeral: true
         });
       }
 
       // Check if character is in the same village as the raid
       if (character.currentVillage.toLowerCase() !== raidData.village.toLowerCase()) {
+        const villageEmojis = {
+          rudania: '<:rudania:899492917452890142>',
+          inariko: '<:inariko:899493009073274920>',
+          vhintl: '<:vhintl:899492879205007450>',
+        };
+        const currentVillageEmoji = villageEmojis[character.currentVillage.toLowerCase()] || '';
+        const raidVillageEmoji = villageEmojis[raidData.village.toLowerCase()] || '';
+        const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+
+        const wrongVillageEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Wrong Village!')
+          .setDescription(`**${character.name}** must be in **${raidVillageEmoji} ${capitalizeFirstLetter(raidData.village)}** to participate in this raid.`)
+          .addFields(
+            {
+              name: '__Current Location__',
+              value: `${currentVillageEmoji} ${capitalizeFirstLetter(character.currentVillage)}`,
+              inline: true
+            },
+            {
+              name: '__Required Location__',
+              value: `${raidVillageEmoji} ${capitalizeFirstLetter(raidData.village)}`,
+              inline: true
+            },
+            {
+              name: '__Raid ID__',
+              value: `\`${raidId}\``,
+              inline: false
+            },
+            {
+              name: '__💡 Need to travel?__',
+              value: 'Use `/travel` to move between villages.',
+              inline: false
+            }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Raid System' })
+          .setTimestamp();
+
         return interaction.editReply({
-          content: `❌ ${character.name} must be in ${raidData.village} to participate in this raid. Current location: ${character.currentVillage}`,
+          embeds: [wrongVillageEmbed],
           ephemeral: true
         });
       }
@@ -205,6 +310,41 @@ module.exports = {
           blightRainMessage = joinResult.blightRainMessage;
         } catch (joinError) {
           console.error(`[raid.js]: ❌ Join raid error for ${character.name}:`, joinError);
+          if (joinError.message === 'You already have a character participating in this raid') {
+            const alreadyInRaidEmbed = new EmbedBuilder()
+              .setColor('#FFA500')
+              .setTitle('👋 Already in This Raid!')
+              .setDescription(`Hey! You already have a character participating in this raid.`)
+              .addFields(
+                {
+                  name: '__Character__',
+                  value: character.name,
+                  inline: true
+                },
+                {
+                  name: '__Raid ID__',
+                  value: `\`${raidId}\``,
+                  inline: true
+                },
+                {
+                  name: '__Current Village__',
+                  value: character.currentVillage,
+                  inline: true
+                },
+                {
+                  name: '__💡 What to do?__',
+                  value: 'Use the raid command again to take your turn, or join with a different character.',
+                  inline: false
+                }
+              )
+              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+              .setFooter({ text: 'Raid System' })
+              .setTimestamp();
+            return interaction.editReply({
+              embeds: [alreadyInRaidEmbed],
+              ephemeral: true
+            });
+          }
           return interaction.editReply({
             content: `❌ **Failed to join raid:** ${joinError.message}\n\n**Character:** ${character.name}\n**Raid ID:** \`${raidId}\`\n**Current Village:** ${character.currentVillage}`,
             ephemeral: true
@@ -653,36 +793,27 @@ async function handleRaidVictory(interaction, raidData, monster) {
       : { image: monster.image };
     const monsterImage = monsterDetails.image || monster.image || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
     
-    // Create victory embed
+    // Build embed fields (split long content to avoid Discord 1024-char limit)
+    const lootText = lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.';
+    const victoryFields = [
+      {
+        name: '__Raid Summary__',
+        value: truncateEmbedField(`🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000 / 60)}m`),
+        inline: false
+      },
+      ...splitIntoEmbedFields(participantList || 'No participants found.', '__Participants__'),
+      ...splitIntoEmbedFields(lootText, '__Loot Distribution__')
+    ];
     const victoryEmbed = new EmbedBuilder()
       .setColor('#FFD700') // Gold color for victory
       .setTitle(`🎉 **${monster.name} Defeated!**`)
       .setDescription(`The raid has been completed successfully! Here's what everyone got:`)
-      .addFields(
-        {
-          name: '__Raid Summary__',
-          value: `🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000 / 60)}m`,
-          inline: false
-        },
-        {
-          name: '__Participants__',
-          value: participantList || 'No participants found.',
-          inline: false
-        },
-        {
-          name: '__Loot Distribution__',
-          value: lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.',
-          inline: false
-        }
-      );
+      .addFields(victoryFields);
     
     // Add blight information if any characters were blighted by Gloom Hands
     if (blightedCharacters.length > 0) {
-      victoryEmbed.addFields({
-        name: '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**',
-        value: `The following characters have been **blighted** by the Gloom Hands encounter:\n${blightedCharacters.map(name => `• **${name}**`).join('\n')}\n\nYou can be healed by **Oracles, Sages & Dragons**\n▹ [Blight Information](https://rootsofthewild.com/world/blight)`,
-        inline: false
-      });
+      const blightValue = `The following characters have been **blighted** by the Gloom Hands encounter:\n${blightedCharacters.map(name => `• **${name}**`).join('\n')}\n\nYou can be healed by **Oracles, Sages & Dragons**\n▹ [Blight Information](https://rootsofthewild.com/world/blight)`;
+      victoryEmbed.addFields(splitIntoEmbedFields(blightValue, '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**'));
     }
     
     victoryEmbed
@@ -717,24 +848,19 @@ async function handleRaidVictory(interaction, raidData, monster) {
           channel.name === 'mod-logs' || channel.name === 'mod-logs' || channel.name === 'admin'
         ) || interaction.channel;
         
+        const failedCharsValue = failedCharacters.map(fc =>
+          `• **${fc.name}**: ${fc.reason}${fc.lootedItem ? ` (${fc.lootedItem.itemName} × ${fc.lootedItem.quantity})` : ''}`
+        ).join('\n');
+        const raidDetailsValue = `**Monster:** ${monster.name}\n**Raid ID:** ${raidData.raidId}\n**Channel:** <#${interaction.channelId}>\n**Message:** ${interaction.url}`;
+        const failedLootFields = [
+          ...splitIntoEmbedFields(failedCharsValue || 'No details available', '__Failed Characters__'),
+          ...splitIntoEmbedFields(raidDetailsValue, '__Raid Details__')
+        ];
         const failedLootEmbed = new EmbedBuilder()
           .setColor('#FF6B6B') // Red color for warnings
           .setTitle(`⚠️ Raid Loot Processing Issues`)
           .setDescription(`Some characters had issues receiving their raid loot. Please investigate:`)
-          .addFields(
-            {
-              name: '__Failed Characters__',
-              value: failedCharacters.map(fc => 
-                `• **${fc.name}**: ${fc.reason}${fc.lootedItem ? ` (${fc.lootedItem.itemName} × ${fc.lootedItem.quantity})` : ''}`
-              ).join('\n'),
-              inline: false
-            },
-            {
-              name: '__Raid Details__',
-              value: `**Monster:** ${monster.name}\n**Raid ID:** ${raidData.raidId}\n**Channel:** <#${interaction.channelId}>\n**Message:** ${interaction.url}`,
-              inline: false
-            }
-          )
+          .addFields(failedLootFields)
           .setTimestamp();
         
         await modChannel.send({ embeds: [failedLootEmbed] });
