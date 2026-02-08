@@ -6,13 +6,14 @@
 import { discordApiRequest } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 import { getAppUrl } from "@/lib/config";
+import { getJobPerk } from "@/data/jobData";
 
 const GUILD_ID = process.env.GUILD_ID || "";
 const LOGGING_CHANNEL_ID = process.env.LOGGING_CHANNEL_ID || "";
 const RESIDENT_ROLE_ID = process.env.RESIDENT_ROLE_ID || "";
 const APP_URL = getAppUrl();
 
-// Role mappings
+// Role mappings (PascalCase / display keys)
 const RACE_ROLES: Record<string, string> = {
   Hylian: process.env.RACE_HYLIAN || "",
   Zora: process.env.RACE_ZORA || "",
@@ -44,6 +45,39 @@ const JOB_PERK_ROLES: Record<string, string> = {
   Boosting: process.env.JOB_PERK_BOOSTING || "",
   Vending: process.env.JOB_PERK_VENDING || "",
 };
+
+// Lowercase-keyed lookups so DB values (e.g. "keaton", "rudania") resolve correctly
+function buildLowerKeyMap(source: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, roleId] of Object.entries(source)) {
+    if (roleId) out[key.toLowerCase()] = roleId;
+  }
+  return out;
+}
+const RACE_ROLES_LOWER = buildLowerKeyMap(RACE_ROLES);
+const VILLAGE_ROLES_LOWER = buildLowerKeyMap(VILLAGE_ROLES);
+
+// Map jobData perk string (e.g. "LOOTING", "BOOST") to JOB_PERK_ROLES key
+const PERK_TO_ROLE_KEY: Record<string, string> = {
+  LOOTING: "Looting",
+  STEALING: "Stealing",
+  DELIVERING: "Delivering",
+  HEALING: "Healing",
+  GATHERING: "Gathering",
+  CRAFTING: "Crafting",
+  VENDING: "Vending",
+  BOOST: "Boosting",
+  ENTERTAINING: "Entertaining",
+};
+function perkStringsToRoleIds(perkString: string): string[] {
+  const roleIds: string[] = [];
+  const parts = perkString.split(/[/&,]/).map((p) => p.trim().toUpperCase());
+  for (const part of parts) {
+    const key = PERK_TO_ROLE_KEY[part];
+    if (key && JOB_PERK_ROLES[key]) roleIds.push(JOB_PERK_ROLES[key]);
+  }
+  return roleIds;
+}
 
 type CharacterDocument = {
   _id: unknown;
@@ -118,7 +152,8 @@ async function logRoleAssignmentError(
 }
 
 /**
- * Assign character roles based on race, village, and job
+ * Assign character roles based on race, village, and job.
+ * Resident is assigned first so accepted users get it even if other lookups fail.
  */
 export async function assignCharacterRoles(
   userId: string,
@@ -127,9 +162,23 @@ export async function assignCharacterRoles(
   const errors: string[] = [];
 
   try {
-    // Assign race role
+    // Assign resident role first (so accepted users always get it when configured)
+    if (RESIDENT_ROLE_ID) {
+      const success = await assignRole(userId, RESIDENT_ROLE_ID);
+      if (!success) {
+        errors.push(`Failed to assign resident role`);
+      }
+    } else {
+      logger.warn(
+        "roleAssignmentService",
+        "RESIDENT_ROLE_ID not configured, skipping resident role assignment"
+      );
+    }
+
+    // Assign race role (case-insensitive lookup)
     if (character.race) {
-      const raceRoleId = RACE_ROLES[character.race];
+      const raceKey = character.race.toLowerCase();
+      const raceRoleId = RACE_ROLES_LOWER[raceKey] ?? RACE_ROLES[character.race];
       if (raceRoleId) {
         const success = await assignRole(userId, raceRoleId);
         if (!success) {
@@ -143,9 +192,10 @@ export async function assignCharacterRoles(
       }
     }
 
-    // Assign village role
+    // Assign village role (case-insensitive lookup)
     if (character.homeVillage) {
-      const villageRoleId = VILLAGE_ROLES[character.homeVillage];
+      const villageKey = character.homeVillage.toLowerCase();
+      const villageRoleId = VILLAGE_ROLES_LOWER[villageKey] ?? VILLAGE_ROLES[character.homeVillage];
       if (villageRoleId) {
         const success = await assignRole(userId, villageRoleId);
         if (!success) {
@@ -159,26 +209,24 @@ export async function assignCharacterRoles(
       }
     }
 
-    // Assign resident role
-    if (RESIDENT_ROLE_ID) {
-      const success = await assignRole(userId, RESIDENT_ROLE_ID);
-      if (!success) {
-        errors.push(`Failed to assign resident role`);
-      }
-    } else {
-      logger.warn(
-        "roleAssignmentService",
-        "RESIDENT_ROLE_ID not configured, skipping resident role assignment"
-      );
-    }
-
-    // Assign job perk role
+    // Assign job perk role(s) via job → perk → role (e.g. Scout → LOOTING → JOB_PERK_LOOTING)
     if (character.job) {
-      const jobPerkRoleId = JOB_PERK_ROLES[character.job];
-      if (jobPerkRoleId) {
-        const success = await assignRole(userId, jobPerkRoleId);
-        if (!success) {
-          errors.push(`Failed to assign job perk role: ${character.job}`);
+      const jobPerk = getJobPerk(character.job);
+      if (jobPerk?.perk) {
+        const roleIds = perkStringsToRoleIds(jobPerk.perk);
+        for (const roleId of roleIds) {
+          if (roleId) {
+            const success = await assignRole(userId, roleId);
+            if (!success) {
+              errors.push(`Failed to assign job perk role for job: ${character.job}`);
+            }
+          }
+        }
+        if (roleIds.length === 0 && !["N/A", "NONE", "ALL"].includes(jobPerk.perk.toUpperCase())) {
+          logger.warn(
+            "roleAssignmentService",
+            `No role mapping for job perk: ${character.job} (perk: ${jobPerk.perk})`
+          );
         }
       } else {
         logger.warn(

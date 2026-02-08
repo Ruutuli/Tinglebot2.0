@@ -228,6 +228,16 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     if (!item) {
       throw new Error(`Item with name "${itemName}" not found`);
     }
+    // Sanity check: ensure fetchItemByName returned the correct variant (e.g. Ancient Battleaxe+ not Ancient Battleaxe)
+    const requestedTrimmed = String(itemName).trim();
+    const returnedTrimmed = String(item.itemName || '').trim();
+    if (requestedTrimmed.toLowerCase() !== returnedTrimmed.toLowerCase()) {
+      logger.error('INVENTORY', `Item name mismatch: requested "${requestedTrimmed}" but got "${returnedTrimmed}" - possible downgrade`);
+      throw new Error(`Item lookup returned wrong variant: expected "${requestedTrimmed}" but got "${returnedTrimmed}". Please try again.`);
+    }
+    if (requestedTrimmed.includes('+')) {
+      logger.info('INVENTORY', `Adding enhanced item: ${returnedTrimmed} (qty: ${quantity}) for ${character.name}`);
+    }
 
     // Query for existing item matching both itemName AND obtain field
     // This allows items with different obtain methods to be tracked separately

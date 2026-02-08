@@ -480,34 +480,18 @@ for (const { name } of cleanedItems) {
     return;
   }
 
-  // ------------------- NEW: Prevent gifting equipped items -------------------
+  // ------------------- Equipped items (for quantity-aware gift check) -------------------
+  // We allow gifting extra copies; only block if trying to gift more than (total - 1 equipped)
   const equippedItems = [
     fromCharacter.gearArmor?.head?.name,
     fromCharacter.gearArmor?.chest?.name,
     fromCharacter.gearArmor?.legs?.name,
     fromCharacter.gearWeapon?.name,
     fromCharacter.gearShield?.name,
-  ].filter(Boolean); // remove undefineds
-  
-  for (const { name } of cleanedItems) {
-    if (equippedItems.includes(name)) {
-      await interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Item Equipped',
-          description: `You cannot gift \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
-          image: {
-            url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
-          },
-          footer: {
-            text: 'Equipment Check'
-          }
-        }],
-        ephemeral: true
-      });
-      return;
-    }
-  }
+  ].filter(Boolean);
+  const equippedItemNamesLower = new Set(
+    equippedItems.map((n) => String(n).trim().toLowerCase())
+  );
 
   const allCharacters = await fetchAllCharactersExceptUser(userId);
   const allModCharacters = await fetchAllModCharacters();
@@ -714,8 +698,12 @@ for (const { name } of cleanedItems) {
     (sum, entry) => sum + (entry.quantity || 0),
     0
    );
-   if (totalQuantity < quantity) {
-     unavailableItems.push(`${canonicalName} - QTY:${totalQuantity}`);
+   const isEquipped = equippedItemNamesLower.has(canonicalName.trim().toLowerCase());
+   const availableToGift = totalQuantity - (isEquipped ? 1 : 0);
+   if (quantity > availableToGift) {
+     unavailableItems.push(
+       `${canonicalName} - Available:${availableToGift}${isEquipped ? ' (1 equipped)' : ''}`
+     );
      allItemsAvailable = false;
    }
   }

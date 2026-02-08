@@ -501,16 +501,23 @@ const healKoCharacter = async (characterId, healerId = null) => {
 
 // ============================================================================
 // Stat Update Functions
+// ------------------- Gear stat model -------------------
+// Each gear slot (weapon, shield, head, chest, legs) contributes at most once.
+// Stats use modifierHearts (or "attack" for weapons) - both keys supported for backward compatibility.
+// No stacking: only one item per slot, each slot adds its value to the total.
 // ------------------- Helper: Get modifierHearts from stats (handles both Map and plain object) -------------------
 const getModifierHearts = (stats) => {
   if (!stats) return 0;
-  // Handle Map
+  // Handle Map (e.g. from dashboard gear-equip which uses "attack"/"defense" keys)
   if (stats instanceof Map) {
-    return stats.get('modifierHearts') || 0;
+    const modHearts = stats.get('modifierHearts');
+    if (modHearts != null) return modHearts;
+    return stats.get('attack') || stats.get('defense') || 0;
   }
   // Handle plain object
   if (typeof stats === 'object') {
-    return stats.modifierHearts || 0;
+    if (stats.modifierHearts != null) return stats.modifierHearts;
+    return stats.attack || stats.defense || 0;
   }
   return 0;
 };
