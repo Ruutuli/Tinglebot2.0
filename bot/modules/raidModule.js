@@ -510,6 +510,13 @@ async function joinRaid(character, raidId, options = {}) {
       throw new Error(`Character ${character.name} cannot participate in raids at Blight Stage ${character.blightStage} - monsters no longer attack them`);
     }
 
+    // Check raid participant cap (max 10)
+    const MAX_RAID_PARTICIPANTS = 10;
+    const participantCount = (raid.participants || []).length;
+    if (participantCount >= MAX_RAID_PARTICIPANTS) {
+      throw new Error(`This raid is full! Maximum of ${MAX_RAID_PARTICIPANTS} participants allowed. (${participantCount}/${MAX_RAID_PARTICIPANTS})`);
+    }
+
     // ------------------- Blight Rain Check -------------------
     // Check for blight rain in the village and apply infection chance
     const { getCurrentWeather } = require('@/services/weatherService');

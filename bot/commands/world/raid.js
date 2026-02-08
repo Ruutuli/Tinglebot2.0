@@ -298,6 +298,15 @@ module.exports = {
       const existingParticipant = raidData.participants.find(p => 
         p.characterId.toString() === character._id.toString()
       );
+
+      // Check raid participant cap (max 10) before attempting to join
+      const MAX_RAID_PARTICIPANTS = 10;
+      if (!existingParticipant && raidData.participants.length >= MAX_RAID_PARTICIPANTS) {
+        return interaction.editReply({
+          content: `❌ **Raid is full!** This raid has reached the maximum of **${MAX_RAID_PARTICIPANTS} participants**. (${raidData.participants.length}/${MAX_RAID_PARTICIPANTS})\n\nTry joining another raid when one is announced!`,
+          ephemeral: true
+        });
+      }
       
       let blightRainMessage = null;
       if (!existingParticipant) {
