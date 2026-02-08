@@ -213,13 +213,22 @@ function aggregateItems(
     const type = normalizeArrayField(itemDetails?.type ?? inventoryEntries[0]?.type);
     const total = inventoryEntries.reduce((sum, entry) => sum + entry.quantity, 0);
 
+    // Group by characterName and sum quantity so each character appears once per item
+    const characterQuantities = new Map<string, number>();
+    for (const entry of inventoryEntries) {
+      const name = entry.characterName;
+      const qty = characterQuantities.get(name) ?? 0;
+      characterQuantities.set(name, qty + entry.quantity);
+    }
+    const characters = Array.from(characterQuantities.entries()).map(([characterName, quantity]) => ({
+      characterName,
+      quantity,
+    }));
+
     itemMap.set(itemNameLower, {
       itemName: originalItemName,
       total,
-      characters: inventoryEntries.map((entry) => ({
-        characterName: entry.characterName,
-        quantity: entry.quantity,
-      })),
+      characters,
       category,
       type,
       image: itemDetails?.image || inventoryEntries[0]?.image,

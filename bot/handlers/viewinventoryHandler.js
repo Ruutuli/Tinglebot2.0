@@ -77,29 +77,34 @@ module.exports = {
       }
 
       // ------------------- Process Inventory Items with Crafting Status -------------------
-      // Keep crafted and non-crafted items separate, filter out zero quantities, then sort items alphabetically.
-      const processedItems = inventoryItems
-        .filter(item => item.quantity > 0) // Remove items with zero quantity
-        .map(item => {
-          // Determine if item is crafted
-          const obtainMethod = (item.obtain || '').toString().toLowerCase();
-          const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
-          
-          return {
-            name: item.itemName,
-            quantity: item.quantity,
+      // Aggregate by itemName (case-insensitive): one line per item, sum quantity; crafted if any row is crafted.
+      const rawFiltered = inventoryItems.filter(item => item.quantity > 0);
+      const byItemName = new Map();
+      for (const item of rawFiltered) {
+        const name = (item.itemName || '').toString().trim();
+        const key = name.toLowerCase();
+        const obtainMethod = (item.obtain || '').toString().toLowerCase();
+        const isCrafted = !!item.craftedAt || obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
+        const existing = byItemName.get(key);
+        if (existing) {
+          existing.quantity += item.quantity || 0;
+          if (isCrafted) existing.isCrafted = true;
+        } else {
+          byItemName.set(key, {
+            name,
+            quantity: item.quantity || 0,
             type: item.type,
-            isCrafted: isCrafted,
+            isCrafted,
             obtain: item.obtain || 'Unknown',
             craftedAt: item.craftedAt
-          };
-        })
-        .sort((a, b) => {
-          // Sort by name first, then by crafting status (non-crafted first)
-          const nameCompare = a.name.localeCompare(b.name);
-          if (nameCompare !== 0) return nameCompare;
-          return a.isCrafted ? 1 : -1;
-        });
+          });
+        }
+      }
+      const processedItems = Array.from(byItemName.values()).sort((a, b) => {
+        const nameCompare = a.name.localeCompare(b.name);
+        if (nameCompare !== 0) return nameCompare;
+        return a.isCrafted ? 1 : -1;
+      });
 
       // ------------------- Group Items by Type -------------------
       // Group processed items by their type for organized display.

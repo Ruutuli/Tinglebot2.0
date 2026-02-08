@@ -692,11 +692,11 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       return "canceled";
     }
 
-    // If user has multiple stacks or it's a general category, prompt for selection
-    // Only auto-select if there's exactly one stack with enough quantity
-    const needsSelection = validItems.length > 1 || 
-                          (validItems.length === 1 && validItems[0].quantity < requiredQuantity) ||
-                          generalCategories[materialName];
+    // Only prompt for selection when: general category, insufficient total, or single stack with not enough
+    // Same item in multiple stacks (different obtain methods) should not prompt—we deduct by name across stacks
+    const needsSelection = !!generalCategories[materialName] ||
+                          totalQuantity < requiredQuantity ||
+                          (validItems.length === 1 && validItems[0].quantity < requiredQuantity);
 
     if (needsSelection && interaction) {
       // Create select menu for user to choose items

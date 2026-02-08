@@ -108,12 +108,22 @@ export async function GET(
       .sort({ itemName: 1 })
       .toArray();
 
-    // Return simplified item list with Equipped flag
-    const items = inventoryItems.map((item) => ({
-      itemName: item.itemName,
-      quantity: item.quantity || 0,
-      Equipped: item.Equipped === true, // Explicitly check for true
-    }));
+    // Aggregate by itemName (case-insensitive): one entry per item, sum quantity, Equipped if any row has it
+    const byItemName = new Map<string, { itemName: string; quantity: number; Equipped: boolean }>();
+    for (const item of inventoryItems) {
+      const name = String(item.itemName ?? "").trim();
+      const key = name.toLowerCase();
+      const qty = Number(item.quantity) || 0;
+      const equipped = item.Equipped === true;
+      const existing = byItemName.get(key);
+      if (existing) {
+        existing.quantity += qty;
+        if (equipped) existing.Equipped = true;
+      } else {
+        byItemName.set(key, { itemName: name, quantity: qty, Equipped: equipped });
+      }
+    }
+    const items = Array.from(byItemName.values());
 
     const response = NextResponse.json({
       data: items,
