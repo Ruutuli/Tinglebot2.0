@@ -668,25 +668,45 @@ async function updateUserTracking(user, quest, userId) {
  * Handles /helpwanted guess: validate and complete a character-guess quest on correct guess
  */
 async function handleCharacterGuess(interaction, questId, characterName, guess) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await interaction.deferReply(); // Public so correct-guess success is visible to the channel
   const logger = require('@/utils/logger');
   try {
     const quest = await HelpWantedQuest.findOne({ questId });
     if (!quest) {
-      return await interaction.editReply({ content: '❌ Quest not found. Please check the quest ID.' });
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Quest Not Found')
+        .setDescription('Please check the quest ID and try again.')
+        .addFields({ name: 'Quest ID', value: `\`${questId}\``, inline: true })
+        .setTimestamp();
+      return await interaction.editReply({ embeds: [embed] });
     }
     if (quest.type !== 'character-guess') {
-      return await interaction.editReply({
-        content: `❌ This quest is not a character guessing quest. Use the appropriate command for **${quest.type}** quests.`
-      });
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Wrong Quest Type')
+        .setDescription(`This quest is not a character guessing quest. Use the appropriate command for **${quest.type}** quests.`)
+        .addFields({ name: 'Quest Type', value: quest.type, inline: true })
+        .setTimestamp();
+      return await interaction.editReply({ embeds: [embed] });
     }
     if (quest.completed) {
-      return await interaction.editReply({ content: '❌ This quest has already been completed!' });
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Quest Already Completed')
+        .setDescription('This character guess quest has already been completed.')
+        .setTimestamp();
+      return await interaction.editReply({ embeds: [embed] });
     }
     const userId = interaction.user.id;
     const user = await User.findOne({ discordId: userId });
     if (!user) {
-      return await interaction.editReply({ content: '❌ User not found. Please try again.' });
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ User Not Found')
+        .setDescription('Your user record was not found. Please try again.')
+        .setTimestamp();
+      return await interaction.editReply({ embeds: [embed] });
     }
     const cooldownCheck = await validateUserCooldowns(userId);
     if (!cooldownCheck.canProceed) {
@@ -697,7 +717,13 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
     }
     const character = await findCharacterByNameForUser(userId, characterName);
     if (!character) {
-      return await interaction.editReply({ content: `❌ Character "${characterName}" not found.` });
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Character Not Found')
+        .setDescription(`No character named **${characterName}** was found for you. Check the spelling and try again.`)
+        .addFields({ name: 'Character', value: characterName, inline: true })
+        .setTimestamp();
+      return await interaction.editReply({ embeds: [embed] });
     }
     const eligibilityCheck = await validateCharacterEligibility(character, quest);
     if (!eligibilityCheck.canProceed) {
@@ -718,9 +744,12 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
     const normalizedCorrect = correctName.toLowerCase().replace(/\s+/g, ' ').trim();
     const normalizedGuess = userGuess.toLowerCase().replace(/\s+/g, ' ').trim();
     if (normalizedGuess !== normalizedCorrect) {
-      return await interaction.editReply({
-        content: "❌ That's not quite right! Better luck next time!"
-      });
+      const embed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle('🎭 Not Quite Right')
+        .setDescription("That's not the correct character. Better luck next time!")
+        .setTimestamp();
+      return await interaction.editReply({ embeds: [embed] });
     }
     const now = new Date();
     const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
@@ -752,15 +781,21 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
       .setColor(0x00FF00)
       .setDescription(`**${character.name}** correctly identified **${correctName}**!`)
       .addFields(
-        { name: 'Quest Completed', value: `Quest ID: \`${questId}\``, inline: false },
+        { name: 'Quest ID', value: `\`${questId}\``, inline: true },
+        { name: 'Village', value: quest.village, inline: true },
         { name: 'Rewards', value: 'Completion has been recorded. Tokens and experience apply per Help Wanted rules.', inline: false }
-      );
+      )
+      .setTimestamp();
     return await interaction.editReply({ embeds: [successEmbed] });
   } catch (error) {
     logger.error('QUEST', `Error handling character guess for quest ${questId}`, error);
-    return await interaction.editReply({
-      content: '❌ An error occurred while processing your guess. Please try again.'
-    });
+    const embed = new EmbedBuilder()
+      .setColor(0xFF0000)
+      .setTitle('❌ Something Went Wrong')
+      .setDescription('An error occurred while processing your guess. Please try again.')
+      .setFooter({ text: 'If this keeps happening, report it in the bug reports channel.' })
+      .setTimestamp();
+    return await interaction.editReply({ embeds: [embed] });
   }
 }
 

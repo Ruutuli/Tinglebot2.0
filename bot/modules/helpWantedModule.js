@@ -2576,6 +2576,13 @@ async function formatQuestsAsEmbedsByVillage() {
               inline: false
             });
           }
+          if (quest.type === 'character-guess' && quest.requirements?.characterName) {
+            embed.addFields({
+              name: '🎭 Answer',
+              value: `**${quest.requirements.characterName}**`,
+              inline: true
+            });
+          }
         } catch (error) {
           logger.error('QUEST', 'Error fetching character for completed quest', error);
         }
@@ -2684,6 +2691,13 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
               name: '🏆 Completed By',
               value: `**${character.name}** (${character.race}) - <@${quest.completedBy.userId}>`,
               inline: false
+            });
+          }
+          if (quest.type === 'character-guess' && quest.requirements?.characterName) {
+            embed.addFields({
+              name: '🎭 Answer',
+              value: `**${quest.requirements.characterName}**`,
+              inline: true
             });
           }
         } catch (error) {
@@ -2870,6 +2884,13 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
             name: '🏆 Completed By',
             value: `**${character.name}** (${character.race}) - <@${quest.completedBy.userId}>`,
             inline: false
+          });
+        }
+        if (quest.type === 'character-guess' && quest.requirements?.characterName) {
+          updatedEmbed.addFields({
+            name: '🎭 Answer',
+            value: `**${quest.requirements.characterName}**`,
+            inline: true
           });
         }
       } catch (error) {
