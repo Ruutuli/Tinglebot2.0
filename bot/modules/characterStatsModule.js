@@ -524,7 +524,7 @@ const getModifierHearts = (stats) => {
 };
 
 // ------------------- Helper: Get character for stat update (shared by defense/attack) -------------------
-// Returns the character document or null if mod character (caller no-ops). Throws if not found.
+// Returns the character document (regular or mod) so callers can persist defense/attack. Throws if not found.
 const getCharacterForStatUpdate = async (characterId) => {
   if (Character.db && Character.db.readyState !== 1) {
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -539,8 +539,7 @@ const getCharacterForStatUpdate = async (characterId) => {
   ]);
 
   if (character && character.isModCharacter) {
-    console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} - stat update skipped (mod characters have unlimited stats)`);
-    return null;
+    return character;
   }
 
   if (!character) {
@@ -551,8 +550,7 @@ const getCharacterForStatUpdate = async (characterId) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('ModCharacter query timeout')), 2000))
         ]);
         if (modCharacter) {
-          console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - stat update skipped (mod characters have unlimited stats)`);
-          return null;
+          return modCharacter;
         }
       }
     } catch (modError) {
@@ -563,6 +561,10 @@ const getCharacterForStatUpdate = async (characterId) => {
 
   return character;
 };
+
+// Helper: true if the document is a mod character (for choosing Character vs ModCharacter update)
+const isModCharacterDoc = (doc) =>
+  doc && (doc.isModCharacter === true || (doc.constructor && doc.constructor.modelName === 'ModCharacter'));
 
 // ------------------- Update Character Defense -------------------
 // Updates the character's defense based on equipped gear.
@@ -582,8 +584,10 @@ const updateCharacterDefense = async (characterId) => {
       totalDefense += getModifierHearts(character.gearShield.stats);
     }
 
+    const updateOp = ModCharacter.updateOne({ _id: characterId }, { $set: { defense: totalDefense } });
+    const regularOp = Character.updateOne({ _id: characterId }, { $set: { defense: totalDefense } });
     await Promise.race([
-      Character.updateOne({ _id: characterId }, { $set: { defense: totalDefense } }),
+      isModCharacterDoc(character) ? updateOp : regularOp,
       new Promise((_, reject) => setTimeout(() => reject(new Error('Character update timeout')), 5000))
     ]);
   } catch (error) {
@@ -605,10 +609,12 @@ const updateCharacterAttack = async (characterId) => {
     const character = await getCharacterForStatUpdate(characterId);
     if (!character) return;
 
-    totalAttack = getModifierHearts(character.gearWeapon?.stats);
+    totalAttack = getModifierHearts(character.gearWeapon?.stats) || 0;
 
+    const updateOp = ModCharacter.updateOne({ _id: characterId }, { $set: { attack: totalAttack } });
+    const regularOp = Character.updateOne({ _id: characterId }, { $set: { attack: totalAttack } });
     await Promise.race([
-      Character.updateOne({ _id: characterId }, { $set: { attack: totalAttack } }),
+      isModCharacterDoc(character) ? updateOp : regularOp,
       new Promise((_, reject) => setTimeout(() => reject(new Error('Character update timeout')), 5000))
     ]);
   } catch (error) {

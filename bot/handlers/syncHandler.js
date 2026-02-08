@@ -16,7 +16,7 @@ const path = require('path');
 // Database Connections
 // ============================================================================
 
-const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('@/database/db');
+const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('@/database/db');
 
 // ============================================================================
 // Database Models
@@ -213,12 +213,20 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
     let skippedItems = []; // Now an array of { name, reason }
 
     try {
-        // Connect to database and fetch character
+        // Connect to database and fetch character (try regular, then mod character)
         await connectToTinglebot();
-        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        let character = await fetchCharacterByNameAndUserId(characterName, userId);
+        if (!character) {
+            character = await fetchModCharacterByNameAndUserId(characterName, userId);
+        }
         if (!character) {
             console.log(`[syncHandler.js]: ⚠️ Character not found: ${characterName}`);
             await editCharacterNotFoundMessage(interaction, characterName);
+            return;
+        }
+
+        // Mod characters use shared inventory; skip Google Sheets sync
+        if (character.isModCharacter) {
             return;
         }
 

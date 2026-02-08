@@ -13,7 +13,7 @@ const { handleError } = require('@/utils/globalErrorHandler');
 // ============================================================================
 // Database Services
 // ------------------- Importing database service functions -------------------
-const { fetchCharacterByNameAndUserId } = require('@/database/db');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('@/database/db');
 
 // ============================================================================
 // Modules
@@ -54,8 +54,11 @@ module.exports = {
       const characterName = interaction.options.getString('charactername');
       const userId = interaction.user.id;
 
-      // Fetch character from the database.
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      // Fetch character from the database (try regular, then mod character).
+      let character = await fetchCharacterByNameAndUserId(characterName, userId);
+      if (!character) {
+        character = await fetchModCharacterByNameAndUserId(characterName, userId);
+      }
       if (!character) {
         await interaction.reply({ content: `❌ **Character ${characterName} not found or does not belong to you.**`, flags: [4096] });
         return;
@@ -64,7 +67,7 @@ module.exports = {
 
       // ------------------- Synchronize Inventory -------------------
       // Sync the inventory from Google Sheets to the database.
-      await syncInventory(characterId);
+      await syncInventory(characterName, userId, interaction);
 
       // ------------------- Retrieve Inventory Items -------------------
       // Fetch the updated inventory collection and convert to an array.

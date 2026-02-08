@@ -939,11 +939,16 @@ async function handleCharacterBasedCommandsAutocomplete(
       const allCharacters = [...(characters || []), ...(modCharacters || [])]
         .filter((character) => character.status === 'accepted');
       
-      // Map all characters to choices with their basic info
-      const choices = allCharacters.map((character) => ({
-        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-        value: character.name,
-      }));
+      // Map all characters to choices with their basic info (defensive job/modTitle for mod OCs)
+      const choices = allCharacters.map((character) => {
+        const jobLabel = character.job
+          ? capitalize(character.job)
+          : (character.modTitle && character.modType ? `${character.modTitle} (${character.modType})` : 'Unknown');
+        return {
+          name: `${character.name} | ${capitalize(character.currentVillage || 'No Village')} | ${jobLabel}`,
+          value: character.name,
+        };
+      });
       
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     } catch (queryError) {

@@ -1639,8 +1639,21 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       }
 
       if (itemQuantityInt !== requiredItem.quantity) {
+        const quantityMismatchEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Incorrect Quantity')
+          .setDescription(`**${healer.name}** requires an exact amount of **${requiredItem.name}**.`)
+          .addFields(
+            { name: 'Required', value: `${requiredItem.name} x${requiredItem.quantity}`, inline: true },
+            { name: 'You Provided', value: `${requiredItem.name} x${itemQuantityInt}`, inline: true }
+          )
+          .setThumbnail(healer.iconUrl)
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+          .setTimestamp();
+
         await interaction.editReply({
-          content: `❌ **${healer.name}** requires exactly **${requiredItem.quantity}** of **${requiredItem.name}**, but you provided **${itemQuantityInt}**.`,
+          embeds: [quantityMismatchEmbed],
           flags: [4096]
         });
         return;
