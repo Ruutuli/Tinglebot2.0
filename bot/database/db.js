@@ -1068,19 +1068,12 @@ async function fetchItemByName(itemName, context = {}) {
         }
         
         const normalizedItemName = itemName.trim();
-        // For items with + in the name (e.g. Ancient Battleaxe+), use exact match to avoid
-        // cross-variant matches (Ancient Battleaxe vs Ancient Battleaxe+)
-        let item;
-        if (normalizedItemName.includes('+')) {
-            item = await db.collection("items").findOne({
-                itemName: normalizedItemName,
-            });
-        } else {
-            const escapedName = normalizedItemName.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
-            item = await db.collection("items").findOne({
-                itemName: new RegExp(`^${escapedName}$`, "i"),
-            });
-        }
+        // Escape special regex characters (including + and ++) so we match the exact variant
+        // e.g. "Sword+", "Sword++" without cross-variant matches; case-insensitive.
+        const escapedName = normalizedItemName.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+        const item = await db.collection("items").findOne({
+            itemName: new RegExp(`^${escapedName}$`, "i"),
+        });
         if (!item) {
             return null;
         }
