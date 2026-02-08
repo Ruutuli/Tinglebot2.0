@@ -60,13 +60,15 @@ export async function GET(
         .exec(),
     ]);
 
-    // Manually populate character references
+    // Manually populate character references and use current names from DB (so renames are reflected)
     const outgoingRelationships = await Promise.all(
       outgoingRaw.map(async (rel) => {
         const targetChar = await populateCharacter(rel.targetCharacterId as unknown as Types.ObjectId);
+        const targetName = (targetChar as { name?: string } | null)?.name ?? rel.targetCharacterName;
         return {
           ...rel,
           targetCharacterId: targetChar || rel.targetCharacterId,
+          targetCharacterName: targetName,
         };
       })
     );
@@ -74,9 +76,11 @@ export async function GET(
     const incomingRelationships = await Promise.all(
       incomingRaw.map(async (rel) => {
         const sourceChar = await populateCharacter(rel.characterId as unknown as Types.ObjectId);
+        const sourceName = (sourceChar as { name?: string } | null)?.name ?? rel.characterName;
         return {
           ...rel,
           characterId: sourceChar || rel.characterId,
+          characterName: sourceName,
         };
       })
     );

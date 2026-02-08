@@ -55,18 +55,21 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .exec();
 
-    // Manually populate character references
+    // Manually populate character references and use current names (so renames are reflected)
     const relationships = await Promise.all(
       relationshipsRaw.map(async (rel) => {
         const [sourceChar, targetChar] = await Promise.all([
           populateCharacter(rel.characterId as unknown as Types.ObjectId),
           populateCharacter(rel.targetCharacterId as unknown as Types.ObjectId),
         ]);
-        
+        const characterName = (sourceChar as { name?: string } | null)?.name ?? rel.characterName;
+        const targetCharacterName = (targetChar as { name?: string } | null)?.name ?? rel.targetCharacterName;
         return {
           ...rel,
           characterId: sourceChar || rel.characterId,
           targetCharacterId: targetChar || rel.targetCharacterId,
+          characterName,
+          targetCharacterName,
         };
       })
     );
