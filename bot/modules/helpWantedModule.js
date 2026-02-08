@@ -3299,11 +3299,41 @@ async function sendQuestCompletionMessage(quest, submissionData, client) {
   }
 }
 
+// ------------------- Function: generateCharacterGuessQuestForTesting -------------------
+// Generates a single character-guess quest for a given village (or random). Used by test script.
+async function generateCharacterGuessQuestForTesting(village = null) {
+  const targetVillage = village && VILLAGES.includes(village) ? village : getRandomElement(VILLAGES);
+  const pools = await getAllQuestPools();
+  const questId = generateUniqueId('X');
+  if (!questId) {
+    throw new Error('Failed to generate questId');
+  }
+  const npcName = getRandomNPCName();
+  const requirements = await generateQuestRequirements('character-guess', pools, targetVillage, questId);
+  const date = getUTCDateString();
+  const scheduledPostTime = '0 12 * * *'; // noon UTC placeholder
+  return {
+    questId,
+    village: targetVillage,
+    date,
+    type: 'character-guess',
+    npcName,
+    requirements,
+    completed: false,
+    completedBy: null,
+    scheduledPostTime,
+    messageId: null,
+    channelId: null,
+    postedToDiscord: false
+  };
+}
+
 // ============================================================================
 // ------------------- Module Exports -------------------
 // ============================================================================
 module.exports = {
   generateDailyQuests,
+  generateCharacterGuessQuestForTesting,
   getItemQuestPool,
   getMonsterQuestPool,
   hasUserCompletedQuestToday,

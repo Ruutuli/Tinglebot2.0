@@ -298,6 +298,26 @@ async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason
   }
 }
 
+// ------------------- OC App Vote Notification Helper -------------------
+async function postOCAppVoteNotification(client, character, modUsername, vote, note = null) {
+  try {
+    const channelId = character.discordThreadId || ADMIN_REVIEW_CHANNEL_ID;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel?.isTextBased()) return;
+
+    const voteEmoji = vote === 'approve' ? '✅' : '⚠️';
+    const voteText = vote === 'approve' ? 'approved' : 'provided feedback (needs changes)';
+    let content = `${voteEmoji} **${modUsername}** ${voteText} on **${character.name}** app`;
+    if (vote === 'needs_changes' && note) {
+      content += `\n\n**Feedback:** ${note}`;
+    }
+    await channel.send({ content });
+    logger.success('MOD_OCAPP', `Posted vote notification for ${character.name} to channel`);
+  } catch (err) {
+    logger.error('MOD_OCAPP', `Failed to post vote notification: ${err.message}`);
+  }
+}
+
 // ------------------- Approval Notification Message Update Helper -------------------
 async function updateApprovalNotificationMessage(interaction, submissionId, status, reason = null) {
   try {
@@ -642,6 +662,7 @@ const villageEmojis = {
 
 const allVillageMounts = ['Horse', 'Donkey'];
 const EDIT_NOTIFICATION_CHANNEL_ID = '1381479893090566144';
+const ADMIN_REVIEW_CHANNEL_ID = process.env.ADMIN_REVIEW_CHANNEL_ID || '964342870796537909';
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -1565,6 +1586,14 @@ async function handleOCAppApprove(interaction) {
       
       character = await Character.findById(character._id);
 
+      await postOCAppVoteNotification(
+        interaction.client,
+        character,
+        modUsername,
+        'approve',
+        note
+      );
+
       return interaction.editReply({
         content: `✅ **Character Approved!**\n\n**${character.name}** has been approved and roles have been assigned.`
       });
@@ -1572,6 +1601,14 @@ async function handleOCAppApprove(interaction) {
 
     const { APPROVAL_THRESHOLD } = ocApplicationService;
     const remaining = APPROVAL_THRESHOLD - voteResult.counts.approves;
+
+    await postOCAppVoteNotification(
+      interaction.client,
+      character,
+      modUsername,
+      'approve',
+      note
+    );
 
     return interaction.editReply({
       content: `✅ **Vote Recorded**\n\n**${character.name}**\n✅ Approves: ${voteResult.counts.approves}/${APPROVAL_THRESHOLD}\n⚠️ Needs Changes: ${voteResult.counts.needsChanges}\n\n**${remaining} more approval(s) needed.**`
@@ -1666,7 +1703,17 @@ async function handleOCAppNeedsChanges(interaction) {
 
     if (decision && decision.decision === 'needs_changes') {
       await ocApplicationService.processNeedsChanges(character._id.toString(), note);
+    }
 
+    await postOCAppVoteNotification(
+      interaction.client,
+      character,
+      modUsername,
+      'needs_changes',
+      note
+    );
+
+    if (decision && decision.decision === 'needs_changes') {
       return interaction.editReply({
         content: `⚠️ **Needs Changes**\n\n**${character.name}** has been marked as needs changes.\n\n**Feedback:**\n${note}\n\nThe user has been notified and can edit and resubmit.`
       });

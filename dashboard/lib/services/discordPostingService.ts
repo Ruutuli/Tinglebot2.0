@@ -277,6 +277,68 @@ export async function handleResubmission(
 }
 
 /**
+ * Post a vote/feedback notification to the same channel as the character app
+ * Format: "User provided feedback! {modUsername} votes on {characterName} app"
+ */
+export async function postVoteNotification(
+  characterId: string,
+  modUsername: string,
+  vote: "approve" | "needs_changes",
+  note?: string | null
+): Promise<void> {
+  try {
+    await import("@/lib/db").then((m) => m.connect());
+    const { default: Character } = await import("@/models/CharacterModel.js");
+
+    const char = (await (Character as {
+      findById: (id: string) => Promise<CharacterDocument | null>;
+    }).findById(characterId)) as CharacterDocument | null;
+
+    if (!char) {
+      logger.warn(
+        "discordPostingService",
+        `Character ${characterId} not found for vote notification`
+      );
+      return;
+    }
+
+    const channelId = char.discordThreadId || ADMIN_REVIEW_CHANNEL_ID;
+    if (!channelId) {
+      logger.warn(
+        "discordPostingService",
+        "No channel configured for vote notification"
+      );
+      return;
+    }
+
+    const voteEmoji = vote === "approve" ? "✅" : "⚠️";
+    const voteText =
+      vote === "approve"
+        ? "approved"
+        : "provided feedback (needs changes)";
+
+    let content = `${voteEmoji} **${modUsername}** ${voteText} on **${char.name}** app`;
+    if (vote === "needs_changes" && note) {
+      content += `\n\n**Feedback:** ${note}`;
+    }
+
+    await discordApiRequest(`channels/${channelId}/messages`, "POST", {
+      content,
+    });
+
+    logger.info(
+      "discordPostingService",
+      `Posted vote notification for character ${characterId} (${char.name}) by ${modUsername}`
+    );
+  } catch (error) {
+    logger.error(
+      "discordPostingService",
+      `Error posting vote notification: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
  * Notify moderators when a new character is created
  * Sends a simple message to the admin review channel with a link to the character
  */

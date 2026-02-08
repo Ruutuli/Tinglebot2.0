@@ -16,7 +16,10 @@ import {
 } from "@/lib/ocApplicationService";
 import { fetchDiscordUsernames } from "@/lib/discord";
 import { logger } from "@/utils/logger";
-import { updateApplicationEmbed } from "@/lib/services/discordPostingService";
+import {
+  updateApplicationEmbed,
+  postVoteNotification,
+} from "@/lib/services/discordPostingService";
 
 export async function POST(
   req: NextRequest,
@@ -105,6 +108,22 @@ export async function POST(
           `Failed to update Discord embed: ${error instanceof Error ? error.message : String(error)}`
         );
         // Continue even if Discord update fails
+      }
+
+      // Post vote/feedback notification to same channel as character app
+      try {
+        await postVoteNotification(
+          id,
+          modUsername,
+          vote,
+          reason || note || null
+        );
+      } catch (error) {
+        logger.error(
+          "api/characters/[id]/vote",
+          `Failed to post vote notification: ${error instanceof Error ? error.message : String(error)}`
+        );
+        // Continue even if notification fails
       }
     }
 
