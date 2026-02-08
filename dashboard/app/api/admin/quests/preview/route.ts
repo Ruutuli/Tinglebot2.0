@@ -74,6 +74,11 @@ function yyyyMmToDisplay(ym: string): string {
   return `${MONTH_NAMES[monthIdx]} ${y}`;
 }
 
+/** Known emojis for items that may not have emoji in DB */
+const KNOWN_ITEM_EMOJIS: Record<string, string> = {
+  "spirit orb": "<:spiritorb:1171310851748270121>",
+};
+
 /** Parse raw token string (flat:300 per_unit:200 etc) to human-readable display */
 function formatTokenRewardForDisplay(raw: string): string | null {
   if (!raw?.trim() || raw === "N/A" || ["None", "No reward"].includes(raw)) return null;
@@ -118,7 +123,12 @@ async function buildRewardsText(body: Record<string, unknown>): Promise<string> 
         for (const item of items) {
           const name = (item as { itemName?: string }).itemName;
           const emoji = (item as { emoji?: string }).emoji;
-          if (name) emojiMap[name.toLowerCase()] = emoji && String(emoji).trim() ? String(emoji).trim() : "";
+          const s = emoji && String(emoji).trim() ? String(emoji).trim() : "";
+          if (name) emojiMap[name.toLowerCase()] = s || KNOWN_ITEM_EMOJIS[name.toLowerCase()] || "";
+        }
+        for (const r of itemRewards) {
+          const key = r?.name?.trim()?.toLowerCase();
+          if (key && !(key in emojiMap)) emojiMap[key] = KNOWN_ITEM_EMOJIS[key] || "";
         }
       } catch {
         /* ignore */
@@ -163,6 +173,13 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
     ? `${durationStr} | Ends ${formatEndDateWithTime(endDate)}`
     : timeLimit;
 
+  const tableroll = (body.tableroll as string)?.trim() || "";
+  const participationLines: string[] = [];
+  if (minRequirements) participationLines.push(`📝 Min requirement: ${minRequirements}`);
+  else if (questType === "RP") participationLines.push(`📝 RP Posts Required (${postReq})`);
+  if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
+  const participationValue = participationLines.length ? participationLines.join("\n") : "—";
+
   const fields: { name: string; value: string; inline?: boolean }[] = [
     {
       name: "**__📋 Details__**",
@@ -178,11 +195,7 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
     { name: "**__🏆 Rewards__**", value: rewardsText, inline: false },
     {
       name: "**__🗓️ Participation__**",
-      value: minRequirements
-        ? `📝 Min requirement: ${minRequirements}`
-        : questType === "RP"
-          ? `📝 RP Posts Required (${postReq})`
-          : "—",
+      value: participationValue,
       inline: false,
     },
     { name: "**__📋 Rules__**", value: rules.length > 1024 ? rules.slice(0, 1021) + "..." : rules, inline: false },

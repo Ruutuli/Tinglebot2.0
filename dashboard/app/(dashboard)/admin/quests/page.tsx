@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { useSession } from "@/hooks/use-session";
 import { Loading, Tabs } from "@/components/ui";
@@ -497,6 +497,41 @@ function formatTokenRewardForDisplay(form: FormState): string | null {
   return null;
 }
 
+/** Fallback emojis when API/DB doesn't have them */
+const KNOWN_ITEM_EMOJIS: Record<string, string> = {
+  "spirit orb": "<:spiritorb:1171310851748270121>",
+};
+
+/** Renders text with Discord emoji codes as inline images */
+function renderWithDiscordEmojis(text: string) {
+  const parts: React.ReactNode[] = [];
+  const regex = /<(a?):(\w+):(\d+)>/g;
+  let lastIndex = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIndex) parts.push(text.slice(lastIndex, m.index));
+    parts.push(
+      <img
+        key={`${m.index}-${m[3]}`}
+        src={`https://cdn.discordapp.com/emojis/${m[3]}.${m[1] ? "gif" : "png"}`}
+        alt=""
+        className="inline-block w-4 h-4 align-middle"
+      />
+    );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts.length > 1 ? <>{parts}</> : text;
+}
+
+function getItemEmoji(name: string, emojiMap?: Record<string, string>): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  const fromMap = emojiMap?.[trimmed]?.trim() ?? emojiMap?.[trimmed.toLowerCase()]?.trim();
+  if (fromMap) return fromMap;
+  return KNOWN_ITEM_EMOJIS[trimmed.toLowerCase()] ?? "";
+}
+
 function buildRewardsPreview(form: FormState, emojiMap?: Record<string, string>): string {
   const parts: string[] = [];
   const tokenDisplay = formatTokenRewardForDisplay(form);
@@ -509,7 +544,7 @@ function buildRewardsPreview(form: FormState, emojiMap?: Record<string, string>)
   const items = form.itemRewards
     .filter((r) => r.name.trim())
     .map((r) => {
-      const emoji = emojiMap?.[r.name]?.trim();
+      const emoji = getItemEmoji(r.name, emojiMap);
       const prefix = emoji ? `${emoji} ` : "";
       return `${prefix}${r.name} x${r.quantity || 1}`;
     });
@@ -562,10 +597,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
           {title}
         </div>
         <div className="text-sm whitespace-pre-wrap break-words border-l-2 border-[var(--totk-mid-ocher)]/60 pl-3 italic" style={{ color: EMBED_TEXT }}>
-          {(() => {
-            const d = description.length > 400 ? description.slice(0, 397) + "..." : description;
-            return d.trimEnd().split("\n").map((line) => (line === "" ? "" : `> ${line}`)).join("\n");
-          })()}
+          {description.length > 400 ? description.slice(0, 397) + "..." : description}
         </div>
 
         <div className="text-sm">
@@ -589,8 +621,10 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
 
         <div className="text-sm">
           <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🏆 Rewards</span>
-          <div style={{ color: EMBED_TEXT }} className="mt-1 whitespace-pre-wrap">
-            {rewardsPreview}
+          <div style={{ color: EMBED_TEXT }} className="mt-1 whitespace-pre-wrap [&_img]:mx-0.5">
+            {rewardsPreview.split("\n").map((line, i) => (
+              <div key={i}>{renderWithDiscordEmojis(line)}</div>
+            ))}
           </div>
         </div>
 
@@ -603,7 +637,10 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
             {form.questType === "RP" && (
               <div>📝 RP Posts Required ({postReqVal})</div>
             )}
-            {!form.minRequirements.trim() && form.questType !== "RP" && <div>—</div>}
+            {form.tableroll.trim() && (
+              <div>🎲 Table roll: <span className="font-medium">{form.tableroll.trim()}</span></div>
+            )}
+            {!form.minRequirements.trim() && form.questType !== "RP" && !form.tableroll.trim() && <div>—</div>}
           </div>
         </div>
 
@@ -672,6 +709,14 @@ export default function AdminQuestsPage() {
   const [viewQuestId, setViewQuestId] = useState<string | null>(null);
   const [viewQuest, setViewQuest] = useState<QuestRecord | null>(null);
   const [previewPosting, setPreviewPosting] = useState(false);
+  const [tablerollNames, setTablerollNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/models/tablerolls")
+      .then((r) => r.json())
+      .then((names: string[]) => setTablerollNames(Array.isArray(names) ? names : []))
+      .catch(() => setTablerollNames([]));
+  }, []);
 
   const handlePostPreview = useCallback(async () => {
     if (!form.title.trim()) {
@@ -1212,13 +1257,27 @@ export default function AdminQuestsPage() {
                                 {RP_THREAD_CHANNELS.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
                               </select>
                             </div>
+                            <div>
+                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table roll (optional)</label>
+                              <select value={form.tableroll} onChange={(e) => setField("tableroll", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
+                                <option value="">—</option>
+                                {[...new Set([form.tableroll, ...tablerollNames].filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((name) => (
+                                  <option key={name} value={name}>{name}</option>
+                                ))}
+                              </select>
+                            </div>
                           </>
                         )}
                         {form.questType === "Interactive" && (
                           <>
                             <div>
-                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table roll name</label>
-                              <input type="text" value={form.tableroll} onChange={(e) => setField("tableroll", e.target.value)} placeholder="Table name for rolls" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                              <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table roll</label>
+                              <select value={form.tableroll} onChange={(e) => setField("tableroll", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
+                                <option value="">—</option>
+                                {[...new Set([form.tableroll, ...tablerollNames].filter(Boolean))].sort((a, b) => a.localeCompare(b)).map((name) => (
+                                  <option key={name} value={name}>{name}</option>
+                                ))}
+                              </select>
                             </div>
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Required rolls</label>

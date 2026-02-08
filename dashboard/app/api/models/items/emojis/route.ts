@@ -4,6 +4,11 @@
 // Returns: { "Spirit Orb": "<:emoji:123>", "Goron Ore": "" }
 // ============================================================================
 
+/** Known emojis for items that may not have emoji in DB (used by bot elsewhere) */
+const KNOWN_ITEM_EMOJIS: Record<string, string> = {
+  "spirit orb": "<:spiritorb:1171310851748270121>",
+};
+
 import { NextRequest, NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 
@@ -33,8 +38,9 @@ export async function GET(req: NextRequest) {
       const item = items.find(
         (i) => (i as { itemName?: string }).itemName?.toLowerCase() === reqName.toLowerCase()
       );
-      const emoji = item ? (item as { emoji?: string }).emoji : null;
-      map[reqName] = emoji && String(emoji).trim() ? String(emoji).trim() : "";
+      let emoji = item ? (item as { emoji?: string }).emoji : null;
+      const s = emoji && String(emoji).trim() ? String(emoji).trim() : "";
+      map[reqName] = s || KNOWN_ITEM_EMOJIS[reqName.toLowerCase()] || "";
     }
     return NextResponse.json(map);
   } catch {
