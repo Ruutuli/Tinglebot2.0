@@ -19,7 +19,7 @@ const { getWeatherWithoutGeneration, getCurrentPeriodBounds, getNextPeriodBounds
 const { canUseSpecialWeather, normalizeVillageName } = require('@/utils/specialWeatherUtils');
 const { enforceJail } = require('@/utils/jailCheck.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
-const { createGatherDebuffEmbed } = require('../../embeds/embeds.js');
+const { createGatherDebuffEmbed, createKOEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/Default-Footer.png';
@@ -296,10 +296,11 @@ async function validateCharacterState(interaction, character, now) {
   }
 
   if (character.ko) {
-    await interaction.editReply({
-      content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
-      ephemeral: true
-    });
+    const embed = createKOEmbed(
+      character,
+      `> ${character.name} is currently KOed and cannot gather.\n> 💤 Let them rest and recover before gathering again.`
+    );
+    await interaction.editReply({ embeds: [embed], ephemeral: true });
     return { valid: false };
   }
 

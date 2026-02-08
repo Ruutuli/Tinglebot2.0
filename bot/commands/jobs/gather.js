@@ -258,10 +258,11 @@ module.exports = {
 
       // Check if the character is KOed.
       if (character.ko) {
-        await safeReply({
-          content: `❌ **${character.name}** is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
-          flags: 64,
-        });
+        const embed = createKOEmbed(
+          character,
+          `> ${character.name} is currently KOed and cannot gather.\n> 💤 Let them rest and recover before gathering again.`
+        );
+        await safeReply({ embeds: [embed] });
         return;
       }
 

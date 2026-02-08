@@ -61,6 +61,14 @@ const DEFAULT_EMOJI = "🔹";
 /** Economy commands are only allowed in this channel. */
 const ECONOMY_CHANNEL_ID = "651614266046152705";
 
+/** Gift subcommand is also allowed in village town halls (where both characters are present). */
+const GIFT_ALLOWED_CHANNEL_IDS = [
+  ECONOMY_CHANNEL_ID,
+  process.env.RUDANIA_TOWNHALL,
+  process.env.INARIKO_TOWNHALL,
+  process.env.VHINTL_TOWNHALL
+].filter(Boolean);
+
 async function getItemEmoji(itemName) {
   try {
     let item;
@@ -343,14 +351,18 @@ module.exports = {
 
  async execute(interaction) {
   try {
-   if (interaction.channelId !== ECONOMY_CHANNEL_ID) {
+   const subcommand = interaction.options.getSubcommand();
+   const isGift = subcommand === "gift";
+   const allowedChannels = isGift ? GIFT_ALLOWED_CHANNEL_IDS : [ECONOMY_CHANNEL_ID];
+   if (!allowedChannels.includes(interaction.channelId)) {
     await interaction.reply({
-     content: `Economy commands can only be used in <#${ECONOMY_CHANNEL_ID}>. Please go there to use gift, shop, trade, or transfer.`,
+     content: isGift
+      ? `The gift command can only be used in <#${ECONOMY_CHANNEL_ID}> or in a village town hall where both characters are located.`
+      : `Economy commands can only be used in <#${ECONOMY_CHANNEL_ID}>. Please go there to use gift, shop, trade, or transfer.`,
      flags: MessageFlags.Ephemeral
     });
     return;
    }
-   const subcommand = interaction.options.getSubcommand();
    switch (subcommand) {
     case "gift":
      await handleGift(interaction);

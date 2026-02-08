@@ -159,6 +159,14 @@ function formatEndDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+/** Format end date for Duration line: "April 30th 11:59 pm" */
+function formatEndDateWithTime(d: Date): string {
+  const day = d.getDate();
+  const ord = day === 1 || day === 21 || day === 31 ? "st" : day === 2 || day === 22 ? "nd" : day === 3 || day === 23 ? "rd" : "th";
+  const month = d.toLocaleDateString("en-US", { month: "long" });
+  return `${month} ${day}${ord} 11:59 pm`;
+}
+
 const RP_THREAD_CHANNELS: { id: string; name: string }[] = [
   { id: "629027808274022410", name: "🔥》rudania" },
   { id: "717090447369043990", name: "🔥》akkala-parade-grounds" },
@@ -440,18 +448,23 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
 // Discord embed preview: matches bot quest post format (Details, Rewards, Participation, Rules, Join, Participants, Recent Activity)
 const BORDER_IMAGE = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const EMBED_BG = "#2f3136";
-const EMBED_BORDER_ACTIVE = "#00FF00";
-const EMBED_BORDER_COMPLETED = "#FEE75C";
+const EMBED_BORDER = "#AA916A";
 const EMBED_TEXT = "#dcddde";
 const EMBED_LABEL = "#b9bbbe";
+
+const VILLAGE_EMOJIS = {
+  rudania: "<:rudania:899492917452890142>",
+  inariko: "<:inariko:899493009073274920>",
+  vhintl: "<:vhintl:899492879205007450>",
+};
 
 function formatLocationPreview(location: string): string {
   if (!location.trim()) return "Not specified";
   const l = location.toLowerCase();
   const parts: string[] = [];
-  if (l.includes("rudania")) parts.push(":rudania: Rudania");
-  if (l.includes("inariko")) parts.push(":inariko: Inariko");
-  if (l.includes("vhintl")) parts.push(":vhintl: Vhintl");
+  if (l.includes("rudania")) parts.push(`${VILLAGE_EMOJIS.rudania} Rudania`);
+  if (l.includes("inariko")) parts.push(`${VILLAGE_EMOJIS.inariko} Inariko`);
+  if (l.includes("vhintl")) parts.push(`${VILLAGE_EMOJIS.vhintl} Vhintl`);
   if (parts.length) return parts.join(", ");
   return location.trim();
 }
@@ -484,7 +497,7 @@ function formatTokenRewardForDisplay(form: FormState): string | null {
   return null;
 }
 
-function buildRewardsPreview(form: FormState): string {
+function buildRewardsPreview(form: FormState, emojiMap?: Record<string, string>): string {
   const parts: string[] = [];
   const tokenDisplay = formatTokenRewardForDisplay(form);
   if (tokenDisplay) {
@@ -493,19 +506,38 @@ function buildRewardsPreview(form: FormState): string {
   if (form.collabAllowed && form.collabRule?.trim()) {
     parts.push(`(${form.collabRule.trim()})`);
   }
-  const items = form.itemRewards.filter((r) => r.name.trim()).map((r) => `${r.name} x${r.quantity || 1}`);
+  const items = form.itemRewards
+    .filter((r) => r.name.trim())
+    .map((r) => {
+      const emoji = emojiMap?.[r.name]?.trim();
+      const prefix = emoji ? `${emoji} ` : "";
+      return `${prefix}${r.name} x${r.quantity || 1}`;
+    });
   if (items.length) parts.push(items.join(", "));
   return parts.length ? parts.join("\n") : "—";
 }
 
 function QuestEmbedPreview({ form }: { form: FormState }) {
+  const [itemEmojiMap, setItemEmojiMap] = useState<Record<string, string>>({});
+  const itemNames = form.itemRewards.filter((r) => r.name.trim()).map((r) => r.name);
+  useEffect(() => {
+    if (itemNames.length === 0) {
+      setItemEmojiMap({});
+      return;
+    }
+    fetch(`/api/models/items/emojis?names=${encodeURIComponent(itemNames.join(","))}`)
+      .then((r) => r.json())
+      .then((data: Record<string, string>) => setItemEmojiMap(data))
+      .catch(() => setItemEmojiMap({}));
+  }, [itemNames.join(",")]);
+
   const cap = form.participantCap.trim() ? parseInt(form.participantCap, 10) : null;
   const participantCount = 0;
   const participantStr =
     cap != null && !Number.isNaN(cap)
       ? `${participantCount}/${cap}${participantCount >= cap ? " - FULL" : ""}`
       : "0";
-  const borderColor = form.status === "completed" ? EMBED_BORDER_COMPLETED : EMBED_BORDER_ACTIVE;
+  const borderColor = EMBED_BORDER;
 
   const title = form.title.trim() || "Quest title";
   const description = form.description.trim() || "Quest description will appear here.";
@@ -515,7 +547,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
   const effectiveLocation = form.location === "ALL" ? "Rudania, Inariko, Vhintl" : form.location;
   const effectiveTimeLimit = form.timeLimit === "Custom" ? form.timeLimitCustom : form.timeLimit;
   const locationPreview = formatLocationPreview(effectiveLocation);
-  const rewardsPreview = buildRewardsPreview(form);
+  const rewardsPreview = buildRewardsPreview(form, itemEmojiMap);
 
   return (
     <div
@@ -529,18 +561,29 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
         <div className="font-semibold text-base" style={{ color: EMBED_TEXT }}>
           {title}
         </div>
-        <div className="text-sm whitespace-pre-wrap break-words" style={{ color: EMBED_TEXT }}>
-          {description.length > 400 ? description.slice(0, 397) + "..." : description}
+        <div className="text-sm whitespace-pre-wrap break-words border-l-2 border-[var(--totk-mid-ocher)]/60 pl-3 italic" style={{ color: EMBED_TEXT }}>
+          {(() => {
+            const d = description.length > 400 ? description.slice(0, 397) + "..." : description;
+            return d.trimEnd().split("\n").map((line) => (line === "" ? "" : `> ${line}`)).join("\n");
+          })()}
         </div>
 
         <div className="text-sm">
           <span style={{ color: EMBED_LABEL }} className="font-semibold underline">📋 Details</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 space-y-0.5">
-            <div>Type: {form.questType || "—"}</div>
-            <div>ID: {questId}</div>
-            <div>Location: {locationPreview}</div>
-            <div>Duration: {effectiveTimeLimit.trim() || "—"}</div>
-            <div>Date: {form.date ? (yyyyMmToDisplay(form.date) || form.date) : "—"}</div>
+            <div><span className="font-semibold">Type:</span> {form.questType || "—"}</div>
+            <div><span className="font-semibold">ID:</span> <code className="bg-black/30 px-1 rounded">{questId}</code></div>
+            <div><span className="font-semibold">Location:</span> {locationPreview}</div>
+            <div>
+              <span className="font-semibold">Duration:</span>{" "}
+              {form.date && effectiveTimeLimit && effectiveTimeLimit !== "Custom"
+                ? (() => {
+                    const end = getEndDateFromDuration(form.date, effectiveTimeLimit);
+                    return end ? `${effectiveTimeLimit} | Ends ${formatEndDateWithTime(end)}` : effectiveTimeLimit;
+                  })()
+                : (effectiveTimeLimit.trim() || "—")}
+            </div>
+            <div><span className="font-semibold">Date:</span> {form.date ? (yyyyMmToDisplay(form.date) || form.date) : "—"}</div>
           </div>
         </div>
 

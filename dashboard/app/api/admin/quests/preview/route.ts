@@ -5,23 +5,73 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, isAdminUser } from "@/lib/session";
+import { connect } from "@/lib/db";
 import { discordApiRequest } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 
 const QUEST_PREVIEW_CHANNEL_ID = "1391812848099004578";
 const BORDER_IMAGE = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
-const EMBED_COLOR_ACTIVE = 0x00ff00; // Green
-const EMBED_COLOR_COMPLETED = 0xfee75c; // Yellow
+const EMBED_COLOR = 0xaa916a; // #AA916A
+
+const VILLAGE_EMOJIS = {
+  rudania: "<:rudania:899492917452890142>",
+  inariko: "<:inariko:899493009073274920>",
+  vhintl: "<:vhintl:899492879205007450>",
+};
 
 function formatLocation(location: string): string {
   if (!location?.trim()) return "Not specified";
   const l = location.toLowerCase();
   const parts: string[] = [];
-  if (l.includes("rudania")) parts.push(":rudania: Rudania");
-  if (l.includes("inariko")) parts.push(":inariko: Inariko");
-  if (l.includes("vhintl")) parts.push(":vhintl: Vhintl");
+  if (l.includes("rudania")) parts.push(`${VILLAGE_EMOJIS.rudania} Rudania`);
+  if (l.includes("inariko")) parts.push(`${VILLAGE_EMOJIS.inariko} Inariko`);
+  if (l.includes("vhintl")) parts.push(`${VILLAGE_EMOJIS.vhintl} Vhintl`);
   if (parts.length) return parts.join(", ");
   return location.trim();
+}
+
+function getEndDateFromDuration(startYYYYMM: string, duration: string): Date | null {
+  if (!startYYYYMM || !/^\d{4}-\d{2}$/.test(startYYYYMM)) return null;
+  const [y, m] = startYYYYMM.split("-").map(Number);
+  const start = new Date(y, m - 1, 1);
+  if (Number.isNaN(start.getTime())) return null;
+  const d = String(duration).toLowerCase();
+  let end: Date;
+  const weekMatch = d.match(/(\d+)\s*week/);
+  const monthMatch = d.match(/(\d+)\s*month/);
+  const dayMatch = d.match(/(\d+)\s*day/);
+  if (weekMatch) {
+    end = new Date(start);
+    end.setDate(end.getDate() + parseInt(weekMatch[1], 10) * 7);
+  } else if (monthMatch) {
+    end = new Date(start);
+    end.setMonth(end.getMonth() + parseInt(monthMatch[1], 10));
+  } else if (dayMatch) {
+    end = new Date(start);
+    end.setDate(end.getDate() + parseInt(dayMatch[1], 10));
+  } else if (duration === "Custom") {
+    return null;
+  } else {
+    end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+  }
+  return end;
+}
+
+function formatEndDateWithTime(d: Date): string {
+  const day = d.getDate();
+  const ord = day === 1 || day === 21 || day === 31 ? "st" : day === 2 || day === 22 ? "nd" : day === 3 || day === 23 ? "rd" : "th";
+  const month = d.toLocaleDateString("en-US", { month: "long" });
+  return `${month} ${day}${ord} 11:59 pm`;
+}
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function yyyyMmToDisplay(ym: string): string {
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym;
+  const [y, m] = ym.split("-");
+  const monthIdx = parseInt(m, 10) - 1;
+  if (monthIdx < 0 || monthIdx > 11) return ym;
+  return `${MONTH_NAMES[monthIdx]} ${y}`;
 }
 
 /** Parse raw token string (flat:300 per_unit:200 etc) to human-readable display */
@@ -41,7 +91,7 @@ function formatTokenRewardForDisplay(raw: string): string | null {
   return s;
 }
 
-function buildRewardsText(body: Record<string, unknown>): string {
+async function buildRewardsText(body: Record<string, unknown>): Promise<string> {
   const parts: string[] = [];
   const tokenReward = body.tokenReward;
   if (tokenReward && typeof tokenReward === "string") {
@@ -53,13 +103,39 @@ function buildRewardsText(body: Record<string, unknown>): string {
   }
   const itemRewards = body.itemRewards as Array<{ name: string; quantity?: number }> | undefined;
   if (Array.isArray(itemRewards) && itemRewards.length > 0) {
-    const items = itemRewards.filter((r) => r?.name?.trim()).map((r) => `${r.name} x${r.quantity ?? 1}`);
+    const names = itemRewards.filter((r) => r?.name?.trim()).map((r) => r.name);
+    let emojiMap: Record<string, string> = {};
+    if (names.length > 0) {
+      try {
+        await connect();
+        const Item = (await import("@/models/ItemModel.js")).default;
+        const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        const items = await Item.find({
+          $or: escaped.map((e) => ({ itemName: new RegExp(`^${e}$`, "i") })),
+        })
+          .select("itemName emoji")
+          .lean();
+        for (const item of items) {
+          const name = (item as { itemName?: string }).itemName;
+          const emoji = (item as { emoji?: string }).emoji;
+          if (name) emojiMap[name.toLowerCase()] = emoji && String(emoji).trim() ? String(emoji).trim() : "";
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    const items = itemRewards
+      .filter((r) => r?.name?.trim())
+      .map((r) => {
+        const emoji = emojiMap[r.name.toLowerCase()]?.trim();
+        return emoji ? `${emoji} ${r.name} x${r.quantity ?? 1}` : `${r.name} x${r.quantity ?? 1}`;
+      });
     if (items.length) parts.push(items.join(", "));
   }
   return parts.length ? parts.join("\n") : "—";
 }
 
-function buildQuestPreviewEmbed(body: Record<string, unknown>) {
+async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
   const title = (body.title as string)?.trim() || "Quest title";
   const description = (body.description as string)?.trim() || "Quest description will appear here.";
   const questType = (body.questType as string) || "—";
@@ -74,19 +150,28 @@ function buildQuestPreviewEmbed(body: Record<string, unknown>) {
     : 15;
   const minRequirements = (body.minRequirements as string)?.trim() || "";
 
-  const color = status === "completed" ? EMBED_COLOR_COMPLETED : EMBED_COLOR_ACTIVE;
+  const color = EMBED_COLOR;
   const locationPreview = formatLocation(location);
-  const rewardsText = buildRewardsText(body);
+  const rewardsText = await buildRewardsText(body);
+
+  const dateStr = (body.date as string)?.trim() || "";
+  const durationStr = timeLimit === "Custom" ? (body.timeLimitCustom as string)?.trim() || "" : timeLimit;
+  const endDate = dateStr && durationStr && timeLimit !== "Custom"
+    ? getEndDateFromDuration(dateStr, durationStr)
+    : null;
+  const durationDisplay = endDate
+    ? `${durationStr} | Ends ${formatEndDateWithTime(endDate)}`
+    : timeLimit;
 
   const fields: { name: string; value: string; inline?: boolean }[] = [
     {
       name: "**__📋 Details__**",
       value: [
-        `Type: ${questType}`,
-        `ID: ${questID}`,
-        `Location: ${locationPreview}`,
-        `Duration: ${timeLimit}`,
-        `Date: ${date}`,
+        `**Type:** ${questType}`,
+        `**ID:** \`${questID}\``,
+        `**Location:** ${locationPreview}`,
+        `**Duration:** ${durationDisplay}`,
+        `**Date:** ${dateStr ? yyyyMmToDisplay(dateStr) : "—"}`,
       ].join("\n"),
       inline: false,
     },
@@ -110,9 +195,12 @@ function buildQuestPreviewEmbed(body: Record<string, unknown>) {
     { name: "**__📊 Recent Activity__**", value: "—", inline: false },
   ];
 
+  const desc = description.length > 4096 ? description.slice(0, 4093) + "..." : description;
+  const descriptionBlockquote = desc.trimEnd().split("\n").map((line) => (line === "" ? "" : `> ${line}`)).join("\n");
+
   return {
     title,
-    description: description.length > 4096 ? description.slice(0, 4093) + "..." : description,
+    description: descriptionBlockquote,
     color,
     fields,
     image: { url: BORDER_IMAGE },
@@ -147,7 +235,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const embed = buildQuestPreviewEmbed(body);
+    const embed = await buildQuestPreviewEmbed(body);
 
     const result = await discordApiRequest<{ id: string }>(
       `channels/${QUEST_PREVIEW_CHANNEL_ID}/messages`,
