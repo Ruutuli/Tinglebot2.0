@@ -74,6 +74,32 @@ function yyyyMmToDisplay(ym: string): string {
   return `${MONTH_NAMES[monthIdx]} ${y}`;
 }
 
+/** Parse "March 2026" (display) back to "2026-03" for end-date math, or return as-is if already YYYY-MM. */
+function dateToYYYYMM(dateStr: string): string {
+  const s = (dateStr ?? "").trim();
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  const monthIdx = MONTH_NAMES.findIndex((m) => s.startsWith(m));
+  if (monthIdx < 0) return s;
+  const rest = s.slice(MONTH_NAMES[monthIdx].length).trim();
+  const yearMatch = rest.match(/^\d{4}$/);
+  if (yearMatch) return `${yearMatch[0]}-${String(monthIdx + 1).padStart(2, "0")}`;
+  return s;
+}
+
+/** Format signup deadline (ISO date or YYYY-MM-DD) for display. */
+function formatSignupDeadline(signupDeadline: unknown): string | null {
+  if (signupDeadline == null || signupDeadline === "") return null;
+  const s = String(signupDeadline).trim();
+  if (!s) return null;
+  try {
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return s;
+    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  } catch {
+    return s;
+  }
+}
+
 /** Known emojis for items that may not have emoji in DB */
 const KNOWN_ITEM_EMOJIS: Record<string, string> = {
   "spirit orb": "<:spiritorb:1171310851748270121>",
@@ -166,13 +192,15 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
   const rewardsText = await buildRewardsText(body);
 
   const dateStr = (body.date as string)?.trim() || "";
+  const dateYYYYMM = dateToYYYYMM(dateStr);
   const durationStr = timeLimit === "Custom" ? (body.timeLimitCustom as string)?.trim() || "" : timeLimit;
-  const endDate = dateStr && durationStr && timeLimit !== "Custom"
-    ? getEndDateFromDuration(dateStr, durationStr)
+  const endDate = dateYYYYMM && durationStr && timeLimit !== "Custom"
+    ? getEndDateFromDuration(dateYYYYMM, durationStr)
     : null;
   const durationDisplay = endDate
     ? `${durationStr} | Ends ${formatEndDateWithTime(endDate)}`
     : timeLimit;
+  const signupDeadlineDisplay = formatSignupDeadline(body.signupDeadline);
 
   const tableroll = (body.tableroll as string)?.trim() || "";
   const participationLines: string[] = [];
@@ -181,16 +209,20 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
   if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
   const participationValue = participationLines.length ? participationLines.join("\n") : "—";
 
+  const detailsLines = [
+    `**Type:** ${questType}`,
+    `**ID:** \`${questID}\``,
+    `**Location:** ${locationPreview}`,
+    `**Duration:** ${durationDisplay}`,
+    `**Date:** ${dateStr ? (dateStr.match(/^\d{4}-\d{2}$/) ? yyyyMmToDisplay(dateStr) : dateStr) : "—"}`,
+  ];
+  if (signupDeadlineDisplay) {
+    detailsLines.push(`**Signup deadline:** ${signupDeadlineDisplay}`);
+  }
   const fields: { name: string; value: string; inline?: boolean }[] = [
     {
       name: "**__📋 Details__**",
-      value: [
-        `**Type:** ${questType}`,
-        `**ID:** \`${questID}\``,
-        `**Location:** ${locationPreview}`,
-        `**Duration:** ${durationDisplay}`,
-        `**Date:** ${dateStr ? yyyyMmToDisplay(dateStr) : "—"}`,
-      ].join("\n"),
+      value: detailsLines.join("\n"),
       inline: false,
     },
     { name: "**__🏆 Rewards__**", value: rewardsText, inline: false },
