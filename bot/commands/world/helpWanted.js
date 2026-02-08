@@ -1976,6 +1976,7 @@ module.exports = {
           opt.setName('guess')
             .setDescription('Your guess for the character name')
             .setRequired(true)
+            .setAutocomplete(true)
         )
     ),
 

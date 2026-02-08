@@ -1059,7 +1059,7 @@ export default function OCDetailPage() {
         params,
         pathname,
       });
-      const res = await fetch(`/api/characters/${characterId}`);
+      const res = await fetch(`/api/characters/${characterId}`, { cache: "no-store" });
       console.log("[OCDetailPage] /api/characters response (callback):", {
         characterId,
         status: res.status,
@@ -1197,7 +1197,7 @@ export default function OCDetailPage() {
           sessionLoading,
           hasUser: Boolean(user?.id),
         });
-        const res = await fetch(`/api/characters/${characterId}`, { signal: abortController.signal });
+        const res = await fetch(`/api/characters/${characterId}`, { signal: abortController.signal, cache: "no-store" });
         if (abortController.signal.aborted) return;
         console.log("[OCDetailPage] /api/characters response:", {
           characterId,

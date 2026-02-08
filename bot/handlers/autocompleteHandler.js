@@ -759,6 +759,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                   await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
                 } else if (focusedOption.name === 'character') {
                   await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+                } else if (focusedOption.name === 'guess') {
+                  await handleHelpWantedGuessAutocomplete(interaction, focusedOption);
                 }
               }
             }
@@ -3515,6 +3517,46 @@ async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
       handleError(error, "autocompleteHandler.js");
       console.error("[handleHelpWantedQuestIdAutocomplete]: Error:", error);
       await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Help Wanted Guess (character name) Autocomplete -------------------
+// Search-style: up to 25 results; filters by typed text (DB-side). Quest ID narrows to that village.
+const HELP_WANTED_GUESS_MAX_CHOICES = 25;
+
+async function handleHelpWantedGuessAutocomplete(interaction, focusedOption) {
+  try {
+    const Character = require('@/models/CharacterModel');
+    const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
+    const questId = interaction.options.getString('id');
+    const search = (focusedOption?.value?.toString() || '').trim();
+    const filter = { status: 'accepted' };
+    if (questId) {
+      const quest = await HelpWantedQuest.findOne({ questId }).select('village').lean();
+      if (quest?.village) filter.homeVillage = quest.village;
+    }
+    if (search.length > 0) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.name = new RegExp(escaped, 'i');
+    }
+    const characters = await Character.find(filter)
+      .select('name').lean().sort({ name: 1 }).limit(HELP_WANTED_GUESS_MAX_CHOICES)
+      .exec();
+    const choices = characters.map((c) => ({
+      name: c.name.length > 100 ? c.name.slice(0, 97) + '...' : c.name,
+      value: c.name.length > 100 ? c.name.slice(0, 100) : c.name
+    }));
+    await safeAutocompleteResponse(interaction, choices, {
+      validate: true,
+      filter: true,
+      focusedValue: search,
+      maxResults: HELP_WANTED_GUESS_MAX_CHOICES,
+      fallbackToEmpty: false
+    });
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    console.error('[handleHelpWantedGuessAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
   }
 }
 

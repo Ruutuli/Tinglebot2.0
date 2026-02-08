@@ -1423,9 +1423,10 @@ export function CreateForm({
               : "Character updated."
           );
           // Redirect to character page after successful update using slug
+          // Add cache-busting param so the detail page fetches fresh data
           if (data.character?.name) {
             const slug = createSlug(data.character.name);
-            router.push(`/characters/${slug}`);
+            router.push(`/characters/${slug}?t=${Date.now()}`);
           }
         } else {
           setSubmitSuccess(
@@ -1436,9 +1437,10 @@ export function CreateForm({
               : "Character created."
           );
           // Redirect to character page after successful creation using slug
+          // Add cache-busting param so the detail page fetches fresh data
           if (data.character?.name) {
             const slug = createSlug(data.character.name);
-            router.push(`/characters/${slug}`);
+            router.push(`/characters/${slug}?t=${Date.now()}`);
           }
         }
       } catch (e) {

@@ -500,9 +500,23 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
   if (questType === 'character-guess') {
     const clueType = requirements?.clueType || 'snippets';
     if (clueType === 'icon-zoom') {
-      return `${npcName} found a really zoomed-in picture of someone's portrait but can't tell who it is! Can you figure it out?\n\n*"I only have this tiny piece of the image—who does it belong to?!"*`;
+      const iconFlavors = [
+        `${npcName} needs help identifying someone they spotted! *"I only got a glimpse—something about the eyes and the way their hair fell. I had a scribe sketch the detail from memory. Do you recognize them?"* *(See the sketch below.)*`,
+        `${npcName} is trying to place a face! *"Someone passed through and I can't shake the memory—the curve of their jaw, the set of their expression. I've had it drawn as best I can. Who is this?"* *(Sketch below.)*`,
+        `${npcName} needs a second opinion! *"I saw a stranger recently and I'm trying to remember who they reminded me of. Just a certain look—the brow, the shape of the face. Here's a rough likeness. Ring any bells?"* *(See below.)*`,
+        `${npcName} is stumped! *"I caught a fragment of someone's appearance—enough to stick in my mind. I had an artist capture the detail. Can you tell me who this is?"* *(Likeness below.)*`,
+        `${npcName} needs help putting a name to a face! *"I only remember a sliver—a particular angle, a look in the eyes. I've had it rendered so others might recognize them. Do you know who I'm describing?"* *(See the rendering below.)*`
+      ];
+      return getRandomElement(iconFlavors);
     }
-    return `${npcName} has found some mysterious notes about someone, but can't remember who they belong to! Can you help identify this person?\n\n*"I found these notes scattered around, but I can't for the life of me remember who they're about! Help me figure it out!"*`;
+    const snippetFlavors = [
+      `${npcName} has found some mysterious notes about someone, but can't remember who they belong to! Can you help identify this person?\n\n*"I found these notes scattered around, but I can't for the life of me remember who they're about! Help me figure it out!"*`,
+      `${npcName} stumbled upon some notes—snippets about someone's personality and past—but the name escapes them! Can you help?\n\n*"Who do these belong to? I've read them over and over but I just can't place the person!"*`,
+      `${npcName} has scraps of writing that describe someone, but they've forgotten who!\n\n*"These bits and pieces are clearly about one person—their quirks, their history—but I'm drawing a blank on the name. Sound familiar to anyone?"*`,
+      `${npcName} found some notes that seem to describe a villager, but can't match them to a face.\n\n*"I've got these fragments—personality, backstory—and they're driving me mad. Who in the village is this about? Help me out!"*`,
+      `${npcName} is holding a handful of notes about someone and needs help putting a name to them!\n\n*"I found these scattered notes. They're clearly about one person, but I can't for the life of me remember who they're about! Can you figure it out?"*`
+    ];
+    return getRandomElement(snippetFlavors);
   }
 
   const npcFlavor = NPC_QUEST_FLAVOR[npcName];
@@ -515,7 +529,7 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
       crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount || 'unknown'}x ${requirements.item || 'unknown item'}**`,
       art: `**${npcName} requests artwork:** Create a picture showing **${requirements.prompt || 'something for the village'}** (${requirements.requirement || 'any style'})`,
       writing: `**${npcName} needs documentation:** Write a detailed account about **${requirements.prompt || 'village life'}** (${requirements.requirement || '500+ words'})`,
-      'character-guess': `**${npcName} needs your help:** Someone's identity is a mystery—use the clues to guess who it is!`
+      'character-guess': `**${npcName} needs help identifying a character!** Use the clues below (personality/history snippets or the zoomed image) to figure out who it is.`
     };
     return fallbackTexts[questType] || `**${npcName} needs help:** Complete this quest for the village`;
   }

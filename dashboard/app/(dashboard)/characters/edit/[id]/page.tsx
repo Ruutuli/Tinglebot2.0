@@ -135,7 +135,7 @@ export default function EditCharacterPage() {
       characterFetchAbortControllerRef.current = new AbortController();
       const signal = characterFetchAbortControllerRef.current.signal;
 
-      const res = await fetch(`/api/characters/${characterId}`, { signal });
+      const res = await fetch(`/api/characters/${characterId}`, { signal, cache: "no-store" });
       if (signal.aborted) return;
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
