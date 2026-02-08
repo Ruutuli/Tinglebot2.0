@@ -3533,7 +3533,10 @@ async function handleHelpWantedGuessAutocomplete(interaction, focusedOption) {
     const filter = { status: 'accepted' };
     if (questId) {
       const quest = await HelpWantedQuest.findOne({ questId }).select('village').lean();
-      if (quest?.village) filter.homeVillage = quest.village;
+      if (quest?.village) {
+        const villageEscaped = String(quest.village).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        filter.homeVillage = new RegExp('^' + villageEscaped + '$', 'i');
+      }
     }
     if (search.length > 0) {
       const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
