@@ -1077,8 +1077,8 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
    () => fetchCharacterByName(job),
    `Error fetching character for job "${job}"`
   );
-  if (character && character.job) {
-   actualJob = character.job;
+  if (character) {
+   actualJob = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
   }
  }
 

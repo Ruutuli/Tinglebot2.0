@@ -291,7 +291,7 @@ async function getBoosterInfo(characterName) {
       return null;
     }
     
-    const boosterJob = booster.job || activeBoost.boosterJob;
+    const boosterJob = (booster.jobVoucher && booster.jobVoucherJob) ? booster.jobVoucherJob : (booster.job || activeBoost.boosterJob);
     
     return {
       name: booster.name,
