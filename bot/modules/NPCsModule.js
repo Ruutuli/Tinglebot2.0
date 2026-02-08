@@ -496,6 +496,15 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
     return specialText;
   }
 
+  // ------------------- Character-guess quest (by clue type) -------------------
+  if (questType === 'character-guess') {
+    const clueType = requirements?.clueType || 'snippets';
+    if (clueType === 'icon-zoom') {
+      return `${npcName} found a really zoomed-in picture of someone's portrait but can't tell who it is! Can you figure it out?\n\n*"I only have this tiny piece of the image—who does it belong to?!"*`;
+    }
+    return `${npcName} has found some mysterious notes about someone, but can't remember who they belong to! Can you help identify this person?\n\n*"I found these notes scattered around, but I can't for the life of me remember who they're about! Help me figure it out!"*`;
+  }
+
   const npcFlavor = NPC_QUEST_FLAVOR[npcName];
   if (!npcFlavor || !npcFlavor[questType]) {
     // Fallback to generic flavor text if NPC or quest type not found
@@ -505,7 +514,8 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
       escort: `**${npcName} needs protection:** Safely escort them to **${requirements.location || 'unknown location'}**`,
       crafting: `**${npcName} needs a craftsman:** Create and deliver **${requirements.amount || 'unknown'}x ${requirements.item || 'unknown item'}**`,
       art: `**${npcName} requests artwork:** Create a picture showing **${requirements.prompt || 'something for the village'}** (${requirements.requirement || 'any style'})`,
-      writing: `**${npcName} needs documentation:** Write a detailed account about **${requirements.prompt || 'village life'}** (${requirements.requirement || '500+ words'})`
+      writing: `**${npcName} needs documentation:** Write a detailed account about **${requirements.prompt || 'village life'}** (${requirements.requirement || '500+ words'})`,
+      'character-guess': `**${npcName} needs your help:** Someone's identity is a mystery—use the clues to guess who it is!`
     };
     return fallbackTexts[questType] || `**${npcName} needs help:** Complete this quest for the village`;
   }

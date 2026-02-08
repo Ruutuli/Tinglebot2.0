@@ -310,7 +310,27 @@ module.exports = {
           return interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
         }
       }
-      
+
+      // ------------------- Check if Destination Village is Damaged -------------------
+      // Block travel TO a damaged village (same exemption for mod characters)
+      if (!isModCharacter && destination) {
+        const destinationStatus = await checkVillageStatus(destination);
+        if (destinationStatus === 'damaged') {
+          const capitalizedDestination = capitalizeFirstLetter(destination);
+          const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Destination Village Damaged')
+            .setDescription(`**${character.name}** cannot travel to **${capitalizedDestination}** because the village is damaged and needs repair.`)
+            .addFields(
+              { name: 'What to do', value: 'Travel is blocked until the village is repaired. Others can help by contributing tokens using </village donate> in that village.', inline: false }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setFooter({ text: 'Repair the village to unlock travel' })
+            .setTimestamp();
+          return interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
+        }
+      }
+
       // Check starting village for blight rain (moved to after travel completion)
       const startingWeather = await getWeatherWithoutGeneration(startingVillage);
       if (false && startingWeather?.special?.label === 'Blight Rain') {

@@ -1083,6 +1083,17 @@ function QuestSection({ user }: { user: UserProfile }) {
     };
   }, [completions, user.quests.typeTotals]);
 
+  const questListDisplay = useMemo(() => {
+    const c = user.quests.completions || [];
+    return [...c].reverse().map((entry) => ({
+      name: entry.questTitle || "Unknown",
+      year: entry.completedAt
+        ? String(new Date(entry.completedAt).getFullYear())
+        : "",
+      category: entry.questType || "",
+    }));
+  }, [user.quests.completions]);
+
   // Improved pie chart colors - more vibrant and visible
   const PIE_CHART_COLORS = [
     "var(--botw-blue)",           // Blue
@@ -1165,6 +1176,32 @@ function QuestSection({ user }: { user: UserProfile }) {
               </Pill>
             </div>
           </div>
+
+          {questListDisplay.length > 0 && (
+            <>
+              <Divider />
+              <div>
+                <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
+                  Quest List
+                </p>
+                <ul className="space-y-1.5 text-sm text-[var(--botw-pale)]">
+                  {questListDisplay.map((entry, i) => (
+                    <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="font-medium text-[var(--totk-light-green)]">
+                        {entry.name || "Unknown"}
+                        {entry.year ? ` (${entry.year})` : ""}
+                      </span>
+                      {entry.category && String(entry.category).trim() && (
+                        <Pill className="bg-[var(--totk-grey-400)]/50 text-[var(--totk-grey-200)] text-xs">
+                          {entry.category}
+                        </Pill>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
         </div>
       </SectionCard>
 

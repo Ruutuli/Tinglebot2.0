@@ -102,6 +102,12 @@ export type QuestLegacy = {
   transferUsed: boolean;
 };
 
+export type QuestListEntry = {
+  name: string;
+  year: string;
+  category?: string;
+};
+
 export type Quests = {
   totalCompleted: number;
   lastCompletionAt: Date | string | null;

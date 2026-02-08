@@ -524,7 +524,7 @@ userSchema.methods.ensureQuestTracking = function() {
     if (!Array.isArray(this.quests.completions)) {
       this.quests.completions = [];
     }
-    
+
     if (typeof this.quests.totalCompleted !== 'number') {
       this.quests.totalCompleted = 0;
     }
@@ -691,6 +691,12 @@ userSchema.methods.getQuestStats = function() {
   };
   const allTimeTotal = (questTracking.totalCompleted || 0) + legacyClone.totalTransferred;
   const turnInSummary = this.getQuestTurnInSummary();
+  const completions = questTracking.completions || [];
+  const questList = completions.map((c) => ({
+    name: c.questTitle || 'Unknown',
+    year: c.completedAt ? String(new Date(c.completedAt).getFullYear()) : '',
+    category: c.questType || ''
+  }));
   return {
     totalCompleted: questTracking.totalCompleted,
     legacy: legacyClone,
@@ -699,7 +705,8 @@ userSchema.methods.getQuestStats = function() {
     typeTotals: { ...questTracking.typeTotals },
     recentCompletions: questTracking.completions.slice(-5).reverse(),
     pendingTurnIns: turnInSummary.totalPending,
-    turnInSummary
+    turnInSummary,
+    questList
   };
 };
 

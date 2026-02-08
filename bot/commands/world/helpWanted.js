@@ -26,7 +26,8 @@ const QUEST_TYPE_EMOJIS = {
   'escort': '🛡️',
   'crafting': '🔨',
   'art': '🎨',
-  'writing': '📝'
+  'writing': '📝',
+  'character-guess': '🎭'
 };
 
 const VILLAGE_SHOP_SPECIAL_WEATHER_MAX_RETRY = 1;
@@ -252,6 +253,11 @@ async function validateQuestRequirements(character, quest) {
       return {
         requirementsMet: false,
         message: `📝 **Writing Quest:** This quest requires writing content. Please use the \`/submit writing\` command with this quest ID to submit your writing. Once approved by a moderator, the quest will be automatically completed.`
+      };
+    case 'character-guess':
+      return {
+        requirementsMet: false,
+        message: '🎭 **Character Guess Quest:** Use `/helpwanted guess` with the quest ID and your guess for the character name.'
       };
     default:
       console.log(`[helpWanted.js]: ❌ Unknown quest type: ${quest.type}`);
@@ -608,6 +614,17 @@ async function updateVillageShopsStock(itemName, amountUsed, retryAttempt = 0) {
  * @returns {Promise<void>}
  */
 async function updateUserTracking(user, quest, userId) {
+  if (!user.helpWanted) {
+    user.helpWanted = {
+      lastCompletion: null,
+      cooldownUntil: null,
+      totalCompletions: 0,
+      currentCompletions: 0,
+      lastExchangeAmount: 0,
+      lastExchangeAt: null,
+      completions: []
+    };
+  }
   const now = new Date();
   // Get today's date in EST format (YYYY-MM-DD) - EST is UTC-5
   const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
@@ -625,6 +642,106 @@ async function updateUserTracking(user, quest, userId) {
     timestamp: new Date()
   });
   await user.save();
+}
+
+/**
+ * Handles /helpwanted guess: validate and complete a character-guess quest on correct guess
+ */
+async function handleCharacterGuess(interaction, questId, characterName, guess) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const logger = require('@/utils/logger');
+  try {
+    const quest = await HelpWantedQuest.findOne({ questId });
+    if (!quest) {
+      return await interaction.editReply({ content: '❌ Quest not found. Please check the quest ID.' });
+    }
+    if (quest.type !== 'character-guess') {
+      return await interaction.editReply({
+        content: `❌ This quest is not a character guessing quest. Use the appropriate command for **${quest.type}** quests.`
+      });
+    }
+    if (quest.completed) {
+      return await interaction.editReply({ content: '❌ This quest has already been completed!' });
+    }
+    const userId = interaction.user.id;
+    const user = await User.findOne({ discordId: userId });
+    if (!user) {
+      return await interaction.editReply({ content: '❌ User not found. Please try again.' });
+    }
+    const cooldownCheck = await validateUserCooldowns(userId);
+    if (!cooldownCheck.canProceed) {
+      return await interaction.editReply({
+        embeds: cooldownCheck.embed ? [cooldownCheck.embed] : undefined,
+        content: cooldownCheck.message || undefined
+      });
+    }
+    const character = await Character.findOne({ userId, name: characterName });
+    if (!character) {
+      return await interaction.editReply({ content: `❌ Character "${characterName}" not found.` });
+    }
+    const eligibilityCheck = await validateCharacterEligibility(character, quest);
+    if (!eligibilityCheck.canProceed) {
+      return await interaction.editReply({
+        embeds: eligibilityCheck.embed ? [eligibilityCheck.embed] : undefined,
+        content: eligibilityCheck.message || undefined
+      });
+    }
+    const locationCheck = validateCharacterLocation(character, quest);
+    if (!locationCheck.canProceed) {
+      return await interaction.editReply({
+        embeds: locationCheck.embed ? [locationCheck.embed] : undefined,
+        content: locationCheck.message || undefined
+      });
+    }
+    const correctName = (quest.requirements?.characterName || '').trim();
+    const userGuess = (guess || '').trim();
+    const normalizedCorrect = correctName.toLowerCase().replace(/\s+/g, ' ').trim();
+    const normalizedGuess = userGuess.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (normalizedGuess !== normalizedCorrect) {
+      return await interaction.editReply({
+        content: "❌ That's not quite right! Better luck next time!"
+      });
+    }
+    const now = new Date();
+    const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
+    quest.completed = true;
+    quest.completedBy = {
+      userId,
+      characterId: character._id.toString(),
+      timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
+    };
+    await quest.save();
+    await updateUserTracking(user, quest, userId);
+    if (!character.helpWanted) {
+      character.helpWanted = { lastCompletion: null, cooldownUntil: null, completions: [] };
+    }
+    character.helpWanted.lastCompletion = today;
+    character.helpWanted.completions = character.helpWanted.completions || [];
+    character.helpWanted.completions.push({
+      date: today,
+      village: quest.village,
+      questType: quest.type,
+      questId: quest.questId,
+      timestamp: new Date()
+    });
+    await character.save();
+    await updateQuestEmbed(interaction.client, quest, quest.completedBy);
+    const successEmbed = new EmbedBuilder()
+      .setTitle('🎭 Correct Guess!')
+      .setColor(0x00FF00)
+      .setDescription(`**${character.name}** correctly identified **${correctName}**!`)
+      .addFields(
+        { name: 'Quest Completed', value: `Quest ID: \`${questId}\``, inline: false },
+        { name: 'Rewards', value: 'Completion has been recorded. Tokens and experience apply per Help Wanted rules.', inline: false }
+      );
+    return await interaction.editReply({ embeds: [successEmbed] });
+  } catch (error) {
+    logger.error('QUEST', `Error handling character guess for quest ${questId}`, error);
+    return await interaction.editReply({
+      content: '❌ An error occurred while processing your guess. Please try again.'
+    });
+  }
 }
 
 /**
@@ -684,6 +801,9 @@ function createQuestCompletionEmbed(character, quest, userId) {
       break;
     case 'writing':
       questDetails = `**Written:** ${quest.requirements.prompt}\n**Requirement:** ${quest.requirements.requirement}`;
+      break;
+    case 'character-guess':
+      questDetails = `**Correctly identified:** ${quest.requirements?.characterName || 'the character'}`;
       break;
     default:
       questDetails = 'Quest completed successfully!';
@@ -1325,6 +1445,13 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   if (!expirationCheck.canProceed) {
     return await interaction.editReply({ content: expirationCheck.message });
   }
+
+  // Check quest not already completed (prevent double-dip)
+  if (quest.completed) {
+    return await interaction.editReply({
+      content: `❌ This quest has already been completed by <@${quest.completedBy?.userId || 'unknown'}>.`
+    });
+  }
   
   // Get monster list
   let monsterList = [];
@@ -1829,10 +1956,39 @@ module.exports = {
     .addSubcommand(sub =>
       sub.setName('history')
         .setDescription('View your recent Help Wanted quest completions and character info')
+    )
+    .addSubcommand(sub =>
+      sub.setName('guess')
+        .setDescription('Submit your guess for a character guessing quest')
+        .addStringOption(opt =>
+          opt.setName('id')
+            .setDescription('The quest ID')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('character')
+            .setDescription('Your character\'s name (if you have multiple)')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('guess')
+            .setDescription('Your guess for the character name')
+            .setRequired(true)
+        )
     ),
 
   execute: async function(interaction) {
     const sub = interaction.options.getSubcommand();
+    
+    if (sub === 'guess') {
+      const questId = interaction.options.getString('id');
+      const characterName = interaction.options.getString('character');
+      const guess = interaction.options.getString('guess');
+      await handleCharacterGuess(interaction, questId, characterName, guess);
+      return;
+    }
     
     if (sub === 'monsterhunt') {
       const questId = interaction.options.getString('id');
@@ -2114,40 +2270,39 @@ module.exports = {
       await interaction.deferReply();
       
       try {
-        // Fetch character and user
         const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
         if (!character) {
           return await interaction.editReply({ content: '❌ Character not found.' });
         }
 
-        const user = await User.findOne({ discordId: interaction.user.id });
-        if (!user) {
-          return await interaction.editReply({ content: '❌ No user data found. Please complete some Help Wanted quests first.' });
-        }
+        const exchangeAmount = 50;
+        const notEnoughMessage = (current, total) =>
+          `❌ **${character.name}** has only **${current} current Help Wanted quest completions** for exchange. You need at least **50** to exchange for a reward.\n\n📊 **Total completions:** ${total}\n🎯 **Current for exchange:** ${current}`;
 
-        const totalCompletions = user.helpWanted?.totalCompletions || user.helpWanted?.completions?.length || 0;
-        const currentCompletions = user.helpWanted?.currentCompletions || 0;
-
-        if (currentCompletions < 50) {
-          return await interaction.editReply({
-            content: `❌ **${character.name}** has only **${currentCompletions} current Help Wanted quest completions** for exchange. You need at least **50** to exchange for a reward.\n\n📊 **Total completions:** ${totalCompletions}\n🎯 **Current for exchange:** ${currentCompletions}`
-          });
-        }
-
-        // Reset exchange tracking for new exchange
-        user.helpWanted.lastExchangeAmount = 0;
-
-        // ------------------- Process the Exchange -------------------
         if (reward === 'spirit_orb') {
-          // Add Spirit Orb to character's inventory
+          const user = await User.findOneAndUpdate(
+            { discordId: interaction.user.id, 'helpWanted.currentCompletions': { $gte: exchangeAmount } },
+            {
+              $inc: { 'helpWanted.currentCompletions': -exchangeAmount },
+              $set: { 'helpWanted.lastExchangeAmount': exchangeAmount, 'helpWanted.lastExchangeAt': new Date() }
+            },
+            { new: true }
+          );
+          if (!user) {
+            const u = await User.findOne({ discordId: interaction.user.id });
+            const current = u?.helpWanted?.currentCompletions ?? 0;
+            const total = u?.helpWanted?.totalCompletions ?? u?.helpWanted?.completions?.length ?? 0;
+            return await interaction.editReply({ content: notEnoughMessage(current, total) });
+          }
+          const beforeCurrent = user.helpWanted.currentCompletions + exchangeAmount;
+          const totalCompletions = user.helpWanted?.totalCompletions ?? user.helpWanted?.completions?.length ?? 0;
+
           const { getCharacterInventoryCollection } = require('@/database/db');
           const inventoryCollection = await getCharacterInventoryCollection(character.name);
-          
           const existingOrb = await inventoryCollection.findOne({
             characterId: character._id,
             itemName: { $regex: /^spirit orb$/i }
           });
-
           if (existingOrb) {
             existingOrb.quantity += 1;
             await inventoryCollection.updateOne(
@@ -2165,15 +2320,12 @@ module.exports = {
               addedAt: new Date()
             });
           }
-
-          // Log to InventoryLog database collection
           try {
             const ItemModel = require('@/models/ItemModel');
             const spiritOrbItem = await ItemModel.findOne({ itemName: { $regex: /^spirit orb$/i } });
-            const interactionUrl = interaction 
+            const interactionUrl = interaction
               ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
               : '';
-            
             await logItemAcquisitionToDatabase(character, spiritOrbItem || { itemName: 'Spirit Orb', category: 'Material', type: 'Special' }, {
               quantity: 1,
               obtain: 'Help Wanted Exchange',
@@ -2181,68 +2333,46 @@ module.exports = {
               link: interactionUrl
             });
           } catch (logError) {
-            // Don't fail the exchange if logging fails
             console.error(`[helpWanted.js] ⚠️ Failed to log Spirit Orb to InventoryLog:`, logError.message);
           }
-
-          // Deduct 50 completions from user and track exchange
-          const exchangeAmount = 50;
-          const beforeCurrent = user.helpWanted.currentCompletions;
-          user.helpWanted.currentCompletions -= exchangeAmount;
-          user.helpWanted.lastExchangeAmount = exchangeAmount;
-          user.helpWanted.lastExchangeAt = new Date();
-          await user.save();
-
-          // ------------------- Build Spirit Orb Exchange Embed -------------------
           const embed = new EmbedBuilder()
             .setAuthor({ name: `${character.name} - Quest Exchange`, iconURL: character.icon })
             .setColor('#AA926A')
             .setThumbnail('https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png')
             .setDescription(`🎯 **[${character.name}](${character.inventory})** exchanges **50 Help Wanted quest completions** for a <:spiritorb:1171310851748270121> Spirit Orb.\n\n*A grateful villager hands you a glowing orb as thanks for your service.*`)
             .addFields([
-              {
-                name: '🎯 __Quest Exchange Result__',
-                value: `> +1 <:spiritorb:1171310851748270121> **Spirit Orb**\n> Added to inventory`,
-                inline: false
-              },
-              {
-                name: '📊 __Help Wanted Progress__',
-                value: `> **Current:** ${beforeCurrent} → ${user.helpWanted.currentCompletions} (used ${user.helpWanted.lastExchangeAmount})\n> **Total:** ${user.helpWanted.totalCompletions || totalCompletions}`,
-                inline: false
-              }
+              { name: '🎯 __Quest Exchange Result__', value: `> +1 <:spiritorb:1171310851748270121> **Spirit Orb**\n> Added to inventory`, inline: false },
+              { name: '📊 __Help Wanted Progress__', value: `> **Current:** ${beforeCurrent} → ${user.helpWanted.currentCompletions} (used ${user.helpWanted.lastExchangeAmount})\n> **Total:** ${totalCompletions}`, inline: false }
             ]);
-
           return await interaction.editReply({ embeds: [embed] });
+        }
 
-        } else if (reward === 'character_slot') {
-          // Add character slot to user
-          const exchangeAmount = 50;
-          const beforeCurrent = user.helpWanted.currentCompletions;
-          user.characterSlot = (user.characterSlot || 2) + 1;
-          user.helpWanted.currentCompletions -= exchangeAmount;
-          user.helpWanted.lastExchangeAmount = exchangeAmount;
-          user.helpWanted.lastExchangeAt = new Date();
-          await user.save();
-
-          // ------------------- Build Character Slot Exchange Embed -------------------
+        if (reward === 'character_slot') {
+          const user = await User.findOneAndUpdate(
+            { discordId: interaction.user.id, 'helpWanted.currentCompletions': { $gte: exchangeAmount } },
+            {
+              $inc: { 'helpWanted.currentCompletions': -exchangeAmount, characterSlot: 1 },
+              $set: { 'helpWanted.lastExchangeAmount': exchangeAmount, 'helpWanted.lastExchangeAt': new Date() }
+            },
+            { new: true }
+          );
+          if (!user) {
+            const u = await User.findOne({ discordId: interaction.user.id });
+            const current = u?.helpWanted?.currentCompletions ?? 0;
+            const total = u?.helpWanted?.totalCompletions ?? u?.helpWanted?.completions?.length ?? 0;
+            return await interaction.editReply({ content: notEnoughMessage(current, total) });
+          }
+          const beforeCurrent = user.helpWanted.currentCompletions + exchangeAmount;
+          const totalCompletions = user.helpWanted?.totalCompletions ?? user.helpWanted?.completions?.length ?? 0;
           const embed = new EmbedBuilder()
             .setAuthor({ name: `${character.name} - Quest Exchange`, iconURL: character.icon })
             .setColor('#AA926A')
             .setThumbnail('https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png')
             .setDescription(`🎯 **[${character.name}](${character.inventory})** exchanges **50 Help Wanted quest completions** for a 🎫 Character Slot Voucher.\n\n*The village elder grants you permission to create another character in recognition of your service.*`)
             .addFields([
-              {
-                name: '🎯 __Quest Exchange Result__',
-                value: `> +1 🎫 **Character Slot Voucher**\n> Character slots: ${user.characterSlot - 1} → ${user.characterSlot}`,
-                inline: false
-              },
-              {
-                name: '📊 __Help Wanted Progress__',
-                value: `> **Current:** ${beforeCurrent} → ${user.helpWanted.currentCompletions} (used ${user.helpWanted.lastExchangeAmount})\n> **Total:** ${user.helpWanted.totalCompletions || totalCompletions}`,
-                inline: false
-              }
+              { name: '🎯 __Quest Exchange Result__', value: `> +1 🎫 **Character Slot Voucher**\n> Character slots: ${user.characterSlot - 1} → ${user.characterSlot}`, inline: false },
+              { name: '📊 __Help Wanted Progress__', value: `> **Current:** ${beforeCurrent} → ${user.helpWanted.currentCompletions} (used ${user.helpWanted.lastExchangeAmount})\n> **Total:** ${totalCompletions}`, inline: false }
             ]);
-
           return await interaction.editReply({ embeds: [embed] });
         }
 

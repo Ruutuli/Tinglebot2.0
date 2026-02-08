@@ -76,6 +76,26 @@ async function uploadPetImage(imageUrl, imageName) {
   }
 }
 
+// ------------------- Upload Quest Clue Image (buffer) -------------------
+// Uploads a buffer to GCS under quest-clues/ and returns the public URL
+async function uploadQuestClueBuffer(buffer, filename) {
+  try {
+    const destination = `quest-clues/${filename}`;
+    const file = bucket.file(destination);
+    await file.save(buffer, {
+      metadata: {
+        contentType: 'image/png',
+        cacheControl: 'public, max-age=31536000',
+      },
+    });
+    return `https://storage.googleapis.com/${bucket.name}/${destination}`;
+  } catch (error) {
+    handleError(error, 'uploadUtils.js');
+    console.error('Error uploading quest clue image to GCS:', error);
+    throw new Error('Failed to upload quest clue image');
+  }
+}
+
 // ------------------- Exported Utilities -------------------
 // Export the upload function for external use
-module.exports = { uploadSubmissionImage, uploadPetImage  };
+module.exports = { uploadSubmissionImage, uploadPetImage, uploadQuestClueBuffer };

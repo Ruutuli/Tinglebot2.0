@@ -431,6 +431,13 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                 village.contributors.set(contributorKey, contributorData);
                 village.markModified('contributors');
                 
+                // Tokens used for repair also count toward upgrade total
+                if (village.level < 3) {
+                    const requiredForNext = DEFAULT_TOKEN_REQUIREMENTS[village.level + 1] ?? 0;
+                    const currentTotal = village.currentTokens || 0;
+                    village.currentTokens = Math.min(requiredForNext, currentTotal + tokensForRepair);
+                }
+                
                 // Update status
                 updateVillageStatus(village);
                 

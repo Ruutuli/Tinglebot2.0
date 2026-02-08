@@ -384,28 +384,56 @@ const snapshotLines = [
    `• 📅 **Last Completion:** ${lastCompletionAt}`
   ];
 
-   statsEmbed.addFields(
+   const fields = [
     {
-    name: "📊 Quest Snapshot",
-     value: snapshotLines.join("\n"),
-     inline: false
-    },
-   {
-   name: "🕰️ Legacy Transfer",
-    value: legacyStatus,
-    inline: false
-   },
-    {
-    name: "📚 Quest Type Breakdown",
-     value: typeBreakdown,
-     inline: true
+      name: "📊 Quest Snapshot",
+      value: snapshotLines.join("\n"),
+      inline: false
     },
     {
-    name: "📝 Recent Quest Completions",
-     value: recentCompletions,
-     inline: false
+      name: "🕰️ Legacy Transfer",
+      value: legacyStatus,
+      inline: false
+    },
+    {
+      name: "📚 Quest Type Breakdown",
+      value: typeBreakdown,
+      inline: true
+    },
+    {
+      name: "📝 Recent Quest Completions",
+      value: recentCompletions,
+      inline: false
     }
-   );
+   ];
+
+   const questList = stats.questList || [];
+   if (Array.isArray(questList) && questList.length > 0) {
+     const maxShow = 15;
+     const DISCORD_FIELD_MAX = 1024;
+     const lines = questList.slice(-maxShow).reverse().map((entry) => {
+       const name = entry.name || "Unknown";
+       const year = entry.year || "";
+       const category = entry.category && String(entry.category).trim() ? entry.category : "";
+       return category ? `${name} (${year}) — ${category}` : `${name} (${year})`;
+     });
+     let value = lines.join("\n");
+     const remaining = questList.length - maxShow;
+     if (remaining > 0) {
+       const suffix = `\n… and ${remaining} more`;
+       if (value.length + suffix.length <= DISCORD_FIELD_MAX) {
+         value += suffix;
+       } else {
+         value = value.slice(0, DISCORD_FIELD_MAX - suffix.length) + suffix;
+       }
+     }
+     if (value.length > DISCORD_FIELD_MAX) {
+       value = value.slice(0, DISCORD_FIELD_MAX - 3) + "...";
+     }
+     fields.push({ name: "📋 Quest List", value, inline: false });
+   }
+
+   statsEmbed.addFields(fields);
 
    return interaction.reply({
     embeds: [statsEmbed],

@@ -21,7 +21,7 @@ const logger = require('@/utils/logger');
 // ------------------- Constants -------------------
 // ============================================================================
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
-const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting', 'art', 'writing'];
+const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting', 'art', 'writing', 'character-guess'];
 
 // Weather conditions that block travel
 const TRAVEL_BLOCKING_WEATHER = ['Flood', 'Avalanche', 'Rock Slide'];
@@ -60,7 +60,8 @@ const QUEST_TYPE_EMOJIS = {
   'escort': '🛡️',
   'crafting': '🔨',
   'art': '🎨',
-  'writing': '📝'
+  'writing': '📝',
+  'character-guess': '🎭'
 };
 
 const { VILLAGE_BANNERS } = require('@/database/db');
@@ -321,7 +322,7 @@ async function regenerateEscortQuest(quest) {
       // Try each type until one succeeds
       for (const tryType of typesToTry) {
         try {
-          newRequirements = generateQuestRequirements(tryType, pools, quest.village);
+          newRequirements = await generateQuestRequirements(tryType, pools, quest.village, quest.questId);
           newType = tryType;
           break; // Success, exit loop
         } catch (error) {
@@ -438,7 +439,7 @@ async function regenerateArtWritingQuest(quest) {
       // Try each type until one succeeds
       for (const tryType of typesToTry) {
         try {
-          newRequirements = generateQuestRequirements(tryType, pools, quest.village);
+          newRequirements = await generateQuestRequirements(tryType, pools, quest.village, quest.questId);
           newType = tryType;
           break; // Success, exit loop
         } catch (error) {
@@ -1127,22 +1128,154 @@ async function getVillageShopQuestPool() {
   }
 }
 
+// ------------------- Function: getCharacterGuessSnippetPool -------------------
+// Fetches accepted characters with sufficient personality/history (not TBA) for snippet clues, for a village
+async function getCharacterGuessSnippetPool(village) {
+  try {
+    const Character = require('@/models/CharacterModel');
+    const characters = await Character.find({
+      status: 'accepted',
+      homeVillage: village
+    }).select('_id name personality history homeVillage icon').lean();
+    const validCharacters = characters.filter(char => {
+      const personality = (char.personality || '').trim();
+      const history = (char.history || '').trim();
+      if (personality.toLowerCase() === 'tba' || history.toLowerCase() === 'tba') return false;
+      return personality.length >= 50 && history.length >= 50;
+    });
+    return validCharacters;
+  } catch (error) {
+    logger.error('QUEST', 'Error fetching character guess snippet pool', error);
+    return [];
+  }
+}
+
+// ------------------- Function: getCharacterGuessIconPool -------------------
+// Fetches accepted characters with valid icon for icon-zoom clues, for a village
+async function getCharacterGuessIconPool(village) {
+  try {
+    const Character = require('@/models/CharacterModel');
+    const characters = await Character.find({
+      status: 'accepted',
+      homeVillage: village,
+      icon: { $exists: true, $ne: '', $not: /^\s*$/ }
+    }).select('_id name icon homeVillage').lean();
+    return characters;
+  } catch (error) {
+    logger.error('QUEST', 'Error fetching character guess icon pool', error);
+    return [];
+  }
+}
+
+// ------------------- Function: extractSnippetsFromCharacter -------------------
+// Extracts random snippets from character's personality and history (excludes name in snippet when possible)
+function extractSnippetsFromCharacter(character, snippetCount = 3) {
+  const snippets = [];
+  const personality = (character.personality || '').trim();
+  const history = (character.history || '').trim();
+  const nameLower = (character.name || '').toLowerCase();
+  const splitSentences = (text) => text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 20);
+  const personalitySentences = splitSentences(personality);
+  const historySentences = splitSentences(history);
+  if (personalitySentences.length === 0 && historySentences.length === 0) {
+    throw new Error('Character has insufficient text for snippets');
+  }
+  const pickFrom = (arr, source, count) => {
+    const out = [];
+    const copy = [...arr];
+    for (let i = 0; i < count && copy.length > 0; i++) {
+      const idx = Math.floor(Math.random() * copy.length);
+      const sentence = copy[idx].trim();
+      copy.splice(idx, 1);
+      if (sentence.length > 0 && !sentence.toLowerCase().includes(nameLower)) {
+        out.push({ text: sentence, source });
+      }
+    }
+    return out;
+  };
+  let personalityCount = 0;
+  let historyCount = 0;
+  if (personalitySentences.length > 0 && historySentences.length > 0) {
+    personalityCount = Math.max(1, Math.floor(snippetCount / 2));
+    historyCount = snippetCount - personalityCount;
+  } else if (personalitySentences.length > 0) {
+    personalityCount = snippetCount;
+  } else {
+    historyCount = snippetCount;
+  }
+  snippets.push(...pickFrom(personalitySentences, 'personality', personalityCount));
+  snippets.push(...pickFrom(historySentences, 'history', historyCount));
+  if (snippets.length === 0) throw new Error('Character has insufficient text for snippets');
+  return shuffleArray(snippets);
+}
+
+// ------------------- Function: generateZoomedIconUrl -------------------
+// Fetches character icon, crops center region, resizes to 256x256, uploads to GCS, returns URL
+async function generateZoomedIconUrl(iconUrl, questIdOrUniqueId) {
+  try {
+    const { default: fetch } = await import('node-fetch');
+    const Jimp = require('jimp');
+    const { uploadQuestClueBuffer } = require('@/utils/uploadUtils');
+    const response = await fetch(iconUrl);
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+    const inputBuffer = Buffer.from(arrayBuffer);
+    const image = await Jimp.read(inputBuffer);
+    const w = image.bitmap.width;
+    const h = image.bitmap.height;
+    const cropRatio = 0.15 + Math.random() * 0.1; // 15-25%
+    const cropW = Math.max(1, Math.floor(w * cropRatio));
+    const cropH = Math.max(1, Math.floor(h * cropRatio));
+    const x = Math.floor((w - cropW) / 2);
+    const y = Math.floor((h - cropH) / 2);
+    image.crop(x, y, cropW, cropH);
+    image.resize(256, 256);
+    const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
+    const filename = `${questIdOrUniqueId}-zoomed.png`;
+    const publicUrl = await uploadQuestClueBuffer(buffer, filename);
+    return publicUrl;
+  } catch (error) {
+    logger.error('QUEST', 'Error generating zoomed icon URL', error);
+    return null;
+  }
+}
+
 // ------------------- Function: getAllQuestPools -------------------
-// Fetches all quest pools in parallel
+// Fetches all quest pools in parallel (character-guess pools are per-village)
 async function getAllQuestPools() {
   try {
-    const [itemPool, monsterPool, craftingPool, villageShopPool] = await Promise.all([
+    const [itemPool, monsterPool, craftingPool, villageShopPool, snippetByVillage, iconByVillage] = await Promise.all([
       getItemQuestPool(),
       getMonsterQuestPool(),
       getCraftingQuestPool(),
-      getVillageShopQuestPool()
+      getVillageShopQuestPool(),
+      Promise.all(VILLAGES.map(v => getCharacterGuessSnippetPool(v))).then(arr => {
+        const out = {};
+        VILLAGES.forEach((v, i) => { out[v] = arr[i]; });
+        return out;
+      }),
+      Promise.all(VILLAGES.map(v => getCharacterGuessIconPool(v))).then(arr => {
+        const out = {};
+        VILLAGES.forEach((v, i) => { out[v] = arr[i]; });
+        return out;
+      })
     ]);
     
     const escortPool = getEscortQuestPool();
     const artPool = getArtQuestPool();
     const writingPool = getWritingQuestPool();
     
-    return { itemPool, monsterPool, craftingPool, escortPool, villageShopPool, artPool, writingPool };
+    return {
+      itemPool,
+      monsterPool,
+      craftingPool,
+      escortPool,
+      villageShopPool,
+      artPool,
+      writingPool,
+      characterGuessSnippetPoolByVillage: snippetByVillage,
+      characterGuessIconPoolByVillage: iconByVillage
+    };
   } catch (error) {
     logger.error('QUEST', 'Error fetching quest pools', error);
     throw error;
@@ -1176,7 +1309,7 @@ function calculateItemQuestAmount(itemRarity) {
 
 // ------------------- Function: generateQuestRequirements -------------------
 // Generates quest requirements based on quest type with pool validation and fallbacks
-function generateQuestRequirements(type, pools, village) {
+async function generateQuestRequirements(type, pools, village, optionalQuestId) {
   // Validate pools are available
   if (!pools || typeof pools !== 'object') {
     logger.error('QUEST', `Invalid pools object provided for ${village} ${type} quest`);
@@ -1435,6 +1568,43 @@ function generateQuestRequirements(type, pools, village) {
       }
     }
     
+    case 'character-guess': {
+      try {
+        const clueType = Math.random() < 0.5 ? 'snippets' : 'icon-zoom';
+        const snippetPool = pools.characterGuessSnippetPoolByVillage?.[village] || [];
+        const iconPool = pools.characterGuessIconPoolByVillage?.[village] || [];
+        if (clueType === 'snippets') {
+          if (!snippetPool.length) throw new Error(`No characters for snippet character-guess in ${village}`);
+          const selectedCharacter = getRandomElement(snippetPool);
+          const snippetCount = Math.floor(Math.random() * 3) + 2; // 2-4
+          const snippets = extractSnippetsFromCharacter(selectedCharacter, snippetCount);
+          if (!snippets.length) throw new Error(`Failed to extract snippets for ${selectedCharacter.name}`);
+          return {
+            characterId: selectedCharacter._id.toString(),
+            characterName: selectedCharacter.name,
+            clueType: 'snippets',
+            snippets,
+            snippetCount: snippets.length
+          };
+        }
+        if (!iconPool.length) throw new Error(`No characters for icon-zoom character-guess in ${village}`);
+        const selectedCharacter = getRandomElement(iconPool);
+        const questIdForPath = optionalQuestId || `cg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const zoomedIconUrl = await generateZoomedIconUrl(selectedCharacter.icon, questIdForPath);
+        if (!zoomedIconUrl) throw new Error(`Failed to generate zoomed icon for ${selectedCharacter.name}`);
+        return {
+          characterId: selectedCharacter._id.toString(),
+          characterName: selectedCharacter.name,
+          clueType: 'icon-zoom',
+          iconUrl: selectedCharacter.icon,
+          zoomedIconUrl
+        };
+      } catch (error) {
+        logger.error('QUEST', `Error generating character-guess quest for ${village}`, error);
+        throw new Error(`Failed to generate character-guess quest for ${village}: ${error.message}`);
+      }
+    }
+    
     default:
       logger.error('QUEST', `Unknown quest type: ${type} for ${village}`);
       throw new Error(`Unknown quest type: ${type} for ${village}`);
@@ -1567,7 +1737,7 @@ async function generateQuestForVillage(village, date, pools, availableNPCs = nul
   for (const type of shuffledTypes) {
     triedTypes.push(type);
     try {
-      const requirements = generateQuestRequirements(type, pools, village);
+      const requirements = await generateQuestRequirements(type, pools, village, questId);
       
       return {
         questId,
@@ -2283,7 +2453,8 @@ function getQuestTurnInInstructions(type) {
     escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using </travel:1379850586987430009>, then use </helpwanted complete:1402779337270497370>.',
     crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1402779337270497370>.',
     art: '• **Art Quest:** Create the requested artwork and submit it using </submit art:1402779337270497370> with this quest ID. **Must be submitted before midnight (EST) today.** Once approved by a moderator, the quest will be automatically completed.',
-    writing: '• **Writing Quest:** Write the requested content and submit it using </submit writing:1402779337270497370> with this quest ID. **Must be submitted before midnight (EST) today.** Once approved by a moderator, the quest will be automatically completed.'
+    writing: '• **Writing Quest:** Write the requested content and submit it using </submit writing:1402779337270497370> with this quest ID. **Must be submitted before midnight (EST) today.** Once approved by a moderator, the quest will be automatically completed.',
+    'character-guess': '• **Character Guess Quest:** Use </helpwanted guess:1402779337270497370> with the quest ID and your guess for the character name.'
   };
   
   return instructions[type] || '• Use </helpwanted complete:1402779337270497370> to turn in your quest.';
@@ -2375,6 +2546,21 @@ async function formatQuestsAsEmbedsByVillage() {
           ...questInfoFields
         );
       
+      // Character-guess: add clue field and optionally set zoomed image
+      if (quest.type === 'character-guess' && quest.requirements) {
+        const { clueType, snippets, zoomedIconUrl } = quest.requirements;
+        if (clueType === 'snippets' && snippets?.length) {
+          const snippetText = snippets.map((snippet, index) => {
+            const sourceLabel = snippet.source === 'personality' ? 'Personality' : 'History';
+            return `**${sourceLabel} Clue ${index + 1}:**\n${snippet.text}`;
+          }).join('\n\n');
+          embed.addFields({ name: '🎭 Who is this person?', value: snippetText, inline: false });
+        } else if (clueType === 'icon-zoom' && zoomedIconUrl) {
+          embed.setImage(zoomedIconUrl);
+          embed.addFields({ name: '🎭 Who is this person?', value: '*Guess from the zoomed-in picture above!*', inline: false });
+        }
+      }
+      
       // Add character completion info if quest is completed
       if (quest.completed && quest.completedBy?.characterId) {
         try {
@@ -2418,7 +2604,10 @@ async function formatQuestsAsEmbedsByVillage() {
       
       embed.addFields({ name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true });
       
-      if (image) embed.setImage(image);
+      const imageToSet = (quest.type === 'character-guess' && quest.requirements?.clueType === 'icon-zoom' && quest.requirements?.zoomedIconUrl)
+        ? quest.requirements.zoomedIconUrl
+        : image;
+      if (imageToSet) embed.setImage(imageToSet);
       result[quest.village] = embed;
     }
     
@@ -2467,6 +2656,21 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
           ...questInfoFields
         );
       
+      // Character-guess: add clue field and optionally set zoomed image
+      if (quest.type === 'character-guess' && quest.requirements) {
+        const { clueType, snippets, zoomedIconUrl } = quest.requirements;
+        if (clueType === 'snippets' && snippets?.length) {
+          const snippetText = snippets.map((snippet, index) => {
+            const sourceLabel = snippet.source === 'personality' ? 'Personality' : 'History';
+            return `**${sourceLabel} Clue ${index + 1}:**\n${snippet.text}`;
+          }).join('\n\n');
+          embed.addFields({ name: '🎭 Who is this person?', value: snippetText, inline: false });
+        } else if (clueType === 'icon-zoom' && zoomedIconUrl) {
+          embed.setImage(zoomedIconUrl);
+          embed.addFields({ name: '🎭 Who is this person?', value: '*Guess from the zoomed-in picture above!*', inline: false });
+        }
+      }
+      
       // Add character completion info if quest is completed
       if (quest.completed && quest.completedBy?.characterId) {
         try {
@@ -2510,7 +2714,10 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
       
       embed.addFields({ name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true });
       
-      if (image) embed.setImage(image);
+      const imageToSet = (quest.type === 'character-guess' && quest.requirements?.clueType === 'icon-zoom' && quest.requirements?.zoomedIconUrl)
+        ? quest.requirements.zoomedIconUrl
+        : image;
+      if (imageToSet) embed.setImage(imageToSet);
       result[quest.village] = embed;
     }
     
@@ -2635,6 +2842,21 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
         ...questInfoFields
       );
     
+    // Character-guess: add clue field and optionally set zoomed image
+    if (quest.type === 'character-guess' && quest.requirements) {
+      const { clueType, snippets, zoomedIconUrl } = quest.requirements;
+      if (clueType === 'snippets' && snippets?.length) {
+        const snippetText = snippets.map((snippet, index) => {
+          const sourceLabel = snippet.source === 'personality' ? 'Personality' : 'History';
+          return `**${sourceLabel} Clue ${index + 1}:**\n${snippet.text}`;
+        }).join('\n\n');
+        updatedEmbed.addFields({ name: '🎭 Who is this person?', value: snippetText, inline: false });
+      } else if (clueType === 'icon-zoom' && zoomedIconUrl) {
+        updatedEmbed.setImage(zoomedIconUrl);
+        updatedEmbed.addFields({ name: '🎭 Who is this person?', value: '*Guess from the zoomed-in picture above!*', inline: false });
+      }
+    }
+    
     // Add character completion info if quest is completed
     if (quest.completed && quest.completedBy?.characterId) {
       try {
@@ -2684,7 +2906,10 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     
     updatedEmbed.addFields({ name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true });
     
-    if (image) updatedEmbed.setImage(image);
+    const imageToSet = (quest.type === 'character-guess' && quest.requirements?.clueType === 'icon-zoom' && quest.requirements?.zoomedIconUrl)
+      ? quest.requirements.zoomedIconUrl
+      : image;
+    if (imageToSet) updatedEmbed.setImage(imageToSet);
 
     await message.edit({ embeds: [updatedEmbed] });
   } catch (error) {
@@ -2859,6 +3084,19 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
       }
     }
 
+    // Enforce daily/weekly limits (same as /helpwanted complete and monsterhunt)
+    const userId = submissionData.userId;
+    const dailyCompleted = await hasUserCompletedQuestToday(userId);
+    if (dailyCompleted) {
+      logger.debug('QUEST', `Quest ${questId} not completed: user ${userId} already completed a Help Wanted quest today`);
+      return;
+    }
+    const weeklyLimitReached = await hasUserReachedWeeklyQuestLimit(userId);
+    if (weeklyLimitReached) {
+      logger.debug('QUEST', `Quest ${questId} not completed: user ${userId} has reached the weekly Help Wanted limit (3)`);
+      return;
+    }
+
     // Complete the quest
     await completeQuestFromSubmission(quest, submissionData, client);
     
@@ -2954,6 +3192,17 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
 // ------------------- Function: updateUserTracking -------------------
 // Updates user tracking for quest completion (copied from helpWanted.js)
 async function updateUserTracking(user, quest, userId) {
+  if (!user.helpWanted) {
+    user.helpWanted = {
+      lastCompletion: null,
+      cooldownUntil: null,
+      totalCompletions: 0,
+      currentCompletions: 0,
+      lastExchangeAmount: 0,
+      lastExchangeAt: null,
+      completions: []
+    };
+  }
   const now = new Date();
   const today = getUTCDateString(now);
   

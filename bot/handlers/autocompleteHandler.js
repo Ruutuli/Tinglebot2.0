@@ -754,6 +754,12 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (focusedOption.name === 'character') {
                   await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
                 }
+              } else if (helpWantedSubcommand === 'guess') {
+                if (focusedOption.name === 'id') {
+                  await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === 'character') {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+                }
               }
             }
             break;
