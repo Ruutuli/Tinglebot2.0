@@ -42,8 +42,7 @@ const {
  createGiftEmbed,
  createTradeEmbed,
  createTransferEmbed,
- updateBoostRequestEmbed,
- createEquippedItemErrorEmbed
+ updateBoostRequestEmbed
 } = require("../../embeds/embeds.js");
 const { hasPerk } = require("../../modules/jobsModule");
 const TempData = require('@/models/TempDataModel');
@@ -1649,23 +1648,15 @@ if (quantity <= 0) {
   const isEquipped = equippedItems.some(
     (eq) => normalizeItemNameForCompare(eq) === itemNameNorm
   );
-  
-  if (isEquipped) {
-    const errorEmbed = createEquippedItemErrorEmbed(itemName);
-    await interaction.editReply({
-      embeds: [errorEmbed],
-      ephemeral: true,
-    });
-    return;
-  }
+  const availableToSell = totalQuantity - (isEquipped ? 1 : 0);
 
-  if (!inventoryItem || totalQuantity < quantity) {
-   logger.error('INVENTORY', `Insufficient inventory for item: ${itemName}. Available: ${totalQuantity}`);
+  if (!inventoryItem || quantity > availableToSell) {
+   logger.error('INVENTORY', `Insufficient inventory for item: ${itemName}. Available to sell: ${availableToSell}${isEquipped ? ' (1 equipped)' : ''}`);
    return interaction.editReply({
     embeds: [{
       color: 0xFF0000, // Red color
       title: '❌ Insufficient Inventory',
-      description: `You don't have enough \`${itemName}\` in your inventory to sell.`,
+      description: `You don't have enough \`${itemName}\` available to sell.${isEquipped ? ' One copy is currently equipped.' : ''}`,
       fields: [
         {
           name: 'Requested',
@@ -1673,13 +1664,13 @@ if (quantity <= 0) {
           inline: true
         },
         {
-          name: 'Available',
-          value: `${totalQuantity}`,
+          name: 'Available to sell',
+          value: `${availableToSell}${isEquipped ? ' (1 equipped)' : ''}`,
           inline: true
         },
         {
           name: 'Shortage',
-          value: `${quantity - totalQuantity}`,
+          value: `${Math.max(0, quantity - availableToSell)}`,
           inline: true
         }
       ],
