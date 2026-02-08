@@ -228,8 +228,8 @@ function calculateFinalValue(character, diceRoll) {
     }
   }
   
-  const attackSuccess = calculateAttackBuff(character);
-  const defenseSuccess = calculateDefenseBuff(character);
+  const attackSuccess = calculateAttackBuff(character, character.attack ?? 0);
+  const defenseSuccess = calculateDefenseBuff(character, character.defense ?? 0);
   const adjustedRandomValue = applyBuffs(
     finalDiceRoll,
     attackSuccess,

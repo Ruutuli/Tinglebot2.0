@@ -85,6 +85,13 @@ function normalizeStats(s: Map<string, number> | Record<string, number> | undefi
     }, {} as Record<string, number>);
 }
 
+/** Normalize gear stats to a single modifierHearts key for consistent storage (bot and dashboard). */
+function normalizeStatsToModifierHearts(stats: Record<string, number>): Record<string, number> {
+  if (!stats || Object.keys(stats).length === 0) return {};
+  const value = stats.modifierHearts ?? stats.attack ?? stats.defense ?? 0;
+  return { modifierHearts: value };
+}
+
 /** Normalize a single gear item (weapon/shield or armor slot) for comparison. DB uses Map for stats; form sends Record. */
 function normalizeGearItem(
   item: { name: string; stats?: Map<string, number> | Record<string, number> } | null | undefined
@@ -789,7 +796,7 @@ export async function PUT(
             const stats = statsForItem(equippedGearData.gearWeapon, char.gearWeapon);
             gear.gearWeapon = {
               name: equippedGearData.gearWeapon.name,
-              stats: new Map(Object.entries(stats)),
+              stats: new Map(Object.entries(normalizeStatsToModifierHearts(stats))),
             };
           } else {
             gear.gearWeapon = null;
@@ -802,7 +809,7 @@ export async function PUT(
             const stats = statsForItem(equippedGearData.gearShield, char.gearShield);
             gear.gearShield = {
               name: equippedGearData.gearShield.name,
-              stats: new Map(Object.entries(stats)),
+              stats: new Map(Object.entries(normalizeStatsToModifierHearts(stats))),
             };
           } else {
             gear.gearShield = null;
@@ -817,21 +824,21 @@ export async function PUT(
               const stats = statsForItem(equippedGearData.gearArmor.head, char.gearArmor?.head);
               gear.gearArmor.head = {
                 name: equippedGearData.gearArmor.head.name,
-                stats: new Map(Object.entries(stats)),
+                stats: new Map(Object.entries(normalizeStatsToModifierHearts(stats))),
               };
             }
             if (equippedGearData.gearArmor.chest) {
               const stats = statsForItem(equippedGearData.gearArmor.chest, char.gearArmor?.chest);
               gear.gearArmor.chest = {
                 name: equippedGearData.gearArmor.chest.name,
-                stats: new Map(Object.entries(stats)),
+                stats: new Map(Object.entries(normalizeStatsToModifierHearts(stats))),
               };
             }
             if (equippedGearData.gearArmor.legs) {
               const stats = statsForItem(equippedGearData.gearArmor.legs, char.gearArmor?.legs);
               gear.gearArmor.legs = {
                 name: equippedGearData.gearArmor.legs.name,
-                stats: new Map(Object.entries(stats)),
+                stats: new Map(Object.entries(normalizeStatsToModifierHearts(stats))),
               };
             }
           } else {
@@ -979,7 +986,8 @@ export async function PUT(
     }
     }
     
-    // Recalculate attack/defense stats from equipped gear (always run, even for gear-only updates)
+    // Recalculate attack/defense stats from equipped gear (always run, even for gear-only updates).
+    // Any future code path that mutates gearWeapon/gearShield/gearArmor must also call recalculateStats before save so attack/defense stay in sync.
     recalculateStats(char);
     
     await char.save();

@@ -929,8 +929,8 @@ async function processBattle(character, monster, battleId, originalRoll, interac
     }
     
     try {
-        const attackSuccess = calculateAttackBuff(character);
-        const defenseSuccess = calculateDefenseBuff(character);
+        const attackSuccess = calculateAttackBuff(character, character.attack ?? 0);
+        const defenseSuccess = calculateDefenseBuff(character, character.defense ?? 0);
         const adjustedRandomValue = applyBuffs(
             originalRoll,
             attackSuccess,

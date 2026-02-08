@@ -5,7 +5,7 @@ const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require
 // The higher the attack stat, the greater the chance of applying the buff.
 function calculateAttackBuff(character, baseAttack) {
   const buffEffects = getActiveBuffEffects(character);
-  let finalAttack = baseAttack;
+  let finalAttack = baseAttack ?? 0;
 
   // Apply elixir attack boost
   if (buffEffects && buffEffects.attackBoost > 0) {
@@ -33,7 +33,7 @@ function calculateAttackBuff(character, baseAttack) {
 // A higher defense stat gives a greater chance of applying the defense buff.
 function calculateDefenseBuff(character, baseDefense) {
   const buffEffects = getActiveBuffEffects(character);
-  let finalDefense = baseDefense;
+  let finalDefense = baseDefense ?? 0;
 
   // Apply elixir defense boost
   if (buffEffects && buffEffects.defenseBoost > 0) {
@@ -53,7 +53,7 @@ function calculateDefenseBuff(character, baseDefense) {
     // Additional buff logic can be added here
   }
 
-  // Apply 1.5x multiplier to final defense
+  // 1.5x effective defense for success weighting so defense gear scales meaningfully
   finalDefense = Math.floor(finalDefense * 1.5);
 
   return Math.max(0, finalDefense); // Ensure minimum defense of 0

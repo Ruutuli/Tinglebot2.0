@@ -118,8 +118,8 @@ export function equipItem(
   
   // Handle weapon equipping
   if (weaponType) {
-    // For weapons, modifierHearts = attack
-    const stats = new Map<string, number>([["attack", modifierHearts]]);
+    // For weapons, modifierHearts = attack (stored as modifierHearts for consistency with bot)
+    const stats = new Map<string, number>([["modifierHearts", modifierHearts]]);
     // Equip the weapon
     newGear.gearWeapon = { name: itemName, stats };
     
@@ -139,8 +139,8 @@ export function equipItem(
   
   // Handle shield equipping
   if (isShield(item)) {
-    // For shields, modifierHearts = defense
-    const stats = new Map<string, number>([["defense", modifierHearts]]);
+    // For shields, modifierHearts = defense (stored as modifierHearts for consistency with bot)
+    const stats = new Map<string, number>([["modifierHearts", modifierHearts]]);
     // Equip the shield
     newGear.gearShield = { name: itemName, stats };
     
@@ -159,8 +159,8 @@ export function equipItem(
   
   // Handle armor equipping
   if (armorSlot) {
-    // For armor, modifierHearts = defense
-    const stats = new Map<string, number>([["defense", modifierHearts]]);
+    // For armor, modifierHearts = defense (stored as modifierHearts for consistency with bot)
+    const stats = new Map<string, number>([["modifierHearts", modifierHearts]]);
     // Equip armor in the specific slot (replaces previous item in that slot)
     newGear.gearArmor![armorSlot] = { name: itemName, stats };
   }

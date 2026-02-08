@@ -39,6 +39,7 @@ const ItemSchema = new Schema(
     sellPrice: { type: Number, default: 0 },
 
     // ------------------- Effects / Stats -------------------
+    // For gear: used as attack (weapon) or defense (armor/shield) when equipped
     modifierHearts: { type: Number, default: 0 },
     staminaRecovered: { type: Number, default: 0 },
 
