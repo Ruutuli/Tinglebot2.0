@@ -2872,11 +2872,13 @@ async function handleItemAutocomplete(interaction, focusedOption) {
         .map(item => {
           const obtainMethod = (item.obtain || '').toString().toLowerCase();
           const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
+          const hasFortuneTellerBoost = !!item.fortuneTellerBoost;
           
           return {
             name: item.itemName?.toLowerCase(),
             quantity: item.quantity,
             isCrafted: isCrafted,
+            hasFortuneTellerBoost: hasFortuneTellerBoost,
             obtain: item.obtain || 'Unknown'
           };
         })
@@ -2910,24 +2912,37 @@ async function handleItemAutocomplete(interaction, focusedOption) {
             };
           });
       } else {
-        // For non-sell subcommands, show all items in inventory
-        choices = processedItems
-          .filter(item => 
-            item.name.includes(searchQuery) &&
-            item.name !== "initial item"
-          )
+        // For non-sell subcommands, aggregate by item name + crafted + boost so multiple DB rows show as one option
+        const itemMap = new Map();
+        for (const item of processedItems) {
+          if (item.name === "initial item") continue;
+          const key = `${item.name}-${item.isCrafted ? 'crafted' : 'regular'}-${item.hasFortuneTellerBoost ? 'boosted' : 'normal'}`;
+          if (!itemMap.has(key)) {
+            itemMap.set(key, {
+              name: item.name,
+              quantity: item.quantity || 0,
+              isCrafted: item.isCrafted,
+              hasFortuneTellerBoost: item.hasFortuneTellerBoost,
+            });
+          } else {
+            const existing = itemMap.get(key);
+            existing.quantity += (item.quantity || 0);
+          }
+        }
+        const aggregatedItems = Array.from(itemMap.values())
+          .filter(item => item.name.includes(searchQuery))
           .sort((a, b) => {
             const nameCompare = a.name.localeCompare(b.name);
             if (nameCompare !== 0) return nameCompare;
             return a.isCrafted ? 1 : -1; // Non-crafted first
-          })
-          .map(item => {
-            const craftingIcon = item.isCrafted ? '🔨' : '📦';
-            return {
-              name: `${craftingIcon} ${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
-              value: item.name,
-            };
           });
+        choices = aggregatedItems.map(item => {
+          const craftingIcon = item.isCrafted ? '🔨' : (item.hasFortuneTellerBoost ? '🔮' : '📦');
+          return {
+            name: `${craftingIcon} ${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
+            value: item.name,
+          };
+        });
       }
     } else {
       // If we're not focusing itemname, don't do anything fancy

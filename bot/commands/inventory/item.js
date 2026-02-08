@@ -1232,11 +1232,7 @@ module.exports = {
         await healKoCharacter(character._id);
         character.currentHearts = character.maxHearts;
         await updateCurrentHearts(character._id, character.currentHearts);
-        await syncToInventoryDatabase(character, {
-          itemName: item.itemName,
-          quantity: -quantity,
-          obtain: `Used for healing`
-        }, interaction);
+        await removeItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Used for healing');
 
         const successEmbed = new EmbedBuilder()
           .setColor('#59A914')
@@ -1293,11 +1289,7 @@ module.exports = {
         }
       }
 
-      await syncToInventoryDatabase(character, {
-        itemName: item.itemName,
-        quantity: -quantity,
-        obtain: `Used for healing`
-      }, interaction);
+      await removeItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Used for healing');
 
       // Build description with actual recovered amounts
       const heartsDisplay = healAmount > 0 ? `❤️ +${healAmount}` : '';
