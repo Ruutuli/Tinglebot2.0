@@ -158,7 +158,8 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
   const postReq = body.postRequirement != null && !Number.isNaN(Number(body.postRequirement))
     ? Number(body.postRequirement)
     : 15;
-  const minRequirements = (body.minRequirements as string)?.trim() || "";
+  const minRequirements =
+    (body.minRequirements != null ? String(body.minRequirements) : "").trim() || "";
 
   const color = EMBED_COLOR;
   const locationPreview = formatLocation(location);

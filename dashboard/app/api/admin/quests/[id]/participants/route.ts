@@ -63,6 +63,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
 
+    const questID = quest.questID?.trim?.();
+    if (!questID) {
+      logger.error("api/admin/quests/[id]/participants", "Quest has no questID; cannot record completions");
+      return NextResponse.json(
+        { error: "Quest has no questID; add questID to the quest document to record completions" },
+        { status: 400 }
+      );
+    }
+
     const participants = quest.participants;
     if (!participants || typeof participants.get !== "function") {
       return NextResponse.json(
@@ -73,9 +82,8 @@ export async function PATCH(
 
     const rewarded: string[] = [];
     const now = new Date();
-    const questTitle = quest.title || `Quest ${quest.questID || id}`;
+    const questTitle = quest.title || `Quest ${questID}`;
     const questType = quest.questType || "Other";
-    const questID = quest.questID || String(id);
 
     for (const userId of userIds) {
       if (!userId || typeof userId !== "string") continue;

@@ -45,6 +45,15 @@ export async function POST(
       return NextResponse.json({ error: "Quest not found" }, { status: 404 });
     }
 
+    const questID = quest.questID?.trim?.();
+    if (!questID) {
+      logger.error("api/admin/quests/[id]/complete", "Quest has no questID; cannot record completions");
+      return NextResponse.json(
+        { error: "Quest has no questID; add questID to the quest document to record completions" },
+        { status: 400 }
+      );
+    }
+
     quest.status = "completed";
     const participants = quest.participants;
     const userIds: string[] = [];
@@ -55,9 +64,8 @@ export async function POST(
     }
 
     const now = new Date();
-    const questTitle = quest.title || `Quest ${quest.questID || id}`;
+    const questTitle = quest.title || `Quest ${questID}`;
     const questType = quest.questType || "Other";
-    const questID = quest.questID || String(id);
     const rewarded: string[] = [];
 
     for (const userId of userIds) {

@@ -27,7 +27,7 @@ const TokenTransaction = require('@/models/TokenTransactionModel');
 const { releaseFromJail } = require('@/utils/jailCheck');
 const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('@/modules/characterStatsModule');
-const { processMonthlyQuestRewards } = require('@/modules/questRewardModule');
+const { processMonthlyQuestRewards, processQuestCompletion } = require('@/modules/questRewardModule');
 const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME } = require('@/modules/raidModule');
 const { checkVillageRaidQuotas } = require('@/scripts/randomMonsterEncounters');
 const {
@@ -1537,11 +1537,24 @@ async function villageRaidQuotaCheck(client, _data = {}) {
 async function questCompletionCheck(_client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'quest-completion-check: starting');
-    
-    // Quest completion check logic would go here
-    // This can be implemented when quest completion system is ready
-    
-    logger.info('SCHEDULED', 'quest-completion-check: done (completion check system not yet implemented)');
+    const activeQuests = await Quest.find({ status: 'active' });
+    let checked = 0;
+    let processed = 0;
+    for (const quest of activeQuests) {
+      try {
+        checked++;
+        if (!quest.checkTimeExpiration()) continue;
+        const result = await quest.checkAutoCompletion(true);
+        if (result.completed && result.needsRewardProcessing) {
+          await processQuestCompletion(quest.questID);
+          await quest.markCompletionProcessed();
+          processed++;
+        }
+      } catch (questErr) {
+        logger.error('SCHEDULED', `quest-completion-check: quest ${quest.questID || quest._id}: ${questErr.message}`);
+      }
+    }
+    logger.info('SCHEDULED', `quest-completion-check: done (checked ${checked}, processed ${processed})`);
   } catch (err) {
     logger.error('SCHEDULED', `quest-completion-check: ${err.message}`);
   }

@@ -256,14 +256,18 @@ const TIME_MULTIPLIERS = {
 // ------------------- Helper Functions -------------------
 // ============================================================================
 
+// ------------------- Default requirement constants (single source of truth; exported for questRewardModule) ------------------
+const DEFAULT_POST_REQUIREMENT = 15;
+const DEFAULT_ROLL_REQUIREMENT = 1;
+
 // ------------------- Requirements Check ------------------
-// Logic intentionally mirrored in questRewardModule; keep in sync when changing completion rules.
+// Single source of truth; questRewardModule requires this from QuestModel.
 function meetsRequirements(participant, quest) {
     const { questType, postRequirement, requiredRolls } = quest;
     const { rpPostCount, submissions, successfulRolls } = participant;
     
     if (questType === QUEST_TYPES.RP) {
-        return rpPostCount >= (postRequirement || 15); // DEFAULT_POST_REQUIREMENT
+        return rpPostCount >= (postRequirement || DEFAULT_POST_REQUIREMENT);
     }
     
     if (questType === QUEST_TYPES.ART || questType === QUEST_TYPES.WRITING) {
@@ -281,7 +285,7 @@ function meetsRequirements(participant, quest) {
     }
     
     if (questType === QUEST_TYPES.INTERACTIVE) {
-        return successfulRolls >= (requiredRolls || 1); // DEFAULT_ROLL_REQUIREMENT
+        return successfulRolls >= (requiredRolls || DEFAULT_ROLL_REQUIREMENT);
     }
     
     return false;
@@ -1433,4 +1437,8 @@ questSchema.methods.getNormalizedTokenReward = function() {
 };
 
 // ------------------- Export Quest Model -------------------
-module.exports = mongoose.model('Quest', questSchema);
+const Quest = mongoose.model('Quest', questSchema);
+module.exports = Quest;
+module.exports.meetsRequirements = meetsRequirements;
+module.exports.DEFAULT_POST_REQUIREMENT = DEFAULT_POST_REQUIREMENT;
+module.exports.DEFAULT_ROLL_REQUIREMENT = DEFAULT_ROLL_REQUIREMENT;

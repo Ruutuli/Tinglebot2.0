@@ -64,15 +64,16 @@ const QUEST_SEARCH_CRITERIA = {
 // ------------------- Handle RP Post Tracking -------------------
 async function handleRPPostTracking(message) {
     try {
-        if (!isRPQuestThread(message.channel)) return;
-
-        logger.info('QUEST', `Tracking post in ${message.channel.name}`);
-
-        const quest = await findQuestByThreadId(message.channel.id);
+        // Prefer thread-id-based lookup first so renames don't break tracking
+        let quest = await findQuestByThreadId(message.channel.id);
         if (!quest || !isValidRPQuest(quest)) {
-            logger.info('QUEST', `No valid RP quest found for thread`);
+            // Fallback: only consider channel as RP quest thread if name matches (avoids logging on every message)
+            if (!isRPQuestThread(message.channel)) return;
+            logger.info('QUEST', `Tracking post in ${message.channel.name}`);
+            logger.info('QUEST', 'No valid RP quest found for thread');
             return;
         }
+        logger.info('QUEST', `Tracking post in ${message.channel.name}`);
 
         const participant = quest.getParticipant(message.author.id);
         if (!participant) {

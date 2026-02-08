@@ -4,6 +4,7 @@
 // ============================================================================
 
 const Quest = require('../models/QuestModel');
+const { meetsRequirements, DEFAULT_POST_REQUIREMENT, DEFAULT_ROLL_REQUIREMENT } = Quest;
 const Character = require('../models/CharacterModel');
 const User = require('../models/UserModel');
 const ApprovedSubmission = require('../models/ApprovedSubmissionModel');
@@ -16,8 +17,6 @@ const { EmbedBuilder } = require('discord.js');
 // ============================================================================
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const QUEST_CHANNEL_ID = process.env.QUESTS_BOARD || '1305486549252706335';
-const DEFAULT_POST_REQUIREMENT = 15;
-const DEFAULT_ROLL_REQUIREMENT = 1;
 const RP_SIGNUP_WINDOW_DAYS = 7;
 const ENTERTAINER_BONUS_AMOUNT = 100;
 const QUEST_COLORS = {
@@ -603,37 +602,6 @@ async function syncApprovedSubmissionsToParticipant(quest, participant) {
     }
 }
 
-// ------------------- Requirements Check ------------------
-// Logic intentionally mirrored in QuestModel; keep in sync when changing completion rules.
-function meetsRequirements(participant, quest) {
-    const { questType, postRequirement, requiredRolls } = quest;
-    const { rpPostCount, submissions, successfulRolls } = participant;
-    
-    if (questType === QUEST_TYPES.RP) {
-        return rpPostCount >= (postRequirement || DEFAULT_POST_REQUIREMENT);
-    }
-    
-    if (questType === QUEST_TYPES.ART || questType === QUEST_TYPES.WRITING) {
-        const submissionType = questType.toLowerCase();
-        return submissions.some(sub => 
-            sub.type === submissionType && sub.approved
-        );
-    }
-    
-    if (questType === QUEST_TYPES.ART_WRITING) {
-        // For Art/Writing combined quests, require BOTH art AND writing submissions
-        const hasArtSubmission = submissions.some(sub => sub.type === 'art' && sub.approved);
-        const hasWritingSubmission = submissions.some(sub => sub.type === 'writing' && sub.approved);
-        return hasArtSubmission && hasWritingSubmission;
-    }
-    
-    if (questType === QUEST_TYPES.INTERACTIVE) {
-        return successfulRolls >= (requiredRolls || DEFAULT_ROLL_REQUIREMENT);
-    }
-    
-    return false;
-}
-
 // ------------------- Token Calculation ------------------
 function computeTokens(quest) {
     return quest.getNormalizedTokenReward();
@@ -752,16 +720,15 @@ async function getGroupMembers(questId, groupId) {
 // ------------------- Quest Completion Processing ------------------
 async function processQuestCompletion(questId) {
     try {
+        logger.info('QUEST', `processQuestCompletion: starting questId=${questId}`);
         const quest = await findQuestSafely(questId);
 
         // Accept both 'active' and 'completed' status for reward processing
         // (quests may be marked as completed before rewards are distributed)
         if (quest.status !== 'active' && quest.status !== 'completed') {
-            console.log(`[questRewardModule.js] ℹ️ Quest ${questId} is not active or completed (status: ${quest.status}), skipping completion processing.`);
+            logger.info('QUEST', `processQuestCompletion: quest ${questId} status=${quest.status}, skipping`);
             return;
         }
-
-        console.log(`[questRewardModule.js] ⚙️ Processing completion for quest: ${quest.title}`);
 
         if (!quest.participants || quest.participants.size === 0) {
             console.log(`[questRewardModule.js] ⚠️ No participants found for quest ${questId}`);
@@ -793,8 +760,8 @@ async function processQuestCompletion(questId) {
         }
 
         await quest.save();
-        console.log(`[questRewardModule.js] ✅ Quest completion processing finished. Completed: ${results.completedCount}, Rewarded: ${results.rewardedCount}, Errors: ${results.errorCount}`);
-        
+        logger.info('QUEST', `processQuestCompletion: finished questId=${questId} completed=${results.completedCount} rewarded=${results.rewardedCount} errors=${results.errorCount}`);
+
         // Send completion summary after rewards are processed
         // Use the quest's completion reason or default to time_expired
         const completionReason = quest.completionReason || 'time_expired';
@@ -1026,11 +993,12 @@ async function recordQuestCompletionSafeguard(participant, quest) {
             return;
         }
         
-        // Validate quest data
-        if (!quest || !quest.questID) {
+        // Validate quest data - require non-empty questID for proper tracking
+        if (!quest || typeof quest.questID !== 'string' || quest.questID.trim() === '') {
+            logger.warn('QUEST', 'recordQuestCompletionSafeguard: quest or questID missing, skipping');
             return;
         }
-        
+
         // Always call recordQuestCompletion - it handles duplicates by updating existing entries
         // This ensures the safeguard logic in recordQuestCompletion runs and fixes any discrepancies
         // Record with temporary reward data (will be updated when rewards are distributed)
@@ -1060,8 +1028,8 @@ async function recordUserQuestCompletion(participant, quest, rewardResult, rewar
         }
 
         // ------------------- Validate quest data -------------------
-        if (!quest || !quest.questID) {
-            logger.error('QUEST', `Cannot record quest completion: quest or questID is missing`);
+        if (!quest || typeof quest.questID !== 'string' || quest.questID.trim() === '') {
+            logger.error('QUEST', 'Cannot record quest completion: quest or questID is missing');
             return;
         }
 
