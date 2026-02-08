@@ -1129,13 +1129,14 @@ async function getVillageShopQuestPool() {
 }
 
 // ------------------- Function: getCharacterGuessSnippetPool -------------------
-// Fetches accepted characters with sufficient personality/history (not TBA) for snippet clues, for a village
+// Fetches accepted characters with sufficient personality/history (not TBA) for snippet clues, for a village (case-insensitive)
 async function getCharacterGuessSnippetPool(village) {
   try {
     const Character = require('@/models/CharacterModel');
+    const villageRegex = new RegExp('^' + String(village).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const characters = await Character.find({
       status: 'accepted',
-      homeVillage: village
+      homeVillage: villageRegex
     }).select('_id name personality history homeVillage icon').lean();
     const validCharacters = characters.filter(char => {
       const personality = (char.personality || '').trim();
@@ -1151,13 +1152,14 @@ async function getCharacterGuessSnippetPool(village) {
 }
 
 // ------------------- Function: getCharacterGuessIconPool -------------------
-// Fetches accepted characters with valid icon for icon-zoom clues, for a village
+// Fetches accepted characters with valid icon for icon-zoom clues, for a village (case-insensitive)
 async function getCharacterGuessIconPool(village) {
   try {
     const Character = require('@/models/CharacterModel');
+    const villageRegex = new RegExp('^' + String(village).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
     const characters = await Character.find({
       status: 'accepted',
-      homeVillage: village,
+      homeVillage: villageRegex,
       icon: { $exists: true, $ne: '', $not: /^\s*$/ }
     }).select('_id name icon homeVillage').lean();
     return characters;
