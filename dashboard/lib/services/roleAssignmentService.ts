@@ -3,7 +3,7 @@
 // Assigns Discord roles when character is approved
 // ============================================================================
 
-import { discordApiRequest } from "@/lib/discord";
+import { discordApiRequest, assignGuildMemberRole } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 import { getAppUrl } from "@/lib/config";
 import { getJobPerk } from "@/data/jobData";
@@ -90,27 +90,21 @@ type CharacterDocument = {
 };
 
 /**
- * Assign a role to a user
+ * Assign a role to a user. Returns error message on failure for logging.
  */
-async function assignRole(userId: string, roleId: string): Promise<boolean> {
+async function assignRole(userId: string, roleId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!roleId || !GUILD_ID) {
-    return false;
+    return { ok: false, error: "Missing roleId or GUILD_ID" };
   }
 
-  try {
-    const result = await discordApiRequest(
-      `guilds/${GUILD_ID}/members/${userId}/roles/${roleId}`,
-      "PUT"
-    );
-
-    return result !== null;
-  } catch (error) {
+  const result = await assignGuildMemberRole(GUILD_ID, userId, roleId);
+  if (!result.ok) {
     logger.error(
       "roleAssignmentService",
-      `Failed to assign role ${roleId} to user ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to assign role ${roleId} to user ${userId}: ${result.error}`
     );
-    return false;
   }
+  return result;
 }
 
 /**
@@ -164,9 +158,9 @@ export async function assignCharacterRoles(
   try {
     // Assign resident role first (so accepted users always get it when configured)
     if (RESIDENT_ROLE_ID) {
-      const success = await assignRole(userId, RESIDENT_ROLE_ID);
-      if (!success) {
-        errors.push(`Failed to assign resident role`);
+      const result = await assignRole(userId, RESIDENT_ROLE_ID);
+      if (!result.ok) {
+        errors.push(`Failed to assign resident role: ${result.error}`);
       }
     } else {
       logger.warn(
@@ -180,9 +174,9 @@ export async function assignCharacterRoles(
       const raceKey = character.race.toLowerCase();
       const raceRoleId = RACE_ROLES_LOWER[raceKey] ?? RACE_ROLES[character.race];
       if (raceRoleId) {
-        const success = await assignRole(userId, raceRoleId);
-        if (!success) {
-          errors.push(`Failed to assign race role: ${character.race}`);
+        const result = await assignRole(userId, raceRoleId);
+        if (!result.ok) {
+          errors.push(`Failed to assign race role: ${character.race} — ${result.error}`);
         }
       } else {
         logger.warn(
@@ -197,9 +191,9 @@ export async function assignCharacterRoles(
       const villageKey = character.homeVillage.toLowerCase();
       const villageRoleId = VILLAGE_ROLES_LOWER[villageKey] ?? VILLAGE_ROLES[character.homeVillage];
       if (villageRoleId) {
-        const success = await assignRole(userId, villageRoleId);
-        if (!success) {
-          errors.push(`Failed to assign village role: ${character.homeVillage}`);
+        const result = await assignRole(userId, villageRoleId);
+        if (!result.ok) {
+          errors.push(`Failed to assign village role: ${character.homeVillage} — ${result.error}`);
         }
       } else {
         logger.warn(
@@ -209,29 +203,29 @@ export async function assignCharacterRoles(
       }
     }
 
-    // Assign job perk role(s) via job → perk → role (e.g. Scout → LOOTING → JOB_PERK_LOOTING)
+    // Assign perk role(s) via job → perk → role (e.g. Healer → HEALING → JOB_PERK_HEALING)
     if (character.job) {
       const jobPerk = getJobPerk(character.job);
       if (jobPerk?.perk) {
         const roleIds = perkStringsToRoleIds(jobPerk.perk);
         for (const roleId of roleIds) {
           if (roleId) {
-            const success = await assignRole(userId, roleId);
-            if (!success) {
-              errors.push(`Failed to assign job perk role for job: ${character.job}`);
+            const result = await assignRole(userId, roleId);
+            if (!result.ok) {
+              errors.push(`Failed to assign perk role: ${jobPerk.perk} (job: ${character.job}) — ${result.error}`);
             }
           }
         }
         if (roleIds.length === 0 && !["N/A", "NONE", "ALL"].includes(jobPerk.perk.toUpperCase())) {
           logger.warn(
             "roleAssignmentService",
-            `No role mapping for job perk: ${character.job} (perk: ${jobPerk.perk})`
+            `No role mapping for perk: ${jobPerk.perk} (job: ${character.job})`
           );
         }
       } else {
         logger.warn(
           "roleAssignmentService",
-          `No role mapping found for job: ${character.job}`
+          `No perk defined for job: ${character.job}`
         );
       }
     }

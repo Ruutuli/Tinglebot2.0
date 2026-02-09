@@ -234,3 +234,37 @@ export async function discordApiRequest<T = unknown>(
     return null;
   }
 }
+
+/**
+ * Add a role to a guild member. Returns the Discord API error message on failure
+ * so callers can log it (e.g. role hierarchy, missing permission).
+ */
+export async function assignGuildMemberRole(
+  guildId: string,
+  userId: string,
+  roleId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const token = process.env.DISCORD_TOKEN;
+  if (!token || !guildId || !userId || !roleId) {
+    return { ok: false, error: "Missing DISCORD_TOKEN, GUILD_ID, userId, or roleId" };
+  }
+  const url = `${DISCORD_API_BASE}/guilds/${guildId}/members/${userId}/roles/${roleId}`;
+  try {
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bot ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (res.ok || res.status === 204) return { ok: true };
+    const errorText = await res.text();
+    const error = `Discord API (${res.status}): ${errorText}`;
+    console.error(error);
+    return { ok: false, error };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`Assign role request failed: ${error}`);
+    return { ok: false, error };
+  }
+}
