@@ -675,6 +675,11 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
                 : (effectiveTimeLimit.trim() || "—")}
             </div>
             <div><span className="font-semibold">Date:</span> {form.date ? (yyyyMmToDisplay(form.date) || form.date) : "—"}</div>
+            {form.signupDeadline.trim() && (() => {
+              const d = new Date(form.signupDeadline.trim());
+              const label = Number.isNaN(d.getTime()) ? form.signupDeadline.trim() : d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+              return <div><span className="font-semibold">Signup deadline:</span> {label}</div>;
+            })()}
           </div>
         </div>
 
