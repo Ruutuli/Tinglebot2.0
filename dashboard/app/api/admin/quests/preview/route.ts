@@ -211,7 +211,7 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
 
   const tableroll = (body.tableroll as string)?.trim() || "";
   const participationLines: string[] = [];
-  if (minRequirements) participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
+  if (minRequirements && minRequirements !== "0") participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
   if (questType === "RP") participationLines.push(`📝 Post requirement: ${postReq}`);
   if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
   const participationValue = participationLines.length ? participationLines.join("\n") : "—";

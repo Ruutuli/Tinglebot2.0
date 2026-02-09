@@ -696,7 +696,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
         <div className="text-sm">
           <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🗓️ Participation</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 space-y-0.5">
-            {form.minRequirements.trim() ? (
+            {form.minRequirements.trim() && form.minRequirements.trim() !== "0" ? (
               <div className="mt-0.5">
                 <span>📝 Participation Requirement: </span>
                 <span className="whitespace-pre-line">{form.minRequirements.trim()}</span>
@@ -708,7 +708,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
             {form.tableroll.trim() && (
               <div>🎲 Table roll: <span className="font-medium">{form.tableroll.trim()}</span></div>
             )}
-            {!form.minRequirements.trim() && form.questType !== "RP" && !form.tableroll.trim() && <div>—</div>}
+            {(!form.minRequirements.trim() || form.minRequirements.trim() === "0") && form.questType !== "RP" && !form.tableroll.trim() && <div>—</div>}
           </div>
         </div>
 
