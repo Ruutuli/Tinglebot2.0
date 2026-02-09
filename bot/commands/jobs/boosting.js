@@ -10,6 +10,7 @@ const {
  fetchCharacterByName,
  fetchModCharacterByNameAndUserId,
  fetchModCharacterByName,
+ fetchAllItems,
 } = require('@/database/db');
 const { getBoostEffect, normalizeJobName } = require('../../modules/boostingModule');
 const { getJobPerk } = require('../../modules/jobsModule');
@@ -1069,6 +1070,42 @@ async function handleBoostAccept(interaction) {
    ephemeral: true,
   });
   return;
+ }
+
+ // For Gathering boosts: ensure the target can actually gather at least one item
+ // so we don't consume the booster's stamina or the target's daily roll for nothing
+ if (requestData.category === 'Gathering') {
+  const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);
+  if (targetCharacter) {
+   const gatheringVillage =
+    boosterJob === 'Scholar' && requestData.targetVillage
+     ? requestData.targetVillage
+     : targetCharacter.currentVillage;
+   const { getVillageRegionByName } = require('../../modules/locationsModule');
+   const villageRegion = gatheringVillage ? getVillageRegionByName(gatheringVillage) : null;
+   const regionKey = villageRegion ? villageRegion.toLowerCase() : (gatheringVillage && gatheringVillage.toLowerCase());
+   if (regionKey) {
+    const items = await fetchAllItems();
+    const job = targetCharacter.job;
+    const normalizedInputJob = normalizeJobName(job);
+    // ItemModel: gathering (Boolean), allJobs ([String]), region keys (e.g. eldin, faron, lanayru)
+    const availableItems = items.filter((item) => {
+     if (item.gathering !== true) return false;
+     const isJobMatch = item.allJobs?.some((j) => normalizeJobName(j) === normalizedInputJob) || false;
+     const isRegionMatch = item[regionKey] === true;
+     return isJobMatch && isRegionMatch;
+    });
+    if (!availableItems || availableItems.length === 0) {
+     await interaction.reply({
+      content:
+       `⚠️ **No items available to gather** in the target location (**${gatheringVillage}**) for **${targetCharacter.name}**'s job (**${job || 'unknown'}**) with this boost.\n\n` +
+       "Neither the booster's stamina nor the character's daily gather roll will be used. Request or accept a boost when the character is in a village (or, for Scholar, a target village) that has gatherable items for their job.",
+      ephemeral: true,
+     });
+     return;
+    }
+   }
+  }
  }
 
  // Deduct 1 stamina from the booster character

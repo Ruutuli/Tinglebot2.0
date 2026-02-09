@@ -514,18 +514,6 @@ module.exports = {
           });
           return;
         }
-
-        // Update daily roll AFTER all validations pass
-        try {
-          await updateDailyRoll(character, 'gather');
-        } catch (error) {
-          logger.error('GATHER', 'Failed to update daily roll');
-          await safeReply({
-            content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
-            flags: 64,
-          });
-          return;
-        }
       }
 
       // ------------------- Step 5: Validate Region ------------------
@@ -695,6 +683,17 @@ module.exports = {
           );
           if (monstersByRegion.length > 0) {
             const encounteredMonster = monstersByRegion[Math.floor(Math.random() * monstersByRegion.length)];
+            // Consume daily roll only when we actually start an encounter
+            try {
+              await updateDailyRoll(character, 'gather');
+            } catch (error) {
+              logger.error('GATHER', 'Failed to update daily roll (encounter path)');
+              await safeReply({
+                content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+                flags: 64,
+              });
+              return;
+            }
           const diceRoll = Math.floor(Math.random() * 100) + 1;
           const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
           const outcome = await getEncounterOutcome(
@@ -729,9 +728,11 @@ module.exports = {
                 const jobNormalized = normalizeJobName(job);
                 const regionKeyForBonus = region.toLowerCase();
 
+                // ItemModel: gathering (Boolean), allJobs ([String]), region keys (e.g. eldin, faron, lanayru)
                 const availableForBonus = itemsForBonus.filter(item => {
+                  if (item.gathering !== true) return false;
                   const isJobMatch = item.allJobs?.some(j => normalizeJobName(j) === jobNormalized) || false;
-                  const isRegionMatch = item[regionKeyForBonus];
+                  const isRegionMatch = item[regionKeyForBonus] === true;
                   return isJobMatch && isRegionMatch;
                 });
 
@@ -890,19 +891,14 @@ module.exports = {
 
         }
         
+        // ItemModel: gathering (Boolean), allJobs ([String]), region keys (e.g. eldin, faron, lanayru)
         const availableItems = items.filter(item => {
-          const jobKey = job.toLowerCase();
-          
-          // Use the normalizeJobName function from jobsModule
+          if (item.gathering !== true) return false;
           const normalizedInputJob = normalizeJobName(job);
-          
-          // Use allJobs which is already an array of job names
-          const isJobMatch = item.allJobs?.some(j => 
+          const isJobMatch = item.allJobs?.some(j =>
             normalizeJobName(j) === normalizedInputJob
           ) || false;
-          
-          const isRegionMatch = item[regionKey];
-          
+          const isRegionMatch = item[regionKey] === true;
           return isJobMatch && isRegionMatch;
         });
         
@@ -987,9 +983,23 @@ module.exports = {
         if (!weightedItems || weightedItems.length === 0) {
           logger.warn('GATHER', `No valid items available after weighting - availableItems: ${boostedAvailableItems.length}, weightedItems: 0`);
           await safeReply({
-            content: `⚠️ **No items available to gather here with the current boost and job combination.**`,
+            content: `⚠️ **No items available to gather here with the current boost and job combination.** Your daily gather roll was not used.`,
           });
           return;
+        }
+
+        // Consume daily roll only when we have items to gather (not when we hit the no-items guard above)
+        if (!character.jobVoucher && !character.isModCharacter) {
+          try {
+            await updateDailyRoll(character, 'gather');
+          } catch (error) {
+            logger.error('GATHER', 'Failed to update daily roll');
+            await safeReply({
+              content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+              flags: 64,
+            });
+            return;
+          }
         }
         
         // Calculate total weight for selection
