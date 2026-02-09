@@ -1696,8 +1696,21 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 
       const validationResult = await hasItem(character._id, requiredItem.name, requiredItem.quantity);
       if (!validationResult.available) {
+        const insufficientItemEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Not Enough Items')
+          .setDescription(`**${character.name}** doesn't have enough of **${requiredItem.name}** for this submission.`)
+          .addFields(
+            { name: 'You Have', value: `${requiredItem.name} x${validationResult.quantity}`, inline: true },
+            { name: 'Needed', value: `${requiredItem.name} x${requiredItem.quantity}`, inline: true }
+          )
+          .setThumbnail(healer.iconUrl)
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+          .setTimestamp();
+
         await interaction.editReply({
-          content: `❌ **${character.name}** only has **${validationResult.quantity}** of **${requiredItem.name}**, but **${requiredItem.quantity}** is needed.`,
+          embeds: [insufficientItemEmbed],
           flags: [4096]
         });
         return;

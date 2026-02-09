@@ -697,10 +697,13 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
           <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🗓️ Participation</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 space-y-0.5">
             {form.minRequirements.trim() ? (
-              <div>📝 Min requirement: {form.minRequirements.trim()}</div>
+              <div className="mt-0.5">
+                <span>📝 Participation Requirement: </span>
+                <span className="whitespace-pre-line">{form.minRequirements.trim()}</span>
+              </div>
             ) : null}
             {form.questType === "RP" && (
-              <div>📝 RP Posts Required ({postReqVal})</div>
+              <div>📝 Post requirement: {postReqVal}</div>
             )}
             {form.tableroll.trim() && (
               <div>🎲 Table roll: <span className="font-medium">{form.tableroll.trim()}</span></div>
@@ -1381,8 +1384,8 @@ export default function AdminQuestsPage() {
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Participation</legend>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="sm:col-span-2">
-                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Min requirements</label>
-                          <input type="text" value={form.minRequirements} onChange={(e) => setField("minRequirements", e.target.value)} placeholder="e.g. 500 words minimum" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participation Requirement</label>
+                          <textarea rows={3} value={form.minRequirements} onChange={(e) => setField("minRequirements", e.target.value)} placeholder="Optional — e.g. 0, 15, or any text" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] resize-y min-h-[4rem]" />
                         </div>
                         {form.questType === "RP" && (
                           <>
