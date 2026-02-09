@@ -696,6 +696,9 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
         <div className="text-sm">
           <span style={{ color: EMBED_LABEL }} className="font-semibold underline">🗓️ Participation</span>
           <div style={{ color: EMBED_TEXT }} className="mt-1 space-y-0.5">
+            {cap != null && !Number.isNaN(cap) && (
+              <div>👥 Participation cap: {cap}</div>
+            )}
             {form.minRequirements.trim() && form.minRequirements.trim() !== "0" ? (
               <div className="mt-0.5">
                 <span>📝 Participation Requirement: </span>
@@ -708,7 +711,7 @@ function QuestEmbedPreview({ form }: { form: FormState }) {
             {form.tableroll.trim() && (
               <div>🎲 Table roll: <span className="font-medium">{form.tableroll.trim()}</span></div>
             )}
-            {(!form.minRequirements.trim() || form.minRequirements.trim() === "0") && form.questType !== "RP" && !form.tableroll.trim() && <div>—</div>}
+            {!cap && (!form.minRequirements.trim() || form.minRequirements.trim() === "0") && form.questType !== "RP" && !form.tableroll.trim() && <div>—</div>}
           </div>
         </div>
 
@@ -1264,6 +1267,7 @@ export default function AdminQuestsPage() {
                               const newType = e.target.value;
                               setField("questType", newType);
                               if (newType === "RP" && !form.rules.trim()) setField("rules", DEFAULT_RP_RULES);
+                              if (newType !== "RP") setField("rules", "");
                             }}
                             className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]"
                           >
@@ -1306,10 +1310,6 @@ export default function AdminQuestsPage() {
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Signup Deadline</label>
                           <input type="date" value={form.signupDeadline} onChange={(e) => setField("signupDeadline", e.target.value)} className="quest-date-input w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participant Cap</label>
-                          <input type="number" min={0} value={form.participantCap} onChange={(e) => setField("participantCap", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                         </div>
                         <div>
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Status</label>
@@ -1383,6 +1383,10 @@ export default function AdminQuestsPage() {
                     <fieldset className="rounded-lg border border-[var(--totk-dark-ocher)]/60 p-4 space-y-4">
                       <legend className="text-sm font-semibold text-[var(--totk-ivory)] px-1">Participation</legend>
                       <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participation cap (optional)</label>
+                          <input type="number" min={1} value={form.participantCap} onChange={(e) => setField("participantCap", e.target.value)} placeholder="No limit" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                        </div>
                         <div className="sm:col-span-2">
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participation Requirement</label>
                           <textarea rows={3} value={form.minRequirements} onChange={(e) => setField("minRequirements", e.target.value)} placeholder="Optional — e.g. 0, 15, or any text" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] resize-y min-h-[4rem]" />
@@ -1622,7 +1626,7 @@ export default function AdminQuestsPage() {
                   <p className="mt-1 text-sm text-[var(--totk-grey-200)]">
                     Quest ID: <span className="font-mono text-[var(--totk-ivory)]">{manageQuest.questID ?? manageQuestId}</span>
                     {manageQuest.participantCap != null && (
-                      <> · Cap: {manageQuest.participantCap}</>
+                      <> · Participation cap: {manageQuest.participantCap}</>
                     )}
                   </p>
                 )}
@@ -1884,7 +1888,7 @@ export default function AdminQuestsPage() {
                         <div><dt className="text-[var(--totk-grey-200)]">Location</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { location?: string }).location ?? "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Time limit</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { timeLimit?: string }).timeLimit ?? "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Signup deadline</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { signupDeadline?: string }).signupDeadline ?? "—"}</dd></div>
-                        <div><dt className="text-[var(--totk-grey-200)]">Participant cap</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.participantCap != null ? viewQuest.participantCap : "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Participation cap</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.participantCap != null ? viewQuest.participantCap : "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Participants</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{Object.keys(viewQuest.participants ?? {}).length}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Posted</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{isQuestPosted(viewQuest) ? "Yes" : "No"}</dd></div>
                         {Boolean(viewQuest.postedAt ?? (viewQuest as Record<string, unknown>).postedAt) && (

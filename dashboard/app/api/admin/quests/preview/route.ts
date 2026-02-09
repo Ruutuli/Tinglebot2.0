@@ -210,7 +210,12 @@ async function buildQuestPreviewEmbed(body: Record<string, unknown>) {
   const signupDeadlineDisplay = formatSignupDeadline(body.signupDeadline);
 
   const tableroll = (body.tableroll as string)?.trim() || "";
+  const participantCap =
+    body.participantCap != null && !Number.isNaN(Number(body.participantCap))
+      ? Number(body.participantCap)
+      : null;
   const participationLines: string[] = [];
+  if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
   if (minRequirements && minRequirements !== "0") participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
   if (questType === "RP") participationLines.push(`📝 Post requirement: ${postReq}`);
   if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
