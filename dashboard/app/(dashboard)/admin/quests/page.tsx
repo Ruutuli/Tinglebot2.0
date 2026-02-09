@@ -1538,7 +1538,7 @@ export default function AdminQuestsPage() {
                     <th className="pb-3 pt-3 pr-3 text-[var(--totk-grey-200)] font-semibold">Type</th>
                     <th className="pb-3 pt-3 pr-3 text-[var(--totk-grey-200)] font-semibold">Status</th>
                     <th className="pb-3 pt-3 pr-3 text-[var(--totk-grey-200)] font-semibold">Posted</th>
-                    <th className="pb-3 pt-3 pr-4 text-[var(--totk-grey-200)] font-semibold">Actions</th>
+                    <th className="pb-3 pt-3 pr-4 text-[var(--totk-grey-200)] font-semibold min-w-[280px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1558,19 +1558,19 @@ export default function AdminQuestsPage() {
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.questType ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{statusDisplay(q.status)}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{isQuestPosted(q) ? "Yes" : "No"}</td>
-                      <td className="py-3 pr-4">
-                        <div className="flex flex-wrap gap-2">
+                      <td className="py-3 pr-4 min-w-[280px]">
+                        <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => loadQuestForEdit(String(q._id))}
-                            className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors"
+                            className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors shrink-0"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => openManageModal(String(q._id))}
-                            className="rounded-md bg-[var(--totk-dark-ocher)]/80 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors"
+                            className="rounded-md bg-[var(--totk-dark-ocher)]/80 px-3 py-1.5 text-xs font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)] transition-colors shrink-0"
                           >
                             Manage
                           </button>
@@ -1579,7 +1579,7 @@ export default function AdminQuestsPage() {
                               type="button"
                               onClick={() => setCompleteConfirmQuestId(String(q._id))}
                               disabled={completingQuestId === String(q._id)}
-                              className="rounded-md bg-[var(--totk-light-green)]/30 px-3 py-1.5 text-xs font-semibold text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/50 disabled:opacity-50 transition-colors"
+                              className="rounded-md bg-[var(--totk-light-green)]/30 px-3 py-1.5 text-xs font-semibold text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/50 disabled:opacity-50 transition-colors shrink-0"
                             >
                               {completingQuestId === String(q._id) ? "Completing..." : "Mark completed"}
                             </button>
@@ -1587,7 +1587,7 @@ export default function AdminQuestsPage() {
                           <button
                             type="button"
                             onClick={() => setDeleteFromListId(String(q._id))}
-                            className="rounded-md border border-red-500/50 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                            className="rounded-md border-2 border-red-500 bg-red-500/15 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/25 transition-colors shrink-0"
                           >
                             Delete
                           </button>
