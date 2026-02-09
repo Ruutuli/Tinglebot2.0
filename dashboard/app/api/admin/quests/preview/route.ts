@@ -114,8 +114,8 @@ function formatTokenRewardForDisplay(
   const s = String(raw).trim();
   const flat = s.match(/flat:(\d+)/i)?.[1];
   const perUnit = s.match(/per_unit:(\d+)/i)?.[1];
-  const unitQuoted = s.match(/unit:"((?:[^"\\]|\\.)*)"/i)?.[1];
-  const unitUnquoted = !unitQuoted ? s.match(/unit:(\S+)/i)?.[1] : null;
+  const unitQuoted = s.match(/\bunit:"((?:[^"\\]|\\.)*)"/i)?.[1];
+  const unitUnquoted = !unitQuoted ? s.match(/\bunit:(\S+)/i)?.[1] : null;
   const unit = unitQuoted ? unitQuoted.replace(/\\"/g, '"') : (unitUnquoted ?? null);
   const max = s.match(/max:(\d+)/i)?.[1];
   const collab = s.match(/collab_bonus:(\d+)/i)?.[1];

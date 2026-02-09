@@ -353,8 +353,8 @@ function parseTokenReward(tokenReward: string | number | undefined): ParsedToken
   if (!raw.trim()) return empty;
   const flatMatch = raw.match(/flat:(\d+)/i);
   const perUnitMatch = raw.match(/per_unit:(\d+)/i);
-  const unitQuotedMatch = raw.match(/unit:"((?:[^"\\]|\\.)*)"/i);
-  const unitUnquotedMatch = !unitQuotedMatch ? raw.match(/unit:(\S+)/i) : null;
+  const unitQuotedMatch = raw.match(/\bunit:"((?:[^"\\]|\\.)*)"/i);
+  const unitUnquotedMatch = !unitQuotedMatch ? raw.match(/\bunit:(\S+)/i) : null;
   const unitRaw = unitQuotedMatch ? unitQuotedMatch[1].replace(/\\"/g, '"') : (unitUnquotedMatch ? unitUnquotedMatch[1] : "");
   const unit = unitRaw;
   const maxMatch = raw.match(/max:(\d+)/i);
@@ -530,8 +530,8 @@ function formatTokenRewardForDisplay(form: FormState): string | null {
     const raw = form.tokenRewardCustom.trim();
     const flat = raw.match(/flat:(\d+)/i)?.[1];
     const perUnit = raw.match(/per_unit:(\d+)/i)?.[1];
-    const unitQuotedMatch = raw.match(/unit:"((?:[^"\\]|\\.)*)"/i);
-    const unitUnquotedMatch = !unitQuotedMatch ? raw.match(/unit:(\S+)/i) : null;
+    const unitQuotedMatch = raw.match(/\bunit:"((?:[^"\\]|\\.)*)"/i);
+    const unitUnquotedMatch = !unitQuotedMatch ? raw.match(/\bunit:(\S+)/i) : null;
     const unit = unitQuotedMatch ? unitQuotedMatch[1].replace(/\\"/g, '"') : (unitUnquotedMatch ? unitUnquotedMatch[1] : null);
     const max = raw.match(/max:(\d+)/i)?.[1];
     const collab = raw.match(/collab_bonus:(\d+)/i)?.[1];
