@@ -114,14 +114,16 @@ function formatTokenRewardForDisplay(
   const s = String(raw).trim();
   const flat = s.match(/flat:(\d+)/i)?.[1];
   const perUnit = s.match(/per_unit:(\d+)/i)?.[1];
-  const unit = s.match(/unit:(\S+)/i)?.[1];
+  const unitQuoted = s.match(/unit:"((?:[^"\\]|\\.)*)"/i)?.[1];
+  const unitUnquoted = !unitQuoted ? s.match(/unit:(\S+)/i)?.[1] : null;
+  const unit = unitQuoted ? unitQuoted.replace(/\\"/g, '"') : (unitUnquoted ?? null);
   const max = s.match(/max:(\d+)/i)?.[1];
   const collab = s.match(/collab_bonus:(\d+)/i)?.[1];
   const parts: string[] = [];
-  if (flat) parts.push(`${flat} base`);
-  if (perUnit) parts.push(max && unit ? `${perUnit} per ${unit} (cap ${max})` : unit ? `${perUnit} per ${unit}` : `${perUnit} per unit`);
+  if (flat) parts.push(`${flat} tokens base`);
+  if (perUnit) parts.push(max && unit ? `${perUnit} tokens per ${unit} (cap ${max})` : unit ? `${perUnit} tokens per ${unit}` : `${perUnit} tokens per unit`);
   const showCollab = collab && (opts?.collabAllowed === true || (collab !== "0" && collab !== ""));
-  if (showCollab) parts.push(`${collab} collab bonus`);
+  if (showCollab) parts.push(`${collab} tokens collab bonus`);
   if (parts.length) return parts.join(" + ");
   return s;
 }
@@ -132,7 +134,7 @@ async function buildRewardsText(body: Record<string, unknown>): Promise<string> 
   if (tokenReward && typeof tokenReward === "string") {
     const collabAllowed = body.collabAllowed === true;
     const display = formatTokenRewardForDisplay(tokenReward, { collabAllowed });
-    if (display) parts.push(`💰 ${display} tokens`);
+    if (display) parts.push(display.includes("tokens") ? `💰 ${display}` : `💰 ${display} tokens`);
   }
   if (body.collabAllowed && body.collabRule) {
     parts.push(`(${String(body.collabRule).trim()})`);

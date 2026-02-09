@@ -1098,9 +1098,11 @@ formatQuestCount(count = 0) {
    );
 
    if (statusFieldIndex >= 0) {
-    const statusText = quest.status === 'active' ? '🟢 Active' : 
-                     quest.status === 'completed' ? '✅ Completed' : 
-                     quest.status === 'cancelled' ? '❌ Cancelled' : 
+    const statusText = quest.status === 'active' ? '🟢 Active' :
+                     quest.status === 'completed' ? '✅ Complete' :
+                     quest.status === 'draft' ? '📝 Draft' :
+                     quest.status === 'unposted' ? '📤 Unposted' :
+                     quest.status === 'cancelled' ? '❌ Cancelled' :
                      quest.status === 'expired' ? '⏰ Expired' : quest.status;
 
     embed.data.fields[statusFieldIndex] = {

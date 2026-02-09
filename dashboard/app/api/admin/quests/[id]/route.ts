@@ -7,11 +7,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
+import { isModeratorUser } from "@/lib/moderator";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 
+async function canAccessQuestAdmin(userId: string): Promise<boolean> {
+  const [admin, mod] = await Promise.all([isAdminUser(userId), isModeratorUser(userId)]);
+  return admin || mod;
+}
+
 const QUEST_TYPES = ["Art", "Writing", "Interactive", "RP", "Art / Writing"] as const;
-const STATUSES = ["active", "completed"] as const;
+const STATUSES = ["draft", "unposted", "active", "completed"] as const;
 
 type QuestType = (typeof QUEST_TYPES)[number];
 type Status = (typeof STATUSES)[number];
@@ -91,10 +97,10 @@ export async function GET(
     if (!user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const admin = await isAdminUser(user.id);
-    if (!admin) {
+    const allowed = await canAccessQuestAdmin(user.id);
+    if (!allowed) {
       return NextResponse.json(
-        { error: "Forbidden", message: "Admin access required" },
+        { error: "Forbidden", message: "Admin or moderator access required" },
         { status: 403 }
       );
     }
@@ -135,10 +141,10 @@ export async function PUT(
     if (!user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const admin = await isAdminUser(user.id);
-    if (!admin) {
+    const allowed = await canAccessQuestAdmin(user.id);
+    if (!allowed) {
       return NextResponse.json(
-        { error: "Forbidden", message: "Admin access required" },
+        { error: "Forbidden", message: "Admin or moderator access required" },
         { status: 403 }
       );
     }
@@ -178,10 +184,11 @@ export async function PUT(
       );
     }
 
-    const status = (body.status as string) || "active";
+    const statusRaw = (body.status as string) || "active";
+    const status = statusRaw === "complete" ? "completed" : statusRaw;
     if (!STATUSES.includes(status as Status)) {
       return NextResponse.json(
-        { error: "Validation failed", message: "status must be active or completed" },
+        { error: "Validation failed", message: "status must be draft, unposted, active, or completed" },
         { status: 400 }
       );
     }
@@ -313,6 +320,48 @@ export async function PUT(
     logger.error("api/admin/quests/[id] PUT", e instanceof Error ? e.message : String(e));
     return NextResponse.json(
       { error: "Failed to update quest" },
+      { status: 500 }
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------
+// DELETE - Delete quest (mod or admin)
+// ----------------------------------------------------------------------------
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    const user = session.user ?? null;
+    if (!user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const allowed = await canAccessQuestAdmin(user.id);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Admin or moderator access required" },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: "Invalid quest id" }, { status: 400 });
+    }
+
+    await connect();
+    const Quest = (await import("@/models/QuestModel.js")).default;
+    const deleted = await Quest.findByIdAndDelete(id).exec();
+    if (!deleted) {
+      return NextResponse.json({ error: "Quest not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, deleted: deleted.questID ?? id });
+  } catch (e) {
+    logger.error("api/admin/quests/[id] DELETE", e instanceof Error ? e.message : String(e));
+    return NextResponse.json(
+      { error: "Failed to delete quest" },
       { status: 500 }
     );
   }

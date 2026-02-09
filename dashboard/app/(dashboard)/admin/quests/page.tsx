@@ -97,7 +97,18 @@ const QUEST_TABS: { value: QuestTab; label: string; icon: string }[] = [
 ];
 
 const QUEST_TYPES = ["Art", "Writing", "Interactive", "RP", "Art / Writing"] as const;
-const STATUSES = ["active", "completed"] as const;
+const STATUSES = ["draft", "unposted", "active", "completed"] as const;
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "draft", label: "Draft" },
+  { value: "unposted", label: "Unposted" },
+  { value: "active", label: "Active" },
+  { value: "completed", label: "Complete" },
+];
+function statusDisplay(s: string | undefined): string {
+  if (!s) return "—";
+  const o = STATUS_OPTIONS.find((x) => x.value === s);
+  return o ? o.label : s;
+}
 
 const LOCATION_PRESETS = ["Rudania", "Inariko", "Vhintl", "ALL"] as const;
 const TIME_LIMIT_PRESETS = ["1 week", "2 weeks", "1 month", "2 months"] as const;
@@ -308,14 +319,17 @@ function parseTokenReward(tokenReward: string | number | undefined): ParsedToken
   if (!raw.trim()) return empty;
   const flatMatch = raw.match(/flat:(\d+)/i);
   const perUnitMatch = raw.match(/per_unit:(\d+)/i);
-  const unitMatch = raw.match(/unit:(\S+)/i);
+  const unitQuotedMatch = raw.match(/unit:"((?:[^"\\]|\\.)*)"/i);
+  const unitUnquotedMatch = !unitQuotedMatch ? raw.match(/unit:(\S+)/i) : null;
+  const unitRaw = unitQuotedMatch ? unitQuotedMatch[1].replace(/\\"/g, '"') : (unitUnquotedMatch ? unitUnquotedMatch[1] : "");
+  const unit = unitRaw;
   const maxMatch = raw.match(/max:(\d+)/i);
   const collabMatch = raw.match(/collab_bonus:(\d+)/i);
   if (flatMatch || perUnitMatch || collabMatch || /^\d+$/.test(raw.trim())) {
     return {
       tokenFlat: flatMatch ? flatMatch[1] : /^\d+$/.test(raw.trim()) ? raw.trim() : "",
       tokenPerUnit: perUnitMatch ? perUnitMatch[1] : "",
-      tokenUnit: unitMatch ? unitMatch[1] : "",
+      tokenUnit: unitRaw,
       tokenMax: maxMatch ? maxMatch[1] : "",
       tokenCollabBonus: collabMatch ? collabMatch[1] : "",
       tokenRewardCustom: "",
@@ -395,7 +409,14 @@ function buildTokenRewardFromForm(f: FormState): string {
   if (f.tokenFlat.trim()) parts.push(`flat:${f.tokenFlat.trim()}`);
   if (f.tokenPerUnit.trim()) {
     parts.push(`per_unit:${f.tokenPerUnit.trim()}`);
-    if (f.tokenUnit.trim()) parts.push(`unit:${f.tokenUnit.trim()}`);
+    const u = f.tokenUnit.trim();
+    if (u) {
+      if (u.includes(" ") || u.includes('"')) {
+        parts.push(`unit:"${u.replace(/"/g, '\\"')}"`);
+      } else {
+        parts.push(`unit:${u}`);
+      }
+    }
     if (f.tokenMax.trim()) parts.push(`max:${f.tokenMax.trim()}`);
   }
   if (f.tokenCollabBonus.trim()) parts.push(`collab_bonus:${f.tokenCollabBonus.trim()}`);
@@ -475,26 +496,28 @@ function formatTokenRewardForDisplay(form: FormState): string | null {
     const raw = form.tokenRewardCustom.trim();
     const flat = raw.match(/flat:(\d+)/i)?.[1];
     const perUnit = raw.match(/per_unit:(\d+)/i)?.[1];
-    const unit = raw.match(/unit:(\S+)/i)?.[1];
+    const unitQuotedMatch = raw.match(/unit:"((?:[^"\\]|\\.)*)"/i);
+    const unitUnquotedMatch = !unitQuotedMatch ? raw.match(/unit:(\S+)/i) : null;
+    const unit = unitQuotedMatch ? unitQuotedMatch[1].replace(/\\"/g, '"') : (unitUnquotedMatch ? unitUnquotedMatch[1] : null);
     const max = raw.match(/max:(\d+)/i)?.[1];
     const collab = raw.match(/collab_bonus:(\d+)/i)?.[1];
     const customParts: string[] = [];
-    if (flat) customParts.push(`${flat} base`);
-    if (perUnit) customParts.push(max && unit ? `${perUnit} per ${unit} (cap ${max})` : unit ? `${perUnit} per ${unit}` : `${perUnit} per unit`);
+    if (flat) customParts.push(`${flat} tokens base`);
+    if (perUnit) customParts.push(max && unit ? `${perUnit} tokens per ${unit} (cap ${max})` : unit ? `${perUnit} tokens per ${unit}` : `${perUnit} tokens per unit`);
     const showCollab = collab && (form.collabAllowed || (collab !== "0" && collab !== ""));
-    if (showCollab) customParts.push(`${collab} collab bonus`);
+    if (showCollab) customParts.push(`${collab} tokens collab bonus`);
     if (customParts.length) return customParts.join(" + ");
     return raw;
   }
   const tokenParts: string[] = [];
-  if (form.tokenFlat.trim()) tokenParts.push(`${form.tokenFlat.trim()} base`);
+  if (form.tokenFlat.trim()) tokenParts.push(`${form.tokenFlat.trim()} tokens base`);
   if (form.tokenPerUnit.trim()) {
     const unit = form.tokenUnit.trim() || "unit";
     const cap = form.tokenMax.trim();
-    tokenParts.push(cap ? `${form.tokenPerUnit.trim()} per ${unit} (cap ${cap})` : `${form.tokenPerUnit.trim()} per ${unit}`);
+    tokenParts.push(cap ? `${form.tokenPerUnit.trim()} tokens per ${unit} (cap ${cap})` : `${form.tokenPerUnit.trim()} tokens per ${unit}`);
   }
   const showCollab = form.collabAllowed || (form.tokenCollabBonus.trim() !== "0" && form.tokenCollabBonus.trim() !== "");
-  if (showCollab && form.tokenCollabBonus.trim()) tokenParts.push(`${form.tokenCollabBonus.trim()} collab bonus`);
+  if (showCollab && form.tokenCollabBonus.trim()) tokenParts.push(`${form.tokenCollabBonus.trim()} tokens collab bonus`);
   if (tokenParts.length) return tokenParts.join(" + ");
   return null;
 }
@@ -538,7 +561,7 @@ function buildRewardsPreview(form: FormState, emojiMap?: Record<string, string>)
   const parts: string[] = [];
   const tokenDisplay = formatTokenRewardForDisplay(form);
   if (tokenDisplay) {
-    parts.push(`💰 ${tokenDisplay} tokens`);
+    parts.push(tokenDisplay.includes("tokens") ? `💰 ${tokenDisplay}` : `💰 ${tokenDisplay} tokens`);
   }
   if (form.collabAllowed && form.collabRule?.trim()) {
     parts.push(`(${form.collabRule.trim()})`);
@@ -716,6 +739,8 @@ export default function AdminQuestsPage() {
   const [completeConfirmQuestId, setCompleteConfirmQuestId] = useState<string | null>(null);
   const [viewQuestId, setViewQuestId] = useState<string | null>(null);
   const [viewQuest, setViewQuest] = useState<QuestRecord | null>(null);
+  const [deleteConfirmQuestId, setDeleteConfirmQuestId] = useState<string | null>(null);
+  const [deletingQuestId, setDeletingQuestId] = useState<string | null>(null);
   const [previewPosting, setPreviewPosting] = useState(false);
   const [tablerollNames, setTablerollNames] = useState<string[]>([]);
 
@@ -832,7 +857,32 @@ export default function AdminQuestsPage() {
   const closeViewModal = useCallback(() => {
     setViewQuestId(null);
     setViewQuest(null);
+    setDeleteConfirmQuestId(null);
   }, []);
+
+  const confirmDeleteQuest = useCallback(
+    async (questId: string) => {
+      setDeletingQuestId(questId);
+      setError(null);
+      setSuccess(null);
+      try {
+        const res = await fetch(`/api/admin/quests/${questId}`, { method: "DELETE" });
+        const data = (await res.json()) as { ok?: boolean; deleted?: string; error?: string; message?: string };
+        if (!res.ok) {
+          throw new Error(data.message ?? data.error ?? "Failed to delete quest");
+        }
+        setDeleteConfirmQuestId(null);
+        closeViewModal();
+        setSuccess(data.deleted ? `Quest ${data.deleted} deleted.` : "Quest deleted.");
+        await fetchQuests();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDeletingQuestId(null);
+      }
+    },
+    [closeViewModal, fetchQuests]
+  );
 
   const toggleParticipantSelected = useCallback((userId: string) => {
     setSelectedParticipantIds((prev) =>
@@ -1174,14 +1224,12 @@ export default function AdminQuestsPage() {
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participant Cap</label>
                           <input type="number" min={0} value={form.participantCap} onChange={(e) => setField("participantCap", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
                         </div>
-                        {editingId && (
-                          <div>
-                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Status</label>
-                            <select value={form.status} onChange={(e) => setField("status", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
-                              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </div>
-                        )}
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Status</label>
+                          <select value={form.status} onChange={(e) => setField("status", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
+                            {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
                         {editingId && form.questID && (
                           <p className="text-sm text-[var(--totk-grey-200)] sm:col-span-2">Quest ID: <span className="font-mono text-[var(--totk-ivory)]">{form.questID}</span></p>
                         )}
@@ -1424,7 +1472,7 @@ export default function AdminQuestsPage() {
                       <td className="py-3 pr-3 font-mono text-[var(--totk-ivory)] text-xs">{q.questID ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.date ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.questType ?? "—"}</td>
-                      <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.status ?? "—"}</td>
+                      <td className="py-3 pr-3 text-[var(--botw-pale)]">{statusDisplay(q.status)}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{isQuestPosted(q) ? "Yes" : "No"}</td>
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap gap-2">
@@ -1693,7 +1741,7 @@ export default function AdminQuestsPage() {
                       <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
                         <div><dt className="text-[var(--totk-grey-200)]">Date</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.date ?? "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Type</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.questType ?? "—"}</dd></div>
-                        <div><dt className="text-[var(--totk-grey-200)]">Status</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{viewQuest.status ?? "—"}</dd></div>
+                        <div><dt className="text-[var(--totk-grey-200)]">Status</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{statusDisplay(viewQuest.status)}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Location</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { location?: string }).location ?? "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Time limit</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { timeLimit?: string }).timeLimit ?? "—"}</dd></div>
                         <div><dt className="text-[var(--totk-grey-200)]">Signup deadline</dt><dd className="mt-0.5 font-medium text-[var(--totk-ivory)]">{(viewQuest as QuestRecord & { signupDeadline?: string }).signupDeadline ?? "—"}</dd></div>
@@ -1740,29 +1788,59 @@ export default function AdminQuestsPage() {
                 )}
               </div>
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--totk-dark-ocher)]/60 px-5 py-4">
-                <button
-                  type="button"
-                  onClick={closeViewModal}
-                  className="rounded-md border border-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/20"
-                >
-                  Close
-                </button>
-                {viewQuest && (
+                {viewQuest && viewQuestId && deleteConfirmQuestId === viewQuestId ? (
+                  <>
+                    <span className="text-sm text-[var(--totk-grey-200)]">Are you sure? This cannot be undone.</span>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmQuestId(null)}
+                      className="rounded-md border border-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/20"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => confirmDeleteQuest(viewQuestId)}
+                      disabled={deletingQuestId === viewQuestId}
+                      className="rounded-md border border-red-500/80 bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                    >
+                      {deletingQuestId === viewQuestId ? "Deleting..." : "Delete quest"}
+                    </button>
+                  </>
+                ) : (
                   <>
                     <button
                       type="button"
-                      onClick={() => { closeViewModal(); openManageModal(viewQuestId!); }}
-                      className="rounded-md bg-[var(--totk-dark-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]"
+                      onClick={closeViewModal}
+                      className="rounded-md border border-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/20"
                     >
-                      Manage
+                      Close
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => { closeViewModal(); loadQuestForEdit(viewQuestId!); }}
-                      className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]"
-                    >
-                      Edit
-                    </button>
+                    {viewQuest && viewQuestId && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { closeViewModal(); openManageModal(viewQuestId); }}
+                          className="rounded-md bg-[var(--totk-dark-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]"
+                        >
+                          Manage
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { closeViewModal(); loadQuestForEdit(viewQuestId); }}
+                          className="rounded-md bg-[var(--totk-mid-ocher)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmQuestId(viewQuestId)}
+                          className="rounded-md border border-red-500/50 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
