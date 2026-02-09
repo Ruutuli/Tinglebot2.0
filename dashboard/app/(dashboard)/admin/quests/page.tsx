@@ -741,6 +741,7 @@ export default function AdminQuestsPage() {
   const [viewQuest, setViewQuest] = useState<QuestRecord | null>(null);
   const [deleteConfirmQuestId, setDeleteConfirmQuestId] = useState<string | null>(null);
   const [deletingQuestId, setDeletingQuestId] = useState<string | null>(null);
+  const [deleteFromListId, setDeleteFromListId] = useState<string | null>(null);
   const [previewPosting, setPreviewPosting] = useState(false);
   const [tablerollNames, setTablerollNames] = useState<string[]>([]);
 
@@ -872,6 +873,7 @@ export default function AdminQuestsPage() {
           throw new Error(data.message ?? data.error ?? "Failed to delete quest");
         }
         setDeleteConfirmQuestId(null);
+        setDeleteFromListId(null);
         closeViewModal();
         setSuccess(data.deleted ? `Quest ${data.deleted} deleted.` : "Quest deleted.");
         await fetchQuests();
@@ -882,6 +884,29 @@ export default function AdminQuestsPage() {
       }
     },
     [closeViewModal, fetchQuests]
+  );
+
+  const confirmDeleteQuestFromList = useCallback(
+    async (questId: string) => {
+      setDeletingQuestId(questId);
+      setError(null);
+      setSuccess(null);
+      try {
+        const res = await fetch(`/api/admin/quests/${questId}`, { method: "DELETE" });
+        const data = (await res.json()) as { ok?: boolean; deleted?: string; error?: string; message?: string };
+        if (!res.ok) {
+          throw new Error(data.message ?? data.error ?? "Failed to delete quest");
+        }
+        setDeleteFromListId(null);
+        setSuccess(data.deleted ? `Quest ${data.deleted} deleted.` : "Quest deleted.");
+        await fetchQuests();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDeletingQuestId(null);
+      }
+    },
+    [fetchQuests]
   );
 
   const toggleParticipantSelected = useCallback((userId: string) => {
@@ -1500,6 +1525,13 @@ export default function AdminQuestsPage() {
                               {completingQuestId === String(q._id) ? "Completing..." : "Mark completed"}
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteFromListId(String(q._id))}
+                            className="rounded-md border border-red-500/50 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1706,6 +1738,51 @@ export default function AdminQuestsPage() {
                   className="rounded-md bg-[var(--totk-light-green)]/30 px-4 py-2 text-sm font-semibold text-[var(--totk-light-green)] hover:bg-[var(--totk-light-green)]/50 disabled:opacity-50"
                 >
                   {completingQuestId === completeConfirmQuestId ? "Completing..." : "Mark completed"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete quest from list confirmation modal */}
+        {deleteFromListId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-title"
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl">
+              <div className="p-5">
+                <h2 id="delete-confirm-title" className="text-lg font-bold text-[var(--totk-ivory)]">
+                  Delete quest?
+                </h2>
+                {(() => {
+                  const quest = quests.find((q) => String(q._id) === deleteFromListId);
+                  return quest?.title ? (
+                    <p className="mt-2 text-sm font-medium text-[var(--botw-pale)]">{quest.title}</p>
+                  ) : null;
+                })()}
+                <p className="mt-3 text-sm leading-relaxed text-[var(--totk-grey-200)]">
+                  This cannot be undone. The quest will be removed from the database.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--totk-dark-ocher)]/60 p-4">
+                <button
+                  type="button"
+                  onClick={() => setDeleteFromListId(null)}
+                  disabled={deletingQuestId === deleteFromListId}
+                  className="rounded-md border border-[var(--totk-dark-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/20 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteFromListId && confirmDeleteQuestFromList(deleteFromListId)}
+                  disabled={deletingQuestId === deleteFromListId}
+                  className="rounded-md border border-red-500/80 bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  {deletingQuestId === deleteFromListId ? "Deleting..." : "Delete quest"}
                 </button>
               </div>
             </div>
