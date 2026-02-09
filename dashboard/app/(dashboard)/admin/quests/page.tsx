@@ -224,6 +224,40 @@ function isQuestPosted(q: QuestRecord): boolean {
   return false;
 }
 
+/** Build request body for POST /api/admin/quests/preview from a loaded quest (view modal). */
+function viewQuestToPreviewBody(q: QuestRecord): Record<string, unknown> {
+  const location = (q as Record<string, unknown>).location as string | undefined;
+  const timeLimit = (q as Record<string, unknown>).timeLimit as string | undefined;
+  const rules = (q as Record<string, unknown>).rules as string | undefined;
+  const signupDeadline = (q as Record<string, unknown>).signupDeadline as string | undefined;
+  const collabAllowed = (q as Record<string, unknown>).collabAllowed as boolean | undefined;
+  const collabRule = (q as Record<string, unknown>).collabRule as string | undefined;
+  const tableroll = q.tableRollName ?? (q as Record<string, unknown>).tableroll as string | undefined;
+  const postRequirement = (q as Record<string, unknown>).postRequirement as number | undefined;
+  const minRequirements = (q as Record<string, unknown>).minRequirements;
+  const itemRewards = q.itemRewards ?? (q.itemReward ? [{ name: String(q.itemReward), quantity: q.itemRewardQty ?? 1 }] : []);
+  return {
+    title: q.title ?? "",
+    description: (q as Record<string, unknown>).description ?? "",
+    rules: rules ?? "",
+    date: q.date ?? "",
+    questType: q.questType ?? "RP",
+    questID: q.questID ?? "",
+    location: location ?? "",
+    timeLimit: timeLimit ?? "1 month",
+    signupDeadline: signupDeadline ?? null,
+    status: q.status ?? "active",
+    tokenReward: q.tokenReward ?? "N/A",
+    collabAllowed: collabAllowed ?? false,
+    collabRule: collabRule ?? null,
+    itemRewards: Array.isArray(itemRewards) ? itemRewards : [],
+    tableroll: tableroll ?? null,
+    tableRollName: tableroll ?? null,
+    postRequirement: postRequirement ?? 15,
+    minRequirements: minRequirements ?? "",
+  };
+}
+
 type ItemRewardRow = { name: string; quantity: number };
 
 type FormState = {
@@ -743,6 +777,7 @@ export default function AdminQuestsPage() {
   const [deletingQuestId, setDeletingQuestId] = useState<string | null>(null);
   const [deleteFromListId, setDeleteFromListId] = useState<string | null>(null);
   const [previewPosting, setPreviewPosting] = useState(false);
+  const [viewPreviewPosting, setViewPreviewPosting] = useState(false);
   const [tablerollNames, setTablerollNames] = useState<string[]>([]);
 
   useEffect(() => {
@@ -778,6 +813,30 @@ export default function AdminQuestsPage() {
       setPreviewPosting(false);
     }
   }, [form, editingId]);
+
+  const handleViewPreviewPost = useCallback(async () => {
+    if (!viewQuest?.title?.trim()) return;
+    setViewPreviewPosting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const body = viewQuestToPreviewBody(viewQuest);
+      const res = await fetch("/api/admin/quests/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) {
+        throw new Error((data as { message?: string }).message ?? data.error ?? "Failed to post preview");
+      }
+      setSuccess("Preview posted to Discord channel.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setViewPreviewPosting(false);
+    }
+  }, [viewQuest]);
 
   const fetchQuests = useCallback(async () => {
     setLoading(true);
@@ -1895,6 +1954,14 @@ export default function AdminQuestsPage() {
                     </button>
                     {viewQuest && viewQuestId && (
                       <>
+                        <button
+                          type="button"
+                          onClick={handleViewPreviewPost}
+                          disabled={viewPreviewPosting || !viewQuest.title?.trim()}
+                          className="rounded-md border border-[var(--totk-mid-ocher)] bg-[var(--totk-mid-ocher)]/20 px-4 py-2 text-sm font-semibold text-[var(--totk-ivory)] hover:bg-[var(--totk-mid-ocher)]/40 disabled:opacity-50"
+                        >
+                          {viewPreviewPosting ? "Posting..." : "Preview post"}
+                        </button>
                         <button
                           type="button"
                           onClick={() => { closeViewModal(); openManageModal(viewQuestId); }}
