@@ -2731,6 +2731,7 @@ async function clearBoostAfterUse(character, options = {}) {
 // ------------------- Module Exports -------------------
 // ============================================================================
 
+module.exports.getEffectiveJob = getEffectiveJob;
 module.exports.isBoostActive = isBoostActive;
 module.exports.getActiveBoostEffect = getActiveBoostEffect;
 module.exports.getRemainingBoostTime = getRemainingBoostTime;

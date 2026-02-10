@@ -2621,7 +2621,8 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       applyCraftingQuantityBoost 
     } = require('../modules/boostIntegration');
     const { 
-      clearBoostAfterUse 
+      clearBoostAfterUse, 
+      getEffectiveJob 
     } = require('../commands/jobs/boosting');
     const { 
       createCraftingEmbed 
@@ -2653,7 +2654,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       
       if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+        if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
           teacherUpdatedStamina = await checkAndUseStamina(boosterCharacter, continueData.teacherStaminaContribution);
           success('CRFT', `Teacher stamina deducted for ${boosterCharacter.name} - remaining: ${teacherUpdatedStamina}`);
         }
@@ -2684,7 +2685,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       let teacherBoostInfo = null;
       if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+        if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
           teacherBoostInfo = {
             teacherName: boosterCharacter.name,
             teacherStaminaUsed: continueData.teacherStaminaContribution,
@@ -2713,7 +2714,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       await checkAndUseStamina(freshCharacter, -continueData.crafterStaminaCost);
       if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+        if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
           await checkAndUseStamina(boosterCharacter, -continueData.teacherStaminaContribution);
         }
       }
@@ -2731,7 +2732,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
     let fortuneTellerBoostTag = null;
     if (freshCharacter.boostedBy) {
       const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-      if (boosterCharacter && boosterCharacter.job === 'Fortune Teller') {
+      if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Fortune Teller') {
         fortuneTellerBoostTag = 'Fortune Teller';
       }
     }

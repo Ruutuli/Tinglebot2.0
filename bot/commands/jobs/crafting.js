@@ -25,7 +25,7 @@ const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule'
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
 const { applyCraftingBoost, applyCraftingStaminaBoost, applyCraftingMaterialBoost, applyCraftingQuantityBoost } = require('../../modules/boostIntegration');
-const { clearBoostAfterUse } = require('./boosting');
+const { clearBoostAfterUse, getEffectiveJob, retrieveBoostingRequestFromTempDataByCharacter } = require('./boosting');
 const { info, success, error } = require('@/utils/logger');
 
 // ------------------- Utility Functions -------------------
@@ -334,10 +334,23 @@ module.exports = {
       // ------------------- Check for Teacher Stamina Boost -------------------
       let teacherStaminaContribution = 0;
       let crafterStaminaCost = staminaCost;
-      if (freshCharacter.boostedBy) {
+      // Resolve booster: use boostedBy first, fall back to TempData if null (sync repair)
+      let boosterName = freshCharacter.boostedBy;
+      if (!boosterName) {
+        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+        const currentTime = Date.now();
+        const notExpired = !activeBoost?.boostExpiresAt || currentTime <= activeBoost.boostExpiresAt;
+        if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Crafting' && activeBoost.boostingCharacter && notExpired) {
+          boosterName = activeBoost.boostingCharacter;
+          freshCharacter.boostedBy = boosterName;
+          await freshCharacter.save();
+          info('CRFT', `Restored boostedBy for ${freshCharacter.name} from TempData (boosted by ${boosterName})`);
+        }
+      }
+      if (boosterName) {
         const { fetchCharacterByName } = require('@/database/db');
-        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-        if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+        const boosterCharacter = await fetchCharacterByName(boosterName);
+        if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
           // Teacher can contribute up to 3 stamina (or half the reduced cost if less than 6)
           // Both characters split the stamina cost (after Priest reduction if active)
           const halfCost = Math.ceil(staminaCost / 2);
@@ -598,7 +611,7 @@ module.exports = {
         if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
           const { fetchCharacterByName } = require('@/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-          if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+          if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
             teacherUpdatedStamina = await checkAndUseStamina(boosterCharacter, teacherStaminaContribution);
             success('CRFT', `Teacher stamina deducted for ${boosterCharacter.name} - remaining: ${teacherUpdatedStamina}`);
           }
@@ -624,7 +637,7 @@ module.exports = {
       if (freshCharacter.boostedBy) {
         const { fetchCharacterByName } = require('@/database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-        if (boosterCharacter && boosterCharacter.job === 'Entertainer') {
+        if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Entertainer') {
           info('CRFT', `Entertainer boost active: Added 1 free ${itemName} for ${freshCharacter.name} (total: ${craftedQuantity})`);
         }
       }
@@ -647,7 +660,7 @@ module.exports = {
         if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
           const { fetchCharacterByName } = require('@/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-          if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+          if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
             teacherBoostInfo = {
               teacherName: boosterCharacter.name,
               teacherStaminaUsed: teacherStaminaContribution,
@@ -668,7 +681,7 @@ module.exports = {
         if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
           const { fetchCharacterByName } = require('@/database/db');
           const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-          if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+          if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
             await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);
           }
         }
@@ -687,7 +700,7 @@ module.exports = {
       if (freshCharacter.boostedBy) {
         const { fetchCharacterByName } = require('@/database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-        if (boosterCharacter && boosterCharacter.job === 'Fortune Teller') {
+        if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Fortune Teller') {
           fortuneTellerBoostTag = 'Fortune Teller';
           info('CRFT', `Fortune Teller boost active: Tagging ${craftedQuantity} ${itemName} with fortuneTellerBoost tag`);
         }
@@ -746,7 +759,7 @@ module.exports = {
           if (typeof teacherStaminaContribution !== 'undefined' && teacherStaminaContribution > 0 && freshCharacter?.boostedBy) {
             const { fetchCharacterByName } = require('@/database/db');
             const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
-            if (boosterCharacter && boosterCharacter.job === 'Teacher') {
+            if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Teacher') {
               await checkAndUseStamina(boosterCharacter, -teacherStaminaContribution);
             }
           }
