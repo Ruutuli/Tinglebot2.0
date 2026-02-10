@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
+import type { FilterQuery } from "mongoose";
 import { connect } from "@/lib/db";
 import {
   parsePaginatedQuery,
@@ -9,7 +11,6 @@ import {
   buildSearchRegex,
 } from "@/lib/api-utils";
 import { logger } from "@/utils/logger";
-import type { FilterQuery } from "mongoose";
 
 // Helper function to create case-insensitive filter conditions for string arrays
 function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
@@ -27,7 +28,9 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     await connect();
-    const { default: Monster } = await import("@/models/MonsterModel.js");
+    const MonsterModule = await import("@/models/MonsterModel.js");
+    const Monster = (mongoose.models.Monster ?? MonsterModule.default) as mongoose.Model<unknown>;
+    const monsterMapping = MonsterModule.monsterMapping as Record<string, { name?: string; image?: string }> | undefined;
 
     const { page, limit, search } = parsePaginatedQuery(req);
     const params = req.nextUrl.searchParams;
@@ -84,9 +87,17 @@ export async function GET(req: NextRequest) {
       tier: (tierOpts as number[]).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b),
     };
 
+    // Resolve image from monsterMapping when document has no image or "No Image"
+    const dataWithImages = (data as Array<{ nameMapping?: string; image?: string; [k: string]: unknown }>).map((doc) => {
+      const hasNoImage = !doc.image || doc.image === "No Image";
+      const key = doc.nameMapping?.replace(/\s+/g, "");
+      const mappedImage = monsterMapping?.[key]?.image;
+      return { ...doc, image: hasNoImage && mappedImage ? mappedImage : doc.image };
+    });
+
     const response = NextResponse.json(
       buildListResponse({
-        data,
+        data: dataWithImages,
         total,
         page,
         limit,
@@ -102,9 +113,11 @@ export async function GET(req: NextRequest) {
 
     return response;
   } catch (e) {
-    logger.error("api/models/monsters", e instanceof Error ? e.message : String(e));
+    const message = e instanceof Error ? e.message : String(e);
+    logger.error("api/models/monsters", message);
+    const isDev = process.env.NODE_ENV !== "production";
     return NextResponse.json(
-      { error: "Failed to fetch monsters" },
+      { error: isDev ? message : "Failed to fetch monsters", details: isDev ? message : undefined },
       { status: 500 }
     );
   }

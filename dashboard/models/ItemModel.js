@@ -331,4 +331,4 @@ ItemSchema.statics.getJobPerk = function(jobName) {
 // ============================================================================
 // Exports
 // ============================================================================
-module.exports = mongoose.model('Item', ItemSchema);
+module.exports = mongoose.models.Item || mongoose.model('Item', ItemSchema);

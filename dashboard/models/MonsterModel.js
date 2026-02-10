@@ -132,5 +132,5 @@ const monsterMapping = {
   yigaFootsoldier: { name: 'Yiga Footsoldier', image: 'https://storage.googleapis.com/tinglebot/Monsters/Monsters_Yiga_Footsoldier.png' },
 };
 
-module.exports = mongoose.model('Monster', MonsterSchema);
+module.exports = mongoose.models.Monster || mongoose.model('Monster', MonsterSchema);
 module.exports.monsterMapping = monsterMapping;

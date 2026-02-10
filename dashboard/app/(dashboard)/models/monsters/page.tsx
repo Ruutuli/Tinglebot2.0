@@ -19,6 +19,7 @@ type Monster = {
   dmg: number;
   bloodmoon: boolean;
   locations: string[];
+  job?: string[];
   [key: string]: unknown;
 };
 
@@ -31,6 +32,26 @@ function monsterImageUrl(img?: string): string {
     return `/api/images/${img.replace("https://storage.googleapis.com/tinglebot/", "")}`;
   }
   return img;
+}
+
+// ------------------- Location color class (same as items page ItemFlipCard) -------------------
+function getLocationClass(locationName: string | null | undefined): string {
+  const normalized = String(locationName ?? "").toLowerCase().replace(/\s+/g, "-");
+  const locationMap: Record<string, string> = {
+    eldin: "location-eldin",
+    faron: "location-faron",
+    gerudo: "location-gerudo",
+    hebra: "location-hebra",
+    lanayru: "location-lanayru",
+    "leaf-dew-way": "location-leafdew",
+    "path-of-scarlet-leaves": "location-scarletleaves",
+    "central-hyrule": "location-central-hyrule",
+  };
+  if (locationMap[normalized]) return locationMap[normalized];
+  if (normalized.includes("scarlet") || normalized.includes("leaves")) return "location-scarletleaves";
+  if (normalized.includes("leaf") || normalized.includes("dew")) return "location-leafdew";
+  if (normalized.includes("central")) return "location-central-hyrule";
+  return "";
 }
 
 // ------------------- Monster flip card (front: stats, back: drops) -------------------
@@ -66,7 +87,7 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
 
   return (
     <div
-      className={`model-details-item item-card modern-item-card flip-card ${isFlipped ? "flipped" : ""}`}
+      className={`model-details-item item-card modern-item-card flip-card flip-card-monster ${isFlipped ? "flipped" : ""}`}
       onClick={handleFlip}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -133,8 +154,22 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             </div>
             <div className="item-tag-list modern-item-tag-list">
               {monster.locations.map((loc, idx) => (
-                <span key={idx} className="item-tag">
+                <span key={idx} className={`item-tag ${getLocationClass(loc)}`}>
                   {loc}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {monster.job && monster.job.length > 0 && (
+          <div className="item-section modern-item-section">
+            <div className="item-section-label modern-item-section-label">
+              <i className="fas fa-user" aria-hidden="true"></i> Jobs that can find this monster
+            </div>
+            <div className="item-tag-list modern-item-tag-list">
+              {monster.job.map((j, idx) => (
+                <span key={idx} className="item-tag">
+                  {j}
                 </span>
               ))}
             </div>
@@ -171,12 +206,18 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             <div className="item-detail-row modern-item-detail-row">Loading drops...</div>
           </div>
         ) : drops && drops.length > 0 ? (
-          <div className="item-tag-list modern-item-tag-list flex-wrap">
+          <div className="item-detail-list modern-item-detail-list">
             {drops.map((item, idx) => (
-              <span key={idx} className="item-tag">
-                {item.emoji && !/^[a-zA-Z0-9_\-:<>]+$/.test(item.emoji) ? `${item.emoji} ` : ""}
-                {item.itemName}
-              </span>
+              <div key={idx} className="item-detail-row modern-item-detail-row flex justify-between items-center gap-2">
+                <span>
+                  {item.emoji && !/^[a-zA-Z0-9_\-:<>]+$/.test(item.emoji) ? `${item.emoji} ` : ""}
+                  {item.itemName}
+                </span>
+                <span className="text-[var(--totk-light-ocher)] shrink-0" title="Rarity">
+                  <i className="fas fa-star text-xs mr-1" aria-hidden="true"></i>
+                  {item.itemRarity ?? 1}
+                </span>
+              </div>
             ))}
           </div>
         ) : (

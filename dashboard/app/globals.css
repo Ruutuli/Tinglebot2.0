@@ -795,6 +795,11 @@ textarea::placeholder {
   transition: transform 0.8s cubic-bezier(0.4, 0.0, 0.2, 1), box-shadow 0.3s ease;
 }
 
+/* Shorter height for monster flip cards */
+.item-card.modern-item-card.flip-card.flip-card-monster {
+  height: 700px;
+}
+
 /* Flipped state - apply directly to item-card */
 .item-card.modern-item-card.flipped {
   transform: rotateY(180deg);
