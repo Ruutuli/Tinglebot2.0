@@ -8,7 +8,7 @@ export type ArmorSlot = "head" | "chest" | "legs";
 export type GearSlot = "weapon" | "shield" | ArmorSlot;
 
 export type ItemData = {
-  _id: unknown;
+  _id?: unknown;
   itemName?: string;
   categoryGear?: string;
   type?: string[];
