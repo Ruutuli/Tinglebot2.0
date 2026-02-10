@@ -854,7 +854,8 @@ export async function PUT(
             .select("categoryGear type subtype")
             .lean()
             .exec();
-          return doc ? { categoryGear: doc.categoryGear, type: doc.type, subtype: doc.subtype } : null;
+          const single = doc && !Array.isArray(doc) ? doc : null;
+          return single ? { categoryGear: single.categoryGear, type: single.type, subtype: single.subtype } : null;
         };
         await normalizeGearSlots(gear, getItemByName);
         
