@@ -921,10 +921,10 @@ module.exports = {
         let isEntertainerBoost = false;
         
         if (character.boostedBy && boosterCharacter) {
-          // Entertainer: main item stays from normal table; bonus item is from entertainer pool (see below).
+          // Entertainer: main item from normal table; ADDITIONAL bonus item from performer-marked (entertainerItems === true) pool.
           if (boosterCharacter.job === 'Entertainer') {
             isEntertainerBoost = true;
-            // Do not replace main pool—Entertainer grants a bonus themed item in addition to normal gather.
+            // Keep main pool as normal (boostedAvailableItems stays availableItems)
           } else if (boosterCharacter.job !== 'Scholar') {
             // Normal boost application for all other jobs (including Priest) - apply to available items
             // Skip Scholar since we already handled the region change above
