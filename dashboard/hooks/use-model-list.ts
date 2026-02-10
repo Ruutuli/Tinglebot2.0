@@ -367,16 +367,86 @@ function buildFilterGroups(
         },
       ],
     });
+  } else if (resource === "monsters") {
+    groups.push({
+      id: "sortBy",
+      label: "Sort By",
+      type: "single" as const,
+      options: [
+        {
+          id: "name",
+          label: "Name (A-Z)",
+          value: "name",
+          active: sortBy === "name" || !sortBy,
+        },
+        {
+          id: "name-desc",
+          label: "Name (Z-A)",
+          value: "name-desc",
+          active: sortBy === "name-desc",
+        },
+        {
+          id: "tier-asc",
+          label: "Tier (Low to High)",
+          value: "tier-asc",
+          active: sortBy === "tier-asc",
+        },
+        {
+          id: "tier-desc",
+          label: "Tier (High to Low)",
+          value: "tier-desc",
+          active: sortBy === "tier-desc",
+        },
+        {
+          id: "species",
+          label: "Species (A-Z)",
+          value: "species",
+          active: sortBy === "species",
+        },
+        {
+          id: "species-desc",
+          label: "Species (Z-A)",
+          value: "species-desc",
+          active: sortBy === "species-desc",
+        },
+        {
+          id: "hearts-asc",
+          label: "Hearts (Least to Most)",
+          value: "hearts-asc",
+          active: sortBy === "hearts-asc",
+        },
+        {
+          id: "hearts-desc",
+          label: "Hearts (Most to Least)",
+          value: "hearts-desc",
+          active: sortBy === "hearts-desc",
+        },
+        {
+          id: "dmg-asc",
+          label: "Damage (Least to Most)",
+          value: "dmg-asc",
+          active: sortBy === "dmg-asc",
+        },
+        {
+          id: "dmg-desc",
+          label: "Damage (Most to Least)",
+          value: "dmg-desc",
+          active: sortBy === "dmg-desc",
+        },
+      ],
+    });
   }
-  
+
   // Add Per Page group (single select)
-  if (resource === "characters" || resource === "items" || resource === "village-shops") {
+  if (resource === "characters" || resource === "items" || resource === "village-shops" || resource === "monsters") {
     let perPageOptions: number[];
     if (resource === "items") {
       perPageOptions = [24, 48, 96, 192];
     } else if (resource === "village-shops") {
       // Options that work well with 4 columns: 36 (9 rows), 72 (18 rows), 108 (27 rows), 144 (36 rows)
       perPageOptions = [36, 72, 108, 144];
+    } else if (resource === "monsters") {
+      perPageOptions = [12, 24, 48, 96];
     } else {
       perPageOptions = [12, 24, 48, 96];
     }

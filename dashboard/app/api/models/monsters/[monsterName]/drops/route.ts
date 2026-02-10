@@ -29,8 +29,9 @@ export async function GET(
       .select("itemName image emoji itemRarity")
       .lean();
 
+    type ItemDoc = { itemName: string; image?: string; emoji?: string; itemRarity?: number };
     return NextResponse.json({
-      items: items.map((doc: { itemName: string; image?: string; emoji?: string; itemRarity?: number }) => ({
+      items: (items as ItemDoc[]).map((doc) => ({
         itemName: doc.itemName,
         image: doc.image,
         emoji: doc.emoji,

@@ -73,8 +73,20 @@ export async function GET(req: NextRequest) {
     }
     if (tiers.length) filter.tier = { $in: tiers };
 
+    const sortBy = params.get("sortBy") || "name";
+    let sortQuery: Record<string, 1 | -1> = { name: 1 };
+    if (sortBy === "name-desc") sortQuery = { name: -1 };
+    else if (sortBy === "tier-asc") sortQuery = { tier: 1, name: 1 };
+    else if (sortBy === "tier-desc") sortQuery = { tier: -1, name: 1 };
+    else if (sortBy === "species") sortQuery = { species: 1, name: 1 };
+    else if (sortBy === "species-desc") sortQuery = { species: -1, name: 1 };
+    else if (sortBy === "hearts-asc") sortQuery = { hearts: 1, name: 1 };
+    else if (sortBy === "hearts-desc") sortQuery = { hearts: -1, name: 1 };
+    else if (sortBy === "dmg-asc") sortQuery = { dmg: 1, name: 1 };
+    else if (sortBy === "dmg-desc") sortQuery = { dmg: -1, name: 1 };
+
     const [data, total, speciesOpts, typeOpts, tierOpts] = await Promise.all([
-      Monster.find(filter).skip((page - 1) * limit).limit(limit).lean(),
+      Monster.find(filter).sort(sortQuery).skip((page - 1) * limit).limit(limit).lean(),
       Monster.countDocuments(filter),
       Monster.distinct("species"),
       Monster.distinct("type"),
@@ -91,7 +103,7 @@ export async function GET(req: NextRequest) {
     const dataWithImages = (data as Array<{ nameMapping?: string; image?: string; [k: string]: unknown }>).map((doc) => {
       const hasNoImage = !doc.image || doc.image === "No Image";
       const key = doc.nameMapping?.replace(/\s+/g, "");
-      const mappedImage = monsterMapping?.[key]?.image;
+      const mappedImage = key != null ? monsterMapping?.[key]?.image : undefined;
       return { ...doc, image: hasNoImage && mappedImage ? mappedImage : doc.image };
     });
 

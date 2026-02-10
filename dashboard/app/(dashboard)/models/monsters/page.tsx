@@ -178,9 +178,9 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
         <p className="mt-auto text-xs text-[var(--totk-grey-200)]">Click to see drops</p>
       </div>
 
-      {/* Back: drops list */}
+      {/* Back: drops list (scrollable when many drops) */}
       <div className="flip-card-back item-card-back">
-        <div className="item-header-row modern-item-header">
+        <div className="item-header-row modern-item-header shrink-0">
           <div className="item-image-card">
             <img
               src={imageSrc}
@@ -201,38 +201,46 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             </div>
           </div>
         </div>
-        {dropsLoading ? (
-          <div className="item-detail-list modern-item-detail-list">
-            <div className="item-detail-row modern-item-detail-row">Loading drops...</div>
-          </div>
-        ) : drops && drops.length > 0 ? (
-          <div className="item-section modern-item-section">
-            <ul className="space-y-2 pl-0 list-none text-[var(--botw-pale)] text-sm">
-              {drops.map((item, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-baseline gap-2 py-1 border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0"
-                >
-                  <span className="text-[var(--totk-light-ocher)] shrink-0 w-5 text-xs" aria-hidden>
-                    <i className="fas fa-star" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    {item.emoji && !/^[a-zA-Z0-9_\-:<>]+$/.test(item.emoji) ? `${item.emoji} ` : ""}
-                    {item.itemName}
-                  </span>
-                  <span className="text-[var(--totk-grey-200)] text-xs shrink-0">
-                    Rarity {item.itemRarity ?? 1}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <div className="item-detail-list modern-item-detail-list">
-            <div className="item-detail-row modern-item-detail-row">No drops recorded</div>
-          </div>
-        )}
-        <p className="mt-auto text-xs text-[var(--totk-grey-200)]">Click to flip back</p>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2">
+          {dropsLoading ? (
+            <div className="item-detail-list modern-item-detail-list">
+              <div className="item-detail-row modern-item-detail-row">Loading drops...</div>
+            </div>
+          ) : drops && drops.length > 0 ? (
+            <div className="item-section modern-item-section">
+              <ul className="space-y-2 pl-0 list-none text-[var(--botw-pale)] text-sm">
+                {[...drops]
+                  .sort(
+                    (a, b) =>
+                      (a.itemRarity ?? 1) - (b.itemRarity ?? 1) ||
+                      (a.itemName ?? "").localeCompare(b.itemName ?? "")
+                  )
+                  .map((item, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-baseline gap-2 py-1 border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0"
+                  >
+                    <span className="text-[var(--totk-light-ocher)] shrink-0 w-5 text-xs" aria-hidden>
+                      <i className="fas fa-star" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      {item.emoji && !/^[a-zA-Z0-9_\-:<>]+$/.test(item.emoji) ? `${item.emoji} ` : ""}
+                      {item.itemName}
+                    </span>
+                    <span className="text-[var(--totk-grey-200)] text-xs shrink-0">
+                      Rarity {item.itemRarity ?? 1}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="item-detail-list modern-item-detail-list">
+              <div className="item-detail-row modern-item-detail-row">No drops recorded</div>
+            </div>
+          )}
+        </div>
+        <p className="shrink-0 text-xs text-[var(--totk-grey-200)]">Click to flip back</p>
       </div>
     </div>
   );
