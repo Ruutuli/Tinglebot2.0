@@ -109,7 +109,11 @@ const raidSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     },
-          characterState: {
+    isModCharacter: {
+      type: Boolean,
+      default: false
+    },
+    characterState: {
         currentHearts: Number,
         maxHearts: Number,
         currentStamina: Number,
@@ -396,60 +400,40 @@ raidSchema.methods.incrementParticipantSkipCountAndMaybeRemove = async function(
 };
 
 // ---- Method: advanceTurn ----
-// Advance to the next turn, skipping KO'd participants with retry logic for version conflicts
+// Advance to the next turn. KO'd participants stay in turn order (they get a turn to use a fairy or leave).
+// Only mod characters are skipped (they don't participate in turn order).
 raidSchema.methods.advanceTurn = async function(maxRetries = 3) {
-  // Ensure participants array exists
-  if (!this.participants) {
-    this.participants = [];
-  }
-  
-  if (this.participants.length === 0) {
-    return this.save();
-  }
-  
+  if (!this.participants) this.participants = [];
+  if (this.participants.length === 0) return this.save();
+
+  const ModCharacter = require('./ModCharacterModel');
+  const isModParticipant = async (p) => {
+    if (!p || p.isModCharacter) return true;
+    try {
+      const modChar = await ModCharacter.findById(p.characterId);
+      return !!modChar;
+    } catch (err) {
+      return false;
+    }
+  };
+
   let retries = 0;
   while (retries < maxRetries) {
     try {
-      // Get current character states from database to check KO status
-      const Character = require('./CharacterModel');
-      
-      // Find the next non-KO'd participant
       let nextTurn = this.currentTurn;
       let attempts = 0;
-      const maxAttempts = this.participants.length; // Prevent infinite loop
-      
+      const maxAttempts = this.participants.length;
       do {
         nextTurn = (nextTurn + 1) % this.participants.length;
         attempts++;
-        
-        // Check if the next participant is KO'd
         const nextParticipant = this.participants[nextTurn];
-        if (nextParticipant) {
-          try {
-            const character = await Character.findById(nextParticipant.characterId);
-            if (character && !character.ko) {
-              // Found a non-KO'd participant
-              break;
-            }
-          } catch (error) {
-            console.error(`[RaidModel.js]: ❌ Error checking KO status for ${nextParticipant.name}:`, error);
-            // If we can't check the character, assume they're not KO'd to avoid getting stuck
-            break;
-          }
-        }
+        if (nextParticipant && !(await isModParticipant(nextParticipant))) break;
       } while (attempts < maxAttempts);
-      
-      // If all participants are KO'd, just advance normally
       if (attempts >= maxAttempts) {
         nextTurn = (this.currentTurn + 1) % this.participants.length;
       }
-      
       this.currentTurn = nextTurn;
-      const nextParticipant = this.participants[this.currentTurn];
-      // Turn advancement logged only in debug mode
-      
       return await this.save();
-      
     } catch (error) {
       if (error.name === 'VersionError' && retries < maxRetries - 1) {
         retries++;
@@ -477,64 +461,35 @@ raidSchema.methods.advanceTurn = async function(maxRetries = 3) {
 };
 
 // ---- Method: getEffectiveCurrentTurnParticipant ----
-// Get the effective current turn participant (skipping KO'd participants)
+// Get the effective current turn participant (skipping KO'd and mod-character participants; mod characters don't participate in turn order)
 raidSchema.methods.getEffectiveCurrentTurnParticipant = async function() {
-  // Ensure participants array exists
-  if (!this.participants) {
-    this.participants = [];
-  }
-  
-  if (this.participants.length === 0) {
-    return null;
-  }
-  
-  // Get current character states from database to check KO status
+  if (!this.participants) this.participants = [];
+  if (this.participants.length === 0) return null;
+
   const Character = require('./CharacterModel');
-  
-  // Check if current turn participant is KO'd
-  const currentParticipant = this.participants[this.currentTurn];
-  if (currentParticipant) {
+  const ModCharacter = require('./ModCharacterModel');
+  const isEligible = async (p) => {
+    if (p.isModCharacter) return false;
     try {
-      const character = await Character.findById(currentParticipant.characterId);
-      if (character && !character.ko) {
-        // Current participant is not KO'd, return them
-        return currentParticipant;
-      }
-    } catch (error) {
-      console.error(`[RaidModel.js]: ❌ Error checking KO status for ${currentParticipant.name}:`, error);
-      // If we can't check the character, assume they're not KO'd
-      return currentParticipant;
+      const modChar = await ModCharacter.findById(p.characterId);
+      if (modChar) return false; // mod characters don't participate in turn order (even without flag on participant)
+      const character = await Character.findById(p.characterId);
+      return character && !character.ko;
+    } catch (err) {
+      return true;
     }
-  }
-  
-  // Current participant is KO'd, find the next non-KO'd participant
-  let nextTurn = this.currentTurn;
+  };
+
+  let idx = this.currentTurn;
   let attempts = 0;
-  const maxAttempts = this.participants.length; // Prevent infinite loop
-  
+  const maxAttempts = this.participants.length;
   do {
-    nextTurn = (nextTurn + 1) % this.participants.length;
+    const p = this.participants[idx];
+    if (p && await isEligible(p)) return p;
+    idx = (idx + 1) % this.participants.length;
     attempts++;
-    
-    // Check if the next participant is KO'd
-    const nextParticipant = this.participants[nextTurn];
-    if (nextParticipant) {
-      try {
-        const character = await Character.findById(nextParticipant.characterId);
-        if (character && !character.ko) {
-          // Found a non-KO'd participant
-          return nextParticipant;
-        }
-      } catch (error) {
-        console.error(`[RaidModel.js]: ❌ Error checking KO status for ${nextParticipant.name}:`, error);
-        // If we can't check the character, assume they're not KO'd to avoid getting stuck
-        return nextParticipant;
-      }
-    }
   } while (attempts < maxAttempts);
-  
-  // If all participants are KO'd, return the current participant
-  return currentParticipant;
+  return null;
 };
 
 // ---- Method: getCurrentTurnParticipant ----

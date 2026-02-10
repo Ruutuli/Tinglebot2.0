@@ -1344,6 +1344,33 @@ export function CreateForm({
             if (stats instanceof Map) return Object.fromEntries(stats);
             return stats;
           };
+          // Client-side safeguard: never send a shield in weapon slot or a weapon in shield slot
+          let gearWeaponForSubmit: { name: string; stats: Record<string, number> } | null =
+            currentGear.gearWeapon
+              ? {
+                  name: currentGear.gearWeapon.name,
+                  stats: statsToRecord(currentGear.gearWeapon.stats),
+                }
+              : null;
+          let gearShieldForSubmit: { name: string; stats: Record<string, number> } | null =
+            currentGear.gearShield
+              ? {
+                  name: currentGear.gearShield.name,
+                  stats: statsToRecord(currentGear.gearShield.stats),
+                }
+              : null;
+          if (equippedWeapon && isShield(gearItemToItemData(equippedWeapon))) {
+            gearWeaponForSubmit = null;
+            if (!gearShieldForSubmit) {
+              gearShieldForSubmit = {
+                name: equippedWeapon.name,
+                stats: { attack: equippedWeapon.modifierHearts, defense: equippedWeapon.modifierHearts },
+              };
+            }
+          }
+          if (equippedShield && getWeaponType(gearItemToItemData(equippedShield)) !== null) {
+            gearShieldForSubmit = null;
+          }
           gearForSubmit = {
             gearArmor: currentGear.gearArmor
               ? {
@@ -1383,18 +1410,8 @@ export function CreateForm({
                         : null),
                 }
               : null,
-            gearShield: currentGear.gearShield
-              ? {
-                  name: currentGear.gearShield.name,
-                  stats: statsToRecord(currentGear.gearShield.stats),
-                }
-              : null,
-            gearWeapon: currentGear.gearWeapon
-              ? {
-                  name: currentGear.gearWeapon.name,
-                  stats: statsToRecord(currentGear.gearWeapon.stats),
-                }
-              : null,
+            gearShield: gearShieldForSubmit,
+            gearWeapon: gearWeaponForSubmit,
           };
         }
 

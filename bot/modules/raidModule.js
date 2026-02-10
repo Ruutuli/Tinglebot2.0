@@ -49,10 +49,10 @@ const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (Discord allows: 1, 3, 7,
 /** Agenda job name for one-time raid expiration (used by scheduler and raidModule) */
 const RAID_EXPIRATION_JOB_NAME = 'raid-expiration';
 
-/** Agenda job name for 30s turn skip (when current player doesn't roll in time) */
+/** Agenda job name for 1-minute turn skip (when current player doesn't roll in time) */
 const RAID_TURN_SKIP_JOB_NAME = 'raid-turn-skip';
 
-const RAID_TURN_SKIP_SECONDS = 30;
+const RAID_TURN_SKIP_SECONDS = 60;
 
 // Village resident role IDs
 const VILLAGE_RESIDENT_ROLES = {
@@ -71,6 +71,34 @@ const VILLAGE_VISITING_ROLES = {
 // Universal raid role for all villages (replaces resident + visiting during raids)
 const UNIVERSAL_RAID_ROLE = '1205321558671884328';
 
+/** Party-size scaling: 5 or fewer = base max hearts; 6+ = base + 2 per extra participant (5→10, 6→12, 7→14). */
+function getScaledMaxHearts(baseHearts, partySize) {
+  if (partySize <= 5) return baseHearts;
+  return baseHearts + 2 * (partySize - 5);
+}
+
+/** Recompute monster max/current hearts from base and current participant count; preserves damage dealt. Call after join or leave. */
+async function applyPartySizeScalingToRaid(raid) {
+  if (!raid.analytics) raid.analytics = {};
+  if (!raid.analytics.baseMonsterHearts || raid.analytics.baseMonsterHearts <= 0) {
+    raid.analytics.baseMonsterHearts = raid.monster.maxHearts || 0;
+  }
+  const baseHearts = raid.analytics.baseMonsterHearts || 0;
+  const partySize = (raid.participants || []).length;
+  const oldMax = raid.monster.maxHearts || 0;
+  const oldCurrent = raid.monster.currentHearts ?? oldMax;
+  const damageDealtSoFar = Math.max(0, oldMax - oldCurrent);
+  const newMax = getScaledMaxHearts(baseHearts, partySize);
+  const newCurrent = Math.max(0, Math.min(newMax, newMax - damageDealtSoFar));
+  raid.monster.maxHearts = newMax;
+  raid.monster.currentHearts = newCurrent;
+  await raid.save();
+  if (partySize >= 5) {
+    console.log(`[raidModule.js]: 📈 Raid ${raid.raidId} scaled HP → partySize=${partySize}, base=${baseHearts}, max=${newMax}, current=${newCurrent}`);
+  }
+  return raid;
+}
+
 // ============================================================================
 // ---- Raid Battle Processing ----
 // ============================================================================
@@ -84,8 +112,8 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     let outcome;
     
     // ------------------- Mod Character 1-Hit KO Logic -------------------
-    // Dragons and other special mod characters (like Aemu) have the ability to 1-hit KO all monsters
-    if (character.modTitle === 'Dragon' || character.name === 'Aemu') {
+    // Mod characters have the ability to 1-hit KO all raid monsters
+    if (character.isModCharacter) {
       logger.info('RAID', `Mod character ${character.name} (${character.modTitle || 'Oracle'}) uses 1-hit KO ability on ${monster.name}!`);
       
       // Import flavor text module for mod character victory messages
@@ -503,7 +531,11 @@ async function joinRaid(character, raidId, options = {}) {
       throw new Error('Raid is not active');
     }
 
-    // Note: KO'd characters can still join raids (KO status is handled during combat)
+    // KO'd characters cannot start a raid alone (would produce "No valid turn order"). They can join if others are already in the raid (they get a turn to use a fairy or leave).
+    const participantCount = (raid.participants || []).length;
+    if (character.ko && participantCount === 0) {
+      throw new Error('Your character is KO\'d and cannot start a raid alone. Use </item:1463789335626125378> to heal first, or join a raid that already has participants.');
+    }
 
     // Check if character is in the same village
     if (character.currentVillage.toLowerCase() !== raid.village.toLowerCase()) {
@@ -515,10 +547,9 @@ async function joinRaid(character, raidId, options = {}) {
       throw new Error(`Character ${character.name} cannot participate in raids at Blight Stage ${character.blightStage} - monsters no longer attack them`);
     }
 
-    // Check raid participant cap (max 10)
+    // Check raid participant cap (max 10); mod characters can join at any time
     const MAX_RAID_PARTICIPANTS = 10;
-    const participantCount = (raid.participants || []).length;
-    if (participantCount >= MAX_RAID_PARTICIPANTS) {
+    if (!character.isModCharacter && participantCount >= MAX_RAID_PARTICIPANTS) {
       throw new Error(`This raid is full! Maximum of ${MAX_RAID_PARTICIPANTS} participants allowed. (${participantCount}/${MAX_RAID_PARTICIPANTS})`);
     }
 
@@ -611,13 +642,14 @@ async function joinRaid(character, raidId, options = {}) {
       }
     }
 
-    // Create participant data
+    // Create participant data (isModCharacter: mod characters don't participate in turn order)
     const participant = {
       userId: character.userId,
       characterId: character._id,
       name: character.name,
       damage: 0,
       joinedAt: new Date(),
+      isModCharacter: !!character.isModCharacter,
       characterState: {
         currentHearts: character.currentHearts,
         maxHearts: character.maxHearts,
@@ -642,45 +674,18 @@ async function joinRaid(character, raidId, options = {}) {
       throw error; // Re-throw other errors
     }
 
-    // ----- Dynamic HP scaling based on party size (starts at 5+ participants) -----
+    // ----- Dynamic HP scaling: 5 or fewer = base max; 6+ = base + 2 per extra participant -----
     try {
-      // Ensure we have a persistent base hearts value (for pre-existing raids)
-      if (!raid.analytics) raid.analytics = {};
-      if (!raid.analytics.baseMonsterHearts || raid.analytics.baseMonsterHearts <= 0) {
-        raid.analytics.baseMonsterHearts = raid.monster.maxHearts || 0;
-      }
-      const baseHearts = raid.analytics.baseMonsterHearts || 0;
-      const partySize = (raid.participants || []).length;
-      
-      // Only scale hearts when 5+ participants join
-      let scaleMultiplier = 1;
-      if (partySize >= 5) {
-        // +10% base hearts per extra participant beyond the 4th (starts scaling at 5th participant)
-        const extraParticipants = partySize - 4;
-        scaleMultiplier = Math.max(1, 1 + 0.10 * extraParticipants);
-      }
-      
-      const oldMax = raid.monster.maxHearts;
-      const oldCurrent = raid.monster.currentHearts;
-      const damageDealtSoFar = Math.max(0, oldMax - oldCurrent);
-      const newMax = Math.ceil(baseHearts * scaleMultiplier);
-      const newCurrent = Math.max(1, newMax - damageDealtSoFar);
-      raid.monster.maxHearts = newMax;
-      raid.monster.currentHearts = newCurrent;
-      await raid.save();
-      
-      if (partySize >= 5) {
-        console.log(`[raidModule.js]: 📈 Raid ${raidId} scaled HP → partySize=${partySize}, base=${baseHearts}, max=${newMax}, current=${newCurrent} (scaling active)`);
-      } else {
-        console.log(`[raidModule.js]: 📊 Raid ${raidId} party size: ${partySize}/5 (scaling inactive)`);
-      }
+      await applyPartySizeScalingToRaid(raid);
     } catch (scaleError) {
       console.warn(`[raidModule.js]: ⚠️ Failed to scale raid HP: ${scaleError.message}`);
     }
 
     console.log(`[raidModule.js]: 👤 ${character.name} joined raid ${raidId}`);
 
-    // First participant: start the 30s roll timer for their turn
+    // Only start the 1-minute skip timer when the first participant joins. Later joiners
+    // get their turn (and timer) from raid.js + processRaidTurn, so scheduling here
+    // would use stale currentTurn and target the wrong player.
     if (raid.participants.length === 1) {
       try {
         await scheduleRaidTurnSkip(raidId);
@@ -707,19 +712,31 @@ async function joinRaid(character, raidId, options = {}) {
 }
 
 // ---- Function: scheduleRaidTurnSkip ----
-// Schedules a one-time job in 30s to skip the current turn if they don't roll
+// Schedules a one-time job in 60s to skip the current turn if they don't roll (skipped for mod characters)
+// Always cancels any existing skip job for this raid first so only one timer is ever active.
+// Stores scheduledAt (ms) so the handler only skips after 60s elapsed (immune to Agenda running early or clock skew).
 async function scheduleRaidTurnSkip(raidId) {
   const scheduler = require('@/utils/scheduler');
+  await cancelRaidTurnSkip(raidId); // Prevent duplicate jobs — only one skip timer per raid
   const raid = await Raid.findOne({ raidId, status: 'active' });
   if (!raid || !raid.participants || raid.participants.length === 0) return;
-  const current = await raid.getEffectiveCurrentTurnParticipant();
+  const current = raid.getCurrentTurnParticipant(); // Include KO'd — they get 1 minute to use a fairy or leave
   if (!current) return;
-  const when = new Date(Date.now() + RAID_TURN_SKIP_SECONDS * 1000);
+  if (current.isModCharacter) return; // Mod characters are not on the turn timer
+  const now = Date.now();
+  const scheduledAt = now;
+  const runAfterMs = now + RAID_TURN_SKIP_SECONDS * 1000;
+  const when = new Date(runAfterMs);
+  if (when.getTime() <= now + 1000) {
+    logger.warn('RAID', `scheduleRaidTurnSkip: computed time was in the past, using now + ${RAID_TURN_SKIP_SECONDS}s`);
+  }
   await scheduler.scheduleOneTimeJob(RAID_TURN_SKIP_JOB_NAME, when, {
     raidId,
-    characterId: current.characterId.toString()
+    characterId: current.characterId.toString(),
+    scheduledAt, // Handler: only skip when (Date.now() - scheduledAt) >= 60000
+    runAfter: runAfterMs
   });
-  logger.info('RAID', `Scheduled turn skip for ${raidId} in ${RAID_TURN_SKIP_SECONDS}s (${current.name})`);
+  logger.info('RAID', `Scheduled turn skip for ${raidId} in ${RAID_TURN_SKIP_SECONDS}s at ${when.toISOString()} (${current.name})`);
 }
 
 // ---- Function: cancelRaidTurnSkip ----
@@ -730,7 +747,7 @@ async function cancelRaidTurnSkip(raidId) {
 }
 
 // ---- Function: leaveRaid ----
-// Player voluntarily leaves; monster HP reverts by their damage; eligible for loot if 1+ damage or 3+ rounds
+// Player voluntarily leaves; monster HP is unchanged (no revert). Eligible for loot if 1+ damage or 3+ rounds.
 async function leaveRaid(character, raidId, options = {}) {
   const raid = await Raid.findOne({ raidId });
   if (!raid) throw new Error('Raid not found');
@@ -739,20 +756,25 @@ async function leaveRaid(character, raidId, options = {}) {
   const participant = participants.find(p => p.characterId.toString() === character._id.toString());
   if (!participant) throw new Error('Character is not in this raid');
 
-  const currentTurnParticipant = await raid.getEffectiveCurrentTurnParticipant();
+  const currentTurnParticipant = raid.getCurrentTurnParticipant();
   const wasCurrentTurn = currentTurnParticipant && currentTurnParticipant.characterId.toString() === character._id.toString();
-
-  // Revert monster HP by this participant's damage
-  const damage = participant.damage || 0;
-  raid.monster.currentHearts = Math.min(raid.monster.maxHearts, (raid.monster.currentHearts || 0) + damage);
-  raid.analytics.totalDamage = Math.max(0, (raid.analytics.totalDamage || 0) - damage);
 
   const eligibleForLoot = (participant.damage >= 1) || ((participant.roundsParticipated || 0) >= 3);
   await raid.removeParticipant(character._id, eligibleForLoot);
 
+  // Revert monster max (and current) hearts to the scale for the new party size (e.g. 6→5 reverts max 12→10)
+  try {
+    const updatedRaid = await Raid.findOne({ raidId, status: 'active' });
+    if (updatedRaid && updatedRaid.participants && updatedRaid.participants.length > 0) {
+      await applyPartySizeScalingToRaid(updatedRaid);
+    }
+  } catch (scaleError) {
+    console.warn(`[raidModule.js]: ⚠️ Failed to rescale raid HP on leave: ${scaleError.message}`);
+  }
+
   if (wasCurrentTurn) {
     await cancelRaidTurnSkip(raidId);
-    // Optionally schedule 30s for new current turn
+    // Optionally schedule 1-minute skip for new current turn
     const freshRaid = await Raid.findOne({ raidId, status: 'active' });
     if (freshRaid && freshRaid.participants && freshRaid.participants.length > 0) {
       await scheduleRaidTurnSkip(raidId);
@@ -762,7 +784,7 @@ async function leaveRaid(character, raidId, options = {}) {
   const freshRaid = await Raid.findOne({ raidId, status: 'active' });
   let nextTurnMention = null;
   if (freshRaid && freshRaid.participants && freshRaid.participants.length > 0) {
-    const next = await freshRaid.getEffectiveCurrentTurnParticipant();
+    const next = freshRaid.getCurrentTurnParticipant();
     if (next) nextTurnMention = `<@${next.userId}>`;
   }
   return { eligibleForLoot, nextTurnMention };
@@ -790,8 +812,11 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error('Raid is not active');
     }
 
-    // Cancel 30s skip job for this raid (current player is rolling)
-    await cancelRaidTurnSkip(raidId);
+    // Cancel 1-minute skip job only when the current turn player is rolling (mod characters don't affect turn order)
+    const isModTurn = !!character.isModCharacter;
+    if (!isModTurn) {
+      await cancelRaidTurnSkip(raidId);
+    }
 
     // Find participant
     const participants = raid.participants || [];
@@ -876,13 +901,14 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
             console.log(`[raidModule.js]: 🎭 Boost cleared for ${character.name} after raid turn`);
           }
           
-          // Advance to next turn if monster is not defeated
-          await raid.advanceTurn();
-          // Schedule 30s skip for the new current turn
-          try {
-            await scheduleRaidTurnSkip(raidId);
-          } catch (skipErr) {
-            logger.warn('RAID', `Failed to schedule turn skip after turn for ${raidId}: ${skipErr.message}`);
+          // Advance turn and schedule 1-minute skip only for non-mod turns (mod characters don't affect turn order)
+          if (!isModTurn) {
+            await raid.advanceTurn();
+            try {
+              await scheduleRaidTurnSkip(raidId);
+            } catch (skipErr) {
+              logger.warn('RAID', `Failed to schedule turn skip after turn for ${raidId}: ${skipErr.message}`);
+            }
           }
         }
 
@@ -1062,23 +1088,12 @@ async function createRaidThread(interaction, raid) {
       })
     );
 
-    // Create the initial thread message - use universal raid role for all villages
+    // Create the initial thread message - use universal raid role for all villages; @ in content, rest in embed
     const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
-    
-    // Calculate total duration for this tier
-    const totalDuration = calculateRaidDuration(raid.monster.tier);
-    const totalMinutes = Math.floor(totalDuration / (1000 * 60));
-    
-    const threadMessage = [
-      `💀 A raid has been initiated against **${raid.monster.name} (Tier ${raid.monster.tier})**!`,
-      `\n${roleMention} — come help defend your home!`,
-      `\nUse </raid:1433351189269053455> to join the fight!`,
-      `\n\n**Raid ID:** \`\`\`${raid.raidId}\`\`\``,
-      `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`
-    ].join('');
+    const raidAnnounceEmbed = createRaidEmbed(raid, raid.monster?.image);
 
-    // Send the text message to the thread
-    await thread.send(threadMessage);
+    // Send embed to the thread (mention in content so it pings)
+    await thread.send({ content: roleMention, embeds: [raidAnnounceEmbed] });
 
     // Update raid with thread information
     raid.threadId = thread.id;
@@ -1123,7 +1138,7 @@ function createRaidEmbed(raid, monsterImage) {
     .setDescription(
       `**${raid.monster.name} has been spotted in ${villageName}!**\n` +
       `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
-      `</raid:1433351189269053455> to join or continue the raid!\n` +
+      `</raid:1470659276287774734> to join or continue the raid!\n` +
       `</item:1379838613067530385> to heal during the raid!\n\n` +
       `⏰ **You have ${totalMinutes} minutes to complete this raid!**`
     )
@@ -1310,22 +1325,10 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       console.log(`[raidModule.js]: 🧵 Thread created with ID: ${thread.id}`);
       console.log(`[raidModule.js]: 📝 Thread name: ${thread.name}`);
       
-      // Send initial thread message with raid ID - use universal raid role for all villages
+      // Send initial thread message: @ in content, nice embed with clickable raid
       const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
-      
-      // Calculate total duration for this tier
-      const totalDuration = calculateRaidDuration(monster.tier);
-      const totalMinutes = Math.floor(totalDuration / (1000 * 60));
-      
-      const threadMessage = [
-        `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
-        `\n${roleMention} — come help defend your home!`,
-        `\nUse </raid:1433351189269053455> to join the fight!`,
-        `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`
-      ].join('');
-
-      await thread.send(threadMessage);
+      const threadRaidEmbed = createRaidEmbed(raidData, raidData.monster?.image);
+      await thread.send({ content: roleMention, embeds: [threadRaidEmbed] });
       console.log(`[raidModule.js]: 💬 Thread message sent`);
 
       // Update raid data with thread information
@@ -1339,28 +1342,20 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       console.warn(`[raidModule.js]: ⚠️ This may be because the channel doesn't support threads (DM, etc.)`);
       console.warn(`[raidModule.js]: ⚠️ Raid will continue without a thread - participants can use the raid ID directly`);
       
-      // Send the raid information as a follow-up message instead - use universal raid role for all villages
+      // Send the raid information as a follow-up: @ in content, embed for raid info (nice embed + clickable raid)
       const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
-      
-      // Calculate total duration for this tier
-      const totalDuration = calculateRaidDuration(monster.tier);
-      const totalMinutes = Math.floor(totalDuration / (1000 * 60));
-      
-      const raidInfoMessage = [
-        `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
-        `\n${roleMention} — come help defend your home!`,
-        `\nUse </raid:1433351189269053455> to join the fight!`,
-        `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`,
-        `\n\n*Note: No thread was created in this channel. Use the raid ID to participate!*`
-      ].join('');
+      const raidAnnounceEmbed = createRaidEmbed(raidData, raidData.monster?.image);
+      raidAnnounceEmbed.addFields({
+        name: '📌 Note',
+        value: '*No thread was created in this channel. Use the Raid ID above with </raid:1470659276287774734> to participate!*',
+        inline: false
+      });
+      const payload = { content: roleMention, embeds: [raidAnnounceEmbed] };
 
-      // Check if interaction has followUp method before calling it
       if (interaction && typeof interaction.followUp === 'function') {
-        await interaction.followUp({ content: raidInfoMessage });
+        await interaction.followUp(payload);
       } else {
-        // If no followUp method, send as a regular message to the channel
-        await interaction.channel.send({ content: raidInfoMessage });
+        await interaction.channel.send(payload);
       }
       
       // Update raid data without thread information
@@ -1419,6 +1414,7 @@ module.exports = {
   triggerRaid,
   calculateRaidDuration,
   scheduleRaidTurnSkip,
+  applyPartySizeScalingToRaid,
   RAID_EXPIRATION_JOB_NAME,
   RAID_TURN_SKIP_JOB_NAME
 };

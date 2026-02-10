@@ -4,7 +4,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
-const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid } = require('../../modules/raidModule');
+const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid, scheduleRaidTurnSkip } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed } = require('../../embeds/embeds.js');
 const Raid = require('@/models/RaidModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
@@ -177,8 +177,19 @@ module.exports = {
         )
         .setFooter({ text: 'Raid System' })
         .setTimestamp();
-      let content = result.nextTurnMention ? `It's your turn, ${result.nextTurnMention}` : null;
-      return interaction.editReply({ content, embeds: [embed] });
+      const embeds = [embed];
+      if (result.nextTurnMention) {
+        embeds.push(
+          new EmbedBuilder()
+            .setColor('#FFA500')
+            .setTitle('⚔️ It\'s your turn')
+            .setDescription(`It's your turn — use </raid:1470659276287774734> to roll.`)
+            .setFooter({ text: 'Raid System' })
+            .setTimestamp()
+        );
+      }
+      const content = result.nextTurnMention || null;
+      return interaction.editReply({ content, embeds });
     } catch (err) {
       return interaction.editReply({
         content: `❌ **Leave failed:** ${err.message}`,
@@ -222,7 +233,7 @@ module.exports = {
       // (no longer required, but kept for compatibility)
       await checkInventorySync(character);
 
-      // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
+      // KO'd characters cannot join raids (blocked in joinRaid); existing participants who get KO'd during combat are skipped in turn order
 
       // Check raid expiration and get raid data
       const raidData = await checkRaidExpiration(raidId, interaction.client);
@@ -249,6 +260,11 @@ module.exports = {
             {
               name: '⚠️ Possible Issues',
               value: '• Check if you copied the raid ID correctly\n• The raid may have expired (20-minute time limit)\n• The raid may have been completed\n• Check the raid announcement for the correct ID',
+              inline: false
+            },
+            {
+              name: '__To join a raid__',
+              value: 'Use </raid:1470659276287774734> with a valid raid ID from an announcement.',
               inline: false
             }
           )
@@ -279,7 +295,7 @@ module.exports = {
             },
             {
               name: '__To join a new raid__',
-              value: '• Wait for a new raid announcement\n• Check the village town hall for active raids\n• Use the raid ID from the most recent announcement',
+              value: '• Wait for a new raid announcement\n• Check the village town hall for active raids\n• Use </raid:1470659276287774734> with the raid ID from the most recent announcement',
               inline: false
             }
           )
@@ -366,11 +382,22 @@ module.exports = {
         p.characterId.toString() === character._id.toString()
       );
 
-      // Check raid participant cap (max 10) before attempting to join
+      // Check raid participant cap (max 10) before attempting to join (mod characters can join at any time)
       const MAX_RAID_PARTICIPANTS = 10;
-      if (!existingParticipant && raidData.participants.length >= MAX_RAID_PARTICIPANTS) {
+      if (!existingParticipant && !character.isModCharacter && raidData.participants.length >= MAX_RAID_PARTICIPANTS) {
+        const raidFullEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Raid is full!')
+          .setDescription(`This raid has reached the maximum of **${MAX_RAID_PARTICIPANTS} participants**. (${raidData.participants.length}/${MAX_RAID_PARTICIPANTS})`)
+          .addFields({
+            name: '__Try again__',
+            value: 'Try joining another raid when one is announced! Use </raid:1470659276287774734> with a different raid ID.',
+            inline: false
+          })
+          .setFooter({ text: 'Raid System' })
+          .setTimestamp();
         return interaction.editReply({
-          content: `❌ **Raid is full!** This raid has reached the maximum of **${MAX_RAID_PARTICIPANTS} participants**. (${raidData.participants.length}/${MAX_RAID_PARTICIPANTS})\n\nTry joining another raid when one is announced!`,
+          embeds: [raidFullEmbed],
           ephemeral: true
         });
       }
@@ -385,8 +412,9 @@ module.exports = {
           updatedRaidData = joinResult.raidData;
           blightRainMessage = joinResult.blightRainMessage;
         } catch (joinError) {
+          const message = (joinError && typeof joinError.message === 'string') ? joinError.message : (typeof joinError === 'string' ? joinError : 'Unable to join raid.');
           console.error(`[raid.js]: ❌ Join raid error for ${character.name}:`, joinError);
-          if (joinError.message === 'You already have a character participating in this raid') {
+          if (message === 'You already have a character participating in this raid') {
             const alreadyInRaidEmbed = new EmbedBuilder()
               .setColor('#FFA500')
               .setTitle('👋 Already in This Raid!')
@@ -409,7 +437,7 @@ module.exports = {
                 },
                 {
                   name: '__💡 What to do?__',
-                  value: 'Use the raid command again to take your turn, or join with a different character.',
+                  value: 'Use </raid:1470659276287774734> again to take your turn, or join with a different character.',
                   inline: false
                 }
               )
@@ -421,8 +449,53 @@ module.exports = {
               ephemeral: true
             });
           }
+          if (message.includes("KO'd") || message.includes('cannot join the raid')) {
+            const koCantJoinEmbed = new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Can\'t join — character is KO\'d')
+              .setDescription(`**${character.name}** is knocked out and must be healed before joining a raid.`)
+              .addFields(
+                {
+                  name: '__What to do__',
+                  value: `Use </item:1463789335626125378> to use a healing item on **${character.name}**, then use </raid:1470659276287774734> to join again.`,
+                  inline: false
+                },
+                {
+                  name: '__Raid ID__',
+                  value: `\`${raidId}\``,
+                  inline: true
+                },
+                {
+                  name: '__Village__',
+                  value: character.currentVillage,
+                  inline: true
+                }
+              )
+              .setFooter({ text: 'Raid System' })
+              .setTimestamp();
+            return interaction.editReply({
+              embeds: [koCantJoinEmbed],
+              ephemeral: true
+            });
+          }
+          const failedJoinEmbed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ Failed to join raid')
+            .setDescription(message)
+            .addFields(
+              { name: '__Character__', value: character.name, inline: true },
+              { name: '__Raid ID__', value: `\`${raidId}\``, inline: true },
+              { name: '__Current Village__', value: character.currentVillage, inline: true },
+              {
+                name: '__Try again__',
+                value: 'Use </raid:1470659276287774734> with the correct raid ID and character.',
+                inline: false
+              }
+            )
+            .setFooter({ text: 'Raid System' })
+            .setTimestamp();
           return interaction.editReply({
-            content: `❌ **Failed to join raid:** ${joinError.message}\n\n**Character:** ${character.name}\n**Raid ID:** \`${raidId}\`\n**Current Village:** ${character.currentVillage}`,
+            embeds: [failedJoinEmbed],
             ephemeral: true
           });
         }
@@ -430,19 +503,82 @@ module.exports = {
         // Character already in raid
       }
 
-      // ------------------- Strict turn order: only the current turn may roll -------------------
-      const effectiveCurrentTurnParticipant = await updatedRaidData.getEffectiveCurrentTurnParticipant();
-      if (!effectiveCurrentTurnParticipant || effectiveCurrentTurnParticipant.characterId.toString() !== character._id.toString()) {
-        const whoseTurn = effectiveCurrentTurnParticipant
-          ? `It's **${effectiveCurrentTurnParticipant.name}**'s turn. <@${effectiveCurrentTurnParticipant.userId}> — you have 30 seconds to roll.`
-          : 'No valid turn order.';
+      // When someone new joins: start or reset the 1-minute skip timer for the current turn holder (so they get a full minute; mid-raid join no longer wrongly skips them).
+      if (!existingParticipant && updatedRaidData.participants?.length > 0) {
+        await scheduleRaidTurnSkip(raidId);
+      }
+
+      const myParticipant = updatedRaidData.participants?.find(p => p.characterId && p.characterId.toString() === character._id.toString());
+      const isModInRaid = myParticipant && (myParticipant.isModCharacter || character.isModCharacter);
+
+      // ------------------- Strict turn order: only the current turn may roll (mod characters can roll anytime). KO'd stay in order and get a turn to use a fairy or leave. -------------------
+      const currentTurnParticipant = updatedRaidData.getCurrentTurnParticipant();
+      const Character = require('@/models/CharacterModel');
+      let currentTurnIsKO = false;
+      if (currentTurnParticipant) {
+        const currentTurnChar = await Character.findById(currentTurnParticipant.characterId);
+        currentTurnIsKO = currentTurnChar?.ko ?? false;
+      }
+      const isMyTurn = currentTurnParticipant && currentTurnParticipant.characterId.toString() === character._id.toString();
+
+      // KO'd member's turn: prompt to use a fairy or leave (don't process a roll)
+      if (!isModInRaid && isMyTurn && character.ko) {
+        await scheduleRaidTurnSkip(raidId);
+        const koTurnEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('💀 KO\'d — it\'s your turn')
+          .setDescription('You\'re knocked out.')
+          .addFields(
+            {
+              name: 'What to do',
+              value: 'Please use a fairy with </item:1463789335626125378>.',
+              inline: false
+            },
+            {
+              name: 'Leave the raid',
+              value: 'Use </raid:1470659276287774734> (raidid, charactername, action: Leave raid).',
+              inline: false
+            },
+            {
+              name: '⏰ Time',
+              value: 'You have 1 minute.',
+              inline: false
+            },
+            {
+              name: 'New joiners',
+              value: '**New characters can join the raid now** (added at the end of turn order).',
+              inline: false
+            }
+          )
+          .setFooter({ text: 'Raid System' })
+          .setTimestamp();
         return interaction.editReply({
-          content: `❌ **Not your turn.** Only one person rolls at a time, in order.\n\n${whoseTurn}`,
-          ephemeral: true
+          embeds: [koTurnEmbed],
+          ephemeral: false
         });
       }
 
-      // Process the raid turn (cancel any pending skip job for this raid; raidModule will schedule new 30s after)
+      if (!isModInRaid && (!currentTurnParticipant || !isMyTurn)) {
+        const whoseTurnBody = currentTurnParticipant
+          ? currentTurnIsKO
+            ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with </item:1463789335626125378> or leave with </raid:1470659276287774734> raidid, charactername, action: Leave raid). You have 1 minute.`
+            : `It's **${currentTurnParticipant.name}**'s turn. You have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`
+          : 'No valid turn order.';
+        const intro = !existingParticipant
+          ? `We've added you to the turn order! It's not your turn yet — you'll roll when it's your turn. Use </raid:1470659276287774734> when it's your turn.\n\n${whoseTurnBody}`
+          : `It's not your turn yet. You're already in the turn order — wait for your turn, then use </raid:1470659276287774734> to roll.\n\n${whoseTurnBody}`;
+        const notYourTurnEmbed = new EmbedBuilder()
+          .setColor('#FFA500')
+          .setTitle('⏳ Not your turn')
+          .setDescription(intro)
+          .setFooter({ text: 'Raid System' })
+          .setTimestamp();
+        const replyPayload = { embeds: [notYourTurnEmbed], ephemeral: true };
+        if (currentTurnParticipant) replyPayload.content = `<@${currentTurnParticipant.userId}>`;
+        return interaction.editReply(replyPayload);
+      }
+
+      // Process the raid turn (cancel any pending skip job for this raid; raidModule will schedule new 1-minute timer after)
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
       // Create embed for the turn result using the updated raid data from turnResult
@@ -474,16 +610,32 @@ module.exports = {
         return;
       }
       
-      // Send the turn result embed and @mention the next player (30 seconds to roll)
-      const nextParticipant = await turnResult.raidData.getEffectiveCurrentTurnParticipant();
-      const mentionParts = [];
-      if (blightRainMessage) mentionParts.push(blightRainMessage);
+      // Send the turn result embed only (no @mention in same message)
+      const firstResponse = { embeds: [embed] };
+      if (blightRainMessage) firstResponse.content = blightRainMessage;
+      await interaction.editReply(firstResponse);
+
+      // Separate follow-up: @mention in content, turn message in embed (so @ is outside embed)
+      const nextParticipant = turnResult.raidData.getCurrentTurnParticipant();
       if (nextParticipant) {
-        mentionParts.push(`It's your turn, <@${nextParticipant.userId}> — you have 30 seconds to roll.`);
+        const nextChar = await Character.findById(nextParticipant.characterId);
+        const nextIsKO = nextChar?.ko ?? false;
+        const nextTurnEmbed = new EmbedBuilder()
+          .setColor(nextIsKO ? '#FF0000' : '#00FF00')
+          .setTitle(nextIsKO ? '💀 KO\'d — it\'s your turn' : '⚔️ It\'s your turn')
+          .setDescription(
+            nextIsKO
+              ? `**${nextParticipant.name}** — you're knocked out.\n\nPlease use a fairy with </item:1463789335626125378>.\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).\n\nYou have 1 minute.\n\n**New characters can join the raid now** (added at the end of turn order).`
+              : `**${nextParticipant.name}** — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`
+          )
+          .setFooter({ text: 'Raid System' })
+          .setTimestamp();
+        await interaction.followUp({
+          content: `<@${nextParticipant.userId}>`,
+          embeds: [nextTurnEmbed],
+          ephemeral: false
+        });
       }
-      const response = { embeds: [embed] };
-      if (mentionParts.length) response.content = mentionParts.join('\n\n');
-      return interaction.editReply(response);
     } catch (error) {
       await handleInteractionError(error, interaction, {
         source: 'raid.js',
@@ -578,29 +730,20 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   // Get current character states from database
   const Character = require('@/models/CharacterModel');
   
-  // Get the effective current turn participant (skipping KO'd participants)
-  const effectiveCurrentTurnParticipant = await raidData.getEffectiveCurrentTurnParticipant();
-  const effectiveCurrentTurnIndex = participants.findIndex(p => p.characterId.toString() === effectiveCurrentTurnParticipant?.characterId?.toString());
-  
+  // Current turn is by index (KO'd participants stay in order and get a turn)
   for (let idx = 0; idx < participants.length; idx++) {
     const p = participants[idx];
     const isCurrentTurn = idx === currentTurnIndex;
-    const isEffectiveCurrentTurn = idx === effectiveCurrentTurnIndex;
-    
+
     // Get current character state from database
     const currentCharacter = await Character.findById(p.characterId);
     const isKO = currentCharacter?.ko || false;
-    
-    // Participant status logged only in debug mode
-    
+
+    if (isKO) koCharacters.push(p.name);
     if (isKO) {
-      koCharacters.push(p.name);
-      turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
-            } else if (isEffectiveCurrentTurn) {
-          // Show turn indicator on the effective current turn participant
-          turnOrderLines.push(`${idx + 1}. ${p.name}`);
-        } else {
-      turnOrderLines.push(`${idx + 1}. ${p.name}`);
+      turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)${isCurrentTurn ? ' ← current' : ''}`);
+    } else {
+      turnOrderLines.push(`${idx + 1}. ${p.name}${isCurrentTurn ? ' ← current' : ''}`);
     }
   }
   
@@ -675,7 +818,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: 'Want to join in?',
-        value: 'Use `/raid` to join (new players are added at the end of turn order).',
+        value: 'Use </raid:1470659276287774734> to join (new players are added at the end of turn order).',
         inline: false
       },
 
@@ -684,7 +827,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ 
-      text: `Raid ID: ${raidId} • Use /raid to take your turn (30s per turn)! • Use /item to heal!` 
+      text: `Raid ID: ${raidId} • Use </raid:1470659276287774734> to take your turn (1 minute per turn)! • Use </item:1463789335626125378> to heal!` 
     })
     .setTimestamp();
 

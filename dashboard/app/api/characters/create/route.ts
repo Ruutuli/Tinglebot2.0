@@ -9,7 +9,7 @@ import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { MOD_JOBS, ALL_JOBS } from "@/data/characterData";
-import { recalculateStats, type EquippedGear } from "@/lib/gear-equip";
+import { recalculateStats, normalizeGearSlots, type EquippedGear } from "@/lib/gear-equip";
 import {
   DEFAULT_HEARTS,
   DEFAULT_STAMINA,
@@ -293,6 +293,17 @@ export async function POST(req: NextRequest) {
         /* ignore invalid JSON */
       }
     }
+
+    // Normalize weapon/shield slots: move shields out of weapon slot, clear weapons from shield slot
+    const { default: Item } = await import("@/models/ItemModel.js");
+    const getItemByName = async (name: string) => {
+      const doc = await Item.findOne({ itemName: name })
+        .select("categoryGear type subtype")
+        .lean()
+        .exec();
+      return doc ? { categoryGear: doc.categoryGear, type: doc.type, subtype: doc.subtype } : null;
+    };
+    await normalizeGearSlots(gear, getItemByName);
 
     // Ensure every new character has default chest/legs armor if missing
     if (!gear.gearArmor) gear.gearArmor = {};

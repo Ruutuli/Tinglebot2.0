@@ -9,7 +9,7 @@ import { connect, getInventoriesDb } from "@/lib/db";
 import mongoose from "mongoose";
 import { getSession, isAdminUser } from "@/lib/session";
 import { MOD_JOBS, ALL_JOBS } from "@/data/characterData";
-import { recalculateStats } from "@/lib/gear-equip";
+import { recalculateStats, normalizeGearSlots } from "@/lib/gear-equip";
 import { fetchDiscordUsernames } from "@/lib/discord";
 import {
   DEFAULT_HEARTS,
@@ -846,13 +846,24 @@ export async function PUT(
             gear.gearArmor = null;
           }
         }
+
+        // Normalize weapon/shield slots: move shields out of weapon slot, clear weapons from shield slot
+        const { default: Item } = await import("@/models/ItemModel.js");
+        const getItemByName = async (name: string) => {
+          const doc = await Item.findOne({ itemName: name })
+            .select("categoryGear type subtype")
+            .lean()
+            .exec();
+          return doc ? { categoryGear: doc.categoryGear, type: doc.type, subtype: doc.subtype } : null;
+        };
+        await normalizeGearSlots(gear, getItemByName);
         
-        // Update gear on character (including clearing if null/undefined)
-        if (gear.gearWeapon !== undefined) {
-          char.gearWeapon = gear.gearWeapon || undefined;
+        // Update gear on character (use form-sent keys so normalization clears slots when needed)
+        if (equippedGearData.gearWeapon !== undefined) {
+          char.gearWeapon = gear.gearWeapon ?? undefined;
         }
-        if (gear.gearShield !== undefined) {
-          char.gearShield = gear.gearShield || undefined;
+        if (equippedGearData.gearShield !== undefined) {
+          char.gearShield = gear.gearShield ?? undefined;
         }
         if (gear.gearArmor !== undefined) {
           // Convert null values to empty object for Mongoose compatibility

@@ -89,6 +89,41 @@ export function getArmorSlot(item: ItemData): ArmorSlot | null {
   return null;
 }
 
+export type GearSlotsForNormalize = {
+  gearWeapon?: { name: string; stats: Map<string, number> | Record<string, number> } | null;
+  gearShield?: { name: string; stats: Map<string, number> | Record<string, number> } | null;
+};
+
+export type GetItemByName = (
+  name: string
+) => Promise<{ categoryGear?: string; type?: string[]; subtype?: string[] } | null>;
+
+/**
+ * Normalize gear so weapon slot never contains a shield and shield slot never contains a weapon.
+ * Mutates and returns the same gear object. Call before persisting character gear.
+ */
+export async function normalizeGearSlots(
+  gear: GearSlotsForNormalize,
+  getItemByName: GetItemByName
+): Promise<GearSlotsForNormalize> {
+  if (gear.gearWeapon?.name) {
+    const doc = await getItemByName(gear.gearWeapon.name);
+    if (doc && isShield(doc)) {
+      if (!gear.gearShield) {
+        gear.gearShield = { name: gear.gearWeapon.name, stats: gear.gearWeapon.stats };
+      }
+      gear.gearWeapon = undefined;
+    }
+  }
+  if (gear.gearShield?.name) {
+    const doc = await getItemByName(gear.gearShield.name);
+    if (doc && getWeaponType(doc) !== null) {
+      gear.gearShield = undefined;
+    }
+  }
+  return gear;
+}
+
 /**
  * Equip an item, handling all conflict rules
  * Returns updated gear object

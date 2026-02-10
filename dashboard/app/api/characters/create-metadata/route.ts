@@ -48,6 +48,7 @@ export type CreateMetadataResponse = {
 };
 
 // ------------------- Map item to starter gear slot -------------------
+// Check shield before weapon so mis-categorized items (e.g. category Weapon but subtype Shield) get slot "shield".
 function slotFromItem(
   categoryGear: string,
   type: string[] | undefined,
@@ -56,9 +57,9 @@ function slotFromItem(
   const c = (categoryGear || "").toLowerCase();
   const types = (type || []).map((t) => String(t).toLowerCase());
   const sub = (subtype || []).map((s) => String(s).toLowerCase());
+  if (c === "shield" || sub.some((s) => s.includes("shield"))) return "shield";
   if (c === "weapon") return "weapon";
-  if (c === "armor" || c === "shield") {
-    if (sub.some((s) => s.includes("shield"))) return "shield";
+  if (c === "armor") {
     // Armor slot from type array (e.g. Chest, Legs, Head) so Old Shirt / Well-Worn Trousers map correctly
     if (types.some((t) => t === "chest")) return "chest";
     if (types.some((t) => t === "legs")) return "legs";
@@ -212,15 +213,16 @@ export async function GET() {
       modifierHearts?: number;
     }>) {
       const id = String(it._id);
-      const weaponType = getWeaponType({
+      const itemData = {
         _id: it._id,
         itemName: it.itemName,
         categoryGear: it.categoryGear,
         type: it.type,
         subtype: it.subtype,
         modifierHearts: it.modifierHearts,
-      });
-      if (weaponType) {
+      };
+      const weaponType = getWeaponType(itemData);
+      if (weaponType && !isShield(itemData)) {
         weapons.push({
           id,
           name: it.itemName || "Unknown",

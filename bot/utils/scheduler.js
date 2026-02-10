@@ -76,7 +76,7 @@ async function initializeScheduler(discordClient, mongoConnectionString) {
   try {
     agenda = new Agenda({
       db: { address: uri, collection: 'agendaJobs' },
-      processEvery: '30 seconds'
+      processEvery: '5 seconds' // Poll every 5s so one-time jobs (e.g. raid 1-minute skip) run within ~5s of due time
     });
 
     agenda.on('ready', () => logger.success('SCHEDULER', 'Agenda connected to MongoDB'));
@@ -191,6 +191,12 @@ async function scheduleOneTimeJob(name, when, data = {}) {
     throw new Error(`Job "${name}" is not registered`);
   }
   const whenDate = typeof when === 'string' ? new Date(when) : when;
+  const now = Date.now();
+  const runAt = whenDate.getTime();
+  if (runAt <= now) {
+    logger.warn('SCHEDULER', `One-time job "${name}" was scheduled in the past (${whenDate.toISOString()}), clamping to 1s from now`);
+    whenDate.setTime(now + 1000);
+  }
   const job = await agenda.schedule(whenDate, name, data || {});
   logger.info('SCHEDULER', `Scheduled one-time job "${name}" for ${whenDate.toISOString()}`);
   return job;
@@ -198,6 +204,7 @@ async function scheduleOneTimeJob(name, when, data = {}) {
 
 /**
  * Cancel a specific job by name and data query.
+ * Uses Agenda's native cancel (MongoDB deleteMany) so jobs are reliably removed when a player rolls.
  * @param {string} name - Job name
  * @param {object} dataQuery - Query to match job.attrs.data (e.g., { raidId: 'R123' })
  * @returns {Promise<number>} Number of cancelled jobs
@@ -209,29 +216,14 @@ async function cancelJob(name, dataQuery = {}) {
     return 0;
   }
   try {
-    // Agenda stores data in attrs.data, so we need to query jobs and filter
-    const jobs = await agenda.jobs({ name });
-    let cancelledCount = 0;
-
-    for (const job of jobs) {
-      // Check if job data matches the query
-      const jobData = job.attrs.data || {};
-      let matches = true;
-      for (const [key, value] of Object.entries(dataQuery)) {
-        // Handle nested keys like 'data.raidId' by checking jobData directly
-        const actualKey = key.replace('data.', '');
-        if (jobData[actualKey] !== value) {
-          matches = false;
-          break;
-        }
-      }
-      
-      if (matches) {
-        await job.remove();
-        cancelledCount++;
-      }
+    // Build MongoDB filter: Agenda stores job data in top-level "data" field in the collection
+    const mongoQuery = { name };
+    for (const [key, value] of Object.entries(dataQuery)) {
+      const actualKey = key.startsWith('data.') ? key : `data.${key}`;
+      mongoQuery[actualKey] = value;
     }
-    
+    const deletedCount = await agenda.cancel(mongoQuery);
+    const cancelledCount = typeof deletedCount === 'number' ? deletedCount : 0;
     if (cancelledCount > 0) {
       logger.info('SCHEDULER', `Cancelled ${cancelledCount} job(s) for "${name}" matching query`, dataQuery);
     }

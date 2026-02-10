@@ -28,7 +28,7 @@ const { releaseFromJail } = require('@/utils/jailCheck');
 const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('@/modules/characterStatsModule');
 const { processMonthlyQuestRewards, processQuestCompletion } = require('@/modules/questRewardModule');
-const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME, RAID_TURN_SKIP_JOB_NAME, scheduleRaidTurnSkip } = require('@/modules/raidModule');
+const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME, RAID_TURN_SKIP_JOB_NAME, scheduleRaidTurnSkip, applyPartySizeScalingToRaid } = require('@/modules/raidModule');
 const { checkVillageRaidQuotas } = require('@/scripts/randomMonsterEncounters');
 const {
   postBlightRollCall,
@@ -1490,17 +1490,40 @@ async function raidExpiration(client, data = {}) {
   }
 }
 
-// ------------------- raid-turn-skip (One-time job: 30s passed without roll; skip current turn, maybe remove) -------------------
+// ------------------- raid-turn-skip (One-time job: 1 minute passed without roll; skip current turn, maybe remove) -------------------
+// Only skips when at least 60 seconds have elapsed since scheduledAt (same process clock). Ignores Agenda nextRunAt
+// so we never skip early even if Agenda runs the job too soon or server clock is wrong.
 async function raidTurnSkip(client, data = {}) {
   try {
-    const { raidId, characterId } = data;
+    const { raidId, characterId, scheduledAt } = data;
     if (!raidId || !characterId) {
       logger.error('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Missing raidId or characterId`);
+      return;
+    }
+    const now = Date.now();
+    const MIN_ELAPSED_MS = 60000; // Do not skip until 60 full seconds (1 minute) have passed since schedule
+    const scheduledAtMs = typeof scheduledAt === 'number' ? scheduledAt : 0;
+    if (scheduledAtMs <= 0) {
+      logger.info('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} — job has no scheduledAt (stale or pre-fix), rescheduling fresh 1m`);
+      await scheduleRaidTurnSkip(raidId);
+      return;
+    }
+    const elapsedMs = now - scheduledAtMs;
+    if (elapsedMs < MIN_ELAPSED_MS) {
+      logger.info('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} — only ${Math.round(elapsedMs / 1000)}s elapsed (need ${MIN_ELAPSED_MS / 1000}s), rescheduling; skip deferred`);
+      await scheduleRaidTurnSkip(raidId);
       return;
     }
     const raid = await Raid.findOne({ raidId, status: 'active' });
     if (!raid || !raid.participants || raid.participants.length === 0) {
       logger.debug('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} not active or no participants`);
+      return;
+    }
+    // If turn already advanced (e.g. they rolled and cancel ran late), just schedule skip for actual current and exit
+    const currentTurnParticipant = raid.getCurrentTurnParticipant();
+    if (!currentTurnParticipant || currentTurnParticipant.characterId.toString() !== characterId) {
+      logger.info('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} — turn already advanced, scheduling skip for current player`);
+      await scheduleRaidTurnSkip(raidId);
       return;
     }
     const idx = raid.participants.findIndex(p => p.characterId && p.characterId.toString() === characterId);
@@ -1515,18 +1538,72 @@ async function raidTurnSkip(client, data = {}) {
       await raid.advanceTurn();
     }
     await scheduleRaidTurnSkip(raidId);
-    const message = result.removed
-      ? `**${participantName}** was skipped twice and has been **removed** from the raid.`
-      : `**${participantName}** was skipped (${skipCount}/2). It's the next player's turn — 30 seconds to roll.`;
-    const raidAfter = await Raid.findOne({ raidId });
-    const threadId = raidAfter?.threadId;
-    if (threadId && client?.channels) {
+    const raidAfter = await Raid.findOne({ raidId, status: 'active' });
+    if (result.removed && raidAfter && raidAfter.participants && raidAfter.participants.length > 0) {
       try {
-        const thread = await client.channels.fetch(threadId);
-        if (thread) await thread.send(message);
-      } catch (e) {
-        logger.warn('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Could not send to thread: ${e.message}`);
+        await applyPartySizeScalingToRaid(raidAfter);
+      } catch (scaleErr) {
+        logger.warn('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Rescale HP on skip-remove failed: ${scaleErr.message}`);
       }
+    }
+    const nextParticipant = raidAfter ? raidAfter.getCurrentTurnParticipant() : null;
+    let nextTurnLine = '';
+    if (nextParticipant) {
+      const nextChar = await Character.findById(nextParticipant.characterId);
+      const nextIsKO = nextChar?.ko ?? false;
+      nextTurnLine = nextIsKO
+        ? `\n\n💀 **KO'd — it's your turn (**${nextParticipant.name}**).**\n\nPlease use a fairy with </item:1463789335626125378>.\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).\n\nYou have 1 minute.\n\n**New characters can join the raid now** (added at the end of turn order).`
+        : `\n\nIt's your turn (**${nextParticipant.name}**) — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`;
+    } else {
+      nextTurnLine = '\n\nNext up: No one else in the turn order (raid may be empty or everyone else is KO\'d).';
+    }
+    const skipLine = result.removed
+      ? `**${participantName}** was skipped twice and has been **removed** from the raid.`
+      : `**${participantName}** was skipped (${skipCount}/2).`;
+    const embedDescription = skipLine + nextTurnLine;
+    const content = nextParticipant ? `<@${nextParticipant.userId}>` : null;
+    const embed = new EmbedBuilder()
+      .setColor('#FFA500')
+      .setTitle('⏭️ Raid turn skipped')
+      .setDescription(embedDescription)
+      .setFooter({ text: 'Raid System' })
+      .setTimestamp();
+    const payload = { embeds: [embed] };
+    if (content) payload.content = content;
+    const threadId = raidAfter?.threadId;
+    const channelId = raidAfter?.channelId;
+    let sent = false;
+    if (client?.channels) {
+      if (threadId) {
+        try {
+          const thread = await client.channels.fetch(threadId).catch(() => null);
+          if (thread) {
+            await thread.send(payload);
+            sent = true;
+          } else {
+            logger.warn('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Thread ${threadId} not found for raid ${raidId} (archived or invalid)`);
+          }
+        } catch (e) {
+          logger.warn('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Could not send to thread ${threadId}: ${e.message}`);
+        }
+      } else {
+        logger.info('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} has no threadId, skip message not sent`);
+      }
+      if (!sent && channelId) {
+        try {
+          const channel = await client.channels.fetch(channelId).catch(() => null);
+          if (channel) {
+            await channel.send(payload);
+            sent = true;
+            logger.info('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Sent skip message to raid channel (thread unavailable) for ${raidId}`);
+          }
+        } catch (e) {
+          logger.warn('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Could not send to channel ${channelId}: ${e.message}`);
+        }
+      }
+    }
+    if (!sent) {
+      logger.warn('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} — skip message was not sent (no threadId/channelId or send failed)`);
     }
     logger.info('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} — ${participantName} skipped (${skipCount}/2)${result.removed ? ', removed' : ''}`);
   } catch (err) {
@@ -1876,7 +1953,7 @@ const TASKS = [
   
   // Raid/Village Tasks
   { name: RAID_EXPIRATION_JOB_NAME, cron: null, handler: raidExpiration }, // One-time job (scheduled per raid)
-  { name: RAID_TURN_SKIP_JOB_NAME, cron: null, handler: raidTurnSkip }, // One-time job (30s per turn)
+  { name: RAID_TURN_SKIP_JOB_NAME, cron: null, handler: raidTurnSkip }, // One-time job (1 minute per turn)
   { name: 'raid-expiration-cleanup', cron: '*/5 * * * *', handler: raidExpirationCleanup }, // Every 5 minutes
   { name: 'village-raid-quota-check', cron: '0 * * * *', handler: villageRaidQuotaCheck }, // Every hour
   { name: 'quest-completion-check', cron: '0 */6 * * *', handler: questCompletionCheck }, // Every 6 hours
