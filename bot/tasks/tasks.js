@@ -28,7 +28,7 @@ const { releaseFromJail } = require('@/utils/jailCheck');
 const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('@/modules/characterStatsModule');
 const { processMonthlyQuestRewards, processQuestCompletion } = require('@/modules/questRewardModule');
-const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME } = require('@/modules/raidModule');
+const { checkRaidExpiration, RAID_EXPIRATION_JOB_NAME, RAID_TURN_SKIP_JOB_NAME, scheduleRaidTurnSkip } = require('@/modules/raidModule');
 const { checkVillageRaidQuotas } = require('@/scripts/randomMonsterEncounters');
 const {
   postBlightRollCall,
@@ -1490,6 +1490,50 @@ async function raidExpiration(client, data = {}) {
   }
 }
 
+// ------------------- raid-turn-skip (One-time job: 30s passed without roll; skip current turn, maybe remove) -------------------
+async function raidTurnSkip(client, data = {}) {
+  try {
+    const { raidId, characterId } = data;
+    if (!raidId || !characterId) {
+      logger.error('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Missing raidId or characterId`);
+      return;
+    }
+    const raid = await Raid.findOne({ raidId, status: 'active' });
+    if (!raid || !raid.participants || raid.participants.length === 0) {
+      logger.debug('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} not active or no participants`);
+      return;
+    }
+    const idx = raid.participants.findIndex(p => p.characterId && p.characterId.toString() === characterId);
+    if (idx === -1) {
+      logger.debug('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Participant ${characterId} not in raid ${raidId} (already removed?)`);
+      return;
+    }
+    const participantName = raid.participants[idx].name;
+    const result = await raid.incrementParticipantSkipCountAndMaybeRemove(idx);
+    const skipCount = result.participant.skipCount || 1;
+    if (!result.removed) {
+      await raid.advanceTurn();
+    }
+    await scheduleRaidTurnSkip(raidId);
+    const message = result.removed
+      ? `**${participantName}** was skipped twice and has been **removed** from the raid.`
+      : `**${participantName}** was skipped (${skipCount}/2). It's the next player's turn — 30 seconds to roll.`;
+    const raidAfter = await Raid.findOne({ raidId });
+    const threadId = raidAfter?.threadId;
+    if (threadId && client?.channels) {
+      try {
+        const thread = await client.channels.fetch(threadId);
+        if (thread) await thread.send(message);
+      } catch (e) {
+        logger.warn('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Could not send to thread: ${e.message}`);
+      }
+    }
+    logger.info('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: Raid ${raidId} — ${participantName} skipped (${skipCount}/2)${result.removed ? ', removed' : ''}`);
+  } catch (err) {
+    logger.error('SCHEDULED', `${RAID_TURN_SKIP_JOB_NAME}: ${err.message}`);
+  }
+}
+
 // ------------------- raid-expiration-cleanup (Every 5 minutes: expire raids whose time has passed) -------------------
 async function raidExpirationCleanup(client, _data = {}) {
   try {
@@ -1832,6 +1876,7 @@ const TASKS = [
   
   // Raid/Village Tasks
   { name: RAID_EXPIRATION_JOB_NAME, cron: null, handler: raidExpiration }, // One-time job (scheduled per raid)
+  { name: RAID_TURN_SKIP_JOB_NAME, cron: null, handler: raidTurnSkip }, // One-time job (30s per turn)
   { name: 'raid-expiration-cleanup', cron: '*/5 * * * *', handler: raidExpirationCleanup }, // Every 5 minutes
   { name: 'village-raid-quota-check', cron: '0 * * * *', handler: villageRaidQuotaCheck }, // Every hour
   { name: 'quest-completion-check', cron: '0 */6 * * *', handler: questCompletionCheck }, // Every 6 hours

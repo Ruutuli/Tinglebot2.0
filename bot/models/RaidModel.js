@@ -95,6 +95,16 @@ const raidSchema = new mongoose.Schema({
       default: 0,
       min: 0
     },
+    roundsParticipated: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    skipCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     joinedAt: {
       type: Date,
       default: Date.now
@@ -119,6 +129,14 @@ const raidSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+
+  // Participants who left or were removed but are still eligible for loot (1+ damage or 3+ rounds)
+  lootEligibleRemoved: [{
+    characterId: { type: mongoose.Schema.Types.ObjectId, ref: 'Character' },
+    userId: { type: String },
+    name: { type: String },
+    damage: { type: Number, default: 0 }
+  }],
   
   // Analytics information
   analytics: {
@@ -257,8 +275,9 @@ raidSchema.methods.updateParticipantDamage = async function(characterId, damage,
   let retries = 0;
   while (retries < maxRetries) {
     try {
-      // Update the damage values
+      // Update the damage values and round count
       participant.damage += damage;
+      participant.roundsParticipated = (participant.roundsParticipated || 0) + 1;
       this.analytics.totalDamage += damage;
       this.analytics.averageDamagePerParticipant = this.analytics.totalDamage / this.analytics.participantCount;
       
@@ -294,6 +313,86 @@ raidSchema.methods.updateParticipantDamage = async function(characterId, damage,
   }
   
   throw new Error(`Failed to update participant damage after ${maxRetries} retries`);
+};
+
+// ---- Method: addLootEligibleRemoved ----
+// Add a participant (who left or was removed) to lootEligibleRemoved so they still receive loot on victory
+raidSchema.methods.addLootEligibleRemoved = function(participant) {
+  if (!this.lootEligibleRemoved) {
+    this.lootEligibleRemoved = [];
+  }
+  this.lootEligibleRemoved.push({
+    characterId: participant.characterId,
+    userId: participant.userId,
+    name: participant.name,
+    damage: participant.damage || 0
+  });
+};
+
+// ---- Method: removeParticipant ----
+// Remove a participant by characterId; adjust currentTurn; optionally add to lootEligibleRemoved
+// Returns { removedIndex, newCurrentTurn } for caller to use (e.g. cancel skip job)
+raidSchema.methods.removeParticipant = async function(characterId, addToLootEligibleIfEligible = false, maxRetries = 3) {
+  if (!this.participants) {
+    this.participants = [];
+  }
+  const idx = this.participants.findIndex(p => p.characterId.toString() === characterId.toString());
+  if (idx === -1) {
+    throw new Error('Participant not found in raid');
+  }
+  const participant = this.participants[idx];
+  const wasEligible = (participant.damage >= 1) || ((participant.roundsParticipated || 0) >= 3);
+  if (addToLootEligibleIfEligible && wasEligible) {
+    this.addLootEligibleRemoved(participant);
+  }
+  this.participants.splice(idx, 1);
+  this.analytics.participantCount = this.participants.length;
+  // Adjust currentTurn: if we removed someone at or before currentTurn, decrement or clamp
+  if (this.participants.length === 0) {
+    this.currentTurn = 0;
+  } else {
+    if (idx < this.currentTurn) {
+      this.currentTurn = Math.max(0, this.currentTurn - 1);
+    } else if (idx === this.currentTurn) {
+      // Removed current turn; currentTurn now points to next person (or 0 if we were last)
+      this.currentTurn = this.currentTurn % this.participants.length;
+    }
+  }
+  return await this.save();
+};
+
+// ---- Method: incrementParticipantSkipCount ----
+// Increment skipCount for participant at given index; if >= 2, remove (no loot for skip-removed, even if eligible)
+// Returns { removed: boolean, participant, newCurrentTurnIndex }
+raidSchema.methods.incrementParticipantSkipCountAndMaybeRemove = async function(participantIndex, maxRetries = 3) {
+  if (!this.participants || participantIndex < 0 || participantIndex >= this.participants.length) {
+    throw new Error('Invalid participant index');
+  }
+  const participant = this.participants[participantIndex];
+  participant.skipCount = (participant.skipCount || 0) + 1;
+  const removed = participant.skipCount >= 2;
+  if (removed) {
+    // Skip-removed players receive NO loot, even if they met 1+ damage or 3+ rounds
+    this.participants.splice(participantIndex, 1);
+    this.analytics.participantCount = this.participants.length;
+    let newCurrentTurn = this.currentTurn;
+    if (this.participants.length === 0) {
+      newCurrentTurn = 0;
+    } else {
+      if (participantIndex < this.currentTurn) {
+        newCurrentTurn = this.currentTurn - 1;
+      } else if (participantIndex === this.currentTurn) {
+        newCurrentTurn = this.currentTurn % this.participants.length;
+      } else {
+        newCurrentTurn = this.currentTurn;
+      }
+    }
+    this.currentTurn = newCurrentTurn;
+    await this.save();
+    return { removed: true, participant, newCurrentTurnIndex: newCurrentTurn };
+  }
+  await this.save();
+  return { removed: false, participant, newCurrentTurnIndex: this.currentTurn };
 };
 
 // ---- Method: advanceTurn ----

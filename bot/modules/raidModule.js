@@ -49,6 +49,11 @@ const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (Discord allows: 1, 3, 7,
 /** Agenda job name for one-time raid expiration (used by scheduler and raidModule) */
 const RAID_EXPIRATION_JOB_NAME = 'raid-expiration';
 
+/** Agenda job name for 30s turn skip (when current player doesn't roll in time) */
+const RAID_TURN_SKIP_JOB_NAME = 'raid-turn-skip';
+
+const RAID_TURN_SKIP_SECONDS = 30;
+
 // Village resident role IDs
 const VILLAGE_RESIDENT_ROLES = {
   'Rudania': '907344585238409236',
@@ -674,6 +679,15 @@ async function joinRaid(character, raidId, options = {}) {
     }
 
     console.log(`[raidModule.js]: 👤 ${character.name} joined raid ${raidId}`);
+
+    // First participant: start the 30s roll timer for their turn
+    if (raid.participants.length === 1) {
+      try {
+        await scheduleRaidTurnSkip(raidId);
+      } catch (skipErr) {
+        logger.warn('RAID', `Failed to schedule first turn skip for ${raidId}: ${skipErr.message}`);
+      }
+    }
     
     return {
       raidId,
@@ -690,6 +704,68 @@ async function joinRaid(character, raidId, options = {}) {
     console.error(`[raidModule.js]: ❌ Error joining raid:`, error);
     throw error;
   }
+}
+
+// ---- Function: scheduleRaidTurnSkip ----
+// Schedules a one-time job in 30s to skip the current turn if they don't roll
+async function scheduleRaidTurnSkip(raidId) {
+  const scheduler = require('@/utils/scheduler');
+  const raid = await Raid.findOne({ raidId, status: 'active' });
+  if (!raid || !raid.participants || raid.participants.length === 0) return;
+  const current = await raid.getEffectiveCurrentTurnParticipant();
+  if (!current) return;
+  const when = new Date(Date.now() + RAID_TURN_SKIP_SECONDS * 1000);
+  await scheduler.scheduleOneTimeJob(RAID_TURN_SKIP_JOB_NAME, when, {
+    raidId,
+    characterId: current.characterId.toString()
+  });
+  logger.info('RAID', `Scheduled turn skip for ${raidId} in ${RAID_TURN_SKIP_SECONDS}s (${current.name})`);
+}
+
+// ---- Function: cancelRaidTurnSkip ----
+async function cancelRaidTurnSkip(raidId) {
+  const scheduler = require('@/utils/scheduler');
+  const n = await scheduler.cancelJob(RAID_TURN_SKIP_JOB_NAME, { raidId });
+  if (n > 0) logger.info('RAID', `Cancelled ${n} turn-skip job(s) for raid ${raidId}`);
+}
+
+// ---- Function: leaveRaid ----
+// Player voluntarily leaves; monster HP reverts by their damage; eligible for loot if 1+ damage or 3+ rounds
+async function leaveRaid(character, raidId, options = {}) {
+  const raid = await Raid.findOne({ raidId });
+  if (!raid) throw new Error('Raid not found');
+  if (raid.status !== 'active') throw new Error('Raid is not active');
+  const participants = raid.participants || [];
+  const participant = participants.find(p => p.characterId.toString() === character._id.toString());
+  if (!participant) throw new Error('Character is not in this raid');
+
+  const currentTurnParticipant = await raid.getEffectiveCurrentTurnParticipant();
+  const wasCurrentTurn = currentTurnParticipant && currentTurnParticipant.characterId.toString() === character._id.toString();
+
+  // Revert monster HP by this participant's damage
+  const damage = participant.damage || 0;
+  raid.monster.currentHearts = Math.min(raid.monster.maxHearts, (raid.monster.currentHearts || 0) + damage);
+  raid.analytics.totalDamage = Math.max(0, (raid.analytics.totalDamage || 0) - damage);
+
+  const eligibleForLoot = (participant.damage >= 1) || ((participant.roundsParticipated || 0) >= 3);
+  await raid.removeParticipant(character._id, eligibleForLoot);
+
+  if (wasCurrentTurn) {
+    await cancelRaidTurnSkip(raidId);
+    // Optionally schedule 30s for new current turn
+    const freshRaid = await Raid.findOne({ raidId, status: 'active' });
+    if (freshRaid && freshRaid.participants && freshRaid.participants.length > 0) {
+      await scheduleRaidTurnSkip(raidId);
+    }
+  }
+
+  const freshRaid = await Raid.findOne({ raidId, status: 'active' });
+  let nextTurnMention = null;
+  if (freshRaid && freshRaid.participants && freshRaid.participants.length > 0) {
+    const next = await freshRaid.getEffectiveCurrentTurnParticipant();
+    if (next) nextTurnMention = `<@${next.userId}>`;
+  }
+  return { eligibleForLoot, nextTurnMention };
 }
 
 // ---- Function: processRaidTurn ----
@@ -713,6 +789,9 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     if (raid.status !== 'active') {
       throw new Error('Raid is not active');
     }
+
+    // Cancel 30s skip job for this raid (current player is rolling)
+    await cancelRaidTurnSkip(raidId);
 
     // Find participant
     const participants = raid.participants || [];
@@ -799,7 +878,12 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           
           // Advance to next turn if monster is not defeated
           await raid.advanceTurn();
-          // Turn advancement logged only in debug mode
+          // Schedule 30s skip for the new current turn
+          try {
+            await scheduleRaidTurnSkip(raidId);
+          } catch (skipErr) {
+            logger.warn('RAID', `Failed to schedule turn skip after turn for ${raidId}: ${skipErr.message}`);
+          }
         }
 
         // Save updated raid data
@@ -1326,6 +1410,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
 module.exports = {
   startRaid,
   joinRaid,
+  leaveRaid,
   processRaidTurn,
   processRaidBattle,
   checkRaidExpiration,
@@ -1333,5 +1418,7 @@ module.exports = {
   createRaidThread,
   triggerRaid,
   calculateRaidDuration,
-  RAID_EXPIRATION_JOB_NAME
+  scheduleRaidTurnSkip,
+  RAID_EXPIRATION_JOB_NAME,
+  RAID_TURN_SKIP_JOB_NAME
 };

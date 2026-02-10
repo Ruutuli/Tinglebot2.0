@@ -114,8 +114,15 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             />
           </div>
           <div className="item-header-info modern-item-header-info">
-            <div className="item-name-row">
+            <div className="item-name-row flex items-center gap-2">
               <span className="item-name-big">{monster.name}</span>
+              {monster.bloodmoon && (
+                <i
+                  className="fas fa-moon text-[var(--blight-border)] text-sm"
+                  title="Appears during Blood Moon"
+                  aria-hidden
+                />
+              )}
             </div>
             <div className="item-slot-row">
               <span className="item-slot-label">{monster.species}</span>
@@ -193,8 +200,15 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             />
           </div>
           <div className="item-header-info modern-item-header-info">
-            <div className="item-name-row">
+            <div className="item-name-row flex items-center gap-2">
               <span className="item-name-big">{monster.name}</span>
+              {monster.bloodmoon && (
+                <i
+                  className="fas fa-moon text-[var(--blight-border)] text-sm"
+                  title="Appears during Blood Moon"
+                  aria-hidden
+                />
+              )}
             </div>
             <div className="item-section-label modern-item-section-label">
               <i className="fas fa-gift" aria-hidden="true"></i> Drops

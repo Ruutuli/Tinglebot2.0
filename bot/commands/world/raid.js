@@ -4,7 +4,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
-const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
+const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed } = require('../../embeds/embeds.js');
 const Raid = require('@/models/RaidModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
@@ -104,11 +104,11 @@ const UNIVERSAL_RAID_ROLE = '1205321558671884328';
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('raid')
-    .setDescription('Join and participate in a raid')
+    .setDescription('Join a raid or take your turn. New joiners are added at the end of turn order.')
     .addStringOption(option =>
       option
         .setName('raidid')
-        .setDescription('The ID of the raid to join')
+        .setDescription('The ID of the raid')
         .setRequired(true)
         .setAutocomplete(true)
     )
@@ -118,12 +118,79 @@ module.exports = {
         .setDescription('The name of your character')
         .setRequired(true)
         .setAutocomplete(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('action')
+        .setDescription('Join/take turn (default) or leave the raid')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Leave raid', value: 'leave' }
+        )
     ),
 
   // ============================================================================
   // ---- Command Execution ----
   // ============================================================================
   async execute(interaction) {
+    try {
+      const action = interaction.options.getString('action');
+      if (action === 'leave') {
+        return await this.handleLeave(interaction);
+      }
+      return await this.handleJoin(interaction);
+    } catch (error) {
+      await handleInteractionError(error, interaction, {
+        source: 'raid.js',
+        raidId: interaction.options.getString('raidid'),
+        characterName: interaction.options.getString('charactername')
+      });
+    }
+  },
+
+  // ============================================================================
+  // ---- handleLeave ----
+  // ============================================================================
+  async handleLeave(interaction) {
+    await interaction.deferReply();
+    let raidId = interaction.options.getString('raidid');
+    const characterName = interaction.options.getString('charactername');
+    const userId = interaction.user.id;
+    if (raidId.includes(' | ')) raidId = raidId.split(' | ')[0];
+
+    const character = await fetchAnyCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      return interaction.editReply({
+        content: `❌ Character "${characterName}" not found or doesn't belong to you.`,
+        ephemeral: true
+      });
+    }
+
+    try {
+      const result = await leaveRaid(character, raidId, { client: interaction.client });
+      const embed = new EmbedBuilder()
+        .setColor('#00FF00')
+        .setTitle('Left raid')
+        .setDescription(`**${character.name}** has left the raid.${result.eligibleForLoot ? ' They will still receive loot if the raid succeeds (1+ damage or 3+ rounds).' : ''}`)
+        .addFields(
+          { name: 'Raid ID', value: `\`${raidId}\``, inline: false }
+        )
+        .setFooter({ text: 'Raid System' })
+        .setTimestamp();
+      let content = result.nextTurnMention ? `It's your turn, ${result.nextTurnMention}` : null;
+      return interaction.editReply({ content, embeds: [embed] });
+    } catch (err) {
+      return interaction.editReply({
+        content: `❌ **Leave failed:** ${err.message}`,
+        ephemeral: true
+      });
+    }
+  },
+
+  // ============================================================================
+  // ---- handleJoin (join + take turn) ----
+  // ============================================================================
+  async handleJoin(interaction) {
     try {
       await interaction.deferReply();
 
@@ -360,14 +427,22 @@ module.exports = {
           });
         }
       } else {
-        // Character already in raid logged only in debug mode
+        // Character already in raid
       }
 
-      // Log turn order info for debugging (but don't enforce)
-      const currentTurnParticipant = updatedRaidData.getCurrentTurnParticipant();
-      // Turn processing details logged only in debug mode
+      // ------------------- Strict turn order: only the current turn may roll -------------------
+      const effectiveCurrentTurnParticipant = await updatedRaidData.getEffectiveCurrentTurnParticipant();
+      if (!effectiveCurrentTurnParticipant || effectiveCurrentTurnParticipant.characterId.toString() !== character._id.toString()) {
+        const whoseTurn = effectiveCurrentTurnParticipant
+          ? `It's **${effectiveCurrentTurnParticipant.name}**'s turn. <@${effectiveCurrentTurnParticipant.userId}> — you have 30 seconds to roll.`
+          : 'No valid turn order.';
+        return interaction.editReply({
+          content: `❌ **Not your turn.** Only one person rolls at a time, in order.\n\n${whoseTurn}`,
+          ephemeral: true
+        });
+      }
 
-      // Process the raid turn
+      // Process the raid turn (cancel any pending skip job for this raid; raidModule will schedule new 30s after)
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
       // Create embed for the turn result using the updated raid data from turnResult
@@ -399,16 +474,16 @@ module.exports = {
         return;
       }
       
-      // Send the turn result embed without user mention
-      const response = { embeds: [embed] };
-      
-      // Add blight rain message if present
-      if (blightRainMessage) {
-        response.content = blightRainMessage;
+      // Send the turn result embed and @mention the next player (30 seconds to roll)
+      const nextParticipant = await turnResult.raidData.getEffectiveCurrentTurnParticipant();
+      const mentionParts = [];
+      if (blightRainMessage) mentionParts.push(blightRainMessage);
+      if (nextParticipant) {
+        mentionParts.push(`It's your turn, <@${nextParticipant.userId}> — you have 30 seconds to roll.`);
       }
-      
+      const response = { embeds: [embed] };
+      if (mentionParts.length) response.content = mentionParts.join('\n\n');
       return interaction.editReply(response);
-
     } catch (error) {
       await handleInteractionError(error, interaction, {
         source: 'raid.js',
@@ -600,7 +675,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: 'Want to join in?',
-        value: 'Use </raid:1433351189269053455> to join!',
+        value: 'Use `/raid` to join (new players are added at the end of turn order).',
         inline: false
       },
 
@@ -609,7 +684,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ 
-      text: `Raid ID: ${raidId} • Use /raid to take your turn! • Use /item to heal characters!` 
+      text: `Raid ID: ${raidId} • Use /raid to take your turn (30s per turn)! • Use /item to heal!` 
     })
     .setTimestamp();
 
@@ -626,24 +701,29 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
 }
 
 // ---- Function: handleRaidVictory ----
-// Handles raid victory with loot distribution for all participants
-// Includes error handling that skips failed characters and notifies mods
+// Handles raid victory with loot distribution for eligible participants only
+// Eligible: 1+ damage OR 3+ rounds participated; plus anyone in lootEligibleRemoved (left/removed but was eligible)
 async function handleRaidVictory(interaction, raidData, monster) {
   try {
     const participants = raidData.participants || [];
-    console.log(`[raid.js]: 🎉 Raid victory! Processing loot for ${participants.length} participants`);
+    const lootEligibleRemoved = raidData.lootEligibleRemoved || [];
+    const eligibleParticipants = participants.filter(
+      p => (p.damage >= 1) || ((p.roundsParticipated || 0) >= 3)
+    );
+    const lootRecipients = [...eligibleParticipants, ...lootEligibleRemoved];
+    console.log(`[raid.js]: 🎉 Raid victory! Processing loot for ${lootRecipients.length} eligible recipients (${eligibleParticipants.length} in raid, ${lootEligibleRemoved.length} left/removed)`);
     
     // Fetch items for the monster
     const items = await fetchItemsByMonster(monster.name);
     
-    // Process loot for each participant
+    // Process loot for each eligible recipient only
     const lootResults = [];
     const failedCharacters = [];
     const blightedCharacters = [];
     const Character = require('@/models/CharacterModel');
     const User = require('@/models/UserModel');
     
-    for (const participant of participants) {
+    for (const participant of lootRecipients) {
       try {
         // Fetch the character's current data - check both regular and mod characters
         let character = await Character.findById(participant.characterId);
@@ -792,8 +872,11 @@ async function handleRaidVictory(interaction, raidData, monster) {
       }
     }
     
-    // Create participant list
+    // Create participant list (current participants; loot went to eligible only: 1+ damage or 3+ rounds, plus left/removed eligible)
     const participantList = participants.map(p => `• **${p.name}** (${p.damage} hearts)`).join('\n');
+    const leftEligibleList = lootEligibleRemoved.length > 0
+      ? '\n*Also received loot (left/removed but eligible):* ' + lootEligibleRemoved.map(p => p.name).join(', ')
+      : '';
     
     // Get monster image from monsterMapping
     const { monsterMapping } = require('@/models/MonsterModel');
@@ -810,7 +893,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
         value: truncateEmbedField(`🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000 / 60)}m`),
         inline: false
       },
-      ...splitIntoEmbedFields(participantList || 'No participants found.', '__Participants__'),
+      ...splitIntoEmbedFields((participantList || 'No participants found.') + leftEligibleList, '__Participants__'),
       ...splitIntoEmbedFields(lootText, '__Loot Distribution__')
     ];
     const victoryEmbed = new EmbedBuilder()
