@@ -2863,11 +2863,11 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
     }
   );
 
-  // Teacher Crafting: 2-voucher rule (1 at accept, 1 when boosted person crafts)
+  // Teacher Crafting: booster must manually activate both vouchers
   if (requestData.category === 'Crafting' && (requestData.boosterJob || '').toString().toLowerCase() === 'teacher') {
     fields.push({
       name: '📌 **Note**',
-      value: '> This boost uses 2 job vouchers from the booster: one when they accept, and one when the crafting character uses the stamina assistance (removed from the booster at craft time).',
+      value: '> The booster must **manually activate both** job vouchers: one to accept (e.g. use a voucher to be Teacher), and one before the crafting character uses stamina assistance (run `/boosting use-second-voucher`).',
       inline: false
     });
   }
@@ -3045,11 +3045,11 @@ const createBoostAppliedEmbed = (boostData) => {
       inline: true
     }
   ];
-  // Teacher Crafting: 2-voucher rule (1 at accept, 1 when boosted person crafts)
+  // Teacher Crafting: booster must manually activate both vouchers
   if (boostData.category === 'Crafting' && (boostData.boosterJob || '').toString().toLowerCase() === 'teacher') {
     appliedFields.push({
       name: '📌 **Note**',
-      value: '> This boost uses 2 job vouchers from the booster: one when they accept, and one when the crafting character uses the stamina assistance (removed from the booster at craft time).',
+      value: '> The booster must **manually activate both** job vouchers: one to accept (e.g. use a voucher to be Teacher), and one before the crafting character uses stamina assistance (run `/boosting use-second-voucher`).',
       inline: false
     });
   }

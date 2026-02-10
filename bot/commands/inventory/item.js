@@ -532,6 +532,17 @@ module.exports = {
         }
         await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction, `Used for job voucher: ${jobName}`);
 
+        // If this character is the booster of an active Teacher Crafting boost, mark second voucher as used (they used the standard command twice)
+        const jobNameNormalized = (jobName || '').trim().toLowerCase();
+        if (jobNameNormalized === 'teacher') {
+          const { retrieveBoostingRequestFromTempDataByBooster, saveBoostingRequestToTempData } = require('../jobs/boosting');
+          const activeBoost = await retrieveBoostingRequestFromTempDataByBooster(character.name);
+          if (activeBoost && activeBoost.category === 'Crafting' && !activeBoost.boosterUsedSecondVoucher) {
+            activeBoost.boosterUsedSecondVoucher = true;
+            await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+          }
+        }
+
         // ------------------- Build and Send Voucher Embed -------------------
         const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
         const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';

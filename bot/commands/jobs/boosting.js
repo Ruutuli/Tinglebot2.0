@@ -633,6 +633,31 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
   }
 }
 
+/**
+ * Find the active (accepted, not expired) boost where the given character is the booster.
+ */
+async function retrieveBoostingRequestFromTempDataByBooster(boosterCharacterName) {
+  try {
+    const allBoostingData = await TempData.findAllByType('boosting');
+    const currentTime = Date.now();
+    for (const tempData of allBoostingData) {
+      const requestData = tempData.data;
+      if (
+        requestData.boostingCharacter === boosterCharacterName &&
+        requestData.status === 'accepted' &&
+        requestData.boostExpiresAt &&
+        currentTime <= requestData.boostExpiresAt
+      ) {
+        return requestData;
+      }
+    }
+    return null;
+  } catch (error) {
+    logger.error('BOOST', `Error retrieving active boost by booster ${boosterCharacterName}:`, error);
+    return null;
+  }
+}
+
 // ============================================================================
 // ------------------- Boost Utility Functions -------------------
 // ============================================================================
@@ -1110,26 +1135,7 @@ async function handleBoostAccept(interaction) {
   }
  }
 
- // Teacher Crafting: booster uses 1st job voucher when accepting (2nd used when boosted person crafts)
- if (requestData.category === 'Crafting' && boosterJob === 'Teacher') {
-  const invCollection = await getCharacterInventoryCollection(booster.name);
-  const inv = await invCollection.find().toArray();
-  const jobVoucherCount = (inv || [])
-   .filter(entry => entry.itemName && entry.itemName.trim().toLowerCase() === 'job voucher')
-   .reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
-  if (jobVoucherCount < 1) {
-   const voucherError = getJobVoucherErrorMessage('BOOSTER_NEEDS_ONE_VOUCHER_AT_ACCEPT', { boosterName: booster.name });
-   const voucherEmbed = new EmbedBuilder()
-    .setTitle(voucherError.title)
-    .setDescription(voucherError.description)
-    .addFields((voucherError.fields || []).map(f => ({ name: f.name, value: f.value, inline: f.inline })))
-    .setColor(voucherError.color || '#FF0000')
-    .setTimestamp();
-   await interaction.reply({ embeds: [voucherEmbed], ephemeral: true });
-   return;
-  }
-  await removeItemInventoryDatabase(booster._id, 'Job Voucher', 1, interaction, 'Used for Teacher Crafting boost (1st voucher, at accept)');
- }
+ // Teacher Crafting: both vouchers are manually activated by the booster (no automatic removal at accept)
 
  // Deduct 1 stamina from the booster character
  try {
@@ -2759,6 +2765,7 @@ module.exports.isBoostActive = isBoostActive;
 module.exports.getActiveBoostEffect = getActiveBoostEffect;
 module.exports.getRemainingBoostTime = getRemainingBoostTime;
 module.exports.retrieveBoostingRequestFromTempDataByCharacter = retrieveBoostingRequestFromTempDataByCharacter;
+module.exports.retrieveBoostingRequestFromTempDataByBooster = retrieveBoostingRequestFromTempDataByBooster;
 module.exports.saveBoostingRequestToTempData = saveBoostingRequestToTempData;
 module.exports.retrieveBoostingRequestFromTempData = retrieveBoostingRequestFromTempData;
 module.exports.clearBoostAfterUse = clearBoostAfterUse;

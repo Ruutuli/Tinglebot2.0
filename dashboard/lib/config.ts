@@ -7,10 +7,14 @@ import type { NextRequest } from "next/server";
 
 /**
  * Get the app base URL from an incoming request (origin: protocol + host).
- * Use this in auth routes so redirects stay on the same origin the user is on
- * (e.g. localhost:6001 when testing locally, even if DOMAIN or callback URLs are set for production).
+ * In development we use the configured app URL so logout/auth redirects go to the
+ * correct host/port (e.g. localhost:6001), not a wrong origin like localhost:8080.
+ * In production we use the request origin so redirects stay on the same host.
  */
 export function getAppUrlFromRequest(request: NextRequest): string {
+  if (process.env.NODE_ENV === "development") {
+    return getAppUrl();
+  }
   const url = request.nextUrl ?? new URL(request.url);
   const origin = url.origin;
   if (origin) return origin;

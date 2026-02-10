@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { useSession } from "@/hooks/use-session";
 import { Loading, Tabs } from "@/components/ui";
@@ -200,6 +200,7 @@ type QuestRecord = {
   title?: string;
   questID?: string;
   date?: string;
+  createdAt?: string;
   questType?: string;
   status?: string;
   posted?: boolean;
@@ -214,6 +215,25 @@ type QuestRecord = {
   participantCap?: number | null;
   [key: string]: unknown;
 };
+
+/** Parse quest date (e.g. "January 2026" or "2026-01") to a sortable string YYYY-MM, or use createdAt. */
+function getQuestSortKey(q: QuestRecord): string {
+  const dateStr = String(q.date ?? "").trim();
+  if (dateStr) {
+    const yyyyMm = parseDateToYYYYMM(dateStr);
+    if (yyyyMm) return yyyyMm;
+  }
+  const created = q.createdAt;
+  if (created) {
+    try {
+      const d = new Date(created);
+      if (!Number.isNaN(d.getTime())) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      }
+    } catch { /* ignore */ }
+  }
+  return "0000-00";
+}
 
 function isQuestPosted(q: QuestRecord): boolean {
   if (q.posted === true) return true;
@@ -798,6 +818,15 @@ export default function AdminQuestsPage() {
   const [previewPosting, setPreviewPosting] = useState(false);
   const [viewPreviewPosting, setViewPreviewPosting] = useState(false);
   const [tablerollNames, setTablerollNames] = useState<string[]>([]);
+  const [sortDateOrder, setSortDateOrder] = useState<"newest" | "oldest">("newest");
+
+  const sortedQuests = useMemo(() => {
+    const key = (q: QuestRecord) => getQuestSortKey(q) + (q.createdAt ?? "");
+    return [...quests].sort((a, b) => {
+      const cmp = key(a).localeCompare(key(b));
+      return sortDateOrder === "newest" ? -cmp : cmp;
+    });
+  }, [quests, sortDateOrder]);
 
   useEffect(() => {
     fetch("/api/models/tablerolls")
@@ -1535,10 +1564,23 @@ export default function AdminQuestsPage() {
 
         {activeTab === "list" && (
           <section className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-5 sm:p-6 shadow-lg">
-          <h2 className="mb-2 text-xl font-semibold text-[var(--totk-ivory)]">View / Edit quests</h2>
-          <p className="mb-4 text-sm text-[var(--totk-grey-200)]">
-            Click <strong>Edit</strong> to load a quest into the Create tab and update it.
-          </p>
+            <h2 className="mb-2 text-xl font-semibold text-[var(--totk-ivory)]">View / Edit quests</h2>
+            <p className="mb-4 text-sm text-[var(--totk-grey-200)]">
+              Click a title to view, or <strong>Edit</strong> to load a quest into the Create tab and update it.
+            </p>
+            {quests.length > 0 && (
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                <label className="text-sm font-medium text-[var(--totk-grey-200)]">Sort by date:</label>
+                <select
+                  value={sortDateOrder}
+                  onChange={(e) => setSortDateOrder(e.target.value as "newest" | "oldest")}
+                  className="rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-sm text-[var(--totk-ivory)]"
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </div>
+            )}
           {quests.length === 0 ? (
             <div className="rounded-lg border-2 border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-8 text-center">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[var(--totk-dark-ocher)]/20 mb-3">
@@ -1562,7 +1604,7 @@ export default function AdminQuestsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {quests.map((q) => (
+                  {sortedQuests.map((q) => (
                     <tr key={String(q._id)} className="border-b border-[var(--totk-dark-ocher)]/30 hover:bg-[var(--totk-dark-ocher)]/10 transition-colors">
                       <td className="py-3 pl-4 pr-3">
                         <button
