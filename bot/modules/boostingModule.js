@@ -860,7 +860,8 @@ async function applyEntertainerGatheringBoost(regionItems) {
   }
  });
 
- return mergedItems;
+ // Only return items that explicitly have entertainerItems === true (no weapons or non-marked items)
+ return mergedItems.filter((item) => item && item.entertainerItems === true);
 }
 
 function applyEntertainerHealingBoost(baseHealing, wasKO) {

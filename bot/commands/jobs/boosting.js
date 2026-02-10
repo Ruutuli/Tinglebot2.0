@@ -1220,7 +1220,7 @@ async function handleBoostAccept(interaction) {
   const embed = createBoostAppliedEmbed(embedData);
 
  const sent = await interaction.reply({
-  content: `Boost accepted and is now active for 24 hours!`,
+  content: `Boost accepted and is now active for 24 hours or until used!`,
   embeds: [embed],
  });
 
@@ -1478,7 +1478,7 @@ async function handleBoostOther(interaction) {
     inline: true,
    },
   ],
-  footer: "Boosts last 24 hours once accepted.",
+  footer: "Boosts last 24 hours once accepted, or until used.",
  });
 
  await interaction.reply({
@@ -2752,12 +2752,8 @@ async function clearBoostAfterUse(character, options = {}) {
     return { success: true, cleared: false };
   }
 
-  // Only clear boosts that are "consumed on use" (Other category)
-  // Duration-based boosts (Gathering, Crafting, Looting, etc.) should remain active for 24h
-  if (activeBoost && activeBoost.category !== 'Other') {
-    logger.debug('BOOST', `Boost preserved for ${character.name} (category: ${activeBoost.category}) - duration-based${context ? ` (${context})` : ''}`);
-    return { success: true, cleared: false };
-  }
+  // Boosts remain active for 24h OR until used (one use per boost).
+  // When the boosted character uses the action (gather, loot, craft, etc.), the boost is consumed and cleared.
 
   try {
     logger.info('BOOST', `Clearing boost for ${character.name}${context ? ` (${context})` : ''}`);

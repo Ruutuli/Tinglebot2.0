@@ -19,6 +19,7 @@ import { MessageBanner } from "./components/MessageBanner";
 import { ModelSelector } from "./components/ModelSelector";
 import { FIELD_OPTIONS } from "./constants/field-options";
 import { MODEL_CONFIGS, getModelConfig } from "./config/model-configs";
+import { getItemId } from "./utils/id";
 import { capitalize } from "@/lib/string-utils";
 
 // ============================================================================
@@ -389,7 +390,7 @@ export default function AdminDatabasePage() {
         );
       }
 
-      const item = items.find((i) => i._id === itemId);
+      const item = items.find((i) => getItemId(i._id) === itemId);
       const nameField = modelConfig?.nameField || "name";
       const itemName = item?.[nameField] || "item";
       setSuccessMessage(`✓ Successfully saved "${String(itemName)}"!`);
@@ -675,7 +676,7 @@ export default function AdminDatabasePage() {
                   setShowEditModal(false);
                   setEditingItem(null);
                 }}
-                saving={savingItemId === editingItem._id}
+                saving={savingItemId === getItemId(editingItem._id)}
                 onClose={() => {
                   setShowEditModal(false);
                   setEditingItem(null);
@@ -685,16 +686,16 @@ export default function AdminDatabasePage() {
               <GenericEditorForm
                 item={editingItem}
                 modelConfig={modelConfig}
-                items={selectedModel === "Item" ? items.map((item) => ({ 
-                  _id: item._id, 
-                  itemName: String(item.itemName || item[modelConfig.nameField] || "") 
+                items={selectedModel === "Item" ? items.map((item) => ({
+                  _id: item._id,
+                  itemName: String(item.itemName || item[modelConfig.nameField] || "")
                 })) : []}
                 onSave={async (itemId, updates) => {
                   await handleSaveItem(itemId, updates);
                   setShowEditModal(false);
                   setEditingItem(null);
                 }}
-                saving={savingItemId === editingItem._id}
+                saving={savingItemId === getItemId(editingItem._id)}
                 onClose={() => {
                   setShowEditModal(false);
                   setEditingItem(null);

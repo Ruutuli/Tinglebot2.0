@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Tabs } from "@/components/ui/tabs";
 import type { ModelConfig, FieldConfig } from "../types/model-types";
+import { getItemId } from "../utils/id";
 import { FieldRenderer } from "./FieldRenderer";
 import { ToggleGrid } from "./ToggleGrid";
 import { PET_TYPE_DATA } from "../constants/pet-type-data";
@@ -240,7 +241,7 @@ export function GenericEditorForm({
 
   // Handle save
   const handleSave = useCallback(async () => {
-    const itemId = String(item._id || "");
+    const itemId = getItemId(item._id);
     if (!itemId) {
       console.error("No item ID found");
       return;

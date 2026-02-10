@@ -348,15 +348,26 @@ export async function PUT(req: NextRequest) {
 
     // ------------------- Parse Request Body -------------------
     const body = await req.json().catch(() => ({}));
-    const { itemId, updates, model: modelName } = body as {
-      itemId?: string;
+    const { itemId: rawItemId, updates, model: modelName } = body as {
+      itemId?: string | { $oid?: string; oid?: string };
       updates?: Record<string, unknown>;
       model?: string;
     };
 
-    if (!itemId || typeof itemId !== "string") {
+    // Normalize itemId: accept string or ObjectId-like object; reject "[object Object]"
+    let itemId: string;
+    if (typeof rawItemId === "string" && rawItemId) {
+      itemId = rawItemId;
+    } else if (rawItemId && typeof rawItemId === "object") {
+      const oid = (rawItemId as { $oid?: string; oid?: string }).$oid ?? (rawItemId as { $oid?: string; oid?: string }).oid;
+      if (typeof oid === "string" && oid) itemId = oid;
+      else itemId = "";
+    } else {
+      itemId = "";
+    }
+    if (!itemId || itemId === "[object Object]") {
       return NextResponse.json(
-        { error: "Item ID is required" },
+        { error: "Item ID is required and must be a valid ID string" },
         { status: 400 }
       );
     }

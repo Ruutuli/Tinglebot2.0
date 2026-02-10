@@ -341,6 +341,46 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (modSubcommand === "add" && focusedOption.name === "quest_id") {
                   await handleModQuestAddQuestIdAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommandGroup === "reset") {
+                if (modSubcommand === "rolls") {
+                  if (focusedOption.name === "character") {
+                    await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+                  }
+                } else if (modSubcommand === "vending") {
+                  if (focusedOption.name === "character") {
+                    await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+                  }
+                } else if (modSubcommand === "steal") {
+                  if (focusedOption.name === "character") {
+                    try {
+                      const allCharacters = await fetchAllCharacters();
+                      const focusedValue = focusedOption?.value?.toString().toLowerCase() || "";
+
+                      let choices = allCharacters.map((char) => ({
+                        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                        value: char.name,
+                      }));
+
+                      const npcChoice = { name: 'NPC (Reset all NPC cooldowns)', value: 'NPC' };
+
+                      choices = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
+
+                      if (!focusedValue || 'npc'.startsWith(focusedValue) || npcChoice.name.toLowerCase().includes(focusedValue)) {
+                        choices = [npcChoice, ...choices];
+                      }
+
+                      await interaction.respond(choices.slice(0, 25));
+                    } catch (error) {
+                      try { await interaction.respond([]); } catch (_) {}
+                    }
+                  }
+                } else if (modSubcommand === "petrolls") {
+                  if (focusedOption.name === "character") {
+                    await handleModPetLevelCharacterAutocomplete(interaction, focusedOption);
+                  } else if (focusedOption.name === "petname") {
+                    await handleModPetLevelPetNameAutocomplete(interaction, focusedOption);
+                  }
+                }
               } else if (modSubcommand === "give") {
                 if (focusedOption.name === "character") {
                   await handleModGiveCharacterAutocomplete(interaction, focusedOption);
@@ -353,50 +393,6 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 } else if (focusedOption.name === "petname") {
                   await handleModPetLevelPetNameAutocomplete(interaction, focusedOption);
                 }
-              } else if (modSubcommand === "forceresetpetrolls") {
-                if (focusedOption.name === "character") {
-                  await handleModPetLevelCharacterAutocomplete(interaction, focusedOption);
-                } else if (focusedOption.name === "petname") {
-                  await handleModPetLevelPetNameAutocomplete(interaction, focusedOption);
-                }
-              } else if (modSubcommand === "resetrolls") {
-                if (focusedOption.name === "character") {
-                  await handleModGiveCharacterAutocomplete(interaction, focusedOption);
-                }
-              } else if (modSubcommand === "vendingreset") {
-                if (focusedOption.name === "character") {
-                  await handleModGiveCharacterAutocomplete(interaction, focusedOption);
-                }
-          } else if (modSubcommand === "stealreset") {
-            if (focusedOption.name === "character") {
-              try {
-                // Fetch all characters for moderator targeting
-                const allCharacters = await fetchAllCharacters();
-                const focusedValue = focusedOption?.value?.toString().toLowerCase() || "";
-
-                // Map characters to choices
-                let choices = allCharacters.map((char) => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name,
-                }));
-
-                // Always include a special NPC option to reset all NPC cooldowns
-                const npcChoice = { name: 'NPC (Reset all NPC cooldowns)', value: 'NPC' };
-
-                // Filter choices based on user input
-                choices = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
-
-                // Prepend NPC option if it matches filter or if input is empty/starts with 'npc'
-                if (!focusedValue || 'npc'.startsWith(focusedValue) || npcChoice.name.toLowerCase().includes(focusedValue)) {
-                  choices = [npcChoice, ...choices];
-                }
-
-                // Limit to 25 results
-                await interaction.respond(choices.slice(0, 25));
-              } catch (error) {
-                try { await interaction.respond([]); } catch (_) {}
-              }
-            }
               } else if (modSubcommand === "shopadd") {
                 if (focusedOption.name === "itemname") {
                   await handleModGiveItemAutocomplete(interaction, focusedOption);

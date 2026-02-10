@@ -13,6 +13,7 @@ import { ToggleGrid } from "./components/ToggleGrid";
 import { SelectField } from "./components/SelectField";
 import { MultiSelectField } from "./components/MultiSelectField";
 import { CraftingMaterialsField } from "./components/CraftingMaterialsField";
+import { getItemId } from "./utils/id";
 
 type Item = {
   _id: string;
@@ -470,7 +471,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
     Object.keys(changes).forEach((key) => {
       updates[key as keyof ItemFormData] = formData[key as keyof ItemFormData];
     });
-    await onSave(item._id, updates);
+    await onSave(getItemId(item._id), updates);
   }, [changes, formData, item._id, onSave]);
 
   // Reset Changes
