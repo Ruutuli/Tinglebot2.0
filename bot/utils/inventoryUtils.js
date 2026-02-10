@@ -151,24 +151,24 @@ async function syncToInventoryDatabase(character, item, interaction) {
       const positiveEntries = allEntries.filter((e) => (e.quantity || 0) > 0);
       const totalAvailable = positiveEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
 
+      const actualRemove = Math.min(toRemove, totalAvailable);
       if (totalAvailable < toRemove) {
-        logger.warn('INVENTORY', `Sync removal: only ${totalAvailable} ${itemNameForQuery} available, requested ${toRemove}; deducting ${totalAvailable}`);
+        logger.warn('INVENTORY', `Sync removal: only ${totalAvailable} ${itemNameForQuery} available, requested ${toRemove}; deducting ${actualRemove}`);
       }
-      let remaining = toRemove;
-      for (const entry of positiveEntries) {
-        if (remaining <= 0) break;
-        const take = Math.min(remaining, entry.quantity || 0);
-        const newQty = (entry.quantity || 0) - take;
-        if (newQty <= 0) {
-          await inventoryCollection.deleteOne({ _id: entry._id });
-          logger.info('INVENTORY', `Sync removal: deleted entry ${entry.itemName} (was ${entry.quantity})`);
-        } else {
-          await inventoryCollection.updateOne(
-            { _id: entry._id },
-            { $inc: { quantity: -take } }
-          );
+
+      // Atomic one-at-a-time removal to prevent negative quantity under concurrency
+      const syncRemovalFilter = { characterId: character._id, itemName: itemNameRegex, quantity: { $gte: 1 } };
+      for (let i = 0; i < actualRemove; i++) {
+        const doc = await inventoryCollection.findOneAndUpdate(
+          syncRemovalFilter,
+          { $inc: { quantity: -1 } },
+          { returnDocument: 'after', sort: { _id: 1 } }
+        );
+        if (!doc) break;
+        if ((doc.quantity || 0) <= 0) {
+          await inventoryCollection.deleteOne({ _id: doc._id });
+          logger.info('INVENTORY', `Sync removal: deleted entry ${doc.itemName} (quantity reached 0)`);
         }
-        remaining -= take;
       }
       return;
     }
@@ -460,47 +460,44 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     logger.info('INVENTORY', `📊 Found ${totalQuantity} ${itemName} across ${inventoryEntries.length} entry/entries in ${character.name}'s inventory`);
     logger.info('INVENTORY', `➖ Removing ${quantity} ${itemName}`);
     
-    // Remove quantity from entries, starting with the first entry
-    let remainingToRemove = quantity;
     const canonicalItemName = inventoryEntries[0].itemName; // Use canonical name from first entry
-    
-    for (const entry of inventoryEntries) {
-      if (remainingToRemove <= 0) break;
-      
-      const quantityFromThisEntry = Math.min(remainingToRemove, entry.quantity);
-      const newQuantity = entry.quantity - quantityFromThisEntry;
-      
-      if (newQuantity === 0) {
-        // Delete entry if quantity reaches 0
-        const deleteResult = await inventoryCollection.deleteOne({
-          _id: entry._id
-        });
-        
-        if (deleteResult.deletedCount === 0) {
-          logger.error('INVENTORY', `Failed to delete item ${itemName} from inventory`);
-          return false;
-        }
-        logger.info('INVENTORY', `🗑️ Deleted entry for ${entry.itemName} (quantity was ${entry.quantity})`);
-      } else {
-        // Update entry with remaining quantity
-        const updateResult = await inventoryCollection.updateOne(
-          { _id: entry._id },
-          { $inc: { quantity: -quantityFromThisEntry } }
-        );
-        
-        if (updateResult.modifiedCount === 0) {
-          logger.error('INVENTORY', `Failed to update quantity for item ${itemName}`);
-          return false;
-        }
-        logger.info('INVENTORY', `🔄 Updated ${entry.itemName} quantity: ${entry.quantity} → ${newQuantity}`);
+
+    // Build filter for atomic decrement (same as initial query, plus quantity >= 1)
+    const atomicFilter = itemName.includes('+')
+      ? { characterId: character._id, itemName: itemName.trim(), quantity: { $gte: 1 } }
+      : { characterId: character._id, itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }, quantity: { $gte: 1 } };
+
+    // Atomic one-at-a-time removal: each decrement is "take 1 only if quantity >= 1" in a single DB operation
+    let removedCount = 0;
+    for (let i = 0; i < quantity; i++) {
+      const doc = await inventoryCollection.findOneAndUpdate(
+        atomicFilter,
+        { $inc: { quantity: -1 } },
+        { returnDocument: 'after', sort: { _id: 1 } }
+      );
+      if (!doc) {
+        logger.error('INVENTORY', `Atomic removal: no document with qty>=1 for ${itemName} (removed ${removedCount}/${quantity})`);
+        throw new Error(`Not enough ${itemName} in inventory`);
       }
-      
-      remainingToRemove -= quantityFromThisEntry;
+      removedCount++;
+      if ((doc.quantity || 0) <= 0) {
+        await inventoryCollection.deleteOne({ _id: doc._id });
+        logger.info('INVENTORY', `🗑️ Deleted entry for ${doc.itemName} (quantity reached 0)`);
+      }
     }
-    
-    if (remainingToRemove > 0) {
-      logger.error('INVENTORY', `Failed to remove all requested quantity. Remaining: ${remainingToRemove}`);
-      return false;
+    logger.success('INVENTORY', `Removed ${removedCount} ${itemName} from ${character.name}'s inventory`);
+
+    // Post-removal cleanup: delete any remaining invalid/zero/negative entries for this item
+    const cleanupFilter = itemName.includes('+')
+      ? { characterId: character._id, itemName: itemName.trim(), quantity: { $lte: 0 } }
+      : { characterId: character._id, itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }, quantity: { $lte: 0 } };
+    const invalidEntries = await inventoryCollection.find(cleanupFilter).toArray();
+    for (const entry of invalidEntries) {
+      await inventoryCollection.deleteOne({ _id: entry._id });
+      logger.warn('INVENTORY', `Cleaned up invalid entry ${entry.itemName} (quantity ${entry.quantity})`);
+    }
+    if (invalidEntries.length > 0) {
+      logger.warn('INVENTORY', `Cleaned up ${invalidEntries.length} invalid/zero entries for ${itemName}`);
     }
 
     // Log removal to InventoryLog database collection

@@ -337,6 +337,7 @@ const handleKO = async (characterId, context = {}) => {
 // ------------------- Exchange Spirit Orbs -------------------
 // Exchanges Spirit Orbs for an increase in either hearts or stamina.
 const exchangeSpiritOrbs = async (characterId, type) => {
+  let orbCount;
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
@@ -345,24 +346,26 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     const { getCharacterInventoryCollection } = require('../database/db');
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
 
-    const orbEntry = await inventoryCollection.findOne({
-      characterId: characterId,
-      itemName: { $regex: /^spirit orb$/i }
-    });
+    // Atomic update: deduct 4 only if quantity >= 4 to prevent race conditions
+    const orbFilter = { characterId: characterId, itemName: { $regex: /^spirit orb$/i }, quantity: { $gte: 4 } };
+    const updatedOrb = await inventoryCollection.findOneAndUpdate(
+      orbFilter,
+      { $inc: { quantity: -4 } },
+      { returnDocument: 'after' }
+    );
 
-    const orbCount = orbEntry?.quantity || 0;
-    if (orbCount < 4) {
+    if (!updatedOrb) {
+      const currentOrb = await inventoryCollection.findOne({
+        characterId: characterId,
+        itemName: { $regex: /^spirit orb$/i }
+      });
+      orbCount = currentOrb?.quantity || 0;
       throw new Error(`${character.name} only has ${orbCount} Spirit Orb(s). You need at least 4 to exchange.`);
     }
+    orbCount = (updatedOrb.quantity || 0) + 4;
 
-    orbEntry.quantity -= 4;
-    if (orbEntry.quantity <= 0) {
-      await inventoryCollection.deleteOne({ _id: orbEntry._id });
-    } else {
-      await inventoryCollection.updateOne(
-        { _id: orbEntry._id },
-        { $set: { quantity: orbEntry.quantity } }
-      );
+    if ((updatedOrb.quantity || 0) <= 0) {
+      await inventoryCollection.deleteOne({ _id: updatedOrb._id });
     }
 
     if (type === 'hearts') {

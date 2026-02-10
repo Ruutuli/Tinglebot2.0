@@ -2941,24 +2941,20 @@ async function handleFulfill(interaction) {
             const quantityToRemove = offeredItemData.quantity || 1;
             
             try {
-              // Find all matching items (can be multiple stacks)
-              const matchingItems = await buyerInventory.find({
-                itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName)}$`, 'i') },
-                quantity: { $gt: 0 }
-              }).sort({ quantity: -1 }).toArray();
-              
-              if (matchingItems.length === 0) {
-                console.warn('[vendingHandler.js] [handleFulfillBarter] ⚠️ Offered item not found in buyer inventory', {
-                  fulfillmentId,
-                  offeredItem: offeredItemName
-                });
-                continue;
-              }
-              
-              // Calculate total available quantity
+              // Build filter for atomic decrement (same as inventoryUtils: + exact, else case-insensitive)
+              const barterItemFilter = offeredItemName.includes('+')
+                ? { characterId: buyer._id, itemName: offeredItemName.trim(), quantity: { $gte: 1 } }
+                : { characterId: buyer._id, itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName.trim())}$`, 'i') }, quantity: { $gte: 1 } };
+
+              // Pre-check total available
+              const matchingItems = await buyerInventory.find(
+                offeredItemName.includes('+')
+                  ? { characterId: buyer._id, itemName: offeredItemName.trim(), quantity: { $gt: 0 } }
+                  : { characterId: buyer._id, itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName.trim())}$`, 'i') }, quantity: { $gt: 0 } }
+              ).toArray();
               const totalAvailable = matchingItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-              if (totalAvailable < quantityToRemove) {
-                console.warn('[vendingHandler.js] [handleFulfillBarter] ⚠️ Insufficient quantity in buyer inventory', {
+              if (matchingItems.length === 0 || totalAvailable < quantityToRemove) {
+                console.warn('[vendingHandler.js] [handleFulfillBarter] ⚠️ Offered item not found or insufficient in buyer inventory', {
                   fulfillmentId,
                   offeredItem: offeredItemName,
                   required: quantityToRemove,
@@ -2966,61 +2962,54 @@ async function handleFulfill(interaction) {
                 });
                 continue;
               }
-              
-              // Remove items from stacks until we've removed the required quantity
-              let remainingToRemove = quantityToRemove;
-              for (const itemDoc of matchingItems) {
-                if (remainingToRemove <= 0) break;
-                
-                const itemQty = itemDoc.quantity || 0;
-                const removeQty = Math.min(remainingToRemove, itemQty);
-                
-                if (removeQty === itemQty) {
-                  // Remove entire stack
-                  await buyerInventory.deleteOne({ _id: itemDoc._id });
-                } else {
-                  // Partial removal
-                  await buyerInventory.updateOne(
-                    { _id: itemDoc._id },
-                    { $inc: { quantity: -removeQty } }
-                  );
+
+              // Atomic one-at-a-time removal to prevent negative quantity under concurrency
+              let removedCount = 0;
+              for (let i = 0; i < quantityToRemove; i++) {
+                const doc = await buyerInventory.findOneAndUpdate(
+                  barterItemFilter,
+                  { $inc: { quantity: -1 } },
+                  { returnDocument: 'after', sort: { _id: 1 } }
+                );
+                if (!doc) break;
+                removedCount++;
+                if ((doc.quantity || 0) <= 0) {
+                  await buyerInventory.deleteOne({ _id: doc._id });
                 }
-                
-                remainingToRemove -= removeQty;
-                rollbackActions.push({ 
-                  type: 'barter', 
-                  buyerInventory, 
+                rollbackActions.push({
+                  type: 'barter',
+                  buyerInventory,
                   itemName: offeredItemName,
-                  quantity: removeQty,
-                  itemId: itemDoc._id
+                  quantity: 1,
+                  itemId: doc._id
                 });
-                
-                // Log removal to InventoryLog database collection
-                try {
-                  // Fetch item details for proper categorization
-                  let offeredItemDetails;
-                  if (offeredItemName.includes('+')) {
-                    offeredItemDetails = await ItemModel.findOne({ itemName: offeredItemName });
-                  } else {
-                    offeredItemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName)}$`, 'i') } });
-                  }
-                  
-                  const interactionUrl = interaction 
-                    ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
-                    : '';
-                  
-                  await logItemRemovalToDatabase(buyer, offeredItemDetails || { itemName: offeredItemName }, {
-                    quantity: removeQty,
-                    obtain: 'Barter Trade',
-                    location: vendor.name || buyer.currentVillage || 'Unknown',
-                    link: interactionUrl
-                  });
-                } catch (logError) {
-                  // Don't fail the transaction if logging fails
-                  console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to log barter item removal to InventoryLog:', logError.message);
+              }
+              if (removedCount < quantityToRemove) {
+                console.warn('[vendingHandler.js] [handleFulfillBarter] ⚠️ Atomic barter removal removed only', removedCount, 'of', quantityToRemove, offeredItemName);
+              }
+
+              // Log removal to InventoryLog database collection (once per item type)
+              try {
+                let offeredItemDetails;
+                if (offeredItemName.includes('+')) {
+                  offeredItemDetails = await ItemModel.findOne({ itemName: offeredItemName });
+                } else {
+                  offeredItemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${escapeRegExp(offeredItemName)}$`, 'i') } });
                 }
-                
-                // Google Sheets logging removed
+                const interactionUrl = interaction
+                  ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+                  : '';
+                await logItemRemovalToDatabase(buyer, offeredItemDetails || { itemName: offeredItemName }, {
+                  quantity: removedCount,
+                  obtain: 'Barter Trade',
+                  location: vendor.name || buyer.currentVillage || 'Unknown',
+                  link: interactionUrl
+                });
+              } catch (logError) {
+                console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to log barter item removal to InventoryLog:', logError.message);
+              }
+
+              // Google Sheets logging removed
                 if (false) { // Google Sheets functionality removed
                   try {
                     // Fetch item details for proper categorization
@@ -3042,7 +3031,7 @@ async function handleFulfill(interaction) {
                     const removalLogEntry = [
                       buyer.name, // Character Name (A)
                       offeredItemName, // Item Name (B)
-                      -removeQty, // Qty of Item (C) - negative for removal
+                      -removedCount, // Qty of Item (C) - negative for removal
                       category, // Category (D)
                       type, // Type (E)
                       subtype, // Subtype (F)
@@ -3059,7 +3048,7 @@ async function handleFulfill(interaction) {
                     console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removal logged to database', {
                       fulfillmentId,
                       offeredItem: offeredItemName,
-                      quantity: removeQty
+                      quantity: removedCount
                     });
                   } catch (sheetError) {
                     console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to log barter item removal to Google Sheets', {
@@ -3074,10 +3063,9 @@ async function handleFulfill(interaction) {
                 console.log('[vendingHandler.js] [handleFulfillBarter] ✓ Barter item removed from buyer inventory', {
                   fulfillmentId,
                   offeredItem: offeredItemName,
-                  removed: removeQty,
-                  remaining: remainingToRemove
+                  removed: removedCount,
+                  requested: quantityToRemove
                 });
-              }
             } catch (barterError) {
               console.error('[vendingHandler.js] [handleFulfillBarter] ⚠️ Failed to remove barter item', {
                 fulfillmentId,

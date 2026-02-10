@@ -473,7 +473,12 @@ async function changeChannelName(client, channelId, newName) {
 
 // ------------------- renameChannels -------------------
 // Renames channels to indicate Blood Moon activation.
+// Only renames when it is actually a Blood Moon period (8pm EST day-before through 8am EST day-after).
 async function renameChannels(client) {
+  if (!isBloodMoonDay()) {
+    logger.info('BLOODMOON', 'Not a Blood Moon period - skipping channel renaming');
+    return;
+  }
   logger.info('BLOODMOON', 'Starting Blood Moon channel renaming');
   
   const channelMappings = getBloodMoonChannelMappings();

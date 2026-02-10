@@ -32,7 +32,7 @@ const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = r
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
 const { handleInteractionError, ERROR_RESPONSE_TYPES } = require('@/utils/globalErrorHandler');
-const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase, escapeRegExp } = require('@/utils/inventoryUtils');
 const { checkInventorySync } = require('@/utils/characterUtils');
 const { enforceJail } = require('@/utils/jailCheck');
 
@@ -1232,6 +1232,26 @@ module.exports = {
         await healKoCharacter(character._id);
         character.currentHearts = character.maxHearts;
         await updateCurrentHearts(character._id, character.currentHearts);
+
+        // Re-validate inventory immediately before remove (in case another request consumed the item)
+        const healingItemNameKo = item.itemName.trim();
+        const itemQueryKo = healingItemNameKo.includes('+')
+          ? { characterId: character._id, itemName: healingItemNameKo }
+          : { characterId: character._id, itemName: new RegExp(`^${escapeRegExp(healingItemNameKo)}$`, 'i') };
+        const currentItemsKo = await inventoryCollection.find(itemQueryKo).toArray();
+        const totalNowKo = currentItemsKo.reduce((sum, inv) => sum + Math.max(0, inv.quantity || 0), 0);
+        if (totalNowKo < quantity) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Not Enough Items',
+              description: `${character.name} does not have enough **${item.itemName}** in inventory. Inventory may have changed since you started.`,
+              image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+              footer: { text: 'Try again or check your inventory' }
+            }],
+            ephemeral: true
+          });
+        }
         await removeItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Used for healing');
 
         const successEmbed = new EmbedBuilder()
@@ -1289,6 +1309,25 @@ module.exports = {
         }
       }
 
+      // Re-validate inventory immediately before remove (in case another request consumed the item)
+      const healingItemName = item.itemName.trim();
+      const itemQueryHeal = healingItemName.includes('+')
+        ? { characterId: character._id, itemName: healingItemName }
+        : { characterId: character._id, itemName: new RegExp(`^${escapeRegExp(healingItemName)}$`, 'i') };
+      const currentItemsHeal = await inventoryCollection.find(itemQueryHeal).toArray();
+      const totalNowHeal = currentItemsHeal.reduce((sum, inv) => sum + Math.max(0, inv.quantity || 0), 0);
+      if (totalNowHeal < quantity) {
+        return void await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Not Enough Items',
+            description: `${character.name} does not have enough **${item.itemName}** in inventory. Inventory may have changed since you started.`,
+            image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+            footer: { text: 'Try again or check your inventory' }
+          }],
+          ephemeral: true
+        });
+      }
       await removeItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Used for healing');
 
       // Build description with actual recovered amounts
