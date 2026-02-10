@@ -5,6 +5,18 @@ import { Tabs } from "@/components/ui/tabs";
 import type { ModelConfig, FieldConfig } from "../types/model-types";
 import { FieldRenderer } from "./FieldRenderer";
 import { ToggleGrid } from "./ToggleGrid";
+import { PET_TYPE_DATA } from "../constants/pet-type-data";
+
+/** Get a nested value from an object using dot-notation path (e.g. "gearArmor.head.name"). */
+function getNested(obj: Record<string, unknown>, path: string): unknown {
+  const parts = path.split(".");
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current === undefined || current === null) return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
 
 type GenericEditorFormProps = {
   item: Record<string, unknown>;
@@ -38,7 +50,9 @@ export function GenericEditorForm({
           });
           initial[field.key] = gridValues;
         } else {
-          const value = item[field.key];
+          const value = field.key.includes(".")
+            ? getNested(item as Record<string, unknown>, field.key)
+            : (item as Record<string, unknown>)[field.key];
           if (value !== undefined && value !== null) {
             // Handle custom components - keep as object, not JSON string
             if (field.type === "custom" && (
@@ -59,6 +73,14 @@ export function GenericEditorForm({
             } else if (field.type === "text" && typeof value === "object" && !Array.isArray(value) && value.constructor === Object) {
               // Handle plain objects that might be Maps converted by Mongoose
               initial[field.key] = JSON.stringify(value, null, 2);
+            } else if (field.type === "date") {
+              // Normalize date fields so invalid values never cause toISOString() to throw
+              try {
+                const d = value instanceof Date ? value : new Date(value as string | number);
+                initial[field.key] = Number.isFinite(d.getTime()) ? d.toISOString() : "";
+              } catch {
+                initial[field.key] = "";
+              }
             } else {
               initial[field.key] = value;
             }
@@ -117,27 +139,44 @@ export function GenericEditorForm({
 
   // Track changes
   const handleFieldChange = useCallback((fieldKey: string, value: unknown) => {
+    const isPetTypeChange =
+      modelConfig.name === "Pet" &&
+      fieldKey === "petType" &&
+      typeof value === "string";
+    const petTypeData = isPetTypeChange ? PET_TYPE_DATA[value] : null;
+
     setFormData((prev) => {
       const newData = { ...prev, [fieldKey]: value };
-      
-      // Track changes
-      const originalValue = item[fieldKey];
-      if (JSON.stringify(originalValue) !== JSON.stringify(value)) {
-        setChanges((prevChanges) => ({
-          ...prevChanges,
-          [fieldKey]: { original: originalValue, current: value },
-        }));
-      } else {
-        setChanges((prevChanges) => {
-          const newChanges = { ...prevChanges };
-          delete newChanges[fieldKey];
-          return newChanges;
-        });
+      if (petTypeData) {
+        newData.rollCombination = petTypeData.rollCombination;
+        newData.tableDescription = petTypeData.description;
       }
-      
       return newData;
     });
-  }, [item]);
+
+    setChanges((prevChanges) => {
+      const originalValue = fieldKey.includes(".")
+        ? getNested(item as Record<string, unknown>, fieldKey)
+        : (item as Record<string, unknown>)[fieldKey];
+      const next = { ...prevChanges };
+      if (JSON.stringify(originalValue) !== JSON.stringify(value)) {
+        next[fieldKey] = { original: originalValue, current: value };
+      } else {
+        delete next[fieldKey];
+      }
+      if (petTypeData) {
+        next.rollCombination = {
+          original: (item as Record<string, unknown>).rollCombination,
+          current: petTypeData.rollCombination,
+        };
+        next.tableDescription = {
+          original: (item as Record<string, unknown>).tableDescription,
+          current: petTypeData.description,
+        };
+      }
+      return next;
+    });
+  }, [item, modelConfig.name]);
 
   // Handle toggle grid changes (special case for boolean grids)
   const handleToggleGridChange = useCallback((fieldKey: string, values: Record<string, boolean>) => {
@@ -256,8 +295,13 @@ export function GenericEditorForm({
               // If JSON parsing fails, just use the string value
               updates[key] = formValue;
             }
-          } else if (changes[key] || formData[key] !== item[key]) {
-            updates[key] = formValue;
+          } else {
+            const originalValue = key.includes(".")
+              ? getNested(item as Record<string, unknown>, key)
+              : (item as Record<string, unknown>)[key];
+            if (changes[key] || JSON.stringify(formValue) !== JSON.stringify(originalValue)) {
+              updates[key] = formValue;
+            }
           }
         }
       });

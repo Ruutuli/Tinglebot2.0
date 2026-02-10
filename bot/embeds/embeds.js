@@ -2863,6 +2863,15 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
     }
   );
 
+  // Teacher Crafting: 2-voucher rule (1 at accept, 1 when boosted person crafts)
+  if (requestData.category === 'Crafting' && (requestData.boosterJob || '').toString().toLowerCase() === 'teacher') {
+    fields.push({
+      name: '📌 **Note**',
+      value: '> This boost uses 2 job vouchers from the booster: one when they accept, and one when the crafting character uses the stamina assistance (removed from the booster at craft time).',
+      inline: false
+    });
+  }
+
   // Title/description/footer vary by status
   let title;
   let description;
@@ -2987,6 +2996,64 @@ const createBoostAppliedEmbed = (boostData) => {
   const boosterHearts = boostData.boosterHearts || 0;
   const boosterMaxHearts = boostData.boosterMaxHearts || 0;
 
+  const appliedFields = [
+    {
+      name: '💼 **Booster Job**',
+      value: `> ${boosterJob}`,
+      inline: true
+    },
+    {
+      name: '👤 **Target**',
+      value: `> ${target}`,
+      inline: true
+    },
+    {
+      name: '📋 **Category**',
+      value: `> ${category}`,
+      inline: true
+    },
+    {
+      name: '⏰ **Expires**',
+      value: `> ${expiresIn}`,
+      inline: true
+    },
+    {
+      name: '💚 **Booster Stamina**',
+      value: `> ${boosterStamina} → ${boosterStamina - 1}`,
+      inline: true
+    },
+    {
+      name: '❤️ **Booster Hearts**',
+      value: `> ${boosterHearts}`,
+      inline: true
+    },
+    {
+      name: '⚡ **Boost Effect**',
+      value:
+        `> ${effect}\n\n` +
+        `> Boost by: ${boosterJob} ${boostedBy} - ${boostData.boostName || 'Unknown Boost'} for ${category}`,
+      inline: false
+    },
+    {
+      name: '📊 **Status**',
+      value: `> ${boostData.status || 'accepted'}`,
+      inline: true
+    },
+    {
+      name: '🆔 **Boost ID**',
+      value: `> \`${boostData.boostRequestId || 'Unknown'}\``,
+      inline: true
+    }
+  ];
+  // Teacher Crafting: 2-voucher rule (1 at accept, 1 when boosted person crafts)
+  if (boostData.category === 'Crafting' && (boostData.boosterJob || '').toString().toLowerCase() === 'teacher') {
+    appliedFields.push({
+      name: '📌 **Note**',
+      value: '> This boost uses 2 job vouchers from the booster: one when they accept, and one when the crafting character uses the stamina assistance (removed from the booster at craft time).',
+      inline: false
+    });
+  }
+
   const embed = new EmbedBuilder()
     .setTitle(`⚡ Boost Applied: ${boostData.boostName || 'Unknown Boost'}`)
     .setDescription(
@@ -2995,55 +3062,7 @@ const createBoostAppliedEmbed = (boostData) => {
     )
     .setColor(villageColor)
     .setThumbnail(boostData.boostedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-applied-icon.png')
-    .addFields(
-      {
-        name: '💼 **Booster Job**',
-        value: `> ${boosterJob}`,
-        inline: true
-      },
-      {
-        name: '👤 **Target**',
-        value: `> ${target}`,
-        inline: true
-      },
-      {
-        name: '📋 **Category**',
-        value: `> ${category}`,
-        inline: true
-      },
-      {
-        name: '⏰ **Expires**',
-        value: `> ${expiresIn}`,
-        inline: true
-      },
-      {
-        name: '💚 **Booster Stamina**',
-        value: `> ${boosterStamina} → ${boosterStamina - 1}`,
-        inline: true
-      },
-      {
-        name: '❤️ **Booster Hearts**',
-        value: `> ${boosterHearts}`,
-        inline: true
-      },
-      {
-        name: '⚡ **Boost Effect**',
-        value:
-          `> ${effect}\n\n` +
-          `> Boost by: ${boosterJob} ${boostedBy} - ${boostData.boostName || 'Unknown Boost'} for ${category}`,
-        inline: false
-      },
-      {
-        name: '📊 **Status**',
-        value: `> ${boostData.status || 'accepted'}`,
-        inline: true
-      },
-      {
-        name: '🆔 **Boost ID**',
-        value: `> \`${boostData.boostRequestId || 'Unknown'}\``,
-        inline: true
-      }
-    )
+    .addFields(appliedFields)
     .setFooter({ 
       text: `Boost ID: ${boostData.boostRequestId || 'Unknown'} • Boost applied to ${target} • Will last 24 hours`,
       iconURL: boostData.targetIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-success-icon.png'

@@ -46,9 +46,18 @@ export function VillageCooldownsField({
   };
 
   const updateCooldownDate = (cooldownKey: string, dateString: string) => {
+    let value: string | null = null;
+    if (dateString) {
+      try {
+        const d = new Date(dateString);
+        value = Number.isFinite(d.getTime()) ? d.toISOString() : null;
+      } catch {
+        value = null;
+      }
+    }
     onChange({
       ...cooldowns,
-      [cooldownKey]: dateString ? new Date(dateString).toISOString() : null,
+      [cooldownKey]: value,
     });
   };
 
@@ -56,7 +65,7 @@ export function VillageCooldownsField({
     if (!date) return "";
     try {
       const d = typeof date === "string" ? new Date(date) : date;
-      if (isNaN(d.getTime())) return "";
+      if (!Number.isFinite(d.getTime())) return "";
       return d.toISOString().slice(0, 16); // Format for datetime-local input
     } catch {
       return "";

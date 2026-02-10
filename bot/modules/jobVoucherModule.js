@@ -106,6 +106,33 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             ],
             color: '#FF0000'
         },
+        TEACHER_CRAFTING_NEEDS_VOUCHER: {
+            title: '❌ Job Voucher Required for Teacher Stamina Assistance',
+            description: `Teacher stamina assistance requires **${data.characterName || 'the crafting character'}** to have at least one Job Voucher in inventory when using the stamina benefit.`,
+            fields: [
+                { name: 'Note', value: '> This boost uses 2 job vouchers: one from the booster when they accept, and one from the crafting character when they use the stamina assistance.' },
+                { name: 'How to Fix', value: '> Add a Job Voucher to the crafting character\'s inventory, then try crafting again.' }
+            ],
+            color: '#FF0000'
+        },
+        BOOSTER_NEEDS_ONE_VOUCHER_AT_ACCEPT: {
+            title: '❌ Teacher Crafting Boost Requires 1 Job Voucher to Accept',
+            description: `**${data.boosterName || 'The booster'}** must have at least 1 Job Voucher in inventory to accept a Teacher Crafting boost. (A second voucher is used from the booster when the boosted character crafts.)`,
+            fields: [
+                { name: 'Note', value: '> This boost uses 2 job vouchers from the booster: one when they accept, and one when the crafting character uses the stamina assistance.' },
+                { name: 'How to Fix', value: '> Add a Job Voucher to the boosting character\'s inventory, then try accepting again.' }
+            ],
+            color: '#FF0000'
+        },
+        BOOSTER_NEEDS_VOUCHER_AT_CRAFT: {
+            title: '❌ Booster Must Have Job Voucher When You Use Stamina Assistance',
+            description: `The booster (**${data.boosterName || 'Teacher'}**) must have at least 1 Job Voucher in inventory when you use Teacher stamina assistance. The second voucher is removed from the booster when the boosted character crafts.`,
+            fields: [
+                { name: 'Note', value: '> Ask the booster to add a Job Voucher to their inventory, then try crafting again.' },
+                { name: 'How to Fix', value: '> The boosting character needs to have a Job Voucher available when you craft (it is used at craft time).' }
+            ],
+            color: '#FF0000'
+        },
         // ============================================================================
         // ------------------- No Job Specified Error (Job Voucher) -------------------
         // Embed for missing job when using a job voucher

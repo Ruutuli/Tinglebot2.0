@@ -432,7 +432,11 @@ function questToForm(q: QuestRecord): FormState {
     questID: String(q.questID ?? ""),
     status: String(q.status ?? "active"),
     posted: Boolean(q.posted),
-    postedAt: q.postedAt ? new Date(q.postedAt).toISOString().slice(0, 16) : "",
+    postedAt: (() => {
+      if (!q.postedAt) return "";
+      const d = new Date(q.postedAt);
+      return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 16);
+    })(),
     botNotes: String(q.botNotes ?? ""),
   };
 }
@@ -477,7 +481,11 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     collabAllowed: f.collabAllowed,
     collabRule: f.collabRule.trim() || null,
     posted: f.posted,
-    postedAt: f.posted && f.postedAt ? new Date(f.postedAt).toISOString() : null,
+    postedAt: (() => {
+      if (!f.posted || !f.postedAt) return null;
+      const d = new Date(f.postedAt);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    })(),
     botNotes: f.botNotes.trim() || null,
     itemRewards: f.itemRewards.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), quantity: Math.max(0, r.quantity) || 1 })),
     tableroll: f.tableroll.trim() || null,

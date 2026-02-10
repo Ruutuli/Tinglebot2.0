@@ -27,7 +27,7 @@ function isValidRedirectPath(path: string): boolean {
 
 export async function GET(request: NextRequest) {
   const clientId = process.env.DISCORD_CLIENT_ID;
-  const redirectUri = getDiscordRedirectUri();
+  const redirectUri = getDiscordRedirectUri(request);
 
   if (!clientId) {
     return NextResponse.json(

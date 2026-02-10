@@ -62,6 +62,21 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
   const nameField = modelConfig.nameField;
   const displayName = modelConfig.displayName;
 
+  /** Get a stable string ID for list keys. Handles _id as string, ObjectId-like, or plain object. */
+  const getItemKey = (item: Record<string, unknown>, index: number): string => {
+    const id = item._id;
+    if (typeof id === "string" && id) return id;
+    if (id && typeof id === "object") {
+      const oid = (id as Record<string, unknown>).$oid ?? (id as Record<string, unknown>).oid;
+      if (typeof oid === "string" && oid) return oid;
+      if ("toString" in (id as object) && typeof (id as { toString: () => string }).toString === "function") {
+        const s = (id as { toString: () => string }).toString();
+        if (s && s !== "[object Object]") return s;
+      }
+    }
+    return `item-${index}`;
+  };
+
   // Get common display fields based on model type
   const getDisplayFields = () => {
     if (modelConfig.name === "Item") {
@@ -187,15 +202,7 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
             </thead>
             <tbody>
               {sortedItems.map((item, index) => {
-                // Safely extract ID - handle both string IDs and MongoDB ObjectIds
-                let itemId: string;
-                if (typeof item._id === "string") {
-                  itemId = item._id;
-                } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
-                  itemId = (item._id as { toString: () => string }).toString();
-                } else {
-                  itemId = String(item._id || `item-${index}`);
-                }
+                const itemId = getItemKey(item, index);
                 const itemName = String(item[nameField] || "Unnamed");
                 const imageValue = item.image || item.imageUrl || item.icon;
                 const image = imageValue && typeof imageValue === "string" ? imageValue : undefined;
@@ -231,8 +238,9 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
                             {field.type === "array" && Array.isArray(item[field.key]) ? (
                               <>
                                 {(item[field.key] as unknown[]).slice(0, 2).map((val, idx) => {
-                                  const itemId = typeof item._id === "string" ? item._id : (item._id && typeof item._id === "object" && "toString" in item._id ? (item._id as { toString: () => string }).toString() : String(item._id || idx));
-                                  const valStr = String(val);
+                                  const valStr = typeof val === "object" && val !== null && !Array.isArray(val)
+                                    ? JSON.stringify(val)
+                                    : String(val);
                                   return (
                                   <span
                                     key={`${itemId}-${field.key}-${idx}-${valStr}`}
@@ -278,15 +286,7 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sortedItems.map((item, index) => {
-              // Safely extract ID - handle both string IDs and MongoDB ObjectIds
-              let itemId: string;
-              if (typeof item._id === "string") {
-                itemId = item._id;
-              } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
-                itemId = (item._id as { toString: () => string }).toString();
-              } else {
-                itemId = String(item._id || `item-${index}`);
-              }
+              const itemId = getItemKey(item, index);
               const itemName = String(item[nameField] || "Unnamed");
               const imageValue = item.image || item.imageUrl || item.icon;
               const image = imageValue && typeof imageValue === "string" ? imageValue : undefined;

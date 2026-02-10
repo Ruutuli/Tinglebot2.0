@@ -411,6 +411,7 @@ function PrimaryStats({ user, activity }: { user: UserProfile; activity?: Activi
       
       const questCount = questCompletions.filter((q) => {
         const qDate = new Date(q.completedAt);
+        if (Number.isNaN(qDate.getTime())) return false;
         return qDate.toISOString().slice(0, 10) === dateStr;
       }).length;
       
@@ -481,7 +482,7 @@ function PrimaryStats({ user, activity }: { user: UserProfile; activity?: Activi
         activity.pets.forEach((pet) => {
           if (pet.lastRollDate) {
             const rollDate = new Date(pet.lastRollDate);
-            if (rollDate.toISOString().slice(0, 10) === dateStr) {
+            if (!Number.isNaN(rollDate.getTime()) && rollDate.toISOString().slice(0, 10) === dateStr) {
               petRollCount++;
             }
           }
@@ -494,7 +495,7 @@ function PrimaryStats({ user, activity }: { user: UserProfile; activity?: Activi
         activity.mounts.forEach((mount) => {
           if (mount.lastMountTravel) {
             const travelDate = new Date(mount.lastMountTravel);
-            if (travelDate.toISOString().slice(0, 10) === dateStr) {
+            if (!Number.isNaN(travelDate.getTime()) && travelDate.toISOString().slice(0, 10) === dateStr) {
               mountActivityCount++;
             }
           }

@@ -3,45 +3,52 @@
 // Centralized configuration helpers
 // ============================================================================
 
+import type { NextRequest } from "next/server";
+
 /**
- * Get the base URL for the application
- * Uses DOMAIN environment variable if set, otherwise falls back to localhost
- * DOMAIN should be just the domain (e.g., "tinglebot.xyz")
- * Returns full URL with protocol (https for production, http for localhost)
+ * Get the app base URL from an incoming request (origin: protocol + host).
+ * Use this in auth routes so redirects stay on the same origin the user is on
+ * (e.g. localhost:6001 when testing locally, even if DOMAIN or callback URLs are set for production).
+ */
+export function getAppUrlFromRequest(request: NextRequest): string {
+  const url = request.nextUrl ?? new URL(request.url);
+  const origin = url.origin;
+  if (origin) return origin;
+  return getAppUrl();
+}
+
+/**
+ * Get the base URL for the application (when no request is available).
+ * Uses DOMAIN in production; in development uses NEXT_PUBLIC_APP_URL or localhost.
  */
 export function getAppUrl(): string {
+  if (process.env.NODE_ENV === "development") {
+    return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:6001";
+  }
   const domain = process.env.DOMAIN;
-  
   if (domain) {
-    // Use https for production domain
     return `https://${domain}`;
   }
-  
-  // Fallback to localhost for development
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:6001";
 }
 
 /**
  * Get the Discord OAuth redirect URI (redirect_uri).
+ * When request is provided, uses that request's origin so the callback lands on the same host
+ * (e.g. localhost when you started login on localhost). Otherwise uses env/getAppUrl().
  *
- * Important: this must EXACTLY match one of the URLs registered in
- * Discord Developer Portal → OAuth2 → Redirects.
- *
- * Supported env vars (first match wins):
- * - DISCORD_CALLBACK_URL
- * - DISCORD_REDIRECT_URI
- * - NEXT_PUBLIC_DISCORD_REDIRECT_URI
- *
- * If none are set, falls back to `${getAppUrl()}/api/auth/discord/callback`.
+ * The returned URL must be registered in Discord Developer Portal → OAuth2 → Redirects.
  */
-export function getDiscordRedirectUri(): string {
+export function getDiscordRedirectUri(request?: NextRequest): string {
+  if (request) {
+    const base = getAppUrlFromRequest(request).replace(/\/$/, "");
+    return `${base}/api/auth/discord/callback`;
+  }
   const explicit =
     process.env.DISCORD_CALLBACK_URL ||
     process.env.DISCORD_REDIRECT_URI ||
     process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI;
-
   if (explicit) return explicit.replace(/\/$/, "");
-
   const appUrl = getAppUrl().replace(/\/$/, "");
   return `${appUrl}/api/auth/discord/callback`;
 }

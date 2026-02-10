@@ -180,12 +180,32 @@ export function FieldRenderer({
         />
       );
 
-    case "date":
+    case "date": {
+      const safeDateValue = (() => {
+        if (value === undefined || value === null) return "";
+        try {
+          const d = value instanceof Date ? value : new Date(value as string | number);
+          return Number.isFinite(d.getTime()) ? d.toISOString().split("T")[0] : "";
+        } catch {
+          return "";
+        }
+      })();
       return (
         <TextField
           label={label}
-          value={value ? new Date(value as string | number | Date).toISOString().split("T")[0] : ""}
-          onChange={(val) => onChange(val ? new Date(val).toISOString() : null)}
+          value={safeDateValue}
+          onChange={(val) => {
+            if (!val) {
+              onChange(null);
+              return;
+            }
+            try {
+              const d = new Date(val);
+              onChange(Number.isFinite(d.getTime()) ? d.toISOString() : null);
+            } catch {
+              onChange(null);
+            }
+          }}
           helpText={helpText || ""}
           isChanged={isChanged}
           error={error}
@@ -193,6 +213,7 @@ export function FieldRenderer({
           placeholder={field.placeholder || "YYYY-MM-DD"}
         />
       );
+    }
 
     case "custom":
       if (field.component === "CraftingMaterialsField") {

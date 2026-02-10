@@ -2612,7 +2612,8 @@ async function handleCraftingMaterialSelection(interaction) {
 async function continueCraftingProcess(interaction, character, materialsUsed, continueData, processingMessage = null) {
   try {
     const { 
-      addItemInventoryDatabase 
+      addItemInventoryDatabase, 
+      removeItemInventoryDatabase 
     } = require('@/utils/inventoryUtils');
     const { 
       checkAndUseStamina 
@@ -2628,14 +2629,16 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       createCraftingEmbed 
     } = require('../embeds/embeds');
     const { 
-      fetchCharacterByName 
+      fetchCharacterByName, 
+      getCharacterInventoryCollection 
     } = require('@/database/db');
     const { 
       activateJobVoucher, 
-      deactivateJobVoucher
+      deactivateJobVoucher, 
+      getJobVoucherErrorMessage 
     } = require('../modules/jobVoucherModule');
     const { info, success, error } = require('@/utils/logger');
-    const { MessageFlags } = require('discord.js');
+    const { MessageFlags, EmbedBuilder } = require('discord.js');
 
     const freshCharacter = await fetchCharacterById(continueData.characterId);
     if (!freshCharacter) {
@@ -2645,10 +2648,36 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       });
     }
 
+    // ------------------- Teacher Stamina: Booster must have 2nd voucher (used when boosted person crafts) -------------------
+    let boosterCharacterForVoucher = null;
+    if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+      boosterCharacterForVoucher = await fetchCharacterByName(freshCharacter.boostedBy);
+      if (boosterCharacterForVoucher && getEffectiveJob(boosterCharacterForVoucher) === 'Teacher') {
+        const boosterInvCollection = await getCharacterInventoryCollection(boosterCharacterForVoucher.name);
+        const boosterInv = await boosterInvCollection.find().toArray();
+        const boosterVoucherCount = (boosterInv || [])
+          .filter(entry => entry.itemName && entry.itemName.trim().toLowerCase() === 'job voucher')
+          .reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
+        if (boosterVoucherCount < 1) {
+          const voucherError = getJobVoucherErrorMessage('BOOSTER_NEEDS_VOUCHER_AT_CRAFT', { boosterName: boosterCharacterForVoucher.name });
+          const voucherEmbed = new EmbedBuilder()
+            .setTitle(voucherError.title)
+            .setDescription(voucherError.description)
+            .addFields((voucherError.fields || []).map(f => ({ name: f.name, value: f.value, inline: f.inline })))
+            .setColor(voucherError.color || '#FF0000')
+            .setTimestamp();
+          return interaction.followUp({ embeds: [voucherEmbed], flags: [MessageFlags.Ephemeral] });
+        }
+      }
+    }
+
     // ------------------- Deduct Stamina -------------------
     let updatedStamina;
     let teacherUpdatedStamina = null;
     try {
+      if (continueData.teacherStaminaContribution > 0 && boosterCharacterForVoucher) {
+        await removeItemInventoryDatabase(boosterCharacterForVoucher._id, 'Job Voucher', 1, interaction, 'Used for Teacher Crafting boost (2nd voucher, at craft)');
+      }
       updatedStamina = await checkAndUseStamina(freshCharacter, continueData.crafterStaminaCost);
       success('CRFT', `Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
       
@@ -2659,15 +2688,18 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
           success('CRFT', `Teacher stamina deducted for ${boosterCharacter.name} - remaining: ${teacherUpdatedStamina}`);
         }
       }
-    } catch (error) {
-      error('CRFT', `Failed to deduct stamina: ${error.message}`);
+    } catch (staminaErr) {
+      error('CRFT', `Failed to deduct stamina: ${staminaErr.message}`);
       // Refund materials
       for (const mat of materialsUsed) {
         await addItemInventoryDatabase(freshCharacter._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
       }
-      return interaction.followUp({ 
-        content: `⚠️ **Crafting failed due to insufficient stamina. Materials have been refunded.**`, 
-        flags: [MessageFlags.Ephemeral] 
+      if (continueData.teacherStaminaContribution > 0 && boosterCharacterForVoucher) {
+        await addItemInventoryDatabase(boosterCharacterForVoucher._id, 'Job Voucher', 1, interaction, 'Teacher crafting boost refund');
+      }
+      return interaction.followUp({
+        content: `⚠️ **Crafting failed due to insufficient stamina. Materials have been refunded.**`,
+        flags: [MessageFlags.Ephemeral]
       });
     }
 
@@ -2722,9 +2754,12 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       for (const mat of materialsUsed) {
         await addItemInventoryDatabase(freshCharacter._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
       }
-      return interaction.followUp({ 
-        content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded.**', 
-        flags: [MessageFlags.Ephemeral] 
+      if (continueData.teacherStaminaContribution > 0 && boosterCharacterForVoucher) {
+        await addItemInventoryDatabase(boosterCharacterForVoucher._id, 'Job Voucher', 1, interaction, 'Teacher crafting boost refund');
+      }
+      return interaction.followUp({
+        content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded.**',
+        flags: [MessageFlags.Ephemeral]
       });
     }
 

@@ -179,14 +179,17 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
             </thead>
             <tbody>
               {sortedItems.map((item, index) => {
-                // Safely extract ID - handle both string IDs and MongoDB ObjectIds
+                // Safely extract ID - handle string IDs and ObjectIds; never use object as key (plain object.toString() → "[object Object]")
                 let itemId: string;
-                if (typeof item._id === "string") {
+                if (typeof item._id === "string" && item._id) {
                   itemId = item._id;
-                } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
-                  itemId = (item._id as { toString: () => string }).toString();
+                } else if (item._id && typeof item._id === "object") {
+                  const idStr = typeof (item._id as { toString?: () => string }).toString === "function"
+                    ? (item._id as { toString: () => string }).toString()
+                    : "";
+                  itemId = idStr && idStr !== "[object Object]" ? idStr : `item-${index}`;
                 } else {
-                  itemId = String(item._id || `item-${index}`);
+                  itemId = `item-${index}`;
                 }
                 return (
                 <tr
@@ -274,14 +277,17 @@ export function DatabaseItemList({ items, onEdit }: DatabaseItemListProps) {
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sortedItems.map((item, index) => {
-              // Safely extract ID - handle both string IDs and MongoDB ObjectIds
+              // Safely extract ID - handle string IDs and ObjectIds; never use object as key (plain object.toString() → "[object Object]")
               let itemId: string;
-              if (typeof item._id === "string") {
+              if (typeof item._id === "string" && item._id) {
                 itemId = item._id;
-              } else if (item._id && typeof item._id === "object" && "toString" in item._id) {
-                itemId = (item._id as { toString: () => string }).toString();
+              } else if (item._id && typeof item._id === "object") {
+                const idStr = typeof (item._id as { toString?: () => string }).toString === "function"
+                  ? (item._id as { toString: () => string }).toString()
+                  : "";
+                itemId = idStr && idStr !== "[object Object]" ? idStr : `item-${index}`;
               } else {
-                itemId = String(item._id || `item-${index}`);
+                itemId = `item-${index}`;
               }
               return (
               <div

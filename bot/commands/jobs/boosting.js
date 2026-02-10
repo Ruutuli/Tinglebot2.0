@@ -11,10 +11,12 @@ const {
  fetchModCharacterByNameAndUserId,
  fetchModCharacterByName,
  fetchAllItems,
+ getCharacterInventoryCollection,
 } = require('@/database/db');
 const { getBoostEffect, normalizeJobName } = require('../../modules/boostingModule');
 const { getJobPerk } = require('../../modules/jobsModule');
-const { deactivateJobVoucher } = require('../../modules/jobVoucherModule');
+const { deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
+const { removeItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { useStamina } = require('../../modules/characterStatsModule');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const TempData = require('@/models/TempDataModel');
@@ -1106,6 +1108,27 @@ async function handleBoostAccept(interaction) {
     }
    }
   }
+ }
+
+ // Teacher Crafting: booster uses 1st job voucher when accepting (2nd used when boosted person crafts)
+ if (requestData.category === 'Crafting' && boosterJob === 'Teacher') {
+  const invCollection = await getCharacterInventoryCollection(booster.name);
+  const inv = await invCollection.find().toArray();
+  const jobVoucherCount = (inv || [])
+   .filter(entry => entry.itemName && entry.itemName.trim().toLowerCase() === 'job voucher')
+   .reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
+  if (jobVoucherCount < 1) {
+   const voucherError = getJobVoucherErrorMessage('BOOSTER_NEEDS_ONE_VOUCHER_AT_ACCEPT', { boosterName: booster.name });
+   const voucherEmbed = new EmbedBuilder()
+    .setTitle(voucherError.title)
+    .setDescription(voucherError.description)
+    .addFields((voucherError.fields || []).map(f => ({ name: f.name, value: f.value, inline: f.inline })))
+    .setColor(voucherError.color || '#FF0000')
+    .setTimestamp();
+   await interaction.reply({ embeds: [voucherEmbed], ephemeral: true });
+   return;
+  }
+  await removeItemInventoryDatabase(booster._id, 'Job Voucher', 1, interaction, 'Used for Teacher Crafting boost (1st voucher, at accept)');
  }
 
  // Deduct 1 stamina from the booster character
