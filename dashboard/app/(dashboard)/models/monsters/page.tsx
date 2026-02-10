@@ -206,19 +206,26 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             <div className="item-detail-row modern-item-detail-row">Loading drops...</div>
           </div>
         ) : drops && drops.length > 0 ? (
-          <div className="item-detail-list modern-item-detail-list">
-            {drops.map((item, idx) => (
-              <div key={idx} className="item-detail-row modern-item-detail-row flex justify-between items-center gap-2">
-                <span>
-                  {item.emoji && !/^[a-zA-Z0-9_\-:<>]+$/.test(item.emoji) ? `${item.emoji} ` : ""}
-                  {item.itemName}
-                </span>
-                <span className="text-[var(--totk-light-ocher)] shrink-0" title="Rarity">
-                  <i className="fas fa-star text-xs mr-1" aria-hidden="true"></i>
-                  {item.itemRarity ?? 1}
-                </span>
-              </div>
-            ))}
+          <div className="item-section modern-item-section">
+            <ul className="space-y-2 pl-0 list-none text-[var(--botw-pale)] text-sm">
+              {drops.map((item, idx) => (
+                <li
+                  key={idx}
+                  className="flex items-baseline gap-2 py-1 border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0"
+                >
+                  <span className="text-[var(--totk-light-ocher)] shrink-0 w-5 text-xs" aria-hidden>
+                    <i className="fas fa-star" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    {item.emoji && !/^[a-zA-Z0-9_\-:<>]+$/.test(item.emoji) ? `${item.emoji} ` : ""}
+                    {item.itemName}
+                  </span>
+                  <span className="text-[var(--totk-grey-200)] text-xs shrink-0">
+                    Rarity {item.itemRarity ?? 1}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : (
           <div className="item-detail-list modern-item-detail-list">
