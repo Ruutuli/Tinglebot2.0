@@ -1470,8 +1470,26 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     const permissionCheck = validateHealerPermission(healer, character.blightStage);
     if (!permissionCheck.canHeal) {
       const allowedHealers = permissionCheck.allowedCategories.map(c => c.toLowerCase()).join(' or ');
+      const ineligibleHealerEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Healer Not Eligible for This Stage')
+        .setDescription(`**${healer.name}** cannot heal **${character.name}** at Blight Stage ${character.blightStage}.`)
+        .addFields(
+          {
+            name: 'Allowed healers',
+            value: `Only ${allowedHealers} can heal this stage.`,
+            inline: false
+          },
+          {
+            name: 'What to do',
+            value: 'Please request a new healing task from an eligible healer.',
+            inline: false
+          }
+        )
+        .setFooter({ text: 'Healer Validation', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+        .setTimestamp();
       await interaction.editReply({
-        content: `❌ **${healer.name}** cannot heal **${character.name}** at Blight Stage ${character.blightStage}. Only ${allowedHealers} can heal this stage. Please request a new healing task from an eligible healer.`,
+        embeds: [ineligibleHealerEmbed],
         flags: [4096]
       });
       return;

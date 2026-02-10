@@ -33,7 +33,6 @@ import { submitCharacter } from "@/lib/character-submit";
 import { logger } from "@/utils/logger";
 import { gcsUploadService } from "@/lib/services/gcsUploadService";
 import { notifyCharacterCreation } from "@/lib/services/discordPostingService";
-import { assignCharacterRoles } from "@/lib/services/roleAssignmentService";
 
 // ------------------- Placeholder URLs (fallback if GCS not configured) -------------------
 const PLACEHOLDER_ICON = "/placeholder-icon.png";
@@ -420,16 +419,7 @@ export async function POST(req: NextRequest) {
     
     await char.save();
 
-    // Assign Discord roles (race, village, resident) - non-blocking
-    try {
-      await assignCharacterRoles(user.id, char);
-    } catch (roleError) {
-      // Log error but don't fail character creation if role assignment fails
-      logger.error(
-        "api/characters/create",
-        `Failed to assign roles: ${roleError instanceof Error ? roleError.message : String(roleError)}`
-      );
-    }
+    // Roles are assigned only when the character is accepted via mod actions (see ocApplicationService.checkVoteThresholds).
 
     // Notify moderators about new character creation (non-blocking)
     try {
