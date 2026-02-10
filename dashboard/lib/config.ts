@@ -9,10 +9,14 @@ import type { NextRequest } from "next/server";
  * Get the app base URL from an incoming request (origin: protocol + host).
  * In development we use the configured app URL so logout/auth redirects go to the
  * correct host/port (e.g. localhost:6001), not a wrong origin like localhost:8080.
- * In production we use the request origin so redirects stay on the same host.
+ * In production we use DOMAIN (canonical live URL, e.g. tinglebot.xyz) when set,
+ * otherwise the request origin so redirects stay on the same host.
  */
 export function getAppUrlFromRequest(request: NextRequest): string {
   if (process.env.NODE_ENV === "development") {
+    return getAppUrl();
+  }
+  if (process.env.DOMAIN) {
     return getAppUrl();
   }
   const url = request.nextUrl ?? new URL(request.url);

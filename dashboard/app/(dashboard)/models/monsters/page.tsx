@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useModelList } from "@/hooks/use-model-list";
 import { Pagination } from "@/components/ui";
 import { ModelListPageLayout } from "@/components/layout/model-list-page-layout";
 
+// ------------------- Types -------------------
 type Monster = {
   _id: string;
   name: string;
@@ -20,6 +21,174 @@ type Monster = {
   locations: string[];
   [key: string]: unknown;
 };
+
+type DropItem = { itemName: string; image?: string; emoji?: string; itemRarity?: number };
+
+// ------------------- Monster image URL (reuse GCS proxy pattern from pets/items) -------------------
+function monsterImageUrl(img?: string): string {
+  if (!img || img === "No Image") return "/ankle_icon.png";
+  if (img.startsWith("https://storage.googleapis.com/tinglebot/")) {
+    return `/api/images/${img.replace("https://storage.googleapis.com/tinglebot/", "")}`;
+  }
+  return img;
+}
+
+// ------------------- Monster flip card (front: stats, back: drops) -------------------
+function MonsterFlipCard({ monster }: { monster: Monster }) {
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [drops, setDrops] = useState<DropItem[] | null>(null);
+  const [dropsLoading, setDropsLoading] = useState(false);
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    fetchedRef.current = false;
+    setDrops(null);
+  }, [monster.name]);
+
+  useEffect(() => {
+    if (!isFlipped) return;
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    setDropsLoading(true);
+    fetch(`/api/models/monsters/${encodeURIComponent(monster.name)}/drops`)
+      .then((res) => res.json())
+      .then((data: { items?: DropItem[] }) => {
+        setDrops(Array.isArray(data.items) ? data.items : []);
+        setDropsLoading(false);
+      })
+      .catch(() => {
+        setDrops([]);
+        setDropsLoading(false);
+      });
+  }, [isFlipped, monster.name]);
+
+  const handleFlip = () => setIsFlipped((prev) => !prev);
+  const imageSrc = monsterImageUrl(monster.image);
+
+  return (
+    <div
+      className={`model-details-item item-card modern-item-card flip-card ${isFlipped ? "flipped" : ""}`}
+      onClick={handleFlip}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleFlip();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Flip card for ${monster.name}`}
+    >
+      {/* Front: monster stats (match pets/items card styling) */}
+      <div className="flip-card-front item-card-front">
+        <div className="item-header-row modern-item-header">
+          <div className="item-image-card">
+            <img
+              src={imageSrc}
+              alt={monster.name}
+              className="item-image modern-item-image"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = "/ankle_icon.png";
+              }}
+            />
+          </div>
+          <div className="item-header-info modern-item-header-info">
+            <div className="item-name-row">
+              <span className="item-name-big">{monster.name}</span>
+            </div>
+            <div className="item-slot-row">
+              <span className="item-slot-label">{monster.species}</span>
+              <span className="item-subtype-label">{monster.type}</span>
+            </div>
+            <div className="item-detail-row modern-item-detail-row">
+              <i className="fas fa-star" aria-hidden="true"></i>
+              <strong>Tier:</strong> <span className="text-[var(--totk-light-ocher)]">{monster.tier}</span>
+            </div>
+          </div>
+        </div>
+        <div className="item-section modern-item-details">
+          <div className="item-section-label modern-item-section-label">
+            <i className="fas fa-info-circle" aria-hidden="true"></i> Stats
+          </div>
+          <div className="item-detail-list modern-item-detail-list">
+            <div className="item-detail-row modern-item-detail-row">
+              <i className="fas fa-heart" aria-hidden="true"></i>
+              <strong>Hearts:</strong> <span className="text-[var(--totk-light-green)]">{monster.hearts}</span>
+            </div>
+            <div className="item-detail-row modern-item-detail-row">
+              <i className="fas fa-bolt" aria-hidden="true"></i>
+              <strong>Damage:</strong> <span className="text-[var(--blight-border)]">{monster.dmg}</span>
+            </div>
+          </div>
+        </div>
+        {monster.bloodmoon && (
+          <div className="rounded bg-[var(--blight-border)]/30 px-2 py-1 text-center text-xs text-[var(--botw-pale)]">
+            Blood Moon Monster
+          </div>
+        )}
+        {monster.locations && monster.locations.length > 0 && (
+          <div className="item-section modern-item-section">
+            <div className="item-section-label modern-item-section-label">
+              <i className="fas fa-map-marker-alt" aria-hidden="true"></i> Locations
+            </div>
+            <div className="item-tag-list modern-item-tag-list">
+              {monster.locations.map((loc, idx) => (
+                <span key={idx} className="item-tag">
+                  {loc}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="mt-auto text-xs text-[var(--totk-grey-200)]">Click to see drops</p>
+      </div>
+
+      {/* Back: drops list */}
+      <div className="flip-card-back item-card-back">
+        <div className="item-header-row modern-item-header">
+          <div className="item-image-card">
+            <img
+              src={imageSrc}
+              alt={monster.name}
+              className="item-image modern-item-image"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = "/ankle_icon.png";
+              }}
+            />
+          </div>
+          <div className="item-header-info modern-item-header-info">
+            <div className="item-name-row">
+              <span className="item-name-big">{monster.name}</span>
+            </div>
+            <div className="item-section-label modern-item-section-label">
+              <i className="fas fa-gift" aria-hidden="true"></i> Drops
+            </div>
+          </div>
+        </div>
+        {dropsLoading ? (
+          <div className="item-detail-list modern-item-detail-list">
+            <div className="item-detail-row modern-item-detail-row">Loading drops...</div>
+          </div>
+        ) : drops && drops.length > 0 ? (
+          <div className="item-tag-list modern-item-tag-list flex-wrap">
+            {drops.map((item, idx) => (
+              <span key={idx} className="item-tag">
+                {item.emoji && !/^[a-zA-Z0-9_\-:<>]+$/.test(item.emoji) ? `${item.emoji} ` : ""}
+                {item.itemName}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="item-detail-list modern-item-detail-list">
+            <div className="item-detail-row modern-item-detail-row">No drops recorded</div>
+          </div>
+        )}
+        <p className="mt-auto text-xs text-[var(--totk-grey-200)]">Click to flip back</p>
+      </div>
+    </div>
+  );
+}
 
 export default function MonstersPage() {
   const pathname = usePathname();
@@ -96,56 +265,9 @@ export default function MonstersPage() {
         </div>
       ) : (
         <>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mb-6 grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
             {monsters.map((monster) => (
-              <div
-                key={monster._id}
-                className="rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--totk-brown)]/30 p-4"
-              >
-                <h2 className="text-lg font-semibold text-[var(--totk-light-green)]">{monster.name}</h2>
-                <div className="mt-3 space-y-2 text-sm text-[var(--botw-pale)]">
-                  <div className="flex justify-between">
-                    <span className="font-medium">Species:</span>
-                    <span>{monster.species}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Type:</span>
-                    <span>{monster.type}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Tier:</span>
-                    <span className="text-[var(--totk-light-ocher)]">{monster.tier}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Hearts:</span>
-                    <span className="text-[var(--totk-light-green)]">{monster.hearts}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Damage:</span>
-                    <span className="text-[var(--blight-border)]">{monster.dmg}</span>
-                  </div>
-                  {monster.bloodmoon && (
-                    <div className="rounded bg-[var(--blight-border)]/30 px-2 py-1 text-center text-xs">
-                      Blood Moon Monster
-                    </div>
-                  )}
-                  {monster.locations && monster.locations.length > 0 && (
-                    <div className="mt-2">
-                      <span className="font-medium">Locations:</span>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {monster.locations.map((loc, idx) => (
-                          <span
-                            key={idx}
-                            className="rounded bg-[var(--totk-dark-ocher)]/30 px-2 py-0.5 text-xs"
-                          >
-                            {loc}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <MonsterFlipCard key={monster._id} monster={monster} />
             ))}
           </div>
           {total > itemsPerPage && (

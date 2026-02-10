@@ -21,6 +21,7 @@ export const navItems: NavItem[] = [
     children: [
       { href: "/models/items", label: "Items", icon: "fa-cube" },
       { href: "/models/pets", label: "Pets", icon: "fa-paw" },
+      { href: "/models/monsters", label: "Monsters", icon: "fa-dragon" },
       { href: "/models/starter-gear", label: "Starter Gear", icon: "fa-shield" },
       { href: "/models/villages", label: "Villages", icon: "fa-house" },
       { href: "/models/village-shops", label: "Village Shops", icon: "fa-store" },
