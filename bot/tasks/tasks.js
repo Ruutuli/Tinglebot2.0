@@ -685,6 +685,12 @@ async function resetDailyRolls(_client, _data = {}) {
       }
     }
     
+    // Clear expired boosts so "boosted yesterday" does not still apply on the new roll day
+    const { updatedCount: boostUpdated, clearedCount: boostCleared } = await clearExpiredAcceptedBoosts();
+    if (boostUpdated > 0 || boostCleared > 0) {
+      logger.info('SCHEDULED', `reset-daily-rolls: cleared ${boostUpdated} expired boosts, ${boostCleared} character.boostedBy`);
+    }
+    
     logger.success('SCHEDULED', `reset-daily-rolls: done (reset ${resetCount} characters)`);
   } catch (err) {
     logger.error('SCHEDULED', `reset-daily-rolls: ${err.message}`);
@@ -1751,49 +1757,50 @@ async function characterTimerPoll(_client, _data = {}) {
 // ------------------- Expiration Cleanup Tasks -------------------
 // ============================================================================
 
+// ------------------- clearExpiredAcceptedBoosts (shared helper) -------------------
+// Clears expired accepted boosts (TempData status -> expired, character.boostedBy -> null).
+// Used by resetDailyRolls (at daily roll reset) and cleanupBoostExpirations (hourly).
+async function clearExpiredAcceptedBoosts() {
+  const now = Date.now();
+  const expiredBoosts = await TempData.find({
+    type: 'boosting',
+    'data.status': 'accepted',
+    'data.boostExpiresAt': { $lt: now }
+  });
+  let updatedCount = 0;
+  let clearedCount = 0;
+  for (const boostData of expiredBoosts) {
+    try {
+      const data = boostData.data;
+      if (data.status !== 'expired') {
+        data.status = 'expired';
+        boostData.data = data;
+        await boostData.save();
+        updatedCount++;
+      }
+      if (data.targetCharacter) {
+        const character = await Character.findOne({ name: data.targetCharacter });
+        if (character && character.boostedBy) {
+          character.boostedBy = null;
+          await character.save();
+          clearedCount++;
+        }
+      }
+    } catch (err) {
+      logger.error('SCHEDULED', `clearExpiredAcceptedBoosts: Failed for boost ${boostData._id}: ${err.message}`);
+    }
+  }
+  return { updatedCount, clearedCount };
+}
+
 // ------------------- cleanup-boost-expirations (Every hour) -------------------
 // Updates boost status and clears character.boostedBy fields (TTL handles document deletion)
 async function cleanupBoostExpirations(_client, _data = {}) {
   try {
     logger.info('SCHEDULED', 'cleanup-boost-expirations: starting');
-    
+    const { updatedCount: acceptedUpdated, clearedCount } = await clearExpiredAcceptedBoosts();
+    let updatedCount = acceptedUpdated;
     const now = Date.now();
-    
-    // Find all active boosts that have expired
-    const expiredBoosts = await TempData.find({
-      type: 'boosting',
-      'data.status': 'accepted',
-      'data.boostExpiresAt': { $lt: now }
-    });
-    
-    let updatedCount = 0;
-    let clearedCount = 0;
-    
-    for (const boostData of expiredBoosts) {
-      try {
-        const data = boostData.data;
-        
-        // Update status to expired
-        if (data.status !== 'expired') {
-          data.status = 'expired';
-          boostData.data = data;
-          await boostData.save();
-          updatedCount++;
-        }
-        
-        // Clear character.boostedBy field
-        if (data.targetCharacter) {
-          const character = await Character.findOne({ name: data.targetCharacter });
-          if (character && character.boostedBy) {
-            character.boostedBy = null;
-            await character.save();
-            clearedCount++;
-          }
-        }
-      } catch (err) {
-        logger.error('SCHEDULED', `cleanup-boost-expirations: Failed for boost ${boostData._id}: ${err.message}`);
-      }
-    }
     
     // Also handle pending requests that expired
     const expiredRequests = await TempData.find({

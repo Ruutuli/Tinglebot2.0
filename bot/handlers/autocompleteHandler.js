@@ -797,6 +797,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               } else if (boostingSubcommand === "cancel") {
                 if (focusedOption.name === "requestid") {
                   await handleBoostingCancelRequestIdAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "charactername") {
+                  await handleBoostingCancelCharacterAutocomplete(interaction, focusedOption);
                 }
               }
             }
@@ -1510,6 +1512,39 @@ async function handleBoostingCancelRequestIdAutocomplete(interaction, focusedOpt
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("[autocompleteHandler.js]❌ Error in handleBoostingCancelRequestIdAutocomplete:", error);
+  await safeRespondWithError(interaction, error);
+ }
+}
+
+// ------------------- Boosting Cancel Character Name Autocomplete -------------------
+// Shows user's characters that have a pending or active boost (for cancel-by-character).
+async function handleBoostingCancelCharacterAutocomplete(interaction, focusedOption) {
+ try {
+  const userId = interaction.user.id;
+  const allBoostingData = await TempData.findAllByType('boosting');
+  const characters = await fetchCharactersByUserId(userId);
+  const modCharacters = await fetchModCharactersByUserId(userId);
+  const allCharacters = [...characters, ...modCharacters];
+  const userCharacterNames = new Set(allCharacters.map(c => c.name.toLowerCase()));
+  const currentTime = Date.now();
+
+  const validRequests = allBoostingData.filter(tempData => {
+   const requestData = tempData.data;
+   const isPendingOrAccepted = requestData.status === 'pending' || requestData.status === 'accepted';
+   const hasTarget = !!requestData.targetCharacter;
+   const ownsTarget = userCharacterNames.has(requestData.targetCharacter?.toLowerCase());
+   const notExpired = requestData.status === 'pending'
+     ? (!requestData.expiresAt || currentTime <= requestData.expiresAt)
+     : (!requestData.boostExpiresAt || currentTime <= requestData.boostExpiresAt);
+   return isPendingOrAccepted && hasTarget && ownsTarget && notExpired;
+  });
+
+  const characterNames = [...new Set(validRequests.map(t => t.data.targetCharacter).filter(Boolean))];
+  const choices = characterNames.map(name => ({ name, value: name }));
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("[autocompleteHandler.js]❌ Error in handleBoostingCancelCharacterAutocomplete:", error);
   await safeRespondWithError(interaction, error);
  }
 }

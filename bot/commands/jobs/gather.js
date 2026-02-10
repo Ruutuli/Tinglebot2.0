@@ -932,29 +932,9 @@ module.exports = {
           }
         }
 
-        // ------------------- Defensive Filter: Prevent Weapons from Gather Pool ------------------
         // Safety check: ensure boostedAvailableItems is an array
         if (!Array.isArray(boostedAvailableItems)) {
           boostedAvailableItems = availableItems; // Fallback to original items
-        }
-        
-        // Filter out weapons from the gather pool as a safety measure
-        // Weapons should only be obtained through looting, not gathering
-        const beforeWeaponFilter = boostedAvailableItems.length;
-        boostedAvailableItems = boostedAvailableItems.filter((item) => {
-          // Exclude items marked as weapons
-          if (item.categoryGear === 'Weapon') {
-            return false;
-          }
-          // Also check category array for weapon classification
-          if (Array.isArray(item.category) && item.category.includes('Weapon')) {
-            return false;
-          }
-          return true;
-        });
-        
-        if (beforeWeaponFilter > boostedAvailableItems.length) {
-          logger.warn('GATHER', `Filtered out ${beforeWeaponFilter - boostedAvailableItems.length} weapon(s) from gather pool (defensive filter)`);
         }
         
         let weightedItems;
@@ -982,8 +962,11 @@ module.exports = {
         // Guard: Check if weightedItems is empty (can happen if all items filtered out or have zero weight)
         if (!weightedItems || weightedItems.length === 0) {
           logger.warn('GATHER', `No valid items available after weighting - availableItems: ${boostedAvailableItems.length}, weightedItems: 0`);
+          const cancelHint = character.boostedBy
+            ? `\n\nYou can cancel the boost with \`/boosting cancel\` (use the request ID from your boost message, or pick it from autocomplete) to gather without the boost.`
+            : '';
           await safeReply({
-            content: `⚠️ **No items available to gather here with the current boost and job combination.** Your daily gather roll was not used.`,
+            content: `⚠️ **No items available to gather here with the current boost and job combination.** Your daily gather roll was not used.${cancelHint}`,
           });
           return;
         }
@@ -1116,20 +1099,12 @@ module.exports = {
           logger.info('GATHER', `🏘️ Village Level 1: No quantity bonuses (base quantity: ${quantity})`);
         }
         
-        // Handle Entertainer bonus item
+        // Handle Entertainer bonus item: only items with entertainerItems === true
         if (isEntertainerBoost) {
           const entertainerItems = await applyGatheringBoost(character.name, availableItems);
-          // Preserve the filtered list if no Entertainer-specific items are available.
           let entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
-            ? entertainerItems
-            : availableItems;
-
-          // Defensive filter: Remove weapons from bonus pool
-          entertainerBonusPool = entertainerBonusPool.filter((item) => {
-            if (item.categoryGear === 'Weapon') return false;
-            if (Array.isArray(item.category) && item.category.includes('Weapon')) return false;
-            return true;
-          });
+            ? entertainerItems.filter((item) => item.entertainerItems === true)
+            : availableItems.filter((item) => item.entertainerItems === true);
 
           if (entertainerBonusPool.length > 0) {
             // Select a random entertainer item as bonus

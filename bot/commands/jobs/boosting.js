@@ -814,7 +814,14 @@ module.exports = {
      option
       .setName("requestid")
       .setDescription("The ID of the boost request to cancel")
-      .setRequired(true)
+      .setRequired(false)
+      .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("charactername")
+      .setDescription("Character name (use if you don't have the request ID)")
+      .setRequired(false)
       .setAutocomplete(true)
     )
   ),
@@ -2591,10 +2598,54 @@ const selectionFieldValue = manualSelection
 
 async function handleBoostCancel(interaction) {
  const requestId = interaction.options.getString("requestid");
+ const characterName = interaction.options.getString("charactername");
  const userId = interaction.user.id;
 
- const requestData = await retrieveBoostingRequestFromTempData(requestId);
- 
+ let requestData = null;
+ let resolvedRequestId = requestId;
+
+ if (requestId) {
+  requestData = await retrieveBoostingRequestFromTempData(requestId);
+ } else if (characterName) {
+  // Cancel by character name: find pending or accepted boost for this character
+  const targetCharacter = await fetchCharacterWithFallback(characterName, userId);
+  if (!targetCharacter) {
+   await interaction.reply({
+    content: "❌ **Character not found**\n\nYou can only cancel boosts for your own characters. Check the character name and try again.",
+    ephemeral: true,
+   });
+   return;
+  }
+  const allBoosting = await TempData.find({
+   type: 'boosting',
+   'data.targetCharacter': targetCharacter.name,
+   'data.status': { $in: ['pending', 'accepted'] }
+  });
+  if (allBoosting.length === 0) {
+   await interaction.reply({
+    content: `❌ **No boost to cancel**\n\n**${targetCharacter.name}** does not have a pending or active boost.`,
+    ephemeral: true,
+   });
+   return;
+  }
+  if (allBoosting.length > 1) {
+   await interaction.reply({
+    content: `❌ **Multiple boosts found**\n\n**${targetCharacter.name}** has more than one boost. Please use \`/boosting cancel\` with the **Request ID** (use autocomplete on the requestid option to pick one).`,
+    ephemeral: true,
+   });
+   return;
+  }
+  const tempData = allBoosting[0];
+  requestData = tempData.data;
+  resolvedRequestId = tempData.key || requestData.boostRequestId;
+ } else {
+  await interaction.reply({
+   content: "❌ **Specify what to cancel**\n\nProvide either a **Request ID** or a **Character name** (use autocomplete to pick a character with an active boost).",
+   ephemeral: true,
+  });
+  return;
+ }
+
  if (!requestData) {
   await interaction.reply({
    content: "❌ **Invalid Request ID**\n\nCould not find a boost request with that ID.",
@@ -2645,7 +2696,7 @@ async function handleBoostCancel(interaction) {
 
  // Cancel the request
  requestData.status = "cancelled";
- await saveBoostingRequestToTempData(requestId, requestData);
+ await saveBoostingRequestToTempData(resolvedRequestId, requestData);
 
  // Update the embed if it exists
  await updateBoostRequestEmbed(interaction.client, requestData, 'cancelled');

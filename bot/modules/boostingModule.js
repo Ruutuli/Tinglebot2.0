@@ -834,7 +834,7 @@ async function applyEntertainerGatheringBoost(regionItems) {
 
  // Ensure we always return an array so calling code can safely iterate.
  if (!Array.isArray(regionItems)) {
-  return entertainerItems.length > 0 ? entertainerItems : regionItems;
+  return entertainerItems.length > 0 ? entertainerItems : [];
  }
 
  // Filter regionItems to only include items marked as entertainerItems: true
