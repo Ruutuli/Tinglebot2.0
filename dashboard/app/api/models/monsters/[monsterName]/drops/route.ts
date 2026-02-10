@@ -20,18 +20,18 @@ export async function GET(
     }
 
     const { default: Item } = await import("@/models/ItemModel.js");
-    const items = await Item.find({
+    type ItemDoc = { itemName: string; image?: string; emoji?: string; itemRarity?: number };
+    const items = (await Item.find({
       $or: [
         { monsterList: monsterName },
         { monsterList: { $in: [monsterName] } },
       ],
     })
       .select("itemName image emoji itemRarity")
-      .lean();
+      .lean()) as unknown as ItemDoc[];
 
-    type ItemDoc = { itemName: string; image?: string; emoji?: string; itemRarity?: number };
     return NextResponse.json({
-      items: (items as ItemDoc[]).map((doc) => ({
+      items: items.map((doc) => ({
         itemName: doc.itemName,
         image: doc.image,
         emoji: doc.emoji,
