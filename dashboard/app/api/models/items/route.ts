@@ -62,10 +62,14 @@ export async function GET(req: NextRequest) {
     const jobs = getFilterParamMultiple(params, "job");
     const craftableParam = params.get("craftable");
     const stackableParam = params.get("stackable");
+    const entertainerItemsParam = params.get("entertainerItems");
+    const divineItemsParam = params.get("divineItems");
     
     // Parse craftable and stackable - if multiple values, check if both true and false are present
     let craftable: string | null = null;
     let stackable: string | null = null;
+    let entertainerItems: string | null = null;
+    let divineItems: string | null = null;
     
     if (craftableParam) {
       const craftableValues = craftableParam.split(",");
@@ -85,6 +89,22 @@ export async function GET(req: NextRequest) {
       if (hasTrue && !hasFalse) stackable = "true";
       else if (hasFalse && !hasTrue) stackable = "false";
       // If both are selected, stackable remains null (no filter)
+    }
+    
+    if (entertainerItemsParam) {
+      const v = entertainerItemsParam.split(",");
+      const hasTrue = v.includes("true");
+      const hasFalse = v.includes("false");
+      if (hasTrue && !hasFalse) entertainerItems = "true";
+      else if (hasFalse && !hasTrue) entertainerItems = "false";
+    }
+    
+    if (divineItemsParam) {
+      const v = divineItemsParam.split(",");
+      const hasTrue = v.includes("true");
+      const hasFalse = v.includes("false");
+      if (hasTrue && !hasFalse) divineItems = "true";
+      else if (hasFalse && !hasTrue) divineItems = "false";
     }
 
     // ------------------- Build Filter -------------------
@@ -249,6 +269,30 @@ export async function GET(req: NextRequest) {
     }
     // If stackable contains both "true" and "false", don't add filter (show all)
     
+    // Entertainer items filter
+    if (entertainerItems === "true") {
+      filter.entertainerItems = true;
+    } else if (entertainerItems === "false") {
+      orConditions.push({
+        $or: [
+          { entertainerItems: { $ne: true } },
+          { entertainerItems: { $exists: false } },
+        ],
+      });
+    }
+    
+    // Divine items filter
+    if (divineItems === "true") {
+      filter.divineItems = true;
+    } else if (divineItems === "false") {
+      orConditions.push({
+        $or: [
+          { divineItems: { $ne: true } },
+          { divineItems: { $exists: false } },
+        ],
+      });
+    }
+    
     // Combine $or conditions with $and if we have multiple
     let finalFilter: Record<string, unknown> = filter;
     if (orConditions.length > 0) {
@@ -297,7 +341,8 @@ export async function GET(req: NextRequest) {
           "allJobs farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
           "fisherman gravekeeper guard maskMaker hunter hunterLooting mercenary miner researcher scout weaver witch " +
           "craftingMaterial crafting staminaToCraft craftingJobs " +
-          "specialWeather modifierHearts staminaRecovered"
+          "specialWeather modifierHearts staminaRecovered " +
+          "entertainerItems divineItems"
         )
         .sort(sortQuery)
         .skip((page - 1) * limit)
@@ -355,6 +400,8 @@ export async function GET(req: NextRequest) {
       ],
       craftable: ["true", "false"],
       stackable: ["true", "false"],
+      entertainerItems: ["true", "false"],
+      divineItems: ["true", "false"],
     };
 
     // ------------------- Return Response -------------------

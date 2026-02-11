@@ -33,6 +33,8 @@ const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
     job: "Job",
     craftable: "Craftable",
     stackable: "Stackable",
+    entertainerItems: "Entertainer item",
+    divineItems: "Divine item",
   },
   monsters: { species: "Species", type: "Type", tier: "Tier" },
   pets: { status: "Status", species: "Species", petType: "Type" },
@@ -106,7 +108,7 @@ function buildFilterGroups(
           labelVal = key === "tier" ? `Tier ${v}` : `Rarity ${v}`;
         } else if (key === "isActive") {
           labelVal = String(v) === "true" ? "Active" : "Inactive";
-        } else if (key === "craftable" || key === "stackable") {
+        } else if (key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems") {
           labelVal = String(v) === "true" ? "Yes" : "No";
         } else if (key === "race" || key === "village" || key === "job" || key === "source" || key === "location" || key === "status" || key === "species" || key === "petType") {
           labelVal = capitalize(String(v));
@@ -482,7 +484,7 @@ function buildQueryParams(
     if (values.length && key !== "sortBy" && key !== "perPage") {
       // Handle boolean values for isModCharacter, craftable, stackable
       // These are stored as strings "true"/"false" in filters
-      if (key === "isModCharacter" || key === "craftable" || key === "stackable") {
+      if (key === "isModCharacter" || key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems") {
         const boolValues = values.map(v => {
           if (typeof v === "boolean") {
             return String(v);
@@ -695,8 +697,8 @@ export function useModelList<T>(
       const opt = opts.find((v) => String(v) === optionId);
       let value: string | number | boolean = opt ?? (groupId === "rarity" || groupId === "tier" ? parseInt(optionId, 10) : optionId);
       
-      // Handle boolean filters (craftable, stackable) - store as strings for API compatibility
-      if (groupId === "craftable" || groupId === "stackable") {
+      // Handle boolean filters (craftable, stackable, entertainerItems, divineItems) - store as strings for API compatibility
+      if (groupId === "craftable" || groupId === "stackable" || groupId === "entertainerItems" || groupId === "divineItems") {
         value = optionId; // Keep as string "true" or "false"
       }
       

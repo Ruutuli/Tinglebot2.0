@@ -36,6 +36,8 @@ export type ItemFlipCardProps = ItemData & {
   modifierHearts?: number;
   staminaRecovered?: number;
   staminaToCraft?: number;
+  entertainerItems?: boolean;
+  divineItems?: boolean;
 };
 
 type CharacterOwnership = {
@@ -357,6 +359,23 @@ export function ItemFlipCard({ item }: { item: ItemFlipCardProps }) {
               ))}
             </div>
           </div>
+
+          {/* Entertainer / Divine item tags (public) */}
+          {(item.entertainerItems || item.divineItems) && (
+            <div className="item-section modern-item-section">
+              <div className="item-section-label modern-item-section-label">
+                <i className="fas fa-tags" aria-hidden="true"></i> Boost tags
+              </div>
+              <div className="item-tag-list modern-item-tag-list">
+                {item.entertainerItems && (
+                  <span className="item-tag">Entertainer item</span>
+                )}
+                {item.divineItems && (
+                  <span className="item-tag">Divine item</span>
+                )}
+              </div>
+            </div>
+          )}
           </div>
 
           {/* Back Side - Character Ownership */}

@@ -270,6 +270,17 @@ const normalizeError = (err: unknown): Error => {
   return err instanceof Error ? err : new Error(String(err));
 };
 
+function getItemId(id: unknown): string {
+  if (typeof id === "string" && id) return id;
+  if (id && typeof id === "object" && "$oid" in id) return (id as { $oid: string }).$oid;
+  if (id && typeof id === "object" && "oid" in id) return (id as { oid: string }).oid;
+  if (id != null && typeof (id as { toString?: () => string }).toString === "function") {
+    const s = (id as { toString: () => string }).toString();
+    return s && s !== "[object Object]" ? s : "";
+  }
+  return "";
+}
+
 // ============================================================================
 // ------------------- Component -------------------
 // ============================================================================
@@ -279,7 +290,7 @@ export default function CharacterInventoryPage() {
   // ------------------- Hooks & State -------------------
   // ============================================================================
 
-  const { user, loading: sessionLoading } = useSession();
+  const { user, isAdmin, loading: sessionLoading } = useSession();
   const params = useParams();
   const characterNameParam = params?.characterName;
   const decodedCharacterName = characterNameParam && typeof characterNameParam === "string"
@@ -303,6 +314,14 @@ export default function CharacterInventoryPage() {
   const [itemLogs, setItemLogs] = useState<InventoryLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
+
+  const [itemDetailsForAdmin, setItemDetailsForAdmin] = useState<{
+    _id: unknown;
+    entertainerItems?: boolean;
+    divineItems?: boolean;
+  } | null>(null);
+  const [loadingItemDetails, setLoadingItemDetails] = useState(false);
+  const [savingItemFlags, setSavingItemFlags] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -696,6 +715,7 @@ export default function CharacterInventoryPage() {
     setSelectedItem(null);
     setItemLogs([]);
     setLogError(null);
+    setItemDetailsForAdmin(null);
   }, []);
 
   useEffect(() => {
@@ -712,6 +732,81 @@ export default function CharacterInventoryPage() {
       document.removeEventListener("keydown", handleEscape);
     };
   }, [selectedItem, closeModal]);
+
+  // Fetch item details for admin (entertainer/divine flags) when modal opens
+  const itemDetailsAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (!selectedItem || !isAdmin) {
+      setItemDetailsForAdmin(null);
+      setLoadingItemDetails(false);
+      return;
+    }
+    itemDetailsAbortRef.current?.abort();
+    itemDetailsAbortRef.current = new AbortController();
+    const signal = itemDetailsAbortRef.current.signal;
+    setLoadingItemDetails(true);
+    setItemDetailsForAdmin(null);
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/database/items?model=Item&itemName=${encodeURIComponent(selectedItem.itemName)}`,
+          { signal }
+        );
+        if (signal.aborted) return;
+        if (res.ok) {
+          const data = (await res.json()) as { item: { _id: unknown; entertainerItems?: boolean; divineItems?: boolean } };
+          if (data.item && !signal.aborted) {
+            setItemDetailsForAdmin({
+              _id: data.item._id,
+              entertainerItems: data.item.entertainerItems ?? false,
+              divineItems: data.item.divineItems ?? false,
+            });
+          }
+        } else {
+          setItemDetailsForAdmin(null);
+        }
+      } catch {
+        if (!signal.aborted) setItemDetailsForAdmin(null);
+      } finally {
+        if (!signal.aborted) setLoadingItemDetails(false);
+      }
+    })();
+    return () => {
+      itemDetailsAbortRef.current?.abort();
+    };
+  }, [selectedItem?.itemName, isAdmin]);
+
+  const updateItemFlags = useCallback(async (updates: { entertainerItems?: boolean; divineItems?: boolean }) => {
+    if (!itemDetailsForAdmin || savingItemFlags) return;
+    const itemId = getItemId(itemDetailsForAdmin._id);
+    if (!itemId) return;
+    setSavingItemFlags(true);
+    try {
+      const res = await fetch("/api/admin/database/items", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, updates, model: "Item" }),
+      });
+      if (!res.ok) {
+        const err = (await res.json()) as { message?: string };
+        throw new Error(err.message || "Failed to update item");
+      }
+      const data = (await res.json()) as { item: { entertainerItems?: boolean; divineItems?: boolean } };
+      setItemDetailsForAdmin((prev) =>
+        prev
+          ? {
+              ...prev,
+              entertainerItems: data.item?.entertainerItems ?? prev.entertainerItems,
+              divineItems: data.item?.divineItems ?? prev.divineItems,
+            }
+          : null
+      );
+    } catch (e) {
+      console.error("[inventories] Update item flags failed:", e);
+    } finally {
+      setSavingItemFlags(false);
+    }
+  }, [itemDetailsForAdmin, savingItemFlags]);
 
   // ============================================================================
   // ------------------- Render Helpers -------------------
@@ -1104,6 +1199,54 @@ export default function CharacterInventoryPage() {
                 <i className="fa-solid fa-times" />
               </button>
             </div>
+
+            {/* Admin: Item flags (Entertainer / Divine) */}
+            {isAdmin && (
+              <div className="border-b border-[var(--totk-dark-ocher)]/30 px-6 py-4 bg-[var(--botw-warm-black)]/40">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)] mb-3">
+                  Item flags (admin)
+                </p>
+                {loadingItemDetails ? (
+                  <p className="text-sm text-[var(--totk-grey-200)] italic">Loading...</p>
+                ) : itemDetailsForAdmin ? (
+                  <div className="flex flex-wrap gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={itemDetailsForAdmin.entertainerItems ?? false}
+                        disabled={savingItemFlags}
+                        onChange={(e) => {
+                          const v = e.target.checked;
+                          setItemDetailsForAdmin((prev) => (prev ? { ...prev, entertainerItems: v } : null));
+                          updateItemFlags({ entertainerItems: v });
+                        }}
+                        className="rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]/50"
+                      />
+                      <span className="text-sm text-[var(--botw-pale)]">Entertainer item</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={itemDetailsForAdmin.divineItems ?? false}
+                        disabled={savingItemFlags}
+                        onChange={(e) => {
+                          const v = e.target.checked;
+                          setItemDetailsForAdmin((prev) => (prev ? { ...prev, divineItems: v } : null));
+                          updateItemFlags({ divineItems: v });
+                        }}
+                        className="rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]/50"
+                      />
+                      <span className="text-sm text-[var(--botw-pale)]">Divine item</span>
+                    </label>
+                    {savingItemFlags && (
+                      <span className="text-xs text-[var(--totk-grey-200)] italic">Saving...</span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--totk-grey-200)] italic">Item not in database.</p>
+                )}
+              </div>
+            )}
 
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-6">

@@ -72,6 +72,8 @@ type Item = ItemFlipCardProps & {
     rockslide?: boolean;
     avalanche?: boolean;
   };
+  entertainerItems?: boolean;
+  divineItems?: boolean;
   [key: string]: unknown;
 };
 

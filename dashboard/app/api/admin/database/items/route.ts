@@ -141,6 +141,34 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // ------------------- Optional: Fetch Single Item by Name (Item model only) -------------------
+    const itemNameParam = params.get("itemName");
+    if (modelName === "Item" && itemNameParam && itemNameParam.trim()) {
+      const nameField = modelConfig.nameField;
+      const singleRecord = (await Model.findOne({ [nameField]: itemNameParam.trim() }).lean()) as ItemLean | null;
+      if (!singleRecord) {
+        return NextResponse.json(
+          { error: "Item not found", message: `No item found with name "${itemNameParam.trim()}"` },
+          { status: 404 }
+        );
+      }
+      const convertMapsToObjects = (obj: unknown): unknown => {
+        if (obj instanceof Map) return Object.fromEntries(obj);
+        if (Array.isArray(obj)) return obj.map(convertMapsToObjects);
+        if (obj !== null && typeof obj === "object") {
+          const converted: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(obj)) {
+            converted[key] = convertMapsToObjects(value);
+          }
+          return converted;
+        }
+        return obj;
+      };
+      const converted = convertMapsToObjects(singleRecord) as ItemLean;
+      logger.info("api/admin/database/items GET", `Fetched single Item by name: ${itemNameParam.trim()}`);
+      return NextResponse.json({ item: converted });
+    }
+
     // ------------------- Fetch All Records -------------------
     // Fetch all records sorted by itemName for consistency
     const records = (await Model.find({})
