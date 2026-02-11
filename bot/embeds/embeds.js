@@ -861,8 +861,17 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
  let craftingMaterialText = "No materials used or invalid data format.";
  
  if (Array.isArray(materialsUsed) && materialsUsed.length > 0) {
+  // Combine same items into one line (e.g. Ironshroom x4 instead of four "x1" lines)
+  const aggregated = new Map();
+  for (const material of materialsUsed) {
+   const key = material.itemName;
+   const prev = aggregated.get(key) || 0;
+   aggregated.set(key, prev + (material.quantity ?? 1));
+  }
+  const materialsByItem = Array.from(aggregated.entries(), ([itemName, quantity]) => ({ itemName, quantity }));
+
   const formattedMaterials = await Promise.all(
-   materialsUsed.map(async (material) => {
+   materialsByItem.map(async (material) => {
     const materialItem = await ItemModel.findOne({ itemName: material.itemName }).select("emoji");
     const emoji = materialItem?.emoji || DEFAULT_EMOJI;
     return formatItemDetails(material.itemName, material.quantity, emoji);

@@ -305,6 +305,22 @@ function MyCharacterCard({ character }: { character: Character }): React.ReactEl
           </span>
         </div>
 
+        {/* Hearts and Stamina */}
+        <div className="flex items-center justify-center gap-4 sm:gap-6 mb-4 text-xs sm:text-sm text-[var(--botw-pale)]">
+          <span className="inline-flex items-center gap-1.5">
+            <i className="fa-solid fa-heart text-[var(--totk-light-green)]" aria-hidden />
+            <span>
+              {character.currentHearts ?? character.maxHearts ?? 0}/{character.maxHearts ?? 0}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <i className="fa-solid fa-bolt text-[var(--botw-blue)]" aria-hidden />
+            <span>
+              {character.currentStamina ?? character.maxStamina ?? 0}/{character.maxStamina ?? 0}
+            </span>
+          </span>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 pt-3 sm:pt-4 border-t border-[var(--totk-dark-ocher)]/50 sm:flex-wrap">
           {character.status === "needs_changes" && (
