@@ -19,13 +19,13 @@ module.exports = {
 
   // ------------------- Execute function to handle subcommands -------------------
   async execute(interaction) {
+    // Defer reply first so we can safely use editReply in both success and catch paths
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
     const subcommand = interaction.options.getSubcommand();
     const userId = interaction.user.id;
 
     try {
-      // Defer reply immediately to prevent timeout
-      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-
       // ------------------- Handle 'check' subcommand -------------------
       if (subcommand === 'check') {
         const tokenRecord = await getOrCreateToken(userId);
@@ -53,10 +53,21 @@ module.exports = {
         handleInteractionError(error, 'tokens.js');
       }
       const { fullMessage } = handleTokenError(error, interaction);
-      await interaction.editReply({
-        content: fullMessage,
-        flags: [MessageFlags.Ephemeral],
-      });
+      try {
+        await interaction.editReply({
+          content: fullMessage,
+          flags: [MessageFlags.Ephemeral],
+        });
+      } catch (replyError) {
+        if (replyError.name === 'InteractionNotReplied' || replyError.code === 'InteractionNotReplied') {
+          await interaction.reply({
+            content: fullMessage,
+            ephemeral: true,
+          }).catch(() => {});
+        } else {
+          throw replyError;
+        }
+      }
     }
   },
 };

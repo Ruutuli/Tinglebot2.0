@@ -206,19 +206,26 @@ export async function GET(
       }
     } else {
       const slug = slugOrId.toLowerCase();
+      type CharSlug = Pick<CharDoc, "_id" | "name"> & { publicSlug?: string | null };
       const regularChars = await Character.find({})
-        .select("name")
-        .lean<Array<Pick<CharDoc, "_id" | "name">>>();
-      const slugMatch = regularChars.find((c) => createSlug(c.name) === slug);
+        .select("name publicSlug")
+        .lean<CharSlug[]>();
+      let slugMatch = regularChars.find((c) => createSlug(c.name) === slug);
+      if (!slugMatch) {
+        slugMatch = regularChars.find((c) => (c.publicSlug ?? "").toLowerCase() === slug) ?? null;
+      }
       if (slugMatch) {
         char = await loadCharacterById(String(slugMatch._id));
       }
 
       if (!char) {
         const modChars = await ModCharacter.find({})
-          .select("name")
-          .lean<Array<Pick<CharDoc, "_id" | "name">>>();
-        const modSlugMatch = modChars.find((c) => createSlug(c.name) === slug);
+          .select("name publicSlug")
+          .lean<CharSlug[]>();
+        let modSlugMatch = modChars.find((c) => createSlug(c.name) === slug);
+        if (!modSlugMatch) {
+          modSlugMatch = modChars.find((c) => (c.publicSlug ?? "").toLowerCase() === slug) ?? undefined;
+        }
         if (modSlugMatch) {
           isModCharacter = true;
           char = await loadCharacterById(String(modSlugMatch._id), true);
