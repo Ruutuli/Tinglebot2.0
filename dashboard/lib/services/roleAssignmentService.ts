@@ -3,7 +3,7 @@
 // Assigns Discord roles when character is approved
 // ============================================================================
 
-import { discordApiRequest, assignGuildMemberRole } from "@/lib/discord";
+import { discordApiRequest, assignGuildMemberRole, removeGuildMemberRole } from "@/lib/discord";
 import { logger } from "@/utils/logger";
 import { getAppUrl } from "@/lib/config";
 import { getJobPerk } from "@/data/jobData";
@@ -11,6 +11,8 @@ import { getJobPerk } from "@/data/jobData";
 const GUILD_ID = process.env.GUILD_ID || "";
 const LOGGING_CHANNEL_ID = process.env.LOGGING_CHANNEL_ID || "";
 const RESIDENT_ROLE_ID = process.env.RESIDENT_ROLE_ID || "";
+// Traveler role (rules reaction) — removed when user gets an approved character
+const TRAVELER_ROLE_ID = process.env.TRAVELER_ROLE_ID || "788137818135330837";
 const APP_URL = getAppUrl();
 
 // Role mappings (PascalCase / display keys)
@@ -156,6 +158,22 @@ export async function assignCharacterRoles(
   const errors: string[] = [];
 
   try {
+    // Remove Traveler role — users with approved characters are residents, not travelers
+    if (TRAVELER_ROLE_ID && GUILD_ID) {
+      const removeResult = await removeGuildMemberRole(GUILD_ID, userId, TRAVELER_ROLE_ID);
+      if (!removeResult.ok) {
+        logger.warn(
+          "roleAssignmentService",
+          `Could not remove Traveler role from user ${userId}: ${removeResult.error}`
+        );
+      } else {
+        logger.info(
+          "roleAssignmentService",
+          `Removed Traveler role from user ${userId} (approved character)`
+        );
+      }
+    }
+
     // Assign resident role first (so accepted users always get it when configured)
     if (RESIDENT_ROLE_ID) {
       const result = await assignRole(userId, RESIDENT_ROLE_ID);

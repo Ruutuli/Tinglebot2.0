@@ -268,3 +268,36 @@ export async function assignGuildMemberRole(
     return { ok: false, error };
   }
 }
+
+/**
+ * Remove a role from a guild member. Returns the Discord API error message on failure.
+ * 404 from Discord (e.g. user not in guild, role not found) is treated as non-fatal.
+ */
+export async function removeGuildMemberRole(
+  guildId: string,
+  userId: string,
+  roleId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const token = process.env.DISCORD_TOKEN;
+  if (!token || !guildId || !userId || !roleId) {
+    return { ok: false, error: "Missing DISCORD_TOKEN, GUILD_ID, userId, or roleId" };
+  }
+  const url = `${DISCORD_API_BASE}/guilds/${guildId}/members/${userId}/roles/${roleId}`;
+  try {
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: { Authorization: `Bot ${token}` },
+    });
+    if (res.ok || res.status === 204) return { ok: true };
+    // 404 = user/role not found or user doesn't have role — treat as success (nothing to remove)
+    if (res.status === 404) return { ok: true };
+    const errorText = await res.text();
+    const error = `Discord API (${res.status}): ${errorText}`;
+    console.error(error);
+    return { ok: false, error };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`Remove role request failed: ${error}`);
+    return { ok: false, error };
+  }
+}

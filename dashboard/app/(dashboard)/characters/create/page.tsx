@@ -675,6 +675,27 @@ export function CreateForm({
       : ""
   );
 
+  /* [create/page.tsx]✨ Pre-submission checklist (required before Submit for Review / Submit Character) - */
+  const [checklist, setChecklist] = useState({
+    reservation: false,
+    visualApp: false,
+    guide: false,
+    villageLore: false,
+    groupLore: false,
+    coreRules: false,
+  });
+  const allChecklistChecked =
+    checklist.reservation &&
+    checklist.visualApp &&
+    checklist.guide &&
+    checklist.villageLore &&
+    checklist.groupLore &&
+    checklist.coreRules;
+
+  const setChecklistItem = useCallback((key: keyof typeof checklist, value: boolean) => {
+    setChecklist((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
   /* [create/page.tsx]✨ Class name constants - */
   const styles = {
     input:
@@ -1162,6 +1183,10 @@ export function CreateForm({
     async (doSubmit: boolean) => {
       setSubmitError(null);
       setSubmitSuccess(null);
+      if (doSubmit && !allChecklistChecked) {
+        setSubmitError("Please complete all items in the “Before you submit for review” checklist before submitting.");
+        return;
+      }
       const err = validate();
       if (err) {
         setSubmitError(err);
@@ -1496,6 +1521,7 @@ export function CreateForm({
       isEditMode,
       characterId,
       initialCharacter,
+      allChecklistChecked,
     ]
   );
 
@@ -1556,6 +1582,7 @@ export function CreateForm({
       className="space-y-3 sm:space-y-4 md:space-y-6"
       onSubmit={(e) => {
         e.preventDefault();
+        if (!isEditMode && !allChecklistChecked) return;
         submit(false);
       }}
     >
@@ -2316,6 +2343,142 @@ export function CreateForm({
         </div>
       </section>
 
+      {/* Pre-submission checklist: required before submitting for review */}
+      {(!isEditMode || characterStatus === null || characterStatus === undefined || characterStatus === "needs_changes") && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <i
+              aria-hidden
+              className="fa-solid fa-clipboard-check text-xl text-[var(--totk-light-green)]"
+            />
+            <h2 className={styles.sectionTitle}>Before you submit for review</h2>
+          </div>
+          <p className={styles.labelMuted + " mb-4"}>
+            Please confirm the following. You must check all boxes before submitting your character for moderator review.
+          </p>
+          <ul className="space-y-3 text-[var(--botw-pale)]">
+            <li className="flex flex-wrap items-start gap-2">
+              <label className="inline-flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={checklist.reservation}
+                  onChange={(e) => setChecklistItem("reservation", e.target.checked)}
+                  className="mt-1.5 h-4 w-4 rounded border-2 border-[var(--totk-green)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]"
+                />
+                <span>
+                  <strong>Did you post a reservation in #roster?</strong> All OCs must have an approved reservation before moving forward.{" "}
+                  <a
+                    href="https://rootsofthewild.com/character-creation/oc-guide#reservation"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)]"
+                  >
+                    Reservation guide
+                  </a>
+                </span>
+              </label>
+            </li>
+            <li className="flex flex-wrap items-start gap-2">
+              <label className="inline-flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={checklist.visualApp}
+                  onChange={(e) => setChecklistItem("visualApp", e.target.checked)}
+                  className="mt-1.5 h-4 w-4 rounded border-2 border-[var(--totk-green)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]"
+                />
+                <span>
+                  <strong>Did you complete the full visual application?</strong> Front-facing, full body art; clean lines + flat colors; all required fields filled in; proper formatting and legible font.{" "}
+                  <a
+                    href="https://rootsofthewild.com/character-creation/oc-guide#application"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)]"
+                  >
+                    Application guide
+                  </a>
+                </span>
+              </label>
+            </li>
+            <li className="flex flex-wrap items-start gap-2">
+              <label className="inline-flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={checklist.guide}
+                  onChange={(e) => setChecklistItem("guide", e.target.checked)}
+                  className="mt-1.5 h-4 w-4 rounded border-2 border-[var(--totk-green)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]"
+                />
+                <span>
+                  <strong>Did you read the Character Creation Guide fully?</strong>{" "}
+                  <a
+                    href="https://rootsofthewild.com/character-creation/oc-guide"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)]"
+                  >
+                    Full OC guide
+                  </a>
+                </span>
+              </label>
+            </li>
+            <li className="flex flex-wrap items-start gap-2">
+              <label className="inline-flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={checklist.villageLore}
+                  onChange={(e) => setChecklistItem("villageLore", e.target.checked)}
+                  className="mt-1.5 h-4 w-4 rounded border-2 border-[var(--totk-green)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]"
+                />
+                <span>
+                  <strong>Did you read the Village + World Lore pages?</strong>{" "}
+                  <a
+                    href="https://rootsofthewild.com/world/villages"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)]"
+                  >
+                    Villages &amp; world
+                  </a>
+                </span>
+              </label>
+            </li>
+            <li className="flex flex-wrap items-start gap-2">
+              <label className="inline-flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={checklist.groupLore}
+                  onChange={(e) => setChecklistItem("groupLore", e.target.checked)}
+                  className="mt-1.5 h-4 w-4 rounded border-2 border-[var(--totk-green)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]"
+                />
+                <span>
+                  <strong>Did you review the Group Lore + Timeline?</strong>{" "}
+                  <a
+                    href="https://rootsofthewild.com/world/group-lore-events"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--botw-blue)] underline hover:text-[var(--totk-light-green)]"
+                  >
+                    Group lore &amp; timeline
+                  </a>
+                </span>
+              </label>
+            </li>
+            <li className="flex flex-wrap items-start gap-2">
+              <label className="inline-flex cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={checklist.coreRules}
+                  onChange={(e) => setChecklistItem("coreRules", e.target.checked)}
+                  className="mt-1.5 h-4 w-4 rounded border-2 border-[var(--totk-green)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]"
+                />
+                <span>
+                  <strong>Does your character follow these core rules?</strong> Born and raised in one of the three villages; not living outside the safe zones; travel history matches the timeline; no modern elements; no money-based economy.
+                </span>
+              </label>
+            </li>
+          </ul>
+        </section>
+      )}
+
       {/* Submit */}
       {submitError && (
         <div className="rounded-lg border-2 border-red-500 bg-red-500/10 px-4 py-3 text-[var(--botw-pale)]">
@@ -2330,17 +2493,19 @@ export function CreateForm({
       <div className="flex flex-col gap-4 border-t-2 border-[var(--totk-green)] pt-4 sm:flex-row sm:flex-wrap sm:pt-6">
         <button
           className="w-full min-h-[44px] rounded-lg border-2 border-[var(--botw-blue)] bg-[var(--botw-blue)] px-5 py-2.5 font-medium text-[var(--botw-white)] shadow-md transition-colors hover:bg-[var(--botw-dark-blue)] hover:border-[var(--botw-dark-blue)] hover:shadow-[0_0_12px_rgba(0,163,218,0.4)] disabled:opacity-50 touch-manipulation sm:w-auto"
-          disabled={submitLoading}
+          disabled={submitLoading || (!isEditMode && !allChecklistChecked)}
           type="submit"
+          title={!isEditMode && !allChecklistChecked ? "Complete all items in the checklist above before creating." : undefined}
         >
           {submitLoading ? (isEditMode ? "Updating…" : "Saving…") : (isEditMode ? "Update Character" : "Create and Save Character")}
         </button>
         {!isEditMode && (
           <button
             className="w-full min-h-[44px] rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--botw-warm-black)] px-5 py-2.5 font-medium text-[var(--totk-light-green)] shadow-md transition-colors hover:bg-[var(--totk-light-green)] hover:text-[var(--totk-dark-green)] hover:shadow-[var(--sheikah-glow-soft)] disabled:opacity-50 touch-manipulation sm:w-auto"
-            disabled={submitLoading}
+            disabled={submitLoading || !allChecklistChecked}
             type="button"
             onClick={() => submit(true)}
+            title={!allChecklistChecked ? "Complete all items in the checklist above before submitting." : undefined}
           >
             {submitLoading ? "Submitting…" : "Submit Character"}
           </button>
@@ -2348,9 +2513,10 @@ export function CreateForm({
         {isEditMode && onSubmitForReview && (characterStatus === null || characterStatus === undefined || characterStatus === "needs_changes") && (
           <button
             className="w-full min-h-[44px] rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)] px-5 py-2.5 font-medium text-[var(--botw-warm-black)] shadow-md transition-all hover:bg-[var(--totk-light-green)] hover:shadow-[0_0_16px_rgba(73,213,156,0.6)] hover:scale-[1.02] hover:border-[var(--totk-light-green)] disabled:opacity-50 touch-manipulation sm:w-auto"
-            disabled={submittingForReview || submitLoading}
+            disabled={submittingForReview || submitLoading || !allChecklistChecked}
             type="button"
             onClick={onSubmitForReview}
+            title={!allChecklistChecked ? "Complete all items in the checklist above before submitting." : undefined}
           >
             {submittingForReview ? "Submitting…" : (characterStatus === null || characterStatus === undefined ? "Submit for Review" : "Resubmit for Review")}
           </button>
