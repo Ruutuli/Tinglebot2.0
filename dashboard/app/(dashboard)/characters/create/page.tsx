@@ -2343,8 +2343,8 @@ export function CreateForm({
         </div>
       </section>
 
-      {/* Pre-submission checklist: required before submitting for review */}
-      {(!isEditMode || characterStatus === null || characterStatus === undefined || characterStatus === "needs_changes") && (
+      {/* Pre-submission checklist: required before submitting for review (create + edit draft/needs_changes/pending) */}
+      {(!isEditMode || characterStatus === null || characterStatus === undefined || characterStatus === "needs_changes" || characterStatus === "pending") && (
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
             <i
