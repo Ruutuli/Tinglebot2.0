@@ -3014,7 +3014,9 @@ async function validateStealTarget(targetName, targetType, thiefCharacter, inter
             // Inventory sync check removed - no longer required
             
             // Check village restriction
-            if (thiefCharacter.currentVillage !== targetCharacter.currentVillage && interaction.channelId !== '1391812848099004578') {
+            const testingChannelId = '1391812848099004578';
+            const isTestingChannelOrThread = interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
+            if (thiefCharacter.currentVillage !== targetCharacter.currentVillage && !isTestingChannelOrThread) {
                 const embed = new EmbedBuilder()
                     .setColor(0xFF6B35)
                     .setTitle('📍 Village Restriction')
@@ -3637,9 +3639,9 @@ async function validateChannelAccess(thiefCharacter, interaction) {
             }
         }
 
-        // Allow testing in specific channel
+        // Allow testing in specific channel and any threads in that channel
         const testingChannelId = '1391812848099004578';
-        const isTestingChannel = interaction.channelId === testingChannelId;
+        const isTestingChannel = interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
 
         // If allowedChannel is undefined, allow the command to proceed (for testing)
         if (!allowedChannel) {

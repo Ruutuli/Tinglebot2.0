@@ -965,7 +965,7 @@ async function handleBoostRequest(interaction) {
  }
 
  // Validate village compatibility
- const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID;
+ const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID || interaction.channel?.parentId === TESTING_CHANNEL_ID;
  const villageValidation = validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel);
  if (!villageValidation.valid) {
   logger.debug('BOOST', '[Validation] Village mismatch detected during boost request.');

@@ -208,9 +208,10 @@ async function validateCorrectTravelChannel(interaction, character, startingVill
   }
 
   const currentChannel = interaction.channelId;
+  const isTestingChannelOrThread = currentChannel === TEST_TRAVEL_CHANNEL_ID || interaction.channel?.parentId === TEST_TRAVEL_CHANNEL_ID;
 
-  // Bypass channel path validation in the designated testing channel
-  if (currentChannel === TEST_TRAVEL_CHANNEL_ID) {
+  // Bypass channel path validation in the designated testing channel and any threads in it
+  if (isTestingChannelOrThread) {
     return true;
   }
 
@@ -1213,8 +1214,9 @@ async function processTravelDay(day, context) {
     }
 
     // ------------------- Wrong-Road Validation -------------------
-    // Skip wrong-road checks in the designated testing channel
-    if (currentChannel !== TEST_TRAVEL_CHANNEL_ID && totalTravelDuration === 2 && character.job && !hasPerk(character, 'DELIVERING')) {
+    // Skip wrong-road checks in the designated testing channel and any threads in it
+    const isTestingChannelOrThread = currentChannel === TEST_TRAVEL_CHANNEL_ID || interaction.channel?.parentId === TEST_TRAVEL_CHANNEL_ID;
+    if (!isTestingChannelOrThread && totalTravelDuration === 2 && character.job && !hasPerk(character, 'DELIVERING')) {
       if (
         (startingVillage === 'inariko' && destination === 'vhintl' && currentChannel !== PATH_CHANNELS.leafDewWay) ||
         (startingVillage === 'inariko' && destination === 'rudania' && currentChannel !== PATH_CHANNELS.pathOfScarletLeaves)

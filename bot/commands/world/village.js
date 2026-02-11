@@ -76,7 +76,7 @@ function getNextDonationReset() {
 // Validates that the command is being used in the correct town hall channel
 function validateVillageChannel(villageName, interaction) {
     const testingChannelId = '1391812848099004578';
-    const isTestingChannel = interaction.channelId === testingChannelId;
+    const isTestingChannel = interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
     
     const villageChannelMap = {
         'Rudania': process.env.RUDANIA_TOWNHALL,
@@ -1163,7 +1163,7 @@ async function validateRestSpotRequirements(character, village, interaction) {
 
     // Check if command is used in the correct channel
     const testingChannelId = '1391812848099004578';
-    const isTestingChannel = interaction.channelId === testingChannelId;
+    const isTestingChannel = interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
     
     const villageChannelMap = {
         'Rudania': process.env.RUDANIA_TOWNHALL,

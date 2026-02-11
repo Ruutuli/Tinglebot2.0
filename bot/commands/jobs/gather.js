@@ -335,9 +335,9 @@ module.exports = {
         }
       }
 
-      // Allow testing in specific channel
+      // Allow testing in specific channel and any threads in that channel
       const testingChannelId = '1391812848099004578';
-      const isTestingChannel = interaction.channelId === testingChannelId;
+      const isTestingChannel = interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
 
       // Check if character is physically in the correct village (skip for testing channel)
       const channelVillage = Object.entries(villageChannels).find(([_, id]) => id === interaction.channelId)?.[0];

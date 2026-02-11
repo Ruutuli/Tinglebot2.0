@@ -321,9 +321,9 @@ async function validateCharacters(characterToHeal, healerCharacter, heartsToHeal
       return { valid: false, message: healerDebuff.message };
     }
 
-    // Check if we're in the testing channel to skip village restrictions
+    // Check if we're in the testing channel (or a thread in it) to skip village restrictions
     const testingChannelId = '1391812848099004578';
-    const isTestingChannel = interaction && interaction.channelId === testingChannelId;
+    const isTestingChannel = interaction && (interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId);
 
     // Check village match (skip for testing channel)
     const villageCheck = checkVillageMatch(characterToHeal, healerCharacter, isTestingChannel);

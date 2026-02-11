@@ -614,7 +614,7 @@ for (const { name } of cleanedItems) {
 
   // ------------------- Check if command is used in the correct townhall channel -------------------
   const testingChannelId = '1391812848099004578';
-  const isTestingChannel = interaction.channelId === testingChannelId;
+  const isTestingChannel = interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
   
   const villageChannelMap = {
     'Rudania': process.env.RUDANIA_TOWNHALL,

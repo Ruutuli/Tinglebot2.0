@@ -141,9 +141,9 @@ module.exports = {
           allowedChannel = villageChannels[requiredVillage];
         }
       }
-      // Allow testing in specific channel
+      // Allow testing in specific channel and any threads in that channel
       const testingChannelId = '1391812848099004578';
-      const isTestingChannel = interaction.channelId === testingChannelId;
+      const isTestingChannel = interaction.channelId === testingChannelId || interaction.channel?.parentId === testingChannelId;
 
       if (!allowedChannel || (interaction.channelId !== allowedChannel && !isTestingChannel)) {
         const channelMention = `<#${allowedChannel}>`;
