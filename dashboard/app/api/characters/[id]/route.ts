@@ -212,7 +212,7 @@ export async function GET(
         .lean<CharSlug[]>();
       let slugMatch = regularChars.find((c) => createSlug(c.name) === slug);
       if (!slugMatch) {
-        slugMatch = regularChars.find((c) => (c.publicSlug ?? "").toLowerCase() === slug) ?? null;
+        slugMatch = regularChars.find((c) => (c.publicSlug ?? "").toLowerCase() === slug);
       }
       if (slugMatch) {
         char = await loadCharacterById(String(slugMatch._id));
