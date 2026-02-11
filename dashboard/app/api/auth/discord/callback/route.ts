@@ -117,6 +117,12 @@ export async function GET(request: NextRequest) {
   session.user = user;
   await session.save();
 
+  console.log("[Dashboard login]", {
+    discordId: user.id,
+    username: user.username,
+    globalName: user.global_name ?? undefined,
+  });
+
   const isValidPath =
     redirectPath &&
     typeof redirectPath === "string" &&
