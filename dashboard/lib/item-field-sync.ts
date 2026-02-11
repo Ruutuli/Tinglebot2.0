@@ -4,7 +4,7 @@
 // Used by: Admin database editor form
 // ============================================================================
 
-import { jobPerks, getJobPerk, getJobDisplayName } from "@/data/jobData";
+import { getJobDisplayName } from "@/data/jobData";
 
 // ============================================================================
 // ------------------- Types -------------------
@@ -114,11 +114,12 @@ function removeFromArray<T>(arr: T[], value: T): T[] {
  * Normalize job field name to job display name
  */
 function normalizeJobName(fieldName: string): string {
-  // Handle special cases
+  // Use jobData for canonical display names (Hunter vs Hunter (Looting))
+  const fromJobData = getJobDisplayName(fieldName);
+  if (fromJobData !== fieldName) return fromJobData;
+  // Handle special cases not in jobData
   if (fieldName === "maskMaker") return "Mask Maker";
-  if (fieldName === "hunterLooting") return "Hunter";
   if (fieldName === "gravekeeper") return "Graveskeeper";
-  
   // Convert camelCase to Title Case
   return fieldName
     .replace(/([A-Z])/g, " $1")
@@ -173,6 +174,11 @@ export function syncJobFlags(
     "researcher", "scout", "weaver", "witch"
   ];
 
+  // Which array each field belongs to (Hunter = gathering only, Hunter (Looting) = looting only)
+  const gatheringJobFields = new Set(["farmer", "forager", "herbalist", "hunter", "fisherman", "rancher", "miner", "beekeeper"]);
+  const lootingJobFields = new Set(["adventurer", "gravekeeper", "guard", "mercenary", "scout", "hunterLooting"]);
+  const craftingJobFields = new Set(["artist", "cook", "craftsman", "witch", "researcher", "blacksmith", "maskMaker", "weaver"]);
+
   // Initialize arrays if they don't exist
   const gatheringJobs = item.gatheringJobs || [];
   const lootingJobs = item.lootingJobs || [];
@@ -193,11 +199,9 @@ export function syncJobFlags(
     if (jobValue === undefined) continue;
 
     const jobDisplayName = normalizeJobName(fieldName);
-    const jobPerk = getJobPerk(jobDisplayName);
-
-    if (!jobPerk) continue;
-
-    const perkUpper = jobPerk.perk.toUpperCase();
+    const isGathering = gatheringJobFields.has(fieldName);
+    const isLooting = lootingJobFields.has(fieldName);
+    const isCrafting = craftingJobFields.has(fieldName);
 
     if (jobValue === true) {
       // Job is enabled - add to allJobs
@@ -206,8 +210,8 @@ export function syncJobFlags(
         updated = true;
       }
       
-      // Job is enabled - add to appropriate arrays
-      if (perkUpper.includes("GATHERING")) {
+      // Job is enabled - add to appropriate arrays (by field, so Hunter = gathering only, Hunter (Looting) = looting only)
+      if (isGathering) {
         if (!gatheringJobs.includes(jobDisplayName)) {
           hasGatheringJobs.push(jobDisplayName);
           changes[`gatheringJobs`] = {
@@ -225,7 +229,7 @@ export function syncJobFlags(
         }
       }
 
-      if (perkUpper.includes("LOOTING")) {
+      if (isLooting) {
         if (!lootingJobs.includes(jobDisplayName)) {
           hasLootingJobs.push(jobDisplayName);
           changes[`lootingJobs`] = {
@@ -243,7 +247,7 @@ export function syncJobFlags(
         }
       }
 
-      if (perkUpper.includes("CRAFTING")) {
+      if (isCrafting) {
         if (!craftingJobs.includes(jobDisplayName)) {
           hasCraftingJobs.push(jobDisplayName);
           changes[`craftingJobs`] = {
@@ -262,34 +266,28 @@ export function syncJobFlags(
       }
     } else if (jobValue === false) {
       // Job is disabled - remove from arrays
-      if (perkUpper.includes("GATHERING")) {
-        if (gatheringJobs.includes(jobDisplayName)) {
-          changes[`gatheringJobs`] = {
-            from: gatheringJobs,
-            to: removeFromArray(gatheringJobs, jobDisplayName)
-          };
-          updated = true;
-        }
+      if (isGathering && gatheringJobs.includes(jobDisplayName)) {
+        changes[`gatheringJobs`] = {
+          from: gatheringJobs,
+          to: removeFromArray(gatheringJobs, jobDisplayName)
+        };
+        updated = true;
       }
 
-      if (perkUpper.includes("LOOTING")) {
-        if (lootingJobs.includes(jobDisplayName)) {
-          changes[`lootingJobs`] = {
-            from: lootingJobs,
-            to: removeFromArray(lootingJobs, jobDisplayName)
-          };
-          updated = true;
-        }
+      if (isLooting && lootingJobs.includes(jobDisplayName)) {
+        changes[`lootingJobs`] = {
+          from: lootingJobs,
+          to: removeFromArray(lootingJobs, jobDisplayName)
+        };
+        updated = true;
       }
 
-      if (perkUpper.includes("CRAFTING")) {
-        if (craftingJobs.includes(jobDisplayName)) {
-          changes[`craftingJobs`] = {
-            from: craftingJobs,
-            to: removeFromArray(craftingJobs, jobDisplayName)
-          };
-          updated = true;
-        }
+      if (isCrafting && craftingJobs.includes(jobDisplayName)) {
+        changes[`craftingJobs`] = {
+          from: craftingJobs,
+          to: removeFromArray(craftingJobs, jobDisplayName)
+        };
+        updated = true;
       }
     }
   }
