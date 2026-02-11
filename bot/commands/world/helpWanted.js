@@ -776,16 +776,7 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
     });
     await character.save();
     await updateQuestEmbed(interaction.client, quest, quest.completedBy);
-    const successEmbed = new EmbedBuilder()
-      .setTitle('🎭 Correct Guess!')
-      .setColor(0x00FF00)
-      .setDescription(`**${character.name}** correctly identified **${correctName}**!`)
-      .addFields(
-        { name: 'Quest ID', value: `\`${questId}\``, inline: true },
-        { name: 'Village', value: quest.village, inline: true },
-        { name: 'Rewards', value: 'Completion has been recorded. Tokens and experience apply per Help Wanted rules.', inline: false }
-      )
-      .setTimestamp();
+    const successEmbed = createQuestCompletionEmbed(character, quest, userId);
     return await interaction.editReply({ embeds: [successEmbed] });
   } catch (error) {
     logger.error('QUEST', `Error handling character guess for quest ${questId}`, error);
