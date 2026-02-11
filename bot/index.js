@@ -1066,18 +1066,20 @@ async function initializeClient() {
         deletionResults.modCharacters = modCharacterResult.deletedCount;
         
         // 4. Delete inventories (for all characters)
-        // Import deleteCharacterInventoryCollection function
-        const { deleteCharacterInventoryCollection } = require('@/database/db');
+        const { deleteCharacterInventoryCollection, transferCharacterInventoryToVillageShops } = require('@/database/db');
         let inventoryCollectionsDeleted = 0;
         if (allCharacterNames.length > 0) {
           for (const characterName of allCharacterNames) {
             try {
-              // Each character has their own inventory collection
+              await transferCharacterInventoryToVillageShops(characterName);
+            } catch (transferErr) {
+              logger.warn('CLEANUP', `[index.js] Failed to transfer inventory to village shops for ${characterName}: ${transferErr.message}`);
+            }
+            try {
               await deleteCharacterInventoryCollection(characterName);
               inventoryCollectionsDeleted++;
             } catch (inventoryError) {
-              // Collection might not exist, which is fine
-              if (inventoryError.code !== 26) { // Ignore "namespace not found" error
+              if (inventoryError.code !== 26) {
                 logger.warn('CLEANUP', `[index.js]⚠️ Error deleting inventory collection for ${characterName}: ${inventoryError.message}`);
               }
             }

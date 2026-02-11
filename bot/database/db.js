@@ -107,7 +107,9 @@ const RelicModel = require("../models/RelicModel");
 const User = require("../models/UserModel");
 const Pet = require("../models/PetModel");
 const { Stable, ForSaleMount, ForSalePet } = require("../models/StableModel");
+const VillageShopItem = require("../models/VillageShopsModel");
 const generalCategories = require("../models/GeneralItemCategories");
+const { escapeRegExp } = require("../utils/inventoryUtils");
 
 // ============================================================================
 // ------------------- Database Connection Functions -------------------
@@ -597,6 +599,96 @@ const createCharacterInventory = async (characterName, characterId, job) => {
   handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in createCharacterInventory for "${characterName}": ${error.message}`
+  );
+  throw error;
+ }
+};
+
+// ------------------- transferCharacterInventoryToVillageShops -------------------
+// Before deleting a character's inventory, transfer all items into the village shops
+// so they are not lost. Does not drop the collection; caller still calls deleteCharacterInventoryCollection.
+const transferCharacterInventoryToVillageShops = async (characterName) => {
+ try {
+  const collection = await getCharacterInventoryCollection(characterName);
+  const docs = await collection.find({}).toArray();
+  const byItem = new Map();
+  for (const doc of docs) {
+   const name = doc.itemName;
+   if (!name || name === "Initial Item") continue;
+   const qty = typeof doc.quantity === "number" ? doc.quantity : 0;
+   if (qty <= 0) continue;
+   byItem.set(name, (byItem.get(name) || 0) + qty);
+  }
+  for (const [itemName, totalQty] of byItem) {
+   let itemFilter;
+   if (itemName.includes("+")) {
+    itemFilter = { itemName };
+   } else {
+    itemFilter = { itemName: { $regex: new RegExp(`^${escapeRegExp(itemName)}$`, "i") } };
+   }
+   const shopItem = await VillageShopItem.findOne(itemFilter);
+   if (shopItem) {
+    await VillageShopItem.updateOne(
+     { _id: shopItem._id },
+     { $inc: { stock: totalQty } }
+    );
+    continue;
+   }
+   const item = await fetchItemByName(itemName);
+   if (!item) {
+    logger.warn("INVENTORY_TRANSFER", `[db.js] Skipping ${itemName} - not in Item DB (character: ${characterName})`);
+    continue;
+   }
+   const finalBuyPrice = item.buyPrice || 0;
+   const finalSellPrice = item.sellPrice || 0;
+   const newShopItem = new VillageShopItem({
+    itemId: item._id,
+    itemName: item.itemName,
+    image: item.image || "No Image",
+    imageType: item.imageType || "No Image Type",
+    itemRarity: item.itemRarity || 1,
+    category: item.category || ["Misc"],
+    categoryGear: item.categoryGear || "None",
+    type: item.type || ["Unknown"],
+    subtype: item.subtype || ["None"],
+    recipeTag: item.recipeTag || ["#Not Craftable"],
+    craftingMaterial: item.craftingMaterial || [],
+    buyPrice: finalBuyPrice,
+    sellPrice: finalSellPrice,
+    staminaToCraft: item.staminaToCraft ?? null,
+    modifierHearts: item.modifierHearts || 0,
+    staminaRecovered: item.staminaRecovered || 0,
+    obtain: item.obtain || [],
+    crafting: item.crafting || false,
+    gathering: item.gathering || false,
+    looting: item.looting || false,
+    vending: item.vending || false,
+    traveling: item.traveling || false,
+    specialWeather: typeof item.specialWeather === "object"
+     ? Object.values(item.specialWeather).some((v) => v === true)
+     : Boolean(item.specialWeather),
+    petPerk: item.petPerk || false,
+    exploring: item.exploring || false,
+    craftingJobs: item.craftingJobs || [],
+    artist: item.artist || false,
+    blacksmith: item.blacksmith || false,
+    cook: item.cook || false,
+    craftsman: item.craftsman || false,
+    maskMaker: item.maskMaker || false,
+    researcher: item.researcher || false,
+    weaver: item.weaver || false,
+    witch: item.witch || false,
+    locations: item.locations || [],
+    emoji: item.emoji || "",
+    allJobs: item.allJobs || ["None"],
+    stock: totalQty
+   });
+   await newShopItem.save();
+  }
+ } catch (error) {
+  handleError(error, "db.js");
+  console.error(
+   `[characterService]: logs - Error in transferCharacterInventoryToVillageShops for "${characterName}": ${error.message}`
   );
   throw error;
  }
@@ -2408,6 +2500,7 @@ module.exports = {
  getCharacterInventoryCollection,
  getCharacterInventoryCollectionWithModSupport,
  createCharacterInventory,
+ transferCharacterInventoryToVillageShops,
  deleteCharacterInventoryCollection,
  getModSharedInventoryCollection,
  // Mod Character Functions

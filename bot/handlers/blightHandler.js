@@ -31,6 +31,7 @@ const {
   getCharacterInventoryCollection,
   getUserTokenData,
   updateTokenBalance,
+  transferCharacterInventoryToVillageShops,
   dbFunctions
 } = require('@/database/db');
 
@@ -3734,6 +3735,13 @@ async function checkMissedRolls(client) {
               characterName: character.name
             });
             console.error('[blightHandler]: Error cleaning up blight submissions:', error);
+          }
+
+          // Transfer inventory to village shops before wipe so items are not lost
+          try {
+            await transferCharacterInventoryToVillageShops(character.name);
+          } catch (transferErr) {
+            console.error('[blightHandler]: Failed to transfer inventory to village shops for', character.name, transferErr.message);
           }
 
           // Wipe character's inventory from DB (not sheet)

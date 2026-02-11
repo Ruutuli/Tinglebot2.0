@@ -27,6 +27,7 @@ const {
  deleteCharacterById,
  deleteCharacterInventoryCollection,
  getCharacterInventoryCollection,
+ transferCharacterInventoryToVillageShops,
 } = require('@/database/db');
 const dbConfig = require('@/config/database');
 const {
@@ -622,6 +623,11 @@ async function handleDeleteCharacter(interaction) {
   // }
 
   await connectToInventories();
+  try {
+   await transferCharacterInventoryToVillageShops(character.name);
+  } catch (transferErr) {
+   console.error(`[character.js]: Failed to transfer inventory to village shops for ${character.name}:`, transferErr.message);
+  }
   await deleteCharacterInventoryCollection(character.name);
 
   const member = interaction.member;
