@@ -740,8 +740,18 @@ async function initializeClient() {
           .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
           .addFields(
             {
-              name: '🗺️ **Start Here**',
-              value: '• React to the **rules** channel to get the Traveler role\n• Post your intro in the **intro** channel to get full access\n• Come hang out in **gossip-stone** chat\n• Questions? DM Roots.Admin#9069 or post in **faq-and-suggestions**',
+              name: '⚠️ **READ THE WEBSITE — This is Critical!**',
+              value: 'Many applications are rejected because members skip the guides. The website has everything you need: the **Character Creation Guide**, **Village + World Lore**, **Group Lore + Timeline**, reservation guide, and application guide. **Please read these before submitting** — it saves everyone time!\n\n🔗 https://www.rootsofthewild.com/',
+              inline: false
+            },
+            {
+              name: '📋 **The Joining Process (Steps 1–3)**',
+              value: '**Step 1:** React to the **rules** channel to get the Traveler role.\n**Step 2:** Post your intro in **#intro** using the pinned template (required — do within 24hrs!).\n**Step 3:** Read the OC Guide on the website, then make a reservation post in **#roster**.',
+              inline: false
+            },
+            {
+              name: '📋 **The Joining Process (Steps 4–6)**',
+              value: '**Step 4:** Submit your character via the tinglebot dashboard (Characters > Create Character). You\'ll get feedback or acceptance via DMs.\n**Step 5:** When accepted, post in **#roster** in the required format. A mod will assign the Resident role.\n**Step 6:** Set your nickname: Your Name | OC Name(s)\n\nThat\'s it! Full access. Welcome to Roots! 🎉',
               inline: false
             },
             {
@@ -757,11 +767,6 @@ async function initializeClient() {
             {
               name: '📜 **Quick Rules**',
               value: '• 18+ server only\n• NSFW belongs in designated channels\n• No godmodding or metagaming\n• Respect pronouns & fellow members\n• Avoid heavy real-world topics (check trigger list)\n• Use "Windfish says No" to end upsetting convos\n• No AI art in apps or official submissions',
-              inline: false
-            },
-            {
-              name: '🔗 **Full Rules + Site**',
-              value: 'https://www.rootsofthewild.com/',
               inline: false
             }
           )
