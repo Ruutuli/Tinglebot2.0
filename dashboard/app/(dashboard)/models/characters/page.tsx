@@ -545,7 +545,7 @@ export default function CharactersPage() {
       loadingMessage="Loading characters..."
       errorMessage="This page will display all characters from the database once MongoDB connection is configured."
       itemName="characters"
-      searchPlaceholder="Search characters by name, job, race, or village..."
+      searchPlaceholder="Search characters by name..."
       loading={loading}
       error={error}
       search={search}

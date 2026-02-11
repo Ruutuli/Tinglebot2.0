@@ -96,24 +96,17 @@ export async function GET(req: NextRequest) {
 
     const re = buildSearchRegex(search);
     if (re) {
-      filter.$or = [
-        { name: re },
-        { job: re },
-        { race: re },
-        { currentVillage: re },
-        { homeVillage: re },
-      ];
+      filter.name = re;
     }
     // Case-insensitive filtering for all string-based filters
     if (races.length) {
       const raceFilter = buildCaseInsensitiveFilter("race", races);
       if (filter.$or) {
-        // If $or already exists (from search), combine with race conditions
-        filter.$and = [
-          { $or: filter.$or },
-          raceFilter
-        ];
+        filter.$and = [{ $or: filter.$or }, raceFilter];
         delete filter.$or;
+      } else if (filter.name) {
+        filter.$and = [{ name: filter.name }, raceFilter];
+        delete filter.name;
       } else {
         filter.$or = raceFilter.$or;
       }
@@ -121,9 +114,11 @@ export async function GET(req: NextRequest) {
     if (villages.length) {
       const villageFilter = buildCaseInsensitiveFilter("homeVillage", villages);
       if (filter.$or || filter.$and) {
-        // If we already have $or or $and, add to $and
         if (!filter.$and) filter.$and = [];
         filter.$and.push(villageFilter);
+      } else if (filter.name) {
+        filter.$and = [{ name: filter.name }, villageFilter];
+        delete filter.name;
       } else {
         filter.$or = villageFilter.$or;
       }
@@ -131,9 +126,11 @@ export async function GET(req: NextRequest) {
     if (jobs.length) {
       const jobFilter = buildCaseInsensitiveFilter("job", jobs);
       if (filter.$or || filter.$and) {
-        // If we already have $or or $and, add to $and
         if (!filter.$and) filter.$and = [];
         filter.$and.push(jobFilter);
+      } else if (filter.name) {
+        filter.$and = [{ name: filter.name }, jobFilter];
+        delete filter.name;
       } else {
         filter.$or = jobFilter.$or;
       }
@@ -142,24 +139,17 @@ export async function GET(req: NextRequest) {
     // Build mod character filter (same filters as regular characters)
     const modFilter: FilterQuery<unknown> = {};
     if (re) {
-      modFilter.$or = [
-        { name: re },
-        { job: re },
-        { race: re },
-        { currentVillage: re },
-        { homeVillage: re },
-      ];
+      modFilter.name = re;
     }
     // Case-insensitive filtering for all string-based filters
     if (races.length) {
       const raceFilter = buildCaseInsensitiveFilter("race", races);
       if (modFilter.$or) {
-        // If $or already exists (from search), combine with race conditions
-        modFilter.$and = [
-          { $or: modFilter.$or },
-          raceFilter
-        ];
+        modFilter.$and = [{ $or: modFilter.$or }, raceFilter];
         delete modFilter.$or;
+      } else if (modFilter.name) {
+        modFilter.$and = [{ name: modFilter.name }, raceFilter];
+        delete modFilter.name;
       } else {
         modFilter.$or = raceFilter.$or;
       }
@@ -167,9 +157,11 @@ export async function GET(req: NextRequest) {
     if (villages.length) {
       const villageFilter = buildCaseInsensitiveFilter("homeVillage", villages);
       if (modFilter.$or || modFilter.$and) {
-        // If we already have $or or $and, add to $and
         if (!modFilter.$and) modFilter.$and = [];
         modFilter.$and.push(villageFilter);
+      } else if (modFilter.name) {
+        modFilter.$and = [{ name: modFilter.name }, villageFilter];
+        delete modFilter.name;
       } else {
         modFilter.$or = villageFilter.$or;
       }
@@ -177,9 +169,11 @@ export async function GET(req: NextRequest) {
     if (jobs.length) {
       const jobFilter = buildCaseInsensitiveFilter("job", jobs);
       if (modFilter.$or || modFilter.$and) {
-        // If we already have $or or $and, add to $and
         if (!modFilter.$and) modFilter.$and = [];
         modFilter.$and.push(jobFilter);
+      } else if (modFilter.name) {
+        modFilter.$and = [{ name: modFilter.name }, jobFilter];
+        delete modFilter.name;
       } else {
         modFilter.$or = jobFilter.$or;
       }

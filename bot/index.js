@@ -1030,6 +1030,7 @@ async function initializeClient() {
         const BlightRollHistory = require('@/models/BlightRollHistoryModel');
         const ApprovedSubmission = require('@/models/ApprovedSubmissionModel');
         const Raid = require('@/models/RaidModel');
+        const Relationship = require('@/models/RelationshipModel');
         
         // For vending cleanup, we'll use the vending connection directly
         const { connectToVending } = require('@/database/db');
@@ -1205,8 +1206,21 @@ async function initializeClient() {
         });
         deletionResults.emptyRaidsDeleted = emptyRaidDeleteResult.deletedCount;
         
+        // 17. Delete relationship entries involving any of this user's characters
+        // (both where they are characterId or targetCharacterId)
+        let relationshipResult = { deletedCount: 0 };
+        if (allCharacterIds.length > 0) {
+          relationshipResult = await Relationship.deleteMany({
+            $or: [
+              { characterId: { $in: allCharacterIds } },
+              { targetCharacterId: { $in: allCharacterIds } }
+            ]
+          });
+        }
+        deletionResults.relationships = relationshipResult.deletedCount;
+        
         // Log summary of deletions
-        logger.success('CLEANUP', `Data cleanup completed for ${username} (${discordId}): Users: ${deletionResults.users}, Characters: ${deletionResults.characters}, Inventory: ${deletionResults.inventoryItems}, Pets: ${deletionResults.pets}, Mounts: ${deletionResults.mounts}`);
+        logger.success('CLEANUP', `Data cleanup completed for ${username} (${discordId}): Users: ${deletionResults.users}, Characters: ${deletionResults.characters}, Inventory: ${deletionResults.inventoryItems}, Pets: ${deletionResults.pets}, Mounts: ${deletionResults.mounts}, Relationships: ${deletionResults.relationships}`);
         
       } catch (error) {
         logger.error('CLEANUP', `Error during user data cleanup for ${member.user.tag}`);
