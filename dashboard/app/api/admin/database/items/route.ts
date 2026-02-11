@@ -155,6 +155,11 @@ export async function GET(req: NextRequest) {
       const convertMapsToObjects = (obj: unknown): unknown => {
         if (obj instanceof Map) return Object.fromEntries(obj);
         if (Array.isArray(obj)) return obj.map(convertMapsToObjects);
+        // Preserve Mongoose/BSON ObjectId as string so _id is not turned into an empty object
+        if (obj !== null && typeof obj === "object" && typeof (obj as { toString?: () => string }).toString === "function") {
+          const str = (obj as { toString: () => string }).toString();
+          if (str && /^[a-fA-F0-9]{24}$/.test(str)) return str;
+        }
         if (obj !== null && typeof obj === "object") {
           const converted: Record<string, unknown> = {};
           for (const [key, value] of Object.entries(obj)) {
@@ -175,13 +180,18 @@ export async function GET(req: NextRequest) {
       .sort({ [sortField]: 1 })
       .lean()) as unknown as ItemLean[];
 
-    // Convert Map objects to plain objects for JSON serialization
+    // Convert Map objects to plain objects for JSON serialization.
+    // Preserve Mongoose/BSON ObjectId as string so _id is not turned into an empty object.
     const convertMapsToObjects = (obj: unknown): unknown => {
       if (obj instanceof Map) {
         return Object.fromEntries(obj);
       }
       if (Array.isArray(obj)) {
         return obj.map(convertMapsToObjects);
+      }
+      if (obj !== null && typeof obj === "object" && typeof (obj as { toString?: () => string }).toString === "function") {
+        const str = (obj as { toString: () => string }).toString();
+        if (str && /^[a-fA-F0-9]{24}$/.test(str)) return str;
       }
       if (obj !== null && typeof obj === "object") {
         const converted: Record<string, unknown> = {};
@@ -590,23 +600,77 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // ------------------- Character model: sanitize values that cause validation errors -------------------
+    if (model === "Character") {
+      // ObjectId refs cannot be empty string; use null so Mongoose accepts "no reference"
+      if (updateData.currentActivePet === "" || (typeof updateData.currentActivePet === "string" && !mongoose.Types.ObjectId.isValid(updateData.currentActivePet as string))) {
+        updateData.currentActivePet = null;
+      }
+      if (updateData.currentActiveMount === "" || (typeof updateData.currentActiveMount === "string" && !mongoose.Types.ObjectId.isValid(updateData.currentActiveMount as string))) {
+        updateData.currentActiveMount = null;
+      }
+      // Gear subdocuments require both name and stats. If we only have dot-path .name, merge with existing subdoc so stats is preserved.
+      const recordObj = record as unknown as { get?: (path: string) => unknown };
+      const getExisting = (path: string): Record<string, unknown> | null => {
+        const v = recordObj.get?.(path);
+        if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
+        return null;
+      };
+      const gearPaths = [
+        "gearArmor.head",
+        "gearArmor.chest",
+        "gearArmor.legs",
+        "gearWeapon",
+        "gearShield",
+      ] as const;
+      for (const gearPath of gearPaths) {
+        const nameKey = gearPath === "gearWeapon" || gearPath === "gearShield" ? `${gearPath}.name` : `${gearPath}.name`;
+        const nameValue = updateData[nameKey];
+        if (nameValue === undefined) continue;
+        const nameStr = typeof nameValue === "string" ? nameValue.trim() : String(nameValue ?? "").trim();
+        delete (updateData as Record<string, unknown>)[nameKey];
+        // GearSchema requires name to be non-empty; empty name means "no gear" so set path to null
+        if (!nameStr) {
+          (updateData as Record<string, unknown>)[gearPath] = null;
+          continue;
+        }
+        const existing = getExisting(gearPath);
+        const existingStats = existing?.stats;
+        const statsMap =
+          existingStats instanceof Map
+            ? existingStats
+            : existingStats && typeof existingStats === "object" && !Array.isArray(existingStats)
+              ? new Map(Object.entries(existingStats as Record<string, number>))
+              : new Map<string, number>();
+        (updateData as Record<string, unknown>)[gearPath] = {
+          name: nameStr,
+          stats: statsMap,
+        };
+      }
+    }
+
     // ------------------- Apply Updates -------------------
-    if (Object.keys(updateData).length > 0) {
-      record.set(updateData);
-      await record.save();
-      
-      const nameField = modelConfig.nameField;
-      const recordName = (record as Record<string, unknown>)[nameField] || itemId;
-      
-      logger.info(
-        "api/admin/database/items PUT",
-        `Updated ${model} ${itemId} (${recordName}): ${Object.keys(updateData).join(", ")}`
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: "No valid fields to update", message: "No valid fields to update" },
+        { status: 400 }
       );
     }
 
+    record.set(updateData);
+    await record.save();
+
+    const nameField = modelConfig.nameField;
+    const recordName = (record as Record<string, unknown>)[nameField] || itemId;
+
+    logger.info(
+      "api/admin/database/items PUT",
+      `Updated ${model} ${itemId} (${recordName}): ${Object.keys(updateData).join(", ")}`
+    );
+
     // ------------------- Return Updated Record -------------------
-    const updatedRecord = typeof record.toObject === "function" 
-      ? record.toObject() 
+    const updatedRecord = typeof record.toObject === "function"
+      ? record.toObject()
       : (record as unknown as Record<string, unknown>);
 
     return NextResponse.json({

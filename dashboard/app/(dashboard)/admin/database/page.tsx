@@ -52,7 +52,7 @@ export default function AdminDatabasePage() {
   const [items, setItems] = useState<DatabaseRecord[]>([]);
   const [filteredItems, setFilteredItems] = useState<DatabaseRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
@@ -71,6 +71,12 @@ export default function AdminDatabasePage() {
   const [itemsPerPage] = useState<number>(50);
   const fetchAbortControllerRef = useRef<AbortController | null>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Tracks last model we fetched for; null = user has not clicked Load yet. Used to avoid fetch on mount and to refetch when model changes after first load. */
+  const lastLoadedModelRef = useRef<string | null>(null);
+  /** True after user has clicked Load at least once; used for empty-state message. */
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  /** When save fails, store payload so user can click Try again without re-editing. */
+  const lastSavePayloadRef = useRef<{ itemId: string; updates: Record<string, unknown> } | null>(null);
 
   // ------------------- Build Filter Groups -------------------
   const filterGroups = useMemo((): FilterGroup[] => {
@@ -373,6 +379,11 @@ export default function AdminDatabasePage() {
   // JSON.stringify preserves all special characters (<, :, etc.) correctly
   // No data modification occurs during serialization - values are passed through as-is
   const handleSaveItem = useCallback(async (itemId: string, updates: Record<string, unknown>) => {
+    if (!itemId || itemId === "[object Object]") {
+      setError("Cannot save: missing or invalid item ID");
+      return;
+    }
+    lastSavePayloadRef.current = { itemId, updates };
     setSavingItemId(itemId);
     try {
       const res = await fetch("/api/admin/database/items", {
@@ -381,20 +392,22 @@ export default function AdminDatabasePage() {
         body: JSON.stringify({ itemId, updates, model: selectedModel }),
       });
 
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          (data as { error?: string; message?: string }).message ||
-          (data as { error?: string }).error ||
-          "Failed to save changes"
-        );
+        const message =
+          res.status === 400 && (data.message === "No valid fields to update" || data.error === "No valid fields to update")
+            ? "No changes were saved. Your edits may not be allowed for this field."
+            : data.message || data.error || "Failed to save changes";
+        throw new Error(message);
       }
 
+      lastSavePayloadRef.current = null;
       const item = items.find((i) => getItemId(i._id) === itemId);
       const nameField = modelConfig?.nameField || "name";
       const itemName = item?.[nameField] || "item";
       setSuccessMessage(`✓ Successfully saved "${String(itemName)}"!`);
-      
+      setError(null);
+
       // Clear success message after 5 seconds
       if (successTimeoutRef.current) {
         clearTimeout(successTimeoutRef.current);
@@ -413,18 +426,34 @@ export default function AdminDatabasePage() {
     }
   }, [items, fetchItems, selectedModel, modelConfig]);
 
-  // ------------------- Effects -------------------
+  const handleRetrySave = useCallback(() => {
+    const payload = lastSavePayloadRef.current;
+    if (payload) handleSaveItem(payload.itemId, payload.updates);
+  }, [handleSaveItem]);
+
+  // ------------------- Load button: trigger first fetch; effect refetches when model changes after first load -------------------
+  const handleLoadClick = useCallback(() => {
+    setHasLoadedOnce(true);
+    lastLoadedModelRef.current = selectedModel;
+    fetchItems();
+  }, [selectedModel, fetchItems]);
+
   useEffect(() => {
-    if (isAdmin && !sessionLoading) {
-      fetchItems();
-    }
+    if (!isAdmin || sessionLoading) return;
+    if (lastLoadedModelRef.current === null) return;
+    if (lastLoadedModelRef.current === selectedModel) return;
+    lastLoadedModelRef.current = selectedModel;
+    fetchItems();
+  }, [isAdmin, sessionLoading, selectedModel, fetchItems]);
+
+  useEffect(() => {
     return () => {
       fetchAbortControllerRef.current?.abort();
       if (successTimeoutRef.current) {
         clearTimeout(successTimeoutRef.current);
       }
     };
-  }, [isAdmin, sessionLoading, selectedModel, fetchItems]);
+  }, []);
 
   // ------------------- Loading State -------------------
   if (sessionLoading || loading) {
@@ -514,13 +543,22 @@ export default function AdminDatabasePage() {
           {/* Toolbar - Redesigned */}
           <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-5 sm:p-6 shadow-lg">
             <div className="flex flex-col gap-4">
-              {/* Top Row - Model Selector and Item Count */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              {/* Top Row - Model Selector, Load button, and Item Count */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-wrap">
                 <ModelSelector
                   value={selectedModel}
                   options={AVAILABLE_MODELS}
                   onChange={setSelectedModel}
                 />
+                <button
+                  type="button"
+                  onClick={handleLoadClick}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--totk-mid-ocher)] hover:bg-[var(--totk-light-ocher)] hover:border-[var(--totk-light-ocher)] text-[var(--botw-pale)] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fa-solid fa-download" aria-hidden="true" />
+                  Load {modelConfig?.displayName ?? selectedModel}
+                </button>
 
                 {/* Item Count Badge */}
                 {items.length > 0 && (
@@ -569,12 +607,25 @@ export default function AdminDatabasePage() {
           </div>
         )}
         {error && (
-          <div className="mb-6">
+          <div className="mb-6 flex flex-col gap-2">
             <MessageBanner
               type="error"
               message={error}
-              onDismiss={() => setError(null)}
+              onDismiss={() => {
+                lastSavePayloadRef.current = null;
+                setError(null);
+              }}
             />
+            {lastSavePayloadRef.current && (
+              <button
+                type="button"
+                onClick={handleRetrySave}
+                disabled={savingItemId !== null}
+                className="self-start px-4 py-2 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--totk-mid-ocher)] hover:bg-[var(--totk-light-ocher)] text-[var(--botw-pale)] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Try again
+              </button>
+            )}
           </div>
         )}
 
@@ -586,10 +637,10 @@ export default function AdminDatabasePage() {
                 <i className="fa-solid fa-inbox text-4xl text-[var(--totk-grey-200)]" aria-hidden="true" />
               </div>
               <p className="text-[var(--botw-pale)] text-xl font-semibold mb-2">
-                {error ? "Failed to load items" : "No items found"}
+                {error ? "Failed to load items" : hasLoadedOnce ? "No items found" : "Select a model and click Load to fetch data"}
               </p>
               <p className="text-sm text-[var(--totk-grey-200)]">
-                {error ? "Please try refreshing the page." : "Items will appear here once loaded."}
+                {error ? "Please try refreshing the page." : hasLoadedOnce ? "Items will appear here once loaded." : "Choose a model type above and click the Load button to load records."}
               </p>
             </div>
           </div>

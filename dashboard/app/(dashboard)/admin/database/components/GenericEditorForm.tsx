@@ -241,11 +241,7 @@ export function GenericEditorForm({
 
   // Handle save
   const handleSave = useCallback(async () => {
-    const itemId = getItemId(item._id);
-    if (!itemId) {
-      console.error("No item ID found");
-      return;
-    }
+    const itemId = getItemId(item._id) || getItemId((item as Record<string, unknown>).id);
 
     // Build updates object from formData
     const updates: Record<string, unknown> = {};

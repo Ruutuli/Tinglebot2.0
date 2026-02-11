@@ -1457,8 +1457,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             key: "jobVoucherJob",
             label: "Job Voucher Job",
             type: "text",
-            helpText: "Job from voucher",
-            showIf: (data) => data.jobVoucher === true,
+            helpText: "Job from voucher (e.g. Fortune Teller). Shown when job voucher is used.",
           },
           {
             key: "boostedBy",

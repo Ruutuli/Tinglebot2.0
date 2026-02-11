@@ -16,6 +16,7 @@ const {
 } = require('@/services/weatherService');
 const { damageVillage } = require('@/modules/villageModule');
 const Character = require('@/models/CharacterModel');
+const ModCharacter = require('@/models/ModCharacterModel');
 const User = require('@/models/UserModel');
 const Pet = require('@/models/PetModel');
 const Quest = require('@/models/QuestModel');
@@ -554,6 +555,17 @@ async function birthdayRemoveRole(client, _data = {}) {
   }
 }
 
+// Helper: get today's month (1-12) and day (1-31) in Eastern time (EST = UTC-5) for consistent "midnight Eastern" semantics
+function getTodayMonthDayEastern() {
+  const now = new Date();
+  const estOffset = 5 * 60 * 60 * 1000; // EST is UTC-5
+  const estNow = new Date(now.getTime() - estOffset);
+  return {
+    month: estNow.getUTCMonth() + 1,
+    day: estNow.getUTCDate()
+  };
+}
+
 // ------------------- birthday-announcements (12am EST = 05:00 UTC) -------------------
 async function birthdayAnnouncements(client, _data = {}) {
   if (!client?.channels) {
@@ -575,9 +587,8 @@ async function birthdayAnnouncements(client, _data = {}) {
       return;
     }
     
-    const today = new Date();
-    const month = today.getUTCMonth() + 1;
-    const day = today.getUTCDate();
+    // Use Eastern date so "today" is the calendar day at midnight Eastern
+    const { month, day } = getTodayMonthDayEastern();
     
     // Find all users with birthdays today
     const birthdayUsers = await User.find({
@@ -585,14 +596,25 @@ async function birthdayAnnouncements(client, _data = {}) {
       'birthday.day': day
     });
     
-    // Find all characters with birthdays today (MM-DD format)
+    // Find all characters with birthdays today — match "MM-DD", "M-D", and optional surrounding whitespace
     const todayBirthdayStr = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const birthdayCharacters = await Character.find({
-      birthday: todayBirthdayStr
-    });
+    const birthdayRegex = new RegExp(`^\\s*0?${month}-0?${day}\\s*$`);
+    const characterBirthdayFilter = {
+      $and: [
+        { birthday: { $exists: true, $ne: '' } },
+        { birthday: { $regex: birthdayRegex } }
+      ]
+    };
+    const [birthdayCharactersRegular, birthdayCharactersMod] = await Promise.all([
+      Character.find(characterBirthdayFilter),
+      ModCharacter.find(characterBirthdayFilter)
+    ]);
+    const birthdayCharacters = [...birthdayCharactersRegular, ...birthdayCharactersMod];
+    
+    logger.info('SCHEDULED', `birthday-announcements: date (Eastern) ${todayBirthdayStr}, found ${birthdayUsers.length} user(s), ${birthdayCharacters.length} character(s)`);
     
     if (birthdayUsers.length === 0 && birthdayCharacters.length === 0) {
-      logger.info('SCHEDULED', 'birthday-announcements: No birthdays today');
+      logger.info('SCHEDULED', 'birthday-announcements: No birthdays today — skipping post');
       return;
     }
     
