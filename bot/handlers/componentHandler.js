@@ -664,8 +664,12 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       }
   
       const previousJob = character.job;
-      const member = interaction.member;
-  
+      // Only assign Discord roles for approved characters; use character owner for role assignment
+      const isAccepted = character.status === 'accepted';
+      const memberForRoles = isAccepted
+        ? (await interaction.guild.members.fetch(character.userId).catch(() => null)) || interaction.member
+        : null;
+
       // Map job names to their role IDs
       const jobRoleIdMap = {
         'Adventurer': process.env.JOB_ADVENTURER,
@@ -715,63 +719,65 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
         'BOOST': process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING,
         'VENDING': process.env.JOB_PERK_VENDING
       };
-  
-      // ------------------- Remove old job role -------------------
-      const oldJobRoleId = jobRoleIdMap[previousJob];
-      if (oldJobRoleId) {
-        const guildRole = interaction.guild.roles.cache.get(oldJobRoleId);
-        if (guildRole) {
-          await member.roles.remove(guildRole);
-        } else {
-          console.error(`[componentHandler.js]: Old job role ID "${oldJobRoleId}" not found in guild.`);
-        }
-      }
-  
-      // ------------------- Add new job role -------------------
-      const newJobRoleId = jobRoleIdMap[updatedJob];
-      if (newJobRoleId) {
-        const guildRole = interaction.guild.roles.cache.get(newJobRoleId);
-        if (guildRole) {
-          await member.roles.add(guildRole);
-        } else {
-          console.error(`[componentHandler.js]: New job role ID "${newJobRoleId}" not found in guild.`);
-        }
-      }
-  
-      // ------------------- Update perk roles -------------------
-      const previousPerks = getJobPerk(previousJob)?.perks || [];
-      const newPerks = getJobPerk(updatedJob)?.perks || [];
-  
-      // Remove previous perk roles
-      for (const perk of previousPerks) {
-        const perkRoleId = jobPerkIdMap[perk];
-        if (perkRoleId) {
-          const role = interaction.guild.roles.cache.get(perkRoleId);
-          if (role) {
-            await member.roles.remove(role);
+
+      if (memberForRoles) {
+        // ------------------- Remove old job role -------------------
+        const oldJobRoleId = jobRoleIdMap[previousJob];
+        if (oldJobRoleId) {
+          const guildRole = interaction.guild.roles.cache.get(oldJobRoleId);
+          if (guildRole) {
+            await memberForRoles.roles.remove(guildRole);
           } else {
-            console.error(`[componentHandler.js]: Old perk role ID "${perkRoleId}" not found.`);
+            console.error(`[componentHandler.js]: Old job role ID "${oldJobRoleId}" not found in guild.`);
           }
-        } else {
-          console.error(`[componentHandler.js]: No role ID mapping for old perk "${perk}".`);
         }
-      }
-  
-      // Add new perk roles
-      for (const perk of newPerks) {
-        const perkRoleId = jobPerkIdMap[perk];
-        if (perkRoleId) {
-          const role = interaction.guild.roles.cache.get(perkRoleId);
-          if (role) {
-            await member.roles.add(role);
+
+        // ------------------- Add new job role -------------------
+        const newJobRoleId = jobRoleIdMap[updatedJob];
+        if (newJobRoleId) {
+          const guildRole = interaction.guild.roles.cache.get(newJobRoleId);
+          if (guildRole) {
+            await memberForRoles.roles.add(guildRole);
           } else {
-            console.error(`[componentHandler.js]: New perk role ID "${perkRoleId}" not found.`);
+            console.error(`[componentHandler.js]: New job role ID "${newJobRoleId}" not found in guild.`);
           }
-        } else {
-          console.error(`[componentHandler.js]: No role ID mapping for new perk "${perk}".`);
+        }
+
+        // ------------------- Update perk roles -------------------
+        const previousPerks = getJobPerk(previousJob)?.perks || [];
+        const newPerks = getJobPerk(updatedJob)?.perks || [];
+
+        // Remove previous perk roles
+        for (const perk of previousPerks) {
+          const perkRoleId = jobPerkIdMap[perk];
+          if (perkRoleId) {
+            const role = interaction.guild.roles.cache.get(perkRoleId);
+            if (role) {
+              await memberForRoles.roles.remove(role);
+            } else {
+              console.error(`[componentHandler.js]: Old perk role ID "${perkRoleId}" not found.`);
+            }
+          } else {
+            console.error(`[componentHandler.js]: No role ID mapping for old perk "${perk}".`);
+          }
+        }
+
+        // Add new perk roles
+        for (const perk of newPerks) {
+          const perkRoleId = jobPerkIdMap[perk];
+          if (perkRoleId) {
+            const role = interaction.guild.roles.cache.get(perkRoleId);
+            if (role) {
+              await memberForRoles.roles.add(role);
+            } else {
+              console.error(`[componentHandler.js]: New perk role ID "${perkRoleId}" not found.`);
+            }
+          } else {
+            console.error(`[componentHandler.js]: No role ID mapping for new perk "${perk}".`);
+          }
         }
       }
-  
+
       // ------------------- Update character job and save -------------------
       character.job = updatedJob;
       character.jobPerk = newPerks.join(' / ');

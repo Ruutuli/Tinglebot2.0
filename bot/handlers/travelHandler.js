@@ -193,9 +193,13 @@ function createFinalTravelEmbed(character, destination, paths, totalTravelDurati
 // ============================================================================
 
 // ------------------- Role Assignment Helper -------------------
-// Assigns the appropriate village visiting role to the user when they arrive at a destination
+// Assigns the appropriate village visiting role to the user when they arrive at a destination.
+// Only assigns roles for approved characters (status === 'accepted').
 async function assignVillageVisitingRole(interaction, destination, character = null) {
   try {
+    if (character && character.status !== 'accepted') {
+      return; // No role assignment until character is approved
+    }
     const member = await interaction.guild.members.fetch(interaction.user.id);
     const destinationRoleId = VILLAGE_VISITING_ROLES[capitalizeFirstLetter(destination)];
     const isHomeVillage = character && character.homeVillage.toLowerCase() === destination.toLowerCase();

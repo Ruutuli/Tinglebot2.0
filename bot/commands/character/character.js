@@ -856,113 +856,116 @@ async function handleChangeJob(interaction) {
     console.error(`[handleChangeJob] ❌ Token tracker error:`, sheetError);
   }
 
-  // ------------------- Update Discord Roles -------------------
-  const member = interaction.member;
-  
-  // Map job names to their role IDs
-  const jobRoleIdMap = {
-    'Adventurer': process.env.JOB_ADVENTURER,
-    'Artist': process.env.JOB_ARTIST,
-    'Bandit': process.env.JOB_BANDIT,
-    'Beekeeper': process.env.JOB_BEEKEEPER,
-    'Blacksmith': process.env.JOB_BLACKSMITH,
-    'Cook': process.env.JOB_COOK,
-    'Courier': process.env.JOB_COURIER,
-    'Craftsman': process.env.JOB_CRAFTSMAN,
-    'Farmer': process.env.JOB_FARMER,
-    'Fisherman': process.env.JOB_FISHERMAN,
-    'Forager': process.env.JOB_FORAGER,
-    'Fortune Teller': process.env.JOB_FORTUNE_TELLER,
-    'Graveskeeper': process.env.JOB_GRAVESKEEPER,
-    'Guard': process.env.JOB_GUARD,
-    'Healer': process.env.JOB_HEALER,
-    'Herbalist': process.env.JOB_HERBALIST,
-    'Hunter': process.env.JOB_HUNTER,
-    'Mask Maker': process.env.JOB_MASK_MAKER,
-    'Merchant': process.env.JOB_MERCHANT,
-    'Mercenary': process.env.JOB_MERCENARY,
-    'Miner': process.env.JOB_MINER,
-    'Oracle': process.env.JOB_ORACLE,
-    'Priest': process.env.JOB_PRIEST,
-    'Rancher': process.env.JOB_RANCHER,
-    'Researcher': process.env.JOB_RESEARCHER,
-    'Scout': process.env.JOB_SCOUT,
-    'Scholar': process.env.JOB_SCHOLAR,
-    'Shopkeeper': process.env.JOB_SHOPKEEPER,
-    'Stablehand': process.env.JOB_STABLEHAND,
-    'Teacher': process.env.JOB_TEACHER,
-    'Villager': process.env.JOB_VILLAGER,
-    'Weaver': process.env.JOB_WEAVER,
-    'Witch': process.env.JOB_WITCH,
-    'Entertainer': process.env.JOB_ENTERTAINER
-  };
+  // ------------------- Update Discord Roles (only for approved characters) -------------------
+  const isAccepted = character.status === 'accepted';
+  if (isAccepted) {
+    const member = interaction.member;
 
-  // Map job perks to their IDs
-  const jobPerkIdMap = {
-    'LOOTING': process.env.JOB_PERK_LOOTING,
-    'STEALING': process.env.JOB_PERK_STEALING,
-    'ENTERTAINING': process.env.JOB_PERK_ENTERTAINING,
-    'DELIVERING': process.env.JOB_PERK_DELIVERING,
-    'HEALING': process.env.JOB_PERK_HEALING,
-    'GATHERING': process.env.JOB_PERK_GATHERING,
-    'CRAFTING': process.env.JOB_PERK_CRAFTING,
-    'BOOST': process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING,
-    'VENDING': process.env.JOB_PERK_VENDING
-  };
+    // Map job names to their role IDs
+    const jobRoleIdMap = {
+      'Adventurer': process.env.JOB_ADVENTURER,
+      'Artist': process.env.JOB_ARTIST,
+      'Bandit': process.env.JOB_BANDIT,
+      'Beekeeper': process.env.JOB_BEEKEEPER,
+      'Blacksmith': process.env.JOB_BLACKSMITH,
+      'Cook': process.env.JOB_COOK,
+      'Courier': process.env.JOB_COURIER,
+      'Craftsman': process.env.JOB_CRAFTSMAN,
+      'Farmer': process.env.JOB_FARMER,
+      'Fisherman': process.env.JOB_FISHERMAN,
+      'Forager': process.env.JOB_FORAGER,
+      'Fortune Teller': process.env.JOB_FORTUNE_TELLER,
+      'Graveskeeper': process.env.JOB_GRAVESKEEPER,
+      'Guard': process.env.JOB_GUARD,
+      'Healer': process.env.JOB_HEALER,
+      'Herbalist': process.env.JOB_HERBALIST,
+      'Hunter': process.env.JOB_HUNTER,
+      'Mask Maker': process.env.JOB_MASK_MAKER,
+      'Merchant': process.env.JOB_MERCHANT,
+      'Mercenary': process.env.JOB_MERCENARY,
+      'Miner': process.env.JOB_MINER,
+      'Oracle': process.env.JOB_ORACLE,
+      'Priest': process.env.JOB_PRIEST,
+      'Rancher': process.env.JOB_RANCHER,
+      'Researcher': process.env.JOB_RESEARCHER,
+      'Scout': process.env.JOB_SCOUT,
+      'Scholar': process.env.JOB_SCHOLAR,
+      'Shopkeeper': process.env.JOB_SHOPKEEPER,
+      'Stablehand': process.env.JOB_STABLEHAND,
+      'Teacher': process.env.JOB_TEACHER,
+      'Villager': process.env.JOB_VILLAGER,
+      'Weaver': process.env.JOB_WEAVER,
+      'Witch': process.env.JOB_WITCH,
+      'Entertainer': process.env.JOB_ENTERTAINER
+    };
 
-  // ------------------- Remove old job role -------------------
-  const oldJobRoleId = jobRoleIdMap[previousJob];
-  if (oldJobRoleId) {
-    const guildRole = interaction.guild.roles.cache.get(oldJobRoleId);
-    if (guildRole) {
-      await member.roles.remove(guildRole);
-    } else {
-      console.error(`[handleChangeJob]: Old job role ID "${oldJobRoleId}" not found in guild.`);
-    }
-  }
+    // Map job perks to their IDs
+    const jobPerkIdMap = {
+      'LOOTING': process.env.JOB_PERK_LOOTING,
+      'STEALING': process.env.JOB_PERK_STEALING,
+      'ENTERTAINING': process.env.JOB_PERK_ENTERTAINING,
+      'DELIVERING': process.env.JOB_PERK_DELIVERING,
+      'HEALING': process.env.JOB_PERK_HEALING,
+      'GATHERING': process.env.JOB_PERK_GATHERING,
+      'CRAFTING': process.env.JOB_PERK_CRAFTING,
+      'BOOST': process.env.JOB_PERK_BOOST || process.env.JOB_PERK_BOOSTING,
+      'VENDING': process.env.JOB_PERK_VENDING
+    };
 
-  // ------------------- Add new job role -------------------
-  const newJobRoleId = jobRoleIdMap[newJob];
-  if (newJobRoleId) {
-    const guildRole = interaction.guild.roles.cache.get(newJobRoleId);
-    if (guildRole) {
-      await member.roles.add(guildRole);
-    } else {
-      console.error(`[handleChangeJob]: New job role ID "${newJobRoleId}" not found in guild.`);
-    }
-  }
-
-  // ------------------- Update perk roles -------------------
-  const previousPerks = getJobPerk(previousJob)?.perks || [];
-  const newPerks = getJobPerk(newJob)?.perks || [];
-
-  // Remove previous perk roles
-  for (const perk of previousPerks) {
-    const perkRoleId = jobPerkIdMap[perk];
-    if (perkRoleId) {
-      const role = interaction.guild.roles.cache.get(perkRoleId);
-      if (role) {
-        await member.roles.remove(role);
+    // ------------------- Remove old job role -------------------
+    const oldJobRoleId = jobRoleIdMap[previousJob];
+    if (oldJobRoleId) {
+      const guildRole = interaction.guild.roles.cache.get(oldJobRoleId);
+      if (guildRole) {
+        await member.roles.remove(guildRole);
       } else {
-        console.error(`[handleChangeJob]: Old perk role ID "${perkRoleId}" not found.`);
+        console.error(`[handleChangeJob]: Old job role ID "${oldJobRoleId}" not found in guild.`);
       }
-    } else {
-      console.error(`[handleChangeJob]: No role ID mapping for old perk "${perk}".`);
     }
-  }
 
-  // Add new perk roles
-  for (const perk of newPerks) {
-    const perkRoleId = jobPerkIdMap[perk];
-    if (perkRoleId) {
-      const role = interaction.guild.roles.cache.get(perkRoleId);
-      if (role) {
-        await member.roles.add(role);
+    // ------------------- Add new job role -------------------
+    const newJobRoleId = jobRoleIdMap[newJob];
+    if (newJobRoleId) {
+      const guildRole = interaction.guild.roles.cache.get(newJobRoleId);
+      if (guildRole) {
+        await member.roles.add(guildRole);
       } else {
-        console.error(`[handleChangeJob]: New perk role ID "${perkRoleId}" not found.`);
+        console.error(`[handleChangeJob]: New job role ID "${newJobRoleId}" not found in guild.`);
       }
-    } else {
-      console.error(`[handleChangeJob]: No role ID mapping for new perk "${perk}".`);
+    }
+
+    // ------------------- Update perk roles -------------------
+    const previousPerks = getJobPerk(previousJob)?.perks || [];
+    const newPerks = getJobPerk(newJob)?.perks || [];
+
+    // Remove previous perk roles
+    for (const perk of previousPerks) {
+      const perkRoleId = jobPerkIdMap[perk];
+      if (perkRoleId) {
+        const role = interaction.guild.roles.cache.get(perkRoleId);
+        if (role) {
+          await member.roles.remove(role);
+        } else {
+          console.error(`[handleChangeJob]: Old perk role ID "${perkRoleId}" not found.`);
+        }
+      } else {
+        console.error(`[handleChangeJob]: No role ID mapping for old perk "${perk}".`);
+      }
+    }
+
+    // Add new perk roles
+    for (const perk of newPerks) {
+      const perkRoleId = jobPerkIdMap[perk];
+      if (perkRoleId) {
+        const role = interaction.guild.roles.cache.get(perkRoleId);
+        if (role) {
+          await member.roles.add(role);
+        } else {
+          console.error(`[handleChangeJob]: New perk role ID "${perkRoleId}" not found.`);
+        }
+      } else {
+        console.error(`[handleChangeJob]: No role ID mapping for new perk "${perk}".`);
+      }
     }
   }
 
