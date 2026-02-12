@@ -55,6 +55,8 @@ const PartySchema = new Schema({
       },
       heartsLost: { type: Number },
       staminaLost: { type: Number },
+      heartsRecovered: { type: Number },
+      staminaRecovered: { type: Number },
     }
   ]
 });

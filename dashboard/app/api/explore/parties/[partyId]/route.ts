@@ -92,6 +92,8 @@ export async function GET(
           const loot = e.loot as Record<string, unknown> | undefined;
           const heartsLost = typeof e.heartsLost === "number" && e.heartsLost > 0 ? e.heartsLost : undefined;
           const staminaLost = typeof e.staminaLost === "number" && e.staminaLost > 0 ? e.staminaLost : undefined;
+          const heartsRecovered = typeof e.heartsRecovered === "number" && e.heartsRecovered > 0 ? e.heartsRecovered : undefined;
+          const staminaRecovered = typeof e.staminaRecovered === "number" && e.staminaRecovered > 0 ? e.staminaRecovered : undefined;
           return {
             at: e.at instanceof Date ? e.at.toISOString() : typeof e.at === "string" ? e.at : String(e.at ?? ""),
             characterName: String(e.characterName ?? ""),
@@ -102,6 +104,8 @@ export async function GET(
               : {}),
             ...(heartsLost != null ? { heartsLost } : {}),
             ...(staminaLost != null ? { staminaLost } : {}),
+            ...(heartsRecovered != null ? { heartsRecovered } : {}),
+            ...(staminaRecovered != null ? { staminaRecovered } : {}),
           };
         })
       : [];

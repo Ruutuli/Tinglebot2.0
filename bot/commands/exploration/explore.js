@@ -67,6 +67,8 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs) {
  if (costs) {
   if (typeof costs.heartsLost === "number" && costs.heartsLost > 0) entry.heartsLost = costs.heartsLost;
   if (typeof costs.staminaLost === "number" && costs.staminaLost > 0) entry.staminaLost = costs.staminaLost;
+  if (typeof costs.heartsRecovered === "number" && costs.heartsRecovered > 0) entry.heartsRecovered = costs.heartsRecovered;
+  if (typeof costs.staminaRecovered === "number" && costs.staminaRecovered > 0) entry.staminaRecovered = costs.staminaRecovered;
  }
  party.progressLog.push(entry);
 }
@@ -151,7 +153,7 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("roll")
-    .setDescription("Roll for an encounter (first time or again in same quadrant)")
+    .setDescription("Roll for an encounter (costs 1 stamina, or 2 in unexplored quad; 0 in secured)")
     .addStringOption((option) =>
      option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
@@ -378,6 +380,33 @@ module.exports = {
       pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Rest, Secure, Roll again, or Move.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
+
+      // Mark quadrant as explored in the canonical map (exploringMap)
+      try {
+       const mapSquareId = (party.square && String(party.square).trim()) || "";
+       const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
+       if (mapSquareId && mapQuadrantId) {
+        const result = await Square.updateOne(
+         { squareId: mapSquareId, "quadrants.quadrantId": mapQuadrantId },
+         {
+          $set: {
+           "quadrants.$[q].status": "explored",
+           "quadrants.$[q].exploredBy": interaction.user?.id || party.leaderId || "",
+           "quadrants.$[q].exploredAt": new Date(),
+          },
+         },
+         { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+        );
+        if (result.matchedCount === 0) {
+         console.warn("[explore.js] Map update: no square found for", mapSquareId, "quadrant", mapQuadrantId);
+        } else if (result.modifiedCount === 0) {
+         console.warn("[explore.js] Map update: square found but quadrant not updated for", mapSquareId, mapQuadrantId);
+        }
+       }
+      } catch (mapErr) {
+       console.error("[explore.js] Failed to update map quadrant status:", mapErr.message);
+      }
+
       const nextCharacter = party.characters[party.currentTurn];
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
@@ -424,7 +453,14 @@ module.exports = {
        monster_camp: `Found a monster camp in ${location}; report to town hall to mark on map.`,
        grotto: `Found a grotto in ${location} (cleanse for 1 plume + 1 stamina or mark for later).`,
       };
-      pushProgressLog(party, character.name, outcomeType, progressMessages[outcomeType] || `Found something in ${location}.`);
+      pushProgressLog(
+       party,
+       character.name,
+       outcomeType,
+       progressMessages[outcomeType] || `Found something in ${location}.`,
+       undefined,
+       outcomeType === "camp" ? { heartsRecovered: campHeartsRecovered, staminaRecovered: campStaminaRecovered } : undefined
+      );
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
