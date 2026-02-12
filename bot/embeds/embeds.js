@@ -468,7 +468,8 @@ function createVendingSetupInstructionsEmbed(character = null) {
 
 // ------------------- Function: addExplorationStandardFields -------------------
 // Appends standard exploration embed fields (Expedition ID, Location, Party Hearts/Stamina, optional Next up + Commands).
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands }) => {
+// showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false }) => {
  const fields = [
   { name: "🆔 **__Expedition ID__**", value: expeditionId || party?.partyId || "Unknown", inline: true },
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
@@ -479,24 +480,14 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   const nextName = nextCharacter.name;
   const expId = expeditionId || party?.partyId || "—";
   const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
-  const quadrantExplored = party?.quadrantState === "explored" || party?.quadrantState === "secured";
-  let commandsValue =
-   `**Take your turn:**\n` +
-   `• ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**`;
-  if (quadrantExplored) {
+  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n**Take your turn:** ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**`;
+  if (showRestSecureMove) {
    const cmdRest = `</explore rest:${EXPLORE_CMD_ID}>`;
    const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
    const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
-   commandsValue +=
-    `\n\n**Only after the quadrant is explored** (e.g. "Quadrant Explored!" prompt):\n` +
-    `• ${cmdRest} — recover stamina\n` +
-    `• ${cmdSecure} — secure quadrant (costs resources)\n` +
-    `• ${cmdMove} — move to next quadrant`;
+   commandsValue += `\n\n**Or:** ${cmdRest} · ${cmdSecure} · ${cmdMove}`;
   }
-  fields.push(
-   { name: "➡️ **__Next up__**", value: `Next: <@${nextCharacter.userId}> (${nextName})`, inline: false },
-   { name: "📋 **__Commands__**", value: commandsValue, inline: false }
-  );
+  fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
  }
  embed.addFields(...fields);
  return embed;

@@ -29,6 +29,9 @@ const REGION_BANNER_FILES: Record<string, string> = {
 
 const EMBED_ATTACHMENT_FILENAME = "banner.png";
 
+// Discord slash command ID for /explore (must match bot embeds EXPLORE_CMD_ID)
+const EXPLORE_CMD_ID = "1471454947089580107";
+
 type PartyMemberDoc = {
   _id: unknown;
   userId: string;
@@ -165,6 +168,14 @@ export async function POST(
         {
           name: "__🆔 Expedition ID__",
           value: `\`\`\`\n${partyId}\n\`\`\``,
+          inline: false,
+        },
+        {
+          name: "__📋 Commands__",
+          value:
+            characters.length > 0
+              ? `**Take your turn:**\n• </explore roll:${EXPLORE_CMD_ID}> — id: \`${partyId}\` charactername: **${String(characters[0].name)}**`
+              : "Use the expedition page link below to manage the party.",
           inline: false,
         },
         {

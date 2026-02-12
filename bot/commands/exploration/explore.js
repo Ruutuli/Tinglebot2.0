@@ -355,16 +355,9 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
-      const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
-      const cmdRest = `</explore rest:${EXPLORE_CMD_ID}>`;
-      const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
-      const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
-       .setDescription(
-        `**${character.name}** has explored this area (**${location}**). The party can now choose what to do next.\n\n` +
-        `**What you can do:** • **Rest** (3 stamina) — ${cmdRest} • **Secure** quadrant — ${cmdSecure} (5 stamina + resources) • **Roll** again — ${cmdRoll} (1 stamina) • **Move** — ${cmdMove} (2 stamina)`
-       )
+       .setDescription(`**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or rest, secure, or move.`)
        .setColor(regionColors[party.region] || "#00ff99")
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
@@ -373,11 +366,10 @@ module.exports = {
         location,
         nextCharacter: nextCharacter ?? null,
         showNextAndCommands: true,
+        showRestSecureMove: true,
       });
-      await interaction.editReply({
-        content: `<@${nextCharacter.userId}> it's your turn now`,
-        embeds: [embed],
-      });
+      await interaction.editReply({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      await interaction.followUp({ embeds: [embed] });
       return;
      }
 
@@ -469,12 +461,8 @@ module.exports = {
        components = [row];
       }
 
-      const replyPayload = {
-        content: `<@${nextCharacter.userId}> it's your turn now`,
-        embeds: [embed],
-        components,
-      };
-      const msg = await interaction.editReply(replyPayload);
+      await interaction.editReply({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      const msg = await interaction.followUp({ embeds: [embed], components });
 
       if (isYesNoChoice) {
        const collector = msg.createMessageComponentCollector({
@@ -526,11 +514,7 @@ module.exports = {
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
         );
-        await interaction.editReply({
-          content: `<@${nextCharacter.userId}> it's your turn now`,
-          embeds: [choiceEmbed],
-          components: [disabledRow],
-        });
+        await i.update({ embeds: [choiceEmbed], components: [disabledRow] });
        });
        collector.on("end", (collected, reason) => {
         if (reason === "time" && collected.size === 0 && msg.editable) {
@@ -546,7 +530,7 @@ module.exports = {
            .setStyle(ButtonStyle.Secondary)
            .setDisabled(true)
          );
-         interaction.editReply({ components: [disabledRow] }).catch(() => {});
+         msg.edit({ components: [disabledRow] }).catch(() => {});
         }
        });
       }
@@ -595,10 +579,8 @@ module.exports = {
        emoji: selectedItem.emoji || "",
       });
 
-      await interaction.editReply({
-        content: `<@${nextCharacter.userId}> it's your turn now`,
-        embeds: [embed],
-      });
+      await interaction.editReply({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      await interaction.followUp({ embeds: [embed] });
 
       try {
        await addItemInventoryDatabase(
@@ -736,10 +718,8 @@ module.exports = {
          }
         }
 
-        await interaction.editReply({
-          content: `<@${nextCharacterRaid.userId}> it's your turn now`,
-          embeds: [embed],
-        });
+        await interaction.editReply({ content: `<@${nextCharacterRaid.userId}> it's your turn now` });
+        await interaction.followUp({ embeds: [embed] });
        } catch (error) {
         handleInteractionError(error, interaction, { source: "explore.js" });
         console.error(`[ERROR] Raid processing failed:`, error);
@@ -868,10 +848,8 @@ module.exports = {
         }
        }
 
-       await interaction.editReply({
-         content: `<@${nextCharacterTier.userId}> it's your turn now`,
-         embeds: [embed],
-       });
+       await interaction.editReply({ content: `<@${nextCharacterTier.userId}> it's your turn now` });
+       await interaction.followUp({ embeds: [embed] });
       }
      }
     } catch (error) {
@@ -985,10 +963,8 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({
-      content: `<@${nextCharacterRest.userId}> it's your turn now`,
-      embeds: [embed],
-    });
+    await interaction.editReply({ content: `<@${nextCharacterRest.userId}> it's your turn now` });
+    await interaction.followUp({ embeds: [embed] });
 
     // ------------------- Secure Quadrant Command -------------------
    } else if (subcommand === "secure") {
@@ -1075,10 +1051,8 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({
-      content: `<@${nextCharacterSecure.userId}> it's your turn now`,
-      embeds: [embed],
-    });
+    await interaction.editReply({ content: `<@${nextCharacterSecure.userId}> it's your turn now` });
+    await interaction.followUp({ embeds: [embed] });
 
     // ------------------- Move to Adjacent Quadrant -------------------
    } else if (subcommand === "move") {
@@ -1162,10 +1136,8 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({
-      content: `<@${nextCharacterMove.userId}> it's your turn now`,
-      embeds: [embed],
-    });
+    await interaction.editReply({ content: `<@${nextCharacterMove.userId}> it's your turn now` });
+    await interaction.followUp({ embeds: [embed] });
 
     // ------------------- Use Item (healing from expedition loadout) -------------------
    } else if (subcommand === "item") {
@@ -1460,10 +1432,8 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({
-      content: `<@${nextCharacterCamp.userId}> it's your turn now`,
-      embeds: [embed],
-    });
+    await interaction.editReply({ content: `<@${nextCharacterCamp.userId}> it's your turn now` });
+    await interaction.followUp({ embeds: [embed] });
    }
   } catch (error) {
    await handleInteractionError(error, interaction, {
