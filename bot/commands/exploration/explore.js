@@ -332,11 +332,7 @@ module.exports = {
        expeditionId,
        location,
        party.totalHearts,
-       party.totalStamina,
-       party.characters
-        .flatMap((char) => char.items)
-        .map((item) => `${item.emoji || "🔹"} ${item.itemName}`)
-        .join(", ")
+       party.totalStamina
       );
 
       if (!party.gatheredItems) {
@@ -366,10 +362,12 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
+      const nextCharacter = party.characters[party.currentTurn];
+      const nextName = nextCharacter?.name || "Unknown";
       embed.addFields({
-       name: "🎮 **__Next Turn__**",
-       value: party.characters[party.currentTurn]?.name || "Unknown",
-       inline: true,
+       name: "➡️ **__What to do next__**",
+       value: `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` to take your turn.`,
+       inline: false,
       });
 
       await interaction.editReply({ embeds: [embed] });
@@ -473,11 +471,7 @@ module.exports = {
          expeditionId,
          location,
          party.totalHearts,
-         party.totalStamina,
-         party.characters
-          .flatMap((char) => char.items)
-          .map((item) => `${item.emoji || "🔹"} ${item.itemName}`)
-          .join(", ")
+         party.totalStamina
         );
 
         embed.addFields(
@@ -548,10 +542,12 @@ module.exports = {
         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
         await party.save();
 
+        const nextCharacterRaid = party.characters[party.currentTurn];
+        const nextNameRaid = nextCharacterRaid?.name || "Unknown";
         embed.addFields({
-         name: "🎮 **__Next Turn__**",
-         value: party.characters[party.currentTurn]?.name || "Unknown",
-         inline: true,
+         name: "➡️ **__What to do next__**",
+         value: `**Next turn:** ${nextNameRaid}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextNameRaid}\` to take your turn.`,
+         inline: false,
         });
 
         await interaction.editReply({ embeds: [embed] });
@@ -626,14 +622,10 @@ module.exports = {
         expeditionId,
         location,
         party.totalHearts,
-        party.totalStamina,
-        party.characters
-         .flatMap((char) => char.items)
-         .map((item) => `${item.emoji || "🔹"} ${item.itemName}`)
-         .join(", ")
-       );
+        party.totalStamina
+      );
 
-       embed.addFields(
+      embed.addFields(
         {
          name: `❤️ __${character.name} Hearts__`,
          value: `${character.currentHearts}/${character.maxHearts}`,
@@ -701,10 +693,12 @@ module.exports = {
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save();
 
+       const nextCharacterTier = party.characters[party.currentTurn];
+       const nextNameTier = nextCharacterTier?.name || "Unknown";
        embed.addFields({
-        name: "🎮 **__Next Turn__**",
-        value: party.characters[party.currentTurn]?.name || "Unknown",
-        inline: true,
+        name: "➡️ **__What to do next__**",
+        value: `**Next turn:** ${nextNameTier}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextNameTier}\` to take your turn.`,
+        inline: false,
        });
 
        await interaction.editReply({ embeds: [embed] });

@@ -471,8 +471,7 @@ const createExplorationItemEmbed = (
  expeditionId,
  location,
  totalHearts,
- totalStamina,
- itemsCarried
+ totalStamina
 ) => {
  const embed = new EmbedBuilder()
   .setTitle(`🗺️ **Expedition: ${character.name} Found an Item!**`)
@@ -495,11 +494,6 @@ const createExplorationItemEmbed = (
    {
     name: "🟩 **__Party Stamina__**",
     value: `${totalStamina}`,
-    inline: false,
-   },
-   {
-    name: "🔹 **__Items Carried__**",
-    value: itemsCarried || "None",
     inline: false,
    }
   );
