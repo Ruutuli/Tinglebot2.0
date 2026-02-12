@@ -68,6 +68,23 @@ The “Explored but not Secured” state is intentional: backtracking can be ris
 
 ---
 
+## Stamina costs by action
+
+Stamina is deducted from the **current turn character** (and party total is recalculated from all characters). Costs are enforced in `explore.js`.
+
+| Action | Stamina cost | Notes |
+|--------|--------------|--------|
+| **/explore roll** | 2 (unexplored), 1 (explored), 0 (secured) | Depends on **Party.quadrantState** for current quadrant. |
+| **/explore rest** | 3 | Heals all party hearts, revives KO'd. Explored or secured quadrant only. |
+| **/explore secure** | 5 | Requires Wood + Eldin Ore. Explored quadrant only. |
+| **/explore move** | 2 | Move to adjacent quadrant; new quadrant is unexplored. |
+| **/explore camp** | 0 (cost is time) | Recovers hearts + stamina over 1–8 hours (2 stamina per hour per character). |
+| **Chest (open)** | 1 | When implemented; open chest found during exploration. |
+| **Ruins (explore)** | 3 | When implemented; explore ruins found during exploration. |
+| **Grotto (cleanse)** | 1 | When implemented; plus 1 goddess plume. |
+
+---
+
 ## Blighted quadrants
 
 When a quadrant is **revealed** and has **25% or more blight coverage**, the party that explored it must run **exposure** logic (exposure command/flag in the database). The bot/dashboard triggers this when the quadrant is revealed and blight level meets the threshold.

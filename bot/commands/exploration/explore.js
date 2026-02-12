@@ -347,7 +347,13 @@ module.exports = {
       );
      }
 
-    party.totalStamina -= staminaCost;
+    // Apply roll cost to current character so party totals stay correct when recalc'd later (e.g. after monster fight)
+    const currentStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
+    character.currentStamina = Math.max(0, currentStamina - staminaCost);
+    await character.save();
+    party.characters[characterIndex].currentStamina = character.currentStamina;
+    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+    party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
     await party.save();
 
      const location = `${party.square} ${party.quadrant}`;
@@ -368,6 +374,7 @@ module.exports = {
 
      if (outcomeType === "explored") {
       party.quadrantState = "explored";
+      party.markModified("quadrantState");
       pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Rest, Secure, Roll again, or Move.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
@@ -952,7 +959,11 @@ module.exports = {
      );
     }
 
-    party.totalStamina -= staminaCost;
+    // Apply rest cost to current character so party total stays correct
+    const restCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
+    character.currentStamina = Math.max(0, restCharStamina - staminaCost);
+    await character.save();
+    party.characters[characterIndex].currentStamina = character.currentStamina;
 
     let revivedCount = 0;
     for (let i = 0; i < party.characters.length; i++) {
@@ -1064,8 +1075,15 @@ module.exports = {
      );
     }
 
-    party.totalStamina -= staminaCost;
+    // Apply secure cost to current character so party total stays correct
+    const secureCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
+    character.currentStamina = Math.max(0, secureCharStamina - staminaCost);
+    await character.save();
+    party.characters[characterIndex].currentStamina = character.currentStamina;
+    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+
     party.quadrantState = "secured";
+    party.markModified("quadrantState");
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
@@ -1153,10 +1171,17 @@ module.exports = {
      );
     }
 
-    party.totalStamina -= staminaCost;
+    // Apply move cost to current character so party total stays correct
+    const moveCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
+    character.currentStamina = Math.max(0, moveCharStamina - staminaCost);
+    await character.save();
+    party.characters[characterIndex].currentStamina = character.currentStamina;
+    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
     party.quadrantState = "unexplored";
+    party.markModified("quadrantState");
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 

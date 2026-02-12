@@ -1209,8 +1209,7 @@ export default function ExplorePartyPage() {
                           <p className="text-sm text-[var(--botw-pale)]">{entry.message}</p>
                           {entry.loot?.itemName ? (
                             <p className="text-xs text-[var(--totk-light-green)]">
-                              Loot: {entry.loot.emoji ? `${entry.loot.emoji} ` : ""}
-                              <span className="font-medium">{entry.loot.itemName}</span>
+                              Loot: <span className="font-medium">{entry.loot.itemName}</span>
                             </p>
                           ) : null}
                         </li>
