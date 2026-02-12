@@ -515,8 +515,7 @@ const createExplorationMonsterEmbed = (
  expeditionId,
  location,
  totalHearts,
- totalStamina,
- itemsCarried
+ totalStamina
 ) => {
  const monsterImage =
   monster.image ||
@@ -548,11 +547,6 @@ const createExplorationMonsterEmbed = (
    {
     name: "🟩 **__Party Stamina__**",
     value: `${totalStamina}`,
-    inline: false,
-   },
-   {
-    name: "🔹 **__Items Carried__**",
-    value: itemsCarried || "None",
     inline: false,
    }
   );

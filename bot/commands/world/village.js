@@ -215,6 +215,7 @@ async function processItemContribution(village, interaction, itemName, qty, char
     const contributorKey = donatingCharacter._id.toString();
     const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
     contributorData.items[matchedKey] = (contributorData.items[matchedKey] || 0) + qty;
+    contributorData.lastDonatedAt = new Date();
     village.contributors.set(contributorKey, contributorData);
     village.markModified('contributors');
 
@@ -316,6 +317,7 @@ async function processTokenContribution(village, interaction, qty, characterName
     const contributorKey = donatingCharacter._id.toString();
     const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
     contributorData.tokens += qty;
+    contributorData.lastDonatedAt = new Date();
     village.contributors.set(contributorKey, contributorData);
     village.markModified('contributors');
 
@@ -428,6 +430,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                 const contributorKey = donatingCharacter._id.toString();
                 const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
                 contributorData.tokens = (contributorData.tokens || 0) + tokensForRepair;
+                contributorData.lastDonatedAt = new Date();
                 village.contributors.set(contributorKey, contributorData);
                 village.markModified('contributors');
                 
@@ -459,6 +462,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                         const contributorKey = donatingCharacter._id.toString();
                         const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
                         contributorData.tokens = (contributorData.tokens || 0) + actualTokensToAdd;
+                        contributorData.lastDonatedAt = new Date();
                         village.contributors.set(contributorKey, contributorData);
                         village.markModified('contributors');
                         
@@ -477,6 +481,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                         const contributorKey = donatingCharacter._id.toString();
                         const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
                         contributorData.tokens = (contributorData.tokens || 0) + tokensRemaining;
+                        contributorData.lastDonatedAt = new Date();
                         village.contributors.set(contributorKey, contributorData);
                         village.markModified('contributors');
                     }
@@ -670,6 +675,7 @@ async function processRepair(village, interaction, qty, characterName) {
         const contributorKey = donatingCharacter._id.toString();
         const contributorData = village.contributors.get(contributorKey) || { items: {}, tokens: 0 };
         contributorData.tokens = (contributorData.tokens || 0) + actualTokensUsed;
+        contributorData.lastDonatedAt = new Date();
         village.contributors.set(contributorKey, contributorData);
         village.markModified('contributors');
 
@@ -844,13 +850,15 @@ async function generateContributorsEmbed(village) {
                 
                 const totalItems = Object.values(items).reduce((sum, qty) => sum + qty, 0);
                 const totalContributions = tokens + totalItems;
+                const lastDonatedAt = data.lastDonatedAt ? new Date(data.lastDonatedAt) : null;
                 
                 return {
                     characterName,
                     tokens,
                     itemContributions,
                     totalItems,
-                    totalContributions
+                    totalContributions,
+                    lastDonatedAt
                 };
             })
     );
@@ -866,7 +874,9 @@ async function generateContributorsEmbed(village) {
         
         let details = `${rankEmoji} **${contrib.characterName}**\n`;
         details += `   Total: ${contrib.totalContributions} contributions\n`;
-        
+        if (contrib.lastDonatedAt) {
+            details += `   📅 Last donated: ${contrib.lastDonatedAt.toLocaleDateString('en-US', { dateStyle: 'medium' })}\n`;
+        }
         if (contrib.tokens > 0) {
             details += `   🪙 Tokens: ${contrib.tokens.toLocaleString()}\n`;
         }

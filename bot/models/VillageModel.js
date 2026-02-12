@@ -102,6 +102,12 @@ const VILLAGE_CONFIG = {
 // ============================================================================
 // ---- Schema Definition ----
 // ============================================================================
+const ContributorSchema = new mongoose.Schema({
+    items: { type: Map, of: Number, default: {} },
+    tokens: { type: Number, default: 0 },
+    lastDonatedAt: { type: Date, default: null },
+}, { _id: false });
+
 const VillageSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -149,7 +155,7 @@ const VillageSchema = new mongoose.Schema({
     },
     contributors: {
         type: Map,
-        of: Object,
+        of: ContributorSchema,
         default: {},
     },
     cooldowns: {
