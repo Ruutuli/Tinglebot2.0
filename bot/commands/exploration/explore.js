@@ -453,13 +453,20 @@ module.exports = {
        monster_camp: `Found a monster camp in ${location}; report to town hall to mark on map.`,
        grotto: `Found a grotto in ${location} (cleanse for 1 plume + 1 stamina or mark for later).`,
       };
+      const chestRuinsCosts =
+       staminaCost > 0 || outcomeType === "camp"
+        ? {
+            ...(staminaCost > 0 && { staminaLost: staminaCost }),
+            ...(outcomeType === "camp" && { heartsRecovered: campHeartsRecovered, staminaRecovered: campStaminaRecovered }),
+          }
+        : undefined;
       pushProgressLog(
        party,
        character.name,
        outcomeType,
        progressMessages[outcomeType] || `Found something in ${location}.`,
        undefined,
-       outcomeType === "camp" ? { heartsRecovered: campHeartsRecovered, staminaRecovered: campStaminaRecovered } : undefined
+       chestRuinsCosts
       );
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
@@ -731,7 +738,7 @@ module.exports = {
          : { current: selectedMonster.hearts, max: selectedMonster.hearts };
         const monsterDefeated = monsterHearts.current === 0;
 
-        pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`);
+        pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
         await party.save();
 
@@ -875,7 +882,11 @@ module.exports = {
        const monsterMsg = outcome.hearts > 0
         ? `Fought ${selectedMonster.name} in ${location}. ${outcome.result}. Lost ${outcome.hearts} heart(s).${outcome.canLoot ? " Got loot." : ""}`
         : `Fought ${selectedMonster.name} in ${location}. ${outcome.result}.${outcome.canLoot ? " Got loot." : ""}`;
-       pushProgressLog(party, character.name, "monster", monsterMsg, lootedItem ? { itemName: lootedItem.itemName, emoji: lootedItem.emoji || "" } : undefined, outcome.hearts > 0 ? { heartsLost: outcome.hearts } : undefined);
+       const monsterCosts =
+        outcome.hearts > 0 || staminaCost > 0
+         ? { ...(outcome.hearts > 0 && { heartsLost: outcome.hearts }), ...(staminaCost > 0 && { staminaLost: staminaCost }) }
+         : undefined;
+       pushProgressLog(party, character.name, "monster", monsterMsg, lootedItem ? { itemName: lootedItem.itemName, emoji: lootedItem.emoji || "" } : undefined, monsterCosts);
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save();
 
