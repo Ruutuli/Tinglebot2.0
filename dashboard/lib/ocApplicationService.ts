@@ -9,6 +9,7 @@ import { isModeratorUser } from "@/lib/moderator";
 import { logger } from "@/utils/logger";
 import { sendOCDecisionNotification } from "@/lib/services/notificationService";
 import { assignCharacterRoles } from "@/lib/services/roleAssignmentService";
+import { addEquippedGearToInventory } from "@/lib/addStarterGearToInventory";
 
 // Approval threshold: number of approve votes needed
 export const APPROVAL_THRESHOLD = 4;
@@ -232,6 +233,16 @@ export async function checkVoteThresholds(characterId: string): Promise<Characte
         "ocApplicationService",
         `Character ${characterId} status updated to accepted (version ${applicationVersion})`
       );
+
+      // Add equipped weapon/armor/gear to character's inventory
+      try {
+        await addEquippedGearToInventory(char as Parameters<typeof addEquippedGearToInventory>[0]);
+      } catch (error) {
+        logger.error(
+          "ocApplicationService",
+          `Failed to add starter gear to inventory: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
 
       // Assign roles and send notification
       try {
