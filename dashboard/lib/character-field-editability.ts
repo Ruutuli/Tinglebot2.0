@@ -31,7 +31,8 @@ export const ACCEPTED_EDITABLE_FIELDS = [
   "birthday",
 ] as const;
 
-// Fields locked when status is "needs_changes" (after revision)
+// Fields locked when status is "needs_changes" (after revision).
+// Job is intentionally NOT locked so users can change job while addressing feedback.
 export const NEEDS_CHANGES_LOCKED_FIELDS = [
   "name",
 ] as const;

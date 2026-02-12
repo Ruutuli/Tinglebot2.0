@@ -870,63 +870,73 @@ export function CreateForm({
     }
   }, [isEditMode, initialCharacter, availableGearItems.legsArmor, equippedLegs]);
 
-  /* [create/page.tsx]🧠 Sync village value when metadata loads - */
+  /* [create/page.tsx]🧠 Sync village value when metadata loads (initial load only; do not overwrite user's selection). */
   useEffect(() => {
     if (isEditMode && initialCharacter && metadata?.villages && metadata.villages.length > 0) {
       const charVillage = initialCharacter.homeVillage || initialCharacter.village;
       if (charVillage) {
-        // Find exact match first
         let matchedVillage = metadata.villages.find(v => v === charVillage);
-        
-        // If no exact match, try case-insensitive match
         if (!matchedVillage) {
           matchedVillage = metadata.villages.find(
             v => v.toLowerCase() === charVillage.toLowerCase()
           );
         }
-        
-        // If still no match, try trimming whitespace
         if (!matchedVillage) {
           matchedVillage = metadata.villages.find(
             v => v.trim().toLowerCase() === charVillage.trim().toLowerCase()
           );
         }
-        
-        if (matchedVillage && village !== matchedVillage) {
+        if (matchedVillage) {
           setVillage(matchedVillage);
         }
       }
     }
-  }, [isEditMode, initialCharacter, metadata?.villages, village]);
+    // Intentionally omit village from deps so we only sync from initialCharacter/metadata, not when user changes village
+  }, [isEditMode, initialCharacter, metadata?.villages]);
 
-  /* [create/page.tsx]🧠 Sync job value when metadata and village are loaded - */
+  /* [create/page.tsx]🧠 Sync job value when metadata and village are loaded (initial load only; do not overwrite user's selection). */
   useEffect(() => {
     if (isEditMode && initialCharacter?.job && village && metadata?.jobsByVillage) {
-      // Get available jobs for the current village
       const availableJobs = metadata.jobsByVillage[village] ?? metadata.jobs ?? [];
-      
-      // Find exact match first
       let matchedJob = availableJobs.find(j => j === initialCharacter.job);
-      
-      // If no exact match, try case-insensitive match
       if (!matchedJob) {
         matchedJob = availableJobs.find(
           j => j.toLowerCase() === initialCharacter.job?.toLowerCase()
         );
       }
-      
-      // If still no match, try trimming whitespace
       if (!matchedJob) {
         matchedJob = availableJobs.find(
           j => j.trim().toLowerCase() === initialCharacter.job?.trim().toLowerCase()
         );
       }
-      
-      if (matchedJob && job !== matchedJob) {
+      if (matchedJob) {
         setJob(matchedJob);
       }
     }
-  }, [isEditMode, initialCharacter?.job, village, metadata?.jobsByVillage, metadata?.jobs, job]);
+    // Intentionally omit job from deps so we only sync from initialCharacter/village/metadata, not when user changes job
+  }, [isEditMode, initialCharacter?.job, village, metadata?.jobsByVillage, metadata?.jobs]);
+
+  /* [create/page.tsx]🧠 Sync race value when metadata loads (initial load only; do not overwrite user's selection). */
+  useEffect(() => {
+    if (isEditMode && initialCharacter?.race && metadata?.races?.length) {
+      const races = metadata.races as Array<{ name: string; value: string }>;
+      let matched = races.find(r => r.value === initialCharacter.race);
+      if (!matched) {
+        matched = races.find(
+          r => r.value.toLowerCase() === initialCharacter.race?.toLowerCase()
+        );
+      }
+      if (!matched) {
+        matched = races.find(
+          r => r.value.trim().toLowerCase() === initialCharacter.race?.trim().toLowerCase()
+        );
+      }
+      if (matched) {
+        setRace(matched.value);
+      }
+    }
+    // Intentionally omit race from deps so we only sync from initialCharacter/metadata, not when user changes race
+  }, [isEditMode, initialCharacter?.race, metadata?.races]);
 
   /* [create/page.tsx]🧠 Sync birthday value when initialCharacter changes - */
   useEffect(() => {
