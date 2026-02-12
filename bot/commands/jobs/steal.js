@@ -15,7 +15,7 @@ const {
     connectToInventoriesForItems,
     fetchModCharacterByNameAndUserId 
 } = require('@/database/db');
-const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('@/utils/inventoryUtils');
+const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase, logItemAcquisitionToDatabase, logItemRemovalToDatabase } = require('@/utils/inventoryUtils');
 const { getNPCItems, NPCs, getStealFlavorText, getStealFailText } = require('../../modules/NPCsModule');
 // Google Sheets functionality removed
 // Google Sheets validation removed - isValidGoogleSheetsUrl and extractSpreadsheetId no longer available
@@ -1726,6 +1726,16 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         // Perform the inventory sync
         await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
         
+        // Log acquisition so it appears under "All Transactions" on the dashboard
+        const stealInteractionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+        await logItemAcquisitionToDatabase(thiefCharacter, stolenItem, {
+            quantity: finalQuantity,
+            obtain: stolenItem.obtain,
+            location: thiefCharacter.currentLocation || thiefCharacter.homeVillage || thiefCharacter.currentVillage || '',
+            link: stealInteractionUrl,
+            dateTime: stolenItem.date
+        });
+        
         // For player steals, also remove item from target's inventory
         if (!isNPC) {
             const removedItem = {
@@ -1735,6 +1745,14 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
                 date: new Date()
             };
             await syncToInventoryDatabase(targetCharacter, removedItem, interaction);
+            // Log removal for victim so it appears in their "All Transactions"
+            await logItemRemovalToDatabase(targetCharacter, { itemName: selectedItem.itemName }, {
+                quantity: finalQuantity,
+                obtain: removedItem.obtain,
+                location: targetCharacter.currentLocation || targetCharacter.homeVillage || targetCharacter.currentVillage || '',
+                link: stealInteractionUrl,
+                dateTime: removedItem.date
+            });
         }
         
         // Create and send the embed
