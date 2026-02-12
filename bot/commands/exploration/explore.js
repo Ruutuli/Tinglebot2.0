@@ -374,12 +374,29 @@ module.exports = {
      }
 
      if (outcomeType === "chest" || outcomeType === "old_map" || outcomeType === "ruins" || outcomeType === "relic" || outcomeType === "camp" || outcomeType === "monster_camp" || outcomeType === "grotto") {
+      let campHeartsRecovered = 0;
+      let campStaminaRecovered = 0;
+      if (outcomeType === "camp") {
+       campHeartsRecovered = Math.floor(Math.random() * 3) + 1;
+       campStaminaRecovered = Math.floor(Math.random() * 3) + 1;
+       character.currentHearts = Math.min(character.maxHearts, character.currentHearts + campHeartsRecovered);
+       character.currentStamina = Math.min(character.maxStamina, character.currentStamina + campStaminaRecovered);
+       await character.save();
+       const campCharIndex = party.characters.findIndex((c) => c._id.toString() === character._id.toString());
+       if (campCharIndex >= 0) {
+        party.characters[campCharIndex].currentHearts = character.currentHearts;
+        party.characters[campCharIndex].currentStamina = character.currentStamina;
+       }
+       party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+       party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+      }
+
       const progressMessages = {
        chest: `Found a chest in ${location} (open for 1 stamina).`,
        old_map: `Found an old map in ${location}; take to Inariko Library to decipher.`,
        ruins: `Found ruins in ${location} (explore for 3 stamina or skip).`,
        relic: `Found a relic in ${location}; take to Artist/Researcher to appraise.`,
-       camp: `Found a camp site in ${location}.`,
+       camp: `Found a safe space in ${location} and rested. Recovered ${campHeartsRecovered} heart(s), ${campStaminaRecovered} stamina.`,
        monster_camp: `Found a monster camp in ${location}; report to town hall to mark on map.`,
        grotto: `Found a grotto in ${location} (cleanse for 1 plume + 1 stamina or mark for later).`,
       };
@@ -427,9 +444,9 @@ module.exports = {
         "You stumble across an interesting looking stump with roots covered in talismans, do you have the means to cleanse them? More info about grottos can be found [here](https://www.rootsofthewild.com/grottos).\n\n" +
         "**Yes** — Use the grotto flow when available (cost 1 goddess plume + 1 stamina).\n" +
         `**No** (mark it on the map for later!) — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
-      } else {
-       title = `🗺️ **Expedition: ${character.name} found a camp!**`;
-       description = `**${character.name}** discovered a camp site in **${location}**.`;
+      } else if (outcomeType === "camp") {
+       title = `🗺️ **Expedition: Found a safe space and rested!**`;
+       description = `**${character.name}** found a safe space in **${location}** and rested! Recovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
       }
 
       const embed = new EmbedBuilder()
