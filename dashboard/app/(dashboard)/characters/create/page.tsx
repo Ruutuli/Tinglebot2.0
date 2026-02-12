@@ -175,7 +175,12 @@ function findGearItemByName(
     ...availableGearItems.legsArmor.map((l) => ({ item: l, category: "legsArmor" as const })),
   ];
 
-  const found = allItems.find(({ item }) => item.name === itemName);
+  const trimLower = (s: string) => s.trim().toLowerCase();
+  const found = allItems.find(
+    ({ item }) =>
+      item.name === itemName ||
+      trimLower(item.name) === trimLower(itemName)
+  );
   if (!found) return null;
 
   // Determine actual type using gear-equip functions
@@ -651,6 +656,11 @@ export function CreateForm({
   const [equippedWeapon, setEquippedWeapon] = useState<GearItemOption | null>(
     null
   );
+  // Refs always hold latest weapon/shield so submit uses current selection (avoids stale closure)
+  const equippedWeaponRef = useRef<GearItemOption | null>(null);
+  const equippedShieldRef = useRef<GearItemOption | null>(null);
+  equippedWeaponRef.current = equippedWeapon;
+  equippedShieldRef.current = equippedShield;
   const [extras, setExtras] = useState(initialCharacter?.extras || "");
   const [gearConflictAlert, setGearConflictAlert] = useState<string | null>(
     null
@@ -764,57 +774,48 @@ export function CreateForm({
     return item.name;
   }, []);
 
-  /* [create/page.tsx]🧠 Load initial gear from character data - */
+  /* [create/page.tsx]🧠 Load initial gear from character data once per character — do not re-run when availableGearItems ref changes or we overwrite user's weapon/shield selection. */
+  const gearInitKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (isEditMode && initialCharacter) {
-      const gearWeapon = initialCharacter.gearWeapon;
-      const gearShield = initialCharacter.gearShield;
-      
-      if (gearWeapon) {
-        // Search all gear items to find the item by name
-        const found = findGearItemByName(gearWeapon.name, availableGearItems);
-        if (found) {
-          // Validate that it's actually a weapon, not a shield or armor
-          if (found.actualType === "weapon") {
-            setEquippedWeapon(found.item);
-          } else if (found.actualType === "shield" && !gearShield) {
-            // If gearWeapon contains a shield (corrupted data) and gearShield is empty,
-            // move it to the correct slot to fix the corruption
-            console.warn(
-              `Character has shield "${gearWeapon.name}" incorrectly stored in gearWeapon slot. Moving to shield slot.`
-            );
-            setEquippedShield(found.item);
-          } else {
-            // If gearWeapon contains armor or a shield when gearShield is already set, ignore it
-            console.warn(
-              `Character has non-weapon item "${gearWeapon.name}" in gearWeapon slot. Ignoring.`
-            );
-          }
-        }
-      }
-    }
-  }, [isEditMode, initialCharacter, availableGearItems]);
+    if (!isEditMode || !initialCharacter || availableGearItems.weapons.length === 0) return;
+    const key = String(initialCharacter._id ?? "new");
+    if (gearInitKeyRef.current === key) return;
+    gearInitKeyRef.current = key;
 
-  useEffect(() => {
-    if (isEditMode && initialCharacter) {
-      const gearShield = initialCharacter.gearShield;
-      if (gearShield) {
-        // Search all gear items to find the item by name
-        const found = findGearItemByName(gearShield.name, availableGearItems);
-        if (found) {
-          // Validate that it's actually a shield
-          if (found.actualType === "shield") {
-            setEquippedShield(found.item);
-          } else {
-            // If gearShield contains a weapon or armor (corrupted data), don't set it
-            console.warn(
-              `Character has non-shield item "${gearShield.name}" in gearShield slot. Ignoring.`
-            );
-          }
+    const gearWeapon = initialCharacter.gearWeapon;
+    const gearShield = initialCharacter.gearShield;
+
+    if (gearWeapon) {
+      const found = findGearItemByName(gearWeapon.name, availableGearItems);
+      if (found) {
+        if (found.actualType === "weapon") {
+          setEquippedWeapon(found.item);
+        } else if (found.actualType === "shield" && !gearShield) {
+          console.warn(
+            `Character has shield "${gearWeapon.name}" incorrectly stored in gearWeapon slot. Moving to shield slot.`
+          );
+          setEquippedShield(found.item);
+        } else {
+          console.warn(
+            `Character has non-weapon item "${gearWeapon.name}" in gearWeapon slot. Ignoring.`
+          );
         }
       }
     }
-  }, [isEditMode, initialCharacter, availableGearItems]);
+
+    if (gearShield) {
+      const found = findGearItemByName(gearShield.name, availableGearItems);
+      if (found) {
+        if (found.actualType === "shield") {
+          setEquippedShield(found.item);
+        } else {
+          console.warn(
+            `Character has non-shield item "${gearShield.name}" in gearShield slot. Ignoring.`
+          );
+        }
+      }
+    }
+  }, [isEditMode, initialCharacter, availableGearItems.weapons.length, availableGearItems.shields.length]);
 
   useEffect(() => {
     if (isEditMode && initialCharacter && availableGearItems.headArmor.length > 0) {
@@ -1401,19 +1402,22 @@ export function CreateForm({
               : null,
           };
         } else {
-          // Build gear from form state (for create mode or when gear is editable)
+          // Build gear from form state (for create mode or when gear is editable).
+          // Use refs for weapon/shield so we always send the latest selection (avoids stale closure on fast click).
+          const latestWeapon = equippedWeaponRef.current;
+          const latestShield = equippedShieldRef.current;
           let currentGear: EquippedGear = { gearArmor: {} };
 
-          if (equippedWeapon) {
-            currentGear = equipItem(gearItemToItemData(equippedWeapon), currentGear);
+          if (latestWeapon) {
+            currentGear = equipItem(gearItemToItemData(latestWeapon), currentGear);
           }
 
-          if (equippedShield) {
-            const currentWeaponItem = equippedWeapon
-              ? gearItemToItemData(equippedWeapon)
+          if (latestShield) {
+            const currentWeaponItem = latestWeapon
+              ? gearItemToItemData(latestWeapon)
               : undefined;
             currentGear = equipItem(
-              gearItemToItemData(equippedShield),
+              gearItemToItemData(latestShield),
               currentGear,
               currentWeaponItem
             );
@@ -1452,16 +1456,16 @@ export function CreateForm({
                   stats: statsToRecord(currentGear.gearShield.stats),
                 }
               : null;
-          if (equippedWeapon && isShield(gearItemToItemData(equippedWeapon))) {
+          if (latestWeapon && isShield(gearItemToItemData(latestWeapon))) {
             gearWeaponForSubmit = null;
             if (!gearShieldForSubmit) {
               gearShieldForSubmit = {
-                name: equippedWeapon.name,
-                stats: { attack: equippedWeapon.modifierHearts, defense: equippedWeapon.modifierHearts },
+                name: latestWeapon.name,
+                stats: { attack: latestWeapon.modifierHearts, defense: latestWeapon.modifierHearts },
               };
             }
           }
-          if (equippedShield && getWeaponType(gearItemToItemData(equippedShield)) !== null) {
+          if (latestShield && getWeaponType(gearItemToItemData(latestShield)) !== null) {
             gearShieldForSubmit = null;
           }
           gearForSubmit = {
@@ -1509,6 +1513,13 @@ export function CreateForm({
         }
 
         form.set("equippedGear", JSON.stringify(gearForSubmit));
+        // Backup: send weapon/shield names as plain fields so API always persists user's selection
+        if (isEditMode && canEditGear) {
+          const w = equippedWeaponRef.current ?? equippedWeapon;
+          const s = equippedShieldRef.current ?? equippedShield;
+          if (w?.name) form.set("gearWeaponName", w.name);
+          if (s?.name) form.set("gearShieldName", s.name);
+        }
 
         const url = isEditMode ? `/api/characters/${characterId}` : "/api/characters/create";
         const method = isEditMode ? "PUT" : "POST";

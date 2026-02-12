@@ -762,6 +762,7 @@ export async function PUT(
         isFieldEditable("gearShield", characterStatus as CharacterStatus) &&
         isFieldEditable("gearArmor", characterStatus as CharacterStatus));
 
+    let gearAppliedFromJson = false;
     if (canEditGear && typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
       try {
         const equippedGearData = JSON.parse(equippedGearRaw) as {
@@ -886,8 +887,28 @@ export async function PUT(
             };
           }
         }
-      } catch {
-        /* ignore invalid JSON */
+        gearAppliedFromJson = true;
+      } catch (e) {
+        logger.warn("api/characters/[id] PUT equippedGear parse/apply failed", e instanceof Error ? e.message : String(e));
+      }
+    }
+
+    // Always apply weapon/shield from plain form fields when present — guarantees user's selection is saved
+    // (equippedGear JSON or normalizeGearSlots can drop/clear items; backup names are source of truth)
+    const gearWeaponName = get("gearWeaponName") as string | undefined;
+    const gearShieldName = get("gearShieldName") as string | undefined;
+    if (canEditGear && (gearWeaponName?.trim() || gearShieldName?.trim())) {
+      if (gearWeaponName?.trim()) {
+        char.gearWeapon = {
+          name: gearWeaponName.trim(),
+          stats: new Map([["modifierHearts", 0]]),
+        };
+      }
+      if (gearShieldName?.trim()) {
+        char.gearShield = {
+          name: gearShieldName.trim(),
+          stats: new Map([["modifierHearts", 0]]),
+        };
       }
     }
 
