@@ -462,6 +462,28 @@ function createVendingSetupInstructionsEmbed(character = null) {
     .setTimestamp()
     .setFooter({ text: 'Note: The shop sheet should not be edited after initial setup' });
 }
+
+// ------------------- Function: addExplorationStandardFields -------------------
+// Appends standard exploration embed fields (Expedition ID, Location, Party Hearts/Stamina, optional Next up + Commands).
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands }) => {
+ const fields = [
+  { name: "🆔 **__Expedition ID__**", value: expeditionId || party?.partyId || "Unknown", inline: true },
+  { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
+  { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
+  { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
+ ];
+ if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
+  const nextName = nextCharacter.name;
+  const expId = expeditionId || party?.partyId || "—";
+  fields.push(
+   { name: "➡️ **__Next up__**", value: `Next: <@${nextCharacter.userId}> (${nextName})`, inline: false },
+   { name: "📋 **__Commands__**", value: `Use \`/explore roll\` with Expedition ID \`${expId}\` and character **${nextName}** to take your turn. When it's your turn you can also use \`/explore rest\`, \`/explore secure\`, or \`/explore move\`.`, inline: false }
+  );
+ }
+ embed.addFields(...fields);
+ return embed;
+};
+
 // ------------------- Function: createExplorationItemEmbed -------------------
 // Creates an embed for when a character finds an item during exploration
 const createExplorationItemEmbed = (
@@ -471,7 +493,9 @@ const createExplorationItemEmbed = (
  expeditionId,
  location,
  totalHearts,
- totalStamina
+ totalStamina,
+ nextCharacter = null,
+ showNextAndCommands = true
 ) => {
  const embed = new EmbedBuilder()
   .setTitle(`🗺️ **Expedition: ${character.name} Found an Item!**`)
@@ -482,21 +506,14 @@ const createExplorationItemEmbed = (
   )
   .setColor(regionColors[party.region] || "#00ff99")
   .setThumbnail(item.image || "https://via.placeholder.com/100x100")
-  .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100") // Dynamically set region-specific image
-  .addFields(
-   { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-   {
-    name: "📍 **__Quadrant__**",
-    value: location || "Unknown Location",
-    inline: true,
-   },
-   { name: "❤️ **__Party Hearts__**", value: `${totalHearts}`, inline: false },
-   {
-    name: "🟩 **__Party Stamina__**",
-    value: `${totalStamina}`,
-    inline: false,
-   }
-  );
+  .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100");
+ addExplorationStandardFields(embed, {
+  party,
+  expeditionId,
+  location: location || "Unknown Location",
+  nextCharacter: nextCharacter ?? null,
+  showNextAndCommands: !!nextCharacter && showNextAndCommands,
+ });
  return embed;
 };
 
@@ -509,7 +526,9 @@ const createExplorationMonsterEmbed = (
  expeditionId,
  location,
  totalHearts,
- totalStamina
+ totalStamina,
+ nextCharacter = null,
+ showNextAndCommands = true
 ) => {
  const monsterImage =
   monster.image ||
@@ -524,26 +543,15 @@ const createExplorationMonsterEmbed = (
    } **${monster.name || "Unknown Monster"}** during exploration in **${location || "Unknown"}**!`
   )
   .setColor(regionColors[party.region] || "#00ff99")
-  .setThumbnail(monsterImage) // Set monster image dynamically
-  .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100") // Region-specific image
-  .addFields(
-   {
-    name: "🆔 **__Expedition ID__**",
-    value: expeditionId || "Unknown",
-    inline: true,
-   },
-   {
-    name: "📍 **__Quadrant__**",
-    value: location || "Unknown Location",
-    inline: true,
-   },
-   { name: "❤️ **__Party Hearts__**", value: `${totalHearts}`, inline: false },
-   {
-    name: "🟩 **__Party Stamina__**",
-    value: `${totalStamina}`,
-    inline: false,
-   }
-  );
+  .setThumbnail(monsterImage)
+  .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100");
+ addExplorationStandardFields(embed, {
+  party,
+  expeditionId,
+  location: location || "Unknown Location",
+  nextCharacter: nextCharacter ?? null,
+  showNextAndCommands: !!nextCharacter && showNextAndCommands,
+ });
  return embed;
 };
 
@@ -3330,6 +3338,7 @@ module.exports = {
  createCharacterGearEmbed,
  createVendorEmbed,
  createVendingSetupInstructionsEmbed,
+ addExplorationStandardFields,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
  createSetupInstructionsEmbed,

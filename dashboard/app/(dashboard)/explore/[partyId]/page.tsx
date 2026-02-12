@@ -1161,25 +1161,6 @@ export default function ExplorePartyPage() {
                     </p>
                   </div>
                 </div>
-                {(party.gatheredItems?.length ?? 0) > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">
-                      Gathered
-                    </h3>
-                    <ul className="space-y-1 rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 p-3">
-                      {party.gatheredItems!.map((g, i) => (
-                        <li key={i} className="flex items-center justify-between text-sm text-[var(--totk-ivory)]">
-                          <span>
-                            {g.emoji && <span className="mr-1.5">{g.emoji}</span>}
-                            {g.itemName}
-                            {g.quantity > 1 && ` ×${g.quantity}`}
-                          </span>
-                          <span className="text-xs text-[var(--totk-grey-200)]">{g.characterName}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
 
                 <div className="mt-6">
                   <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">

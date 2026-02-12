@@ -17,6 +17,7 @@ const Character = require('@/models/CharacterModel.js');
 const ItemModel = require('@/models/ItemModel.js');
 const Square = require('@/models/mapModel.js');
 const {
+ addExplorationStandardFields,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
  regionColors,
@@ -77,22 +78,23 @@ async function handleExpeditionFailed(party, interaction) {
  await party.save();
 
  const regionLabel = (party.region || "").charAt(0).toUpperCase() + (party.region || "").slice(1);
+ const locationStr = `${start.square} ${start.quadrant} (${regionLabel} start)`;
  const embed = new EmbedBuilder()
-  .setTitle("💀 Expedition Failed — Party KO'd")
+  .setTitle("💀 **Expedition: Expedition Failed — Party KO'd**")
   .setColor(0x8b0000)
   .setDescription(
    "The party lost all hearts. The expedition has failed.\n\n" +
    "**Return:** Party is returned to the starting area for the region.\n" +
    "**Items:** All items brought on the expedition and any found during the expedition are lost.\n" +
    "**Party:** All members are KO'd with 0 stamina."
-  )
-  .addFields(
-   { name: "📍 Returned to", value: `${start.square} ${start.quadrant} (${regionLabel} start)`, inline: true },
-   { name: "🆔 Expedition ID", value: party.partyId, inline: true },
-   { name: "❤️ Party Hearts", value: "0", inline: true },
-   { name: "🟩 Party Stamina", value: "0", inline: true }
   );
-
+ addExplorationStandardFields(embed, {
+  party: { partyId: party.partyId, totalHearts: 0, totalStamina: 0 },
+  expeditionId: party.partyId,
+  location: locationStr,
+  nextCharacter: null,
+  showNextAndCommands: false,
+ });
  await interaction.editReply({ embeds: [embed] });
 }
 
@@ -345,30 +347,20 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
-      const nextName = nextCharacter?.name || "Unknown";
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
        .setDescription(
-        `**${character.name}** has explored this area (**${location}**). The party can now choose what to do next.`
+        `**${character.name}** has explored this area (**${location}**). The party can now choose what to do next.\n\n` +
+        "**What you can do:** • **Rest** (3 stamina) — `/explore rest` • **Secure** quadrant — `/explore secure` (5 stamina + resources) • **Roll** again — `/explore roll` (1 stamina) • **Move** — `/explore move` (2 stamina)"
        )
-       .setColor(regionColors[party.region] || "#00ff99")
-       .addFields(
-        { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-        { name: "📍 **__Quadrant__**", value: location, inline: true },
-        { name: "❤️ **__Party Hearts__**", value: `${party.totalHearts}`, inline: true },
-        { name: "🟩 **__Party Stamina__**", value: `${party.totalStamina}`, inline: true },
-        {
-         name: "**What you can do next**",
-         value:
-          "• **Rest** (3 stamina) — `/explore rest` — heal all party hearts, revive KO'd\n• **Secure** quadrant — `/explore secure` (5 stamina + resources)\n• **Roll** again — `/explore roll` (1 stamina in same quadrant)\n• **Move** to next quadrant — `/explore move` (2 stamina)",
-         inline: false,
-        },
-        {
-         name: "➡️ **__What to do next__**",
-         value: `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` (or \`/explore rest\`, \`/explore secure\`, \`/explore move\` when it's your turn).`,
-         inline: false,
-        }
-       );
+       .setColor(regionColors[party.region] || "#00ff99");
+      addExplorationStandardFields(embed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: nextCharacter ?? null,
+        showNextAndCommands: true,
+      });
       await interaction.editReply({ embeds: [embed] });
       return;
      }
@@ -387,8 +379,6 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
-      const nextName = nextCharacter?.name || "Unknown";
-      const nextTurnValue = `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` to take your turn.`;
 
       let title, description;
       if (outcomeType === "monster_camp") {
@@ -437,12 +427,14 @@ module.exports = {
       const embed = new EmbedBuilder()
        .setTitle(title)
        .setDescription(description)
-       .setColor(regionColors[party.region] || "#00ff99")
-       .addFields(
-        { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-        { name: "📍 **__Quadrant__**", value: location, inline: true },
-        { name: "➡️ **__What to do next__**", value: nextTurnValue, inline: false }
-       );
+       .setColor(regionColors[party.region] || "#00ff99");
+      addExplorationStandardFields(embed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: nextCharacter ?? null,
+        showNextAndCommands: true,
+      });
 
       const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto";
       let components = [];
@@ -475,12 +467,7 @@ module.exports = {
         const intro = description.split("\n\n")[0];
         const choiceEmbed = new EmbedBuilder()
          .setTitle(title)
-         .setColor(regionColors[party.region] || "#00ff99")
-         .addFields(
-          { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-          { name: "📍 **__Quadrant__**", value: location, inline: true },
-          { name: "➡️ **__What to do next__**", value: nextTurnValue, inline: false }
-         );
+         .setColor(regionColors[party.region] || "#00ff99");
         if (outcomeType === "ruins") {
          choiceEmbed.setDescription(
           intro +
@@ -498,6 +485,13 @@ module.exports = {
            : "✅ **You marked it on the map for later.** Continue with `/explore roll`.")
          );
         }
+        addExplorationStandardFields(choiceEmbed, {
+          party,
+          expeditionId,
+          location,
+          nextCharacter: nextCharacter ?? null,
+          showNextAndCommands: true,
+        });
         const disabledRow = new ActionRowBuilder().addComponents(
          new ButtonBuilder()
           .setCustomId(`explore_${outcomeType}_yes`)
@@ -546,6 +540,11 @@ module.exports = {
       const selectedItem =
        availableItems[Math.floor(Math.random() * availableItems.length)];
 
+      pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`);
+      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      await party.save();
+
+      const nextCharacter = party.characters[party.currentTurn];
       const embed = createExplorationItemEmbed(
        party,
        character,
@@ -553,7 +552,9 @@ module.exports = {
        expeditionId,
        location,
        party.totalHearts,
-       party.totalStamina
+       party.totalStamina,
+       nextCharacter ?? null,
+       true
       );
 
       if (!party.gatheredItems) {
@@ -566,18 +567,6 @@ module.exports = {
        itemName: selectedItem.itemName,
        quantity: 1,
        emoji: selectedItem.emoji || "",
-      });
-
-      pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`);
-      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-      await party.save();
-
-      const nextCharacter = party.characters[party.currentTurn];
-      const nextName = nextCharacter?.name || "Unknown";
-      embed.addFields({
-       name: "➡️ **__What to do next__**",
-       value: `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` to take your turn.`,
-       inline: false,
       });
 
       await interaction.editReply({ embeds: [embed] });
@@ -650,6 +639,11 @@ module.exports = {
          : { current: selectedMonster.hearts, max: selectedMonster.hearts };
         const monsterDefeated = monsterHearts.current === 0;
 
+        pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`);
+        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+        await party.save();
+
+        const nextCharacterRaid = party.characters[party.currentTurn];
         const embed = createExplorationMonsterEmbed(
          party,
          character,
@@ -657,7 +651,9 @@ module.exports = {
          expeditionId,
          location,
          party.totalHearts,
-         party.totalStamina
+         party.totalStamina,
+         nextCharacterRaid ?? null,
+         true
         );
 
         embed.addFields(
@@ -667,11 +663,6 @@ module.exports = {
           inline: true,
          },
          { name: "🆔 **__Raid ID__**", value: battleId, inline: true },
-         {
-          name: "🆔 **__Expedition ID__**",
-          value: expeditionId || "Unknown",
-          inline: true,
-         },
          {
           name: `⚔️ __Raid Outcome__`,
           value: monsterDefeated ? "Monster defeated!" : "Raid in progress...",
@@ -713,18 +704,6 @@ module.exports = {
           });
          }
         }
-
-        pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`);
-        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-        await party.save();
-
-        const nextCharacterRaid = party.characters[party.currentTurn];
-        const nextNameRaid = nextCharacterRaid?.name || "Unknown";
-        embed.addFields({
-         name: "➡️ **__What to do next__**",
-         value: `**Next turn:** ${nextNameRaid}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextNameRaid}\` to take your turn.`,
-         inline: false,
-        });
 
         await interaction.editReply({ embeds: [embed] });
        } catch (error) {
@@ -791,6 +770,14 @@ module.exports = {
         return;
        }
 
+       const monsterMsg = outcome.hearts > 0
+        ? `Fought ${selectedMonster.name} in ${location}. ${outcome.result}. Lost ${outcome.hearts} heart(s).${outcome.canLoot ? " Got loot." : ""}`
+        : `Fought ${selectedMonster.name} in ${location}. ${outcome.result}.${outcome.canLoot ? " Got loot." : ""}`;
+       pushProgressLog(party, character.name, "monster", monsterMsg);
+       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+       await party.save();
+
+       const nextCharacterTier = party.characters[party.currentTurn];
        const embed = createExplorationMonsterEmbed(
         party,
         character,
@@ -798,23 +785,15 @@ module.exports = {
         expeditionId,
         location,
         party.totalHearts,
-        party.totalStamina
-      );
+        party.totalStamina,
+        nextCharacterTier ?? null,
+        true
+       );
 
-      embed.addFields(
+       embed.addFields(
         {
          name: `❤️ __${character.name} Hearts__`,
          value: `${character.currentHearts}/${character.maxHearts}`,
-         inline: true,
-        },
-        {
-         name: "🆔 **__Expedition ID__**",
-         value: expeditionId || "Unknown",
-         inline: true,
-        },
-        {
-         name: "📍 **__Quadrant__**",
-         value: location || "Unknown Location",
          inline: true,
         },
         { name: `⚔️ __Battle Outcome__`, value: outcome.result, inline: false }
@@ -854,21 +833,6 @@ module.exports = {
          });
         }
        }
-
-       const monsterMsg = outcome.hearts > 0
-        ? `Fought ${selectedMonster.name} in ${location}. ${outcome.result}. Lost ${outcome.hearts} heart(s).${outcome.canLoot ? " Got loot." : ""}`
-        : `Fought ${selectedMonster.name} in ${location}. ${outcome.result}.${outcome.canLoot ? " Got loot." : ""}`;
-       pushProgressLog(party, character.name, "monster", monsterMsg);
-       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-       await party.save();
-
-       const nextCharacterTier = party.characters[party.currentTurn];
-       const nextNameTier = nextCharacterTier?.name || "Unknown";
-       embed.addFields({
-        name: "➡️ **__What to do next__**",
-        value: `**Next turn:** ${nextNameTier}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextNameTier}\` to take your turn.`,
-        inline: false,
-       });
 
        await interaction.editReply({ embeds: [embed] });
       }
@@ -967,22 +931,21 @@ module.exports = {
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
-    const nextNameRest = party.characters[party.currentTurn]?.name || "Unknown";
+    const nextCharacterRest = party.characters[party.currentTurn];
+    const locationRest = `${party.square} ${party.quadrant}`;
     const embed = new EmbedBuilder()
-     .setTitle(`Rest at ${party.square} ${party.quadrant}`)
-     .setColor("#4CAF50")
+     .setTitle(`🗺️ **Expedition: Rest at ${locationRest}**`)
+     .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
       `${character.name} rested. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} party stamina)`
-     )
-     .addFields(
-      { name: "❤️ **__Party Hearts__**", value: `${party.totalHearts}`, inline: true },
-      { name: "🟩 **__Party Stamina__**", value: `${party.totalStamina}`, inline: true },
-      {
-       name: "➡️ **__What to do next__**",
-       value: `**Next turn:** ${nextNameRest}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextNameRest}\` (or \`/explore rest\`, \`/explore secure\`, \`/explore move\` when it's your turn).`,
-       inline: false,
-      }
      );
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationRest,
+      nextCharacter: nextCharacterRest ?? null,
+      showNextAndCommands: true,
+    });
 
     await interaction.editReply({ embeds: [embed] });
 
@@ -1049,26 +1012,26 @@ module.exports = {
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
+    const nextCharacterSecure = party.characters[party.currentTurn];
+    const locationSecure = `${party.square} ${party.quadrant}`;
     const embed = new EmbedBuilder()
-     .setTitle(`Secured ${party.square} ${party.quadrant}`)
-     .setColor("#FF9800")
+     .setTitle(`🗺️ **Expedition: Secured ${locationSecure}**`)
+     .setColor(regionColors[party.region] || "#FF9800")
      .setDescription(
-      `${character.name} secured the quadrant using resources (-${staminaCost} party stamina)`
+      `${character.name} secured the quadrant using resources (-${staminaCost} party stamina).`
      )
-     .addFields(
-      { name: "Quadrant Status", value: "Secured", inline: true },
-      { name: "Party Stamina", value: `${party.totalStamina}`, inline: true },
-      {
-       name: "Benefits",
-       value: "No stamina cost to explore, increased safety",
-       inline: false,
-      },
-      {
-       name: "Next Turn",
-       value: party.characters[party.currentTurn]?.name || "Unknown",
-       inline: true,
-      }
-     );
+     .addFields({
+      name: "📋 **__Benefits__**",
+      value: "Quadrant secured. No stamina cost to explore here, increased safety.",
+      inline: false,
+     });
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationSecure,
+      nextCharacter: nextCharacterSecure ?? null,
+      showNextAndCommands: true,
+    });
 
     await interaction.editReply({ embeds: [embed] });
 
@@ -1137,28 +1100,21 @@ module.exports = {
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
+    const nextCharacterMove = party.characters[party.currentTurn];
+    const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
     const embed = new EmbedBuilder()
-     .setTitle(
-      `Moved ${direction.charAt(0).toUpperCase() + direction.slice(1)}`
-     )
-     .setColor("#2196F3")
+     .setTitle(`🗺️ **Expedition: Moved ${direction.charAt(0).toUpperCase() + direction.slice(1)}**`)
+     .setColor(regionColors[party.region] || "#2196F3")
      .setDescription(
-      `${character.name} led the party to ${newLocation.square} ${newLocation.quadrant}`
-     )
-     .addFields(
-      {
-       name: "New Location",
-       value: `${newLocation.square} ${newLocation.quadrant}`,
-       inline: true,
-      },
-      { name: "Quadrant Status", value: "Unexplored", inline: true },
-      { name: "Party Stamina", value: `${party.totalStamina}`, inline: true },
-      {
-       name: "Next Turn",
-       value: party.characters[party.currentTurn]?.name || "Unknown",
-       inline: true,
-      }
+      `${character.name} led the party to **${locationMove}** (quadrant unexplored).`
      );
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationMove,
+      nextCharacter: nextCharacterMove ?? null,
+      showNextAndCommands: true,
+    });
 
     await interaction.editReply({ embeds: [embed] });
 
@@ -1245,27 +1201,33 @@ module.exports = {
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
     const staminaText = stamina > 0 ? `+${stamina} 🟩` : "";
     const effect = [heartsText, staminaText].filter(Boolean).join(", ");
+    const locationItem = `${party.square} ${party.quadrant}`;
 
     const embed = new EmbedBuilder()
-     .setTitle(`Used item: ${carried.itemName}`)
-     .setColor("#4CAF50")
+     .setTitle(`🗺️ **Expedition: Used item — ${carried.itemName}**`)
+     .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
       `${character.name} used **${carried.itemName}** (${effect}).`
      )
      .addFields(
       {
-       name: `${character.name} Hearts`,
+       name: `❤️ **__${character.name} Hearts__**`,
        value: `${character.currentHearts}/${character.maxHearts}`,
        inline: true,
       },
       {
-       name: `${character.name} Stamina`,
+       name: `🟩 **__${character.name} Stamina__**`,
        value: `${character.currentStamina}/${character.maxStamina}`,
        inline: true,
-      },
-      { name: "Party Hearts", value: `${party.totalHearts}`, inline: true },
-      { name: "Party Stamina", value: `${party.totalStamina}`, inline: true }
+      }
      );
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationItem,
+      nextCharacter: null,
+      showNextAndCommands: false,
+    });
 
     await interaction.editReply({ embeds: [embed] });
 
@@ -1312,16 +1274,23 @@ module.exports = {
     party.status = "completed";
     await party.save();
 
+    const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
+    const locationRetreat = `${party.square} ${party.quadrant} → ${villageLabel}`;
     const embed = new EmbedBuilder()
-     .setTitle("Expedition Retreat")
-     .setColor("#FF5722")
+     .setTitle(`🗺️ **Expedition: Retreat**`)
+     .setColor(regionColors[party.region] || "#FF5722")
      .setDescription(
-      `${character.name} ordered a retreat. All party members return to ${
-       targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1)
-      }.`
-     )
-     .addFields({
-      name: "Items Gathered",
+      `${character.name} ordered a retreat. All party members return to **${villageLabel}**.`
+     );
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId: party.partyId,
+      location: locationRetreat,
+      nextCharacter: null,
+      showNextAndCommands: false,
+    });
+    embed.addFields({
+      name: "📦 **__Items Gathered__**",
       value:
        party.gatheredItems?.length > 0
         ? party.gatheredItems
@@ -1414,30 +1383,30 @@ module.exports = {
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
+    const nextCharacterCamp = party.characters[party.currentTurn];
+    const locationCamp = `${party.square} ${party.quadrant}`;
     const embed = new EmbedBuilder()
-     .setTitle(`Camp at ${party.square} ${party.quadrant}`)
-     .setColor("#4CAF50")
+     .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
+     .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
       `${character.name} set up camp for ${duration} hours. The party rested and recovered.`
      )
-     .addFields(
-      {
-       name: "Recovery",
-       value: `+${Math.floor(
+     .addFields({
+      name: "📋 **__Recovery__**",
+      value: `+${Math.floor(
         totalStaminaRecovered / party.characters.length
        )} stamina, +${Math.floor(
         totalHeartsRecovered / party.characters.length
        )} hearts per member`,
-       inline: false,
-      },
-      { name: "Party Stamina", value: `${party.totalStamina}`, inline: true },
-      { name: "Party Hearts", value: `${party.totalHearts}`, inline: true },
-      {
-       name: "Next Turn",
-       value: party.characters[party.currentTurn]?.name || "Unknown",
-       inline: true,
-      }
-     );
+      inline: false,
+     });
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationCamp,
+      nextCharacter: nextCharacterCamp ?? null,
+      showNextAndCommands: true,
+    });
 
     await interaction.editReply({ embeds: [embed] });
    }
