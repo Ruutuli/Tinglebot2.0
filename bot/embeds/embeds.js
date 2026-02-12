@@ -482,10 +482,10 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
   let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n**Take your turn:** ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**`;
   if (showRestSecureMove) {
-   const cmdRest = `</explore rest:${EXPLORE_CMD_ID}>`;
+   const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
    const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
    const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
-   commandsValue += `\n\n**Or:** ${cmdRest} · ${cmdSecure} · ${cmdMove}`;
+   commandsValue += `\n\n**Or:** ${cmdCamp} · ${cmdSecure} · ${cmdMove}`;
   }
   fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
  }
