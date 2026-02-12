@@ -42,6 +42,9 @@ const REGION_TO_VILLAGE = {
  faron: "Vhintl",
 };
 
+// TODO: remove when done testing - treats tier 5+ monsters as regular encounters (no raid)
+const DISABLE_EXPLORATION_RAIDS = true;
+
 function pushProgressLog(party, characterName, outcome, message) {
  if (!party.progressLog) party.progressLog = [];
  party.progressLog.push({
@@ -631,7 +634,7 @@ module.exports = {
        `[explore.js]: Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`
       );
 
-      if (selectedMonster.tier > 4) {
+      if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
        try {
         const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
         const raidResult = await triggerRaid(

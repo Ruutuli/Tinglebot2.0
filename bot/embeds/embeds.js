@@ -479,16 +479,20 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   const nextName = nextCharacter.name;
   const expId = expeditionId || party?.partyId || "—";
   const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
-  const cmdRest = `</explore rest:${EXPLORE_CMD_ID}>`;
-  const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
-  const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
-  const commandsValue =
+  const quadrantExplored = party?.quadrantState === "explored" || party?.quadrantState === "secured";
+  let commandsValue =
    `**Take your turn:**\n` +
-   `• ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**\n\n` +
-   `**Only after the quadrant is explored** (e.g. "Quadrant Explored!" prompt):\n` +
-   `• ${cmdRest} — recover stamina\n` +
-   `• ${cmdSecure} — secure quadrant (costs resources)\n` +
-   `• ${cmdMove} — move to next quadrant`;
+   `• ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**`;
+  if (quadrantExplored) {
+   const cmdRest = `</explore rest:${EXPLORE_CMD_ID}>`;
+   const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
+   const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
+   commandsValue +=
+    `\n\n**Only after the quadrant is explored** (e.g. "Quadrant Explored!" prompt):\n` +
+    `• ${cmdRest} — recover stamina\n` +
+    `• ${cmdSecure} — secure quadrant (costs resources)\n` +
+    `• ${cmdMove} — move to next quadrant`;
+  }
   fields.push(
    { name: "➡️ **__Next up__**", value: `Next: <@${nextCharacter.userId}> (${nextName})`, inline: false },
    { name: "📋 **__Commands__**", value: commandsValue, inline: false }
