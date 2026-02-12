@@ -248,7 +248,7 @@ async function processItemContribution(village, interaction, itemName, qty, char
             { name: '📦 Material Progress', value: `${emoji} ${displayName}\n> ${progressBar} ${current + qty}/${requiredMax}`, inline: true }
         )
         .setColor(village.color)
-        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
     return { success: true, embed };
@@ -346,7 +346,7 @@ async function processTokenContribution(village, interaction, qty, characterName
             { name: '🪙 Token Progress', value: `> ${progressBar} ${currentTokens + qty}/${requiredTokensMax}`, inline: true }
         )
         .setColor(village.color)
-        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
     return { success: true, embed };
@@ -503,7 +503,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                             { name: '🪙 **Upgrade Progress**', value: `> ${tokenProgress}`, inline: true }
                         )
                         .setColor(village.color)
-                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
                         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
                     
                     return { success: true, embed };
@@ -539,7 +539,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                         { name: '🪙 **Tokens Used**', value: `> ${tokensForRepair} tokens`, inline: true }
                     )
                     .setColor(village.color)
-                    .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                    .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
                     .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
                 
                 if (!repairComplete && maxTokensNeeded - tokensForRepair > 0) {
@@ -682,6 +682,7 @@ async function processRepair(village, interaction, qty, characterName) {
 
         // Generate embed
         const hpProgress = formatProgress(village.health, maxHealth);
+        const maxTokensNeeded = hpNeeded * tokensPerHP;
         const tokensRemaining = maxTokensNeeded - actualTokensUsed;
 
         // Use character name for display
@@ -702,7 +703,7 @@ async function processRepair(village, interaction, qty, characterName) {
                 { name: '🪙 **Tokens Used**', value: `> ${actualTokensUsed} tokens`, inline: true }
             )
             .setColor(village.color)
-            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
             .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
         if (!isComplete && tokensRemaining > 0) {
@@ -794,7 +795,7 @@ async function generateProgressEmbed(village) {
             { name: '🪙 **__Tokens Progress__**', value: `> ${tokenBar}`, inline: false }
         )
         .setColor(village.color)
-        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
     // Add materials field only if not at max level
@@ -823,7 +824,7 @@ async function generateContributorsEmbed(village) {
             .setTitle(`${village.name} Contributors`)
             .setDescription('📭 **No contributions yet.**\nBe the first to contribute to this village!')
         .setColor(village.color)
-        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
         return embed;
     }
@@ -916,7 +917,7 @@ async function generateContributorsEmbed(village) {
         .setTitle(`${village.name} Contributors`)
         .setDescription(`📊 **Total Contributors:** ${contributorList.length}\n\nView all contributions to ${village.name}!`)
         .setColor(village.color)
-        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
     
     // Add all fields
@@ -978,7 +979,7 @@ async function sendLevelUpAnnouncement(village, client) {
                 `Use </village view:1324300899585363968> to check the new requirements.`
             )
             .setColor(village.color)
-            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
             .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE)
             .setTimestamp();
 
@@ -1506,7 +1507,7 @@ module.exports = {
                         { name: '📊 **__Status__**', value: `> ${statusMessage}`, inline: false }
                     )
                     .setColor(villageToDisplay.color)
-                    .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
+                    .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || BORDER_IMAGE)
                     .setImage(VILLAGE_IMAGES[villageName]?.banner || BORDER_IMAGE);
 
                 // Add next level requirements if not at max level
@@ -1719,7 +1720,7 @@ module.exports = {
                                 { name: '💡 **Tip**', value: `> You can donate once per week total (across all villages).\n> Use </village view:1324300899585363968> to check the current status.`, inline: false }
                             )
                             .setColor(village.color)
-                            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                            .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
                             .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
                         
                         return interaction.reply({ embeds: [cooldownEmbed] });
@@ -1803,7 +1804,7 @@ module.exports = {
                             `*You can use the rest spot again tomorrow at 8am EST.*`
                         )
                         .setColor(village.color)
-                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
                         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
                     return interaction.reply({ embeds: [embed] });
@@ -1855,7 +1856,7 @@ module.exports = {
                             `*Select your choice below. You can use the rest spot again tomorrow at 8am EST.*`
                         )
                         .setColor(village.color)
-                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || '')
+                        .setThumbnail(VILLAGE_IMAGES[village.name]?.thumbnail || BORDER_IMAGE)
                         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
                     return interaction.reply({ embeds: [embed], components: [buttons] });
