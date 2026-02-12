@@ -282,7 +282,7 @@ export function buildApprovedDMEmbed(character: CharacterData): {
       },
       {
         name: "Next Steps",
-        value: "Approved! Please submit OC to the roster channel!",
+        value: APPROVED_NEXT_STEPS,
         inline: false,
       },
       {
@@ -324,12 +324,20 @@ export function buildApprovalChannelEmbed(character: CharacterData): {
       },
       {
         name: "📝 Next Steps",
-        value: "Approved! Please submit OC to ⁠Roots Of The Wild⁠🔔》roster channel!",
+        value: APPROVED_NEXT_STEPS,
         inline: false,
       },
     ],
   };
 }
+
+/** Next steps text shown everywhere a member is told their character is approved */
+export const APPROVED_NEXT_STEPS =
+  "You may post your character in **#roster** according to the format below!\n\n" +
+  "`Name | Race | Village | Virtue | Job`\n" +
+  "<link to app>\n\n" +
+  "A mod will then assign you the **Resident** role. Now, go to the **#roles** channel to pick the roles for your pronoun(s), and arrange your server nickname as follows:\n" +
+  "▹ Your Name | OC Name(s)";
 
 /**
  * Build decision channel notification embed
@@ -350,16 +358,26 @@ export function buildDecisionChannelEmbed(
   const emoji = decision === "approved" ? "✅" : "⚠️";
   const decisionText = decision === "approved" ? "approved" : "needs changes";
 
+  const fields: Array<{ name: string; value: string; inline?: boolean }> = [
+    {
+      name: "📋 View Details",
+      value: `[Check Dashboard Notifications](${dashboardUrl})\n\nYour character has been **${decisionText}**. Check your DMs or dashboard notifications for more information.`,
+      inline: false,
+    },
+  ];
+
+  if (decision === "approved") {
+    fields.push({
+      name: "📝 Next Steps",
+      value: APPROVED_NEXT_STEPS,
+      inline: false,
+    });
+  }
+
   return {
     title: `${emoji} OC Decision Update`,
     description: `There has been a decision made on your OC. Go to notifications on dashboard or see DMs for more info.`,
     color: decision === "approved" ? 0x4caf50 : 0xffa500, // Green for approved, Orange for needs changes
-    fields: [
-      {
-        name: "📋 View Details",
-        value: `[Check Dashboard Notifications](${dashboardUrl})\n\nYour character has been **${decisionText}**. Check your DMs or dashboard notifications for more information.`,
-        inline: false,
-      },
-    ],
+    fields,
   };
 }

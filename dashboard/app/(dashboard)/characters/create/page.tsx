@@ -35,6 +35,7 @@ import {
 } from "@/lib/gear-equip";
 import { isFieldEditable } from "@/lib/character-field-editability";
 import type { CharacterStatus } from "@/lib/character-field-editability";
+import { APPROVED_NEXT_STEPS } from "@/lib/services/discordEmbeds";
 
 /* ============================================================================ */
 /* ------------------- Types ------------------- */
@@ -1656,7 +1657,9 @@ export function CreateForm({
         iconColor: "text-[var(--totk-light-green)]",
         title: "Character Approved - Limited Editing",
         titleColor: "text-[var(--totk-light-green)]",
-        description: "This character has been approved. Only profile fields (age, height, pronouns, icon, personality, history, extras, gender, virtue, appLink, appArt, birthday) can be edited.",
+        description:
+          "This character has been approved. Only profile fields (age, height, pronouns, icon, personality, history, extras, gender, virtue, appLink, appArt, birthday) can be edited.\n\n" +
+          APPROVED_NEXT_STEPS,
       };
     }
     
@@ -1719,7 +1722,7 @@ export function CreateForm({
                 <p className={`text-sm sm:text-base font-semibold mb-1 ${config.titleColor}`}>
                   {config.title}
                 </p>
-                <p className="text-xs sm:text-sm leading-relaxed">
+                <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-line">
                   {config.description}
                 </p>
               </div>

@@ -9,6 +9,7 @@ import {
   buildApprovedDMEmbed,
   buildApprovalChannelEmbed,
   buildDecisionChannelEmbed,
+  APPROVED_NEXT_STEPS,
 } from "./discordEmbeds";
 import { logger } from "@/utils/logger";
 import { connect } from "@/lib/db";
@@ -133,7 +134,9 @@ async function createDashboardNotification(
       });
     } else if (type === "oc_approved") {
       title = "✅ Character Approved!";
-      message = `Your character **${character.name}** has been approved and is now active!`;
+      message =
+        `Your character **${character.name}** has been approved and is now active!\n\n` +
+        APPROVED_NEXT_STEPS;
       links.push({
         text: "View Character",
         url: ocPageUrl,
@@ -211,7 +214,7 @@ async function postDecisionChannelNotification(
 }
 
 /**
- * Post fallback notification to channel (kept for backward compatibility)
+ * Post fallback notification to channel (when DMs fail; for approved, include full next steps)
  */
 async function postFallbackNotification(
   userId: string,
@@ -220,9 +223,17 @@ async function postFallbackNotification(
 ): Promise<void> {
   try {
     const dashboardUrl = `${APP_URL}/profile`;
-    await discordApiRequest(`channels/${DECISION_CHANNEL_ID}/messages`, "POST", {
-      content: `<@${userId}> A determination has been made on your OC application. Please check your DMs from Tinglebot or your [Dashboard Notifications](${dashboardUrl}).`,
-    });
+    if (decision === "approved") {
+      const embed = buildApprovedDMEmbed(character) as Record<string, unknown>;
+      await discordApiRequest(`channels/${DECISION_CHANNEL_ID}/messages`, "POST", {
+        content: `<@${userId}> Your character has been approved! (Could not DM you—see below and [Dashboard Notifications](${dashboardUrl}).)`,
+        embeds: [embed],
+      });
+    } else {
+      await discordApiRequest(`channels/${DECISION_CHANNEL_ID}/messages`, "POST", {
+        content: `<@${userId}> A determination has been made on your OC application. Please check your DMs from Tinglebot or your [Dashboard Notifications](${dashboardUrl}).`,
+      });
+    }
 
     // Update notification to mark fallback as posted
     await connect();
