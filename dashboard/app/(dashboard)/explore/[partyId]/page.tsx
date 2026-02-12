@@ -394,7 +394,7 @@ export default function ExplorePartyPage() {
   }, [partyId, editItems, fetchParty]);
 
   const joinParty = useCallback(async () => {
-    if (!partyId || !selectedCharacterId || selectedItems.length !== 3) return;
+    if (!partyId || !selectedCharacterId) return;
     setJoining(true);
     setJoinError(null);
     try {
