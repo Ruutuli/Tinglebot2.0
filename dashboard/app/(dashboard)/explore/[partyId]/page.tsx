@@ -14,9 +14,9 @@ const REGION_BANNERS: Record<string, string> = {
 };
 
 const REGIONS: Record<string, { label: string; village: string; square: string; quadrant: string }> = {
-  eldin: { label: "Eldin", village: "Rudania", square: "D3", quadrant: "Q3" },
-  lanayru: { label: "Lanayru", village: "Inariko", square: "G4", quadrant: "Q2" },
-  faron: { label: "Faron", village: "Vhintl", square: "H6", quadrant: "Q4" },
+  eldin: { label: "Eldin", village: "Rudania", square: "H5", quadrant: "Q3" },
+  lanayru: { label: "Lanayru", village: "Inariko", square: "H8", quadrant: "Q2" },
+  faron: { label: "Faron", village: "Vhintl", square: "F10", quadrant: "Q4" },
 };
 
 const POLL_INTERVAL_MS = 6000;
@@ -29,6 +29,14 @@ type PartyMember = {
   currentStamina?: number;
   icon?: string;
   items: Array<{ itemName: string; modifierHearts?: number; staminaRecovered?: number; emoji?: string }>;
+};
+
+type GatheredItem = {
+  characterId: string;
+  characterName: string;
+  itemName: string;
+  quantity: number;
+  emoji?: string;
 };
 
 type PartyData = {
@@ -44,6 +52,10 @@ type PartyData = {
   currentUserJoined: boolean;
   currentUserMember: PartyMember | null;
   isLeader: boolean;
+  discordThreadUrl?: string | null;
+  currentTurn?: number;
+  quadrantState?: string;
+  gatheredItems?: GatheredItem[];
 };
 
 type Character = {
@@ -103,6 +115,10 @@ export default function ExplorePartyPage() {
   const [editSuggestionsOpen, setEditSuggestionsOpen] = useState(false);
   const [startingExpedition, setStartingExpedition] = useState(false);
   const [startExpeditionError, setStartExpeditionError] = useState<string | null>(null);
+  const [squarePreview, setSquarePreview] = useState<{
+    layers: Array<{ name: string; url: string }>;
+    quadrantBounds: { x: number; y: number; w: number; h: number } | null;
+  } | null>(null);
 
   const regionVillage = party?.region ? normalizeVillage(REGIONS[party.region]?.village ?? party.region) : "";
   const eligibleCharacters = regionVillage
@@ -139,6 +155,24 @@ export default function ExplorePartyPage() {
     const t = setInterval(fetchParty, POLL_INTERVAL_MS);
     return () => clearInterval(t);
   }, [partyId, party, fetchParty]);
+
+  useEffect(() => {
+    if (!party?.square) {
+      setSquarePreview(null);
+      return;
+    }
+    const q = party.quadrant || "";
+    fetch(`/api/explore/square-preview?square=${encodeURIComponent(party.square)}${q ? `&quadrant=${encodeURIComponent(q)}` : ""}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.layers) {
+          setSquarePreview({ layers: data.layers, quadrantBounds: data.quadrantBounds ?? null });
+        } else {
+          setSquarePreview(null);
+        }
+      })
+      .catch(() => setSquarePreview(null));
+  }, [party?.square, party?.quadrant]);
 
   useEffect(() => {
     if (!userId) return;
@@ -185,6 +219,19 @@ export default function ExplorePartyPage() {
 
   const selectedCharacter = eligibleCharacters.find((c) => String(c._id) === String(selectedCharacterId));
 
+  // Paving bundles: 5 Eldin Ore = 1 bundle, 10 Wood = 1 bundle (per plan)
+  const bundleQuantities = useCallback(
+    (byName: Map<string, number>) => {
+      const eldin = byName.get("eldin ore") ?? 0;
+      const wood = byName.get("wood") ?? 0;
+      return {
+        "Eldin Ore Bundle": Math.floor(eldin / 5),
+        "Wood Bundle": Math.floor(wood / 10),
+      };
+    },
+    []
+  );
+
   useEffect(() => {
     if (!selectedCharacter?.name || !userId || exploreItemNames.size === 0) {
       setInventoryWithQuantity([]);
@@ -196,23 +243,26 @@ export default function ExplorePartyPage() {
       .then((r) => r.json())
       .then((data: { data?: Array<{ itemName: string; quantity?: number }> }) => {
         const list = Array.isArray(data?.data) ? data.data : [];
-        const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
-        const valid = list
-          .map((it) => ({ itemName: (it.itemName || "").trim(), quantity: Math.max(0, Number(it.quantity) ?? 0) }))
-          .filter((it) => it.itemName && validLower.has(it.itemName.toLowerCase()));
+        const all = list.map((it) => ({ itemName: (it.itemName || "").trim(), quantity: Math.max(0, Number(it.quantity) ?? 0) })).filter((it) => it.itemName);
         const byName = new Map<string, number>();
-        for (const it of valid) {
+        for (const it of all) {
           const key = it.itemName.toLowerCase();
           byName.set(key, (byName.get(key) ?? 0) + it.quantity);
         }
-        const arr = Array.from(byName.entries())
-          .map(([k, q]) => ({ itemName: valid.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }))
-          .sort((a, b) => a.itemName.localeCompare(b.itemName));
+        const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
+        const bundles = bundleQuantities(byName);
+        const fromInventory = Array.from(byName.entries())
+          .filter(([k]) => validLower.has(k) && k !== "eldin ore" && k !== "wood")
+          .map(([k, q]) => ({ itemName: all.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }));
+        const fromBundles = (["Eldin Ore Bundle", "Wood Bundle"] as const)
+          .filter((name) => exploreItemNames.has(name) && (bundles[name] ?? 0) > 0)
+          .map((name) => ({ itemName: name, quantity: bundles[name] ?? 0 }));
+        const arr = [...fromInventory, ...fromBundles].sort((a, b) => a.itemName.localeCompare(b.itemName));
         setInventoryWithQuantity(arr);
       })
       .catch(() => setInventoryWithQuantity([]))
       .finally(() => setLoadingInventory(false));
-  }, [selectedCharacter?.name, userId, exploreItemNames]);
+  }, [selectedCharacter?.name, userId, exploreItemNames, bundleQuantities]);
 
   const inventoryQty = useCallback(
     (itemName: string) => inventoryWithQuantity.find((it) => it.itemName.toLowerCase() === itemName.toLowerCase())?.quantity ?? 0,
@@ -270,22 +320,25 @@ export default function ExplorePartyPage() {
       .then((r) => r.json())
       .then((data: { data?: Array<{ itemName: string; quantity?: number }> }) => {
         const list = Array.isArray(data?.data) ? data.data : [];
-        const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
-        const valid = list
-          .map((it) => ({ itemName: (it.itemName || "").trim(), quantity: Math.max(0, Number(it.quantity) ?? 0) }))
-          .filter((it) => it.itemName && validLower.has(it.itemName.toLowerCase()));
+        const all = list.map((it) => ({ itemName: (it.itemName || "").trim(), quantity: Math.max(0, Number(it.quantity) ?? 0) })).filter((it) => it.itemName);
         const byName = new Map<string, number>();
-        for (const it of valid) {
+        for (const it of all) {
           const key = it.itemName.toLowerCase();
           byName.set(key, (byName.get(key) ?? 0) + it.quantity);
         }
-        const arr = Array.from(byName.entries())
-          .map(([k, q]) => ({ itemName: valid.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }))
-          .sort((a, b) => a.itemName.localeCompare(b.itemName));
+        const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
+        const bundles = bundleQuantities(byName);
+        const fromInventory = Array.from(byName.entries())
+          .filter(([k]) => validLower.has(k) && k !== "eldin ore" && k !== "wood")
+          .map(([k, q]) => ({ itemName: all.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }));
+        const fromBundles = (["Eldin Ore Bundle", "Wood Bundle"] as const)
+          .filter((name) => exploreItemNames.has(name) && (bundles[name] ?? 0) > 0)
+          .map((name) => ({ itemName: name, quantity: bundles[name] ?? 0 }));
+        const arr = [...fromInventory, ...fromBundles].sort((a, b) => a.itemName.localeCompare(b.itemName));
         setEditInventoryWithQuantity(arr);
       })
       .catch(() => setEditInventoryWithQuantity([]));
-  }, [editingItems, party?.currentUserMember?.name, userId, exploreItemNames]);
+  }, [editingItems, party?.currentUserMember?.name, userId, exploreItemNames, bundleQuantities]);
 
   const cancelEditingItems = useCallback(() => {
     setEditingItems(false);
@@ -461,7 +514,7 @@ export default function ExplorePartyPage() {
     return (
       <div
         className={[
-          "rounded-2xl border p-4 shadow-lg transition-shadow",
+          "min-w-[12rem] flex-1 rounded-2xl border px-5 py-4 shadow-lg transition-shadow",
           isYou
             ? "border-[var(--totk-light-green)]/80 bg-gradient-to-br from-[var(--totk-dark-green)]/40 to-[var(--botw-warm-black)]/60 ring-1 ring-[var(--totk-light-green)]/30"
             : "border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40",
@@ -499,30 +552,38 @@ export default function ExplorePartyPage() {
             </div>
           </div>
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 space-y-1.5">
           {([0, 1, 2] as const).map((i) => {
             const it = items[i];
-            const imgUrl = it ? exploreItemImages.get(it.itemName.toLowerCase()) : null;
+            if (!it) return <div key={i} className="h-9 rounded border border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/40" />;
+            const imgUrl = exploreItemImages.get(it.itemName.toLowerCase()) ?? null;
+            const stats = exploreItemStats.get(it.itemName.toLowerCase());
+            const h = stats?.modifierHearts ?? 0;
+            const s = stats?.staminaRecovered ?? 0;
+            const statStr = `❤️${h} | 🟩${s}`;
             return (
               <div
                 key={i}
-                className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)] shadow-inner"
-                title={it?.itemName}
+                className="flex items-center gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 px-2 py-1.5"
               >
-                {imgUrl ? (
-                  <Image
-                    src={imgUrl}
-                    alt={it?.itemName ?? ""}
-                    width={44}
-                    height={44}
-                    className="h-full w-full object-cover"
-                    unoptimized={imgUrl.startsWith("http") || imgUrl.startsWith("/api/")}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-lg text-[var(--totk-grey-200)]">
-                    {it?.itemName ? it.itemName.slice(0, 1) : "—"}
-                  </div>
-                )}
+                <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded border border-[var(--totk-dark-ocher)]/50">
+                  {imgUrl ? (
+                    <Image
+                      src={imgUrl}
+                      alt=""
+                      width={32}
+                      height={32}
+                      className="h-full w-full object-cover"
+                      unoptimized={imgUrl.startsWith("http") || imgUrl.startsWith("/api/")}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm text-[var(--totk-grey-200)]">
+                      {it.itemName.slice(0, 1)}
+                    </div>
+                  )}
+                </div>
+                <span className="min-w-0 flex-1 truncate text-xs text-[var(--totk-ivory)]">{it.itemName}</span>
+                <span className="flex-shrink-0 text-[10px] text-[var(--totk-grey-200)]">{statStr}</span>
               </div>
             );
           })}
@@ -550,9 +611,9 @@ export default function ExplorePartyPage() {
             <p className="mb-2 text-sm text-red-400">{startExpeditionError}</p>
           )}
           {/* Hero: banner + title + meta */}
-          <header className="relative mb-8 overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/60 shadow-xl">
-            {regionBanner && (
-              <div className="relative h-28 w-full sm:h-36">
+          <header className="relative mb-6 overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/60 shadow-lg">
+            {regionBanner ? (
+              <div className="relative h-24 w-full sm:h-28">
                 <Image
                   src={regionBanner}
                   alt=""
@@ -561,28 +622,85 @@ export default function ExplorePartyPage() {
                   sizes="(max-width: 1024px) 100vw, 72rem"
                   priority
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[var(--botw-warm-black)]/95 via-[var(--botw-warm-black)]/40 to-transparent" />
+                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-[var(--botw-warm-black)]/95 via-[var(--botw-warm-black)]/40 to-transparent px-3 pb-2.5 sm:px-4 sm:pb-3">
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                    <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
+                    <h1 className="text-lg font-bold tracking-tight text-[var(--totk-ivory)] sm:text-xl md:text-2xl">
+                      Expedition {party.partyId}
+                    </h1>
+                    <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
+                  </div>
+                  <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
+                    {regionInfo?.label ?? party.region} · Start {party.square} {party.quadrant}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="px-3 py-2.5 sm:px-4 sm:py-3">
+                <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                  <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
+                  <h1 className="text-lg font-bold tracking-tight text-[var(--totk-ivory)] sm:text-xl md:text-2xl">
+                    Expedition {party.partyId}
+                  </h1>
+                  <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
+                </div>
+                <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
+                  {regionInfo?.label ?? party.region} · Start {party.square} {party.quadrant}
+                </p>
               </div>
             )}
-            <div className={regionBanner ? "relative bg-gradient-to-t from-[var(--botw-warm-black)]/98 to-[var(--botw-warm-black)]/60 p-4 sm:p-5" : "p-4 sm:p-5"}>
-              <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                <img src="/Side=Left.svg" alt="" className="h-4 w-auto sm:h-5 opacity-90" aria-hidden />
-                <h1 className="text-xl font-bold tracking-tight text-[var(--totk-ivory)] sm:text-2xl md:text-3xl">
-                  Expedition {party.partyId}
-                </h1>
-                <img src="/Side=Right.svg" alt="" className="h-4 w-auto sm:h-5 opacity-90" aria-hidden />
+            {squarePreview && squarePreview.layers.length > 0 && (
+              <div className="border-t border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/60 px-3 py-2.5 sm:px-4 sm:py-3">
+                <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)] sm:text-xs">
+                  Map · {party.square} {party.quadrant}
+                </p>
+                <div className="relative mx-auto max-w-[18rem] overflow-hidden rounded border border-[var(--totk-dark-ocher)]/50 shadow-lg sm:max-w-[22rem]" style={{ aspectRatio: "2400/1666" }}>
+                  {squarePreview.layers.map((layer) => (
+                    <img
+                      key={layer.name}
+                      src={layer.url}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
+                  ))}
+                  {squarePreview.quadrantBounds && (
+                    <div
+                      className="pointer-events-none absolute border-2 border-[var(--totk-light-green)]/90 bg-[var(--totk-light-green)]/10"
+                      style={{
+                        left: `${squarePreview.quadrantBounds.x}%`,
+                        top: `${squarePreview.quadrantBounds.y}%`,
+                        width: `${squarePreview.quadrantBounds.w}%`,
+                        height: `${squarePreview.quadrantBounds.h}%`,
+                      }}
+                      aria-hidden
+                    />
+                  )}
+                  {/* Grid overlay: quadrant divider lines */}
+                  <div className="pointer-events-none absolute inset-0" aria-hidden>
+                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40" style={{ transform: "translateX(-50%)" }} />
+                    <div className="absolute top-1/2 left-0 right-0 h-px bg-white/40" style={{ transform: "translateY(-50%)" }} />
+                  </div>
+                  {/* Quadrant labels */}
+                  <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-1 text-[10px] font-bold text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" aria-hidden>
+                    <div className="flex justify-between">
+                      <span>Q1</span>
+                      <span>Q2</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Q3</span>
+                      <span>Q4</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="mt-1 text-center text-sm text-[var(--totk-grey-200)]">
-                {regionInfo?.label ?? party.region} · Start {party.square} {party.quadrant}
-                {regionInfo?.village && ` · ${regionInfo.village}`}
-              </p>
-            </div>
+            )}
             {!regionBanner && <div className="h-px bg-[var(--totk-dark-ocher)]/40" />}
-            <div className="flex flex-wrap items-center justify-center gap-3 border-t border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/40 px-4 py-4 sm:gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-2 border-t border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/40 px-3 py-2.5 sm:gap-3 sm:py-3">
               <button
                 type="button"
                 onClick={copyShareLink}
-                className="inline-flex min-w-0 shrink-0 items-center gap-2 rounded-full border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/80 px-4 py-2.5 text-sm font-medium text-[var(--totk-ivory)] transition-colors hover:border-[var(--totk-mid-ocher)] hover:bg-[var(--totk-dark-ocher)]/30"
+                className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/80 px-3 py-2 text-xs font-medium text-[var(--totk-ivory)] transition-colors hover:border-[var(--totk-mid-ocher)] hover:bg-[var(--totk-dark-ocher)]/30 sm:text-sm sm:px-4 sm:py-2.5"
               >
                 <i className="fa-solid fa-link shrink-0 text-xs opacity-80" aria-hidden />
                 <span className="truncate">Copy link</span>
@@ -596,7 +714,7 @@ export default function ExplorePartyPage() {
                     }
                   }}
                   disabled={startingExpedition}
-                  className="inline-flex min-w-0 shrink-0 items-center gap-2 rounded-full border border-[var(--totk-light-green)]/60 bg-[var(--totk-dark-green)]/80 px-4 py-2.5 text-sm font-bold text-[var(--totk-ivory)] transition-opacity hover:opacity-90 disabled:opacity-60"
+                  className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-[var(--totk-light-green)]/60 bg-[var(--totk-dark-green)]/80 px-3 py-2 text-xs font-bold text-[var(--totk-ivory)] transition-opacity hover:opacity-90 disabled:opacity-60 sm:text-sm sm:px-4 sm:py-2.5"
                 >
                   {startingExpedition ? (
                     <i className="fa-solid fa-spinner fa-spin shrink-0 text-xs" aria-hidden />
@@ -735,7 +853,6 @@ export default function ExplorePartyPage() {
                                     onClick={() => {
                                       addEditItem(it.itemName);
                                       setEditItemSearch("");
-                                      setEditSuggestionsOpen(false);
                                     }}
                                     className={`w-full px-3 py-2 text-left text-sm ${highlighted ? "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]" : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/30"}`}
                                   >
@@ -915,7 +1032,6 @@ export default function ExplorePartyPage() {
                                               onClick={() => {
                                                 addSelectedItem(it.itemName);
                                                 setItemSearch("");
-                                                setItemSuggestionsOpen(false);
                                               }}
                                               className={`w-full px-3 py-2 text-left text-sm ${highlighted ? "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]" : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/30"}`}
                                             >
@@ -970,12 +1086,94 @@ export default function ExplorePartyPage() {
           )}
 
           {party.status === "started" && (
-            <section className="mb-8 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-lg md:p-6">
-              <p className="flex items-center gap-2 text-sm text-[var(--totk-light-green)]">
-                <i className="fa-solid fa-play text-xs opacity-80" aria-hidden />
-                This expedition has started. Use Discord to continue.
-              </p>
-            </section>
+            <>
+              <section className="mb-6 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-lg md:p-6">
+                <p className="mb-4 flex items-center gap-2 text-sm text-[var(--totk-light-green)]">
+                  <i className="fa-solid fa-play text-xs opacity-80" aria-hidden />
+                  This expedition has started. Use Discord to continue.
+                </p>
+                {party.discordThreadUrl ? (
+                  <a
+                    href={party.discordThreadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-dark-green)] px-4 py-2.5 text-sm font-bold text-[var(--totk-ivory)] shadow-md transition hover:opacity-90"
+                  >
+                    <i className="fa-brands fa-discord text-lg" aria-hidden />
+                    Open expedition thread
+                  </a>
+                ) : (
+                  <p className="text-xs text-[var(--totk-grey-200)]">Thread link not available.</p>
+                )}
+              </section>
+
+              <section className="mb-8 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-lg md:p-6">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]">
+                    <i className="fa-solid fa-compass text-sm" aria-hidden />
+                  </span>
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
+                    Expedition progress
+                  </h2>
+                </div>
+                <p className="mb-4 text-xs text-[var(--totk-grey-200)]">
+                  Live reference: rolls and actions happen in Discord; this page updates as the party state changes.
+                </p>
+                <div className="mb-4 flex flex-wrap gap-3">
+                  <div className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-2.5">
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Current turn</span>
+                    <p className="mt-0.5 font-bold text-[var(--totk-ivory)]">
+                      {party.members[party.currentTurn ?? 0]?.name ?? "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-2.5">
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Current quadrant</span>
+                    <p className="mt-0.5 font-bold text-[var(--totk-ivory)]">
+                      {party.quadrant ?? "—"} {party.square ? `· ${party.square}` : ""}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-2.5">
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Area status</span>
+                    <p className="mt-0.5 font-bold capitalize text-[var(--totk-ivory)]">
+                      {party.quadrantState ?? "unexplored"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-2.5">
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Party hearts</span>
+                    <p className="mt-0.5 flex items-center gap-1 font-bold text-[var(--totk-ivory)]">
+                      <i className="fa-solid fa-heart text-[10px] text-red-400/90" aria-hidden />
+                      {party.totalHearts}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-2.5">
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Party stamina</span>
+                    <p className="mt-0.5 flex items-center gap-1 font-bold text-[var(--totk-ivory)]">
+                      <i className="fa-solid fa-bolt text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />
+                      {party.totalStamina}
+                    </p>
+                  </div>
+                </div>
+                {(party.gatheredItems?.length ?? 0) > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                      Gathered
+                    </h3>
+                    <ul className="space-y-1 rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 p-3">
+                      {party.gatheredItems!.map((g, i) => (
+                        <li key={i} className="flex items-center justify-between text-sm text-[var(--totk-ivory)]">
+                          <span>
+                            {g.emoji && <span className="mr-1.5">{g.emoji}</span>}
+                            {g.itemName}
+                            {g.quantity > 1 && ` ×${g.quantity}`}
+                          </span>
+                          <span className="text-xs text-[var(--totk-grey-200)]">{g.characterName}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            </>
           )}
 
         </main>
@@ -1012,9 +1210,17 @@ export default function ExplorePartyPage() {
                 const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
                 const displayHearts = typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts);
                 const displayStamina = typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina);
+                const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
                 return (
                   <div key={m.characterId} className="flex items-start gap-3">
-                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[var(--totk-dark-ocher)]/70 text-xs font-bold text-[var(--totk-ivory)] shadow-inner">
+                    <span
+                      className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold shadow-inner ${
+                        isCurrentTurn
+                          ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]"
+                          : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"
+                      }`}
+                      title={isCurrentTurn ? "Current turn" : undefined}
+                    >
                       {index + 1}
                     </span>
                     <PartySlotCard
@@ -1024,7 +1230,7 @@ export default function ExplorePartyPage() {
                       stamina={displayStamina}
                       items={m.items}
                       isYou={userId === m.userId}
-                      label={userId === m.userId ? "(you)" : undefined}
+                      label={[isCurrentTurn && "Current turn", userId === m.userId && "(you)"].filter(Boolean).join(" ") || undefined}
                     />
                   </div>
                 );

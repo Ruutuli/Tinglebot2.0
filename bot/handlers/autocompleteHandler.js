@@ -66,7 +66,7 @@ const { handleError } = require('@/utils/globalErrorHandler');
 const Character = require('@/models/CharacterModel');
 const Item = require('@/models/ItemModel');
 const Mount = require('@/models/MountModel');
-const Party = require('@/models/PartyModel');
+const Party = require('../models/PartyModel.js');
 const Pet = require('@/models/PetModel');
 const Quest = require('@/models/QuestModel');
 const ShopStock = require('@/models/VillageShopsModel');
@@ -849,10 +849,20 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             }
             break;
 
+          // ------------------- Explore Command -------------------
+          case "explore":
+            if (focusedOption.name === "id") {
+              await handleExploreIdAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "charactername") {
+              await handleExploreRollCharacterAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "item") {
+              await handleExploreUseItemAutocomplete(interaction, focusedOption);
+            }
+            break;
+
           // ------------------- Mod Character Command -------------------
           // Note: ModCharacter autocomplete is handled locally in the command file
-          break;
-          
+
           default:
             // Command not found in switch - log for debugging (non-blocking)
             try {
@@ -3239,8 +3249,53 @@ async function handleEditCharacterAutocomplete(interaction, focusedOption) {
 // EXPLORE COMMANDS
 // ============================================================================
 // This section handles autocomplete interactions for the "explore" command.
-// It provides suggestions for healing items from a character's inventory and for
-// selecting characters involved in an exploration roll.
+// id = expeditions the user leads or is in; charactername = characters in that expedition.
+// (Item selection for expeditions is dashboard-only; no item option on bot.)
+
+async function handleExploreIdAutocomplete(interaction, focusedOption) {
+ try {
+  await DatabaseConnectionManager.connectToTinglebot();
+
+  const userId = interaction.user.id;
+  const value = (focusedOption.value || '').toString().toLowerCase();
+
+  const parties = await Party.find({
+   $or: [
+    { leaderId: userId },
+    { 'characters.userId': userId },
+   ],
+  })
+   .select('partyId region status square quadrant')
+   .lean()
+   .exec();
+
+  const choices = parties.map((p) => {
+   const partyId = p.partyId || String(p._id);
+   const name = `${partyId} | ${capitalize(p.region || '')} | ${p.status || ''} | ${p.square || ''} ${p.quadrant || ''}`.trim();
+   return {
+    name: name.length > 100 ? name.slice(0, 97) + '...' : name,
+    value: partyId,
+   };
+  });
+
+  const filtered = value
+   ? choices.filter(
+      (c) =>
+       c.value.toLowerCase().includes(value) ||
+       c.name.toLowerCase().includes(value)
+     )
+   : choices;
+
+  return await safeRespondWithValidation(
+   interaction,
+   filtered.length > 0 ? filtered.slice(0, 25) : choices.slice(0, 25)
+  );
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore id autocomplete:", error);
+  await interaction.respond([]);
+ }
+}
 
 async function handleExploreRollCharacterAutocomplete(
  interaction,
@@ -3274,12 +3329,22 @@ async function handleExploreRollCharacterAutocomplete(
    ]);
   }
 
+  const charByName = new Map(userCharacters.map((c) => [c.name, c]));
   const currentTurnCharacter = party.characters[party.currentTurn];
 
   const choices = userPartyCharacters.map((char) => {
-   const isTurn = currentTurnCharacter && char.name === currentTurnCharacter.name;
+   const full = charByName.get(char.name);
+   const village = full?.currentVillage ? capitalize(full.currentVillage) : '';
+   const job = full?.job ? capitalize(full.job) : '';
+   const hearts = char.currentHearts ?? 0;
+   const stamina = char.currentStamina ?? 0;
+   const parts = [char.name];
+   if (village) parts.push(village);
+   if (job) parts.push(job);
+   parts.push(`❤️ ${hearts}`);
+   parts.push(`🟩 ${stamina}`);
    return {
-    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)} | ❤️ ${char.currentHearts || 0} | 🟩 ${char.currentStamina || 0}`,
+    name: parts.join(' | '),
     value: char.name,
    };
   });
@@ -3295,6 +3360,53 @@ async function handleExploreRollCharacterAutocomplete(
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("Error during explore roll character autocomplete:", error);
+  await interaction.respond([]);
+ }
+}
+
+// ------------------- Explore: Use Item Autocomplete -------------------
+// Lists healing items from the character's expedition loadout (party.characters[].items).
+async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
+ try {
+  await DatabaseConnectionManager.connectToTinglebot();
+
+  const expeditionId = interaction.options.getString("id");
+  const characterName = interaction.options.getString("charactername");
+  if (!expeditionId || !characterName) return await interaction.respond([]);
+
+  const party = await Party.findOne({ partyId: expeditionId }).lean();
+  if (!party) return await interaction.respond([]);
+
+  const partyChar = party.characters.find(
+   (c) => c.name && c.name.trim().toLowerCase() === characterName.trim().toLowerCase()
+  );
+  if (!partyChar || !partyChar.items || partyChar.items.length === 0) {
+   return await interaction.respond([{ name: "No items in loadout", value: "none" }]);
+  }
+
+  const healing = partyChar.items.filter(
+   (i) => (i.modifierHearts || 0) > 0 || (i.staminaRecovered || 0) > 0
+  );
+  if (healing.length === 0) {
+   return await interaction.respond([{ name: "No healing items to use", value: "none" }]);
+  }
+
+  const value = (focusedOption.value || "").toLowerCase();
+  const choices = healing.map((i) => {
+   const name = `${i.emoji || "🔹"} ${i.itemName} — ❤️ ${i.modifierHearts || 0} | 🟩 ${i.staminaRecovered || 0}`;
+   return { name: name.length > 100 ? name.slice(0, 97) + "..." : name, value: i.itemName };
+  });
+  const filtered = value
+   ? choices.filter((c) => c.value.toLowerCase().includes(value) || c.name.toLowerCase().includes(value))
+   : choices;
+
+  return await safeRespondWithValidation(
+   interaction,
+   filtered.length > 0 ? filtered.slice(0, 25) : choices.slice(0, 25)
+  );
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore use-item autocomplete:", error);
   await interaction.respond([]);
  }
 }
@@ -3420,10 +3532,16 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
    ]);
   }
 
-  const choices = eligibleCharacters.map((char) => ({
-   name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
-   value: char.name,
-  }));
+  const choices = eligibleCharacters.map((char) => {
+   const village = char.currentVillage ? capitalize(char.currentVillage) : '';
+   const job = char.job ? capitalize(char.job) : '';
+   const parts = [char.name];
+   if (village) parts.push(village);
+   if (job) parts.push(job);
+   parts.push(`❤️ ${char.currentHearts ?? 0}`);
+   parts.push(`🟩 ${char.currentStamina ?? 0}`);
+   return { name: parts.join(' | '), value: char.name };
+  });
 
   const filtered = choices.filter((choice) =>
    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
@@ -6236,9 +6354,11 @@ module.exports = {
  // ------------------- Edit Character Functions -------------------
  handleEditCharacterAutocomplete,
 
- // ------------------- Explore Functions -------------------
- handleExploreItemAutocomplete,
- handleExploreRollCharacterAutocomplete,
+// ------------------- Explore Functions -------------------
+  handleExploreIdAutocomplete,
+  handleExploreItemAutocomplete,
+  handleExploreRollCharacterAutocomplete,
+  handleExploreUseItemAutocomplete,
 
  // ------------------- Gear Functions -------------------
  handleGearAutocomplete,

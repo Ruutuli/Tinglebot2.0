@@ -14,8 +14,45 @@ const REGION_TO_VILLAGE: Record<string, string> = {
   faron: "vhintl",
 };
 
+/** Paving bundles: 5 Eldin Ore = 1 bundle = 1 slot, 10 Wood = 1 bundle = 1 slot */
+const PAVING_BUNDLES: Record<string, { material: string; requiredPerSlot: number }> = {
+  "Eldin Ore Bundle": { material: "Eldin Ore", requiredPerSlot: 5 },
+  "Wood Bundle": { material: "Wood", requiredPerSlot: 10 },
+};
+
 function normalizeVillage(v: string): string {
   return (v || "").trim().toLowerCase();
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Remove quantity of a material from character inventory (by decrementing/deleting entries). */
+async function deductMaterialFromInventory(
+  collection: mongoose.mongo.Collection,
+  charId: mongoose.Types.ObjectId,
+  materialName: string,
+  quantity: number
+): Promise<void> {
+  if (quantity <= 0) return;
+  const regex = new RegExp(`^${escapeRegExp(materialName)}$`, "i");
+  const entries = await collection
+    .find({ characterId: charId, itemName: { $regex: regex }, quantity: { $gt: 0 } })
+    .toArray();
+  let remaining = quantity;
+  for (const entry of entries) {
+    if (remaining <= 0) break;
+    const qty = Number(entry.quantity) || 0;
+    const take = Math.min(remaining, qty);
+    const newQty = qty - take;
+    if (newQty === 0) {
+      await collection.deleteOne({ _id: entry._id });
+    } else {
+      await collection.updateOne({ _id: entry._id }, { $inc: { quantity: -take } });
+    }
+    remaining -= take;
+  }
 }
 
 export async function POST(
@@ -122,15 +159,30 @@ export async function POST(
       const key = name.toLowerCase();
       inventoryQty.set(key, (inventoryQty.get(key) ?? 0) + Number(row.quantity) || 0);
     }
+    // Inventory check: normal items 1:1; bundles require material per slot (5 Eldin Ore, 10 Wood)
     for (const itemName of names) {
       const key = itemName.toLowerCase();
-      const have = inventoryQty.get(key) ?? 0;
-      const need = names.filter((n) => (n || "").trim().toLowerCase() === key).length;
-      if (have < need) {
-        return NextResponse.json(
-          { error: `Not enough "${itemName}" in inventory (have ${have}, need ${need}).` },
-          { status: 400 }
-        );
+      const bundleSpec = PAVING_BUNDLES[itemName];
+      if (bundleSpec) {
+        const materialKey = bundleSpec.material.toLowerCase();
+        const have = inventoryQty.get(materialKey) ?? 0;
+        const bundlesWanted = names.filter((n) => (n || "").trim() === itemName).length;
+        const need = bundleSpec.requiredPerSlot * bundlesWanted;
+        if (have < need) {
+          return NextResponse.json(
+            { error: `Not enough "${bundleSpec.material}" for ${bundlesWanted}× ${itemName} (need ${need}, have ${have}).` },
+            { status: 400 }
+          );
+        }
+      } else {
+        const have = inventoryQty.get(key) ?? 0;
+        const need = names.filter((n) => (n || "").trim().toLowerCase() === key).length;
+        if (have < need) {
+          return NextResponse.json(
+            { error: `Not enough "${itemName}" in inventory (have ${have}, need ${need}).` },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -140,14 +192,10 @@ export async function POST(
           $or: [
             { modifierHearts: { $gt: 0 } },
             { staminaRecovered: { $gt: 0 } },
-            { itemName: "Eldin Ore" },
-            { itemName: "Wood" },
           ],
         },
         {
           $or: [
-            { itemName: "Eldin Ore" },
-            { itemName: "Wood" },
             { crafting: true },
             { itemName: /Fairy/i },
           ],
@@ -156,6 +204,16 @@ export async function POST(
     };
     const foundItems: Array<{ itemName: string; modifierHearts?: number; staminaRecovered?: number; emoji?: string }> = [];
     for (const itemName of names) {
+      const bundleSpec = PAVING_BUNDLES[itemName];
+      if (bundleSpec) {
+        foundItems.push({
+          itemName,
+          modifierHearts: 0,
+          staminaRecovered: 0,
+          emoji: "📦",
+        });
+        continue;
+      }
       const docs = await Item.find({
         itemName,
         categoryGear: { $nin: ["Weapon", "Armor"] },
@@ -174,6 +232,22 @@ export async function POST(
         staminaRecovered: (doc.staminaRecovered as number) ?? 0,
         emoji: (doc.emoji as string) ?? "🔹",
       });
+    }
+
+    // Deduct all brought items from inventory: bundles = material qty (5 ore / 10 wood), normal items = 1 each
+    const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
+    const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
+    if (eldinBundles > 0) {
+      await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
+    }
+    if (woodBundles > 0) {
+      await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
+    }
+    // Deduct non-bundle items (1 per slot)
+    const distinctNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
+    for (const itemName of distinctNonBundle) {
+      const count = names.filter((n) => (n || "").trim() === itemName).length;
+      await deductMaterialFromInventory(collection, charId, itemName, count);
     }
 
     const rawHearts = Number(character.currentHearts);

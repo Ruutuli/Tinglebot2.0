@@ -81,6 +81,12 @@ export async function POST(
     }
 
     const characters = (p.characters as PartyMemberDoc[]) ?? [];
+    if (characters.length < 1) {
+      return NextResponse.json(
+        { error: "Need at least 1 party member to start the expedition." },
+        { status: 400 }
+      );
+    }
     const region = String(p.region ?? "");
     const square = String(p.square ?? "");
     const quadrant = String(p.quadrant ?? "");
@@ -97,7 +103,7 @@ export async function POST(
     const expeditionUrl = `${baseUrl}/explore/${encodeURIComponent(partyId)}`;
     const bannerFilename = region ? REGION_BANNER_FILES[region] : null;
 
-    const memberLines: string[] = [];
+    const memberBlocks: string[] = [];
     for (let i = 0; i < characters.length; i++) {
       const c = characters[i];
       let hearts: number | string = typeof c.currentHearts === "number" ? c.currentHearts : NaN;
@@ -116,8 +122,16 @@ export async function POST(
         Array.isArray(c.items) && c.items.length > 0
           ? c.items.map((it) => it.itemName).join(", ")
           : "—";
-      memberLines.push(`**${i + 1}. ${String(c.name)}**\n　❤️ ${hearts} · 🟩 ${stamina}\n　📦 ${itemsStr}`);
+      memberBlocks.push(
+        `**Turn ${i + 1} — ${String(c.name)}**\n` +
+          `> ❤️ ${hearts} hearts · 🟩 ${stamina} stamina\n` +
+          `> 📦 ${itemsStr}`
+      );
     }
+    const partyValue =
+      memberBlocks.length > 0
+        ? memberBlocks.join("\n\n")
+        : "> —";
 
     const embed: {
       title: string;
@@ -135,22 +149,27 @@ export async function POST(
       url: expeditionUrl,
       color: 2990110,
       fields: [
-        { name: "📍 Region", value: regionLabel, inline: true },
-        { name: "🏘️ Village", value: village || "—", inline: true },
-        { name: "🔄 Start", value: `${square} ${quadrant}`, inline: true },
+        { name: "__📍 Region__", value: `> ${regionLabel}`, inline: true },
+        { name: "__🏘️ Village__", value: `> ${village || "—"}`, inline: true },
+        { name: "__🔄 Start__", value: `> ${square} ${quadrant}`, inline: true },
         {
-          name: "❤️ Party total",
-          value: `**${totalHearts}** hearts · **${totalStamina}** stamina`,
+          name: "__❤️ Party total__",
+          value: `> **${totalHearts}** hearts · **${totalStamina}** stamina`,
           inline: false,
         },
         {
-          name: `👥 Party (${characters.length}/4) — turn order`,
-          value: memberLines.join("\n\n") || "—",
+          name: `__👥 Party (${characters.length}/4) — turn order__`,
+          value: partyValue,
           inline: false,
         },
         {
-          name: "🔗 Expedition page",
-          value: `[Open in dashboard](${expeditionUrl})`,
+          name: "__🆔 Expedition ID__",
+          value: `\`\`\`\n${partyId}\n\`\`\``,
+          inline: false,
+        },
+        {
+          name: "__🔗 Expedition page__",
+          value: `> [Open in dashboard](${expeditionUrl})`,
           inline: false,
         },
       ],
@@ -165,19 +184,53 @@ export async function POST(
       .join(" ");
 
     const threadName = `Expedition ${partyId}`.slice(0, 100);
+    const existingThreadId = typeof p.discordThreadId === "string" ? p.discordThreadId.trim() : null;
 
-    const thread = await discordApiRequest<{ id: string }>(
-      `channels/${DISCORD_EXPEDITION_CHANNEL_ID}/threads`,
-      "POST",
-      { name: threadName, type: 11 }
-    );
+    let threadId: string;
 
-    if (!thread?.id) {
-      console.error("[explore/parties/start] Discord thread creation failed");
-      return NextResponse.json(
-        { error: "Failed to create Discord thread" },
-        { status: 502 }
+    if (existingThreadId) {
+      const existing = await discordApiRequest<{ id: string; archived?: boolean }>(
+        `channels/${existingThreadId}`,
+        "GET"
       );
+      if (existing?.id) {
+        if (existing.archived) {
+          await discordApiRequest(
+            `channels/${existingThreadId}`,
+            "PATCH",
+            { archived: false }
+          );
+        }
+        threadId = existing.id;
+      } else {
+        const newThread = await discordApiRequest<{ id: string }>(
+          `channels/${DISCORD_EXPEDITION_CHANNEL_ID}/threads`,
+          "POST",
+          { name: threadName, type: 11 }
+        );
+        if (!newThread?.id) {
+          console.error("[explore/parties/start] Discord thread creation failed");
+          return NextResponse.json(
+            { error: "Failed to create Discord thread" },
+            { status: 502 }
+          );
+        }
+        threadId = newThread.id;
+      }
+    } else {
+      const newThread = await discordApiRequest<{ id: string }>(
+        `channels/${DISCORD_EXPEDITION_CHANNEL_ID}/threads`,
+        "POST",
+        { name: threadName, type: 11 }
+      );
+      if (!newThread?.id) {
+        console.error("[explore/parties/start] Discord thread creation failed");
+        return NextResponse.json(
+          { error: "Failed to create Discord thread" },
+          { status: 502 }
+        );
+      }
+      threadId = newThread.id;
     }
 
     const messageBody = mentionContent
@@ -191,7 +244,7 @@ export async function POST(
         const buffer = await fs.readFile(bannerPath);
         const embedWithImage = { ...embed, image: { url: `attachment://${EMBED_ATTACHMENT_FILENAME}` as string } };
         postResult = await discordApiPostWithFile<{ id: string }>(
-          `channels/${thread.id}/messages`,
+          `channels/${threadId}/messages`,
           { content: messageBody, embeds: [embedWithImage] },
           [{ data: buffer, filename: EMBED_ATTACHMENT_FILENAME }]
         );
@@ -201,7 +254,7 @@ export async function POST(
     }
     if (postResult === null) {
       postResult = await discordApiRequest<{ id: string }>(
-        `channels/${thread.id}/messages`,
+        `channels/${threadId}/messages`,
         "POST",
         { content: messageBody, embeds: [embed] }
       );
@@ -216,13 +269,13 @@ export async function POST(
 
     await Party.updateOne(
       { partyId },
-      { $set: { status: "started", discordThreadId: thread.id } }
+      { $set: { status: "started", discordThreadId: threadId } }
     );
 
-    const threadUrl = `https://discord.com/channels/${process.env.GUILD_ID ?? ""}/${thread.id}`;
+    const threadUrl = `https://discord.com/channels/${process.env.GUILD_ID ?? ""}/${threadId}`;
     return NextResponse.json({
       ok: true,
-      threadId: thread.id,
+      threadId,
       threadUrl: process.env.GUILD_ID ? threadUrl : null,
     });
   } catch (err) {

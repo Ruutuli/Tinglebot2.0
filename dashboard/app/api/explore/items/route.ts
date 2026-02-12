@@ -1,4 +1,5 @@
-// GET /api/explore/items — items valid for expedition: crafted/cooked food, fairy, Eldin Ore, Wood (no raw food or gear)
+// GET /api/explore/items — items valid for expedition: healing items and/or bundles for paving
+// Bundles: 5 Eldin Ore = 1 bundle = 1 item slot; 10 Wood = 1 bundle = 1 item slot
 
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
@@ -15,6 +16,12 @@ type ExploreItem = {
   staminaRecovered?: number;
   image?: string;
 };
+
+/** Base materials for paving bundles; bundles use the base item's icon. */
+const BUNDLE_BASES = [
+  { bundleName: "Eldin Ore Bundle", baseItemName: "Eldin Ore", _id: "bundle-eldin" },
+  { bundleName: "Wood Bundle", baseItemName: "Wood", _id: "bundle-wood" },
+] as const;
 
 export async function GET() {
   try {
@@ -34,21 +41,18 @@ export async function GET() {
       Item = ItemModel as unknown as Model<unknown>;
     }
 
+    // Healing items only (crafted/cooked, fairy); raw Eldin Ore / Wood are not slot options — use bundles instead
     const items = await Item.find({
+      categoryGear: { $nin: ["Weapon", "Armor"] },
       $and: [
-        { categoryGear: { $nin: ["Weapon", "Armor"] } },
         {
           $or: [
             { modifierHearts: { $gt: 0 } },
             { staminaRecovered: { $gt: 0 } },
-            { itemName: "Eldin Ore" },
-            { itemName: "Wood" },
           ],
         },
         {
           $or: [
-            { itemName: "Eldin Ore" },
-            { itemName: "Wood" },
             { crafting: true },
             { itemName: new RegExp("Fairy", "i") },
           ],
@@ -60,14 +64,42 @@ export async function GET() {
       .lean()
       .exec();
 
-    const list = (items as unknown as ExploreItem[]).map((doc) => ({
-      _id: String(doc._id),
-      itemName: doc.itemName,
-      emoji: doc.emoji ?? "",
-      modifierHearts: doc.modifierHearts ?? 0,
-      staminaRecovered: doc.staminaRecovered ?? 0,
-      image: doc.image ?? undefined,
-    }));
+    // Bundles use the base item's icon (Eldin Ore, Wood)
+    const baseItems = await Item.find({
+      itemName: { $in: ["Eldin Ore", "Wood"] },
+    })
+      .select("itemName emoji image")
+      .lean()
+      .exec();
+    const baseByName = new Map<string, { emoji?: string; image?: string }>();
+    for (const doc of baseItems) {
+      const d = doc as Record<string, unknown>;
+      const name = d.itemName as string;
+      if (name) baseByName.set(name, { emoji: d.emoji as string | undefined, image: d.image as string | undefined });
+    }
+    const pavingBundles: ExploreItem[] = BUNDLE_BASES.map(({ bundleName, baseItemName, _id }) => {
+      const base = baseByName.get(baseItemName) ?? {};
+      return {
+        _id,
+        itemName: bundleName,
+        emoji: base.emoji ?? "📦",
+        modifierHearts: 0,
+        staminaRecovered: 0,
+        image: base.image,
+      };
+    });
+
+    const list = [
+      ...(items as unknown as ExploreItem[]).map((doc) => ({
+        _id: String(doc._id),
+        itemName: doc.itemName,
+        emoji: doc.emoji ?? "",
+        modifierHearts: doc.modifierHearts ?? 0,
+        staminaRecovered: doc.staminaRecovered ?? 0,
+        image: doc.image ?? undefined,
+      })),
+      ...pavingBundles,
+    ].sort((a, b) => a.itemName.localeCompare(b.itemName));
 
     return NextResponse.json(list);
   } catch (err) {

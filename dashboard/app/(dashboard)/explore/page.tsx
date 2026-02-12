@@ -7,9 +7,9 @@ import Image from "next/image";
 import { useSession } from "@/hooks/use-session";
 
 const REGIONS = [
-  { value: "eldin" as const, label: "Eldin", village: "Rudania", square: "D3", quadrant: "Q3", banner: "/assets/banners/Rudania1.png", crest: "/assets/icons/[RotW] village crest_rudania_.png" },
-  { value: "lanayru" as const, label: "Lanayru", village: "Inariko", square: "G4", quadrant: "Q2", banner: "/assets/banners/Inariko1.png", crest: "/assets/icons/[RotW] village crest_inariko_.png" },
-  { value: "faron" as const, label: "Faron", village: "Vhintl", square: "H6", quadrant: "Q4", banner: "/assets/banners/Vhintl1.png", crest: "/assets/icons/[RotW] village crest_vhintl_.png" },
+  { value: "eldin" as const, label: "Eldin", village: "Rudania", square: "H5", quadrant: "Q3", banner: "/assets/banners/Rudania1.png", crest: "/assets/icons/[RotW] village crest_rudania_.png" },
+  { value: "lanayru" as const, label: "Lanayru", village: "Inariko", square: "H8", quadrant: "Q2", banner: "/assets/banners/Inariko1.png", crest: "/assets/icons/[RotW] village crest_inariko_.png" },
+  { value: "faron" as const, label: "Faron", village: "Vhintl", square: "F10", quadrant: "Q4", banner: "/assets/banners/Vhintl1.png", crest: "/assets/icons/[RotW] village crest_vhintl_.png" },
 ] as const;
 
 type RegionValue = (typeof REGIONS)[number]["value"];
@@ -156,7 +156,7 @@ export default function ExplorePage() {
                   region === r.value ? "border-[var(--totk-light-green)]/50 bg-[var(--totk-dark-green)]/30" : "border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60",
                 ].join(" ")}>
                   <span className="font-semibold text-[var(--totk-ivory)]">{r.label}</span>
-                  <span className="text-xs text-[var(--totk-grey-200)]">{r.square} {r.quadrant} · {r.village}</span>
+                  <span className="text-xs text-[var(--totk-grey-200)]">{r.square} {r.quadrant}</span>
                 </div>
               </label>
             ))}

@@ -24,20 +24,63 @@ const {
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
 } = require("../../embeds/embeds.js");
-const { generateUniqueId } = require("../../utils/uniqueIdUtils.js");
+const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
-// ------------------- Utility Functions -------------------
-
-const regionColors = {
- eldin: "#FF0000",
- lanayru: "#0000FF",
- faron: "#008000",
- central_hyrule: "#00FFFF",
- gerudo: "#FFA500",
- hebra: "#800080",
+// Region start squares (party returned here on full party KO)
+const START_POINTS_BY_REGION = {
+ eldin: { square: "H5", quadrant: "Q3" },
+ lanayru: { square: "H8", quadrant: "Q2" },
+ faron: { square: "F10", quadrant: "Q4" },
 };
-const regionImage =
- "https://storage.googleapis.com/tinglebot/Graphics/border.png";
+
+async function handleExpeditionFailed(party, interaction) {
+ const start = START_POINTS_BY_REGION[party.region];
+ if (!start) {
+  await interaction.editReply("Expedition failed but could not resolve start location for region.");
+  return;
+ }
+
+ for (const partyChar of party.characters) {
+  const char = await Character.findById(partyChar._id);
+  if (char) {
+   await handleKO(char._id);
+   char.currentStamina = 0;
+   await char.save();
+  }
+ }
+
+ party.square = start.square;
+ party.quadrant = start.quadrant;
+ party.status = "completed";
+ party.totalHearts = 0;
+ party.totalStamina = 0;
+ party.gatheredItems = [];
+ for (const c of party.characters) {
+  c.currentHearts = 0;
+  c.currentStamina = 0;
+  c.items = [];
+ }
+ await party.save();
+
+ const regionLabel = (party.region || "").charAt(0).toUpperCase() + (party.region || "").slice(1);
+ const embed = new EmbedBuilder()
+  .setTitle("💀 Expedition Failed — Party KO'd")
+  .setColor(0x8b0000)
+  .setDescription(
+   "The party lost all hearts. The expedition has failed.\n\n" +
+   "**Return:** Party is returned to the starting area for the region.\n" +
+   "**Items:** All items brought on the expedition and any found during the expedition are lost.\n" +
+   "**Party:** All members are KO'd with 0 stamina."
+  )
+  .addFields(
+   { name: "📍 Returned to", value: `${start.square} ${start.quadrant} (${regionLabel} start)`, inline: true },
+   { name: "🆔 Expedition ID", value: party.partyId, inline: true },
+   { name: "❤️ Party Hearts", value: "0", inline: true },
+   { name: "🟩 Party Stamina", value: "0", inline: true }
+  );
+
+ await interaction.editReply({ embeds: [embed] });
+}
 
 // Helper function for calculating new location
 function calculateNewLocation(currentSquare, currentQuadrant, direction) {
@@ -66,76 +109,10 @@ module.exports = {
   .setDescription("Manage exploration parties")
   .addSubcommand((subcommand) =>
    subcommand
-    .setName("setup")
-    .setDescription("Setup a new exploration party")
-    .addStringOption((option) =>
-     option
-      .setName("region")
-      .setDescription("Select the region for exploration")
-      .setRequired(true)
-      .addChoices(
-       { name: "Eldin", value: "eldin" },
-       { name: "Lanayru", value: "lanayru" },
-       { name: "Faron", value: "faron" }
-      )
-    )
-  )
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("join")
-    .setDescription("Join an expedition party")
-    .addStringOption((option) =>
-     option
-      .setName("id")
-      .setDescription("Expedition ID to join")
-      .setRequired(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("Your character name")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("item1")
-      .setDescription("First item")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("item2")
-      .setDescription("Second item")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("item3")
-      .setDescription("Third item")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-  )
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("start")
-    .setDescription("Start the expedition")
-    .addStringOption((option) =>
-     option
-      .setName("id")
-      .setDescription("Expedition ID to start")
-      .setRequired(true)
-    )
-  )
-  .addSubcommand((subcommand) =>
-   subcommand
     .setName("roll")
-    .setDescription("Roll for a random encounter")
+    .setDescription("Roll for an encounter (first time or again in same quadrant)")
     .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true)
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
@@ -150,7 +127,7 @@ module.exports = {
     .setName("rest")
     .setDescription("Rest at current location to recover stamina")
     .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true)
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
@@ -165,22 +142,7 @@ module.exports = {
     .setName("secure")
     .setDescription("Secure the current quadrant (costs resources)")
     .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("Your character name")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-  )
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("continue")
-    .setDescription("Continue exploring the same quadrant")
-    .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true)
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
@@ -195,7 +157,7 @@ module.exports = {
     .setName("move")
     .setDescription("Move to an adjacent quadrant")
     .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true)
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
@@ -219,10 +181,32 @@ module.exports = {
   )
   .addSubcommand((subcommand) =>
    subcommand
+    .setName("item")
+    .setDescription("Use a healing item from your expedition loadout")
+    .addStringOption((option) =>
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("charactername")
+      .setDescription("Your character name")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("item")
+      .setDescription("Item to use (healing items only)")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
+  )
+  .addSubcommand((subcommand) =>
+   subcommand
     .setName("retreat")
     .setDescription("Return to starting village")
     .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true)
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
@@ -237,7 +221,7 @@ module.exports = {
     .setName("camp")
     .setDescription("Set up camp for extended rest")
     .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true)
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
@@ -266,453 +250,9 @@ module.exports = {
     `Executing subcommand: ${subcommand}, User ID: ${interaction.user.id}`
    );
 
-   // ------------------- Expedition Setup -------------------
-   if (subcommand === "setup") {
-    const region = interaction.options.getString("region");
-    const startPoints = {
-     lanayru: { square: "G4", quadrant: "Q2" },
-     eldin: { square: "D3", quadrant: "Q3" },
-     faron: { square: "H6", quadrant: "Q4" },
-    };
-    const startPoint = startPoints[region];
-    const partyId = generateUniqueId("E");
-
-    const party = new Party({
-     leaderId: interaction.user.id,
-     region,
-     square: startPoint.square,
-     quadrant: startPoint.quadrant,
-     partyId,
-     characters: [],
-     status: "open",
-     currentTurn: 0,
-     totalStamina: 0,
-     totalHearts: 0,
-     gatheredItems: [],
-     quadrantState: "unexplored",
-    });
-    await party.save();
-
-    const embed = new EmbedBuilder()
-     .setTitle(
-      `🗺️ **Expedition Started in ${
-       region.charAt(0).toUpperCase() + region.slice(1)
-      }!**`
-     )
-     .setColor(regionColors[region] || "#00ff99")
-     .setImage(regionImage)
-     .setDescription(
-      `**${interaction.user.tag}** is leading an expedition in the **${
-       region.charAt(0).toUpperCase() + region.slice(1)
-      }** region! 🎉\n\n`
-     )
-     .addFields(
-      { name: "🆔 **__Expedition ID__**", value: partyId, inline: true },
-      {
-       name: "📍 **__Starting Location__**",
-       value: `${startPoint.square} ${startPoint.quadrant}`,
-       inline: true,
-      },
-      {
-       name: "⏱️ **__Join the Expedition__**",
-       value: `You have **15 minutes** to join!\n\n**To join, use:**\n\`\`\`\n/explore join id:${partyId} charactername: item1: item2: item3:\n\`\`\``,
-       inline: false,
-      },
-      {
-       name: "✨ **__Get Ready__**",
-       value: `Once ready, use the following to start:\n\`\`\`\n/explore start id:${partyId}\n\`\`\``,
-       inline: false,
-      }
-     )
-     .setFooter({ text: "🧭 Happy exploring!" });
-
-    const message = await interaction.reply({
-     embeds: [embed],
-     fetchReply: true,
-    });
-    party.messageId = message.id;
-    await party.save();
-
-    // ------------------- Join Expedition -------------------
-   } else if (subcommand === "join") {
-    const expeditionId = interaction.options.getString("id");
-    const characterName = interaction.options.getString("charactername");
-    const itemNames = [
-     interaction.options.getString("item1").split(" - ")[0],
-     interaction.options.getString("item2").split(" - ")[0],
-     interaction.options.getString("item3").split(" - ")[0],
-    ];
-    const userId = interaction.user.id;
-
-    const party = await Party.findOne({ partyId: expeditionId }).lean();
-    const character = await Character.findOne({ name: characterName, userId });
-
-    if (!party || !character) {
-     return interaction.reply("Expedition ID or character not found.");
-    }
-
-    if (party.status !== "open") {
-     return interaction.reply("This expedition has already started.");
-    }
-
-    if (party.characters.length >= 4) {
-     return interaction.reply(
-      "This expedition already has the maximum number of participants (4)."
-     );
-    }
-
-    const hasCharacterInParty = party.characters.some(
-     (char) => char.userId === userId
-    );
-
-    if (hasCharacterInParty) {
-     return interaction.reply(
-      "You already have a character in this expedition."
-     );
-    }
-
-    if (await enforceJail(interaction, character)) {
-     return;
-    }
-
+   // ------------------- Roll for Encounter -------------------
+   if (subcommand === "roll") {
     try {
-     await checkInventorySync(character);
-    } catch (error) {
-     await interaction.reply({
-      content: error.message,
-      ephemeral: true,
-     });
-     return;
-    }
-
-    const regionToVillage = {
-     eldin: "rudania",
-     lanayru: "inariko",
-     faron: "vhintl",
-    };
-
-    const requiredVillage = regionToVillage[party.region];
-    if (character.currentVillage.toLowerCase() !== requiredVillage) {
-     return interaction.reply(
-      `Your character must be in ${
-       requiredVillage.charAt(0).toUpperCase() + requiredVillage.slice(1)
-      } to join this expedition.`
-     );
-    }
-
-    if (!character.name || typeof character.name !== "string") {
-     console.error(
-      `[ERROR] Character name is invalid or undefined for Character ID: ${character._id}`
-     );
-     return interaction.reply(
-      "**Character name is invalid or missing. Please check your character settings.**"
-     );
-    }
-
-    if (!character.icon || !character.icon.startsWith("http")) {
-     console.warn(
-      `[WARN] Character icon is invalid or undefined for Character ID: ${character._id}. Defaulting to placeholder.`
-     );
-     character.icon = "https://via.placeholder.com/100";
-    }
-
-    const items = [];
-    for (const itemName of itemNames) {
-     const foundItems = await ItemModel.find({
-      itemName: itemName,
-      categoryGear: { $nin: ["Weapon", "Armor"] },
-      $and: [
-       {
-        $or: [
-         { modifierHearts: { $gt: 0 } },
-         { staminaRecovered: { $gt: 0 } },
-         { itemName: "Eldin Ore" },
-         { itemName: "Wood" },
-        ],
-       },
-       {
-        $or: [
-         { itemName: "Eldin Ore" },
-         { itemName: "Wood" },
-         { crafting: true },
-         { itemName: /Fairy/i },
-        ],
-       },
-      ],
-     })
-      .lean()
-      .exec();
-     if (foundItems.length > 0) {
-      items.push(foundItems[0]);
-     }
-    }
-
-    if (items.length < 3) {
-     return interaction.reply(
-      "Invalid items selected. Please ensure you have 3 valid exploration items."
-     );
-    }
-
-    const characterData = {
-     _id: character._id,
-     userId: character.userId,
-     name: character.name,
-     currentHearts: character.currentHearts,
-     currentStamina: character.currentStamina,
-     icon: character.icon,
-     items: items.map((item) => ({
-      itemName: item.itemName,
-      modifierHearts: item.modifierHearts || 0,
-      staminaRecovered: item.staminaRecovered || 0,
-      emoji: item.emoji || "🔹",
-     })),
-    };
-
-    await Party.updateOne(
-     { partyId: expeditionId },
-     {
-      $push: { characters: characterData },
-      $inc: {
-       totalHearts: character.currentHearts,
-       totalStamina: character.currentStamina,
-      },
-     }
-    );
-
-    const updatedParty = await Party.findOne({ partyId: expeditionId });
-
-    let totalHearts = 0;
-    let totalStamina = 0;
-    const membersFields = updatedParty.characters.map((char) => {
-     totalHearts += char.currentHearts || 0;
-     totalStamina += char.currentStamina || 0;
-
-     const charItems = char.items
-      .map(
-       (item) =>
-        `${item.emoji || "🔹"} ${item.itemName} - Heals ${
-         item.modifierHearts || 0
-        } ❤️ | ${item.staminaRecovered || 0} 🟩`
-      )
-      .join("\n");
-
-     return {
-      name: `🔹 __**${char.name}**__ ❤️ ${char.currentHearts || 0} | 🟩 ${
-       char.currentStamina || 0
-      }`,
-      value: `>>> ${charItems}\n`,
-      inline: false,
-     };
-    });
-
-    const embedFields = [
-     { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-     {
-      name: "📍 **__Starting Location__**",
-      value: `${updatedParty.square} ${updatedParty.quadrant}`,
-      inline: true,
-     },
-     { name: "\u200B", value: "\u200B", inline: true },
-     { name: "❤️ **__Party Hearts__**", value: `${totalHearts}`, inline: true },
-     {
-      name: "🟩 **__Party Stamina__**",
-      value: `${totalStamina}`,
-      inline: true,
-     },
-     { name: "\u200B", value: "\u200B", inline: true },
-     { name: "\u200B", value: `\`\`\`\n          \n\`\`\``, inline: false },
-     ...membersFields,
-    ];
-
-    if (updatedParty.characters.length < 4) {
-     embedFields.push({
-      name: "⏱️ **__Join the Expedition__**",
-      value: `Use the command below until 4 members join or expedition starts:\n\`\`\`\n/explore join id:${expeditionId} charactername: item1: item2: item3:\n\`\`\``,
-      inline: false,
-     });
-    }
-
-    embedFields.push({
-     name: "✨ **__Get Ready__**",
-     value: `Once ready, use the following to start:\n\`\`\`\n/explore start id:${expeditionId}\n\`\`\``,
-     inline: false,
-    });
-
-    const updatedEmbed = new EmbedBuilder()
-     .setTitle(
-      `🗺️ **Expedition in ${
-       updatedParty.region.charAt(0).toUpperCase() +
-       updatedParty.region.slice(1)
-      }**`
-     )
-     .setColor(regionColors[updatedParty.region] || "#00ff99")
-     .setImage(regionImage)
-     .setDescription(
-      `**${interaction.user.tag}** is leading an expedition in the **${
-       updatedParty.region.charAt(0).toUpperCase() +
-       updatedParty.region.slice(1)
-      }** region! 🎉\n\n`
-     )
-     .addFields(embedFields)
-     .setFooter({ text: "🧭 Happy exploring!" });
-
-    try {
-     const originalMessage = await interaction.channel.messages.fetch(
-      updatedParty.messageId
-     );
-     await originalMessage.edit({ embeds: [updatedEmbed] });
-     await interaction.reply({
-      content: `${characterName} has joined the expedition with their items!`,
-      ephemeral: true,
-     });
-    } catch (error) {
-     handleInteractionError(error, interaction, { source: "explore.js" });
-     await interaction.reply({
-      content: `${characterName} has joined the expedition, but I could not update the original message.`,
-      ephemeral: true,
-     });
-    }
-
-    // ------------------- Start Expedition -------------------
-   } else if (subcommand === "start") {
-    const expeditionId = interaction.options.getString("id");
-    const party = await Party.findOne({ partyId: expeditionId });
-
-    if (!party) {
-     return interaction.reply("Expedition ID not found.");
-    }
-
-    if (party.status !== "open") {
-     return interaction.reply("This expedition has already started.");
-    }
-
-    if (party.characters.length === 0) {
-     return interaction.reply(
-      "Cannot start an expedition with no participants."
-     );
-    }
-
-    if (interaction.user.id !== party.leaderId) {
-     return interaction.reply(
-      "Only the expedition leader can start the expedition."
-     );
-    }
-
-    let leaderIndex = party.characters.findIndex(
-     (char) => char.name === interaction.options.getString("charactername")
-    );
-
-    if (leaderIndex === -1) {
-     const userCharacters = await Character.find({
-      userId: interaction.user.id,
-     }).lean();
-     const userCharacterNames = userCharacters.map((char) => char.name);
-
-     leaderIndex = party.characters.findIndex((char) =>
-      userCharacterNames.includes(char.name)
-     );
-    }
-
-    party.currentTurn = leaderIndex !== -1 ? leaderIndex : 0;
-    party.status = "started";
-    await party.save();
-    try {
-     const originalMessage = await interaction.channel.messages.fetch(
-      party.messageId
-     );
-
-     let totalHearts = 0;
-     let totalStamina = 0;
-
-     const membersFields = party.characters.map((char) => {
-      totalHearts += char.currentHearts || 0;
-      totalStamina += char.currentStamina || 0;
-
-      const charItems = char.items
-       .map(
-        (item) =>
-         `${item.emoji || "🔹"} ${item.itemName} - Heals ${
-          item.modifierHearts || 0
-         } ❤️ | ${item.staminaRecovered || 0} 🟩`
-       )
-       .join("\n");
-
-      return {
-       name: `🔹 __**${char.name}**__ ❤️ ${char.currentHearts || 0} | 🟩 ${
-        char.currentStamina || 0
-       }`,
-       value: `>>> ${charItems}\n`,
-       inline: false,
-      };
-     });
-
-     const startedEmbed = new EmbedBuilder()
-      .setTitle(
-       `🗺️ **Expedition Started in ${
-        party.region.charAt(0).toUpperCase() + party.region.slice(1)
-       }!**`
-      )
-      .setColor(regionColors[party.region] || "#00ff99")
-      .setImage(regionImage)
-      .setDescription(
-       `**${
-        interaction.user.tag
-       }** has officially started the expedition in the **${
-        party.region.charAt(0).toUpperCase() + party.region.slice(1)
-       }** region! 🚀\n\n`
-      )
-      .addFields(
-       { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-       {
-        name: "📍 **__Starting Location__**",
-        value: `${party.square} ${party.quadrant}`,
-        inline: true,
-       },
-       {
-        name: "📋 **__Quadrant State__**",
-        value: `${party.quadrantState || "unexplored"}`,
-        inline: true,
-       },
-       {
-        name: "❤️ **__Party Hearts__**",
-        value: `${totalHearts}`,
-        inline: true,
-       },
-       {
-        name: "🟩 **__Party Stamina__**",
-        value: `${totalStamina}`,
-        inline: true,
-       },
-       {
-        name: "🎮 **__Next Turn__**",
-        value: party.characters[0]?.name || "Unknown",
-        inline: true,
-       },
-       { name: "\u200B", value: `\`\`\`\n          \n\`\`\``, inline: false },
-       ...membersFields
-      )
-      .setFooter({ text: "🧭 Adventure awaits!" });
-
-     await originalMessage.edit({ embeds: [startedEmbed] });
-     await interaction.reply({
-      content: `Expedition started! Use \`/explore roll id:${expeditionId} charactername:${
-       party.characters[0]?.name || "<character_name>"
-      }\` to begin!`,
-      ephemeral: false,
-     });
-    } catch (error) {
-     handleInteractionError(error, interaction, { source: "explore.js" });
-     await interaction.reply({
-      content: `Expedition started, but I could not update the original message. Use \`/explore roll id:${expeditionId} charactername:<character_name>\` to begin!`,
-      ephemeral: false,
-     });
-    }
-
-    // ------------------- Roll for Encounter -------------------
-   } else if (subcommand === "roll") {
-    try {
-     await interaction.deferReply();
-
      const expeditionId = interaction.options.getString("id");
      const characterName = interaction.options.getString("charactername");
      const userId = interaction.user.id;
@@ -818,7 +358,7 @@ module.exports = {
        embed.addFields({
         name: "Quadrant Explored!",
         value:
-         "You have successfully explored this quadrant. You can now:\n- Rest (3 stamina)\n- Secure Quadrant (5 stamina + resources)\n- Continue to next quadrant (2 stamina)",
+         "You have successfully explored this quadrant. You can now:\n- **Rest** (3 stamina)\n- **Secure** quadrant (5 stamina + resources)\n- **Roll** again in same quadrant (1 stamina)\n- **Move** to next quadrant (2 stamina)",
         inline: false,
        });
       }
@@ -999,7 +539,7 @@ module.exports = {
           embed.addFields({
            name: "Quadrant Explored!",
            value:
-            "You have successfully explored this quadrant. You can now:\n- Rest (3 stamina)\n- Secure Quadrant (5 stamina + resources)\n- Continue to next quadrant (2 stamina)",
+            "You have successfully explored this quadrant. You can now:\n- **Rest** (3 stamina)\n- **Secure** quadrant (5 stamina + resources)\n- **Roll** again in same quadrant (1 stamina)\n- **Move** to next quadrant (2 stamina)",
            inline: false,
           });
          }
@@ -1061,6 +601,22 @@ module.exports = {
         }
 
         await character.save();
+
+        party.characters[characterIndex].currentHearts = character.currentHearts;
+        party.characters[characterIndex].currentStamina = character.currentStamina;
+        party.totalHearts = party.characters.reduce(
+         (sum, c) => sum + (c.currentHearts ?? 0),
+         0
+        );
+        party.totalStamina = party.characters.reduce(
+         (sum, c) => sum + (c.currentStamina ?? 0),
+         0
+        );
+       }
+
+       if (party.totalHearts <= 0) {
+        await handleExpeditionFailed(party, interaction);
+        return;
        }
 
        const embed = createExplorationMonsterEmbed(
@@ -1136,7 +692,7 @@ module.exports = {
          embed.addFields({
           name: "Quadrant Explored!",
           value:
-           "You have successfully explored this quadrant. You can now:\n- Rest (3 stamina)\n- Secure Quadrant (5 stamina + resources)\n- Continue to next quadrant (2 stamina)",
+           "You have successfully explored this quadrant. You can now:\n- **Rest** (3 stamina)\n- **Secure** quadrant (5 stamina + resources)\n- **Roll** again in same quadrant (1 stamina)\n- **Move** to next quadrant (2 stamina)",
           inline: false,
          });
         }
@@ -1347,286 +903,6 @@ module.exports = {
 
     await interaction.editReply({ embeds: [embed] });
 
-    // ------------------- Continue Same Quadrant -------------------
-   } else if (subcommand === "continue") {
-    const expeditionId = interaction.options.getString("id");
-    const characterName = interaction.options.getString("charactername");
-    const userId = interaction.user.id;
-
-    const party = await Party.findOne({ partyId: expeditionId });
-    if (!party) {
-     return interaction.editReply("Expedition ID not found.");
-    }
-
-    const character = await Character.findOne({ name: characterName, userId });
-    if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
-    }
-
-    const characterIndex = party.characters.findIndex(
-     (char) => char.name === characterName
-    );
-
-    if (characterIndex === -1) {
-     return interaction.editReply(
-      "Your character is not part of this expedition."
-     );
-    }
-
-    if (party.currentTurn !== characterIndex) {
-     const nextCharacter = party.characters[party.currentTurn];
-     return interaction.editReply(
-      `It is not your turn. Next turn: ${nextCharacter?.name || "Unknown"}`
-     );
-    }
-
-    if (party.quadrantState === "unexplored") {
-     return interaction.editReply(
-      "You must explore this quadrant first using /explore roll."
-     );
-    }
-
-    const staminaCost = party.quadrantState === "secured" ? 0 : 1;
-    if (party.totalStamina < staminaCost) {
-     return interaction.editReply(
-      `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
-     );
-    }
-
-    party.totalStamina -= staminaCost;
-    await party.save();
-
-    const encounterType = Math.random() < 0.7 ? "monster" : "item";
-    const location = `${party.square} ${party.quadrant}`;
-
-    if (encounterType === "item") {
-     const allItems = await fetchAllItems();
-     const availableItems = allItems.filter(
-      (item) => item[party.region.toLowerCase()]
-     );
-
-     if (availableItems.length === 0) {
-      return interaction.editReply("No items available for this region.");
-     }
-
-     const selectedItem =
-      availableItems[Math.floor(Math.random() * availableItems.length)];
-
-     const embed = createExplorationItemEmbed(
-      party,
-      character,
-      selectedItem,
-      expeditionId,
-      location,
-      party.totalHearts,
-      party.totalStamina,
-      party.characters
-       .flatMap((char) => char.items)
-       .map((item) => `${item.emoji || ""} ${item.itemName}`)
-       .join(", ")
-     );
-
-     if (!party.gatheredItems) {
-      party.gatheredItems = [];
-     }
-
-     party.gatheredItems.push({
-      characterId: character._id,
-      characterName: character.name,
-      itemName: selectedItem.itemName,
-      quantity: 1,
-      emoji: selectedItem.emoji || "",
-     });
-
-     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-     await party.save();
-
-     embed.addFields({
-      name: "Next Turn",
-      value: party.characters[party.currentTurn]?.name || "Unknown",
-      inline: true,
-     });
-
-     await interaction.editReply({ embeds: [embed] });
-
-     try {
-      await addItemInventoryDatabase(
-       character._id,
-       selectedItem.itemName,
-       1,
-       interaction,
-       "Exploration"
-      );
-     } catch (error) {
-      console.error(`Could not add item to inventory: ${error.message}`);
-     }
-    } else {
-     const monsters = await getMonstersByRegion(party.region.toLowerCase());
-     if (!monsters || monsters.length === 0) {
-      return interaction.editReply("No monsters available for this region.");
-     }
-
-     const selectedMonster =
-      monsters[Math.floor(Math.random() * monsters.length)];
-
-     const diceRoll = Math.floor(Math.random() * 100) + 1;
-     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
-      calculateFinalValue(character, diceRoll);
-     const outcome = await getEncounterOutcome(
-      character,
-      selectedMonster,
-      damageValue,
-      adjustedRandomValue,
-      attackSuccess,
-      defenseSuccess
-     );
-
-     // ------------------- Elixir Consumption Logic -------------------
-     // Check if elixirs should be consumed based on the exploration encounter
-     try {
-       const { shouldConsumeElixir, consumeElixirBuff, getActiveBuffEffects } = require('../../modules/elixirModule');
-       
-       // Check for active elixir buffs before consumption
-       const activeBuff = getActiveBuffEffects(character);
-       if (activeBuff) {
-         console.log(`[explore.js]: 🧪 ${character.name} has active elixir buff: ${character.buff.type}`);
-         
-         // Log specific elixir effects that might help
-         if (activeBuff.fireResistance > 0 && selectedMonster.name.includes('Fire')) {
-           console.log(`[explore.js]: 🔥 Fireproof Elixir active! ${character.name} has +${activeBuff.fireResistance} fire resistance against ${selectedMonster.name}`);
-         }
-         if (activeBuff.coldResistance > 0 && selectedMonster.name.includes('Ice')) {
-           console.log(`[explore.js]: ❄️ Spicy Elixir active! ${character.name} has +${activeBuff.coldResistance} cold resistance against ${selectedMonster.name}`);
-         }
-         if (activeBuff.electricResistance > 0 && selectedMonster.name.includes('Electric')) {
-           console.log(`[explore.js]: ⚡ Electro Elixir active! ${character.name} has +${activeBuff.electricResistance} electric resistance against ${selectedMonster.name}`);
-         }
-         if (activeBuff.defenseBoost > 0) {
-           console.log(`[explore.js]: 🛡️ Tough Elixir active! ${character.name} has +${activeBuff.defenseBoost} defense boost`);
-         }
-         if (activeBuff.attackBoost > 0) {
-           console.log(`[explore.js]: ⚔️ Mighty Elixir active! ${character.name} has +${activeBuff.attackBoost} attack boost`);
-         }
-       }
-       
-       if (shouldConsumeElixir(character, 'combat', { monster: selectedMonster })) {
-         const consumedElixirType = character.buff.type;
-         
-         console.log(`[explore.js]: 🧪 Elixir consumed for ${character.name} during exploration encounter with ${selectedMonster.name}`);
-   
-         
-         // Log what the elixir protected against
-         if (consumedElixirType === 'fireproof' && selectedMonster.name.includes('Fire')) {
-           console.log(`[explore.js]: 🔥 Fireproof Elixir protected ${character.name} from fire damage during encounter with ${selectedMonster.name}`);
-         } else if (consumedElixirType === 'spicy' && selectedMonster.name.includes('Ice')) {
-           console.log(`[explore.js]: ❄️ Spicy Elixir protected ${character.name} from ice damage during encounter with ${selectedMonster.name}`);
-         } else if (consumedElixirType === 'electro' && selectedMonster.name.includes('Electric')) {
-           console.log(`[explore.js]: ⚡ Electro Elixir protected ${character.name} from electric damage during encounter with ${selectedMonster.name}`);
-         } else if (consumedElixirType === 'tough') {
-           console.log(`[explore.js]: 🛡️ Tough Elixir provided defense boost for ${character.name} during encounter`);
-         } else if (consumedElixirType === 'mighty') {
-           console.log(`[explore.js]: ⚔️ Mighty Elixir provided attack boost for ${character.name} during encounter`);
-         }
-         
-         consumeElixirBuff(character);
-         
-         // Update character in database to persist the consumed elixir
-         await character.save();
-       } else if (character.buff?.active) {
-         // Log when elixir is not used due to conditions not met
-         console.log(`[explore.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
-       }
-     } catch (elixirError) {
-       console.error(`[explore.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
-       // Don't fail the exploration if elixir consumption fails
-     }
-
-     if (outcome.hearts > 0) {
-      party.totalHearts = Math.max(0, party.totalHearts - outcome.hearts);
-      character.currentHearts = Math.max(
-       0,
-       character.currentHearts - outcome.hearts
-      );
-
-      if (character.currentHearts === 0) {
-       await handleKO(character._id);
-      }
-
-      await character.save();
-     }
-
-     const embed = createExplorationMonsterEmbed(
-      party,
-      character,
-      selectedMonster,
-      expeditionId,
-      location,
-      party.totalHearts,
-      party.totalStamina,
-      party.characters
-       .flatMap((char) => char.items)
-       .map((item) => `${item.emoji || ""} ${item.itemName}`)
-       .join(", ")
-     );
-
-     embed.addFields(
-      {
-       name: "Hearts",
-       value: `${character.currentHearts}/${character.maxHearts}`,
-       inline: true,
-      },
-      { name: "Battle Outcome", value: outcome.result, inline: false }
-     );
-
-     if (outcome.canLoot) {
-      const items = await fetchItemsByMonster(selectedMonster.name);
-      const lootedItem =
-       items.length > 0
-        ? items[Math.floor(Math.random() * items.length)]
-        : null;
-
-      if (lootedItem) {
-       embed.addFields({
-        name: "Loot Found",
-        value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**`,
-        inline: false,
-       });
-
-       await addItemInventoryDatabase(
-        character._id,
-        lootedItem.itemName,
-        1,
-        interaction,
-        "Exploration Loot"
-       );
-
-       if (!party.gatheredItems) {
-        party.gatheredItems = [];
-       }
-       party.gatheredItems.push({
-        characterId: character._id,
-        characterName: character.name,
-        itemName: lootedItem.itemName,
-        quantity: 1,
-        emoji: lootedItem.emoji || "",
-       });
-      }
-     }
-
-     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-     await party.save();
-
-     embed.addFields({
-      name: "Next Turn",
-      value: party.characters[party.currentTurn]?.name || "Unknown",
-      inline: true,
-     });
-
-     await interaction.editReply({ embeds: [embed] });
-    }
-
     // ------------------- Move to Adjacent Quadrant -------------------
    } else if (subcommand === "move") {
     const expeditionId = interaction.options.getString("id");
@@ -1713,6 +989,113 @@ module.exports = {
        value: party.characters[party.currentTurn]?.name || "Unknown",
        inline: true,
       }
+     );
+
+    await interaction.editReply({ embeds: [embed] });
+
+    // ------------------- Use Item (healing from expedition loadout) -------------------
+   } else if (subcommand === "item") {
+    const expeditionId = interaction.options.getString("id");
+    const characterName = interaction.options.getString("charactername");
+    const itemName = interaction.options.getString("item");
+    const userId = interaction.user.id;
+
+    const party = await Party.findOne({ partyId: expeditionId });
+    if (!party) {
+     return interaction.editReply("Expedition ID not found.");
+    }
+
+    const character = await Character.findOne({ name: characterName, userId });
+    if (!character) {
+     return interaction.editReply(
+      "Character not found or you do not own this character."
+     );
+    }
+
+    const characterIndex = party.characters.findIndex(
+     (c) => c.name === characterName
+    );
+    if (characterIndex === -1) {
+     return interaction.editReply(
+      "Your character is not part of this expedition."
+     );
+    }
+
+    if (party.status !== "started") {
+     return interaction.editReply("This expedition has not been started yet.");
+    }
+
+    const partyChar = party.characters[characterIndex];
+    const itemIndex = partyChar.items.findIndex(
+     (i) => i.itemName && i.itemName.trim().toLowerCase() === (itemName || "").trim().toLowerCase()
+    );
+    if (itemIndex === -1) {
+     return interaction.editReply(
+      `Your character doesn't have **${itemName}** in their expedition loadout.`
+     );
+    }
+
+    const carried = partyChar.items[itemIndex];
+    const hearts = Math.max(0, carried.modifierHearts || 0);
+    const stamina = Math.max(0, carried.staminaRecovered || 0);
+
+    if (hearts === 0 && stamina === 0) {
+     return interaction.editReply(
+      "That item can only be used when securing the quadrant (e.g. Wood Bundle, Eldin Ore Bundle)."
+     );
+    }
+
+    if (hearts > 0) {
+     character.currentHearts = Math.min(
+      character.maxHearts,
+      character.currentHearts + hearts
+     );
+    }
+    if (stamina > 0) {
+     character.currentStamina = Math.min(
+      character.maxStamina,
+      character.currentStamina + stamina
+     );
+    }
+    partyChar.currentHearts = character.currentHearts;
+    partyChar.currentStamina = character.currentStamina;
+
+    partyChar.items.splice(itemIndex, 1);
+    party.totalHearts = party.characters.reduce(
+     (sum, c) => sum + (c.currentHearts ?? 0),
+     0
+    );
+    party.totalStamina = party.characters.reduce(
+     (sum, c) => sum + (c.currentStamina ?? 0),
+     0
+    );
+
+    await character.save();
+    await party.save();
+
+    const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
+    const staminaText = stamina > 0 ? `+${stamina} 🟩` : "";
+    const effect = [heartsText, staminaText].filter(Boolean).join(", ");
+
+    const embed = new EmbedBuilder()
+     .setTitle(`Used item: ${carried.itemName}`)
+     .setColor("#4CAF50")
+     .setDescription(
+      `${character.name} used **${carried.itemName}** (${effect}).`
+     )
+     .addFields(
+      {
+       name: `${character.name} Hearts`,
+       value: `${character.currentHearts}/${character.maxHearts}`,
+       inline: true,
+      },
+      {
+       name: `${character.name} Stamina`,
+       value: `${character.currentStamina}/${character.maxStamina}`,
+       inline: true,
+      },
+      { name: "Party Hearts", value: `${party.totalHearts}`, inline: true },
+      { name: "Party Stamina", value: `${party.totalStamina}`, inline: true }
      );
 
     await interaction.editReply({ embeds: [embed] });
@@ -1895,5 +1278,9 @@ module.exports = {
      subcommand: interaction.options?.getSubcommand()
    });
   }
+ },
+
+ async autocomplete(interaction) {
+  await handleAutocomplete(interaction);
  },
 };

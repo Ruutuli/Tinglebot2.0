@@ -70,6 +70,23 @@ export async function GET(
       ? members.find((m) => m.userId === currentUserId)
       : null;
 
+    const discordThreadId = typeof p.discordThreadId === "string" ? p.discordThreadId.trim() : null;
+    const guildId = process.env.GUILD_ID ?? null;
+    const discordThreadUrl =
+      discordThreadId && guildId
+        ? `https://discord.com/channels/${guildId}/${discordThreadId}`
+        : null;
+
+    const gatheredItems = Array.isArray(p.gatheredItems)
+      ? (p.gatheredItems as Array<Record<string, unknown>>).map((g) => ({
+          characterId: String(g.characterId),
+          characterName: String(g.characterName ?? ""),
+          itemName: String(g.itemName ?? ""),
+          quantity: typeof g.quantity === "number" ? g.quantity : 1,
+          emoji: typeof g.emoji === "string" ? g.emoji : undefined,
+        }))
+      : [];
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
@@ -83,6 +100,10 @@ export async function GET(
       currentUserJoined: !!myMember,
       currentUserMember: myMember ?? null,
       isLeader: currentUserId === p.leaderId,
+      discordThreadUrl,
+      currentTurn: typeof p.currentTurn === "number" ? p.currentTurn : 0,
+      quadrantState: typeof p.quadrantState === "string" ? p.quadrantState : "unexplored",
+      gatheredItems,
     });
   } catch (err) {
     console.error("[explore/parties/[partyId] GET]", err);

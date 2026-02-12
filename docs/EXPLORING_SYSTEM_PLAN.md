@@ -26,7 +26,7 @@ Exploring is the “leave the village and push the map forward” system. Users 
 
 **Bot commands**
 
-- **`/explore`** (`bot/commands/exploration/explore.js`): **setup** (region: eldin \| lanayru \| faron), **join** (id, charactername, item1–3), **start** (id), **roll** (id, charactername), **rest** (id, charactername), **secure** (id, charactername), **continue** (id, charactername), **move** (id, charactername, direction), **retreat** (id, charactername), **camp** (id, charactername, duration).
+- **`/explore`** (`bot/commands/exploration/explore.js`): **roll** (id, charactername), **rest** (id, charactername), **secure** (id, charactername), **move** (id, charactername, direction), **retreat** (id, charactername), **camp** (id, charactername, duration). Setup, join, and start are dashboard-only.
 - Regions are stored lowercase: `eldin`, `lanayru`, `faron`. Start squares per region: Eldin D3 Q3, Lanayru G4 Q2, Faron H6 Q4.
 
 **Current explore flow (roll)**
@@ -199,7 +199,7 @@ Stamina is consumed while exploring via:
 - **At start:** Each character’s hearts, stamina, and items are posted once so combined totals are clear (bot/dashboard computes and displays).
 - **End of expedition:** Remaining hearts and stamina are **evenly divided** among the group. If there isn’t enough to divide evenly, members use a tiebreaker (e.g. random) to see who gets the remainder. If there’s too much, any extra is **discarded**.
 
-**Alignment with codebase:** `PartyModel`, `exploreModule.calculateTotalHeartsAndStamina`, and `/explore` (setup, join, start, roll, etc.) in `explore.js` already support party formation, totals, turn order, and roll outcome (monster/gather). **End-of-expedition split** of hearts/stamina and **sync of Party.quadrantState to Square.quadrants** in **exploringMap** are planned.
+**Alignment with codebase:** `PartyModel`, `exploreModule.calculateTotalHeartsAndStamina`, and `/explore` (roll, rest, secure, move, retreat, camp) in `explore.js` support totals, turn order, and roll outcome (monster/gather). Party creation/join/start are dashboard-only. **End-of-expedition split** of hearts/stamina and **sync of Party.quadrantState to Square.quadrants** in **exploringMap** are planned.
 
 ---
 
@@ -331,19 +331,26 @@ We **do not use** `/tableroll` or table rolls. Outcomes are driven by **bot comm
 
 **Bot: `/explore` subcommands** (`bot/commands/exploration/explore.js`)
 
+Create party, join, and start are **dashboard-only**. The bot has no `/explore setup`, `/explore join`, or `/explore start`. Use the dashboard to create expeditions, add characters/items, and start.
+
 | Subcommand | Purpose | Notes |
 |------------|---------|--------|
-| **setup** | Create party; region = eldin \| lanayru \| faron | Sets Party.region, Party.square, Party.quadrant from start points; Party.quadrantState = unexplored. |
-| **join** | Add character + 3 items to party | Validates village (eldin→rudania, lanayru→inariko, faron→vhintl); items can be healing or Wood/Eldin Ore. |
-| **start** | Begin expedition (status → started) | Party.totalHearts, Party.totalStamina from characters. |
-| **roll** | Resolve one explore action | Stamina from Party.quadrantState (2/1/0). Outcome: monster (getMonstersByRegion(party.region)) or gather (ItemModel filtered by region). Sets Party.quadrantState = explored when “quadrant explored” triggers; advances Party.currentTurn. |
-| **rest** | Heal party (3 stamina) | Only in explored or secured quadrant. |
-| **secure** | Pave quadrant (5 stamina + Wood + Eldin Ore) | Sets Party.quadrantState = secured; map (exploringMap) should be updated so Square.quadrants[].status reflects secured. |
-| **continue** | Keep exploring same quadrant | Next turn uses **roll** again (1 stamina if quadrantState was explored). |
-| **move** | Move to adjacent quadrant (direction) | Updates Party.square/quadrant; quadrantState resets per new quadrant (or read from Square if synced). |
-| **retreat** | Return to village | Records end state. |
-| **camp** | Camp for duration (1–8 hours) | For when party is stuck (e.g. out of stamina). |
+| **roll** | Resolve one explore action (first time or again in same quadrant) | Stamina from Party.quadrantState (2 unexplored / 1 explored / 0 secured). Outcome: monster or gather. Sets Party.quadrantState = explored when “quadrant explored” triggers; advances Party.currentTurn. |
+| **rest** | Rest at current location (3 stamina) | Only in explored or secured quadrant. Plan: heal all party hearts + revive KO'd; current code recovers stamina for acting character only. |
+| **item** | Use a healing item from expedition loadout | Consumes one item from party loadout; applies hearts/stamina per item. Bundles (Wood/Eldin Ore) only when securing. |
+| **secure** | Pave quadrant (5 stamina + resources) | Only in explored quadrant. Plan: 5 stamina + 500 tokens + 10 wood + 5 Eldin Ore; code checks presence of Wood and Eldin Ore (no quantity/token deduction yet). Sets Party.quadrantState = secured. |
+| **move** | Move to adjacent quadrant (direction) | Costs 2 stamina. Updates Party.square/quadrant; Party.quadrantState = unexplored. |
+| **retreat** | Return to village (leader only) | Sets party status to completed; moves all characters to region village. |
+| **camp** | Camp for duration (1–8 hours) | Only in **secured** quadrant. Recovers stamina and hearts per member. Plan: "when stuck (e.g. out of stamina)" — currently safe rest in secured areas only. |
 
+**Exploration commands audit (vs plan)**
+
+- **Setup / join / start:** Removed from bot; create party, add characters/items, and start expedition on dashboard only. Plan table above updated.
+- **Continue:** Redundant with **roll**. Plan: “Continue exploring same quadrant” means next action is run **roll** again (1 stamina). The bot had a separate `/explore continue` that did the same encounter logic; removed so one command (**roll**) covers both “first time in quadrant” and “explore again in same quadrant.”
+- **Rest:** Plan: heal all party hearts and revive KO’d (3 stamina). Code: 3 stamina, recovers only stamina for the acting character (up to 5). Align if full party heal/revive is required.
+- **Secure:** Plan: 5 stamina + 500 tokens + 10 wood + 5 Eldin Ore; track payer. Code: 5 stamina + checks for Wood and Eldin Ore in party items (no quantities, no token check, no deduction). To do: quantities, token payment, consumption.
+- **Retreat:** Code sets `party.status = 'completed'`. Party schema must include `completed` in status enum (see PartyModel.js).
+- **Camp:** Plan: “when party is stuck (e.g. out of stamina).” Code: allowed only in **secured** quadrants; grants stamina/hearts recovery. Either allow camp in explored quadrants for “stuck” recovery or keep secured-only and document.
 **Region and outcome data**
 
 - **Monster** (`MonsterModel.js`): Region flags `eldin`, `lanayru`, `faron` are used by **getMonstersByRegion(region)** in `rngModule.js` for explore encounters. The model also has **exploreEldin**, **exploreLanayru**, **exploreFaron** for future exploration-specific monster pools if desired.
@@ -357,7 +364,7 @@ We **do not use** `/tableroll` or table rolls. Outcomes are driven by **bot comm
 **Existing in code**
 
 - [x] **Map/quadrant schema:** `Square` (exploringMap), `QuadrantSchema` with status `inaccessible` \| `unexplored` \| `explored` \| `secured`, `blighted`, `discoveries` — `mapModel.js` (bot + dashboard).
-- [x] **Party and turn order:** `Party` with `region`, `square`, `quadrant`, `quadrantState`, `currentTurn`, `totalHearts`, `totalStamina`, `characters[]`, `gatheredItems[]` — `PartyModel.js`. `/explore setup | join | start | roll | rest | secure | continue | move | retreat | camp` — `explore.js`.
+- [x] **Party and turn order:** `Party` with `region`, `square`, `quadrant`, `quadrantState`, `currentTurn`, `totalHearts`, `totalStamina`, `characters[]`, `gatheredItems[]` — `PartyModel.js`. Bot: `/explore roll | rest | item | secure | move | retreat | camp` (setup/join/start are dashboard-only; continue removed, use roll for same-quadrant exploration). — `explore.js`.
 - [x] **Stamina costs in roll:** 2 (unexplored), 1 (explored), 0 (secured) from Party.quadrantState — `explore.js` roll subcommand.
 - [x] **Explore outcome logic:** Monster from getMonstersByRegion(party.region) (`rngModule.js`), gather from ItemModel filtered by region; “quadrant explored” sets Party.quadrantState = explored.
 - [x] **Relic model:** Relic schema with appraised, rollOutcome, artSubmitted, etc. — `RelicModel.js` (bot + dashboard).

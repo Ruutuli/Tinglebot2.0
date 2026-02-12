@@ -8,9 +8,9 @@ import mongoose from "mongoose";
 export const dynamic = "force-dynamic";
 
 const START_POINTS: Record<string, { square: string; quadrant: string }> = {
-  eldin: { square: "D3", quadrant: "Q3" },
-  lanayru: { square: "G4", quadrant: "Q2" },
-  faron: { square: "H6", quadrant: "Q4" },
+  eldin: { square: "H5", quadrant: "Q3" },
+  lanayru: { square: "H8", quadrant: "Q2" },
+  faron: { square: "F10", quadrant: "Q4" },
 };
 
 /** Generate expedition ID in same format as bot: E + 6 digits (e.g. E123456). */
