@@ -481,7 +481,8 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   const expId = expeditionId || party?.partyId || "—";
   const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
   let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n**Take your turn:** ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**`;
-  if (showRestSecureMove) {
+  // Only add rest/secure/move options when explicitly requested (Quadrant Explored! embed only).
+  if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
    const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
    const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
@@ -522,6 +523,7 @@ const createExplorationItemEmbed = (
   location: location || "Unknown Location",
   nextCharacter: nextCharacter ?? null,
   showNextAndCommands: !!nextCharacter && showNextAndCommands,
+  showRestSecureMove: false,
  });
  return embed;
 };
@@ -560,6 +562,7 @@ const createExplorationMonsterEmbed = (
   location: location || "Unknown Location",
   nextCharacter: nextCharacter ?? null,
   showNextAndCommands: !!nextCharacter && showNextAndCommands,
+  showRestSecureMove: false,
  });
  return embed;
 };
