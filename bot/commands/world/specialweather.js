@@ -411,7 +411,7 @@ function createWarningEmbed(weather, village) {
     .setColor(0x8B0000)
     .setTitle(warningConfig.title)
     .setDescription(warningConfig.description)
-    .setThumbnail({ url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' })
+    .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ text: `${village} Weather Advisory` })
     .setTimestamp();
 }
