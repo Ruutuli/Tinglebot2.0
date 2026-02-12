@@ -486,7 +486,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
    const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
    const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
-   commandsValue += `\n\n**Or:** ${cmdCamp} · ${cmdSecure} · ${cmdMove}`;
+   commandsValue += `\n\n**Or:** ${cmdCamp} (for heals) · ${cmdSecure} (secure this quad and make a path) · ${cmdMove} (move to next quadrant)`;
   }
   fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
  }
