@@ -478,7 +478,7 @@ const createExplorationItemEmbed = (
   .setDescription(
    `✨ **${character.name || "Adventurer"}** discovered ${item.emoji || ""} **${
     item.itemName
-   }** during exploration!\n\n`
+   }** during exploration in **${location || "Unknown"}**!\n\n`
   )
   .setColor(regionColors[party.region] || "#00ff99")
   .setThumbnail(item.image || "https://via.placeholder.com/100x100")
@@ -486,7 +486,7 @@ const createExplorationItemEmbed = (
   .addFields(
    { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
    {
-    name: "📍 **__Current Location__**",
+    name: "📍 **__Quadrant__**",
     value: location || "Unknown Location",
     inline: true,
    },
@@ -521,7 +521,7 @@ const createExplorationMonsterEmbed = (
   .setDescription(
    `**${character.name || "Adventurer"}** encountered ${
     monster.emoji || ""
-   } **${monster.name || "Unknown Monster"}** during exploration!`
+   } **${monster.name || "Unknown Monster"}** during exploration in **${location || "Unknown"}**!`
   )
   .setColor(regionColors[party.region] || "#00ff99")
   .setThumbnail(monsterImage) // Set monster image dynamically
@@ -533,7 +533,7 @@ const createExplorationMonsterEmbed = (
     inline: true,
    },
    {
-    name: "📍 **__Current Location__**",
+    name: "📍 **__Quadrant__**",
     value: location || "Unknown Location",
     inline: true,
    },

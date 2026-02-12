@@ -30,6 +30,23 @@ const START_POINTS_BY_REGION = {
  faron: { square: "F10", quadrant: "Q4" },
 };
 
+// Region to village (Raid model requires village: Rudania | Inariko | Vhintl)
+const REGION_TO_VILLAGE = {
+ eldin: "Rudania",
+ lanayru: "Inariko",
+ faron: "Vhintl",
+};
+
+function pushProgressLog(party, characterName, outcome, message) {
+ if (!party.progressLog) party.progressLog = [];
+ party.progressLog.push({
+  at: new Date(),
+  characterName: characterName || "Unknown",
+  outcome,
+  message: message || "",
+ });
+}
+
 async function handleExpeditionFailed(party, interaction) {
  const start = START_POINTS_BY_REGION[party.region];
  if (!start) {
@@ -122,7 +139,7 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("rest")
-    .setDescription("Rest at current location to recover stamina")
+    .setDescription("Rest at current location (3 stamina) — heals all party hearts, revives KO'd")
     .addStringOption((option) =>
      option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
@@ -311,19 +328,20 @@ module.exports = {
      // Single outcome per roll: one of monster, raid, item, explored, chest, old_map, ruins, relic, camp, monster_camp, grotto
      const outcomeRoll = Math.random();
      let outcomeType;
-     if (outcomeRoll < 0.50) outcomeType = "monster";
-     else if (outcomeRoll < 0.75) outcomeType = "item";
-     else if (outcomeRoll < 0.90) outcomeType = "explored";
-     else if (outcomeRoll < 0.91) outcomeType = "chest";
-     else if (outcomeRoll < 0.92) outcomeType = "old_map";
-     else if (outcomeRoll < 0.94) outcomeType = "ruins";
-     else if (outcomeRoll < 0.96) outcomeType = "relic";
-     else if (outcomeRoll < 0.97) outcomeType = "camp";
-     else if (outcomeRoll < 0.98) outcomeType = "monster_camp";
+     if (outcomeRoll < 0.45) outcomeType = "monster";
+     else if (outcomeRoll < 0.70) outcomeType = "item";
+     else if (outcomeRoll < 0.85) outcomeType = "explored";
+     else if (outcomeRoll < 0.86) outcomeType = "chest";
+     else if (outcomeRoll < 0.87) outcomeType = "old_map";
+     else if (outcomeRoll < 0.93) outcomeType = "ruins";
+     else if (outcomeRoll < 0.935) outcomeType = "relic";
+     else if (outcomeRoll < 0.985) outcomeType = "camp";
+     else if (outcomeRoll < 0.995) outcomeType = "monster_camp";
      else outcomeType = "grotto";
 
      if (outcomeType === "explored") {
       party.quadrantState = "explored";
+      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Rest, Secure, Roll again, or Move.`);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
@@ -331,23 +349,23 @@ module.exports = {
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
        .setDescription(
-        `**${character.name}** has explored this area. The party can now choose what to do next.`
+        `**${character.name}** has explored this area (**${location}**). The party can now choose what to do next.`
        )
        .setColor(regionColors[party.region] || "#00ff99")
        .addFields(
         { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-        { name: "📍 **__Current Location__**", value: location, inline: true },
+        { name: "📍 **__Quadrant__**", value: location, inline: true },
         { name: "❤️ **__Party Hearts__**", value: `${party.totalHearts}`, inline: true },
         { name: "🟩 **__Party Stamina__**", value: `${party.totalStamina}`, inline: true },
         {
          name: "**What you can do next**",
          value:
-          "• **Rest** (3 stamina) — heal all party hearts, revive KO'd\n• **Secure** quadrant (5 stamina + resources)\n• **Roll** again in same quadrant (1 stamina)\n• **Move** to next quadrant (2 stamina)",
+          "• **Rest** (3 stamina) — `/explore rest` — heal all party hearts, revive KO'd\n• **Secure** quadrant — `/explore secure` (5 stamina + resources)\n• **Roll** again — `/explore roll` (1 stamina in same quadrant)\n• **Move** to next quadrant — `/explore move` (2 stamina)",
          inline: false,
         },
         {
          name: "➡️ **__What to do next__**",
-         value: `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` to take your turn (or use **rest** / **secure** / **move** when it's your turn).`,
+         value: `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` (or \`/explore rest\`, \`/explore secure\`, \`/explore move\` when it's your turn).`,
          inline: false,
         }
        );
@@ -356,6 +374,16 @@ module.exports = {
      }
 
      if (outcomeType === "chest" || outcomeType === "old_map" || outcomeType === "ruins" || outcomeType === "relic" || outcomeType === "camp" || outcomeType === "monster_camp" || outcomeType === "grotto") {
+      const progressMessages = {
+       chest: `Found a chest in ${location} (open for 1 stamina).`,
+       old_map: `Found an old map in ${location}; take to Inariko Library to decipher.`,
+       ruins: `Found ruins in ${location} (explore for 3 stamina or skip).`,
+       relic: `Found a relic in ${location}; take to Artist/Researcher to appraise.`,
+       camp: `Found a camp site in ${location}.`,
+       monster_camp: `Found a monster camp in ${location}; report to town hall to mark on map.`,
+       grotto: `Found a grotto in ${location} (cleanse for 1 plume + 1 stamina or mark for later).`,
+      };
+      pushProgressLog(party, character.name, outcomeType, progressMessages[outcomeType] || `Found something in ${location}.`);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
@@ -366,44 +394,44 @@ module.exports = {
       if (outcomeType === "monster_camp") {
        title = `🗺️ **Expedition: Monster Camp found!**`;
        description =
-        `**${character.name}** found something unsettling.\n\n` +
+        `**${character.name}** found something unsettling in **${location}**.\n\n` +
         "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there. Report it back to the town hall to have it marked on the map for later.\n\n" +
         "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
        description =
-        `**${character.name}** found a chest!\n\n` +
+        `**${character.name}** found a chest in **${location}**!\n\n` +
         "You found a chest! Use the chest flow to open it (cost 1 stamina).\n\n" +
         "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
       } else if (outcomeType === "old_map") {
        title = `🗺️ **Expedition: Old map found!**`;
        description =
-        `**${character.name}** discovered something unusual.\n\n` +
+        `**${character.name}** discovered something unusual in **${location}**.\n\n` +
         "You found a really old map! You have no idea what you're looking at when you open it. Take it to the Inariko Library to get it deciphered. You can find out more info [here](https://www.rootsofthewild.com/oldmaps).\n\n" +
         "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
       } else if (outcomeType === "ruins") {
        title = `🗺️ **Expedition: Ruins found!**`;
        description =
-        `**${character.name}** found some ruins!\n\n` +
+        `**${character.name}** found some ruins in **${location}**!\n\n` +
         "You found some ruins! Do you want to explore them?\n\n" +
         "**Yes** — Use the ruins flow when available (cost 3 stamina).\n" +
         "**No** — Continue exploring with `/explore roll`.";
       } else if (outcomeType === "relic") {
        title = `🗺️ **Expedition: Relic found!**`;
        description =
-        `**${character.name}** found something ancient.\n\n` +
+        `**${character.name}** found something ancient in **${location}**.\n\n` +
         "You found a relic! What is this? Take it to an Inarikian Artist or Researcher to get this appraised. You can find more info [here](https://www.rootsofthewild.com/relics).\n\n" +
         "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
       } else if (outcomeType === "grotto") {
        title = `🗺️ **Expedition: Grotto found!**`;
        description =
-        `**${character.name}** stumbled across something strange.\n\n` +
+        `**${character.name}** stumbled across something strange in **${location}**.\n\n` +
         "You stumble across an interesting looking stump with roots covered in talismans, do you have the means to cleanse them? More info about grottos can be found [here](https://www.rootsofthewild.com/grottos).\n\n" +
         "**Yes** — Use the grotto flow when available (cost 1 goddess plume + 1 stamina).\n" +
         "**No** (mark it on the map for later!) — Continue exploring with `/explore roll`.";
       } else {
        title = `🗺️ **Expedition: ${character.name} found a camp!**`;
-       description = `**${character.name}** discovered a camp site in this quadrant.`;
+       description = `**${character.name}** discovered a camp site in **${location}**.`;
       }
 
       const embed = new EmbedBuilder()
@@ -412,7 +440,7 @@ module.exports = {
        .setColor(regionColors[party.region] || "#00ff99")
        .addFields(
         { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-        { name: "📍 **__Current Location__**", value: location, inline: true },
+        { name: "📍 **__Quadrant__**", value: location, inline: true },
         { name: "➡️ **__What to do next__**", value: nextTurnValue, inline: false }
        );
 
@@ -450,7 +478,7 @@ module.exports = {
          .setColor(regionColors[party.region] || "#00ff99")
          .addFields(
           { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
-          { name: "📍 **__Current Location__**", value: location, inline: true },
+          { name: "📍 **__Quadrant__**", value: location, inline: true },
           { name: "➡️ **__What to do next__**", value: nextTurnValue, inline: false }
          );
         if (outcomeType === "ruins") {
@@ -540,6 +568,7 @@ module.exports = {
        emoji: selectedItem.emoji || "",
       });
 
+      pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
@@ -589,10 +618,11 @@ module.exports = {
 
       if (selectedMonster.tier > 4) {
        try {
+        const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
         const raidResult = await triggerRaid(
          selectedMonster,
          interaction,
-         null,
+         village,
          false,
          character
         );
@@ -684,6 +714,7 @@ module.exports = {
          }
         }
 
+        pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`);
         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
         await party.save();
 
@@ -782,7 +813,7 @@ module.exports = {
          inline: true,
         },
         {
-         name: "📍 **__Current Location__**",
+         name: "📍 **__Quadrant__**",
          value: location || "Unknown Location",
          inline: true,
         },
@@ -824,6 +855,10 @@ module.exports = {
         }
        }
 
+       const monsterMsg = outcome.hearts > 0
+        ? `Fought ${selectedMonster.name} in ${location}. ${outcome.result}. Lost ${outcome.hearts} heart(s).${outcome.canLoot ? " Got loot." : ""}`
+        : `Fought ${selectedMonster.name} in ${location}. ${outcome.result}.${outcome.canLoot ? " Got loot." : ""}`;
+       pushProgressLog(party, character.name, "monster", monsterMsg);
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save();
 
@@ -902,44 +937,50 @@ module.exports = {
     }
 
     party.totalStamina -= staminaCost;
-    const staminaRecovered = Math.min(
-     5,
-     character.maxStamina - character.currentStamina
-    );
-    character.currentStamina = Math.min(
-     character.maxStamina,
-     character.currentStamina + staminaRecovered
-    );
-    await character.save();
 
-    party.totalStamina = party.characters.reduce((total, char) => {
-     if (char.name === character.name) {
-      char.currentStamina = character.currentStamina;
-      return total + character.currentStamina;
+    let revivedCount = 0;
+    for (let i = 0; i < party.characters.length; i++) {
+     const partyChar = party.characters[i];
+     const char = await Character.findById(partyChar._id);
+     if (char) {
+      if (char.currentHearts === 0) revivedCount++;
+      char.currentHearts = char.maxHearts;
+      await char.save();
+      party.characters[i].currentHearts = char.currentHearts;
      }
-     return total + char.currentStamina;
-    }, 0);
+    }
+    party.totalHearts = party.characters.reduce(
+     (sum, c) => sum + (c.currentHearts ?? 0),
+     0
+    );
+    party.totalStamina = party.characters.reduce(
+     (sum, c) => sum + (c.currentStamina ?? 0),
+     0
+    );
 
+    pushProgressLog(
+     party,
+     character.name,
+     "rest",
+     `Rested at ${party.square} ${party.quadrant}. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} stamina)`
+    );
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
+    const nextNameRest = party.characters[party.currentTurn]?.name || "Unknown";
     const embed = new EmbedBuilder()
      .setTitle(`Rest at ${party.square} ${party.quadrant}`)
      .setColor("#4CAF50")
      .setDescription(
-      `${character.name} rested and recovered ${staminaRecovered} stamina (-${staminaCost} party stamina)`
+      `${character.name} rested. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} party stamina)`
      )
      .addFields(
+      { name: "❤️ **__Party Hearts__**", value: `${party.totalHearts}`, inline: true },
+      { name: "🟩 **__Party Stamina__**", value: `${party.totalStamina}`, inline: true },
       {
-       name: "Character Stamina",
-       value: `${character.currentStamina}/${character.maxStamina}`,
-       inline: true,
-      },
-      { name: "Party Stamina", value: `${party.totalStamina}`, inline: true },
-      {
-       name: "Next Turn",
-       value: party.characters[party.currentTurn]?.name || "Unknown",
-       inline: true,
+       name: "➡️ **__What to do next__**",
+       value: `**Next turn:** ${nextNameRest}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextNameRest}\` (or \`/explore rest\`, \`/explore secure\`, \`/explore move\` when it's your turn).`,
+       inline: false,
       }
      );
 

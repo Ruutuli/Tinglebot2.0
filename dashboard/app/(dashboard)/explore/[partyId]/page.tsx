@@ -39,6 +39,13 @@ type GatheredItem = {
   emoji?: string;
 };
 
+type ProgressEntry = {
+  at: string;
+  characterName: string;
+  outcome: string;
+  message: string;
+};
+
 type PartyData = {
   partyId: string;
   region: string;
@@ -56,6 +63,7 @@ type PartyData = {
   currentTurn?: number;
   quadrantState?: string;
   gatheredItems?: GatheredItem[];
+  progressLog?: ProgressEntry[];
 };
 
 type Character = {
@@ -1172,6 +1180,40 @@ export default function ExplorePartyPage() {
                     </ul>
                   </div>
                 )}
+
+                <div className="mt-6">
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
+                    Progress log
+                  </h3>
+                  <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
+                    Every roll and what happened (monster fights, items found, quadrant explored, etc.).
+                  </p>
+                  {(party.progressLog?.length ?? 0) === 0 ? (
+                    <p className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-4 text-sm text-[var(--totk-grey-200)]">
+                      No rolls yet. Use <code className="rounded bg-[var(--totk-dark-ocher)]/40 px-1">/explore roll</code> in Discord to start.
+                    </p>
+                  ) : (
+                    <ul className="max-h-[24rem] space-y-2 overflow-y-auto rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 p-3">
+                      {[...(party.progressLog ?? [])].reverse().map((entry, i) => (
+                        <li
+                          key={i}
+                          className="flex flex-col gap-0.5 border-b border-[var(--totk-dark-ocher)]/30 pb-2 last:border-0 last:pb-0"
+                        >
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="font-medium text-[var(--totk-ivory)]">{entry.characterName}</span>
+                            <span className="rounded bg-[var(--totk-dark-ocher)]/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">
+                              {entry.outcome}
+                            </span>
+                            <span className="text-[var(--totk-grey-200)]">
+                              {typeof entry.at === "string" ? new Date(entry.at).toLocaleString() : ""}
+                            </span>
+                          </div>
+                          <p className="text-sm text-[var(--botw-pale)]">{entry.message}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </section>
             </>
           )}

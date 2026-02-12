@@ -42,7 +42,15 @@ const PartySchema = new Schema({
   currentTurn: { type: Number, default: 0 },
   totalHearts: { type: Number, default: 0 },
   totalStamina: { type: Number, default: 0 },
-  quadrantState: { type: String, default: 'unexplored', enum: ['unexplored', 'explored', 'secured'] }
+  quadrantState: { type: String, default: 'unexplored', enum: ['unexplored', 'explored', 'secured'] },
+  progressLog: [
+    {
+      at: { type: Date, default: Date.now },
+      characterName: { type: String, required: true },
+      outcome: { type: String, required: true },
+      message: { type: String, required: true },
+    }
+  ]
 });
 
 module.exports = mongoose.model('Party', PartySchema);

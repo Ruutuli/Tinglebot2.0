@@ -87,6 +87,15 @@ export async function GET(
         }))
       : [];
 
+    const progressLog = Array.isArray(p.progressLog)
+      ? (p.progressLog as Array<Record<string, unknown>>).map((e) => ({
+          at: e.at instanceof Date ? e.at.toISOString() : typeof e.at === "string" ? e.at : String(e.at ?? ""),
+          characterName: String(e.characterName ?? ""),
+          outcome: String(e.outcome ?? ""),
+          message: String(e.message ?? ""),
+        }))
+      : [];
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
@@ -104,6 +113,7 @@ export async function GET(
       currentTurn: typeof p.currentTurn === "number" ? p.currentTurn : 0,
       quadrantState: typeof p.quadrantState === "string" ? p.quadrantState : "unexplored",
       gatheredItems,
+      progressLog,
     });
   } catch (err) {
     console.error("[explore/parties/[partyId] GET]", err);

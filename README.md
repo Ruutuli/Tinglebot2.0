@@ -194,16 +194,16 @@ When using `/explore roll`, each roll produces **exactly one** outcome. Odds (pe
 
 | Outcome | Chance | Notes |
 |--------|--------|--------|
-| **Monster** | 50% | Tier ≤4 = simple battle (may loot on win); tier 5+ = raid |
+| **Monster** | 45% | Tier ≤4 = simple battle (may loot on win); tier 5+ = raid |
 | **Item** | 25% | Gather a region item |
 | **Explored** | 15% | Quadrant cleared; choose Rest / Secure / Roll again / Move |
+| **Ruins** | 6% | Yes = explore ruins (cost 3 stamina); No = continue |
+| **Camp** | 5% | Camp site found |
 | **Chest** | 1% | Open with chest flow (cost 1 stamina) |
 | **Old map** | 1% | Take to Inariko Library to decipher |
-| **Ruins** | 2% | Yes = explore ruins (cost 3 stamina); No = continue |
-| **Relic** | 2% | Take to Inarikian Artist/Researcher to appraise |
-| **Camp** | 1% | Camp site found |
 | **Monster camp** | 1% | Report to town hall to mark on map |
-| **Grotto** | 2% | Yes = cleanse (1 goddess plume + 1 stamina); No = mark for later |
+| **Relic** | 0.5% | Take to Inarikian Artist/Researcher to appraise (rare) |
+| **Grotto** | 0.5% | Yes = cleanse (1 goddess plume + 1 stamina); No = mark for later (rare) |
 
 Ruins and Grotto show **Yes** / **No** buttons; other outcomes continue with “What to do next” (next turn + `/explore roll`).
 
