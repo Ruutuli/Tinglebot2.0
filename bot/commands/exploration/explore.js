@@ -629,7 +629,7 @@ module.exports = {
       const selectedItem =
        availableItems[Math.floor(Math.random() * availableItems.length)];
 
-      pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`);
+      pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
