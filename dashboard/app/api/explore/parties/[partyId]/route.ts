@@ -88,12 +88,22 @@ export async function GET(
       : [];
 
     const progressLog = Array.isArray(p.progressLog)
-      ? (p.progressLog as Array<Record<string, unknown>>).map((e) => ({
-          at: e.at instanceof Date ? e.at.toISOString() : typeof e.at === "string" ? e.at : String(e.at ?? ""),
-          characterName: String(e.characterName ?? ""),
-          outcome: String(e.outcome ?? ""),
-          message: String(e.message ?? ""),
-        }))
+      ? (p.progressLog as Array<Record<string, unknown>>).map((e) => {
+          const loot = e.loot as Record<string, unknown> | undefined;
+          const heartsLost = typeof e.heartsLost === "number" && e.heartsLost > 0 ? e.heartsLost : undefined;
+          const staminaLost = typeof e.staminaLost === "number" && e.staminaLost > 0 ? e.staminaLost : undefined;
+          return {
+            at: e.at instanceof Date ? e.at.toISOString() : typeof e.at === "string" ? e.at : String(e.at ?? ""),
+            characterName: String(e.characterName ?? ""),
+            outcome: String(e.outcome ?? ""),
+            message: String(e.message ?? ""),
+            ...(loot && (loot.itemName || loot.emoji)
+              ? { loot: { itemName: String(loot.itemName ?? ""), emoji: String(loot.emoji ?? "") } }
+              : {}),
+            ...(heartsLost != null ? { heartsLost } : {}),
+            ...(staminaLost != null ? { staminaLost } : {}),
+          };
+        })
       : [];
 
     return NextResponse.json({

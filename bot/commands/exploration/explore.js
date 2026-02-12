@@ -45,14 +45,30 @@ const REGION_TO_VILLAGE = {
 // TODO: remove when done testing - treats tier 5+ monsters as regular encounters (no raid)
 const DISABLE_EXPLORATION_RAIDS = true;
 
-function pushProgressLog(party, characterName, outcome, message) {
+// Autocomplete can show "E402960 | Lanayru | started | H8 Q2"; value sent may be that full string. Use only the partyId (before first "|").
+function normalizeExpeditionId(value) {
+ if (!value || typeof value !== "string") return value;
+ const trimmed = value.trim();
+ const pipe = trimmed.indexOf("|");
+ return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
+}
+
+function pushProgressLog(party, characterName, outcome, message, loot, costs) {
  if (!party.progressLog) party.progressLog = [];
- party.progressLog.push({
+ const entry = {
   at: new Date(),
   characterName: characterName || "Unknown",
   outcome,
   message: message || "",
- });
+ };
+ if (loot && (loot.itemName || loot.emoji)) {
+  entry.loot = { itemName: loot.itemName || "", emoji: loot.emoji || "" };
+ }
+ if (costs) {
+  if (typeof costs.heartsLost === "number" && costs.heartsLost > 0) entry.heartsLost = costs.heartsLost;
+  if (typeof costs.staminaLost === "number" && costs.staminaLost > 0) entry.staminaLost = costs.staminaLost;
+ }
+ party.progressLog.push(entry);
 }
 
 async function handleExpeditionFailed(party, interaction) {
@@ -278,7 +294,7 @@ module.exports = {
    // ------------------- Roll for Encounter -------------------
    if (subcommand === "roll") {
     try {
-     const expeditionId = interaction.options.getString("id");
+     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
      const characterName = interaction.options.getString("charactername");
      const userId = interaction.user.id;
 
@@ -352,7 +368,7 @@ module.exports = {
 
      if (outcomeType === "explored") {
       party.quadrantState = "explored";
-      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Rest, Secure, Roll again, or Move.`);
+      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Rest, Secure, Roll again, or Move.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
@@ -804,10 +820,19 @@ module.exports = {
         return;
        }
 
+       let lootedItem = null;
+       if (outcome.canLoot) {
+        const items = await fetchItemsByMonster(selectedMonster.name);
+        lootedItem =
+         items.length > 0
+          ? items[Math.floor(Math.random() * items.length)]
+          : null;
+       }
+
        const monsterMsg = outcome.hearts > 0
         ? `Fought ${selectedMonster.name} in ${location}. ${outcome.result}. Lost ${outcome.hearts} heart(s).${outcome.canLoot ? " Got loot." : ""}`
         : `Fought ${selectedMonster.name} in ${location}. ${outcome.result}.${outcome.canLoot ? " Got loot." : ""}`;
-       pushProgressLog(party, character.name, "monster", monsterMsg);
+       pushProgressLog(party, character.name, "monster", monsterMsg, lootedItem ? { itemName: lootedItem.itemName, emoji: lootedItem.emoji || "" } : undefined, outcome.hearts > 0 ? { heartsLost: outcome.hearts } : undefined);
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save();
 
@@ -833,39 +858,31 @@ module.exports = {
         { name: `⚔️ __Battle Outcome__`, value: outcome.result, inline: false }
        );
 
-       if (outcome.canLoot) {
-        const items = await fetchItemsByMonster(selectedMonster.name);
-        const lootedItem =
-         items.length > 0
-          ? items[Math.floor(Math.random() * items.length)]
-          : null;
+       if (outcome.canLoot && lootedItem) {
+        embed.addFields({
+         name: `🎉 __Loot Found__`,
+         value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**`,
+         inline: false,
+        });
 
-        if (lootedItem) {
-         embed.addFields({
-          name: `🎉 __Loot Found__`,
-          value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**`,
-          inline: false,
-         });
+        await addItemInventoryDatabase(
+         character._id,
+         lootedItem.itemName,
+         1,
+         interaction,
+         "Exploration Loot"
+        );
 
-         await addItemInventoryDatabase(
-          character._id,
-          lootedItem.itemName,
-          1,
-          interaction,
-          "Exploration Loot"
-         );
-
-         if (!party.gatheredItems) {
-          party.gatheredItems = [];
-         }
-         party.gatheredItems.push({
-          characterId: character._id,
-          characterName: character.name,
-          itemName: lootedItem.itemName,
-          quantity: 1,
-          emoji: lootedItem.emoji || "",
-         });
+        if (!party.gatheredItems) {
+         party.gatheredItems = [];
         }
+        party.gatheredItems.push({
+         characterId: character._id,
+         characterName: character.name,
+         itemName: lootedItem.itemName,
+         quantity: 1,
+         emoji: lootedItem.emoji || "",
+        });
        }
 
        await interaction.editReply({ embeds: [embed] });
@@ -882,7 +899,7 @@ module.exports = {
 
     // ------------------- Rest Command -------------------
    } else if (subcommand === "rest") {
-    const expeditionId = interaction.options.getString("id");
+    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
@@ -961,7 +978,9 @@ module.exports = {
      party,
      character.name,
      "rest",
-     `Rested at ${party.square} ${party.quadrant}. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} stamina)`
+     `Rested at ${party.square} ${party.quadrant}. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} stamina)`,
+     undefined,
+     { staminaLost: staminaCost }
     );
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
@@ -989,7 +1008,7 @@ module.exports = {
 
     // ------------------- Secure Quadrant Command -------------------
    } else if (subcommand === "secure") {
-    const expeditionId = interaction.options.getString("id");
+    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
@@ -1078,7 +1097,7 @@ module.exports = {
 
     // ------------------- Move to Adjacent Quadrant -------------------
    } else if (subcommand === "move") {
-    const expeditionId = interaction.options.getString("id");
+    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
     const direction = interaction.options.getString("direction");
     const userId = interaction.user.id;
@@ -1164,7 +1183,7 @@ module.exports = {
 
     // ------------------- Use Item (healing from expedition loadout) -------------------
    } else if (subcommand === "item") {
-    const expeditionId = interaction.options.getString("id");
+    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
     const itemName = interaction.options.getString("item");
     const userId = interaction.user.id;
@@ -1279,7 +1298,7 @@ module.exports = {
 
     // ------------------- Retreat to Village -------------------
    } else if (subcommand === "retreat") {
-    const expeditionId = interaction.options.getString("id");
+    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
@@ -1355,7 +1374,7 @@ module.exports = {
 
     // ------------------- Camp Command -------------------
    } else if (subcommand === "camp") {
-    const expeditionId = interaction.options.getString("id");
+    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
     const duration = interaction.options.getInteger("duration");
     const userId = interaction.user.id;

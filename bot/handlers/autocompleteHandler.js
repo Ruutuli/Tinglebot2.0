@@ -3251,6 +3251,13 @@ async function handleEditCharacterAutocomplete(interaction, focusedOption) {
 // This section handles autocomplete interactions for the "explore" command.
 // id = expeditions the user leads or is in; charactername = characters in that expedition.
 // (Item selection for expeditions is dashboard-only; no item option on bot.)
+// Normalize id in case user pasted full autocomplete label (e.g. "E402960 | Lanayru | started | H8 Q2").
+function normalizeExploreExpeditionId(v) {
+  if (!v || typeof v !== "string") return v;
+  const t = v.trim();
+  const i = t.indexOf("|");
+  return i === -1 ? t : t.slice(0, i).trim();
+}
 
 async function handleExploreIdAutocomplete(interaction, focusedOption) {
  try {
@@ -3303,7 +3310,7 @@ async function handleExploreRollCharacterAutocomplete(
 ) {
  try {
                 const userId = interaction.user.id;
-  const expeditionId = interaction.options.getString("id");
+  const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
 
   if (!expeditionId) {
    return await interaction.respond([]);
@@ -3370,7 +3377,7 @@ async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
  try {
   await DatabaseConnectionManager.connectToTinglebot();
 
-  const expeditionId = interaction.options.getString("id");
+  const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
   const characterName = interaction.options.getString("charactername");
   if (!expeditionId || !characterName) return await interaction.respond([]);
 
@@ -3472,7 +3479,7 @@ async function handleExploreItemAutocomplete(interaction, focusedOption) {
 async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
  try {
                 const userId = interaction.user.id;
-  const expeditionId = interaction.options.getString("id");
+  const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
 
   const userCharacters = await fetchCharactersByUserId(userId);
   const modCharacters = await fetchModCharactersByUserId(userId);

@@ -618,8 +618,11 @@ raidSchema.methods.failRaid = async function(client = null) {
     }
   }
   
-  // Apply village damage (only for Tier 5-10 raids)
-  if (this.monster && this.monster.tier >= 5 && this.monster.tier <= 10 && this.village) {
+  // Apply village damage (only for Tier 5-10 village raids; never for exploration raids)
+  const isExplorationRaid = !!this.expeditionId;
+  if (isExplorationRaid) {
+    console.log(`[RaidModel.js]: 🗺️ Skipping village damage for exploration raid ${this.raidId} (expedition ${this.expeditionId})`);
+  } else if (this.monster && this.monster.tier >= 5 && this.monster.tier <= 10 && this.village) {
     try {
       const { applyVillageDamage } = require('../modules/villageModule');
       

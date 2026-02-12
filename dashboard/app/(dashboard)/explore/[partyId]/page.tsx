@@ -44,6 +44,9 @@ type ProgressEntry = {
   characterName: string;
   outcome: string;
   message: string;
+  loot?: { itemName: string; emoji?: string };
+  heartsLost?: number;
+  staminaLost?: number;
 };
 
 type PartyData = {
@@ -1188,8 +1191,28 @@ export default function ExplorePartyPage() {
                             <span className="text-[var(--totk-grey-200)]">
                               {typeof entry.at === "string" ? new Date(entry.at).toLocaleString() : ""}
                             </span>
+                            {(entry.heartsLost != null && entry.heartsLost > 0) || (entry.staminaLost != null && entry.staminaLost > 0) ? (
+                              <span className="ml-auto flex items-center gap-1.5 text-[var(--totk-grey-200)]">
+                                {entry.heartsLost != null && entry.heartsLost > 0 ? (
+                                  <span className="text-red-400/90" title="Hearts lost">
+                                    -{entry.heartsLost} <i className="fa-solid fa-heart text-[10px]" aria-hidden />
+                                  </span>
+                                ) : null}
+                                {entry.staminaLost != null && entry.staminaLost > 0 ? (
+                                  <span className="text-[var(--totk-light-green)]/90" title="Stamina lost">
+                                    -{entry.staminaLost} <i className="fa-solid fa-bolt text-[10px]" aria-hidden />
+                                  </span>
+                                ) : null}
+                              </span>
+                            ) : null}
                           </div>
                           <p className="text-sm text-[var(--botw-pale)]">{entry.message}</p>
+                          {entry.loot?.itemName ? (
+                            <p className="text-xs text-[var(--totk-light-green)]">
+                              Loot: {entry.loot.emoji ? `${entry.loot.emoji} ` : ""}
+                              <span className="font-medium">{entry.loot.itemName}</span>
+                            </p>
+                          ) : null}
                         </li>
                       ))}
                     </ul>

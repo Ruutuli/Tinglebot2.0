@@ -49,6 +49,12 @@ const PartySchema = new Schema({
       characterName: { type: String, required: true },
       outcome: { type: String, required: true },
       message: { type: String, required: true },
+      loot: {
+        itemName: { type: String, default: '' },
+        emoji: { type: String, default: '' },
+      },
+      heartsLost: { type: Number },
+      staminaLost: { type: Number },
     }
   ]
 });

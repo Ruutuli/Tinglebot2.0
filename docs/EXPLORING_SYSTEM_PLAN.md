@@ -467,3 +467,51 @@ When using `/explore roll`, each roll produces **exactly one** outcome. Odds (pe
 | **Grotto** | 0.5% | Yes = cleanse (1 goddess plume + 1 stamina); No = mark for later (rare) |
 
 Ruins and Grotto show **Yes** / **No** buttons; other outcomes continue with “What to do next” (next turn + `/explore roll`).
+
+---
+
+## Implementation status checklist
+
+Summary of what is implemented vs not, as of the current codebase.
+
+### ✅ Implemented
+
+| Area | Item | Notes |
+|------|------|--------|
+| **Models** | Map/quadrant schema | `Square` (exploringMap), `QuadrantSchema` with status, blighted, discoveries — bot + dashboard `mapModel.js`. |
+| **Models** | Party schema | `Party` with region, square, quadrant, quadrantState, currentTurn, totalHearts, totalStamina, characters[], gatheredItems[], progressLog — `PartyModel.js`. |
+| **Models** | Relic schema | `RelicModel.js` with appraised, rollOutcome, artSubmitted, etc. |
+| **Bot** | `/explore` subcommands | **roll**, **rest**, **item**, **secure**, **move**, **retreat**, **camp** — all present in `explore.js`. Setup/join/start are dashboard-only. |
+| **Bot** | Roll stamina costs | 2 (unexplored), 1 (explored), 0 (secured) from Party.quadrantState. |
+| **Bot** | Roll outcomes | Monster, Item, Explored, Chest, Old map, Ruins, Relic, Camp, Monster camp, Grotto — all outcome types in roll; odds in code (e.g. 45% monster, 25% item, 15% explored). |
+| **Bot** | Monster encounter | getMonstersByRegion(region); tier ≤4 = encounter; tier 5+ raid path exists but currently disabled (`DISABLE_EXPLORATION_RAIDS`). |
+| **Bot** | Item gather | Region-filtered items, add to inventory and gatheredItems. |
+| **Bot** | Rest | 3 stamina; heals **all** party hearts and **revives** KO'd members. |
+| **Bot** | Secure | 5 stamina; checks for Wood and Eldin Ore in party (no quantity/token deduction or item consumption yet). Sets quadrantState = secured. |
+| **Bot** | Move | 2 stamina; adjacent quadrant; quadrantState = unexplored. |
+| **Bot** | Camp | Secured quadrant only; 1–8 hours; stamina/hearts recovery per member. |
+| **Bot** | Retreat | Sets party status completed; party returns to village. |
+| **Bot** | Full party KO | handleExpeditionFailed: return to region start, 0 hearts/stamina, items lost. |
+| **Bot** | Ruins / Grotto | Yes/No buttons; messaging and progress log; “ruins flow” / “grotto flow” TBD for Yes. |
+| **Dashboard** | Party page | Create/join/start expedition, add characters and items, start expedition, view party state, progress log, square preview — `explore/[partyId]/page.tsx`. |
+| **Dashboard** | API | `/api/explore/parties/[partyId]` for party data. |
+
+### ❌ Not implemented (or partial)
+
+| Area | Item | Notes |
+|------|------|--------|
+| **Map sync** | Party → exploringMap | When party explores or secures, update Square.quadrants[].status (and blighted) in exploringMap so public map matches. |
+| **Move** | All 4 quadrants before next square | Enforce in `/explore move` (or equivalent) that all quadrants of current square are explored/secured before allowing move to adjacent **square**. |
+| **Secure** | Full cost and consumption | 500 tokens + **10 wood** + **5 Eldin Ore** (exact quantities), consume items from loadout, track who paid tokens. |
+| **Blight** | Exposure | When quadrant revealed with ≥25% blight or party travels through blighted quadrant, run exposure logic; stack on repeated travel. |
+| **KO / debuff** | Week debuff | Full party KO: week-long no healing/stamina items, no explore, 1 stamina/day recovery — not implemented. |
+| **Expedition end** | Heart/stamina split | Even split of remaining hearts/stamina among party; tiebreaker for remainder; discard excess — not in code. |
+| **Relics** | Full flow | Find → lock character → appraisal request → appraiser (3 stamina) → mod approve → relic outcome → art (2 months) → library. Model and discovery messaging exist; full flow and deadlines not wired. |
+| **Dashboard** | Map UI | Quadrant colors (inaccessible/unexplored/explored/secured), clouded vs resolved per square, mod tools to update map and mark findings. |
+| **Dashboard** | User map updates | **Drawing** on maps (roads, paths); **pins** for grottos, camps, POIs. Pin model exists; exploring map UI for drawing/pins TBD. |
+| **Dashboard** | 24h rules | 24h to complete journey and submit report; 24h for party to mark map (grottos, camps, roads) or mod completes — not enforced in app. |
+| **Bot** | Ruins flow | “Yes” to explore ruins: deduct 3 stamina and run ruins flow — TBD. |
+| **Bot** | Grotto flow | “Yes” to cleanse: 1 goddess plume + 1 stamina — TBD. |
+| **Bot** | Retreat (tier 5+) | Retreat during tier 5+ monster encounter: 1 stamina per attempt, retreat command/flag — retreat subcommand exists; in-encounter retreat flow to confirm. |
+| **Optional** | Explore monster pool | Use Monster.exploreEldin / exploreLanayru / exploreFaron for exploration-only pools. |
+| **Future** | Mount exploring | Not in scope; Basic/Mid/High stamina documented for later. |
