@@ -7,10 +7,6 @@ const {
  getMonstersByRegion,
 } = require("../../modules/rngModule.js");
 const { getEncounterOutcome } = require("../../modules/encounterModule.js");
-const {
- storeRaidProgress,
- getRaidProgressById,
-} = require("../../modules/raidModule.js");
 const { handleKO } = require("../../modules/characterStatsModule.js");
 const { triggerRaid } = require("../../modules/raidModule.js");
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
@@ -407,21 +403,6 @@ module.exports = {
       );
 
       if (selectedMonster.tier > 4) {
-       const battleId = Date.now().toString();
-
-       const monsterHearts = {
-        max: selectedMonster.hearts,
-        current: selectedMonster.hearts,
-       };
-
-       await storeRaidProgress(
-        character,
-        selectedMonster,
-        selectedMonster.tier,
-        monsterHearts,
-        `Raid started: ${character.name} vs ${selectedMonster.name}`
-       );
-
        try {
         const raidResult = await triggerRaid(
          selectedMonster,
@@ -448,21 +429,11 @@ module.exports = {
         }
 
         const battleId = raidResult.raidId;
-
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        const battleProgress = await getRaidProgressById(battleId);
-        if (!battleProgress) {
-         console.error(
-          `[ERROR] No battle progress found for Battle ID: ${battleId}`
-         );
-         await interaction.editReply(
-          "**An error occurred retrieving raid progress.**"
-         );
-         return;
-        }
-
-        const monsterDefeated = battleProgress.monsterHearts?.current === 0;
+        const raidData = raidResult.raidData || {};
+        const monsterHearts = raidData.monster
+         ? { current: raidData.monster.currentHearts, max: raidData.monster.maxHearts }
+         : { current: selectedMonster.hearts, max: selectedMonster.hearts };
+        const monsterDefeated = monsterHearts.current === 0;
 
         const embed = createExplorationMonsterEmbed(
          party,
@@ -477,7 +448,7 @@ module.exports = {
         embed.addFields(
          {
           name: `💙 __Monster Hearts__`,
-          value: `${battleProgress.monsterHearts.current}/${battleProgress.monsterHearts.max}`,
+          value: `${monsterHearts.current}/${monsterHearts.max}`,
           inline: true,
          },
          { name: "🆔 **__Raid ID__**", value: battleId, inline: true },
