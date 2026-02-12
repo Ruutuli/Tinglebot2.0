@@ -24,15 +24,9 @@ const {
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
 } = require("../../embeds/embeds.js");
+const { generateUniqueId } = require("../../utils/uniqueIdUtils.js");
 
 // ------------------- Utility Functions -------------------
-function generateShortId(length = 6) {
- const characters =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
- return Array.from({ length }, () =>
-  characters.charAt(Math.floor(Math.random() * characters.length))
- ).join("");
-}
 
 const regionColors = {
  eldin: "#FF0000",
@@ -281,7 +275,7 @@ module.exports = {
      faron: { square: "H6", quadrant: "Q4" },
     };
     const startPoint = startPoints[region];
-    const partyId = generateShortId();
+    const partyId = generateUniqueId("E");
 
     const party = new Party({
      leaderId: interaction.user.id,
@@ -426,11 +420,24 @@ module.exports = {
     for (const itemName of itemNames) {
      const foundItems = await ItemModel.find({
       itemName: itemName,
-      $or: [
-       { modifierHearts: { $gt: 0 } },
-       { staminaRecovered: { $gt: 0 } },
-       { itemName: "Eldin Ore" },
-       { itemName: "Wood" },
+      categoryGear: { $nin: ["Weapon", "Armor"] },
+      $and: [
+       {
+        $or: [
+         { modifierHearts: { $gt: 0 } },
+         { staminaRecovered: { $gt: 0 } },
+         { itemName: "Eldin Ore" },
+         { itemName: "Wood" },
+        ],
+       },
+       {
+        $or: [
+         { itemName: "Eldin Ore" },
+         { itemName: "Wood" },
+         { crafting: true },
+         { itemName: /Fairy/i },
+        ],
+       },
       ],
      })
       .lean()

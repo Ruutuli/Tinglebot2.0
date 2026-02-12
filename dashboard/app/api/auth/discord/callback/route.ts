@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, type SessionUser } from "@/lib/session";
 import { getAppUrlFromRequest, getDiscordRedirectUri } from "@/lib/config";
+import { connect } from "@/lib/db";
 
 const TOKEN_URL = "https://discord.com/api/oauth2/token";
 const USER_URL = "https://discord.com/api/users/@me";
@@ -116,6 +117,21 @@ export async function GET(request: NextRequest) {
   const session = await getSession();
   session.user = user;
   await session.save();
+
+  const displayName = (raw.global_name && raw.global_name.trim()) || raw.username || "";
+  if (displayName) {
+    try {
+      await connect();
+      const User = (await import("@/models/UserModel.js")).default;
+      await User.updateOne(
+        { discordId: raw.id },
+        { $set: { username: displayName } },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn("[Dashboard login] Failed to update User username:", e);
+    }
+  }
 
   console.log("[Dashboard login]", {
     discordId: user.id,

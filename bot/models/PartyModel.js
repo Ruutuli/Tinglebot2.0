@@ -11,14 +11,20 @@ const PartySchema = new Schema({
   partyId: { type: String, required: true, unique: true },
   characters: [
     {
-      _id: { type: mongoose.Schema.Types.ObjectId, required: true }, 
+      _id: { type: mongoose.Schema.Types.ObjectId, required: true },
       userId: { type: String, required: true },
       name: { type: String, required: true },
-      items: [{ 
-        itemName: { type: String, required: true },
-        modifierHearts: { type: Number, default: 0 },
-        staminaRecovered: { type: Number, default: 0 }
-      }]
+      currentHearts: { type: Number, default: 0 },
+      currentStamina: { type: Number, default: 0 },
+      icon: { type: String },
+      items: [
+        {
+          itemName: { type: String, required: true },
+          modifierHearts: { type: Number, default: 0 },
+          staminaRecovered: { type: Number, default: 0 },
+          emoji: { type: String }
+        }
+      ]
     }
   ],
   gatheredItems: [
@@ -30,7 +36,8 @@ const PartySchema = new Schema({
       emoji: { type: String, default: '' }, // Emoji for the Item
     }
   ],
-  messageId: { type: String }, 
+  messageId: { type: String },
+  discordThreadId: { type: String },
   status: { type: String, default: 'open', enum: ['open', 'started'] },
   currentTurn: { type: Number, default: 0 },
   totalHearts: { type: Number, default: 0 },

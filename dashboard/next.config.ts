@@ -8,6 +8,12 @@ const projectRoot = path.resolve(process.cwd());
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Don't log map tile image requests in dev (reduces console noise)
+  logging: {
+    incomingRequests: {
+      ignore: [/\/api\/images\/maps\/squares\//],
+    },
+  },
   async rewrites() {
     return [
       // Allow using a non-API redirect URI in Discord settings/env while

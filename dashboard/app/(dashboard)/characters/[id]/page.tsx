@@ -27,7 +27,6 @@ import {
   VILLAGE_COLORS,
   MOD_CHARACTER_GOLD,
 } from "@/app/(dashboard)/models/characters/page";
-import { APPROVED_NEXT_STEPS } from "@/lib/services/discordEmbeds";
 
 // ============================================================================
 // ------------------- Types -------------------
@@ -1543,21 +1542,6 @@ export default function OCDetailPage() {
               </div>
             </div>
           )}
-
-        {/* Accepted - Next steps (owner only) */}
-        {character.status === "accepted" && user && character.userId === user.id && (
-          <div className="mb-4 sm:mb-6 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 p-4 sm:p-6 shadow-lg">
-            <h2 className="mb-3 sm:mb-4 flex items-center gap-2 border-b border-[var(--totk-light-green)] pb-2 text-base sm:text-lg font-bold text-[var(--totk-light-green)]">
-              <i className="fa-solid fa-check-circle text-sm sm:text-base" aria-hidden="true" />
-              Character accepted – next steps
-            </h2>
-            <div className="text-sm leading-relaxed text-[var(--botw-pale)]">
-              <ReactMarkdown components={MARKDOWN_COMPONENTS}>
-                {convertUrlsToMarkdown(APPROVED_NEXT_STEPS)}
-              </ReactMarkdown>
-            </div>
-          </div>
-        )}
 
         {/* Main Content Grid */}
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">

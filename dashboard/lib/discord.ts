@@ -170,10 +170,90 @@ export async function userHasGuildRole(
  * Generic Discord API request handler.
  * Uses DISCORD_TOKEN from environment. Handles rate limiting and errors.
  * @param endpoint - Discord API endpoint (e.g., "/channels/123/messages")
- * @param method - HTTP method (GET, POST, PATCH, DELETE)
+ * @param method - HTTP method (GET, POST, PATCH, PUT, DELETE)
  * @param body - Request body (will be JSON stringified)
  * @returns Response data or null on error
  */
+
+/**
+ * POST with file attachments (e.g. for embed image via attachment://filename).
+ */
+export async function discordApiPostWithFile<T = unknown>(
+  endpoint: string,
+  payload: Record<string, unknown>,
+  files: Array<{ data: Buffer | Uint8Array; filename: string }>
+): Promise<T | null> {
+  const token = process.env.DISCORD_TOKEN;
+  if (!token) {
+    console.error("DISCORD_TOKEN not configured");
+    return null;
+  }
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+  const url = `${DISCORD_API_BASE}/${cleanEndpoint}`;
+
+  try {
+    const boundary = `----DiscordBoundary${Date.now()}`;
+    const parts: Uint8Array[] = [];
+
+    parts.push(
+      new TextEncoder().encode(
+        `--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(payload)}\r\n`
+      )
+    );
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      parts.push(
+        new TextEncoder().encode(
+          `--${boundary}\r\nContent-Disposition: form-data; name="files[${i}]"; filename="${file.filename}"\r\nContent-Type: image/png\r\n\r\n`
+        )
+      );
+      parts.push(file.data instanceof Buffer ? file.data : Buffer.from(file.data));
+      parts.push(new TextEncoder().encode("\r\n"));
+    }
+    parts.push(new TextEncoder().encode(`--${boundary}--\r\n`));
+
+    const body = Buffer.concat(parts);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${token}`,
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": String(body.length),
+      },
+      body,
+      duplex: "half",
+    } as RequestInit);
+
+    if (res.status === 429) {
+      const retryAfter = res.headers.get("retry-after");
+      const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000;
+      await new Promise((r) => setTimeout(r, delay));
+      const retryRes = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bot ${token}`,
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          "Content-Length": String(body.length),
+        },
+        body,
+        duplex: "half",
+      } as RequestInit);
+      if (!retryRes.ok) return null;
+      return retryRes.json() as Promise<T>;
+    }
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`Discord API error (${res.status}): ${errorText}`);
+      return null;
+    }
+    if (res.status === 204) return null as T;
+    return res.json() as Promise<T>;
+  } catch (error) {
+    console.error(`Discord API request failed: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
 export async function discordApiRequest<T = unknown>(
   endpoint: string,
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE" = "GET",

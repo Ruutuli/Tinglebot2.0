@@ -1,0 +1,235 @@
+// POST /api/explore/parties/[partyId]/start — create Discord thread for expedition, post embed, @members
+
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { connect } from "@/lib/db";
+import { getSession } from "@/lib/session";
+import { getAppUrl } from "@/lib/config";
+import { discordApiRequest, discordApiPostWithFile } from "@/lib/discord";
+import mongoose from "mongoose";
+import path from "path";
+import fs from "fs/promises";
+
+export const dynamic = "force-dynamic";
+
+const DISCORD_EXPEDITION_CHANNEL_ID = "1391812848099004578";
+
+const REGIONS: Record<string, { label: string; village: string }> = {
+  eldin: { label: "Eldin", village: "Rudania" },
+  lanayru: { label: "Lanayru", village: "Inariko" },
+  faron: { label: "Faron", village: "Vhintl" },
+};
+
+// Banner images from dashboard/public/assets/banners (filename only for reading from disk)
+const REGION_BANNER_FILES: Record<string, string> = {
+  eldin: "Rudania1.png",
+  lanayru: "Inariko1.png",
+  faron: "Vhintl1.png",
+};
+
+const EMBED_ATTACHMENT_FILENAME = "banner.png";
+
+type PartyMemberDoc = {
+  _id: unknown;
+  userId: string;
+  name: string;
+  currentHearts?: number;
+  currentStamina?: number;
+  items?: Array<{ itemName: string }>;
+};
+
+export async function POST(
+  _req: NextRequest,
+  { params }: { params: Promise<{ partyId: string }> }
+) {
+  try {
+    const session = await getSession();
+    const currentUserId = session.user?.id ?? null;
+    if (!currentUserId) {
+      return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    }
+
+    const { partyId } = await params;
+    if (!partyId) {
+      return NextResponse.json({ error: "Missing party ID" }, { status: 400 });
+    }
+
+    await connect();
+
+    const Party =
+      mongoose.models.Party ??
+      ((await import("@/models/PartyModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+    const Character =
+      mongoose.models.Character ??
+      ((await import("@/models/CharacterModel.js")) as { default: mongoose.Model<unknown> }).default;
+    const ModCharacter =
+      mongoose.models.ModCharacter ??
+      ((await import("@/models/ModCharacterModel.js")) as { default: mongoose.Model<unknown> }).default;
+
+    const party = await Party.findOne({ partyId }).lean();
+    if (!party) {
+      return NextResponse.json({ error: "Expedition not found" }, { status: 404 });
+    }
+
+    const p = party as Record<string, unknown>;
+    if (String(p.leaderId) !== currentUserId) {
+      return NextResponse.json({ error: "Only the expedition leader can start it" }, { status: 403 });
+    }
+
+    if (String(p.status) === "started") {
+      return NextResponse.json({ error: "Expedition already started" }, { status: 400 });
+    }
+
+    const characters = (p.characters as PartyMemberDoc[]) ?? [];
+    const region = String(p.region ?? "");
+    const square = String(p.square ?? "");
+    const quadrant = String(p.quadrant ?? "");
+    const totalHearts = typeof p.totalHearts === "number" ? p.totalHearts : 0;
+    const totalStamina = typeof p.totalStamina === "number" ? p.totalStamina : 0;
+    const regionInfo = REGIONS[region];
+    const regionLabel = regionInfo?.label ?? region;
+    const village = regionInfo?.village ?? "";
+
+    let baseUrl = getAppUrl().replace(/\/$/, "");
+    if (baseUrl.includes("localhost") || baseUrl.startsWith("http://127.0.0.1")) {
+      baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tinglebot.xyz").replace(/\/$/, "");
+    }
+    const expeditionUrl = `${baseUrl}/explore/${encodeURIComponent(partyId)}`;
+    const bannerFilename = region ? REGION_BANNER_FILES[region] : null;
+
+    const memberLines: string[] = [];
+    for (let i = 0; i < characters.length; i++) {
+      const c = characters[i];
+      let hearts: number | string = typeof c.currentHearts === "number" ? c.currentHearts : NaN;
+      let stamina: number | string = typeof c.currentStamina === "number" ? c.currentStamina : NaN;
+      if (Number.isNaN(hearts) || Number.isNaN(stamina)) {
+        const charId = c._id instanceof mongoose.Types.ObjectId ? c._id : new mongoose.Types.ObjectId(String(c._id));
+        let charDoc = await Character.findById(charId).select("currentHearts maxHearts currentStamina maxStamina").lean();
+        if (!charDoc) {
+          charDoc = await ModCharacter.findById(charId).select("currentHearts maxHearts currentStamina maxStamina").lean();
+        }
+        const ch = charDoc as Record<string, unknown> | null;
+        if (Number.isNaN(hearts)) hearts = typeof ch?.currentHearts === "number" ? ch.currentHearts : typeof ch?.maxHearts === "number" ? ch.maxHearts : "?";
+        if (Number.isNaN(stamina)) stamina = typeof ch?.currentStamina === "number" ? ch.currentStamina : typeof ch?.maxStamina === "number" ? ch.maxStamina : "?";
+      }
+      const itemsStr =
+        Array.isArray(c.items) && c.items.length > 0
+          ? c.items.map((it) => it.itemName).join(", ")
+          : "—";
+      memberLines.push(`**${i + 1}. ${String(c.name)}**\n　❤️ ${hearts} · 🟩 ${stamina}\n　📦 ${itemsStr}`);
+    }
+
+    const embed: {
+      title: string;
+      description: string;
+      url: string;
+      color: number;
+      thumbnail?: { url: string };
+      image?: { url: string };
+      fields: Array<{ name: string; value: string; inline?: boolean }>;
+      footer: { text: string };
+      timestamp: string;
+    } = {
+      title: `🗺️ Expedition ${partyId}`,
+      description: `Expedition is **locked in** and ready to run. Use the link below to open the expedition page.`,
+      url: expeditionUrl,
+      color: 2990110,
+      fields: [
+        { name: "📍 Region", value: regionLabel, inline: true },
+        { name: "🏘️ Village", value: village || "—", inline: true },
+        { name: "🔄 Start", value: `${square} ${quadrant}`, inline: true },
+        {
+          name: "❤️ Party total",
+          value: `**${totalHearts}** hearts · **${totalStamina}** stamina`,
+          inline: false,
+        },
+        {
+          name: `👥 Party (${characters.length}/4) — turn order`,
+          value: memberLines.join("\n\n") || "—",
+          inline: false,
+        },
+        {
+          name: "🔗 Expedition page",
+          value: `[Open in dashboard](${expeditionUrl})`,
+          inline: false,
+        },
+      ],
+      footer: { text: "Tinglebot · Roots of the Wild" },
+      timestamp: new Date().toISOString(),
+    };
+    // embed.image set only when sending file attachment below
+
+    const mentionContent = characters
+      .map((c) => `<@${c.userId}>`)
+      .filter(Boolean)
+      .join(" ");
+
+    const threadName = `Expedition ${partyId}`.slice(0, 100);
+
+    const thread = await discordApiRequest<{ id: string }>(
+      `channels/${DISCORD_EXPEDITION_CHANNEL_ID}/threads`,
+      "POST",
+      { name: threadName, type: 11 }
+    );
+
+    if (!thread?.id) {
+      console.error("[explore/parties/start] Discord thread creation failed");
+      return NextResponse.json(
+        { error: "Failed to create Discord thread" },
+        { status: 502 }
+      );
+    }
+
+    const messageBody = mentionContent
+      ? `${mentionContent}\n\nExpedition is starting! See embed for details and link.`
+      : "Expedition is starting! See embed for details and link.";
+
+    let postResult: { id: string } | null = null;
+    if (bannerFilename) {
+      try {
+        const bannerPath = path.join(process.cwd(), "public", "assets", "banners", bannerFilename);
+        const buffer = await fs.readFile(bannerPath);
+        const embedWithImage = { ...embed, image: { url: `attachment://${EMBED_ATTACHMENT_FILENAME}` as string } };
+        postResult = await discordApiPostWithFile<{ id: string }>(
+          `channels/${thread.id}/messages`,
+          { content: messageBody, embeds: [embedWithImage] },
+          [{ data: buffer, filename: EMBED_ATTACHMENT_FILENAME }]
+        );
+      } catch (err) {
+        console.warn("[explore/parties/start] Could not read banner file, posting without image:", err);
+      }
+    }
+    if (postResult === null) {
+      postResult = await discordApiRequest<{ id: string }>(
+        `channels/${thread.id}/messages`,
+        "POST",
+        { content: messageBody, embeds: [embed] }
+      );
+    }
+    if (postResult === null) {
+      console.error("[explore/parties/start] Discord message post failed");
+      return NextResponse.json(
+        { error: "Failed to post expedition message to thread" },
+        { status: 502 }
+      );
+    }
+
+    await Party.updateOne(
+      { partyId },
+      { $set: { status: "started", discordThreadId: thread.id } }
+    );
+
+    const threadUrl = `https://discord.com/channels/${process.env.GUILD_ID ?? ""}/${thread.id}`;
+    return NextResponse.json({
+      ok: true,
+      threadId: thread.id,
+      threadUrl: process.env.GUILD_ID ? threadUrl : null,
+    });
+  } catch (err) {
+    console.error("[explore/parties/[partyId]/start]", err);
+    return NextResponse.json(
+      { error: "Failed to start expedition" },
+      { status: 500 }
+    );
+  }
+}

@@ -696,7 +696,11 @@ const processMaterials = async (interaction, character, inventory, craftableItem
   for (const material of craftableItem.craftingMaterial) {
     const materialName = material.itemName;
     let specificItems = [];
-    let requiredQuantity = material.quantity * quantity;
+    // Normalize to number; skip if NaN or <= 0 (e.g. Scholar saved entire material)
+    let requiredQuantity = Number(material.quantity) * Number(quantity);
+    if (isNaN(requiredQuantity) || requiredQuantity <= 0) {
+      continue;
+    }
 
     // Get available items for this material
     if (generalCategories[materialName]) {
@@ -903,6 +907,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       if (itemQty <= 0) continue; // Skip invalid items
       
       let removeQuantity = Math.min(requiredQuantity, itemQty);
+      if (typeof removeQuantity !== 'number' || isNaN(removeQuantity) || removeQuantity <= 0) continue;
       await removeItemInventoryDatabase(
         character._id,
         specificItem.itemName,

@@ -1,0 +1,2920 @@
+{
+  "grid": {
+    "cols": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J"
+    ],
+    "rows": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ]
+  },
+  "squareSize": {
+    "w": 2400,
+    "h": 1666
+  },
+  "canvas": {
+    "w": 24000,
+    "h": 20000
+  },
+  "squares": {
+    "A1": {
+      "bounds": {
+        "x0": 0,
+        "y0": 0,
+        "x1": 2400,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B1": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 0,
+        "x1": 4800,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C1": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 0,
+        "x1": 7200,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D1": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 0,
+        "x1": 9600,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E1": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 0,
+        "x1": 12000,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F1": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 0,
+        "x1": 14400,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G1": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 0,
+        "x1": 16800,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H1": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 0,
+        "x1": 19200,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I1": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 0,
+        "x1": 21600,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J1": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 0,
+        "x1": 24000,
+        "y1": 1666
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A2": {
+      "bounds": {
+        "x0": 0,
+        "y0": 1666,
+        "x1": 2400,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B2": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 1666,
+        "x1": 4800,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C2": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 1666,
+        "x1": 7200,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D2": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 1666,
+        "x1": 9600,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E2": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 1666,
+        "x1": 12000,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F2": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 1666,
+        "x1": 14400,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G2": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 1666,
+        "x1": 16800,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H2": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 1666,
+        "x1": 19200,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I2": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 1666,
+        "x1": 21600,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J2": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 1666,
+        "x1": 24000,
+        "y1": 3332
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A3": {
+      "bounds": {
+        "x0": 0,
+        "y0": 3332,
+        "x1": 2400,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B3": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 3332,
+        "x1": 4800,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C3": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 3332,
+        "x1": 7200,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D3": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 3332,
+        "x1": 9600,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E3": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 3332,
+        "x1": 12000,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F3": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 3332,
+        "x1": 14400,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G3": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 3332,
+        "x1": 16800,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H3": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 3332,
+        "x1": 19200,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I3": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 3332,
+        "x1": 21600,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J3": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 3332,
+        "x1": 24000,
+        "y1": 4998
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A4": {
+      "bounds": {
+        "x0": 0,
+        "y0": 4998,
+        "x1": 2400,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B4": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 4998,
+        "x1": 4800,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C4": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 4998,
+        "x1": 7200,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D4": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 4998,
+        "x1": 9600,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E4": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 4998,
+        "x1": 12000,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F4": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 4998,
+        "x1": 14400,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G4": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 4998,
+        "x1": 16800,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H4": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 4998,
+        "x1": 19200,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I4": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 4998,
+        "x1": 21600,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J4": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 4998,
+        "x1": 24000,
+        "y1": 6664
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A5": {
+      "bounds": {
+        "x0": 0,
+        "y0": 6664,
+        "x1": 2400,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B5": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 6664,
+        "x1": 4800,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C5": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 6664,
+        "x1": 7200,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D5": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 6664,
+        "x1": 9600,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E5": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 6664,
+        "x1": 12000,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F5": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 6664,
+        "x1": 14400,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G5": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 6664,
+        "x1": 16800,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H5": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 6664,
+        "x1": 19200,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I5": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 6664,
+        "x1": 21600,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J5": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 6664,
+        "x1": 24000,
+        "y1": 8330
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A6": {
+      "bounds": {
+        "x0": 0,
+        "y0": 8330,
+        "x1": 2400,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B6": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 8330,
+        "x1": 4800,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C6": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 8330,
+        "x1": 7200,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D6": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 8330,
+        "x1": 9600,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E6": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 8330,
+        "x1": 12000,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F6": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 8330,
+        "x1": 14400,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G6": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 8330,
+        "x1": 16800,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H6": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 8330,
+        "x1": 19200,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I6": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 8330,
+        "x1": 21600,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J6": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 8330,
+        "x1": 24000,
+        "y1": 9996
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A7": {
+      "bounds": {
+        "x0": 0,
+        "y0": 9996,
+        "x1": 2400,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B7": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 9996,
+        "x1": 4800,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C7": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 9996,
+        "x1": 7200,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D7": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 9996,
+        "x1": 9600,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E7": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 9996,
+        "x1": 12000,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F7": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 9996,
+        "x1": 14400,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G7": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 9996,
+        "x1": 16800,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H7": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 9996,
+        "x1": 19200,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I7": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 9996,
+        "x1": 21600,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J7": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 9996,
+        "x1": 24000,
+        "y1": 11662
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A8": {
+      "bounds": {
+        "x0": 0,
+        "y0": 11662,
+        "x1": 2400,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B8": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 11662,
+        "x1": 4800,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C8": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 11662,
+        "x1": 7200,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D8": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 11662,
+        "x1": 9600,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E8": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 11662,
+        "x1": 12000,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F8": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 11662,
+        "x1": 14400,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G8": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 11662,
+        "x1": 16800,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H8": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 11662,
+        "x1": 19200,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I8": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 11662,
+        "x1": 21600,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J8": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 11662,
+        "x1": 24000,
+        "y1": 13328
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A9": {
+      "bounds": {
+        "x0": 0,
+        "y0": 13328,
+        "x1": 2400,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B9": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 13328,
+        "x1": 4800,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C9": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 13328,
+        "x1": 7200,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D9": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 13328,
+        "x1": 9600,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E9": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 13328,
+        "x1": 12000,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F9": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 13328,
+        "x1": 14400,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G9": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 13328,
+        "x1": 16800,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H9": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 13328,
+        "x1": 19200,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I9": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 13328,
+        "x1": 21600,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J9": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 13328,
+        "x1": 24000,
+        "y1": 14994
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A10": {
+      "bounds": {
+        "x0": 0,
+        "y0": 14994,
+        "x1": 2400,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B10": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 14994,
+        "x1": 4800,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C10": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 14994,
+        "x1": 7200,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D10": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 14994,
+        "x1": 9600,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E10": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 14994,
+        "x1": 12000,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F10": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 14994,
+        "x1": 14400,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G10": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 14994,
+        "x1": 16800,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H10": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 14994,
+        "x1": 19200,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I10": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 14994,
+        "x1": 21600,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J10": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 14994,
+        "x1": 24000,
+        "y1": 16660
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A11": {
+      "bounds": {
+        "x0": 0,
+        "y0": 16660,
+        "x1": 2400,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B11": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 16660,
+        "x1": 4800,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C11": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 16660,
+        "x1": 7200,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D11": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 16660,
+        "x1": 9600,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E11": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 16660,
+        "x1": 12000,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F11": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 16660,
+        "x1": 14400,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G11": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 16660,
+        "x1": 16800,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H11": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 16660,
+        "x1": 19200,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I11": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 16660,
+        "x1": 21600,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J11": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 16660,
+        "x1": 24000,
+        "y1": 18326
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "A12": {
+      "bounds": {
+        "x0": 0,
+        "y0": 18326,
+        "x1": 2400,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "B12": {
+      "bounds": {
+        "x0": 2400,
+        "y0": 18326,
+        "x1": 4800,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "C12": {
+      "bounds": {
+        "x0": 4800,
+        "y0": 18326,
+        "x1": 7200,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "D12": {
+      "bounds": {
+        "x0": 7200,
+        "y0": 18326,
+        "x1": 9600,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "E12": {
+      "bounds": {
+        "x0": 9600,
+        "y0": 18326,
+        "x1": 12000,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "F12": {
+      "bounds": {
+        "x0": 12000,
+        "y0": 18326,
+        "x1": 14400,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "G12": {
+      "bounds": {
+        "x0": 14400,
+        "y0": 18326,
+        "x1": 16800,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "H12": {
+      "bounds": {
+        "x0": 16800,
+        "y0": 18326,
+        "x1": 19200,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "I12": {
+      "bounds": {
+        "x0": 19200,
+        "y0": 18326,
+        "x1": 21600,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    },
+    "J12": {
+      "bounds": {
+        "x0": 21600,
+        "y0": 18326,
+        "x1": 24000,
+        "y1": 19992
+      },
+      "layers": [
+        "background",
+        "base",
+        "blight",
+        "mask",
+        "region-borders",
+        "paths",
+        "village-borders-inner",
+        "village-borders-outer",
+        "village-markers",
+        "region-names",
+        "MAP_0003s_0000_PSL",
+        "MAP_0003s_0001_LDW",
+        "MAP_0003s_0002_Other-Paths"
+      ],
+      "hasPreview": true
+    }
+  }
+}

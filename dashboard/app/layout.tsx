@@ -6,9 +6,8 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 
 import "@/app/globals.css";
-import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { ConditionalDashboardLayout } from "@/components/layout/conditional-dashboard-layout";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
-import { TopBar, TOP_BAR_HEIGHT } from "@/components/layout/top-bar";
 import { getAppUrl } from "@/lib/config";
 
 /* [layout.tsx]✨ Page metadata - */
@@ -108,16 +107,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen antialiased">
         <SidebarProvider>
-          <TopBar />
-          <div
-            className="flex flex-col"
-            style={{
-              minHeight: "100vh",
-              paddingTop: TOP_BAR_HEIGHT,
-            }}
-          >
-            <DashboardShell>{children}</DashboardShell>
-          </div>
+          <ConditionalDashboardLayout>{children}</ConditionalDashboardLayout>
         </SidebarProvider>
         <Script
           crossOrigin="anonymous"

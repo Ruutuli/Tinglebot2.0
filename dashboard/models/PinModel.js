@@ -82,6 +82,13 @@ const pinSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+
+  // Optional character tag (user's character this pin is associated with)
+  character: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Character',
+    default: null
+  },
   
   // Image attachment
   imageUrl: {
@@ -154,21 +161,23 @@ pinSchema.methods.canUserModify = function(userDiscordId) {
   return this.discordId === userDiscordId;
 };
 
-// Static method to get pins for a user
+// Static method to get pins for a user (returns plain objects via .lean())
+// Does not populate 'creator' to avoid requiring User model in API route (Next.js can load models in different order).
 pinSchema.statics.getUserPins = function(discordId, includePublic = true) {
   const query = includePublic 
     ? { $or: [{ discordId }, { isPublic: true }] }
     : { discordId };
     
   return this.find(query)
-    .populate('creator', 'username avatar discriminator')
-    .sort({ createdAt: -1 });
+    .populate('character', 'name')
+    .sort({ createdAt: -1 })
+    .lean();
 };
 
 // Static method to get pins by grid location
 pinSchema.statics.getPinsByLocation = function(gridLocation) {
   return this.find({ gridLocation, isPublic: true })
-    .populate('creator', 'username avatar discriminator')
+    .populate('creator', 'discordId')
     .sort({ createdAt: -1 });
 };
 
@@ -179,8 +188,8 @@ pinSchema.statics.getPinsByCategory = function(category, includePublic = true) {
     : { category };
     
   return this.find(query)
-    .populate('creator', 'username avatar discriminator')
+    .populate('creator', 'discordId')
     .sort({ createdAt: -1 });
 };
 
-module.exports = mongoose.model('Pin', pinSchema);
+module.exports = mongoose.models.Pin || mongoose.model('Pin', pinSchema);

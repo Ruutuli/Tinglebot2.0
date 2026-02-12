@@ -30,6 +30,7 @@ export const navItems: NavItem[] = [
   { href: "/levels", label: "Levels & Progression", icon: "fa-chart-line" },
   { href: "/stats", label: "Statistics", icon: "fa-chart-bar" },
   { href: "/calendar", label: "Calendar", icon: "fa-calendar" },
+  { href: "/map", label: "ROTW Map", icon: "fa-map" },
   { href: "/profile", label: "Profile", icon: "fa-user-circle" },
   {
     label: "Admin",
