@@ -735,22 +735,44 @@ export function CreateForm({
       return getWeaponType(itemData) !== null && !isShield(itemData);
     };
 
-    return {
-      chestArmor: metadata.gearItems.chestArmor.filter((c) =>
-        starterGearIds.has(c.id)
-      ),
-      headArmor: metadata.gearItems.headArmor.filter((h) =>
-        starterGearIds.has(h.id)
-      ),
-      legsArmor: metadata.gearItems.legsArmor.filter((l) =>
-        starterGearIds.has(l.id)
-      ),
-      shields: metadata.gearItems.shields.filter((s) =>
-        starterGearIds.has(s.id)
-      ),
-      weapons: metadata.gearItems.weapons.filter(filterWeapon),
+    const addEquippedByName = <T extends GearItemOption>(
+      filtered: T[],
+      fullList: T[],
+      equippedName: string | undefined
+    ): T[] => {
+      if (!equippedName?.trim()) return filtered;
+      const name = equippedName.trim();
+      if (filtered.some((i) => i.name.toLowerCase() === name.toLowerCase())) return filtered;
+      const found = fullList.find((i) => i.name.toLowerCase() === name.toLowerCase());
+      return found ? [...filtered, found] : filtered;
     };
-  }, [metadata.gearItems, starterGearIds]);
+
+    const chestArmor = metadata.gearItems.chestArmor.filter((c) => starterGearIds.has(c.id));
+    const headArmor = metadata.gearItems.headArmor.filter((h) => starterGearIds.has(h.id));
+    const legsArmor = metadata.gearItems.legsArmor.filter((l) => starterGearIds.has(l.id));
+    const shields = metadata.gearItems.shields.filter((s) => starterGearIds.has(s.id));
+    const weapons = metadata.gearItems.weapons.filter(filterWeapon);
+
+    // In edit mode, include character's current gear so it can be found and preselected (persists on load)
+    if (isEditMode && initialCharacter) {
+      const c = initialCharacter;
+      return {
+        chestArmor: addEquippedByName(chestArmor, metadata.gearItems.chestArmor, c.gearArmor?.chest?.name),
+        headArmor: addEquippedByName(headArmor, metadata.gearItems.headArmor, c.gearArmor?.head?.name),
+        legsArmor: addEquippedByName(legsArmor, metadata.gearItems.legsArmor, c.gearArmor?.legs?.name),
+        shields: addEquippedByName(shields, metadata.gearItems.shields, c.gearShield?.name),
+        weapons: addEquippedByName(weapons, metadata.gearItems.weapons, c.gearWeapon?.name),
+      };
+    }
+
+    return {
+      chestArmor,
+      headArmor,
+      legsArmor,
+      shields,
+      weapons,
+    };
+  }, [metadata.gearItems, starterGearIds, isEditMode, initialCharacter?.gearWeapon?.name, initialCharacter?.gearShield?.name, initialCharacter?.gearArmor?.head?.name, initialCharacter?.gearArmor?.chest?.name, initialCharacter?.gearArmor?.legs?.name]);
 
   const formatItemDisplay = useCallback((item: GearItemOption): string => {
     const itemData = gearItemToItemData(item);
