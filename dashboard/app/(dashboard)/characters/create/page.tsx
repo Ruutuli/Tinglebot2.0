@@ -947,6 +947,64 @@ export function CreateForm({
     }
   }, [isEditMode, initialCharacter?.birthday]);
 
+  /* [create/page.tsx]🧠 Unsaved changes: warn before leaving (edit mode) so users don't lose edits by accident. */
+  const isDirty = useMemo(() => {
+    if (!isEditMode || !initialCharacter) return false;
+    const trim = (s: string | undefined) => (s ?? "").trim();
+    const init = initialCharacter;
+    const initBday = parseBirthday(init.birthday ?? null);
+    const currentBday = birthdayMonth.trim() && birthdayDay.trim()
+      ? `${String(parseInt(birthdayMonth.trim(), 10)).padStart(2, "0")}-${String(parseInt(birthdayDay.trim(), 10)).padStart(2, "0")}`
+      : "";
+    const initBdayStr = initBday.month && initBday.day ? `${initBday.month.padStart(2, "0")}-${initBday.day.padStart(2, "0")}` : "";
+    if (trim(name) !== trim(init.name ?? "")) return true;
+    if (trim(age) !== trim(String(init.age ?? ""))) return true;
+    if (trim(height) !== trim(String(init.height ?? ""))) return true;
+    if (trim(pronouns) !== trim(init.pronouns ?? "")) return true;
+    if (trim(gender) !== trim(init.gender ?? "")) return true;
+    if (trim(race) !== trim(init.race ?? "")) return true;
+    if (trim(village) !== (trim(init.homeVillage ?? init.village ?? ""))) return true;
+    if (trim(job) !== trim(init.job ?? "")) return true;
+    if (trim(virtue) !== trim(init.virtue ?? "")) return true;
+    if (trim(personality) !== trim(init.personality ?? "")) return true;
+    if (trim(history) !== trim(init.history ?? "")) return true;
+    if (trim(extras) !== trim(init.extras ?? "")) return true;
+    if (trim(appLink) !== trim(init.appLink ?? "")) return true;
+    if (currentBday !== initBdayStr) return true;
+    if (iconFile && iconFile instanceof File && iconFile.size > 0) return true;
+    if (appArtFile && appArtFile instanceof File && appArtFile.size > 0) return true;
+    return false;
+  }, [
+    isEditMode,
+    initialCharacter,
+    name,
+    age,
+    height,
+    pronouns,
+    gender,
+    race,
+    village,
+    job,
+    virtue,
+    personality,
+    history,
+    extras,
+    appLink,
+    birthdayMonth,
+    birthdayDay,
+    iconFile,
+    appArtFile,
+  ]);
+
+  useEffect(() => {
+    if (!isEditMode || !isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isEditMode, isDirty]);
+
   /* [create/page.tsx]🧠 Auto-dismiss alerts - */
   useEffect(() => {
     if (gearConflictAlert) {
@@ -1471,14 +1529,14 @@ export function CreateForm({
         if (isEditMode) {
           setSubmitSuccess(
             data.character?.name
-              ? `Character "${data.character.name}" updated successfully.`
-              : "Character updated."
+              ? `All changes saved. "${data.character.name}" has been updated. Redirecting…`
+              : "All changes saved. Redirecting…"
           );
-          // Redirect to character page after successful update using slug
-          // Add cache-busting param so the detail page fetches fresh data
+          // Redirect after a short delay so the user sees the success message (avoids "did my stuff save?" confusion)
           if (data.character?.name) {
             const slug = createSlug(data.character.name);
-            router.push(`/characters/${slug}?t=${Date.now()}`);
+            const redirectUrl = `/characters/${slug}?t=${Date.now()}&saved=1`;
+            setTimeout(() => router.push(redirectUrl), 2200);
           }
         } else {
           setSubmitSuccess(
@@ -2498,11 +2556,17 @@ export function CreateForm({
           {submitSuccess}
         </div>
       )}
+      {isEditMode && (
+        <p className="text-sm text-[var(--totk-grey-200)]">
+          Click &quot;Update Character&quot; to save <strong>all</strong> your changes (personality, history, job, race, etc.) before leaving or resubmitting for review.
+        </p>
+      )}
       <div className="flex flex-col gap-4 border-t-2 border-[var(--totk-green)] pt-4 sm:flex-row sm:flex-wrap sm:pt-6">
         <button
           className="w-full min-h-[44px] rounded-lg border-2 border-[var(--botw-blue)] bg-[var(--botw-blue)] px-5 py-2.5 font-medium text-[var(--botw-white)] shadow-md transition-colors hover:bg-[var(--botw-dark-blue)] hover:border-[var(--botw-dark-blue)] hover:shadow-[0_0_12px_rgba(0,163,218,0.4)] disabled:opacity-50 touch-manipulation sm:w-auto"
           disabled={submitLoading}
           type="submit"
+          title={isEditMode ? "Save all your changes to this character" : undefined}
         >
           {submitLoading ? (isEditMode ? "Updating…" : "Saving…") : (isEditMode ? "Update Character" : "Create and Save Character")}
         </button>

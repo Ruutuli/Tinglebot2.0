@@ -6,7 +6,7 @@
 // [page.tsx]✨ External dependencies and internal imports -
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo, type ReactNode } from "react";
-import { useParams, useRouter, usePathname } from "next/navigation";
+import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -1023,7 +1023,11 @@ export default function OCDetailPage() {
   const params = useParams();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, loading: sessionLoading } = useSession();
+  const savedParam = searchParams.get("saved") === "1";
+  const [savedBannerVisible, setSavedBannerVisible] = useState(false);
+  const showSavedBanner = savedParam || savedBannerVisible;
   const [character, setCharacter] = useState<CharacterDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1043,6 +1047,18 @@ export default function OCDetailPage() {
   const [relationshipsError, setRelationshipsError] = useState<string | null>(null);
 
   const characterId = typeof params.id === "string" ? params.id : null;
+
+  // When landing with ?saved=1, show banner, clean URL, and keep banner visible for a few seconds
+  useEffect(() => {
+    if (!savedParam) return;
+    setSavedBannerVisible(true);
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("saved");
+    const q = next.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    const t = setTimeout(() => setSavedBannerVisible(false), 5000);
+    return () => clearTimeout(t);
+  }, [savedParam, pathname, router, searchParams]);
 
   const fetchCharacter = useCallback(async () => {
     if (!characterId) {
@@ -1635,6 +1651,14 @@ export default function OCDetailPage() {
                 <p className="text-sm font-medium text-[#ff6347]">
                   <i className="fa-solid fa-exclamation-triangle mr-2" aria-hidden="true" />
                   {submitError}
+                </p>
+              </div>
+            )}
+            {showSavedBanner && (
+              <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 p-3 text-center">
+                <p className="text-sm font-medium text-[var(--totk-light-green)]">
+                  <i className="fa-solid fa-check-circle mr-2" aria-hidden="true" />
+                  Your changes have been saved.
                 </p>
               </div>
             )}

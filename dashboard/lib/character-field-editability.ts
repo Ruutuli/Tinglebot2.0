@@ -32,7 +32,8 @@ export const ACCEPTED_EDITABLE_FIELDS = [
 ] as const;
 
 // Fields locked when status is "needs_changes" (after revision).
-// Job is intentionally NOT locked so users can change job while addressing feedback.
+// Only "name" is locked. Job, personality, history, and other fields remain editable
+// so users can address mod feedback and resubmit; changes must save and persist.
 export const NEEDS_CHANGES_LOCKED_FIELDS = [
   "name",
 ] as const;
