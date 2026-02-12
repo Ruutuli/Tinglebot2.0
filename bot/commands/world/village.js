@@ -72,6 +72,34 @@ function getNextDonationReset() {
 // ---- Helper Functions ----
 // ============================================================================
 
+// ------------------- Function: getContributorItemTotal -------------------
+// Safely sums contributor items (handles Mongoose Map and plain object)
+function getContributorItemTotal(items) {
+    if (!items) return 0;
+    if (items instanceof Map) {
+        return [...items.values()].reduce((sum, qty) => sum + (Number(qty) || 0), 0);
+    }
+    return Object.values(items).reduce((sum, qty) => sum + (Number(qty) || 0), 0);
+}
+
+// ------------------- Function: getContributorItemEntries -------------------
+// Safely gets [itemName, qty] entries (handles Mongoose Map and plain object)
+function getContributorItemEntries(items) {
+    if (!items) return [];
+    if (items instanceof Map) {
+        return [...items.entries()].map(([k, v]) => [String(k), Number(v) || 0]);
+    }
+    return Object.entries(items).map(([k, v]) => [String(k), Number(v) || 0]);
+}
+
+// ------------------- Function: isValidContributorKey -------------------
+// Filters out MongoDB path-style keys (e.g. contributors.$.items)
+function isValidContributorKey(key) {
+    if (typeof key !== 'string' || !key) return false;
+    if (key.includes('$') || key.includes('[object Object]')) return false;
+    return true;
+}
+
 // ------------------- Function: validateVillageChannel -------------------
 // Validates that the command is being used in the correct town hall channel
 function validateVillageChannel(villageName, interaction) {
@@ -768,16 +796,19 @@ async function generateProgressEmbed(village) {
     // Get top contributors (by CHARACTER ID now, not user ID)
     const contributors = village.contributors instanceof Map ? Object.fromEntries(village.contributors) : village.contributors;
     const topContributors = await Promise.all(
-        Object.entries(contributors)
+        Object.entries(contributors || {})
+            .filter(([characterId]) => isValidContributorKey(characterId))
             .map(async ([characterId, data]) => {
-                const total = (data.tokens || 0) + Object.values(data.items || {}).reduce((sum, qty) => sum + qty, 0);
+                const tokens = Number(data?.tokens) || 0;
+                const itemTotal = getContributorItemTotal(data?.items);
+                const total = tokens + itemTotal;
                 // Fetch character to get name
                 const character = await fetchCharacterById(characterId);
                 const characterName = character ? character.name : `Character ${characterId.substring(0, 8)}...`;
                 return {
                     characterId,
                     characterName,
-                    total
+                    total: Number(total)
                 };
             })
     );
@@ -837,18 +868,19 @@ async function generateContributorsEmbed(village) {
 
     // Process all contributors
     const contributorList = await Promise.all(
-        Object.entries(contributors)
+        Object.entries(contributors || {})
+            .filter(([characterId]) => isValidContributorKey(characterId))
             .map(async ([characterId, data]) => {
                 const character = await fetchCharacterById(characterId);
                 const characterName = character ? character.name : `Character ${characterId.substring(0, 8)}...`;
                 
-                const tokens = data.tokens || 0;
-                const items = data.items || {};
-                const itemContributions = Object.entries(items)
+                const tokens = Number(data?.tokens) || 0;
+                const itemEntries = getContributorItemEntries(data?.items);
+                const itemContributions = itemEntries
                     .filter(([_, qty]) => qty > 0)
                     .map(([itemName, qty]) => ({ itemName, qty }));
                 
-                const totalItems = Object.values(items).reduce((sum, qty) => sum + qty, 0);
+                const totalItems = getContributorItemTotal(data?.items);
                 const totalContributions = tokens + totalItems;
                 const lastDonatedAt = data.lastDonatedAt ? new Date(data.lastDonatedAt) : null;
                 
@@ -1481,16 +1513,19 @@ module.exports = {
                 // Get top contributors (by CHARACTER ID now, not user ID)
                 const contributors = villageToDisplay.contributors instanceof Map ? Object.fromEntries(villageToDisplay.contributors) : villageToDisplay.contributors;
                 const topContributors = await Promise.all(
-                    Object.entries(contributors)
+                    Object.entries(contributors || {})
+                        .filter(([characterId]) => isValidContributorKey(characterId))
                         .map(async ([characterId, data]) => {
-                            const total = (data.tokens || 0) + Object.values(data.items || {}).reduce((sum, qty) => sum + qty, 0);
+                            const tokens = Number(data?.tokens) || 0;
+                            const itemTotal = getContributorItemTotal(data?.items);
+                            const total = tokens + itemTotal;
                             // Fetch character to get name
                             const character = await fetchCharacterById(characterId);
                             const characterName = character ? character.name : `Character ${characterId.substring(0, 8)}...`;
                             return {
                                 characterId,
                                 characterName,
-                                total
+                                total: Number(total)
                             };
                         })
                 );

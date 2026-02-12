@@ -19,6 +19,7 @@ const Square = require('@/models/mapModel.js');
 const {
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
+ regionColors,
 } = require("../../embeds/embeds.js");
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
@@ -302,13 +303,123 @@ module.exports = {
       );
      }
 
-     party.totalStamina -= staminaCost;
-     await party.save();
+    party.totalStamina -= staminaCost;
+    await party.save();
 
-     const encounterType = Math.random() < 0.7 ? "monster" : "item";
      const location = `${party.square} ${party.quadrant}`;
 
-     if (encounterType === "item") {
+     // Single outcome per roll: one of monster, raid, item, explored, chest, old_map, ruins, relic, camp, monster_camp, grotto
+     const outcomeRoll = Math.random();
+     let outcomeType;
+     if (outcomeRoll < 0.50) outcomeType = "monster";
+     else if (outcomeRoll < 0.75) outcomeType = "item";
+     else if (outcomeRoll < 0.90) outcomeType = "explored";
+     else if (outcomeRoll < 0.91) outcomeType = "chest";
+     else if (outcomeRoll < 0.92) outcomeType = "old_map";
+     else if (outcomeRoll < 0.94) outcomeType = "ruins";
+     else if (outcomeRoll < 0.96) outcomeType = "relic";
+     else if (outcomeRoll < 0.97) outcomeType = "camp";
+     else if (outcomeRoll < 0.98) outcomeType = "monster_camp";
+     else outcomeType = "grotto";
+
+     if (outcomeType === "explored") {
+      party.quadrantState = "explored";
+      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      await party.save();
+      const nextCharacter = party.characters[party.currentTurn];
+      const nextName = nextCharacter?.name || "Unknown";
+      const embed = new EmbedBuilder()
+       .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
+       .setDescription(
+        `**${character.name}** has explored this area. The party can now choose what to do next.`
+       )
+       .setColor(regionColors[party.region] || "#00ff99")
+       .addFields(
+        { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
+        { name: "📍 **__Current Location__**", value: location, inline: true },
+        { name: "❤️ **__Party Hearts__**", value: `${party.totalHearts}`, inline: true },
+        { name: "🟩 **__Party Stamina__**", value: `${party.totalStamina}`, inline: true },
+        {
+         name: "**What you can do next**",
+         value:
+          "• **Rest** (3 stamina) — heal all party hearts, revive KO'd\n• **Secure** quadrant (5 stamina + resources)\n• **Roll** again in same quadrant (1 stamina)\n• **Move** to next quadrant (2 stamina)",
+         inline: false,
+        },
+        {
+         name: "➡️ **__What to do next__**",
+         value: `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` to take your turn (or use **rest** / **secure** / **move** when it's your turn).`,
+         inline: false,
+        }
+       );
+      await interaction.editReply({ embeds: [embed] });
+      return;
+     }
+
+     if (outcomeType === "chest" || outcomeType === "old_map" || outcomeType === "ruins" || outcomeType === "relic" || outcomeType === "camp" || outcomeType === "monster_camp" || outcomeType === "grotto") {
+      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      await party.save();
+      const nextCharacter = party.characters[party.currentTurn];
+      const nextName = nextCharacter?.name || "Unknown";
+      const nextTurnValue = `**Next turn:** ${nextName}\n**Command:** Use \`/explore roll\` with **Expedition ID** \`${expeditionId}\` and **Character** \`${nextName}\` to take your turn.`;
+
+      let title, description;
+      if (outcomeType === "monster_camp") {
+       title = `🗺️ **Expedition: Monster Camp found!**`;
+       description =
+        `**${character.name}** found something unsettling.\n\n` +
+        "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there. Report it back to the town hall to have it marked on the map for later.\n\n" +
+        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+      } else if (outcomeType === "chest") {
+       title = `🗺️ **Expedition: Chest found!**`;
+       description =
+        `**${character.name}** found a chest!\n\n` +
+        "You found a chest! Use the chest flow to open it (cost 1 stamina).\n\n" +
+        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+      } else if (outcomeType === "old_map") {
+       title = `🗺️ **Expedition: Old map found!**`;
+       description =
+        `**${character.name}** discovered something unusual.\n\n` +
+        "You found a really old map! You have no idea what you're looking at when you open it. Take it to the Inariko Library to get it deciphered. You can find out more info [here](https://www.rootsofthewild.com/oldmaps).\n\n" +
+        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+      } else if (outcomeType === "ruins") {
+       title = `🗺️ **Expedition: Ruins found!**`;
+       description =
+        `**${character.name}** found some ruins!\n\n` +
+        "You found some ruins! Do you want to explore them?\n\n" +
+        "**Yes** — Use the ruins flow when available (cost 3 stamina).\n" +
+        "**No** — Continue exploring with `/explore roll`.";
+      } else if (outcomeType === "relic") {
+       title = `🗺️ **Expedition: Relic found!**`;
+       description =
+        `**${character.name}** found something ancient.\n\n` +
+        "You found a relic! What is this? Take it to an Inarikian Artist or Researcher to get this appraised. You can find more info [here](https://www.rootsofthewild.com/relics).\n\n" +
+        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+      } else if (outcomeType === "grotto") {
+       title = `🗺️ **Expedition: Grotto found!**`;
+       description =
+        `**${character.name}** stumbled across something strange.\n\n` +
+        "You stumble across an interesting looking stump with roots covered in talismans, do you have the means to cleanse them? More info about grottos can be found [here](https://www.rootsofthewild.com/grottos).\n\n" +
+        "**Yes** — Use the grotto flow when available (cost 1 goddess plume + 1 stamina).\n" +
+        "**No** (mark it on the map for later!) — Continue exploring with `/explore roll`.";
+      } else {
+       title = `🗺️ **Expedition: ${character.name} found a camp!**`;
+       description = `**${character.name}** discovered a camp site in this quadrant.`;
+      }
+
+      const embed = new EmbedBuilder()
+       .setTitle(title)
+       .setDescription(description)
+       .setColor(regionColors[party.region] || "#00ff99")
+       .addFields(
+        { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
+        { name: "📍 **__Current Location__**", value: location, inline: true },
+        { name: "➡️ **__What to do next__**", value: nextTurnValue, inline: false }
+       );
+      await interaction.editReply({ embeds: [embed] });
+      return;
+     }
+
+     if (outcomeType === "item") {
       const allItems = await fetchAllItems();
       const availableItems = allItems.filter(
        (item) => item[party.region.toLowerCase()]
@@ -343,18 +454,6 @@ module.exports = {
        emoji: selectedItem.emoji || "",
       });
 
-      const exploreChance = Math.random();
-      if (exploreChance > 0.7 || party.quadrantState !== "unexplored") {
-       party.quadrantState = "explored";
-
-       embed.addFields({
-        name: "Quadrant Explored!",
-        value:
-         "You have successfully explored this quadrant. You can now:\n- **Rest** (3 stamina)\n- **Secure** quadrant (5 stamina + resources)\n- **Roll** again in same quadrant (1 stamina)\n- **Move** to next quadrant (2 stamina)",
-        inline: false,
-       });
-      }
-
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
@@ -382,7 +481,7 @@ module.exports = {
         `[ERROR] Could not add item to inventory: ${error.message}`
        );
       }
-     } else if (encounterType === "monster") {
+     } else if (outcomeType === "monster") {
       // Check if character has blight stage 3 or higher (monsters don't attack them)
       if (character.blighted && character.blightStage >= 3) {
         return interaction.editReply({
@@ -495,17 +594,6 @@ module.exports = {
            itemName: lootedItem.itemName,
            quantity: 1,
            emoji: lootedItem.emoji || "",
-          });
-         }
-
-         const exploreChance = Math.random();
-         if (exploreChance > 0.3 || party.quadrantState !== "unexplored") {
-          party.quadrantState = "explored";
-          embed.addFields({
-           name: "Quadrant Explored!",
-           value:
-            "You have successfully explored this quadrant. You can now:\n- **Rest** (3 stamina)\n- **Secure** quadrant (5 stamina + resources)\n- **Roll** again in same quadrant (1 stamina)\n- **Move** to next quadrant (2 stamina)",
-           inline: false,
           });
          }
         }
@@ -646,17 +734,6 @@ module.exports = {
           itemName: lootedItem.itemName,
           quantity: 1,
           emoji: lootedItem.emoji || "",
-         });
-        }
-
-        const exploreChance = Math.random();
-        if (exploreChance > 0.3 || party.quadrantState !== "unexplored") {
-         party.quadrantState = "explored";
-         embed.addFields({
-          name: "Quadrant Explored!",
-          value:
-           "You have successfully explored this quadrant. You can now:\n- **Rest** (3 stamina)\n- **Secure** quadrant (5 stamina + resources)\n- **Roll** again in same quadrant (1 stamina)\n- **Move** to next quadrant (2 stamina)",
-          inline: false,
          });
         }
        }

@@ -17,6 +17,22 @@ function serializeMap(m: unknown): Record<string, unknown> {
   return {};
 }
 
+// Safely sum contributor items (handles Map and plain object)
+function getContributorItemTotal(items: unknown): number {
+  if (!items) return 0;
+  if (items instanceof Map) return [...items.values()].reduce((s, n) => s + (Number(n) || 0), 0);
+  if (typeof items === "object" && items !== null) {
+    return Object.values(items).reduce((s, n) => s + (Number(n) || 0), 0);
+  }
+  return 0;
+}
+
+function isValidContributorKey(key: string): boolean {
+  if (!key || typeof key !== "string") return false;
+  if (key.includes("$") || key.includes("[object Object]")) return false;
+  return true;
+}
+
 // ------------------- Case-Insensitive Filter -------------------
 function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Array<Record<string, RegExp>> } {
   const conditions = values.map(value => {
@@ -82,7 +98,7 @@ export async function GET(req: NextRequest) {
     for (const v of rawData as Record<string, unknown>[]) {
       const contribs = serializeMap(v.contributors as Map<unknown, unknown> | Record<string, unknown>);
       for (const id of Object.keys(contribs)) {
-        if (id && !id.startsWith("$") && mongoose.Types.ObjectId.isValid(id)) {
+        if (isValidContributorKey(id) && mongoose.Types.ObjectId.isValid(id)) {
           allContributorIds.add(id);
         }
       }
@@ -140,14 +156,23 @@ export async function GET(req: NextRequest) {
         ? { current: tokenCurrent, required: tokenRequired, remaining: Math.max(0, tokenRequired - tokenCurrent) }
         : { current: 0, required: 0, remaining: 0 };
 
-      // Enrich contributors with names
-      const contributorsEnriched = Object.entries(contributors).map(([charId, data]) => ({
-        characterId: charId,
-        characterName: idToName[charId] ?? `Character ${charId.slice(-6)}`,
-        items: data?.items ?? {},
-        tokens: data?.tokens ?? 0,
-        totalItems: Object.values(data?.items ?? {}).reduce((s, n) => s + n, 0),
-      })).sort((a, b) => (b.tokens + b.totalItems) - (a.tokens + a.totalItems));
+      // Enrich contributors with names (filter invalid keys, handle Map for items)
+      const contributorsEnriched = Object.entries(contributors)
+        .filter(([charId]) => isValidContributorKey(charId))
+        .map(([charId, data]) => {
+          const rawItems = data?.items;
+          const items = rawItems instanceof Map ? Object.fromEntries(rawItems) : (rawItems ?? {}) as Record<string, number>;
+          const totalItems = getContributorItemTotal(rawItems ?? {});
+          const tokens = Number(data?.tokens) ?? 0;
+          return {
+            characterId: charId,
+            characterName: idToName[charId] ?? `Character ${charId.slice(-6)}`,
+            items,
+            tokens,
+            totalItems,
+          };
+        })
+        .sort((a, b) => (b.tokens + b.totalItems) - (a.tokens + a.totalItems));
 
       return {
         ...v,

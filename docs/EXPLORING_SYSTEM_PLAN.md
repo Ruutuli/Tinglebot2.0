@@ -397,3 +397,53 @@ The map page will be **very ugly on mobile**. Recommend users view it in **deskt
 - **Purpose:** Plan for the **new** system where users interact only with the bot and dashboard. We **do not use table rolls**; outcomes are driven by **commands** (`/explore` subcommands), **Party** state, and **database models** (Square/exploringMap, Monster, Item, Relic). Doc aligned with code: `explore.js`, `mapModel.js`, `PartyModel.js`, `RelicModel.js`, `rngModule.js`, `exploreModule.js`.
 
 **Key files:** `bot/commands/exploration/explore.js`, `bot/models/mapModel.js` (Square, collection exploringMap), `bot/models/PartyModel.js`, `bot/models/RelicModel.js`, `bot/models/MonsterModel.js`, `bot/modules/rngModule.js` (getMonstersByRegion), `bot/modules/exploreModule.js`, `dashboard/models/mapModel.js`, `dashboard/models/PartyModel.js`, `dashboard/models/RelicModel.js`, `dashboard/models/PinModel.js`. **Map assets:** Map base URL pattern for square images (A1–J9). **Data:** ROTW_Map Coords_2025 - Sheet1.csv for quadrant/region/blight/status.
+
+
+🗺️ Expedition: Tingle Encountered a Monster!
+Tingle encountered Stalizalfos during exploration!
+🆔 Expedition ID
+E593661
+📍 Current Location
+H8 Q2
+❤️ Party Hearts
+9996
+🟩 Party Stamina
+9993
+❤️ Tingle Hearts
+9996/9999
+🆔 Expedition ID
+E593661
+📍 Current Location
+H8 Q2
+⚔️ Battle Outcome
+Win!/Loot
+🎉 Loot Found
+:Lizalfos_Talon: Lizalfos Talon
+Quadrant Explored!
+You have successfully explored this quadrant. You can now:
+Rest (3 stamina)
+Secure quadrant (5 stamina + resources)
+Roll again in same quadrant (1 stamina)
+Move to next quadrant (2 stamina)
+➡️ What to do next
+Next turn: Tingle
+Command: Use /explore roll with Expedition ID E593661 and Character Tingle to take your turn
+
+----
+
+So when exploring a few things can happen
+
+- monster
+- raid
+- item
+- chest
+- Relic 
+- camp
+- monster camp
+- grotto
+- Explored . ( rest, secured, roll again, move onto next) 
+- Rest (3 stamina)
+Secure quadrant (5 stamina + resources)
+Roll again in same quadrant (1 stamina)
+Move to next quadrant (2 stamina)
+
