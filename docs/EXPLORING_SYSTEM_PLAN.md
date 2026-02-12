@@ -447,3 +447,23 @@ Secure quadrant (5 stamina + resources)
 Roll again in same quadrant (1 stamina)
 Move to next quadrant (2 stamina)
 
+
+
+### Exploration roll outcome odds
+
+When using `/explore roll`, each roll produces **exactly one** outcome. Odds (per roll):
+
+| Outcome | Chance | Notes |
+|--------|--------|--------|
+| **Monster** | 45% | Tier ≤4 = simple battle (may loot on win); tier 5+ = raid |
+| **Item** | 25% | Gather a region item |
+| **Explored** | 15% | Quadrant cleared; choose Rest / Secure / Roll again / Move |
+| **Ruins** | 6% | Yes = explore ruins (cost 3 stamina); No = continue |
+| **Camp** | 5% | Camp site found |
+| **Chest** | 1% | Open with chest flow (cost 1 stamina) |
+| **Old map** | 1% | Take to Inariko Library to decipher |
+| **Monster camp** | 1% | Report to town hall to mark on map |
+| **Relic** | 0.5% | Take to Inarikian Artist/Researcher to appraise (rare) |
+| **Grotto** | 0.5% | Yes = cleanse (1 goddess plume + 1 stamina); No = mark for later (rare) |
+
+Ruins and Grotto show **Yes** / **No** buttons; other outcomes continue with “What to do next” (next turn + `/explore roll`).

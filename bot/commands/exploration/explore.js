@@ -21,7 +21,11 @@ const {
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
  regionColors,
+ regionImages,
+ EXPLORE_CMD_ID,
 } = require("../../embeds/embeds.js");
+
+const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
 // Region start squares (party returned here on full party KO)
@@ -87,7 +91,8 @@ async function handleExpeditionFailed(party, interaction) {
    "**Return:** Party is returned to the starting area for the region.\n" +
    "**Items:** All items brought on the expedition and any found during the expedition are lost.\n" +
    "**Party:** All members are KO'd with 0 stamina."
-  );
+  )
+  .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
  addExplorationStandardFields(embed, {
   party: { partyId: party.partyId, totalHearts: 0, totalStamina: 0 },
   expeditionId: party.partyId,
@@ -347,13 +352,18 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
+      const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+      const cmdRest = `</explore rest:${EXPLORE_CMD_ID}>`;
+      const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
+      const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
        .setDescription(
         `**${character.name}** has explored this area (**${location}**). The party can now choose what to do next.\n\n` +
-        "**What you can do:** • **Rest** (3 stamina) — `/explore rest` • **Secure** quadrant — `/explore secure` (5 stamina + resources) • **Roll** again — `/explore roll` (1 stamina) • **Move** — `/explore move` (2 stamina)"
+        `**What you can do:** • **Rest** (3 stamina) — ${cmdRest} • **Secure** quadrant — ${cmdSecure} (5 stamina + resources) • **Roll** again — ${cmdRoll} (1 stamina) • **Move** — ${cmdMove} (2 stamina)`
        )
-       .setColor(regionColors[party.region] || "#00ff99");
+       .setColor(regionColors[party.region] || "#00ff99")
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
         party,
         expeditionId,
@@ -361,7 +371,10 @@ module.exports = {
         nextCharacter: nextCharacter ?? null,
         showNextAndCommands: true,
       });
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({
+        content: `<@${nextCharacter.userId}> it's your turn now`,
+        embeds: [embed],
+      });
       return;
      }
 
@@ -386,39 +399,39 @@ module.exports = {
        description =
         `**${character.name}** found something unsettling in **${location}**.\n\n` +
         "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there. Report it back to the town hall to have it marked on the map for later.\n\n" +
-        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
        description =
         `**${character.name}** found a chest in **${location}**!\n\n` +
         "You found a chest! Use the chest flow to open it (cost 1 stamina).\n\n" +
-        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
       } else if (outcomeType === "old_map") {
        title = `🗺️ **Expedition: Old map found!**`;
        description =
         `**${character.name}** discovered something unusual in **${location}**.\n\n` +
         "You found a really old map! You have no idea what you're looking at when you open it. Take it to the Inariko Library to get it deciphered. You can find out more info [here](https://www.rootsofthewild.com/oldmaps).\n\n" +
-        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
       } else if (outcomeType === "ruins") {
        title = `🗺️ **Expedition: Ruins found!**`;
        description =
         `**${character.name}** found some ruins in **${location}**!\n\n` +
         "You found some ruins! Do you want to explore them?\n\n" +
         "**Yes** — Use the ruins flow when available (cost 3 stamina).\n" +
-        "**No** — Continue exploring with `/explore roll`.";
+        `**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else if (outcomeType === "relic") {
        title = `🗺️ **Expedition: Relic found!**`;
        description =
         `**${character.name}** found something ancient in **${location}**.\n\n` +
         "You found a relic! What is this? Take it to an Inarikian Artist or Researcher to get this appraised. You can find more info [here](https://www.rootsofthewild.com/relics).\n\n" +
-        "↳ **Continue** ➾ Use `/explore roll` with this Expedition ID to take your turn.";
+        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
       } else if (outcomeType === "grotto") {
        title = `🗺️ **Expedition: Grotto found!**`;
        description =
         `**${character.name}** stumbled across something strange in **${location}**.\n\n` +
         "You stumble across an interesting looking stump with roots covered in talismans, do you have the means to cleanse them? More info about grottos can be found [here](https://www.rootsofthewild.com/grottos).\n\n" +
         "**Yes** — Use the grotto flow when available (cost 1 goddess plume + 1 stamina).\n" +
-        "**No** (mark it on the map for later!) — Continue exploring with `/explore roll`.";
+        `**No** (mark it on the map for later!) — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else {
        title = `🗺️ **Expedition: ${character.name} found a camp!**`;
        description = `**${character.name}** discovered a camp site in **${location}**.`;
@@ -427,7 +440,8 @@ module.exports = {
       const embed = new EmbedBuilder()
        .setTitle(title)
        .setDescription(description)
-       .setColor(regionColors[party.region] || "#00ff99");
+       .setColor(regionColors[party.region] || "#00ff99")
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
         party,
         expeditionId,
@@ -452,7 +466,11 @@ module.exports = {
        components = [row];
       }
 
-      const replyPayload = { embeds: [embed], components };
+      const replyPayload = {
+        content: `<@${nextCharacter.userId}> it's your turn now`,
+        embeds: [embed],
+        components,
+      };
       const msg = await interaction.editReply(replyPayload);
 
       if (isYesNoChoice) {
@@ -467,14 +485,15 @@ module.exports = {
         const intro = description.split("\n\n")[0];
         const choiceEmbed = new EmbedBuilder()
          .setTitle(title)
-         .setColor(regionColors[party.region] || "#00ff99");
+         .setColor(regionColors[party.region] || "#00ff99")
+         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
         if (outcomeType === "ruins") {
          choiceEmbed.setDescription(
           intro +
           "\n\n" +
           (isYes
            ? "✅ **You chose to explore the ruins!** (Cost 3 stamina — ruins flow TBD.)"
-           : "✅ **You left the ruins for later.** Continue with `/explore roll`.")
+           : `✅ **You left the ruins for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
          );
         } else {
          choiceEmbed.setDescription(
@@ -482,7 +501,7 @@ module.exports = {
           "\n\n" +
           (isYes
            ? "✅ **You'll attempt to cleanse the grotto!** (Cost 1 goddess plume + 1 stamina — grotto flow TBD.)"
-           : "✅ **You marked it on the map for later.** Continue with `/explore roll`.")
+           : `✅ **You marked it on the map for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
          );
         }
         addExplorationStandardFields(choiceEmbed, {
@@ -504,7 +523,11 @@ module.exports = {
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
         );
-        await interaction.editReply({ embeds: [choiceEmbed], components: [disabledRow] });
+        await interaction.editReply({
+          content: `<@${nextCharacter.userId}> it's your turn now`,
+          embeds: [choiceEmbed],
+          components: [disabledRow],
+        });
        });
        collector.on("end", (collected, reason) => {
         if (reason === "time" && collected.size === 0 && msg.editable) {
@@ -569,7 +592,10 @@ module.exports = {
        emoji: selectedItem.emoji || "",
       });
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({
+        content: `<@${nextCharacter.userId}> it's your turn now`,
+        embeds: [embed],
+      });
 
       try {
        await addItemInventoryDatabase(
@@ -613,7 +639,9 @@ module.exports = {
          interaction,
          village,
          false,
-         character
+         character,
+         false,
+         expeditionId
         );
 
         if (!raidResult || !raidResult.success) {
@@ -705,7 +733,10 @@ module.exports = {
          }
         }
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({
+          content: `<@${nextCharacterRaid.userId}> it's your turn now`,
+          embeds: [embed],
+        });
        } catch (error) {
         handleInteractionError(error, interaction, { source: "explore.js" });
         console.error(`[ERROR] Raid processing failed:`, error);
@@ -834,7 +865,10 @@ module.exports = {
         }
        }
 
-       await interaction.editReply({ embeds: [embed] });
+       await interaction.editReply({
+         content: `<@${nextCharacterTier.userId}> it's your turn now`,
+         embeds: [embed],
+       });
       }
      }
     } catch (error) {
@@ -938,7 +972,8 @@ module.exports = {
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
       `${character.name} rested. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} party stamina)`
-     );
+     )
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     addExplorationStandardFields(embed, {
       party,
       expeditionId,
@@ -947,7 +982,10 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({
+      content: `<@${nextCharacterRest.userId}> it's your turn now`,
+      embeds: [embed],
+    });
 
     // ------------------- Secure Quadrant Command -------------------
    } else if (subcommand === "secure") {
@@ -1020,6 +1058,7 @@ module.exports = {
      .setDescription(
       `${character.name} secured the quadrant using resources (-${staminaCost} party stamina).`
      )
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
      .addFields({
       name: "📋 **__Benefits__**",
       value: "Quadrant secured. No stamina cost to explore here, increased safety.",
@@ -1033,7 +1072,10 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({
+      content: `<@${nextCharacterSecure.userId}> it's your turn now`,
+      embeds: [embed],
+    });
 
     // ------------------- Move to Adjacent Quadrant -------------------
    } else if (subcommand === "move") {
@@ -1107,7 +1149,8 @@ module.exports = {
      .setColor(regionColors[party.region] || "#2196F3")
      .setDescription(
       `${character.name} led the party to **${locationMove}** (quadrant unexplored).`
-     );
+     )
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     addExplorationStandardFields(embed, {
       party,
       expeditionId,
@@ -1116,7 +1159,10 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({
+      content: `<@${nextCharacterMove.userId}> it's your turn now`,
+      embeds: [embed],
+    });
 
     // ------------------- Use Item (healing from expedition loadout) -------------------
    } else if (subcommand === "item") {
@@ -1209,6 +1255,7 @@ module.exports = {
      .setDescription(
       `${character.name} used **${carried.itemName}** (${effect}).`
      )
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
      .addFields(
       {
        name: `❤️ **__${character.name} Hearts__**`,
@@ -1281,7 +1328,8 @@ module.exports = {
      .setColor(regionColors[party.region] || "#FF5722")
      .setDescription(
       `${character.name} ordered a retreat. All party members return to **${villageLabel}**.`
-     );
+     )
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     addExplorationStandardFields(embed, {
       party,
       expeditionId: party.partyId,
@@ -1391,6 +1439,7 @@ module.exports = {
      .setDescription(
       `${character.name} set up camp for ${duration} hours. The party rested and recovered.`
      )
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
      .addFields({
       name: "📋 **__Recovery__**",
       value: `+${Math.floor(
@@ -1408,7 +1457,10 @@ module.exports = {
       showNextAndCommands: true,
     });
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({
+      content: `<@${nextCharacterCamp.userId}> it's your turn now`,
+      embeds: [embed],
+    });
    }
   } catch (error) {
    await handleInteractionError(error, interaction, {

@@ -448,7 +448,8 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
 
 // ---- Function: startRaid ----
 // Creates a new raid instance with the given monster and village
-async function startRaid(monster, village, interaction = null) {
+// expeditionId: when set, only members of that expedition can join (exploration-triggered raid)
+async function startRaid(monster, village, interaction = null, expeditionId = null) {
   try {
     // Generate unique raid ID with 'R' prefix for Raid
     const raidId = generateUniqueId('R');
@@ -469,6 +470,7 @@ async function startRaid(monster, village, interaction = null) {
       },
       village: village,
       channelId: interaction?.channel?.id || null,
+      expeditionId: expeditionId || null,
       expiresAt: new Date(Date.now() + raidDuration),
       analytics: {
         monsterTier: monster.tier,
@@ -535,6 +537,21 @@ async function joinRaid(character, raidId, options = {}) {
     const participantCount = (raid.participants || []).length;
     if (character.ko && participantCount === 0) {
       throw new Error('Your character is KO\'d and cannot start a raid alone. Use </item:1463789335626125378> to heal first, or join a raid that already has participants.');
+    }
+
+    // If this raid was triggered from an expedition, only expedition members can join
+    if (raid.expeditionId) {
+      const Party = require('@/models/PartyModel');
+      const party = await Party.findOne({ partyId: raid.expeditionId });
+      if (!party || !party.characters || !party.characters.length) {
+        throw new Error(`Expedition ${raid.expeditionId} not found. Only members of that expedition can join this raid.`);
+      }
+      const isInExpedition = party.characters.some(
+        (c) => c._id && character._id && c._id.toString() === character._id.toString()
+      );
+      if (!isInExpedition) {
+        throw new Error(`Only members of expedition **${raid.expeditionId}** can join this raid. This raid was triggered during that expedition. Use \`/explore roll\` with that Expedition ID if you're in the party.`);
+      }
     }
 
     // Check if character is in the same village
@@ -739,6 +756,50 @@ async function scheduleRaidTurnSkip(raidId) {
   logger.info('RAID', `Scheduled turn skip for ${raidId} in ${RAID_TURN_SKIP_SECONDS}s at ${when.toISOString()} (${current.name})`);
 }
 
+// ---- Function: notifyExpeditionRaidOver ----
+// When a raid was triggered from an expedition: update party progressLog and send "continue expedition" to thread
+async function notifyExpeditionRaidOver(raid, client, result) {
+  if (!raid.expeditionId || !client) return;
+  try {
+    const Party = require('@/models/PartyModel');
+    const party = await Party.findOne({ partyId: raid.expeditionId });
+    if (!party) return;
+    if (!party.progressLog) party.progressLog = [];
+    const msg = result === 'defeated'
+      ? `Raid defeated ${raid.monster?.name || 'monster'}! Continue the expedition.`
+      : `Raid timed out. Continue the expedition.`;
+    party.progressLog.push({
+      at: new Date(),
+      characterName: 'Raid',
+      outcome: 'raid_over',
+      message: msg,
+    });
+    await party.save();
+
+    const embed = new EmbedBuilder()
+      .setColor(result === 'defeated' ? 0x4CAF50 : 0xFF9800)
+      .setTitle('🗺️ **Raid over — continue your expedition**')
+      .setDescription(
+        result === 'defeated'
+          ? `The monster was defeated! Use \`/explore roll\` with **Expedition ID** \`${raid.expeditionId}\` and your character to continue.`
+          : `The raid timed out. Use \`/explore roll\` with **Expedition ID** \`${raid.expeditionId}\` and your character to continue.`
+      )
+      .addFields({ name: '🆔 **Expedition ID**', value: raid.expeditionId, inline: true })
+      .setTimestamp();
+
+    if (raid.threadId) {
+      try {
+        const thread = await client.channels.fetch(raid.threadId);
+        if (thread) await thread.send({ embeds: [embed] });
+      } catch (e) {
+        logger.warn('RAID', `Could not send expedition continue message to thread: ${e.message}`);
+      }
+    }
+  } catch (err) {
+    logger.error('RAID', `notifyExpeditionRaidOver: ${err.message}`);
+  }
+}
+
 // ---- Function: cancelRaidTurnSkip ----
 async function cancelRaidTurnSkip(raidId) {
   const scheduler = require('@/utils/scheduler');
@@ -881,6 +942,9 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           }
           
           await raid.completeRaid('defeated');
+          if (raid.expeditionId && interaction?.client) {
+            await notifyExpeditionRaidOver(raid, interaction.client, 'defeated');
+          }
         } else {
           // Reload character from database to get the latest state (hearts were saved in processRaidBattle)
           const { fetchCharacterById } = require('@/database/db');
@@ -991,6 +1055,10 @@ async function checkRaidExpiration(raidId, client = null) {
 
       // Mark raid as failed and KO all participants (idempotent)
       await raid.failRaid(client);
+
+      if (raid.expeditionId && client) {
+        await notifyExpeditionRaidOver(raid, client, 'timeout');
+      }
 
       // Try to send failure message if client is available
       if (client) {
@@ -1167,6 +1235,14 @@ function createRaidEmbed(raid, monsterImage) {
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png')
     .setTimestamp();
 
+  if (raid.expeditionId) {
+    embed.addFields({
+      name: '🗺️ __Expedition raid__',
+      value: `Only members of expedition **${raid.expeditionId}** can join. After the raid, use \`/explore roll\` with this Expedition ID to continue.`,
+      inline: false
+    });
+  }
+
   // Add monster image as thumbnail if available
   if (monsterImage && monsterImage !== 'No Image') {
     embed.setThumbnail(monsterImage);
@@ -1177,15 +1253,16 @@ function createRaidEmbed(raid, monsterImage) {
 
 // ---- Function: triggerRaid ----
 // Triggers a raid in the specified channel
-async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null, isQuotaBased = false) {
+// expeditionId: when set, raid is linked to that expedition (only party members can join; skip global cooldown)
+async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null, isQuotaBased = false, expeditionId = null) {
   try {
-    console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}`);
+    console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}${expeditionId ? ` (expedition ${expeditionId})` : ''}`);
     console.log(`[raidModule.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
     console.log(`[raidModule.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
     
     // ------------------- Global Raid Cooldown Check -------------------
-    // For Blood Moon raids and quota-based raids, skip global cooldown
-    if (!isBloodMoon && !isQuotaBased) {
+    // For Blood Moon, quota-based, and expedition raids, skip global cooldown
+    if (!isBloodMoon && !isQuotaBased && !expeditionId) {
       // Check if we're still in global cooldown period (4 hours between raids)
       const { getGlobalRaidCooldown, setGlobalRaidCooldown } = require('../scripts/randomMonsterEncounters');
       const currentTime = Date.now();
@@ -1217,6 +1294,8 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         console.log('[raidModule.js]: 🌕 Blood Moon raid detected — bypassing global raid cooldown.');
       } else if (isQuotaBased) {
         console.log('[raidModule.js]: 📅 Quota-based raid detected — bypassing global raid cooldown.');
+      } else if (expeditionId) {
+        console.log('[raidModule.js]: 🗺️ Expedition raid detected — bypassing global raid cooldown.');
       }
     }
     
@@ -1246,7 +1325,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     }
     
     // Start the raid
-    const { raidId, raidData } = await startRaid(monster, villageId, interaction);
+    const { raidId, raidData } = await startRaid(monster, villageId, interaction, expeditionId);
     
     // Automatically add character to raid if provided (from loot command)
     if (character) {

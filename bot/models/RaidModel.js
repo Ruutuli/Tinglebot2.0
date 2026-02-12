@@ -47,7 +47,10 @@ const raidSchema = new mongoose.Schema({
     enum: ['Rudania', 'Inariko', 'Vhintl']
   },
   channelId: String,
-  
+
+  // Optional: only set when raid was triggered from /explore roll (exploration). Most raids are village raids and have this null.
+  expeditionId: { type: String, default: null },
+
   // Timing information
   createdAt: {
     type: Date,

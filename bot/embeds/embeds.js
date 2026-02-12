@@ -43,6 +43,9 @@ const regionColors = {
  hebra: "#800080",
 };
 
+// ------------------- Explore command IDs (for clickable slash command mentions) ------------------
+const EXPLORE_CMD_ID = "1471454947089580107";
+
 // ------------------- Region Image Mapping ------------------
 const regionImages = {
  eldin: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
@@ -475,9 +478,20 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
   const nextName = nextCharacter.name;
   const expId = expeditionId || party?.partyId || "—";
+  const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+  const cmdRest = `</explore rest:${EXPLORE_CMD_ID}>`;
+  const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
+  const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
+  const commandsValue =
+   `**Take your turn:**\n` +
+   `• ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**\n\n` +
+   `**Only after the quadrant is explored** (e.g. "Quadrant Explored!" prompt):\n` +
+   `• ${cmdRest} — recover stamina\n` +
+   `• ${cmdSecure} — secure quadrant (costs resources)\n` +
+   `• ${cmdMove} — move to next quadrant`;
   fields.push(
    { name: "➡️ **__Next up__**", value: `Next: <@${nextCharacter.userId}> (${nextName})`, inline: false },
-   { name: "📋 **__Commands__**", value: `Use \`/explore roll\` with Expedition ID \`${expId}\` and character **${nextName}** to take your turn. When it's your turn you can also use \`/explore rest\`, \`/explore secure\`, or \`/explore move\`.`, inline: false }
+   { name: "📋 **__Commands__**", value: commandsValue, inline: false }
   );
  }
  embed.addFields(...fields);
@@ -3312,6 +3326,7 @@ module.exports = {
  jobActions,
  regionColors,
  regionImages,
+ EXPLORE_CMD_ID,
  PATH_IMAGES,
  villageEmojis,
  pathEmojis,
