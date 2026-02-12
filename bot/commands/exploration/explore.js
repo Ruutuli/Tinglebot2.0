@@ -1,6 +1,6 @@
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { SlashCommandBuilder } = require("@discordjs/builders");
-const { EmbedBuilder } = require("discord.js");
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { fetchAllItems, fetchItemsByMonster } = require('@/database/db.js');
 const {
  calculateFinalValue,
@@ -415,7 +415,93 @@ module.exports = {
         { name: "📍 **__Current Location__**", value: location, inline: true },
         { name: "➡️ **__What to do next__**", value: nextTurnValue, inline: false }
        );
-      await interaction.editReply({ embeds: [embed] });
+
+      const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto";
+      let components = [];
+      if (isYesNoChoice) {
+       const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+         .setCustomId(`explore_${outcomeType}_yes`)
+         .setLabel("Yes")
+         .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+         .setCustomId(`explore_${outcomeType}_no`)
+         .setLabel("No")
+         .setStyle(ButtonStyle.Secondary)
+       );
+       components = [row];
+      }
+
+      const replyPayload = { embeds: [embed], components };
+      const msg = await interaction.editReply(replyPayload);
+
+      if (isYesNoChoice) {
+       const collector = msg.createMessageComponentCollector({
+        filter: (i) => i.user.id === interaction.user.id,
+        time: 5 * 60 * 1000,
+        max: 1,
+       });
+       collector.on("collect", async (i) => {
+        await i.deferUpdate();
+        const isYes = i.customId.endsWith("_yes");
+        const intro = description.split("\n\n")[0];
+        const choiceEmbed = new EmbedBuilder()
+         .setTitle(title)
+         .setColor(regionColors[party.region] || "#00ff99")
+         .addFields(
+          { name: "🆔 **__Expedition ID__**", value: expeditionId, inline: true },
+          { name: "📍 **__Current Location__**", value: location, inline: true },
+          { name: "➡️ **__What to do next__**", value: nextTurnValue, inline: false }
+         );
+        if (outcomeType === "ruins") {
+         choiceEmbed.setDescription(
+          intro +
+          "\n\n" +
+          (isYes
+           ? "✅ **You chose to explore the ruins!** (Cost 3 stamina — ruins flow TBD.)"
+           : "✅ **You left the ruins for later.** Continue with `/explore roll`.")
+         );
+        } else {
+         choiceEmbed.setDescription(
+          intro +
+          "\n\n" +
+          (isYes
+           ? "✅ **You'll attempt to cleanse the grotto!** (Cost 1 goddess plume + 1 stamina — grotto flow TBD.)"
+           : "✅ **You marked it on the map for later.** Continue with `/explore roll`.")
+         );
+        }
+        const disabledRow = new ActionRowBuilder().addComponents(
+         new ButtonBuilder()
+          .setCustomId(`explore_${outcomeType}_yes`)
+          .setLabel("Yes")
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(true),
+         new ButtonBuilder()
+          .setCustomId(`explore_${outcomeType}_no`)
+          .setLabel("No")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true)
+        );
+        await interaction.editReply({ embeds: [choiceEmbed], components: [disabledRow] });
+       });
+       collector.on("end", (collected, reason) => {
+        if (reason === "time" && collected.size === 0 && msg.editable) {
+         const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+           .setCustomId(`explore_${outcomeType}_yes`)
+           .setLabel("Yes")
+           .setStyle(ButtonStyle.Success)
+           .setDisabled(true),
+          new ButtonBuilder()
+           .setCustomId(`explore_${outcomeType}_no`)
+           .setLabel("No")
+           .setStyle(ButtonStyle.Secondary)
+           .setDisabled(true)
+         );
+         interaction.editReply({ components: [disabledRow] }).catch(() => {});
+        }
+       });
+      }
       return;
      }
 

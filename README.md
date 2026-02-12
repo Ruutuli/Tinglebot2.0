@@ -188,6 +188,25 @@ Tinglebot 2.0/
 └── README.md            # This file
 ```
 
+### Exploration roll outcome odds
+
+When using `/explore roll`, each roll produces **exactly one** outcome. Odds (per roll):
+
+| Outcome | Chance | Notes |
+|--------|--------|--------|
+| **Monster** | 50% | Tier ≤4 = simple battle (may loot on win); tier 5+ = raid |
+| **Item** | 25% | Gather a region item |
+| **Explored** | 15% | Quadrant cleared; choose Rest / Secure / Roll again / Move |
+| **Chest** | 1% | Open with chest flow (cost 1 stamina) |
+| **Old map** | 1% | Take to Inariko Library to decipher |
+| **Ruins** | 2% | Yes = explore ruins (cost 3 stamina); No = continue |
+| **Relic** | 2% | Take to Inarikian Artist/Researcher to appraise |
+| **Camp** | 1% | Camp site found |
+| **Monster camp** | 1% | Report to town hall to mark on map |
+| **Grotto** | 2% | Yes = cleanse (1 goddess plume + 1 stamina); No = mark for later |
+
+Ruins and Grotto show **Yes** / **No** buttons; other outcomes continue with “What to do next” (next turn + `/explore roll`).
+
 ### Notes
 
 - Both services use the same MongoDB databases but may have different connection requirements
