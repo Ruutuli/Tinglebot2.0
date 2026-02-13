@@ -169,6 +169,11 @@ async function finalizeBlightApplication(character, userId, options = {}) {
       }
       if (!character.blightStage || character.blightStage === 0) {
         character.blightStage = 1;
+        character.blightEffects = {
+          rollMultiplier: 1.0,
+          noMonsters: false,
+          noGathering: false
+        };
       }
       character.blightPaused = false;
       await character.save();

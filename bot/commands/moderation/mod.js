@@ -4732,6 +4732,11 @@ async function handleBlight(interaction) {
       character.blighted = true;
       character.blightedAt = new Date();
       character.blightStage = stage;
+      character.blightEffects = {
+        rollMultiplier: stage === 2 ? 1.5 : 1.0,
+        noMonsters: stage >= 3,
+        noGathering: stage >= 4
+      };
       character.blightPaused = false; // Ensure blight is not paused when setting
       await character.save();
 

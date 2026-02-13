@@ -193,8 +193,8 @@ function createWeightedItemList(items, fv, job, villageLevel = 1) {
 // Calculates the Final Value (FV) for a character by generating a damage value,
 // applying attack and defense buffs, and returning the adjusted random value along with buff details.
 function calculateFinalValue(character, diceRoll) {
-  // Apply blight roll multiplier if present
-  const blightMultiplier = character.blightEffects?.rollMultiplier || 1.0;
+  // Apply blight roll multiplier: only stage 2 gets 1.5x (derive from blightStage to avoid stale blightEffects)
+  const blightMultiplier = (character.blighted && character.blightStage === 2) ? 1.5 : 1.0;
   const adjustedDiceRoll = Math.floor(diceRoll * blightMultiplier);
   
   // Get elixir buff effects
@@ -271,8 +271,8 @@ function calculateFinalValue(character, diceRoll) {
 function calculateRaidFinalValue(character, diceRoll) {
   const { calculateRaidAttackBuff, calculateRaidDefenseBuff, applyRaidBuffs } = require('./buffModule');
   
-  // Apply blight roll multiplier if present
-  const blightMultiplier = character.blightEffects?.rollMultiplier || 1.0;
+  // Apply blight roll multiplier: only stage 2 gets 1.5x (derive from blightStage to avoid stale blightEffects)
+  const blightMultiplier = (character.blighted && character.blightStage === 2) ? 1.5 : 1.0;
   const adjustedDiceRoll = Math.floor(diceRoll * blightMultiplier);
   
   const attackSuccess = calculateRaidAttackBuff(character);

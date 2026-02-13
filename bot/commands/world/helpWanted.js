@@ -2459,25 +2459,31 @@ module.exports = {
           return await interaction.editReply({ content: '❌ No user data found.' });
         }
 
-        const totalCompletions = user.helpWanted?.totalCompletions || user.helpWanted?.completions?.length || 0;
-        const currentCompletions = user.helpWanted?.currentCompletions || 0;
         const recentCompletions = user.helpWanted?.completions || [];
+        // Total: include all completions ever (turned in + not turned in); use max in case of sync drift
+        const totalCompletions = Math.max(
+          user.helpWanted?.totalCompletions ?? 0,
+          recentCompletions.length
+        );
+        // Current for Exchange: if never exchanged, all completions are available; otherwise use stored balance
+        const currentCompletions = user.helpWanted?.lastExchangeAt != null
+          ? (user.helpWanted?.currentCompletions ?? 0)
+          : totalCompletions;
 
-        // Calculate today's and this week's completions
+        // Calculate today's and this week's completions (EST)
         const now = new Date();
-        const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+        const estOffset = 5 * 60 * 60 * 1000;
+        const estDate = new Date(now.getTime() - estOffset);
         const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
         const todayCompletions = recentCompletions.filter(c => c.date === today).length;
         
-        // Calculate this week's completions (Sunday to Saturday)
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
-        startOfWeek.setHours(0, 0, 0, 0);
-        
-        const weekCompletions = recentCompletions.filter(c => {
-          const completionDate = new Date(c.date + 'T00:00:00');
-          return completionDate >= startOfWeek;
-        }).length;
+        // This week: Sunday 00:00 EST through Saturday
+        const estDay = estDate.getUTCDay();
+        const estSunday = new Date(estDate);
+        estSunday.setUTCDate(estDate.getUTCDate() - estDay);
+        estSunday.setUTCHours(0, 0, 0, 0);
+        const startOfWeekStr = `${estSunday.getUTCFullYear()}-${String(estSunday.getUTCMonth() + 1).padStart(2, '0')}-${String(estSunday.getUTCDate()).padStart(2, '0')}`;
+        const weekCompletions = recentCompletions.filter(c => c.date && c.date >= startOfWeekStr).length;
 
         // Get last quest completion details
         const lastCompletion = recentCompletions.length > 0 ? recentCompletions[recentCompletions.length - 1] : null;

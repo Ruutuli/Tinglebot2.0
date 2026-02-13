@@ -97,6 +97,13 @@ function getUTCDateString(date = new Date()) {
   return date.toISOString().split('T')[0];
 }
 
+// ------------------- Helper: getESTDateString -------------------
+// Gets date string in EST format (YYYY-MM-DD) - matches helpWanted.js for completion tracking
+function getESTDateString(date = new Date()) {
+  const estDate = new Date(date.getTime() - 5 * 60 * 60 * 1000);
+  return `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
+}
+
 // ------------------- Helper: getHourInUTC -------------------
 // Gets hour (0-23) in UTC
 function getHourInUTC(date = new Date()) {
@@ -2757,9 +2764,9 @@ async function hasUserCompletedQuestToday(userId) {
       return false;
     }
     
-    // Use EST date for midnight reset
+    // Use EST date for midnight reset (matches completion storage)
     const now = new Date();
-    const today = getUTCDateString(now);
+    const today = getESTDateString(now);
     const lastCompletion = user.helpWanted?.lastCompletion || 'null';
     
     return lastCompletion === today;
@@ -3107,17 +3114,21 @@ async function checkAndCompleteQuestFromSubmission(submissionData, client) {
       }
     }
 
-    // Enforce daily/weekly limits (same as /helpwanted complete and monsterhunt)
     const userId = submissionData.userId;
-    const dailyCompleted = await hasUserCompletedQuestToday(userId);
-    if (dailyCompleted) {
-      logger.debug('QUEST', `Quest ${questId} not completed: user ${userId} already completed a Help Wanted quest today`);
-      return;
-    }
-    const weeklyLimitReached = await hasUserReachedWeeklyQuestLimit(userId);
-    if (weeklyLimitReached) {
-      logger.debug('QUEST', `Quest ${questId} not completed: user ${userId} has reached the weekly Help Wanted limit (3)`);
-      return;
+    // Only enforce daily/weekly limits when NOT from mod approval. When a mod approves a submission,
+    // the user already submitted for this specific quest—we must record the completion regardless
+    // of whether they did another quest that day/week (approval can happen later).
+    if (!submissionData.approvedSubmissionData) {
+      const dailyCompleted = await hasUserCompletedQuestToday(userId);
+      if (dailyCompleted) {
+        logger.debug('QUEST', `Quest ${questId} not completed: user ${userId} already completed a Help Wanted quest today`);
+        return;
+      }
+      const weeklyLimitReached = await hasUserReachedWeeklyQuestLimit(userId);
+      if (weeklyLimitReached) {
+        logger.debug('QUEST', `Quest ${questId} not completed: user ${userId} has reached the weekly Help Wanted limit (3)`);
+        return;
+      }
     }
 
     // Complete the quest
@@ -3227,7 +3238,7 @@ async function updateUserTracking(user, quest, userId) {
     };
   }
   const now = new Date();
-  const today = getUTCDateString(now);
+  const today = getESTDateString(now);
   
   user.helpWanted.lastCompletion = today;
   // Increment both total and current completions
