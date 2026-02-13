@@ -1,11 +1,19 @@
 "use client";
 
+// ============================================================================
+// ------------------- Imports -------------------
+// ============================================================================
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
+
+// ============================================================================
+// ------------------- Constants & types -------------------
+// ============================================================================
 
 const REGION_BANNERS: Record<string, string> = {
   eldin: "/assets/banners/Rudania1.png",
@@ -35,6 +43,9 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
 
 type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string };
 
+// ------------------- Map / discovery helpers ------------------
+// getReportableDiscoveries, discoveryKey, wasSecuredThisSession, squareQuadrantToCoordinates, getSquareBounds, fogClipPathForQuadrants, isClickInQuadrant -
+
 function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): ReportableDiscovery[] {
   if (!Array.isArray(progressLog)) return [];
   const countByKey = new Map<string, number>();
@@ -61,6 +72,13 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
 /** Stable key for a discovery (uses log entry timestamp so it survives party refetch/poll). */
 function discoveryKey(d: { outcome: string; square: string; quadrant: string; at: string }): string {
   return `${d.outcome}|${d.square}|${d.quadrant}|${d.at}`;
+}
+
+/** True if the current quadrant was secured during this expedition (progress log has "secure" for this location). */
+function wasSecuredThisSession(progressLog: ProgressEntry[] | undefined, square: string, quadrant: string): boolean {
+  if (!Array.isArray(progressLog)) return false;
+  const loc = `${square} ${quadrant}`;
+  return progressLog.some((e) => e.outcome === "secure" && e.message.includes(loc));
 }
 
 /** Return map coordinates (lat, lng) for the center of a square+quadrant. Canvas: lng 0–24000, lat 0–20000. */
@@ -135,6 +153,8 @@ function isClickInQuadrant(pctX: number, pctY: number, quadrant: string): boolea
   return pctX >= q.x && pctX < q.x + q.w && pctY >= q.y && pctY < q.y + q.h;
 }
 
+// ------------------- Constants (regions, poll) ------------------
+
 const REGIONS: Record<string, { label: string; village: string; square: string; quadrant: string }> = {
   eldin: { label: "Eldin", village: "Rudania", square: "H5", quadrant: "Q3" },
   lanayru: { label: "Lanayru", village: "Inariko", square: "H8", quadrant: "Q2" },
@@ -143,6 +163,9 @@ const REGIONS: Record<string, { label: string; village: string; square: string; 
 
 
 const POLL_INTERVAL_MS = 6000;
+
+// ------------------- Types ------------------
+// PartyMember, GatheredItem, ProgressEntry, PartyData, Character, ExploreItem -
 
 type PartyMember = {
   characterId: string;
@@ -222,12 +245,94 @@ function normalizeVillage(v: string): string {
   return (v || "").trim().toLowerCase();
 }
 
+// ------------------- buildExploreInventoryList ------------------
+// Builds sorted explore inventory list from API data (byName, bundles, fromInventory, fromBundles). -
+
+function buildExploreInventoryList(
+  data: { data?: Array<{ itemName: string; quantity?: number }> },
+  exploreItemNames: Set<string>,
+  bundleQuantities: (byName: Map<string, number>) => { "Eldin Ore Bundle": number; "Wood Bundle": number }
+): Array<{ itemName: string; quantity: number }> {
+  const list = Array.isArray(data?.data) ? data.data : [];
+  const all = list.map((it) => ({ itemName: (it.itemName || "").trim(), quantity: Math.max(0, Number(it.quantity) ?? 0) })).filter((it) => it.itemName);
+  const byName = new Map<string, number>();
+  for (const it of all) {
+    const key = it.itemName.toLowerCase();
+    byName.set(key, (byName.get(key) ?? 0) + it.quantity);
+  }
+  const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
+  const bundles = bundleQuantities(byName);
+  const fromInventory = Array.from(byName.entries())
+    .filter(([k]) => validLower.has(k) && k !== "eldin ore" && k !== "wood")
+    .map(([k, q]) => ({ itemName: all.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }));
+  const fromBundles = (["Eldin Ore Bundle", "Wood Bundle"] as const)
+    .filter((name) => exploreItemNames.has(name) && (bundles[name] ?? 0) > 0)
+    .map((name) => ({ itemName: name, quantity: bundles[name] ?? 0 }));
+  return [...fromInventory, ...fromBundles].sort((a, b) => a.itemName.localeCompare(b.itemName));
+}
+
+// ------------------- formatItemStat ------------------
+// Hearts + stamina display string for item stats. -
+
+function formatItemStat(modifierHearts: number, staminaRecovered: number): string {
+  return `❤️${modifierHearts} | 🟩${staminaRecovered}`;
+}
+
+// ------------------- QuadrantStatusLegend ------------------
+// Inaccessible, Unexplored, Explored, Secured legend. -
+
+function QuadrantStatusLegend() {
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--totk-grey-200)]">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#1a1a1a]" aria-hidden />
+        Inaccessible
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#b91c1c]" aria-hidden />
+        Unexplored
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#ca8a04]" aria-hidden />
+        Explored
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#15803d]" aria-hidden />
+        Secured
+      </span>
+    </div>
+  );
+}
+
+// ------------------- getMemberDisplay ------------------
+// displayIcon, displayHearts, displayStamina, isCurrentTurn from member + characters + party. -
+
+function getMemberDisplay(
+  m: PartyMember,
+  characters: Character[],
+  party: PartyData,
+  index: number
+): { displayIcon: string | undefined; displayHearts: number | undefined; displayStamina: number | undefined; isCurrentTurn: boolean } {
+  const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
+  const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
+  const displayHearts = typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts);
+  const displayStamina = typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina);
+  const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
+  return { displayIcon, displayHearts, displayStamina, isCurrentTurn };
+}
+
+// ============================================================================
+// ------------------- Component: ExplorePartyPage -------------------
+// ============================================================================
+
 export default function ExplorePartyPage() {
   const params = useParams();
   const router = useRouter();
   const partyId = (params?.partyId as string) ?? "";
   const { user, loading: sessionLoading } = useSession();
   const userId = user?.id ?? null;
+
+  // ------------------- Component: state declarations ------------------
 
   const [party, setParty] = useState<PartyData | null>(null);
   const [partyError, setPartyError] = useState<string | null>(null);
@@ -266,6 +371,9 @@ export default function ExplorePartyPage() {
   const [pathImageFile, setPathImageFile] = useState<File | null>(null);
   const [pathImageUploading, setPathImageUploading] = useState(false);
   const [pathImageStatus, setPathImageStatus] = useState("");
+  const [pathImageSuccessUrl, setPathImageSuccessUrl] = useState<string | null>(null);
+  /** URL of the path image for the current party's square (if any). Shown on explore map and updated after upload. */
+  const [pathImageForSquare, setPathImageForSquare] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [userPins, setUserPins] = useState<Array<{ _id: string; name: string; coordinates: { lat: number; lng: number }; gridLocation: string; icon?: string; color?: string; sourceDiscoveryKey?: string | null }>>([]);
   const [squarePreview, setSquarePreview] = useState<{
@@ -273,6 +381,9 @@ export default function ExplorePartyPage() {
     quadrantBounds: { x: number; y: number; w: number; h: number } | null;
     quadrantStatuses?: Record<string, string>;
   } | null>(null);
+
+  // ------------------- Component: derived values & callbacks ------------------
+  // isDiscoveryReported, eligibleCharacters, fetchParty, etc. -
 
   /** Discovery is reported if DB (party.reportedDiscoveryKeys), session state, or a saved pin has the same discovery key. */
   const isDiscoveryReported = useCallback(
@@ -300,20 +411,38 @@ export default function ExplorePartyPage() {
         return;
       }
       if (!res.ok) {
+        console.error("[page.tsx]❌ Failed to load expedition:", res.status);
         setPartyError("Failed to load expedition.");
         return;
       }
       const data = await res.json();
       setParty(data);
       setPartyError(null);
-    } catch {
+    } catch (err) {
+      console.error("[page.tsx]❌ Failed to load expedition:", err);
       setPartyError("Failed to load expedition.");
     }
   }, [partyId]);
 
+  // ------------------- Component: effects ------------------
+  // fetch party, sync reported keys, poll party, square preview, path image, discovery previews, pins, characters, explore items, inventory, edit inventory -
+
   useEffect(() => {
     fetchParty();
   }, [fetchParty]);
+
+  // Sync reported-discovery state from server so "already placed" persists across reloads
+  useEffect(() => {
+    if (party?.reportedDiscoveryKeys && Array.isArray(party.reportedDiscoveryKeys)) {
+      setReportedDiscoveryKeys((prev) => {
+        const next = new Set(prev);
+        for (const k of party.reportedDiscoveryKeys!) {
+          if (typeof k === "string" && k.length > 0) next.add(k);
+        }
+        return next;
+      });
+    }
+  }, [party?.reportedDiscoveryKeys]);
 
   useEffect(() => {
     if (!partyId || !party) return;
@@ -326,10 +455,13 @@ export default function ExplorePartyPage() {
       setSquarePreview(null);
       return;
     }
+    const controller = new AbortController();
+    const { signal } = controller;
     const q = party.quadrant || "";
-    fetch(`/api/explore/square-preview?square=${encodeURIComponent(party.square)}${q ? `&quadrant=${encodeURIComponent(q)}` : ""}`)
+    fetch(`/api/explore/square-preview?square=${encodeURIComponent(party.square)}${q ? `&quadrant=${encodeURIComponent(q)}` : ""}`, { signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
+        if (signal.aborted) return;
         if (data?.layers) {
           setSquarePreview({
             layers: data.layers,
@@ -340,20 +472,50 @@ export default function ExplorePartyPage() {
           setSquarePreview(null);
         }
       })
-      .catch(() => setSquarePreview(null));
+      .catch((err) => {
+        if (signal.aborted) return;
+        setSquarePreview(null);
+      });
+    return () => controller.abort();
   }, [party?.square, party?.quadrant]);
+
+  // Load path image for current party+square so the map can show it (and refetch after upload via success URL)
+  useEffect(() => {
+    if (!partyId || !party?.square) {
+      setPathImageForSquare(null);
+      return;
+    }
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch(`/api/explore/path-images?partyId=${encodeURIComponent(partyId)}`, { signal })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { pathImages?: Array<{ squareId: string; imageUrl: string }> }) => {
+        if (signal.aborted) return;
+        const list = Array.isArray(data?.pathImages) ? data.pathImages : [];
+        const forSquare = list.find((p) => p.squareId === party.square);
+        setPathImageForSquare(forSquare?.imageUrl ?? null);
+      })
+      .catch(() => {
+        if (signal.aborted) return;
+        setPathImageForSquare(null);
+      });
+    return () => controller.abort();
+  }, [partyId, party?.square]);
 
   // Load square previews for unreported discoveries (for click-to-place map)
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const list = getReportableDiscoveries(party?.progressLog);
     const unreported = list.filter((d) => !isDiscoveryReported(d));
     const squares = Array.from(new Set(unreported.map((d) => d.square)));
     squares.forEach((square) => {
       if (discoveryPreviewFetchedRef.current.has(square)) return;
       discoveryPreviewFetchedRef.current.add(square);
-      fetch(`/api/explore/square-preview?square=${encodeURIComponent(square)}`)
-        .then((r) => (r.ok ? r.json() : null))
+      fetch(`/api/explore/square-preview?square=${encodeURIComponent(square)}`, { signal })
+        .then((r) => r.ok ? r.json() : null)
         .then((data) => {
+          if (signal.aborted) return;
           if (data?.layers) {
             setDiscoveryPreviewBySquare((prev) => ({
               ...prev,
@@ -361,22 +523,30 @@ export default function ExplorePartyPage() {
             }));
           }
         })
-        .catch(() => setDiscoveryPreviewBySquare((prev) => ({ ...prev, [square]: null })));
+        .catch(() => {
+          if (signal.aborted) return;
+          setDiscoveryPreviewBySquare((prev) => ({ ...prev, [square]: null }));
+        });
     });
+    return () => controller.abort();
   }, [party?.progressLog, isDiscoveryReported]);
 
-  const fetchPins = useCallback(() => {
+  const fetchPins = useCallback((signal?: AbortSignal) => {
     if (!userId) return;
-    fetch("/api/pins", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
+    fetch("/api/pins", { credentials: "include", ...(signal && { signal }) })
+      .then((r) => r.ok ? r.json() : null)
       .then((data) => {
+        if (signal?.aborted) return;
         if (data?.pins && Array.isArray(data.pins)) {
           setUserPins(data.pins);
         } else {
           setUserPins([]);
         }
       })
-      .catch(() => setUserPins([]));
+      .catch(() => {
+        if (signal?.aborted) return;
+        setUserPins([]);
+      });
   }, [userId]);
 
   useEffect(() => {
@@ -384,7 +554,9 @@ export default function ExplorePartyPage() {
       setUserPins([]);
       return;
     }
-    fetchPins();
+    const controller = new AbortController();
+    fetchPins(controller.signal);
+    return () => controller.abort();
   }, [userId, fetchPins]);
 
   // Poll pins so when someone else adds a pin, everyone sees it
@@ -406,23 +578,36 @@ export default function ExplorePartyPage() {
 
   useEffect(() => {
     if (!userId) return;
+    const controller = new AbortController();
+    const { signal } = controller;
     setLoadingChars(true);
-    fetch("/api/characters/my-ocs?limit=100")
+    fetch("/api/characters/my-ocs?limit=100", { signal })
       .then((r) => r.json())
       .then((data) => {
+        if (signal.aborted) return;
         const list = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
         setCharacters(list);
       })
-      .catch(() => setCharacters([]))
-      .finally(() => setLoadingChars(false));
+      .catch(() => {
+        if (signal.aborted) return;
+        setCharacters([]);
+      })
+      .finally(() => {
+        if (signal.aborted) return;
+        setLoadingChars(false);
+      });
+    return () => controller.abort();
   }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
-    fetch("/api/explore/items")
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch("/api/explore/items", { signal })
       .then((r) => r.json())
       .then((list) => (Array.isArray(list) ? list : []))
       .then((items: ExploreItem[]) => {
+        if (signal.aborted) return;
         const names = new Set<string>();
         const stats = new Map<string, { modifierHearts: number; staminaRecovered: number }>();
         const images = new Map<string, string>();
@@ -441,10 +626,12 @@ export default function ExplorePartyPage() {
         setExploreItemImages(images);
       })
       .catch(() => {
+        if (signal.aborted) return;
         setExploreItemNames(new Set());
         setExploreItemStats(new Map());
         setExploreItemImages(new Map());
       });
+    return () => controller.abort();
   }, [userId]);
 
   const selectedCharacter = eligibleCharacters.find((c) => String(c._id) === String(selectedCharacterId));
@@ -467,31 +654,25 @@ export default function ExplorePartyPage() {
       setInventoryWithQuantity([]);
       return;
     }
+    const controller = new AbortController();
+    const { signal } = controller;
     setLoadingInventory(true);
     setSelectedItems([]);
-    fetch(`/api/inventories/character/${encodeURIComponent(selectedCharacter.name)}/items`)
+    fetch(`/api/inventories/character/${encodeURIComponent(selectedCharacter.name)}/items`, { signal })
       .then((r) => r.json())
       .then((data: { data?: Array<{ itemName: string; quantity?: number }> }) => {
-        const list = Array.isArray(data?.data) ? data.data : [];
-        const all = list.map((it) => ({ itemName: (it.itemName || "").trim(), quantity: Math.max(0, Number(it.quantity) ?? 0) })).filter((it) => it.itemName);
-        const byName = new Map<string, number>();
-        for (const it of all) {
-          const key = it.itemName.toLowerCase();
-          byName.set(key, (byName.get(key) ?? 0) + it.quantity);
-        }
-        const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
-        const bundles = bundleQuantities(byName);
-        const fromInventory = Array.from(byName.entries())
-          .filter(([k]) => validLower.has(k) && k !== "eldin ore" && k !== "wood")
-          .map(([k, q]) => ({ itemName: all.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }));
-        const fromBundles = (["Eldin Ore Bundle", "Wood Bundle"] as const)
-          .filter((name) => exploreItemNames.has(name) && (bundles[name] ?? 0) > 0)
-          .map((name) => ({ itemName: name, quantity: bundles[name] ?? 0 }));
-        const arr = [...fromInventory, ...fromBundles].sort((a, b) => a.itemName.localeCompare(b.itemName));
-        setInventoryWithQuantity(arr);
+        if (signal.aborted) return;
+        setInventoryWithQuantity(buildExploreInventoryList(data, exploreItemNames, bundleQuantities));
       })
-      .catch(() => setInventoryWithQuantity([]))
-      .finally(() => setLoadingInventory(false));
+      .catch(() => {
+        if (signal.aborted) return;
+        setInventoryWithQuantity([]);
+      })
+      .finally(() => {
+        if (signal.aborted) return;
+        setLoadingInventory(false);
+      });
+    return () => controller.abort();
   }, [selectedCharacter?.name, userId, exploreItemNames, bundleQuantities]);
 
   const inventoryQty = useCallback(
@@ -533,6 +714,9 @@ export default function ExplorePartyPage() {
     setSelectedItems((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  // ------------------- Component: handlers ------------------
+  // join, copy link, start expedition, createDiscoveryPinAt, item add/remove, edit items save/cancel -
+
   const startEditingItems = useCallback(() => {
     if (!party?.currentUserMember?.items) return;
     setEditItems(party.currentUserMember.items.map((it) => it.itemName));
@@ -545,29 +729,20 @@ export default function ExplorePartyPage() {
       if (!editingItems) setEditInventoryWithQuantity([]);
       return;
     }
+    const controller = new AbortController();
+    const { signal } = controller;
     const name = party.currentUserMember.name;
-    fetch(`/api/inventories/character/${encodeURIComponent(name)}/items`)
+    fetch(`/api/inventories/character/${encodeURIComponent(name)}/items`, { signal })
       .then((r) => r.json())
       .then((data: { data?: Array<{ itemName: string; quantity?: number }> }) => {
-        const list = Array.isArray(data?.data) ? data.data : [];
-        const all = list.map((it) => ({ itemName: (it.itemName || "").trim(), quantity: Math.max(0, Number(it.quantity) ?? 0) })).filter((it) => it.itemName);
-        const byName = new Map<string, number>();
-        for (const it of all) {
-          const key = it.itemName.toLowerCase();
-          byName.set(key, (byName.get(key) ?? 0) + it.quantity);
-        }
-        const validLower = new Set([...exploreItemNames].map((n) => n.toLowerCase()));
-        const bundles = bundleQuantities(byName);
-        const fromInventory = Array.from(byName.entries())
-          .filter(([k]) => validLower.has(k) && k !== "eldin ore" && k !== "wood")
-          .map(([k, q]) => ({ itemName: all.find((v) => v.itemName.toLowerCase() === k)?.itemName ?? k, quantity: q }));
-        const fromBundles = (["Eldin Ore Bundle", "Wood Bundle"] as const)
-          .filter((name) => exploreItemNames.has(name) && (bundles[name] ?? 0) > 0)
-          .map((name) => ({ itemName: name, quantity: bundles[name] ?? 0 }));
-        const arr = [...fromInventory, ...fromBundles].sort((a, b) => a.itemName.localeCompare(b.itemName));
-        setEditInventoryWithQuantity(arr);
+        if (signal.aborted) return;
+        setEditInventoryWithQuantity(buildExploreInventoryList(data, exploreItemNames, bundleQuantities));
       })
-      .catch(() => setEditInventoryWithQuantity([]));
+      .catch(() => {
+        if (signal.aborted) return;
+        setEditInventoryWithQuantity([]);
+      });
+    return () => controller.abort();
   }, [editingItems, party?.currentUserMember?.name, userId, exploreItemNames, bundleQuantities]);
 
   const cancelEditingItems = useCallback(() => {
@@ -611,12 +786,14 @@ export default function ExplorePartyPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        console.error("[page.tsx]❌ Failed to update items:", data.error ?? res.status);
         setUpdateItemsError(data.error ?? "Failed to update items");
         return;
       }
       setEditingItems(false);
       await fetchParty();
     } catch (e) {
+      console.error("[page.tsx]❌ Update items request failed:", e);
       setUpdateItemsError(e instanceof Error ? e.message : "Request failed");
     } finally {
       setUpdatingItems(false);
@@ -635,11 +812,13 @@ export default function ExplorePartyPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        console.error("[page.tsx]❌ Failed to join:", data.error ?? res.status);
         setJoinError(data.error ?? "Failed to join");
         return;
       }
       await fetchParty();
     } catch (e) {
+      console.error("[page.tsx]❌ Join request failed:", e);
       setJoinError(e instanceof Error ? e.message : "Request failed");
     } finally {
       setJoining(false);
@@ -658,10 +837,14 @@ export default function ExplorePartyPage() {
       const res = await fetch(`/api/explore/parties/${encodeURIComponent(partyId)}/start`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        console.error("[page.tsx]❌ Failed to start expedition:", data.error ?? res.status);
         setStartExpeditionError(data.error ?? "Failed to start expedition");
         return;
       }
       await fetchParty();
+    } catch (e) {
+      console.error("[page.tsx]❌ Start expedition failed:", e);
+      setStartExpeditionError(e instanceof Error ? e.message : "Request failed");
     } finally {
       setStartingExpedition(false);
     }
@@ -698,20 +881,26 @@ export default function ExplorePartyPage() {
             setPlacePinError("Please log in to place a marker.");
             return;
           }
+          console.error("[page.tsx]❌ Failed to save marker:", data.error ?? res.status);
           setPlacePinError((data.error as string) ?? `Failed to save marker (${res.status}).`);
           return;
         }
         setReportedDiscoveryKeys((prev) => new Set(prev).add(key));
         setPlacingForDiscovery(null);
         fetchPins();
+        await fetchParty();
       } catch (e) {
+        console.error("[page.tsx]❌ Save marker failed:", e);
         setPlacePinError(e instanceof Error ? e.message : "Failed to save marker.");
       } finally {
         setPlacingPinForKey(null);
       }
     },
-    [fetchPins]
+    [partyId, fetchPins, fetchParty]
   );
+
+  // ------------------- Component: early returns ------------------
+  // session loading, no partyId, partyError, !party -
 
   if (sessionLoading) {
     return (
@@ -754,6 +943,9 @@ export default function ExplorePartyPage() {
       </div>
     );
   }
+
+  // ------------------- Component: main render ------------------
+  // header, join section, map + progress, journey, party, sidebar -
 
   const regionInfo = REGIONS[party.region];
   const canJoin =
@@ -836,7 +1028,7 @@ export default function ExplorePartyPage() {
             const stats = exploreItemStats.get(it.itemName.toLowerCase());
             const h = stats?.modifierHearts ?? 0;
             const s = stats?.staminaRecovered ?? 0;
-            const statStr = `❤️${h} | 🟩${s}`;
+            const statStr = formatItemStat(h, s);
             return (
               <div
                 key={i}
@@ -944,7 +1136,7 @@ export default function ExplorePartyPage() {
                   {squarePreview.layers.map((layer) => (
                     <img
                       key={layer.name}
-                      src={layer.url}
+                      src={layer.name === "MAP_0002_Map-Base" && pathImageForSquare ? pathImageForSquare : layer.url}
                       alt=""
                       className="absolute inset-0 h-full w-full object-cover"
                       onError={(e) => { e.currentTarget.style.display = "none"; }}
@@ -989,25 +1181,7 @@ export default function ExplorePartyPage() {
                     })}
                   </div>
                 </div>
-                {/* Quadrant status legend: Inaccessible, Unexplored, Explored, Secured */}
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--totk-grey-200)]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#1a1a1a]" aria-hidden />
-                    Inaccessible
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#b91c1c]" aria-hidden />
-                    Unexplored
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#ca8a04]" aria-hidden />
-                    Explored
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#15803d]" aria-hidden />
-                    Secured
-                  </span>
-                </div>
+                <QuadrantStatusLegend />
               </div>
             )}
             {!regionBanner && <div className="h-px bg-[var(--totk-dark-ocher)]/40" />}
@@ -1193,7 +1367,7 @@ export default function ExplorePartyPage() {
                               const st = exploreItemStats.get(it.itemName.toLowerCase());
                               const h = st?.modifierHearts ?? 0;
                               const s = st?.staminaRecovered ?? 0;
-                              const statPart = `❤️${h}|🟩${s}`;
+                              const statPart = formatItemStat(h, s);
                               const highlighted = idx === editItemHighlightIndex;
                               return (
                                 <li key={it.itemName}>
@@ -1372,7 +1546,7 @@ export default function ExplorePartyPage() {
                                         const st = exploreItemStats.get(it.itemName.toLowerCase());
                                         const h = st?.modifierHearts ?? 0;
                                         const s = st?.staminaRecovered ?? 0;
-                                        const statPart = `❤️${h}|🟩${s}`;
+                                        const statPart = formatItemStat(h, s);
                                         const highlighted = idx === itemHighlightIndex;
                                         return (
                                           <li key={it.itemName}>
@@ -1506,7 +1680,7 @@ export default function ExplorePartyPage() {
                               const isSaving = placingPinForKey === key;
                               return (
                                 <li key={key} className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-[var(--botw-warm-black)]/50 px-2.5 py-1.5">
-                                  <span className="text-xs font-medium text-[var(--totk-ivory)]">{d.label} — {d.square} {d.quadrant}</span>
+                                  <span className="text-xs font-medium text-[var(--totk-ivory)]">{d.square} {d.quadrant} — {d.label}</span>
                                   {reported ? (
                                     <span className="flex items-center gap-1 text-[10px] text-[var(--totk-light-green)]">
                                       <i className="fa-solid fa-check" aria-hidden />
@@ -1537,7 +1711,7 @@ export default function ExplorePartyPage() {
                           </ul>
                         </div>
                       )}
-                      {(party.quadrantState === "secured" || (party.quadrantStatuses && Object.values(party.quadrantStatuses).includes("secured"))) && (
+                      {party.quadrantState === "secured" && wasSecuredThisSession(party.progressLog, party.square, party.quadrant) && (
                         <div className="mb-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-mid-ocher)]/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-ivory)]">
                             <i className="fa-solid fa-route text-[10px] opacity-80" aria-hidden />
@@ -1577,6 +1751,7 @@ export default function ExplorePartyPage() {
                               onClick={async () => {
                                 if (!pathImageFile || pathImageUploading) return;
                                 setPathImageUploading(true);
+                                setPathImageSuccessUrl(null);
                                 setPathImageStatus("Uploading…");
                                 try {
                                   const form = new FormData();
@@ -1588,15 +1763,26 @@ export default function ExplorePartyPage() {
                                     credentials: "include",
                                     body: form,
                                   });
-                                  const data = await res.json().catch(() => ({}));
+                                  const data = (await res.json().catch(() => ({}))) as { error?: string; url?: string };
                                   if (!res.ok) {
-                                    setPathImageStatus((data.error as string) || "Upload failed.");
+                                    console.error("[page.tsx]❌ Path image upload failed:", data.error ?? res.status);
+                                    setPathImageSuccessUrl(null);
+                                    setPathImageStatus((data.error as string) || `Upload failed (${res.status}).`);
                                     return;
                                   }
                                   setPathImageFile(null);
-                                  setPathImageStatus("Path image uploaded! It appears on the main Map page and will update if you upload again.");
-                                } catch {
-                                  setPathImageStatus("Upload failed. Try again.");
+                                  const url = data.url as string | undefined;
+                                  setPathImageSuccessUrl(url ?? null);
+                                  if (url) setPathImageForSquare(url);
+                                  setPathImageStatus(
+                                    url
+                                      ? "Path image uploaded and saved to Google Cloud. It will appear on the main Map page. Verify the image:"
+                                      : "Path image uploaded! It appears on the main Map page."
+                                  );
+                                } catch (e) {
+                                  console.error("[page.tsx]❌ Path image upload failed:", e);
+                                  setPathImageSuccessUrl(null);
+                                  setPathImageStatus("Upload failed: " + (e instanceof Error ? e.message : "Try again."));
                                 } finally {
                                   setPathImageUploading(false);
                                 }
@@ -1607,7 +1793,24 @@ export default function ExplorePartyPage() {
                               Upload path image
                             </button>
                           </div>
-                          {pathImageStatus && <p className="text-[11px] text-[var(--totk-grey-200)]">{pathImageStatus}</p>}
+                          {pathImageStatus && (
+                            <p className="text-[11px] text-[var(--totk-grey-200)]">
+                              {pathImageStatus}
+                              {pathImageSuccessUrl && (
+                                <>
+                                  {" "}
+                                  <a
+                                    href={pathImageSuccessUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[var(--totk-light-green)] underline"
+                                  >
+                                    Open image
+                                  </a>
+                                </>
+                              )}
+                            </p>
+                          )}
                         </div>
                       )}
                       <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">
@@ -1653,7 +1856,7 @@ export default function ExplorePartyPage() {
                             .map((layer) => (
                               <img
                                 key={layer.name}
-                                src={layer.url}
+                                src={layer.name === "MAP_0002_Map-Base" && displayPreview === squarePreview && pathImageForSquare ? pathImageForSquare : layer.url}
                                 alt=""
                                 className="absolute inset-0 h-full w-full object-cover"
                                 onError={(e) => { e.currentTarget.style.display = "none"; }}
@@ -1785,25 +1988,7 @@ export default function ExplorePartyPage() {
                           </div>
                           </div>
                         </div>
-                        {/* Quadrant status legend: Inaccessible, Unexplored, Explored, Secured */}
-                        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--totk-grey-200)]">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#1a1a1a]" aria-hidden />
-                            Inaccessible
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#b91c1c]" aria-hidden />
-                            Unexplored
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#ca8a04]" aria-hidden />
-                            Explored
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#15803d]" aria-hidden />
-                            Secured
-                          </span>
-                        </div>
+                        <QuadrantStatusLegend />
                       </>
                       ) : (
                         <div ref={mapContainerRef} className="relative mx-auto flex max-w-2xl items-center justify-center rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60" style={{ aspectRatio: "2400/1666" }}>
@@ -1981,11 +2166,7 @@ export default function ExplorePartyPage() {
                   </div>
                   <div className="space-y-3">
                     {party.members.map((m, index) => {
-                      const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
-                      const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
-                      const displayHearts = typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts);
-                      const displayStamina = typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina);
-                      const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
+                      const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
                       return (
                         <div key={m.characterId} className="flex items-start gap-2">
                           <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
@@ -2038,11 +2219,7 @@ export default function ExplorePartyPage() {
             </div>
             <div className="space-y-4">
               {party.members.map((m, index) => {
-                const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
-                const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
-                const displayHearts = typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts);
-                const displayStamina = typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina);
-                const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
+                const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
                 return (
                   <div key={m.characterId} className="flex items-start gap-3">
                     <span

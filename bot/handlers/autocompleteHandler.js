@@ -3449,7 +3449,8 @@ async function handleExploreMoveQuadrantAutocomplete(interaction, focusedOption)
   const value = (focusedOption.value || "").toLowerCase();
   const choices = adjacent.map((a) => {
    const loc = `${a.square} - ${a.quadrant}`;
-   return { name: loc, value: loc };
+   const name = a.direction ? `${a.direction} · ${a.square} ${a.quadrant}` : loc;
+   return { name, value: loc };
   });
   const filtered = value
    ? choices.filter((c) => c.value.toLowerCase().includes(value))

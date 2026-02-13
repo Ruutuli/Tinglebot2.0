@@ -472,6 +472,7 @@ module.exports = {
 
      // Sync quadrant state from map so stamina cost matches canonical explored/secured status
      const mapSquare = await Square.findOne({ squareId: party.square });
+     let ruinRestRecovered = 0;
      if (mapSquare && mapSquare.quadrants && mapSquare.quadrants.length) {
       const q = mapSquare.quadrants.find(
        (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
@@ -479,6 +480,21 @@ module.exports = {
       if (q && (q.status === "explored" || q.status === "secured")) {
        party.quadrantState = q.status;
        party.markModified("quadrantState");
+      }
+      // Known ruin-rest spot: auto-recover stamina when rolling here again
+      const restStamina = typeof q?.ruinRestStamina === "number" && q.ruinRestStamina > 0 ? q.ruinRestStamina : 0;
+      if (restStamina > 0 && character) {
+       const maxStam = typeof character.maxStamina === "number" ? character.maxStamina : character.currentStamina ?? 0;
+       const curStam = typeof character.currentStamina === "number" ? character.currentStamina : 0;
+       const add = Math.min(restStamina, Math.max(0, maxStam - curStam));
+       if (add > 0) {
+        character.currentStamina = curStam + add;
+        await character.save();
+        party.characters[characterIndex].currentStamina = character.currentStamina;
+        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+        await party.save();
+        ruinRestRecovered = add;
+       }
       }
      }
 
@@ -617,6 +633,7 @@ module.exports = {
         showNextAndCommands: true,
         showRestSecureMove: true,
         isAtStartQuadrant: !!isAtStartQuadrant,
+        ruinRestRecovered,
       });
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
@@ -664,7 +681,8 @@ module.exports = {
         showRestSecureMove: true,
         commandsLast: true,
         extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${healedChar?.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
-       });
+        ruinRestRecovered,
+      });
        fairyEmbed.addFields(
         { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
        );
@@ -678,7 +696,7 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextChar = party.characters[party.currentTurn];
-      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true);
+      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered);
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
       await interaction.editReply({ embeds: [embed] });
@@ -817,6 +835,7 @@ module.exports = {
         nextCharacter: nextCharacter ?? null,
         showNextAndCommands: true,
         showRestSecureMove: false,
+        ruinRestRecovered,
       });
 
       const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest";
@@ -885,7 +904,7 @@ module.exports = {
            .setColor(regionColors[freshParty.region] || "#00ff99")
            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to explore the ruins.** " + ruinsCharacter.name + " has " + currentStamina + " 🟩 (need 3). Continue with </explore roll>.")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
-          addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+          addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
           await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
           return;
          }
@@ -925,6 +944,21 @@ module.exports = {
           if (idx >= 0) { freshParty.characters[idx].currentStamina = ruinsCharacter.currentStamina; }
           freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
           await freshParty.save();
+          // Mark this quadrant as a ruin-rest spot so future visits auto-heal
+          try {
+           const mapSquareId = (freshParty.square && String(freshParty.square).trim()) || "";
+           const mapQuadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim().toUpperCase()) || "";
+           if (mapSquareId && mapQuadrantId) {
+            const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+            await Square.updateOne(
+             { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+             { $set: { "quadrants.$[q].ruinRestStamina": recover } },
+             { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+            );
+           }
+          } catch (mapErr) {
+           console.warn("[explore.js] Failed to mark ruin-rest on map:", mapErr?.message || mapErr);
+          }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a camp spot; recovered 1 stamina.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost, staminaRecovered: recover });
@@ -1017,8 +1051,9 @@ module.exports = {
           nextCharacter: nextCharacter ?? null,
           showNextAndCommands: true,
           showRestSecureMove: false,
+          ruinRestRecovered,
         });
-         const explorePageUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+         const explorePageUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
          resultEmbed.addFields({
           name: "📍 **__Set pin on webpage__**",
           value: `Set a pin for this discovery on the **explore/${expeditionId}** page: ${explorePageUrl}`,
@@ -1052,7 +1087,7 @@ module.exports = {
                .setColor(regionColors[fp?.region] || "#00ff99")
                .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
-              addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+              addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
               await ci.update({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
               return;
              }
@@ -1066,7 +1101,7 @@ module.exports = {
               .setColor(regionColors[finalParty?.region] || "#00ff99")
               .setDescription(resultDescription.split("\n\n")[0] + `\n\n✅ **You left the chest.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
               .setImage(regionImages[finalParty?.region] || EXPLORATION_IMAGE_FALLBACK);
-             addExplorationStandardFields(skipEmbed, { party: finalParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+             addExplorationStandardFields(skipEmbed, { party: finalParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
              await ci.update({ embeds: [skipEmbed], components: [chestDisabledRow] }).catch(() => {});
             }
            });
@@ -1099,9 +1134,9 @@ module.exports = {
             .setColor(regionColors[freshParty?.region] || "#00ff99")
             .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
-           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
            await i.update({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
-           return;
+          return;
           }
           if (result?.embed) {
            await i.update({ embeds: [result.embed], components: [disabledRow] }).catch(() => {});
@@ -1117,9 +1152,9 @@ module.exports = {
           .setColor(regionColors[party.region] || "#00ff99")
           .setDescription(description.split("\n\n")[0] + `\n\n✅ **You left the chest.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-         addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+         addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
          await i.update({ embeds: [skipEmbed], components: [disabledRow] });
-         return;
+        return;
         }
 
         const intro = description.split("\n\n")[0];
@@ -1151,6 +1186,7 @@ module.exports = {
           nextCharacter: nextCharacter ?? null,
           showNextAndCommands: true,
           showRestSecureMove: false,
+          ruinRestRecovered,
         });
         await i.update({ embeds: [choiceEmbed], components: [disabledRow] });
        });
@@ -1202,7 +1238,8 @@ module.exports = {
        party.totalHearts,
        party.totalStamina,
        nextCharacter ?? null,
-       true
+       true,
+       ruinRestRecovered
       );
 
       if (!party.gatheredItems) {
@@ -1304,7 +1341,8 @@ module.exports = {
          party.totalHearts,
          party.totalStamina,
          nextCharacterRaid ?? null,
-         true
+         true,
+         ruinRestRecovered
         );
 
         embed.addFields(
@@ -1449,7 +1487,8 @@ module.exports = {
         party.totalHearts,
         party.totalStamina,
         nextCharacterTier ?? null,
-        true
+        true,
+        ruinRestRecovered
        );
 
        const hasEquippedWeapon = !!(character?.gearWeapon?.name);
@@ -1683,7 +1722,38 @@ module.exports = {
     }
 
     if (party.quadrantState !== "explored") {
-     return interaction.editReply("You can only secure explored quadrants.");
+     const locationSecure = `${party.square} ${party.quadrant}`;
+     const nextChar = party.characters[party.currentTurn];
+     const notExploredEmbed = new EmbedBuilder()
+       .setTitle("🔒 Quadrant Not Explored")
+       .setColor(regionColors[party.region] || "#FF9800")
+       .setDescription(
+         `You can only **Secure** quadrants that have been fully explored.\n\n` +
+         `**${locationSecure}** has not been explored yet. Use **Explore** to reveal this quadrant, then you can secure it.`
+       )
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+     addExplorationStandardFields(notExploredEmbed, {
+       party,
+       expeditionId,
+       location: locationSecure,
+       nextCharacter: nextChar ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: true,
+       commandsLast: true,
+     });
+     addExplorationCommandsField(notExploredEmbed, {
+       party,
+       expeditionId,
+       location: locationSecure,
+       nextCharacter: nextChar ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: true,
+       isAtStartQuadrant: (() => {
+        const start = START_POINTS_BY_REGION[party.region];
+        return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+       })(),
+     });
+     return interaction.editReply({ embeds: [notExploredEmbed] });
     }
 
     const staminaCost = 5;
@@ -1812,6 +1882,12 @@ module.exports = {
       value: "Quadrant secured. No stamina cost to explore here, increased safety.",
       inline: false,
      });
+    const explorePageUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+    embed.addFields({
+      name: "📋 **__Draw path (do this now)__**",
+      value: `**Check the dashboard** — open the explore page, **download the square image**, draw your path, and **upload it**. You **cannot do this later**; you must do it **before you move**.\n\n🔗 ${explorePageUrl}`,
+      inline: false,
+     });
     addExplorationCommandsField(embed, {
       party,
       expeditionId,
@@ -1822,9 +1898,8 @@ module.exports = {
     });
 
     await interaction.editReply({ embeds: [embed] });
-    const explorePageUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
     await interaction.followUp({
-      content: `Hey, you secured it! Use the **explore/${expeditionId}** page to place pins and draw your path: ${explorePageUrl}\n\n<@${nextCharacterSecure.userId}> it's your turn now`,
+      content: `**Draw your path now:** Check the dashboard → download the square image, draw your path, and upload it. You must do this **before you move** (you cannot do it later). ${explorePageUrl}\n\n<@${nextCharacterSecure.userId}> it's your turn now`,
     });
 
     // ------------------- Move to Adjacent Quadrant -------------------

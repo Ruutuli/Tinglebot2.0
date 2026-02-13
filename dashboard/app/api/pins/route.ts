@@ -182,18 +182,62 @@ export async function POST(request: Request) {
     await pin.populate("character", "name");
     const pinObj = pin.toObject();
 
-    // If this pin was placed from an expedition discovery, mark it on the party so DB tracks pin placed or not
-    if (sourceDiscoveryKey && partyId) {
+    // If this pin was placed from an expedition discovery: update party (reportedDiscoveryKeys) and exploringMap (Square quadrant discoveries)
+    if (sourceDiscoveryKey) {
+      const key = sourceDiscoveryKey.slice(0, 200);
+
+      if (partyId) {
+        try {
+          const Party =
+            mongoose.models.Party ??
+            ((await import("@/models/PartyModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+          const updateResult = await Party.updateOne(
+            { partyId: String(partyId).trim() },
+            { $addToSet: { reportedDiscoveryKeys: key } }
+          );
+          if (updateResult.matchedCount === 0) {
+            console.warn("[api/pins] Party not found for reportedDiscoveryKeys update; partyId:", partyId);
+          }
+        } catch (partyErr) {
+          console.error("[api/pins] Failed to update party reportedDiscoveryKeys:", partyErr);
+        }
+      }
+
+      // Always add discovery to exploringMap (Square.quadrants[].discoveries) so the map DB stays in sync
       try {
-        const Party =
-          mongoose.models.Party ??
-          ((await import("@/models/PartyModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
-        await Party.updateOne(
-          { partyId },
-          { $addToSet: { reportedDiscoveryKeys: sourceDiscoveryKey.slice(0, 200) } }
-        );
-      } catch (partyErr) {
-        console.error("[api/pins] Failed to update party reportedDiscoveryKeys:", partyErr);
+        const parts = String(sourceDiscoveryKey).split("|");
+        const outcome = (parts[0] ?? "").trim();
+        const squareIdRaw = (parts[1] ?? "").trim();
+        const quadrantId = (parts[2] ?? "").trim().toUpperCase();
+        if (outcome && squareIdRaw && (quadrantId === "Q1" || quadrantId === "Q2" || quadrantId === "Q3" || quadrantId === "Q4")) {
+          const Square =
+            mongoose.models.Square ??
+            ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+          const squareIdRegex = new RegExp(
+            `^${squareIdRaw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+            "i"
+          );
+          const mapResult = await Square.updateOne(
+            { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
+            {
+              $push: {
+                "quadrants.$[q].discoveries": {
+                  type: outcome.slice(0, 50),
+                  discoveredBy: auth.discordId,
+                  discoveredAt: new Date(),
+                },
+              },
+            },
+            { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+          );
+          if (mapResult.matchedCount === 0) {
+            console.warn("[api/pins] exploringMap: no Square found for", squareIdRaw, quadrantId);
+          } else if (mapResult.modifiedCount === 0) {
+            console.warn("[api/pins] exploringMap: Square matched but not modified", squareIdRaw, quadrantId);
+          }
+        }
+      } catch (mapErr) {
+        console.error("[api/pins] Failed to add discovery to exploringMap (Square quadrant):", mapErr);
       }
     }
 

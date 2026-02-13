@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
     if (partyId) filter.partyId = partyId;
 
     const docs = await MapPathImage.find(filter).sort({ createdAt: -1 }).lean();
-    const pathImages = (docs as Array<{ squareId: string; imageUrl: string; createdAt?: Date }>).map((d) => ({
+    type PathImageDoc = { squareId: string; imageUrl: string; createdAt?: Date };
+    const pathImages = (docs as unknown as PathImageDoc[]).map((d) => ({
       squareId: d.squareId,
       imageUrl: d.imageUrl,
       updatedAt: d.createdAt ? new Date(d.createdAt).getTime() : 0,

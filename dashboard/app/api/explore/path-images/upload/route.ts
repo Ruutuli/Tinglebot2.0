@@ -19,7 +19,13 @@ export async function POST(request: NextRequest) {
   }
 
   if (!gcsUploadService.isConfigured()) {
-    return NextResponse.json({ error: "Upload service not configured" }, { status: 503 });
+    return NextResponse.json(
+      {
+        error:
+          "Upload service not configured. Set GCP_PROJECT_ID and GCP_BUCKET_NAME (and GCS_CREDENTIALS or GCS_KEY_FILE_PATH) in the dashboard environment.",
+      },
+      { status: 503 }
+    );
   }
 
   let formData: FormData;
@@ -52,6 +58,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await gcsUploadService.uploadPathImage(buf, safePartyId, squareId);
+    console.log("[explore/path-images/upload] GCS upload OK:", result.url);
 
     await connect();
     const MapPathImage =
@@ -72,10 +79,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, url: result.url });
   } catch (err) {
-    console.error("[explore/path-images/upload] error:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to upload path image" },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Failed to upload path image";
+    console.error("[explore/path-images/upload] error:", message, err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

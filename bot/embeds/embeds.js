@@ -471,13 +471,14 @@ function createVendingSetupInstructionsEmbed(character = null) {
 // showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
 const EXPLORE_DASHBOARD_BASE = "https://tinglebot.xyz/explore";
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [] }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0 }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const fields = [
   { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
   { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
   ...(Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []),
+  ...(ruinRestRecovered > 0 ? [{ name: "📋 **__Ruin rest__**", value: `Known ruin-rest spot: +${ruinRestRecovered} stamina.`, inline: false }] : []),
   { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
  ];
@@ -568,7 +569,8 @@ const createExplorationItemEmbed = (
  totalHearts,
  totalStamina,
  nextCharacter = null,
- showNextAndCommands = true
+ showNextAndCommands = true,
+ ruinRestRecovered = 0
 ) => {
  const embed = new EmbedBuilder()
   .setTitle(`🗺️ **Expedition: ${character.name} Found an Item!**`)
@@ -588,6 +590,7 @@ const createExplorationItemEmbed = (
   showNextAndCommands: !!nextCharacter && showNextAndCommands,
   showRestSecureMove: false,
   extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
+  ruinRestRecovered,
  });
  return embed;
 };
@@ -603,7 +606,8 @@ const createExplorationMonsterEmbed = (
  totalHearts,
  totalStamina,
  nextCharacter = null,
- showNextAndCommands = true
+ showNextAndCommands = true,
+ ruinRestRecovered = 0
 ) => {
  const monsterImage =
   monster.image ||
@@ -629,6 +633,7 @@ const createExplorationMonsterEmbed = (
   showRestSecureMove: false,
   commandsLast: true,
   extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
+  ruinRestRecovered,
  });
  return embed;
 };

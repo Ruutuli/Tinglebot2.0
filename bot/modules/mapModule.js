@@ -7,85 +7,74 @@ class MapModule {
       this.quadrants = ['Q1', 'Q2', 'Q3', 'Q4'];
     }
   
-    // Determine adjacent squares based on quadrant layout and full grid setup
+    // Determine adjacent squares based on quadrant layout (must match dashboard/map: Q1=top-left, Q2=top-right, Q3=bottom-left, Q4=bottom-right; row increases south, col east).
     getAdjacentSquares(square, quadrant) {
         const [colIndex, rowIndex] = this.parseSquare(square);
         const adjacentSquares = [];
-    
-        const addSquare = (colIdx, rowIdx, quad) => {
+
+        const addSquare = (colIdx, rowIdx, quad, direction) => {
             if (colIdx >= 0 && colIdx < this.columns.length && rowIdx >= 1 && rowIdx <= 12) {
                 const col = this.columns[colIdx];
                 if (this.isValidSquare(col, rowIdx)) {
-                    adjacentSquares.push({ square: `${col}${rowIdx}`, quadrant: quad });
+                    adjacentSquares.push({ square: `${col}${rowIdx}`, quadrant: quad, direction: direction || null });
                 }
             }
         };
-    
-        // Quadrant layout (row increases south, col increases east):
-        //   Q4 | Q3   (north row)
+
+        // Quadrant layout (matches dashboard map-geometry and map-loader):
+        //   Q1 | Q2   (top row)
         //   ---+---
-        //   Q2 | Q1   (south row)
-        switch (quadrant) {
+        //   Q3 | Q4   (bottom row)
+        const q = String(quadrant || '').trim().toUpperCase();
+        switch (q) {
             case 'Q1':
-                // Same square: Q2 (west), Q3 (north), Q4 (north-west)
-                addSquare(colIndex, rowIndex, 'Q2');
-                addSquare(colIndex, rowIndex, 'Q3');
-                addSquare(colIndex, rowIndex, 'Q4');
-                // East (col+1)
-                addSquare(colIndex + 1, rowIndex, 'Q2');
-                addSquare(colIndex + 1, rowIndex, 'Q4');
-                // South (row+1)
-                addSquare(colIndex, rowIndex + 1, 'Q3');
-                addSquare(colIndex, rowIndex + 1, 'Q4');
-                // South-east (col+1, row+1)
-                addSquare(colIndex + 1, rowIndex + 1, 'Q4');
+                // Top-left: same square Q2 (right), Q3 (below), Q4 (diagonal); north = square above Q3,Q4; west = square left Q2,Q4; north-west = above-left Q4
+                addSquare(colIndex, rowIndex, 'Q2', '→ East (same square)');
+                addSquare(colIndex, rowIndex, 'Q3', '↓ South (same square)');
+                addSquare(colIndex, rowIndex, 'Q4', '↘ South-east (same square)');
+                addSquare(colIndex, rowIndex - 1, 'Q3', '↑ North');
+                addSquare(colIndex, rowIndex - 1, 'Q4', '↑ North');
+                addSquare(colIndex - 1, rowIndex, 'Q2', '← West');
+                addSquare(colIndex - 1, rowIndex, 'Q4', '← West');
+                addSquare(colIndex - 1, rowIndex - 1, 'Q4', '↖ North-west');
                 break;
             case 'Q2':
-                // Same square: Q1 (east), Q3 (north-east), Q4 (north)
-                addSquare(colIndex, rowIndex, 'Q1');
-                addSquare(colIndex, rowIndex, 'Q3');
-                addSquare(colIndex, rowIndex, 'Q4');
-                // North (row-1): H7 Q4, H7 Q3
-                addSquare(colIndex, rowIndex - 1, 'Q4');
-                addSquare(colIndex, rowIndex - 1, 'Q3');
-                // East (col+1): I8 Q1, I8 Q3
-                addSquare(colIndex + 1, rowIndex, 'Q1');
-                addSquare(colIndex + 1, rowIndex, 'Q3');
-                // North-east (col+1, row-1): I7 Q3
-                addSquare(colIndex + 1, rowIndex - 1, 'Q3');
+                // Top-right: same square Q1, Q4, Q3; north = above Q3,Q4; east = right square Q1,Q3; north-east = above-right Q3
+                addSquare(colIndex, rowIndex, 'Q1', '← West (same square)');
+                addSquare(colIndex, rowIndex, 'Q4', '↓ South (same square)');
+                addSquare(colIndex, rowIndex, 'Q3', '↙ South-west (same square)');
+                addSquare(colIndex, rowIndex - 1, 'Q3', '↑ North');
+                addSquare(colIndex, rowIndex - 1, 'Q4', '↑ North');
+                addSquare(colIndex + 1, rowIndex, 'Q1', '→ East');
+                addSquare(colIndex + 1, rowIndex, 'Q3', '→ East');
+                addSquare(colIndex + 1, rowIndex - 1, 'Q3', '↗ North-east');
                 break;
             case 'Q3':
-                // Same square: Q1 (south), Q2 (south-west), Q4 (west)
-                addSquare(colIndex, rowIndex, 'Q1');
-                addSquare(colIndex, rowIndex, 'Q2');
-                addSquare(colIndex, rowIndex, 'Q4');
-                // North (row-1)
-                addSquare(colIndex, rowIndex - 1, 'Q1');
-                addSquare(colIndex, rowIndex - 1, 'Q2');
-                // East (col+1)
-                addSquare(colIndex + 1, rowIndex, 'Q4');
-                addSquare(colIndex + 1, rowIndex, 'Q1');
-                // North-east (col+1, row-1)
-                addSquare(colIndex + 1, rowIndex - 1, 'Q1');
+                // Bottom-left: same square Q1, Q4, Q2; south = below Q1,Q2; west = left square Q2,Q4; south-west = below-left Q2
+                addSquare(colIndex, rowIndex, 'Q1', '↑ North (same square)');
+                addSquare(colIndex, rowIndex, 'Q4', '→ East (same square)');
+                addSquare(colIndex, rowIndex, 'Q2', '↗ North-east (same square)');
+                addSquare(colIndex, rowIndex + 1, 'Q1', '↓ South');
+                addSquare(colIndex, rowIndex + 1, 'Q2', '↓ South');
+                addSquare(colIndex - 1, rowIndex, 'Q2', '← West');
+                addSquare(colIndex - 1, rowIndex, 'Q4', '← West');
+                addSquare(colIndex - 1, rowIndex + 1, 'Q2', '↙ South-west');
                 break;
             case 'Q4':
-                // Same square: Q1 (south-east), Q2 (south), Q3 (east)
-                addSquare(colIndex, rowIndex, 'Q1');
-                addSquare(colIndex, rowIndex, 'Q2');
-                addSquare(colIndex, rowIndex, 'Q3');
-                // North (row-1)
-                addSquare(colIndex, rowIndex - 1, 'Q2');
-                addSquare(colIndex, rowIndex - 1, 'Q1');
-                // West (col-1)
-                addSquare(colIndex - 1, rowIndex, 'Q3');
-                addSquare(colIndex - 1, rowIndex, 'Q1');
-                // North-west (col-1, row-1)
-                addSquare(colIndex - 1, rowIndex - 1, 'Q1');
+                // Bottom-right: same square Q2, Q3, Q1; south = below Q1,Q2; east = right square Q1,Q3; south-east = below-right Q1
+                addSquare(colIndex, rowIndex, 'Q2', '↑ North (same square)');
+                addSquare(colIndex, rowIndex, 'Q3', '← West (same square)');
+                addSquare(colIndex, rowIndex, 'Q1', '↖ North-west (same square)');
+                addSquare(colIndex, rowIndex + 1, 'Q1', '↓ South');
+                addSquare(colIndex, rowIndex + 1, 'Q2', '↓ South');
+                addSquare(colIndex + 1, rowIndex, 'Q1', '→ East');
+                addSquare(colIndex + 1, rowIndex, 'Q3', '→ East');
+                addSquare(colIndex + 1, rowIndex + 1, 'Q1', '↘ South-east');
                 break;
             default:
                 throw new Error('Invalid quadrant specified');
         }
-    
+
         return adjacentSquares;
     }
     

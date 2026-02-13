@@ -567,6 +567,10 @@ class MapLoader {
      * @returns {string} GCS Image URL
      */
     _getImageUrl(squareId, layerName, isPreview) {
+        // Path image (draw path on map) replaces BASE only for this square when set
+        if (layerName === 'MAP_0002_Map-Base' && typeof window !== 'undefined' && window.__pathImageBaseOverrides && window.__pathImageBaseOverrides[squareId]) {
+            return window.__pathImageBaseOverrides[squareId];
+        }
         return this.config.getGCSImageURL(squareId, layerName, isPreview);
     }
     

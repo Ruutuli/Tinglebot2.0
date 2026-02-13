@@ -3,15 +3,36 @@
  * Integrates all modules and provides global API
  */
 
-// Set to true for verbose pin/quadrant hit-test debug logs
+// ============================================================================
+// ------------------- Constants -------------------
+// ============================================================================
 const MAP_DEBUG = false;
+const MAP_LOAD_MIN_TILES = 3;
+const MAP_LOAD_MIN_DURATION_MS = 1200;
+const MAP_LOAD_MAX_WAIT_MS = 15000;
+const MAP_LOAD_POLL_MS = 100;
+const PIN_POLL_INTERVAL_MS = 10000;
+const PATH_MAX_POINTS = 500;
+const PATH_LAT_MIN = 0;
+const PATH_LAT_MAX = 20000;
+const PATH_LNG_MIN = 0;
+const PATH_LNG_MAX = 24000;
 
-// Global map engine instance
+// ------------------- State ------------------
+// Global map engine instance -
 let mapEngine = null;
+// Cleanup refs (intervals and listeners) for page unload
+let zoomDisplayIntervalId = null;
+let pathImagesIntervalId = null;
+let sidebarObserverRef = null;
+let pinVisibilityHandlerRef = null;
 
-/**
- * Check admin status and set it on the map engine
- */
+// ============================================================================
+// ------------------- Map init and loading -------------------
+// ============================================================================
+
+// ------------------- Map init ------------------
+// checkAdminStatus -
 async function checkAdminStatus() {
     try {
         const response = await fetch('/api/user', {
@@ -33,22 +54,12 @@ async function checkAdminStatus() {
             }
         }
     } catch (error) {
-        console.error('[map] Error checking admin status:', error);
+        console.error('[map.js]❌ Error checking admin status:', error);
     }
 }
 
-/** Minimum tiles to load before showing the map (ensures visible content) */
-const MAP_LOAD_MIN_TILES = 3;
-/** Minimum loading duration in ms (gives tiles time to start loading) */
-const MAP_LOAD_MIN_DURATION_MS = 1200;
-/** Maximum wait for tiles before showing map anyway */
-const MAP_LOAD_MAX_WAIT_MS = 15000;
-/** Poll interval for checking tile load progress */
-const MAP_LOAD_POLL_MS = 100;
-
-/**
- * Initialize the map system
- */
+// ------------------- Map init ------------------
+// initializeMap -
 async function initializeMap() {
     try {
         const loadStartTime = performance.now();
@@ -58,7 +69,7 @@ async function initializeMap() {
 
         // Check if MapEngine is available
         if (typeof MapEngine === 'undefined') {
-            console.error('[map] MapEngine class not found. Available classes:', {
+            console.error('[map.js]❌ MapEngine class not found. Available classes:', {
                 MapGeometry: typeof MapGeometry,
                 MapManifest: typeof MapManifest,
                 MapLayers: typeof MapLayers,
@@ -99,9 +110,8 @@ async function initializeMap() {
         // Hide loading overlay
         hideLoadingOverlay();
 
-        // Post-init: zoom display, click handler, pins (also run when init is triggered manually, e.g. from Next.js)
+        // Post-init: click handler, pins (zoom interval started in DOMContentLoaded only)
         if (mapEngine && mapEngine.isInitialized) {
-            setInterval(updateZoomDisplay, 1000);
             mapEngine.addEventListener('click', handleMapClick);
             initializePinsWhenReady();
         }
@@ -109,15 +119,13 @@ async function initializeMap() {
         // Map system initialized successfully
 
     } catch (error) {
-        console.error('[map] Failed to initialize map system:', error);
+        console.error('[map.js]❌ Failed to initialize map system:', error);
         showError('Failed to initialize map system: ' + error.message);
     }
 }
 
-/**
- * Wait for map tiles to load while updating progress. Keeps loading overlay visible
- * and shows real progress as tiles load in the background.
- */
+// ------------------- Map init ------------------
+// waitForMapTiles -
 function waitForMapTiles(loadStartTime) {
     return new Promise((resolve) => {
         const checkProgress = () => {
@@ -153,9 +161,12 @@ function waitForMapTiles(loadStartTime) {
     });
 }
 
-/**
- * Setup global event listeners
- */
+// ============================================================================
+// ------------------- Global event listeners -------------------
+// ============================================================================
+
+// ------------------- Global event listeners ------------------
+// setupGlobalEventListeners -
 function setupGlobalEventListeners() {
     // Window resize handler
     window.addEventListener('resize', debounce(() => {
@@ -174,27 +185,25 @@ function setupGlobalEventListeners() {
         }
     });
     
-    // Add observer to track sidebar class changes
+    // Add observer to track sidebar class changes (stored for cleanup)
     const sidebar = document.querySelector('.side-ui');
     if (sidebar) {
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    console.log('Sidebar class changed:', sidebar.className);
-                    console.log('Collapsed state:', sidebar.classList.contains('collapsed'));
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class' && MAP_DEBUG) {
+                    console.log('[map.js] Sidebar class changed:', sidebar.className);
                 }
             });
         });
         observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+        sidebarObserverRef = observer;
     }
     
     // Global event listeners setup
 }
 
-/**
- * Handle global keyboard shortcuts
- * @param {KeyboardEvent} event - Keyboard event
- */
+// ------------------- Global event listeners ------------------
+// handleGlobalKeydown -
 function handleGlobalKeydown(event) {
     // Only handle shortcuts when not in input fields
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
@@ -245,9 +254,8 @@ function handleGlobalKeydown(event) {
     }
 }
 
-/**
- * Hide loading overlay
- */
+// ------------------- Loading overlay ------------------
+// hideLoadingOverlay -
 function hideLoadingOverlay() {
     const overlay = document.getElementById('map-loading-overlay');
     if (overlay) {
@@ -258,12 +266,10 @@ function hideLoadingOverlay() {
     }
 }
 
-/**
- * Show error message
- * @param {string} message - Error message
- */
+// ------------------- Loading overlay ------------------
+// showError -
 function showError(message) {
-    console.error('[map] Error:', message);
+    console.error('[map.js]❌', message);
     
     // Create error display
     const errorDiv = document.createElement('div');
@@ -310,9 +316,12 @@ function showError(message) {
     document.body.appendChild(errorDiv);
 }
 
-/**
- * Toggle sidebar visibility
- */
+// ============================================================================
+// ------------------- Sidebar and zoom -------------------
+// ============================================================================
+
+// ------------------- Sidebar ------------------
+// toggleSidebar -
 function toggleSidebar() {
     const sidebar = document.querySelector('.side-ui');
     if (sidebar) {
@@ -323,34 +332,26 @@ function toggleSidebar() {
     }
 }
 
-/**
- * Show sidebar
- */
+// ------------------- Sidebar ------------------
+// showSidebar -
 function showSidebar() {
     const sidebar = document.querySelector('.side-ui');
     if (sidebar) {
-        console.log('showSidebar: Removing collapsed class');
         sidebar.classList.remove('collapsed');
-        console.log('showSidebar: Sidebar collapsed state after:', sidebar.classList.contains('collapsed'));
     }
 }
 
-/**
- * Hide sidebar
- */
+// ------------------- Sidebar ------------------
+// hideSidebar -
 function hideSidebar() {
-    console.log('hideSidebar called from:', new Error().stack);
     const sidebar = document.querySelector('.side-ui');
     if (sidebar) {
-        console.log('hideSidebar: Adding collapsed class');
         sidebar.classList.add('collapsed');
-        console.log('hideSidebar: Sidebar collapsed state after:', sidebar.classList.contains('collapsed'));
     }
 }
 
-/**
- * Zoom in
- */
+// ------------------- Zoom ------------------
+// zoomIn -
 function zoomIn() {
     if (mapEngine) {
         const currentZoom = mapEngine.getZoom();
@@ -358,9 +359,8 @@ function zoomIn() {
     }
 }
 
-/**
- * Zoom out
- */
+// ------------------- Zoom ------------------
+// zoomOut -
 function zoomOut() {
     if (mapEngine) {
         const currentZoom = mapEngine.getZoom();
@@ -368,30 +368,24 @@ function zoomOut() {
     }
 }
 
-/**
- * Reset zoom to default
- */
+// ------------------- Zoom ------------------
+// resetZoom -
 function resetZoom() {
     if (mapEngine) {
         mapEngine.setZoom(-2); // Default zoom level (medium detail)
     }
 }
 
-/**
- * Set specific zoom level
- * @param {number} zoom - Zoom level to set
- */
+// ------------------- Zoom ------------------
+// setZoom -
 function setZoom(zoom) {
     if (mapEngine) {
         mapEngine.setZoom(zoom);
     }
 }
 
-/**
- * Jump to a specific village
- * @param {string} square - Square coordinates (e.g., 'H5')
- * @param {string} villageName - Name of the village
- */
+// ------------------- Map API ------------------
+// jumpToVillage -
 function jumpToVillage(square, villageName) {
     if (mapEngine) {
         if (MAP_DEBUG) console.log(`[DEBUG] Jumping to ${villageName} at ${square}`);
@@ -416,10 +410,8 @@ function jumpToVillage(square, villageName) {
     }
 }
 
-/**
- * Toggle section collapse/expand
- * @param {string} sectionId - ID of the section to toggle
- */
+// ------------------- Map API ------------------
+// toggleSection -
 function toggleSection(sectionId) {
     const section = document.querySelector(`.${sectionId}`);
     if (!section) return;
@@ -443,12 +435,8 @@ function toggleSection(sectionId) {
     }
 }
 
-/**
- * Debounce utility function
- * @param {Function} func - Function to debounce
- * @param {number} wait - Wait time in milliseconds
- * @returns {Function} Debounced function
- */
+// ------------------- Map API ------------------
+// debounce -
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -461,47 +449,38 @@ function debounce(func, wait) {
     };
 }
 
-/**
- * Jump to specific square (global API)
- * @param {string} squareId - Square ID (e.g., 'E4')
- */
+// ------------------- Map API ------------------
+// jumpToSquare -
 function jumpToSquare(squareId) {
     if (mapEngine) {
         mapEngine.jumpToSquare(squareId);
     } else {
-        console.warn('[map] Map engine not initialized');
+        console.warn('[map.js]⚠️ Map engine not initialized');
     }
 }
 
-/**
- * Fit map to show entire canvas (global API)
- */
+// ------------------- Map API ------------------
+// fitToCanvas -
 function fitToCanvas() {
     if (mapEngine) {
         mapEngine.fitToCanvas();
     } else {
-        console.warn('[map] Map engine not initialized');
+        console.warn('[map.js]⚠️ Map engine not initialized');
     }
 }
 
-/**
- * Jump to specific coordinates (global API)
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @param {number} zoom - Zoom level (optional)
- */
+// ------------------- Map API ------------------
+// jumpToCoordinates -
 function jumpToCoordinates(x, y, zoom = 3) {
     if (mapEngine) {
         mapEngine.jumpToCoordinates(x, y, zoom);
     } else {
-        console.warn('[map] Map engine not initialized');
+        console.warn('[map.js]⚠️ Map engine not initialized');
     }
 }
 
-/**
- * Get current map state (global API)
- * @returns {Object} Current map state
- */
+// ------------------- Map API ------------------
+// getMapState -
 function getMapState() {
     if (mapEngine) {
         return {
@@ -515,22 +494,19 @@ function getMapState() {
     return null;
 }
 
-/**
- * Set toggle state (global API)
- * @param {Object} state - Toggle states to set
- */
+// ------------------- Map API ------------------
+// setMapToggleState -
 function setMapToggleState(state) {
     if (mapEngine) {
         mapEngine.setToggleState(state);
     } else {
-        console.warn('[map] Map engine not initialized');
+        console.warn('[map.js]⚠️ Map engine not initialized');
     }
 }
 
 
-/**
- * Update zoom level display
- */
+// ------------------- Map API ------------------
+// updateZoomDisplay -
 function updateZoomDisplay() {
     if (!mapEngine || !mapEngine.isInitialized) return;
     
@@ -563,10 +539,8 @@ function updateZoomDisplay() {
     }
 }
 
-/**
- * Handle map click events
- * @param {Event} event - Click event
- */
+// ------------------- Map API ------------------
+// handleMapClick -
 function handleMapClick(event) {
     if (!mapEngine) return;
     
@@ -581,9 +555,8 @@ function handleMapClick(event) {
             if (statusEl) statusEl.textContent = 'Maximum ' + PATH_MAX_POINTS + ' points. Click "Finish path" to save this path.';
             return;
         }
-        const clampedLat = Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, Number(lat) || 0));
-        const clampedLng = Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, Number(lng) || 0));
-        pathDrawingPoints.push({ lat: clampedLat, lng: clampedLng });
+        const pt = clampPathPoint(lat, lng);
+        pathDrawingPoints.push(pt);
         try {
             const map = mapEngine.getMap();
             if (map) {
@@ -621,11 +594,8 @@ function handleMapClick(event) {
     }
 }
 
-/**
- * Show square information including region and status
- * @param {string} squareId - Square ID like "E4"
- * @param {number} quadrant - Quadrant number (1-4) if clicked on quadrant
- */
+// ------------------- Map API ------------------
+// showSquareInfo -
 function showSquareInfo(squareId, quadrant = null) {
     if (!mapEngine) return;
     
@@ -706,13 +676,11 @@ function showSquareInfo(squareId, quadrant = null) {
     
     // Store popup reference for closing
     window.currentSquarePopup = popup;
-    
-    console.log(`[map] Square ${squareId} clicked - Region: ${region}, Status: ${status}, Explorable: ${isExplorable}`);
+    if (MAP_DEBUG) console.log('[map.js] Square', squareId, 'clicked - Region:', region, 'Status:', status, 'Explorable:', isExplorable);
 }
 
-/**
- * Close the current square info popup
- */
+// ------------------- Map API ------------------
+// closeSquareInfo -
 function closeSquareInfo() {
     if (window.currentSquarePopup) {
         // Close the popup
@@ -727,9 +695,8 @@ function closeSquareInfo() {
     }
 }
 
-/**
- * Initialize when DOM is ready
- */
+// ------------------- Map init ------------------
+// DOMContentLoaded -
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Show initial loading progress
@@ -743,8 +710,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Only proceed if initialization was successful
         if (mapEngine && mapEngine.isInitialized) {
-            // Setup zoom display monitoring
-            setInterval(updateZoomDisplay, 1000);
+            if (zoomDisplayIntervalId) clearInterval(zoomDisplayIntervalId);
+            zoomDisplayIntervalId = setInterval(updateZoomDisplay, 1000);
             // Add map click handler
             mapEngine.addEventListener('click', handleMapClick);
             // User-drawn paths layer (secured paths)
@@ -753,6 +720,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // User-uploaded path images (draw on square image, upload; same GCS URL auto-updates)
             userPathImagesLayer = L.layerGroup().addTo(mapEngine.getMap());
             loadUserPathImages();
+            document.addEventListener('visibilitychange', onVisibilityPathImages);
+            if (pathImagesIntervalId) clearInterval(pathImagesIntervalId);
+            pathImagesIntervalId = setInterval(loadUserPathImages, 60000);
             // Initialize pins system
             initializePinsWhenReady();
             // URL: open exploration panel in path-draw mode for this expedition
@@ -773,17 +743,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
     } catch (error) {
-        console.error('[map] Initialization error:', error);
+        console.error('[map.js]❌ Initialization error:', error);
         showError('Failed to initialize map: ' + error.message);
     }
 });
 
-/**
- * Update loading progress with enhanced tracking
- * @param {number} percent - Progress percentage
- * @param {string} message - Progress message
- * @param {number} step - Current loading step (1-4)
- */
+// ------------------- Cleanup ------------------
+// Clear intervals and remove listeners on page unload to prevent leaks
+function mapPageCleanup() {
+    if (zoomDisplayIntervalId) { clearInterval(zoomDisplayIntervalId); zoomDisplayIntervalId = null; }
+    if (pathImagesIntervalId) { clearInterval(pathImagesIntervalId); pathImagesIntervalId = null; }
+    if (pinPollIntervalId) { clearInterval(pinPollIntervalId); pinPollIntervalId = null; }
+    document.removeEventListener('visibilitychange', onVisibilityPathImages);
+    if (pinVisibilityHandlerRef) {
+        document.removeEventListener('visibilitychange', pinVisibilityHandlerRef);
+        pinVisibilityHandlerRef = null;
+    }
+    if (sidebarObserverRef) {
+        sidebarObserverRef.disconnect();
+        sidebarObserverRef = null;
+    }
+}
+window.addEventListener('pagehide', mapPageCleanup);
+
+// ------------------- Map init ------------------
+// updateLoadingProgress -
 function updateLoadingProgress(percent, message, step = 1) {
     const progressFill = document.getElementById('loading-progress-fill');
     const progressText = document.getElementById('loading-progress-text');
@@ -805,10 +789,8 @@ function updateLoadingProgress(percent, message, step = 1) {
     updateLoadingSteps(step);
 }
 
-/**
- * Update loading steps visualization
- * @param {number} currentStep - Current step (1-4)
- */
+// ------------------- Map init ------------------
+// updateLoadingSteps -
 function updateLoadingSteps(currentStep) {
     // Reset all steps
     for (let i = 1; i <= 4; i++) {
@@ -909,9 +891,11 @@ async function initializePinManager() {
                 // Poll pins so when someone else adds a pin, everyone sees it
                 if (pinPollIntervalId) clearInterval(pinPollIntervalId);
                 pinPollIntervalId = setInterval(loadPins, PIN_POLL_INTERVAL_MS);
-                document.addEventListener('visibilitychange', function onPinVisibility() {
+                if (pinVisibilityHandlerRef) document.removeEventListener('visibilitychange', pinVisibilityHandlerRef);
+                pinVisibilityHandlerRef = function onPinVisibility() {
                     if (document.visibilityState === 'visible') loadPins();
-                });
+                };
+                document.addEventListener('visibilitychange', pinVisibilityHandlerRef);
             } else {
                 showPinAuthRequired();
                 initializeSearch();
@@ -920,14 +904,13 @@ async function initializePinManager() {
             showPinAuthRequired();
         }
     } catch (error) {
-        console.error('[map.js]: Error initializing pin manager:', error);
+        console.error('[map.js]❌ Error initializing pin manager:', error);
         showPinAuthRequired();
     }
 }
 
 // Avoid overlapping pin loads when polling
 let pinLoadInProgress = false;
-const PIN_POLL_INTERVAL_MS = 10000;
 let pinPollIntervalId = null;
 
 // Load pins from server
@@ -947,10 +930,10 @@ async function loadPins() {
             updatePinsList();
             addPinsToMap();
         } else {
-            console.error('[map.js]: Failed to load pins:', response.statusText);
+            console.error('[map.js]❌ Failed to load pins:', response.statusText);
         }
     } catch (error) {
-        console.error('[map.js]: Error loading pins:', error);
+        console.error('[map.js]❌ Error loading pins:', error);
     } finally {
         pinLoadInProgress = false;
     }
@@ -984,8 +967,6 @@ function toggleAddPinMode() {
         
         // Show instruction tooltip
         showPinPlacementTooltip();
-        
-        console.log('Add pin mode enabled - click on the map to place a pin');
     } else {
         // Reset button appearance
         addBtn.style.background = '';
@@ -1092,7 +1073,7 @@ async function loadPinCharacterOptions(selectEl, selectedId) {
             selectEl.appendChild(opt);
         });
     } catch (e) {
-        console.warn('[map.js] Failed to load characters for pin:', e);
+        console.warn('[map.js]⚠️ Failed to load characters for pin:', e);
     }
 }
 
@@ -1263,13 +1244,26 @@ function showPinCreationModal(lat, lng) {
 
 // Get default color for pin category
 function getDefaultColorForCategory(category) {
-    const colorMap = {
-        'homes': '#C5FF00',      // Lime Green
-        'farms': '#22C55E',      // Green
-        'shops': '#FF8C00',      // Orange
-        'points-of-interest': '#FF69B4'  // Pink
+    const info = getCategoryDisplayInfo(category);
+    return info.color;
+}
+
+// getCategoryDisplayInfo - single source for pin category name, icon, color
+function getCategoryDisplayInfo(category) {
+    const map = {
+        'homes': { name: 'Homes', icon: '🏠', color: '#C5FF00' },
+        'farms': { name: 'Farms', icon: '🌱', color: '#22C55E' },
+        'shops': { name: 'Shops', icon: '🏪', color: '#FF8C00' },
+        'points-of-interest': { name: 'Points of Interest', icon: '⭐', color: '#FF69B4' }
     };
-    return colorMap[category] || '#00A3DA'; // Default blue if category not found
+    return map[category] || { name: 'Unknown', icon: '📍', color: '#00A3DA' };
+}
+
+// getPinTextShadow - house: black outline, others: white
+function getPinTextShadow(category) {
+    return category === 'homes'
+        ? '-1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black, 0 0 3px black'
+        : '-1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white, 0 0 3px white';
 }
 
 // Get location information for a pin
@@ -1509,10 +1503,6 @@ async function createPinFromForm(lat, lng) {
         const categoryOption = document.querySelector(`.pin-creation-modal [data-category="${selectedCategory}"]`);
         const iconClass = categoryOption ? categoryOption.dataset.icon : 'fas fa-home';
         
-        console.log('Selected category:', selectedCategory);
-        console.log('Category option found:', categoryOption);
-        console.log('Icon class:', iconClass);
-        
         // Get default color based on category
         const defaultColor = getDefaultColorForCategory(selectedCategory);
         
@@ -1548,7 +1538,7 @@ async function createPinFromForm(lat, lng) {
             showPinSuccessMessage(data.pin.name);
             
             closePinModal();
-            console.log('Pin created successfully:', data.pin);
+            if (MAP_DEBUG) console.log('[map.js] Pin created:', data.pin);
         } else {
             const error = await response.json();
             showPinErrorMessage('Failed to create pin: ' + error.error);
@@ -1558,7 +1548,7 @@ async function createPinFromForm(lat, lng) {
             createBtn.disabled = false;
         }
     } catch (error) {
-        console.error('[map.js]: Error creating pin:', error);
+        console.error('[map.js]❌ Error creating pin:', error);
         showPinErrorMessage('Failed to create pin. Please try again.');
         
         // Restore button state
@@ -1726,11 +1716,9 @@ function closePinModal() {
 
 // Show delete confirmation modal
 function showDeleteConfirmationModal(pinName) {
-    console.log('showDeleteConfirmationModal called with pinName:', pinName);
     return new Promise((resolve) => {
         const modal = document.createElement('div');
         modal.className = 'delete-confirmation-modal';
-        console.log('Creating delete modal with class:', modal.className);
         modal.innerHTML = `
             <div class="modal-overlay" onclick="closeDeleteModal(false)">
                 <div class="modal-content" onclick="event.stopPropagation()">
@@ -1766,7 +1754,6 @@ function showDeleteConfirmationModal(pinName) {
         `;
         
         document.body.appendChild(modal);
-        console.log('Modal added to DOM, checking if visible...');
         
         // Add keyboard event listener
         const handleKeydown = (e) => {
@@ -1792,7 +1779,6 @@ function showDeleteConfirmationModal(pinName) {
 // Close delete modal
 function closeDeleteModal(confirmed) {
     const modal = document.querySelector('.delete-confirmation-modal');
-    console.log('closeDeleteModal called with:', confirmed, 'Modal found:', !!modal);
     
     if (modal && modal._resolve) {
         // Remove keyboard event listener
@@ -1809,8 +1795,8 @@ function closeDeleteModal(confirmed) {
         setTimeout(() => {
             modal.remove();
         }, 200);
-    } else {
-        console.error('Delete modal not found or no resolve function');
+    } else if (!modal) {
+        console.error('[map.js]❌ Delete modal not found');
     }
 }
 
@@ -1826,7 +1812,7 @@ function getGridCoordinates(lat, lng) {
 // Add pin to map
 function addPinToMap(pin) {
     if (!mapEngine || !mapEngine.getMap()) {
-        console.warn('[map.js]: Map engine not available, skipping pin addition for:', pin.name);
+        console.warn('[map.js]⚠️ Map engine not available, skipping pin addition for:', pin.name);
         return;
     }
     
@@ -1836,12 +1822,7 @@ function addPinToMap(pin) {
         const leafletLat = mapEngine.config.CANVAS_H - pin.coordinates.lat;
         const leafletLng = pin.coordinates.lng;
     
-    // Apply black outline only to house icons, white outline to others
-    const isHouseIcon = pin.category === 'homes';
-    const textShadow = isHouseIcon 
-        ? '-1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black, 0 0 3px black'
-        : '-1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white, 0 0 3px white';
-    
+    const textShadow = getPinTextShadow(pin.category);
     const marker = L.marker([leafletLat, leafletLng], {
         icon: L.divIcon({
             className: 'custom-pin',
@@ -1855,14 +1836,7 @@ function addPinToMap(pin) {
     const canEdit = pinManager.isAuthenticated && pin.discordId === pinManager.currentUser?.discordId;
     const canDelete = canEdit || (pinManager.isAuthenticated && (pinManager.isMod || pinManager.isAdmin));
     
-    // Get category display info
-    const categoryInfo = {
-        'homes': { name: 'Homes', icon: '🏠', color: '#C5FF00' },
-        'farms': { name: 'Farms', icon: '🌱', color: '#22C55E' },
-        'shops': { name: 'Shops', icon: '🏪', color: '#FF8C00' },
-        'points-of-interest': { name: 'Points of Interest', icon: '⭐', color: '#FF69B4' }
-    };
-    const category = categoryInfo[pin.category] || { name: 'Unknown', icon: '📍', color: '#00A3DA' };
+    const category = getCategoryDisplayInfo(pin.category);
 
     // Format creation date
     const createdDate = pin.createdAt ? new Date(pin.createdAt).toLocaleDateString('en-US', {
@@ -1983,16 +1957,14 @@ function addPinToMap(pin) {
     marker.addTo(map);
     marker.pinId = pin._id;
     } catch (error) {
-        console.error('[map.js]: Error adding pin to map:', error, 'Pin:', pin);
-        // Don't call showError here as it would cause a page refresh
-        // Just log the error and continue
+        console.error('[map.js]❌ Error adding pin to map:', error, 'Pin:', pin);
     }
 }
 
 // Add all pins to map
 function addPinsToMap() {
     if (!mapEngine || !mapEngine.getMap()) {
-        console.warn('[map.js]: Map engine not available, skipping pin addition');
+        console.warn('[map.js]⚠️ Map engine not available, skipping pin addition');
         return;
     }
     
@@ -2010,9 +1982,7 @@ function addPinsToMap() {
             addPinToMap(pin);
         });
     } catch (error) {
-        console.error('[map.js]: Error adding pins to map:', error);
-        // Don't call showError here as it would cause a page refresh
-        // Just log the error and continue
+        console.error('[map.js]❌ Error adding pins to map:', error);
     }
 }
 
@@ -2034,8 +2004,6 @@ function viewPin(pinId) {
         const leafletLng = pin.coordinates.lng;
         mapEngine.getMap().setView([leafletLat, leafletLng], Math.max(mapEngine.getMap().getZoom(), 10));
     }
-    
-    console.log('Viewing pin:', pin);
 }
 
 // Edit pin
@@ -2233,10 +2201,6 @@ async function updatePinFromForm(pinId) {
         const categoryOption = document.querySelector(`.pin-creation-modal [data-category="${selectedCategory}"]`);
         const iconClass = categoryOption ? categoryOption.dataset.icon : 'fas fa-home';
         
-        console.log('Selected category:', selectedCategory);
-        console.log('Category option found:', categoryOption);
-        console.log('Icon class:', iconClass);
-        
         // Get default color based on category
         const defaultColor = getDefaultColorForCategory(selectedCategory);
         
@@ -2279,18 +2243,16 @@ async function updatePinFromForm(pinId) {
                 closePinModal();
                 console.log('Pin updated successfully:', data.pin);
             } catch (mapError) {
-                console.error('[map.js]: Error updating map after pin update:', mapError);
-                // Still close the modal and update the list even if map update fails
+                console.error('[map.js]❌ Error updating map after pin update:', mapError);
                 updatePinsList();
                 closePinModal();
-                console.log('Pin updated successfully (map update failed):', data.pin);
             }
         } else {
             const error = await response.json();
             alert('Failed to update pin: ' + error.error);
         }
     } catch (error) {
-        console.error('[map.js]: Error updating pin:', error);
+        console.error('[map.js]❌ Error updating pin:', error);
         alert('Failed to update pin. Please try again.');
     } finally {
         // Restore button state
@@ -2304,22 +2266,13 @@ async function updatePinFromForm(pinId) {
 
 // Delete pin
 async function deletePin(pinId) {
-    console.log('deletePin called with pinId:', pinId);
-    console.log('pinManager.isAuthenticated:', pinManager.isAuthenticated);
-    console.log('pinManager.currentUser:', pinManager.currentUser);
-    
     if (!pinManager.isAuthenticated) {
-        console.log('User not authenticated, showing auth required');
         showPinAuthRequired();
         return;
     }
     
     const pin = pinManager.pins.find(p => p._id === pinId);
-    console.log('Pin found:', pin);
-    if (!pin) {
-        console.log('Pin not found in pinManager.pins');
-        return;
-    }
+    if (!pin) return;
     
     // Check if user can delete this pin (owner or mod)
     const isOwner = pin.discordId === pinManager.currentUser?.discordId;
@@ -2328,10 +2281,7 @@ async function deletePin(pinId) {
         return;
     }
     
-    console.log('All checks passed, showing delete confirmation modal');
-    // Show delete confirmation modal
     const confirmed = await showDeleteConfirmationModal(pin.name);
-    console.log('Delete confirmation result:', confirmed);
     if (!confirmed) return;
     
     try {
@@ -2347,26 +2297,22 @@ async function deletePin(pinId) {
             if (pinIndex !== -1) {
                 pinManager.pins.splice(pinIndex, 1);
             }
-    
-    // Remove from map
+            // Remove from map
             if (mapEngine && mapEngine.getMap()) {
                 const map = mapEngine.getMap();
                 map.eachLayer(layer => {
-            if (layer.pinId === pinId) {
+                    if (layer.pinId === pinId) {
                         map.removeLayer(layer);
+                    }
+                });
             }
-        });
-    }
-    
-    // Update UI
-    updatePinsList();
-            console.log('Pin deleted successfully:', pinId);
+            updatePinsList();
         } else {
             const error = await response.json();
             alert('Failed to delete pin: ' + error.error);
         }
     } catch (error) {
-        console.error('[map.js]: Error deleting pin:', error);
+        console.error('[map.js]❌ Error deleting pin:', error);
         alert('Failed to delete pin. Please try again.');
     }
 }
@@ -2537,7 +2483,7 @@ function updatePinsListDisplay(pins) {
         return `
             <div class="pin-item">
                 <div class="pin-icon">
-                    <i class="${pin.icon}" style="color: ${pin.color}; text-shadow: ${pin.category === 'homes' ? '-1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black, 1px 1px 0 black, 0 0 3px black' : '-1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white, 0 0 3px white'};"></i>
+                    <i class="${pin.icon}" style="color: ${pin.color}; text-shadow: ${getPinTextShadow(pin.category)};"></i>
                 </div>
                 <div class="pin-info">
                     <span class="pin-name">${pin.name}</span>
@@ -2637,28 +2583,21 @@ function demonstrateSquareMetadata() {
     }
     
     if (!MAP_DEBUG) return;
-    console.log('=== Square Metadata Demonstration ===');
-    
+    console.log('[map.js] === Square Metadata Demonstration ===');
     const squareId = 'H5'; // Rudania
     const metadata = MapAPI.getSquareMetadata(squareId);
-    console.log(`Square ${squareId} metadata:`, metadata);
-    
+    console.log('[map.js] Square', squareId, 'metadata:', metadata);
     const isExplorable = MapAPI.isExplorable(squareId);
-    console.log(`Square ${squareId} is explorable: ${isExplorable}`);
-    
+    console.log('[map.js] Square', squareId, 'is explorable:', isExplorable);
     const region = MapAPI.getRegion(squareId);
-    console.log(`Square ${squareId} is in region: ${region}`);
-    
+    console.log('[map.js] Square', squareId, 'is in region:', region);
     const eldinSquares = MapAPI.getSquaresByRegion('Eldin');
-    console.log(`Eldin region has ${eldinSquares.length} squares:`, eldinSquares.slice(0, 5), '...');
-    
+    console.log('[map.js] Eldin region has', eldinSquares.length, 'squares:', eldinSquares.slice(0, 5), '...');
     const explorableSquares = MapAPI.getSquaresByStatus('Explorable');
-    console.log(`There are ${explorableSquares.length} explorable squares`);
-    
+    console.log('[map.js] Explorable squares:', explorableSquares.length);
     const regions = MapAPI.getRegions();
-    console.log('Available regions:', regions);
-    
-    console.log('=== End Demonstration ===');
+    console.log('[map.js] Available regions:', regions);
+    console.log('[map.js] === End Demonstration ===');
 }
 
 // Make demonstration function available globally
@@ -2671,30 +2610,54 @@ window.demonstrateSquareMetadata = demonstrateSquareMetadata;
 let currentExplorationId = null;
 let explorationMode = false;
 let pathDrawingMode = false;
-/** Points for the path currently being drawn: [{ lat, lng }, ...] */
 let pathDrawingPoints = [];
-/** Preview polyline while drawing */
 let pathPreviewPolyline = null;
-/** Layer group for saved user-drawn paths (secured paths) */
 let userPathsLayer = null;
-/** Layer group for user-uploaded path images (drawn on square, then uploaded) */
 let userPathImagesLayer = null;
-/** Prevent double-submit when saving path */
 let pathDrawingSaving = false;
-/** Max points per path (must match server MAP_PATH_LIMITS.MAX_POINTS) */
-const PATH_MAX_POINTS = 500;
-/** Map coordinate bounds (CRS.Simple) */
-const PATH_LAT_MIN = 0, PATH_LAT_MAX = 20000, PATH_LNG_MIN = 0, PATH_LNG_MAX = 24000;
 
-/**
- * Toggle exploration mode (inline panel)
- */
+// ------------------- Exploration ------------------
+// clampPathPoint - clamp lat/lng to map bounds
+function clampPathPoint(lat, lng) {
+    return {
+        lat: Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, Number(lat) || 0)),
+        lng: Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, Number(lng) || 0))
+    };
+}
+
+// ------------------- Exploration ------------------
+// setMapInteractionsEnabled - enable/disable dragging, zoom, keyboard
+function setMapInteractionsEnabled(enabled) {
+    if (!mapEngine) return;
+    try {
+        const map = mapEngine.getMap();
+        if (!map) return;
+        if (enabled) {
+            map.dragging.enable();
+            map.touchZoom.enable();
+            map.doubleClickZoom.enable();
+            map.scrollWheelZoom.enable();
+            map.boxZoom.enable();
+            map.keyboard.enable();
+        } else {
+            map.dragging.disable();
+            map.touchZoom.disable();
+            map.doubleClickZoom.disable();
+            map.scrollWheelZoom.disable();
+            map.boxZoom.disable();
+            map.keyboard.disable();
+        }
+    } catch (e) { /* ignore */ }
+}
+
+// ------------------- Exploration ------------------
+// toggleExplorationMode -
 function toggleExplorationMode() {
     const panel = document.getElementById('exploration-panel');
     if (panel) {
         if (panel.style.display === 'none') {
             panel.style.display = 'block';
-            console.log('[exploration] Exploration panel shown');
+            if (MAP_DEBUG) console.log('[map.js] Exploration panel shown');
         } else {
             panel.style.display = 'none';
             explorationMode = false;
@@ -2707,35 +2670,21 @@ function toggleExplorationMode() {
                 } catch (e) { /* ignore */ }
                 pathPreviewPolyline = null;
             }
-            if (mapEngine) {
-                try {
-                    const map = mapEngine.getMap();
-                    if (map) {
-                        map.dragging.enable();
-                        map.touchZoom.enable();
-                        map.doubleClickZoom.enable();
-                        map.scrollWheelZoom.enable();
-                        map.boxZoom.enable();
-                        map.keyboard.enable();
-                    }
-                } catch (e) { /* ignore */ }
-            }
-            console.log('[exploration] Exploration panel hidden');
+            setMapInteractionsEnabled(true);
+            if (MAP_DEBUG) console.log('[map.js] Exploration panel hidden');
         }
     }
 }
 
-/**
- * Close exploration panel (legacy function - now handled by toggle)
- */
+// ------------------- Exploration ------------------
+// closeExplorationPanel -
 function closeExplorationPanel() {
     // This function is now handled by toggleExplorationMode()
     toggleExplorationMode();
 }
 
-/**
- * Set exploration ID
- */
+// ------------------- Exploration ------------------
+// setExplorationId -
 function setExplorationId() {
     const input = document.querySelector('#exploration-id');
     const id = input.value.trim();
@@ -2745,15 +2694,14 @@ function setExplorationId() {
         document.getElementById('current-id-display').textContent = id;
         explorationMode = true;
         document.getElementById('exploration-mode-status').textContent = 'Exploration mode active - Click map to add markers';
-        console.log('[exploration] Set exploration ID:', id);
+        if (MAP_DEBUG) console.log('[map.js] Set exploration ID:', id);
     } else {
         alert('Exploration ID must start with "E" (e.g., E123456)');
     }
 }
 
-/**
- * Set marker type for placement
- */
+// ------------------- Exploration ------------------
+// setMarkerType -
 function setMarkerType(type) {
     if (!currentExplorationId) {
         alert('Please set an exploration ID first');
@@ -2768,12 +2716,11 @@ function setMarkerType(type) {
     document.querySelector(`.marker-btn.${type}`).classList.add('active');
     
     document.getElementById('exploration-mode-status').textContent = `Click map to place ${type} marker`;
-    console.log('[exploration] Marker type set:', type);
+    if (MAP_DEBUG) console.log('[map.js] Marker type set:', type);
 }
 
-/**
- * Toggle path drawing mode
- */
+// ------------------- Exploration ------------------
+// togglePathDrawing -
 function togglePathDrawing() {
     if (!currentExplorationId) {
         alert('Please set an exploration ID first');
@@ -2791,47 +2738,22 @@ function togglePathDrawing() {
         pathPreviewPolyline = null;
     }
     document.querySelectorAll('.marker-btn').forEach(btn => btn.classList.remove('active'));
-    if (pathDrawingMode) {
+        if (pathDrawingMode) {
         document.querySelector('.path-btn')?.classList.add('active');
         const statusEl = document.getElementById('exploration-mode-status');
         if (statusEl) statusEl.textContent = 'Click on the map to add points (max ' + PATH_MAX_POINTS + '). When done, click "Finish path" to save.';
-        if (mapEngine) {
-            try {
-                const map = mapEngine.getMap();
-                if (map) {
-                    map.dragging.disable();
-                    map.touchZoom.disable();
-                    map.doubleClickZoom.disable();
-                    map.scrollWheelZoom.disable();
-                    map.boxZoom.disable();
-                    map.keyboard.disable();
-                }
-            } catch (e) { /* ignore */ }
-        }
+        setMapInteractionsEnabled(false);
     } else {
         document.querySelector('.path-btn')?.classList.remove('active');
         const statusEl = document.getElementById('exploration-mode-status');
         if (statusEl) statusEl.textContent = 'Path drawing mode off';
-        if (mapEngine) {
-            try {
-                const map = mapEngine.getMap();
-                if (map) {
-                    map.dragging.enable();
-                    map.touchZoom.enable();
-                    map.doubleClickZoom.enable();
-                    map.scrollWheelZoom.enable();
-                    map.boxZoom.enable();
-                    map.keyboard.enable();
-                }
-            } catch (e) { /* ignore */ }
-        }
+        setMapInteractionsEnabled(true);
     }
     updateFinishPathButtonState();
 }
 
-/**
- * Update Finish path button disabled state and label
- */
+// ------------------- Exploration ------------------
+// updateFinishPathButtonState -
 function updateFinishPathButtonState() {
     const btn = document.querySelector('.finish-path-btn');
     if (!btn) return;
@@ -2840,9 +2762,8 @@ function updateFinishPathButtonState() {
     btn.title = pathDrawingSaving ? 'Saving…' : (pathDrawingPoints.length < 2 ? 'Add at least 2 points first' : 'Save the path you drew');
 }
 
-/**
- * Load saved paths from API and draw them on the map. Retries once on failure.
- */
+// ------------------- Exploration ------------------
+// loadUserPaths -
 async function loadUserPaths(retryCount = 0) {
     if (!mapEngine || !userPathsLayer || typeof L === 'undefined') return;
     const maxRetries = 1;
@@ -2871,10 +2792,8 @@ async function loadUserPaths(retryCount = 0) {
                 const lat = Number(c?.lat);
                 const lng = Number(c?.lng);
                 if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-                latlngs.push([
-                    Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, lat)),
-                    Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, lng))
-                ]);
+                const p = clampPathPoint(lat, lng);
+                latlngs.push([p.lat, p.lng]);
             }
             if (latlngs.length >= 2) {
                 try {
@@ -2884,17 +2803,19 @@ async function loadUserPaths(retryCount = 0) {
             }
         });
     } catch (e) {
-        console.warn('[exploration] Failed to load paths:', e);
+        console.warn('[map.js]⚠️ Failed to load paths:', e);
         if (retryCount < maxRetries) setTimeout(() => loadUserPaths(retryCount + 1), 2000);
     }
 }
 
-/**
- * Load user-uploaded path images from API and add as image overlays per square.
- * Images are at GCS; re-upload overwrites so the same URL auto-updates.
- */
+function onVisibilityPathImages() {
+    if (document.visibilityState === 'visible') loadUserPathImages();
+}
+
+// ------------------- Exploration ------------------
+// loadUserPathImages -
 async function loadUserPathImages() {
-    if (!mapEngine || !userPathImagesLayer || typeof L === 'undefined') return;
+    if (!mapEngine || typeof L === 'undefined') return;
     try {
         const params = new URLSearchParams(window.location.search);
         const partyId = params.get('partyId')?.trim() || '';
@@ -2903,37 +2824,26 @@ async function loadUserPathImages() {
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
         const list = Array.isArray(data.pathImages) ? data.pathImages : [];
-        userPathImagesLayer.clearLayers();
-        const CANVAS_H = typeof MAP_CONFIG !== 'undefined' ? MAP_CONFIG.CANVAS_H : 20000;
+        const overrides = {};
         list.forEach((item) => {
             const squareId = item.squareId;
             let imageUrl = item.imageUrl;
             if (!squareId || !imageUrl) return;
             if (item.updatedAt) imageUrl = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + item.updatedAt;
-            try {
-                const bounds = mapEngine.geometry.getSquareBounds(squareId);
-                const leafletBounds = [
-                    [CANVAS_H - bounds.y1, bounds.x0],
-                    [CANVAS_H - bounds.y0, bounds.x1]
-                ];
-                const overlay = L.imageOverlay(imageUrl, leafletBounds, {
-                    opacity: 0.85,
-                    interactive: false,
-                    className: 'map-overlay user-path-image'
-                });
-                userPathImagesLayer.addLayer(overlay);
-            } catch (e) {
-                console.warn('[map] Failed to add path image overlay:', squareId, e);
+            overrides[squareId] = imageUrl;
+            if (typeof mapEngine.replaceBaseImageForSquare === 'function') {
+                mapEngine.replaceBaseImageForSquare(squareId, imageUrl);
             }
         });
+        window.__pathImageBaseOverrides = overrides;
+        if (userPathImagesLayer) userPathImagesLayer.clearLayers();
     } catch (e) {
-        console.warn('[map] Failed to load path images:', e);
+        console.warn('[map.js]⚠️ Failed to load path images:', e);
     }
 }
 
-/**
- * Add a single path to the user paths layer (after saving)
- */
+// ------------------- Exploration ------------------
+// addPathToMap -
 function addPathToMap(path) {
     if (!userPathsLayer || !path || typeof L === 'undefined') return;
     const coords = Array.isArray(path.coordinates) ? path.coordinates : [];
@@ -2944,10 +2854,8 @@ function addPathToMap(path) {
         const lat = Number(c?.lat);
         const lng = Number(c?.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-        latlngs.push([
-            Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, lat)),
-            Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, lng))
-        ]);
+        const p = clampPathPoint(lat, lng);
+        latlngs.push([p.lat, p.lng]);
     }
     if (latlngs.length < 2) return;
     try {
@@ -2956,9 +2864,8 @@ function addPathToMap(path) {
     } catch (e) { /* ignore */ }
 }
 
-/**
- * Finish the current path: save to API and add to map
- */
+// ------------------- Exploration ------------------
+// finishPathDrawing -
 async function finishPathDrawing() {
     if (pathDrawingSaving) return;
     if (!pathDrawingMode || pathDrawingPoints.length < 2) {
@@ -2975,10 +2882,7 @@ async function finishPathDrawing() {
     try {
         const payload = {
             partyId: currentExplorationId || null,
-            coordinates: pathDrawingPoints.map(p => ({
-                lat: Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, Number(p.lat) || 0)),
-                lng: Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, Number(p.lng) || 0))
-            }))
+            coordinates: pathDrawingPoints.map(p => clampPathPoint(p.lat, p.lng))
         };
         const res = await fetch('/api/explore/paths', {
             method: 'POST',
@@ -3009,7 +2913,7 @@ async function finishPathDrawing() {
         if (statusEl) statusEl.textContent = 'Path saved! You can draw another or turn off path drawing.';
     } catch (e) {
         if (statusEl) statusEl.textContent = 'Failed to save path. Try again.';
-        console.warn('[exploration] Save path error:', e);
+        console.warn('[map.js]⚠️ Save path error:', e);
     } finally {
         pathDrawingSaving = false;
         updateFinishPathButtonState();
@@ -3017,9 +2921,8 @@ async function finishPathDrawing() {
 }
 
 
-/**
- * Add exploration marker
- */
+// ------------------- Exploration ------------------
+// addExplorationMarker -
 function addExplorationMarker(lat, lng, type) {
     if (!currentExplorationId) return;
     
@@ -3062,12 +2965,11 @@ function addExplorationMarker(lat, lng, type) {
     marker._explorationId = currentExplorationId;
     marker._markerType = type;
     
-    console.log('[exploration] Added marker:', { type, id: currentExplorationId, lat, lng });
+    if (MAP_DEBUG) console.log('[map.js] Added exploration marker:', { type, id: currentExplorationId, lat, lng });
 }
 
-/**
- * Remove exploration marker
- */
+// ------------------- Exploration ------------------
+// removeExplorationMarker -
 function removeExplorationMarker(button) {
     const marker = button._marker;
     if (marker) {
@@ -3084,6 +2986,7 @@ window.setExplorationId = setExplorationId;
 window.setMarkerType = setMarkerType;
 window.togglePathDrawing = togglePathDrawing;
 window.finishPathDrawing = finishPathDrawing;
+window.loadUserPathImages = loadUserPathImages;
 window.addExplorationMarker = addExplorationMarker;
 window.removeExplorationMarker = removeExplorationMarker;
 
@@ -3091,9 +2994,8 @@ window.removeExplorationMarker = removeExplorationMarker;
 window.showSquareInfo = showSquareInfo;
 window.closeSquareInfo = closeSquareInfo;
 
-/**
- * Migrate existing house pins to new color
- */
+// ------------------- Pin migration ------------------
+// migrateHousePinColors -
 async function migrateHousePinColors() {
     try {
         console.log('Starting house pin color migration...');
@@ -3108,7 +3010,6 @@ async function migrateHousePinColors() {
         
         if (response.ok) {
             const result = await response.json();
-            console.log('Migration successful:', result);
             alert(`Successfully updated ${result.modifiedCount} house pins to new color!`);
             
             // Refresh the map to show updated pins
@@ -3117,11 +3018,11 @@ async function migrateHousePinColors() {
             }
         } else {
             const error = await response.json();
-            console.error('Migration failed:', error);
+            console.error('[map.js]❌ Migration failed:', error);
             alert('Failed to migrate house pin colors: ' + error.error);
         }
     } catch (error) {
-        console.error('Error during migration:', error);
+        console.error('[map.js]❌ Error during migration:', error);
         alert('Error during migration: ' + error.message);
     }
 }
