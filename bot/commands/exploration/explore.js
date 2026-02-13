@@ -132,7 +132,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location) {
  const resultEmbed = new EmbedBuilder()
   .setTitle("🗺️ **Expedition: Chest opened!**")
   .setDescription(
-   `The party opened the chest in **${location}** and found:\n\n${lootValue}\n\n(-1 stamina)\n\n↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`
+   `Chest opened! Here is what was found!\n\n${lootValue}\n\n(-1 stamina)\n\n↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`
   )
   .setColor(regionColors[party.region] || "#00ff99")
   .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
@@ -146,6 +146,26 @@ async function handleExplorationChestOpen(interaction, expeditionId, location) {
  });
  pushProgressLog(party, character.name, "chest_open", `Opened chest in ${location}; loot: ${lootLines.join("; ")}.`, undefined, { staminaLost: staminaCost });
  return { embed: resultEmbed, party, nextCharacter };
+}
+
+/** Outcomes that count toward the per-square special-event limit (reportable on map). */
+const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto"];
+const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
+
+/** Parse square from progress message like "Found X in H8 Q2; ..." -> "H8". */
+const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+Q[1-4]/i;
+
+function countSpecialEventsInSquare(party, square) {
+ if (!party.progressLog || !Array.isArray(party.progressLog)) return 0;
+ const sq = String(square || "").trim().toUpperCase();
+ if (!sq) return 0;
+ let count = 0;
+ for (const e of party.progressLog) {
+  if (!SPECIAL_OUTCOMES.includes(e.outcome)) continue;
+  const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
+  if (m && m[1] && String(m[1]).trim().toUpperCase() === sq) count += 1;
+ }
+ return count;
 }
 
 function pushProgressLog(party, characterName, outcome, message, loot, costs) {
@@ -463,19 +483,26 @@ module.exports = {
      const location = `${party.square} ${party.quadrant}`;
 
      // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto
-     const outcomeRoll = Math.random();
-     let outcomeType;
-     if (outcomeRoll < 0.45) outcomeType = "monster";
-     else if (outcomeRoll < 0.67) outcomeType = "item";
-     else if (outcomeRoll < 0.82) outcomeType = "explored";
-     else if (outcomeRoll < 0.86) outcomeType = "fairy";
-     else if (outcomeRoll < 0.87) outcomeType = "chest";
-     else if (outcomeRoll < 0.88) outcomeType = "old_map";
-     else if (outcomeRoll < 0.94) outcomeType = "ruins";
-     else if (outcomeRoll < 0.945) outcomeType = "relic";
-     else if (outcomeRoll < 0.985) outcomeType = "camp";
-     else if (outcomeRoll < 0.995) outcomeType = "monster_camp";
-     else outcomeType = "grotto";
+     // Reroll if we get a special place (monster_camp/ruins/grotto) and this square already has 3
+     function rollOutcome() {
+      const r = Math.random();
+      if (r < 0.45) return "monster";
+      if (r < 0.67) return "item";
+      if (r < 0.82) return "explored";
+      if (r < 0.86) return "fairy";
+      if (r < 0.87) return "chest";
+      if (r < 0.88) return "old_map";
+      if (r < 0.94) return "ruins";
+      if (r < 0.945) return "relic";
+      if (r < 0.985) return "camp";
+      if (r < 0.995) return "monster_camp";
+      return "grotto";
+     }
+     let outcomeType = rollOutcome();
+     const specialCount = countSpecialEventsInSquare(party, party.square);
+     while (SPECIAL_OUTCOMES.includes(outcomeType) && specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
+      outcomeType = rollOutcome();
+     }
 
      if (outcomeType === "explored") {
       party.quadrantState = "explored";
@@ -571,9 +598,12 @@ module.exports = {
         nextCharacter: nextChar ?? null,
         showNextAndCommands: true,
         showRestSecureMove: true,
+        commandsLast: true,
         extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${healedChar?.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
        });
-       fairyEmbed.addFields({ name: "📋 Recovery", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false });
+       fairyEmbed.addFields(
+        { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
+       );
        addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: true });
        await interaction.editReply({ embeds: [fairyEmbed] });
        await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
@@ -950,7 +980,7 @@ module.exports = {
                .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
-              await ci.update({ embeds: [noStamEmbed], components: [chestRow] }).catch(() => {});
+              await ci.update({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
               return;
              }
              if (result?.embed) {
@@ -997,10 +1027,7 @@ module.exports = {
             .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
-           await i.update({ embeds: [noStaminaEmbed], components: [new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}`).setLabel("Yes").setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}`).setLabel("No").setStyle(ButtonStyle.Secondary)
-           )] }).catch(() => {});
+           await i.update({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
            return;
           }
           if (result?.embed) {

@@ -378,16 +378,12 @@ class MapLoader {
     }
 
     /**
-     * Check if a square should have region names based on the specific squares that have region name images
+     * Check if a square should have region names. Disabled so names don't cover map content.
      * @param {string} squareId - Square ID to check
      * @returns {boolean} Whether the square should have region names
      */
     _shouldHaveRegionNames(squareId) {
-        // These are the specific squares that have region name images
-        const regionNameSquares = [
-            'B10', 'C3', 'E6', 'G10', 'G4', 'G7', 'G8', 'H4', 'H7', 'H8'
-        ];
-        return regionNameSquares.includes(squareId);
+        return false;
     }
     
     /**

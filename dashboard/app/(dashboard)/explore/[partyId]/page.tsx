@@ -103,6 +103,31 @@ const QUADRANT_PCT: Record<string, { x: number; y: number; w: number; h: number 
   Q4: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
 };
 
+/** CSS clip-path polygon for fog to show only given quadrants (1–4). Matches map-layers.js _fogClipPathForQuadrants. */
+function fogClipPathForQuadrants(quads: number[]): string | null {
+  if (!quads.length || quads.length === 4) return null;
+  const q = [...quads].sort((a, b) => a - b);
+  const key = q.join(",");
+  const polygons: Record<string, string> = {
+    "1": "0% 0%, 50% 0%, 50% 50%, 0% 50%",
+    "2": "50% 0%, 100% 0%, 100% 50%, 50% 50%",
+    "3": "0% 50%, 50% 50%, 50% 100%, 0% 100%",
+    "4": "50% 50%, 100% 50%, 100% 100%, 50% 100%",
+    "1,2": "0% 0%, 100% 0%, 100% 50%, 0% 50%",
+    "1,3": "0% 0%, 50% 0%, 50% 50%, 0% 50%, 0% 100%, 50% 100%, 50% 50%, 0% 50%",
+    "1,4": "0% 0%, 50% 0%, 50% 50%, 0% 50%, 50% 50%, 100% 50%, 100% 100%, 50% 100%, 50% 50%, 0% 50%",
+    "2,3": "50% 0%, 100% 0%, 100% 50%, 50% 50%, 50% 100%, 0% 100%, 0% 50%, 50% 50%",
+    "2,4": "50% 0%, 100% 0%, 100% 100%, 50% 100%, 50% 50%, 100% 50%",
+    "3,4": "0% 50%, 100% 50%, 100% 100%, 0% 100%",
+    "1,2,3": "0% 0%, 100% 0%, 100% 50%, 50% 50%, 50% 100%, 0% 100%, 0% 50%, 50% 50%",
+    "1,2,4": "0% 0%, 100% 0%, 100% 100%, 50% 100%, 50% 50%, 0% 50%",
+    "1,3,4": "0% 0%, 50% 0%, 50% 100%, 100% 100%, 100% 50%, 50% 50%, 0% 50%",
+    "2,3,4": "50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 50%, 50% 50%",
+  };
+  const poly = polygons[key];
+  return poly ? `polygon(${poly})` : null;
+}
+
 /** True if (pctX, pctY) in 0–1 is inside the given quadrant (Q1–Q4). */
 function isClickInQuadrant(pctX: number, pctY: number, quadrant: string): boolean {
   const q = QUADRANT_PCT[quadrant.toUpperCase()];
@@ -231,7 +256,7 @@ export default function ExplorePartyPage() {
   const [reportedDiscoveryKeys, setReportedDiscoveryKeys] = useState<Set<string>>(new Set());
   const [placingPinForKey, setPlacingPinForKey] = useState<string | null>(null);
   const [placePinError, setPlacePinError] = useState<string | null>(null);
-  const [discoveryPreviewBySquare, setDiscoveryPreviewBySquare] = useState<Record<string, { layers: Array<{ name: string; url: string }>; quadrantBounds: { x: number; y: number; w: number; h: number } | null } | null>>({});
+  const [discoveryPreviewBySquare, setDiscoveryPreviewBySquare] = useState<Record<string, { layers: Array<{ name: string; url: string }>; quadrantBounds: { x: number; y: number; w: number; h: number } | null; quadrantStatuses?: Record<string, string> } | null>>({});
   const discoveryPreviewFetchedRef = useRef<Set<string>>(new Set());
   const [placingForDiscovery, setPlacingForDiscovery] = useState<ReportableDiscovery | null>(null);
   const [mapHovered, setMapHovered] = useState(false);
@@ -241,6 +266,7 @@ export default function ExplorePartyPage() {
   const [squarePreview, setSquarePreview] = useState<{
     layers: Array<{ name: string; url: string }>;
     quadrantBounds: { x: number; y: number; w: number; h: number } | null;
+    quadrantStatuses?: Record<string, string>;
   } | null>(null);
 
   /** Discovery is reported if we have it in session state or a pin was already saved (by key or by same square+name). */
@@ -306,6 +332,7 @@ export default function ExplorePartyPage() {
           setSquarePreview({
             layers: data.layers,
             quadrantBounds: data.quadrantBounds ?? null,
+            quadrantStatuses: data.quadrantStatuses ?? undefined,
           });
         } else {
           setSquarePreview(null);
@@ -328,7 +355,7 @@ export default function ExplorePartyPage() {
           if (data?.layers) {
             setDiscoveryPreviewBySquare((prev) => ({
               ...prev,
-              [square]: { layers: data.layers, quadrantBounds: data.quadrantBounds ?? null },
+              [square]: { layers: data.layers, quadrantBounds: data.quadrantBounds ?? null, quadrantStatuses: data.quadrantStatuses ?? undefined },
             }));
           }
         })
@@ -1500,16 +1527,48 @@ export default function ExplorePartyPage() {
                               <span className="text-sm font-medium text-amber-200"><i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden />Saving…</span>
                             </div>
                           )}
-                          {displayPreview!.layers.map((layer) => (
-                            <img
-                              key={layer.name}
-                              src={layer.url}
-                              alt=""
-                              className="absolute inset-0 h-full w-full object-cover"
-                              onError={(e) => { e.currentTarget.style.display = "none"; }}
-                              style={isPlacing ? { pointerEvents: "none" } : undefined}
-                            />
-                          ))}
+                          {displayPreview!.layers
+                            .filter((layer) => layer.name !== "MAP_0001_hidden-areas")
+                            .map((layer) => (
+                              <img
+                                key={layer.name}
+                                src={layer.url}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-cover"
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                style={isPlacing ? { pointerEvents: "none" } : undefined}
+                              />
+                            ))}
+                          {(() => {
+                            const fogLayer = displayPreview!.layers.find((l) => l.name === "MAP_0001_hidden-areas");
+                            if (!fogLayer) return null;
+                            const statuses = displayPreview!.quadrantStatuses ?? party.quadrantStatuses ?? {};
+                            const fogQuadrants: number[] = [];
+                            (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
+                              const s = (statuses[qId] ?? "unexplored").toLowerCase();
+                              if (s === "unexplored" || s === "inaccessible") fogQuadrants.push(i + 1);
+                            });
+                            if (fogQuadrants.length === 0) return null;
+                            const clipPath = fogClipPathForQuadrants(fogQuadrants);
+                            return (
+                              <div
+                                className="pointer-events-none absolute inset-0 z-10"
+                                aria-hidden
+                              >
+                                <img
+                                  src={fogLayer.url}
+                                  alt=""
+                                  className="absolute inset-0 h-full w-full object-cover"
+                                  style={
+                                    clipPath
+                                      ? { clipPath, WebkitClipPath: clipPath }
+                                      : undefined
+                                  }
+                                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
+                              </div>
+                            );
+                          })()}
                           {isPlacing && placingForDiscovery && (() => {
                             const q = QUADRANT_PCT[placingForDiscovery.quadrant.toUpperCase()];
                             if (!q) return null;
@@ -1592,9 +1651,9 @@ export default function ExplorePartyPage() {
                             <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40" style={{ transform: "translateX(-50%)" }} />
                             <div className="absolute top-1/2 left-0 right-0 h-px bg-white/40" style={{ transform: "translateY(-50%)" }} />
                           </div>
-                          <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
+                          <div className="pointer-events-none absolute inset-0 z-20 grid grid-cols-2 grid-rows-2">
                             {(["Q1", "Q2", "Q3", "Q4"] as const).map((qId) => {
-                              const status = party.quadrantStatuses?.[qId] ?? "unexplored";
+                              const status = displayPreview!.quadrantStatuses?.[qId] ?? party.quadrantStatuses?.[qId] ?? "unexplored";
                               const color = QUADRANT_STATUS_COLORS[status] ?? QUADRANT_STATUS_COLORS.unexplored;
                               return (
                                 <div key={qId} className="flex items-center justify-center p-1 text-2xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" style={{ color, WebkitTextStroke: "2px white", paintOrder: "stroke fill" } as React.CSSProperties}>

@@ -39,9 +39,6 @@ const BLIGHT_SQUARES = [
   "J1", "J10", "J2", "J3", "J4", "J5", "J9",
 ];
 
-/** Squares that have region names */
-const REGION_NAME_SQUARES = ["B10", "C3", "E6", "G10", "G4", "G7", "G8", "H4", "H7", "H8"];
-
 /** Path layers per square */
 const PSL_SQUARES = ["G6", "H5", "H6", "H7", "H8"];
 const LDW_SQUARES = ["F10", "F11", "F9", "G10", "G11", "G8", "G9", "H10", "H11", "H8", "H9"];
@@ -59,17 +56,19 @@ const VILLAGE_CIRCLE_LAYERS = [
 /** Quadrant status from DB; used to skip hidden/fog for explored/secured quads */
 type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
 
-/** Build ordered layer list for a square (matches map-loader logic). Omit hidden-areas when current quadrant is explored/secured. */
+/** Build ordered layer list for a square. Fog when any quadrant is unexplored/inaccessible. Region names omitted (cover too much). */
 function getLayersForSquare(
   squareId: string,
-  options?: { currentQuadrantStatus?: QuadrantStatus }
+  options?: { quadrantStatuses?: Record<string, QuadrantStatus> }
 ): string[] {
   const layers: string[] = [];
 
-  // 1. Mask/fog (hidden areas) — only for unexplored/inaccessible quadrants; no fog on explored/secured
-  const skipHidden =
-    options?.currentQuadrantStatus === "explored" || options?.currentQuadrantStatus === "secured";
-  if (!skipHidden) {
+  // 1. Mask/fog — include when any quadrant is unexplored or inaccessible (client will clip to those quads)
+  const statuses = options?.quadrantStatuses ?? {};
+  const fogQuadrants = (["Q1", "Q2", "Q3", "Q4"] as const).filter(
+    (q) => (statuses[q] ?? "unexplored") === "unexplored" || (statuses[q] ?? "unexplored") === "inaccessible"
+  );
+  if (fogQuadrants.length > 0) {
     layers.push("MAP_0001_hidden-areas");
   }
 
@@ -92,10 +91,7 @@ function getLayersForSquare(
   if (LDW_SQUARES.includes(squareId)) layers.push("MAP_0003s_0001_LDW");
   if (OTHER_PATHS_SQUARES.includes(squareId)) layers.push("MAP_0003s_0002_Other-Paths");
 
-  // 7. Region names (square-specific)
-  if (REGION_NAME_SQUARES.includes(squareId)) {
-    layers.push("MAP_0001s_0004_REGIONS-NAMES");
-  }
+  // Region names layer omitted so they don't cover map content
 
   return layers;
 }
@@ -130,7 +126,6 @@ export async function GET(request: NextRequest) {
     let dbImage: string | null = null;
     let mapCoordinates: { center: { lat: number; lng: number }; bounds: { north: number; south: number; east: number; west: number } } | null = null;
     const quadrantStatuses: Record<string, QuadrantStatus> = { Q1: "unexplored", Q2: "unexplored", Q3: "unexplored", Q4: "unexplored" };
-    let currentQuadrantStatus: QuadrantStatus | undefined;
     try {
       await connect();
       const Square = (await import("@/models/mapModel.js")).default;
@@ -157,18 +152,14 @@ export async function GET(request: NextRequest) {
               quadrantStatuses[id] = (["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored") as QuadrantStatus;
             }
           }
-          const requestedQuad = quadrant.match(/^Q([1-4])$/) ? quadrant : "";
-          if (requestedQuad && quadrantStatuses[requestedQuad]) {
-            currentQuadrantStatus = quadrantStatuses[requestedQuad];
-          }
         }
       }
     } catch {
       // DB optional – continue without it
     }
 
-    // Build layers: omit hidden/fog when current quadrant is explored or secured
-    let layers = getLayersForSquare(square, { currentQuadrantStatus });
+    // Build layers: fog when any quadrant is unexplored/inaccessible; no region-names layer
+    let layers = getLayersForSquare(square, { quadrantStatuses });
     if (noMask) {
       layers = layers.filter((l) => l !== "MAP_0001_hidden-areas");
     }
