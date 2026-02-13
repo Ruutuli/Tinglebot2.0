@@ -516,13 +516,16 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
 // Adds the Commands field to an embed (call last when commandsLast was used in addExplorationStandardFields)
 // showSecuredQuadrantOnly: true = quadrant is secured, no Roll/Secure — show only Move, Item, Camp (and End if at start)
 // showFairyRollOnly: true = fairy just appeared — only instruct to use /explore roll
-const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showSecuredQuadrantOnly = false, showFairyRollOnly = false, isAtStartQuadrant = false }) => {
+// showMoveToUnexploredOnly: true = just moved to unexplored quadrant — only "use /explore roll"
+const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showSecuredQuadrantOnly = false, showFairyRollOnly = false, showMoveToUnexploredOnly = false, isAtStartQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (!showNextAndCommands || !nextCharacter?.userId || !nextCharacter?.name) return embed;
  const nextName = nextCharacter.name;
  const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
- if (showSecuredQuadrantOnly === true) {
+ if (showMoveToUnexploredOnly === true) {
+  commandsValue += `**Moved to a new location — use ${cmdRoll} to explore this quadrant.**`;
+ } else if (showSecuredQuadrantOnly === true) {
   const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
   const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
   const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;

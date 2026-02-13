@@ -41,7 +41,7 @@ class MapModule {
                 addSquare(colIndex, rowIndex - 1, 'Q3', '↑ North');
                 addSquare(colIndex, rowIndex - 1, 'Q4', '↗ North-east');
                 addSquare(colIndex - 1, rowIndex, 'Q2', '← West');
-                addSquare(colIndex - 1, rowIndex, 'Q4', '← West');
+                addSquare(colIndex - 1, rowIndex, 'Q4', '↙ South-west');
                 addSquare(colIndex - 1, rowIndex - 1, 'Q4', '↖ North-west');
                 break;
             case 'Q2':

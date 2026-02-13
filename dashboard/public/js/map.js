@@ -85,6 +85,9 @@ async function initializeMap() {
             throw new Error('MAP_CONFIG is not defined. Please check that map-constants.js is loaded.');
         }
 
+        // Fetch path image overrides BEFORE creating map so loader uses them when loading squares
+        await fetchPathImageOverrides();
+
         // Step 2: Create map engine with config
         updateLoadingProgress(15, 'Creating map engine...', 1);
         mapEngine = new MapEngine(MAP_CONFIG);
@@ -2812,6 +2815,37 @@ function onVisibilityPathImages() {
     if (document.visibilityState === 'visible') loadUserPathImages();
 }
 
+// fetchPathImageOverrides - Fetch path images and set __pathImageBaseOverrides before map loads.
+// Called early in init so the loader uses overrides when loading base layer (replaces base completely).
+async function fetchPathImageOverrides() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const partyId = params.get('partyId')?.trim() || '';
+        const url = partyId ? `/api/explore/path-images?partyId=${encodeURIComponent(partyId)}` : '/api/explore/path-images';
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const list = Array.isArray(data.pathImages) ? data.pathImages : [];
+        const overrides = {};
+        const base = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
+        list.forEach((item) => {
+            const squareId = item.squareId;
+            let imageUrl = item.imageUrl;
+            if (!squareId || !imageUrl) return;
+            if (item.updatedAt) imageUrl = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + item.updatedAt;
+            // Use same-origin proxy for GCS URLs to avoid CORS (matches map tile loading)
+            if (imageUrl.startsWith('https://') || imageUrl.startsWith('http://')) {
+                imageUrl = base + '/api/images/' + encodeURIComponent(imageUrl);
+            }
+            overrides[squareId] = imageUrl;
+        });
+        window.__pathImageBaseOverrides = overrides;
+    } catch (e) {
+        window.__pathImageBaseOverrides = {};
+        if (MAP_DEBUG) console.warn('[map.js] Failed to fetch path image overrides:', e);
+    }
+}
+
 // ------------------- Exploration ------------------
 // loadUserPathImages -
 async function loadUserPathImages() {
@@ -2825,11 +2859,16 @@ async function loadUserPathImages() {
         const data = await res.json().catch(() => ({}));
         const list = Array.isArray(data.pathImages) ? data.pathImages : [];
         const overrides = {};
+        const base = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
         list.forEach((item) => {
             const squareId = item.squareId;
             let imageUrl = item.imageUrl;
             if (!squareId || !imageUrl) return;
             if (item.updatedAt) imageUrl = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + item.updatedAt;
+            // Use same-origin proxy for GCS URLs to avoid CORS
+            if (imageUrl.startsWith('https://') || imageUrl.startsWith('http://')) {
+                imageUrl = base + '/api/images/' + encodeURIComponent(imageUrl);
+            }
             overrides[squareId] = imageUrl;
             if (typeof mapEngine.replaceBaseImageForSquare === 'function') {
                 mapEngine.replaceBaseImageForSquare(squareId, imageUrl);

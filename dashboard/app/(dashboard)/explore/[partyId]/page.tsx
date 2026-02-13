@@ -1684,7 +1684,7 @@ export default function ExplorePartyPage() {
                                   {reported ? (
                                     <span className="flex items-center gap-1 text-[10px] text-[var(--totk-light-green)]">
                                       <i className="fa-solid fa-check" aria-hidden />
-                                      <Link href="/map" className="text-amber-300 underline">Map</Link>
+                                      <Link href={partyId ? `/map?partyId=${encodeURIComponent(partyId)}` : "/map"} className="text-amber-300 underline">Map</Link>
                                     </span>
                                   ) : !userId ? (
                                     <span className="text-[10px] text-amber-400/90">Log in to place on map</span>

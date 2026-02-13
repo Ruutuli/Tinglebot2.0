@@ -480,6 +480,30 @@ module.exports = {
       if (q && (q.status === "explored" || q.status === "secured")) {
        party.quadrantState = q.status;
        party.markModified("quadrantState");
+      } else if (party.quadrantState === "unexplored" && party.square && party.quadrant) {
+       // Entering a quadrant counts as explored: ensure map and party are in sync (e.g. moved before this was persisted)
+       const mapSquareId = (party.square && String(party.square).trim()) || "";
+       const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
+       if (mapSquareId && mapQuadrantId) {
+        try {
+         const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+         await Square.updateOne(
+          { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+          {
+           $set: {
+            "quadrants.$[q].status": "explored",
+            "quadrants.$[q].exploredBy": interaction.user?.id || party.leaderId || "",
+            "quadrants.$[q].exploredAt": new Date(),
+           },
+         },
+         { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+        );
+        } catch (mapErr) {
+         console.error("[explore.js] Failed to mark quadrant explored on roll sync:", mapErr.message);
+        }
+        party.quadrantState = "explored";
+        party.markModified("quadrantState");
+       }
       }
       // Known ruin-rest spot: auto-recover stamina when rolling here again
       const restStamina = typeof q?.ruinRestStamina === "number" && q.ruinRestStamina > 0 ? q.ruinRestStamina : 0;
@@ -2013,11 +2037,34 @@ module.exports = {
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
-    // Sync quadrant state from map (we already looked up destination above)
+    // Entering a quadrant counts as exploring it: mark explored in map and party (unless already secured)
+    if (destinationQuadrantState === "unexplored") {
+     const mapSquareId = (newLocation.square && String(newLocation.square).trim()) || "";
+     const mapQuadrantId = (newLocation.quadrant && String(newLocation.quadrant).trim().toUpperCase()) || "";
+     if (mapSquareId && mapQuadrantId) {
+      try {
+       const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+       await Square.updateOne(
+        { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+        {
+         $set: {
+          "quadrants.$[q].status": "explored",
+          "quadrants.$[q].exploredBy": interaction.user?.id || party.leaderId || "",
+          "quadrants.$[q].exploredAt": new Date(),
+         },
+        },
+        { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+       );
+      } catch (mapErr) {
+       console.error("[explore.js] Failed to mark quadrant explored on move:", mapErr.message);
+      }
+     }
+     destinationQuadrantState = "explored";
+    }
     party.quadrantState = destinationQuadrantState;
     party.markModified("quadrantState");
     const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
-    const quadrantStateLabel = destinationQuadrantState === "secured" ? "secured" : destinationQuadrantState === "explored" ? "explored" : "unexplored";
+    const quadrantStateLabel = destinationQuadrantState === "secured" ? "secured" : "explored";
     pushProgressLog(
      party,
      character.name,
@@ -2030,7 +2077,10 @@ module.exports = {
     await party.save();
 
     const nextCharacterMove = party.characters[party.currentTurn];
-    let moveDescription = `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
+    const moveToUnexplored = destinationQuadrantState === "unexplored";
+    let moveDescription = moveToUnexplored
+     ? `Moved to a new location!`
+     : `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
     if (clearedCount > 0) {
      moveDescription += `\n\n⚠️ **${clearedCount} unmarked discovery(ies) in ${currentSquare} were forgotten.** Place pins on the dashboard before moving to keep them on the map.`;
     }
@@ -2081,8 +2131,9 @@ module.exports = {
       location: locationMove,
       nextCharacter: nextCharacterMove ?? null,
       showNextAndCommands: true,
-      showRestSecureMove: !moveToSecured,
+      showRestSecureMove: !moveToSecured && !moveToUnexplored,
       showSecuredQuadrantOnly: moveToSecured,
+      showMoveToUnexploredOnly: moveToUnexplored,
       isAtStartQuadrant: moveIsAtStart,
     });
 
