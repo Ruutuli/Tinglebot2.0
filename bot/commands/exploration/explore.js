@@ -333,6 +333,18 @@ module.exports = {
       );
      }
 
+     // Sync quadrant state from map so stamina cost matches canonical explored/secured status
+     const mapSquare = await Square.findOne({ squareId: party.square });
+     if (mapSquare && mapSquare.quadrants && mapSquare.quadrants.length) {
+      const q = mapSquare.quadrants.find(
+       (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
+      );
+      if (q && (q.status === "explored" || q.status === "secured")) {
+       party.quadrantState = q.status;
+       party.markModified("quadrantState");
+      }
+     }
+
      let staminaCost = 0;
 
      if (party.quadrantState === "unexplored") {
@@ -1231,18 +1243,30 @@ module.exports = {
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
-    party.quadrantState = "unexplored";
+    // Sync quadrant state from map: if this quadrant is already explored/secured, party gets that state (1 or 0 stamina to roll)
+    let mapQuadrantState = "unexplored";
+    const mapSquare = await Square.findOne({ squareId: newLocation.square });
+    if (mapSquare && mapSquare.quadrants && mapSquare.quadrants.length) {
+     const q = mapSquare.quadrants.find(
+      (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
+     );
+     if (q && (q.status === "explored" || q.status === "secured")) {
+      mapQuadrantState = q.status;
+     }
+    }
+    party.quadrantState = mapQuadrantState;
     party.markModified("quadrantState");
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
     const nextCharacterMove = party.characters[party.currentTurn];
     const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
+    const quadrantStateLabel = mapQuadrantState === "secured" ? "secured" : mapQuadrantState === "explored" ? "explored" : "unexplored";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Moved ${direction.charAt(0).toUpperCase() + direction.slice(1)}**`)
      .setColor(regionColors[party.region] || "#2196F3")
      .setDescription(
-      `${character.name} led the party to **${locationMove}** (quadrant unexplored).`
+      `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     addExplorationStandardFields(embed, {
