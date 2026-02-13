@@ -194,6 +194,8 @@ type PartyData = {
   quadrantStatuses?: Record<string, string>;
   gatheredItems?: GatheredItem[];
   progressLog?: ProgressEntry[];
+  /** Discovery keys that have been placed as a pin (stored in DB). */
+  reportedDiscoveryKeys?: string[];
 };
 
 type Character = {
@@ -269,14 +271,15 @@ export default function ExplorePartyPage() {
     quadrantStatuses?: Record<string, string>;
   } | null>(null);
 
-  /** Discovery is reported only if we have it in session or a pin saved with the exact same discovery key (square+quadrant+outcome+at). */
+  /** Discovery is reported if DB (party.reportedDiscoveryKeys), session state, or a saved pin has the same discovery key. */
   const isDiscoveryReported = useCallback(
     (d: ReportableDiscovery) => {
       const key = discoveryKey(d);
+      if (party?.reportedDiscoveryKeys?.includes(key)) return true;
       if (reportedDiscoveryKeys.has(key)) return true;
       return userPins.some((p) => p.sourceDiscoveryKey === key);
     },
-    [reportedDiscoveryKeys, userPins]
+    [party?.reportedDiscoveryKeys, reportedDiscoveryKeys, userPins]
   );
 
   const regionVillage = party?.region ? normalizeVillage(REGIONS[party.region]?.village ?? party.region) : "";
@@ -678,6 +681,7 @@ export default function ExplorePartyPage() {
           color: "#b91c1c",
           icon: d.outcome === "monster_camp" ? "fas fa-skull" : d.outcome === "grotto" ? "fas fa-tree" : "fas fa-landmark",
           sourceDiscoveryKey: key,
+          partyId: partyId || undefined,
         };
         const res = await fetch("/api/pins", {
           method: "POST",
@@ -1467,6 +1471,9 @@ export default function ExplorePartyPage() {
                             <i className="fa-solid fa-landmark text-[10px] opacity-80" aria-hidden />
                             Report to town hall
                           </h3>
+                          <p className="mb-2 text-[11px] font-medium text-amber-300/95">
+                            Place pins before the party moves to another square — unmarked discoveries in the current square are cleared and considered lost when you move.
+                          </p>
                           {!userId ? (
                             <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
                               You found something to report. <Link href="/api/auth/discord" className="font-medium text-amber-300 underline">Log in</Link> to place these on the map (saved pins appear on the main Map page).
@@ -1477,7 +1484,7 @@ export default function ExplorePartyPage() {
                             </p>
                           ) : (
                             <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
-                              You found something to report. Click &quot;Place on map&quot; then click <strong>inside the highlighted quadrant</strong> for that discovery (it will be saved and appear on the main Map page).
+                              Click &quot;Place on map&quot; then click <strong>inside the highlighted quadrant</strong> for that discovery (it will be saved and appear on the main Map page).
                             </p>
                           )}
                           {placePinError && canPlacePins && (

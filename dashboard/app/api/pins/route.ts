@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
     let characterId: string | null = null;
     let imageUrl: string | null = null;
     let sourceDiscoveryKey: string | null = null;
+    let partyId: string | null = null;
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
@@ -100,6 +102,8 @@ export async function POST(request: Request) {
       imageUrl = imgUrl && String(imgUrl).trim() ? String(imgUrl).trim() : null;
       const srcKey = formData.get("sourceDiscoveryKey") as string | null;
       sourceDiscoveryKey = srcKey && String(srcKey).trim() ? String(srcKey).trim() : null;
+      const pId = formData.get("partyId") as string | null;
+      partyId = pId && String(pId).trim() ? String(pId).trim() : null;
     } else {
       body = (await request.json()) as Record<string, unknown>;
       const coords = body.coordinates as { lat?: number; lng?: number };
@@ -119,6 +123,8 @@ export async function POST(request: Request) {
       imageUrl = imgUrl != null && String(imgUrl).trim() ? String(imgUrl).trim() : null;
       const srcKey = body.sourceDiscoveryKey;
       sourceDiscoveryKey = srcKey != null && String(srcKey).trim() ? String(srcKey).trim() : null;
+      const pId = body.partyId;
+      partyId = pId != null && String(pId).trim() ? String(pId).trim() : null;
     }
 
     if (!name) {
@@ -175,6 +181,22 @@ export async function POST(request: Request) {
     await pin.save();
     await pin.populate("character", "name");
     const pinObj = pin.toObject();
+
+    // If this pin was placed from an expedition discovery, mark it on the party so DB tracks pin placed or not
+    if (sourceDiscoveryKey && partyId) {
+      try {
+        const Party =
+          mongoose.models.Party ??
+          ((await import("@/models/PartyModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+        await Party.updateOne(
+          { partyId },
+          { $addToSet: { reportedDiscoveryKeys: sourceDiscoveryKey.slice(0, 200) } }
+        );
+      } catch (partyErr) {
+        console.error("[api/pins] Failed to update party reportedDiscoveryKeys:", partyErr);
+      }
+    }
+
     return NextResponse.json({ success: true, pin: pinObj });
   } catch (error) {
     console.error("[api/pins] POST error:", error);

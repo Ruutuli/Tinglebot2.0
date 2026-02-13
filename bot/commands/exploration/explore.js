@@ -1796,6 +1796,23 @@ module.exports = {
      );
     }
 
+    // When leaving a square, clear any reportable discoveries (monster_camp, ruins, grotto) in that square from progressLog — unmarked discoveries are considered lost
+    const leavingSquare = String(currentSquare || "").trim().toUpperCase();
+    let clearedCount = 0;
+    if (leavingSquare && party.progressLog && Array.isArray(party.progressLog)) {
+     const before = party.progressLog.length;
+     party.progressLog = party.progressLog.filter((e) => {
+      if (!SPECIAL_OUTCOMES.includes(e.outcome)) return true;
+      const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
+      if (!m || !m[1]) return true;
+      const entrySquare = String(m[1]).trim().toUpperCase();
+      if (entrySquare !== leavingSquare) return true;
+      clearedCount += 1;
+      return false;
+     });
+     if (clearedCount > 0) party.markModified("progressLog");
+    }
+
     // Apply move cost to current character so party total stays correct
     const moveCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
     character.currentStamina = Math.max(0, moveCharStamina - staminaCost);
@@ -1833,6 +1850,9 @@ module.exports = {
 
     const nextCharacterMove = party.characters[party.currentTurn];
     let moveDescription = `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
+    if (clearedCount > 0) {
+     moveDescription += `\n\n⚠️ **${clearedCount} unmarked discovery(ies) in ${currentSquare} were forgotten.** Place pins on the dashboard before moving to keep them on the map.`;
+    }
 
     // If this quadrant is an old map location, check if any party member has that map and show prompt
     const quadWithMap = mapSquare && mapSquare.quadrants ? mapSquare.quadrants.find(

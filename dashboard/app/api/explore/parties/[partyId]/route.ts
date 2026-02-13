@@ -141,6 +141,10 @@ export async function GET(
       }
     }
 
+    const reportedDiscoveryKeys = Array.isArray(p.reportedDiscoveryKeys)
+      ? (p.reportedDiscoveryKeys as string[]).filter((k) => typeof k === "string" && k.length > 0)
+      : [];
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
@@ -160,6 +164,7 @@ export async function GET(
       quadrantStatuses,
       gatheredItems,
       progressLog,
+      reportedDiscoveryKeys,
     });
   } catch (err) {
     console.error("[explore/parties/[partyId] GET]", err);

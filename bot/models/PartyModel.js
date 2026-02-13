@@ -58,7 +58,9 @@ const PartySchema = new Schema({
       heartsRecovered: { type: Number },
       staminaRecovered: { type: Number },
     }
-  ]
+  ],
+  /** Discovery keys (outcome|square|quadrant|at) that have been placed as a pin on the map; used to know pin was placed or not. */
+  reportedDiscoveryKeys: [{ type: String }],
 });
 
 module.exports = mongoose.model('Party', PartySchema);
