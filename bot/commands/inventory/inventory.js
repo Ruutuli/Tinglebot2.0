@@ -22,6 +22,7 @@ const {
   fetchCharacterByName,
   fetchCharacterByNameAndUserId,
   fetchCharactersByUserId,
+  fetchModCharacterByNameAndUserId,
   getCharacterInventoryCollection
 } = require('@/database/db.js');
 
@@ -30,6 +31,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 // Google Sheets functionality removed
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
+const { removeNegativeQuantityEntries } = require('@/utils/inventoryUtils.js');
 
 // ------------------- Database Models -------------------
 const ItemModel = require('@/models/ItemModel.js');
@@ -172,8 +174,18 @@ module.exports = {
         return;
       }
 
+      // Include both regular and mod character _ids so items added under either (e.g. raid loot) show
+      const regularChar = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+      const modChar = await fetchModCharacterByNameAndUserId(characterName, interaction.user.id);
+      const characterIds = [regularChar?._id, modChar?._id].filter(Boolean);
+
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
-      const inventoryItems = await inventoryCollection.find({ characterId: character._id }).toArray();
+      await removeNegativeQuantityEntries(inventoryCollection);
+      const inventoryItems = await inventoryCollection.find(
+        characterIds.length > 0
+          ? { characterId: { $in: characterIds } }
+          : { characterId: character._id }
+      ).toArray();
 
       if (!inventoryItems.length) {
         await interaction.editReply({ content: `❌ No inventory items found for \`${character.name}\`.` });

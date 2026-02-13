@@ -828,33 +828,8 @@ async function handleChangeJob(interaction) {
     return;
   }
 
-  console.log('[handleChangeJob] Processing job change and deducting 500 tokens');
-  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-  await updateTokenBalance(interaction.user.id, -500, {
-    category: 'character',
-    description: `Job change (${character.name}: ${previousJob} → ${newJob})`,
-    link: interactionUrl
-  });
-
-  // Log to token tracker
-  try {
-    const user = await User.findOne({ discordId: interaction.user.id });
-    // Google Sheets token tracker functionality removed
-    // if (user?.tokenTracker && isValidGoogleSheetsUrl(user.tokenTracker)) {
-    //   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-    //   const tokenRow = [
-    //     `${character.name} - Job Change from ${previousJob} to ${newJob}`,
-    //     interactionUrl,
-    //     'Job Change',
-    //     'spent',
-    //     '-500'
-    //   ];
-    //   await safeAppendDataToSheet(user.tokenTracker, user, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
-    //   console.log(`[handleChangeJob] ✅ Logged to token tracker: ${character.name}`);
-    // }
-  } catch (sheetError) {
-    console.error(`[handleChangeJob] ❌ Token tracker error:`, sheetError);
-  }
+  // Compute newPerks here so it's in scope for character.jobPerk (used for both accepted and non-accepted)
+  const newPerks = getJobPerk(newJob)?.perks || [];
 
   // ------------------- Update Discord Roles (only for approved characters) -------------------
   const isAccepted = character.status === 'accepted';
@@ -936,7 +911,6 @@ async function handleChangeJob(interaction) {
 
     // ------------------- Update perk roles -------------------
     const previousPerks = getJobPerk(previousJob)?.perks || [];
-    const newPerks = getJobPerk(newJob)?.perks || [];
 
     // Remove previous perk roles
     for (const perk of previousPerks) {
@@ -1031,6 +1005,22 @@ async function handleChangeJob(interaction) {
   }
 
   await character.save();
+
+  // Deduct tokens only after job change completes successfully
+  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+  await updateTokenBalance(interaction.user.id, -500, {
+    category: 'character',
+    description: `Job change (${character.name}: ${previousJob} → ${newJob})`,
+    link: interactionUrl
+  });
+
+  // Log to token tracker
+  try {
+    const user = await User.findOne({ discordId: interaction.user.id });
+    // Google Sheets token tracker functionality removed
+  } catch (sheetError) {
+    console.error(`[handleChangeJob] ❌ Token tracker error:`, sheetError);
+  }
 
   const villageColor = getVillageColorByName(character.homeVillage) || "#4CAF50";
   const villageEmoji = getVillageEmojiByName(character.homeVillage) || "\ud83c\udfe1";

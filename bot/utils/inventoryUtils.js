@@ -136,6 +136,9 @@ async function syncToInventoryDatabase(character, item, interaction) {
     
     const inventoryCollection = db.collection(collectionName);
 
+    // Remove any invalid entries (negative or zero qty) before syncing
+    await removeNegativeQuantityEntries(inventoryCollection);
+
     const itemNameForQuery = (item.itemName || '').trim();
     const itemNameRegex = new RegExp(`^${escapeRegExp(itemNameForQuery)}$`, 'i');
     const quantity = typeof item.quantity === 'number' ? item.quantity : 0;
@@ -236,6 +239,19 @@ async function syncToInventoryDatabase(character, item, interaction) {
       logger.error('INVENTORY', `Sync failed for ${character?.name || 'Unknown'} | ${item?.itemName || 'Unknown'}`);
     }
     throw error;
+  }
+}
+
+// ---- Function: removeNegativeQuantityEntries ----
+// Removes any inventory documents with quantity <= 0 (error state; negative qty should never happen).
+async function removeNegativeQuantityEntries(inventoryCollection) {
+  try {
+    const result = await inventoryCollection.deleteMany({ quantity: { $lte: 0 } });
+    if (result.deletedCount > 0) {
+      logger.warn('INVENTORY', `Removed ${result.deletedCount} invalid inventory entr${result.deletedCount === 1 ? 'y' : 'ies'} (qty <= 0)`);
+    }
+  } catch (err) {
+    logger.warn('INVENTORY', `Failed to remove negative-qty entries: ${err.message}`);
   }
 }
 
@@ -363,7 +379,10 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     } catch (cleanupError) {
       logger.warn('INVENTORY', `Failed to remove Initial Item: ${cleanupError.message}`);
     }
-    
+
+    // Remove any invalid entries (negative or zero qty) from this collection
+    await removeNegativeQuantityEntries(inventoryCollection);
+
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
@@ -1503,6 +1522,7 @@ async function logItemRemovalToDatabase(character, itemData, removalData) {
 module.exports = {
   initializeInventoryUtils,
   initializeItemUtils,
+  removeNegativeQuantityEntries,
   syncToInventoryDatabase,
   addItemInventoryDatabase,
   removeItemInventoryDatabase,

@@ -671,7 +671,7 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
   await interaction.deferReply(); // Public so correct-guess success is visible to the channel
   const logger = require('@/utils/logger');
   try {
-    const quest = await HelpWantedQuest.findOne({ questId });
+    let quest = await HelpWantedQuest.findOne({ questId });
     if (!quest) {
       const embed = new EmbedBuilder()
         .setColor(0xFF0000)
@@ -687,14 +687,6 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
         .setTitle('❌ Wrong Quest Type')
         .setDescription(`This quest is not a character guessing quest. Use the appropriate command for **${quest.type}** quests.`)
         .addFields({ name: 'Quest Type', value: quest.type, inline: true })
-        .setTimestamp();
-      return await interaction.editReply({ embeds: [embed] });
-    }
-    if (quest.completed) {
-      const embed = new EmbedBuilder()
-        .setColor(0xFF0000)
-        .setTitle('❌ Quest Already Completed')
-        .setDescription('This character guess quest has already been completed.')
         .setTimestamp();
       return await interaction.editReply({ embeds: [embed] });
     }
@@ -751,16 +743,28 @@ async function handleCharacterGuess(interaction, questId, characterName, guess) 
         .setTimestamp();
       return await interaction.editReply({ embeds: [embed] });
     }
-    const now = new Date();
-    const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
-    const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
-    quest.completed = true;
-    quest.completedBy = {
+    const completedByPayload = {
       userId,
       characterId: character._id.toString(),
       timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
     };
-    await quest.save();
+    const claimedQuest = await HelpWantedQuest.findOneAndUpdate(
+      { questId, completed: false },
+      { $set: { completed: true, completedBy: completedByPayload } },
+      { new: true }
+    );
+    if (!claimedQuest) {
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Quest Already Completed')
+        .setDescription('This character guess quest has already been completed.')
+        .setTimestamp();
+      return await interaction.editReply({ embeds: [embed] });
+    }
+    quest = claimedQuest;
+    const now = new Date();
+    const estDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    const today = `${estDate.getUTCFullYear()}-${String(estDate.getUTCMonth() + 1).padStart(2, '0')}-${String(estDate.getUTCDate()).padStart(2, '0')}`;
     await updateUserTracking(user, quest, userId);
     if (!character.helpWanted) {
       character.helpWanted = { lastCompletion: null, cooldownUntil: null, completions: [] };
@@ -2073,7 +2077,7 @@ module.exports = {
       try {
         // Fetch quest with debugging
         console.log(`[helpWanted.js]: Searching for quest with ID: "${questId}"`);
-        const quest = await HelpWantedQuest.findOne({ questId });
+        let quest = await HelpWantedQuest.findOne({ questId });
         console.log(`[helpWanted.js]: Quest lookup result:`, quest ? `Found quest ${quest.questId} for ${quest.village}` : 'No quest found');
         
         if (!quest) {
@@ -2116,13 +2120,6 @@ module.exports = {
           }
         }
 
-        // Check quest status
-        if (quest.completed) {
-          return await interaction.editReply({ 
-            content: `❌ This quest has already been completed by <@${quest.completedBy?.userId || 'unknown'}>.`
-          });
-        }
-        
         // Validate character eligibility
         const eligibilityCheck = await validateCharacterEligibility(character, quest);
         if (!eligibilityCheck.canProceed) {
@@ -2155,6 +2152,24 @@ module.exports = {
         }
         
         console.log(`[helpWanted.js]: ✅ Quest requirements MET - proceeding with quest completion`);
+
+        // Atomically claim the quest (prevents race condition when two players complete at same time)
+        const completedByPayload = {
+          userId: interaction.user.id,
+          characterId: character._id,
+          timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
+        };
+        quest = await HelpWantedQuest.findOneAndUpdate(
+          { questId, completed: false },
+          { $set: { completed: true, completedBy: completedByPayload } },
+          { new: true }
+        );
+        if (!quest) {
+          const updatedQuest = await HelpWantedQuest.findOne({ questId }).lean();
+          return await interaction.editReply({
+            content: `❌ This quest has already been completed by <@${updatedQuest?.completedBy?.userId || 'unknown'}>.`
+          });
+        }
 
         // ------------------- Blight Rain Infection Check -------------------
         const weather = await getWeatherWithoutGeneration(character.currentVillage);
@@ -2257,19 +2272,14 @@ module.exports = {
         // Remove items if needed
         const itemsRemoved = await removeQuestItems(character, quest, interaction);
         if (!itemsRemoved) {
-          return await interaction.editReply({ 
+          await HelpWantedQuest.findOneAndUpdate(
+            { questId, 'completedBy.userId': interaction.user.id },
+            { $set: { completed: false, completedBy: null } }
+          );
+          return await interaction.editReply({
             content: `❌ Failed to remove items from inventory. Please try again later.`
           });
         }
-
-        // Mark quest completed
-        quest.completed = true;
-        quest.completedBy = { 
-          userId: interaction.user.id, 
-          characterId: character._id, 
-          timestamp: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}) 
-        };
-        await quest.save();
 
         // Update user tracking
         await updateUserTracking(user, quest, interaction.user.id);

@@ -13,17 +13,13 @@ const { handleError } = require('@/utils/globalErrorHandler');
 // ============================================================================
 // Database Services
 // ------------------- Importing database service functions -------------------
-const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId } = require('@/database/db');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection } = require('@/database/db');
+const { removeNegativeQuantityEntries } = require('@/utils/inventoryUtils');
 
 // ============================================================================
 // Modules
 // ------------------- Importing additional modules -------------------
 const { syncInventory } = require('./syncHandler');
-
-// ============================================================================
-// Utility Functions
-// ------------------- Importing utility functions -------------------
-const { getCharacterInventoryCollection } = require('@/utils/inventoryUtils');
 
 
 // ------------------- Constants -------------------
@@ -63,19 +59,23 @@ module.exports = {
         await interaction.reply({ content: `❌ **Character ${characterName} not found or does not belong to you.**`, flags: [4096] });
         return;
       }
-      const characterId = character._id;
+      // Include both regular and mod character _ids so items added under either (e.g. raid loot) show in inventory
+      const regularChar = await fetchCharacterByNameAndUserId(characterName, userId);
+      const modChar = await fetchModCharacterByNameAndUserId(characterName, userId);
+      const characterIds = [regularChar?._id, modChar?._id].filter(Boolean);
 
       // ------------------- Synchronize Inventory -------------------
       // Sync the inventory from Google Sheets to the database.
       await syncInventory(characterName, userId, interaction);
 
       // ------------------- Retrieve Inventory Items -------------------
-      // Fetch the updated inventory collection and convert to an array.
-      // Include items without characterId (legacy items - collection is per-character so all items belong to this char)
+      // Remove any invalid entries (negative or zero qty) before reading
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
+      await removeNegativeQuantityEntries(inventoryCollection);
+      // Include items for this character's _id(s) and legacy items (null/missing characterId)
       const inventoryItems = await inventoryCollection.find({
         $or: [
-          { characterId },
+          ...(characterIds.length > 0 ? [{ characterId: { $in: characterIds } }] : []),
           { characterId: null },
           { characterId: { $exists: false } }
         ]
