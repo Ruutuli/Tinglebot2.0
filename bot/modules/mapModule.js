@@ -1,13 +1,19 @@
-// mapModule.js
+// ============================================================================
+// ------------------- mapModule.js -------------------
+// ============================================================================
+
+// ------------------- MapModule Class ------------------
+// Grid/quadrant map logic (matches dashboard map-geometry) -
 
 class MapModule {
     constructor() {
-      this.columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']; // Full column range A to J
-      this.rows = Array.from({ length: 12 }, (_, i) => i + 1); // Full row range 1 to 12
-      this.quadrants = ['Q1', 'Q2', 'Q3', 'Q4'];
+        this.columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+        this.rows = Array.from({ length: 12 }, (_, i) => i + 1);
+        this.quadrants = ['Q1', 'Q2', 'Q3', 'Q4'];
     }
-  
-    // Determine adjacent squares based on quadrant layout (must match dashboard/map: Q1=top-left, Q2=top-right, Q3=bottom-left, Q4=bottom-right; row increases south, col east).
+
+    // ------------------- getAdjacentSquares ------------------
+    // Adjacent squares by quadrant (Q1=top-left, Q2=top-right, Q3=bottom-left, Q4=bottom-right) -
     getAdjacentSquares(square, quadrant) {
         const [colIndex, rowIndex] = this.parseSquare(square);
         const adjacentSquares = [];
@@ -33,7 +39,7 @@ class MapModule {
                 addSquare(colIndex, rowIndex, 'Q3', '↓ South (same square)');
                 addSquare(colIndex, rowIndex, 'Q4', '↘ South-east (same square)');
                 addSquare(colIndex, rowIndex - 1, 'Q3', '↑ North');
-                addSquare(colIndex, rowIndex - 1, 'Q4', '↑ North');
+                addSquare(colIndex, rowIndex - 1, 'Q4', '↗ North-east');
                 addSquare(colIndex - 1, rowIndex, 'Q2', '← West');
                 addSquare(colIndex - 1, rowIndex, 'Q4', '← West');
                 addSquare(colIndex - 1, rowIndex - 1, 'Q4', '↖ North-west');
@@ -44,9 +50,9 @@ class MapModule {
                 addSquare(colIndex, rowIndex, 'Q4', '↓ South (same square)');
                 addSquare(colIndex, rowIndex, 'Q3', '↙ South-west (same square)');
                 addSquare(colIndex, rowIndex - 1, 'Q3', '↑ North');
-                addSquare(colIndex, rowIndex - 1, 'Q4', '↑ North');
+                addSquare(colIndex, rowIndex - 1, 'Q4', '↗ North-east');
                 addSquare(colIndex + 1, rowIndex, 'Q1', '→ East');
-                addSquare(colIndex + 1, rowIndex, 'Q3', '→ East');
+                addSquare(colIndex + 1, rowIndex, 'Q3', '↘ South-east');
                 addSquare(colIndex + 1, rowIndex - 1, 'Q3', '↗ North-east');
                 break;
             case 'Q3':
@@ -55,9 +61,9 @@ class MapModule {
                 addSquare(colIndex, rowIndex, 'Q4', '→ East (same square)');
                 addSquare(colIndex, rowIndex, 'Q2', '↗ North-east (same square)');
                 addSquare(colIndex, rowIndex + 1, 'Q1', '↓ South');
-                addSquare(colIndex, rowIndex + 1, 'Q2', '↓ South');
+                addSquare(colIndex, rowIndex + 1, 'Q2', '↘ South-east');
                 addSquare(colIndex - 1, rowIndex, 'Q2', '← West');
-                addSquare(colIndex - 1, rowIndex, 'Q4', '← West');
+                addSquare(colIndex - 1, rowIndex, 'Q4', '↙ South-west');
                 addSquare(colIndex - 1, rowIndex + 1, 'Q2', '↙ South-west');
                 break;
             case 'Q4':
@@ -65,10 +71,10 @@ class MapModule {
                 addSquare(colIndex, rowIndex, 'Q2', '↑ North (same square)');
                 addSquare(colIndex, rowIndex, 'Q3', '← West (same square)');
                 addSquare(colIndex, rowIndex, 'Q1', '↖ North-west (same square)');
-                addSquare(colIndex, rowIndex + 1, 'Q1', '↓ South');
+                addSquare(colIndex, rowIndex + 1, 'Q1', '↙ South-west');
                 addSquare(colIndex, rowIndex + 1, 'Q2', '↓ South');
                 addSquare(colIndex + 1, rowIndex, 'Q1', '→ East');
-                addSquare(colIndex + 1, rowIndex, 'Q3', '→ East');
+                addSquare(colIndex + 1, rowIndex, 'Q3', '↘ South-east');
                 addSquare(colIndex + 1, rowIndex + 1, 'Q1', '↘ South-east');
                 break;
             default:
@@ -77,27 +83,24 @@ class MapModule {
 
         return adjacentSquares;
     }
-    
-   
-  
-    // Parse the square into column index and row number
+
+    // ------------------- parseSquare ------------------
+    // Parse the square into column index and row number -
     parseSquare(square) {
-      const column = this.columns.indexOf(square.charAt(0));
-      const row = parseInt(square.slice(1), 10);
-      console.log(`Parsed square ${square}: Column - ${column}, Row - ${row}`);
-      return [column, row];
+        const column = this.columns.indexOf(square.charAt(0));
+        const row = parseInt(square.slice(1), 10);
+        return [column, row];
     }
-  
-    // Validate if the square exists within the full A-J by 1-12 grid
+
+    // ------------------- isValidSquare ------------------
+    // Validate if the square exists within the full A-J by 1-12 grid -
     isValidSquare(column, row) {
-      if (typeof column === 'string') {
-        column = this.columns.indexOf(column);
-      }
-      const isValid = column >= 0 && column < this.columns.length && row >= 1 && row <= 12;
-      console.log(`Square Validation - Column: ${column}, Row: ${row}, IsValid: ${isValid}`);
-      return isValid;
+        if (typeof column === 'string') {
+            column = this.columns.indexOf(column);
+        }
+        return column >= 0 && column < this.columns.length && row >= 1 && row <= 12;
     }
-  }
-  
-  module.exports = MapModule;
+}
+
+module.exports = MapModule;
   
