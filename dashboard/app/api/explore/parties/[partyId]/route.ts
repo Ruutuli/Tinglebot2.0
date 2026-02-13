@@ -110,6 +110,26 @@ export async function GET(
         })
       : [];
 
+    // Area status: use canonical map (Square) so dashboard matches DB even if party.quadrantState is stale
+    let quadrantState: string = typeof p.quadrantState === "string" ? p.quadrantState : "unexplored";
+    const squareId = typeof p.square === "string" ? p.square.trim() : "";
+    const quadrantId = typeof p.quadrant === "string" ? String(p.quadrant).trim().toUpperCase() : "";
+    if (squareId && quadrantId) {
+      const Square =
+        mongoose.models.Square ??
+        ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+      const mapSquare = await Square.findOne({ squareId }).lean();
+      if (mapSquare && Array.isArray((mapSquare as Record<string, unknown>).quadrants)) {
+        const quads = (mapSquare as Record<string, unknown>).quadrants as Array<Record<string, unknown>>;
+        const q = quads.find(
+          (qu) => String(qu.quadrantId).toUpperCase() === quadrantId
+        );
+        if (q && typeof q.status === "string" && ["explored", "secured"].includes(q.status)) {
+          quadrantState = q.status;
+        }
+      }
+    }
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
@@ -125,7 +145,7 @@ export async function GET(
       isLeader: currentUserId === p.leaderId,
       discordThreadUrl,
       currentTurn: typeof p.currentTurn === "number" ? p.currentTurn : 0,
-      quadrantState: typeof p.quadrantState === "string" ? p.quadrantState : "unexplored",
+      quadrantState,
       gatheredItems,
       progressLog,
     });

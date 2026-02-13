@@ -469,18 +469,22 @@ function createVendingSetupInstructionsEmbed(character = null) {
 // ------------------- Function: addExplorationStandardFields -------------------
 // Appends standard exploration embed fields (Expedition ID, Location, Party Hearts/Stamina, optional Next up + Commands).
 // showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
+const EXPLORE_DASHBOARD_BASE = "https://tinglebot.xyz/explore";
+
 const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false }) => {
+ const expId = expeditionId || party?.partyId || "";
+ if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const fields = [
-  { name: "🆔 **__Expedition ID__**", value: expeditionId || party?.partyId || "Unknown", inline: true },
+  { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
   { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
   { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
+  { name: "🔗 **__Dashboard__**", value: expId ? `${EXPLORE_DASHBOARD_BASE}/${expId}` : "—", inline: false },
  ];
  if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
   const nextName = nextCharacter.name;
-  const expId = expeditionId || party?.partyId || "—";
   const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
-  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n**Take your turn:** ${cmdRoll} — id: \`${expId}\` charactername: **${nextName}**`;
+  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n**Take your turn:** ${cmdRoll} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
   // Only add rest/secure/move options when explicitly requested (Quadrant Explored! embed only).
   if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
