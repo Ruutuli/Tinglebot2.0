@@ -1410,6 +1410,7 @@ export default function ExplorePartyPage() {
                   const displaySquare = isPlacing ? placingForDiscovery!.square : party.square;
                   const displayQuadrant = isPlacing ? placingForDiscovery!.quadrant : party.quadrant;
                   const showMap = displayPreview?.layers?.length;
+                  const canPlacePins = !!(userId && party.currentUserJoined);
                   const unreported = reportableDiscoveries.filter((d) => !isDiscoveryReported(d));
                   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
                     if (!isPlacing || !placingForDiscovery) return;
@@ -1439,12 +1440,16 @@ export default function ExplorePartyPage() {
                             <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
                               You found something to report. <Link href="/api/auth/discord" className="font-medium text-amber-300 underline">Log in</Link> to place these on the map (saved pins appear on the main Map page).
                             </p>
+                          ) : !canPlacePins ? (
+                            <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
+                              Party members can place these on the map. Join this expedition to add markers.
+                            </p>
                           ) : (
                             <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
                               You found something to report. Click &quot;Place on map&quot; then click <strong>inside the highlighted quadrant</strong> for that discovery (it will be saved and appear on the main Map page).
                             </p>
                           )}
-                          {placePinError && userId && (
+                          {placePinError && canPlacePins && (
                             <div className="mb-2 rounded border border-red-500/60 bg-red-950/40 px-2 py-1.5 text-xs text-red-300" role="alert">
                               {placePinError}
                               {placePinError.includes("log in") && (
@@ -1468,6 +1473,8 @@ export default function ExplorePartyPage() {
                                     </span>
                                   ) : !userId ? (
                                     <span className="text-[10px] text-amber-400/90">Log in to place on map</span>
+                                  ) : !canPlacePins ? (
+                                    <span className="text-[10px] text-amber-400/90">Party members only</span>
                                   ) : (
                                     <button
                                       type="button"
@@ -1496,10 +1503,10 @@ export default function ExplorePartyPage() {
                         <>
                         <div
                           ref={mapContainerRef}
-                          role={isPlacing ? "button" : undefined}
-                          tabIndex={isPlacing ? 0 : undefined}
-                          onClick={isPlacing ? handleMapClick : undefined}
-                          onKeyDown={isPlacing ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const coords = squareQuadrantToCoordinates(placingForDiscovery!.square, placingForDiscovery!.quadrant); createDiscoveryPinAt(coords, placingForDiscovery!); } } : undefined}
+                          role={isPlacing && canPlacePins ? "button" : undefined}
+                          tabIndex={isPlacing && canPlacePins ? 0 : undefined}
+                          onClick={isPlacing && canPlacePins ? handleMapClick : undefined}
+                          onKeyDown={isPlacing && canPlacePins ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const coords = squareQuadrantToCoordinates(placingForDiscovery!.square, placingForDiscovery!.quadrant); createDiscoveryPinAt(coords, placingForDiscovery!); } } : undefined}
                           onMouseEnter={isPlacing ? () => setMapHovered(true) : undefined}
                           onMouseLeave={isPlacing ? () => setMapHovered(false) : undefined}
                           onMouseMove={isPlacing ? (e) => {

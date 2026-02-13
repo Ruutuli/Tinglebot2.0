@@ -711,7 +711,7 @@ module.exports = {
         `**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else if (outcomeType === "old_map") {
        const mapInfo = chosenMapOldMap
-        ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\n${chosenMapOldMap.flavorText}\n\n**Saved to ${character.name}'s map collection.** Take it to the Inariko Library to get it deciphered.`
+        ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`
         : `**${character.name}** discovered something unusual in **${location}**.\n\nYou found a really old map! You have no idea what you're looking at when you open it. Take it to the Inariko Library to get it deciphered.`;
        title = `🗺️ **Expedition: Old map found!**`;
        description =
@@ -888,7 +888,7 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins!\n\n${chosenMap.flavorText}\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += `Found ${mapItemName}; saved to map collection. Take to Inariko Library to decipher.`;
           lootForLog = { itemName: mapItemName, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
