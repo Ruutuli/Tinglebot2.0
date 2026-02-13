@@ -799,17 +799,19 @@ module.exports = {
         );
 
         if (outcomeType === "ruins" && isYes) {
+         // Disable Yes/No buttons immediately so the original message stays with greyed-out buttons
+         await i.update({ embeds: [embed], components: [disabledRow] }).catch(() => {});
          // Ruins exploration: charge 3 stamina, then roll one of chest/camp/landmark/relic/old_map/star_fragment/blight/goddess_plume
          const freshParty = await Party.findOne({ partyId: expeditionId });
          if (!freshParty) {
-          await i.update({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], components: [disabledRow] }).catch(() => {});
+          await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
           return;
          }
          const ruinsCharIndex = (freshParty.currentTurn - 1 + freshParty.characters.length) % freshParty.characters.length;
          const ruinsCharSlot = freshParty.characters[ruinsCharIndex];
          const ruinsCharacter = await Character.findById(ruinsCharSlot._id);
          if (!ruinsCharacter) {
-          await i.update({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Character not found.").setColor(0xff0000)], components: [disabledRow] }).catch(() => {});
+          await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Character not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
           return;
          }
          const ruinsStaminaCost = 3;
@@ -821,7 +823,7 @@ module.exports = {
            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to explore the ruins.** " + ruinsCharacter.name + " has " + currentStamina + " 🟩 (need 3). Continue with </explore roll>.")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
-          await i.update({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
+          await i.followUp({ embeds: [noStaminaEmbed] }).catch(() => {});
           return;
          }
          ruinsCharacter.currentStamina = Math.max(0, currentStamina - ruinsStaminaCost);
@@ -963,9 +965,9 @@ module.exports = {
            new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}`).setLabel("Yes").setStyle(ButtonStyle.Success).setDisabled(true),
            new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}`).setLabel("No").setStyle(ButtonStyle.Secondary).setDisabled(true)
           );
-          const updatedMsg = await i.update({ embeds: [resultEmbed], components: [chestRow] }).catch(() => null);
-          if (updatedMsg) {
-           const chestCollector = updatedMsg.createMessageComponentCollector({
+          const resultMsg = await i.followUp({ embeds: [resultEmbed], components: [chestRow], fetchReply: true }).catch(() => null);
+          if (resultMsg) {
+           const chestCollector = resultMsg.createMessageComponentCollector({
             filter: (ci) => ci.user.id === i.user.id,
             time: 5 * 60 * 1000,
             max: 1,
@@ -1000,13 +1002,13 @@ module.exports = {
             }
            });
            chestCollector.on("end", (collected, reason) => {
-            if (reason === "time" && collected.size === 0 && updatedMsg.editable) {
-             updatedMsg.edit({ components: [chestDisabledRow] }).catch(() => {});
+            if (reason === "time" && collected.size === 0 && resultMsg.editable) {
+             resultMsg.edit({ components: [chestDisabledRow] }).catch(() => {});
             }
            });
           }
          } else {
-          await i.update({ embeds: [resultEmbed], components: [disabledRow] }).catch(() => {});
+          await i.followUp({ embeds: [resultEmbed] }).catch(() => {});
           const nextUserId = nextCharacter?.userId;
           const nextName = nextCharacter?.name ?? "Next player";
           await i.followUp({
