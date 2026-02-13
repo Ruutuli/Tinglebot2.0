@@ -471,7 +471,7 @@ function createVendingSetupInstructionsEmbed(character = null) {
 // showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
 const EXPLORE_DASHBOARD_BASE = "https://tinglebot.xyz/explore";
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const fields = [
@@ -490,12 +490,16 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
    const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
    const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+   const cmdEnd = `</explore end:${EXPLORE_CMD_ID}>`;
    commandsValue += `**Next actions**\nYou can do the following:\n\n` +
     `• **Roll** — ${cmdRoll} — Take your turn. Costs 1 stamina (2 in unexplored quad, 0 in secured). Use id: \`${expId || "—"}\` charactername: **${nextName}**\n` +
     `• **Item** — ${cmdItem} — Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n` +
     `• **Camp** — ${cmdCamp} — Extended rest. Recovers hearts only (25% in unexplored/explored, 50% in secured). Costs 3 stamina in unexplored, 0 in explored/secured.\n` +
     `• **Secure** — ${cmdSecure} — Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n` +
     `• **Move** — ${cmdMove} — Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands.`;
+   if (isAtStartQuadrant) {
+    commandsValue += `\n• **End expedition?** — ${cmdEnd} — Return home and end the expedition.`;
+   }
   } else {
    commandsValue += `**Take your turn:** ${cmdRoll} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
   }

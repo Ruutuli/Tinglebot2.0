@@ -348,6 +348,21 @@ module.exports = {
       .setRequired(true)
       .setAutocomplete(true)
     )
+  )
+  .addSubcommand((subcommand) =>
+   subcommand
+    .setName("end")
+    .setDescription("End expedition and return home (only at starting quadrant)")
+    .addStringOption((option) =>
+     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
+    )
+    .addStringOption((option) =>
+     option
+      .setName("charactername")
+      .setDescription("Your character name")
+      .setRequired(true)
+      .setAutocomplete(true)
+    )
   ),
 
  // ------------------- Command Execution Logic -------------------
@@ -487,6 +502,8 @@ module.exports = {
       }
 
       const nextCharacter = party.characters[party.currentTurn];
+      const startPoint = START_POINTS_BY_REGION[party.region];
+      const isAtStartQuadrant = startPoint && String(party.square || "").toUpperCase() === String(startPoint.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
        .setDescription(`**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or rest, secure, or move.`)
@@ -499,6 +516,7 @@ module.exports = {
         nextCharacter: nextCharacter ?? null,
         showNextAndCommands: true,
         showRestSecureMove: true,
+        isAtStartQuadrant: !!isAtStartQuadrant,
       });
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
@@ -1829,6 +1847,96 @@ module.exports = {
       party,
       expeditionId: party.partyId,
       location: locationRetreat,
+      nextCharacter: null,
+      showNextAndCommands: false,
+      showRestSecureMove: false,
+    });
+    embed.addFields({
+      name: "📦 **__Items Gathered__**",
+      value:
+       party.gatheredItems?.length > 0
+        ? party.gatheredItems
+           .map(
+            (item) =>
+             `${item.emoji} ${item.itemName} x${item.quantity} (${item.characterName})`
+           )
+           .join("\n")
+        : "None",
+      inline: false,
+     });
+
+    await interaction.editReply({ embeds: [embed] });
+
+    // ------------------- End Expedition (at starting quadrant) -------------------
+   } else if (subcommand === "end") {
+    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
+    const characterName = interaction.options.getString("charactername");
+    const userId = interaction.user.id;
+
+    const party = await Party.findOne({ partyId: expeditionId });
+    if (!party) {
+     return interaction.editReply("Expedition ID not found.");
+    }
+
+    const character = await Character.findOne({ name: characterName, userId });
+    if (!character) {
+     return interaction.editReply(
+      "Character not found or you do not own this character."
+     );
+    }
+
+    const characterIndex = party.characters.findIndex(
+     (c) => c.name === characterName
+    );
+    if (characterIndex === -1) {
+     return interaction.editReply(
+      "Your character is not part of this expedition."
+     );
+    }
+
+    const startPoint = START_POINTS_BY_REGION[party.region];
+    if (!startPoint) {
+     return interaction.editReply("Could not determine the starting quadrant for this region.");
+    }
+    const isAtStartQuadrant = String(party.square || "").toUpperCase() === String(startPoint.square || "").toUpperCase() &&
+     String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
+    if (!isAtStartQuadrant) {
+     return interaction.editReply(
+      "You can only end the expedition when at the starting quadrant for your region. Use **Retreat** to leave from elsewhere, or **Move** to return to the start first."
+     );
+    }
+
+    const regionToVillage = {
+     eldin: "rudania",
+     lanayru: "inariko",
+     faron: "vhintl",
+    };
+    const targetVillage = regionToVillage[party.region];
+
+    for (const partyCharacter of party.characters) {
+     const char = await Character.findById(partyCharacter._id);
+     if (char) {
+      char.currentVillage = targetVillage;
+      await char.save();
+     }
+    }
+
+    party.status = "completed";
+    await party.save();
+
+    const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
+    const locationEnd = `${party.square} ${party.quadrant} → ${villageLabel}`;
+    const embed = new EmbedBuilder()
+     .setTitle(`🗺️ **Expedition: Returned Home**`)
+     .setColor(regionColors[party.region] || "#4CAF50")
+     .setDescription(
+      `${character.name} ended the expedition. All party members return to **${villageLabel}**.`
+     )
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId: party.partyId,
+      location: locationEnd,
       nextCharacter: null,
       showNextAndCommands: false,
       showRestSecureMove: false,
