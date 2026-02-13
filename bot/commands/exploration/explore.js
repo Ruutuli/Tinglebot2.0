@@ -10,6 +10,7 @@ const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const { handleKO } = require("../../modules/characterStatsModule.js");
 const { triggerRaid } = require("../../modules/raidModule.js");
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
+const { addOldMapToCharacter, hasOldMap } = require('@/utils/oldMapUtils.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 const Party = require('@/models/PartyModel.js');
@@ -29,7 +30,6 @@ const {
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
-const DatabaseConnectionManager = require("../../database/connectionManager.js");
 
 // Region start squares (party returned here on full party KO)
 const START_POINTS_BY_REGION = {
@@ -523,9 +523,32 @@ module.exports = {
        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
       }
 
+      let chosenMapOldMap = null;
+      if (outcomeType === "old_map") {
+       chosenMapOldMap = getRandomOldMap();
+       const mapItemName = `Map #${chosenMapOldMap.number}`;
+       const leadsToLabel = chosenMapOldMap.leadsTo.charAt(0).toUpperCase() + chosenMapOldMap.leadsTo.slice(1);
+       try {
+        await addOldMapToCharacter(character.name, chosenMapOldMap.number, location);
+       } catch (err) {
+        handleInteractionError(err, interaction, { source: "explore.js old_map" });
+       }
+       const userIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
+       const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** leads to **${leadsToLabel}** at **${chosenMapOldMap.coordinates}**.\n\nSaved to **${character.name}**'s map collection. More info: ${OLD_MAPS_LINK}`;
+       const client = interaction.client;
+       if (client) {
+        for (const uid of userIds) {
+         try {
+          const user = await client.users.fetch(uid).catch(() => null);
+          if (user) await user.send(dmContent).catch(() => {});
+         } catch (_) {}
+        }
+       }
+      }
+
       const progressMessages = {
        chest: `Found a chest in ${location} (open for 1 stamina).`,
-       old_map: `Found an old map in ${location}; take to Inariko Library to decipher.`,
+       old_map: chosenMapOldMap ? `Found Map #${chosenMapOldMap.number} in ${location}; saved to ${character.name}'s map collection (leads to ${chosenMapOldMap.leadsTo} at ${chosenMapOldMap.coordinates}).` : `Found an old map in ${location}; take to Inariko Library to decipher.`,
        ruins: `Found ruins in ${location} (explore for 3 stamina or skip).`,
        relic: `Found a relic in ${location}; take to Artist/Researcher to appraise.`,
        camp: `Found a safe space in ${location} and rested. Recovered ${campHeartsRecovered} heart(s), ${campStaminaRecovered} stamina.`,
@@ -544,7 +567,7 @@ module.exports = {
        character.name,
        outcomeType,
        progressMessages[outcomeType] || `Found something in ${location}.`,
-       undefined,
+       outcomeType === "old_map" && chosenMapOldMap ? { itemName: `Map #${chosenMapOldMap.number}`, emoji: "" } : undefined,
        chestRuinsCosts
       );
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
@@ -557,7 +580,7 @@ module.exports = {
        description =
         `**${character.name}** found something unsettling in **${location}**.\n\n` +
         "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there. Report it back to the town hall to have it marked on the map for later.\n\n" +
-        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
+        "↳ **Continue** ➾ See **Commands** below to take your turn.";
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
        description =
@@ -566,11 +589,12 @@ module.exports = {
         "**Yes** — Open the chest (1 item per party member, relics possible).\n" +
         `**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else if (outcomeType === "old_map") {
+       const mapInfo = chosenMapOldMap
+        ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\n${chosenMapOldMap.flavorText}\n\n**Saved to ${character.name}'s map collection.** Take it to the Inariko Library to get it deciphered.`
+        : `**${character.name}** discovered something unusual in **${location}**.\n\nYou found a really old map! You have no idea what you're looking at when you open it. Take it to the Inariko Library to get it deciphered.`;
        title = `🗺️ **Expedition: Old map found!**`;
        description =
-        `**${character.name}** discovered something unusual in **${location}**.\n\n` +
-        "You found a really old map! You have no idea what you're looking at when you open it. Take it to the Inariko Library to get it deciphered. You can find out more info [here](https://www.rootsofthewild.com/oldmaps).\n\n" +
-        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
+        mapInfo + `\n\nFind out more [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ See **Commands** below to take your turn.`;
       } else if (outcomeType === "ruins") {
        title = `🗺️ **Expedition: Ruins found!**`;
        description =
@@ -583,7 +607,7 @@ module.exports = {
        description =
         `**${character.name}** found something ancient in **${location}**.\n\n` +
         "You found a relic! What is this? Take it to an Inarikian Artist or Researcher to get this appraised. You can find more info [here](https://www.rootsofthewild.com/relics).\n\n" +
-        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
+        "↳ **Continue** ➾ See **Commands** below to take your turn.";
       } else if (outcomeType === "grotto") {
        title = `🗺️ **Expedition: Grotto found!**`;
        description =
@@ -739,11 +763,11 @@ module.exports = {
           const mapItemName = `Map #${chosenMap.number}`;
           const leadsToLabel = chosenMap.leadsTo.charAt(0).toUpperCase() + chosenMap.leadsTo.slice(1);
           try {
-           await addItemInventoryDatabase(ruinsCharacter._id, mapItemName, 1, i, "Exploration - Ruins");
+           await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
-          resultDescription = `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins!\n\n${chosenMap.flavorText}\n\nFind out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins!\n\n${chosenMap.flavorText}\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += `Found ${mapItemName} (leads to ${chosenMap.leadsTo} at ${chosenMap.coordinates}).`;
           lootForLog = { itemName: mapItemName, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
@@ -1606,18 +1630,14 @@ module.exports = {
       const whoHasMap = [];
       try {
         for (const pc of party.characters) {
-          const invColl = await DatabaseConnectionManager.getInventoryCollection(pc.name);
-          const entry = await invColl.findOne({
-            itemName: new RegExp(`^${mapItemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-            quantity: { $gt: 0 }
-          });
-          if (entry) whoHasMap.push(pc.name);
+          const hasIt = await hasOldMap(pc.name, quadWithMap.oldMapNumber);
+          if (hasIt) whoHasMap.push(pc.name);
         }
         if (whoHasMap.length > 0) {
           moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}**. ${whoHasMap.join(", ")} ${whoHasMap.length === 1 ? "has" : "have"} the map — you've found the location of a **${leadsToLabel}**! More info: ${OLD_MAPS_LINK}`;
         }
       } catch (invErr) {
-        console.warn("[explore.js] Could not check inventory for old map prompt:", invErr?.message || invErr);
+        console.warn("[explore.js] Could not check old map collection:", invErr?.message || invErr);
       }
     }
 
