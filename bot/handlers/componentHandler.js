@@ -2658,13 +2658,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
       if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
         const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
-        const voucherEmbed = new EmbedBuilder()
-          .setTitle(voucherError.title)
-          .setDescription(voucherError.description)
-          .addFields((voucherError.fields || []).map(f => ({ name: f.name, value: f.value, inline: f.inline })))
-          .setColor(voucherError.color || '#FF0000')
-          .setTimestamp();
-        return interaction.followUp({ embeds: [voucherEmbed], flags: [MessageFlags.Ephemeral] });
+        return interaction.followUp({ embeds: [voucherError.embed], flags: [MessageFlags.Ephemeral] });
       }
     }
 

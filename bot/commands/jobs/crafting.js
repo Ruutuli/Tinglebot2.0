@@ -604,13 +604,7 @@ module.exports = {
         const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
         if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
           const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
-          const voucherEmbed = new EmbedBuilder()
-            .setTitle(voucherError.title)
-            .setDescription(voucherError.description)
-            .addFields((voucherError.fields || []).map(f => ({ name: f.name, value: f.value, inline: f.inline })))
-            .setColor(voucherError.color || '#FF0000')
-            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-            .setTimestamp();
+          const voucherEmbed = voucherError.embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
           return interaction.editReply({ embeds: [voucherEmbed], flags: [MessageFlags.Ephemeral] });
         }
       }
