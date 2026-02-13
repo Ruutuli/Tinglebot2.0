@@ -1884,10 +1884,6 @@ module.exports = {
      );
     }
 
-    if (party.quadrantState !== "secured") {
-     return interaction.editReply("You can only camp in secured quadrants.");
-    }
-
     const recoveryPerMember = [];
 
     for (let i = 0; i < party.characters.length; i++) {

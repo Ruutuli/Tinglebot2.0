@@ -491,11 +491,11 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
    const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
    commandsValue += `**Next actions**\nYou can do the following:\n\n` +
-    `• **Roll** — ${cmdRoll} — Take your turn. Costs 1 stamina (2 in unexplored quad, 0 in secured). Use id: \`${expId || "—"}\` charactername: **${nextName}**\n\n` +
-    `• **Item** — ${cmdItem} — Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
-    `• **Camp** — ${cmdCamp} — Extended rest. **Requires secured quadrant.** Recovers stamina and hearts for the party.\n\n` +
-    `• **Secure** — ${cmdSecure} — Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina. Benefits: 0 stamina to roll here, increased safety.\n\n` +
-    `• **Move** — ${cmdMove} — Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to (options from map).`;
+    `• **Roll** — ${cmdRoll}\n> Take your turn. Costs 1 stamina (2 in unexplored quad, 0 in secured). Use id: \`${expId || "—"}\` charactername: **${nextName}**\n\n` +
+    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
+    `• **Camp** — ${cmdCamp}\n> Extended rest. Recovers stamina and hearts for the party.\n\n` +
+    `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
+    `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands.`;
   } else {
    commandsValue += `**Take your turn:** ${cmdRoll} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
   }
