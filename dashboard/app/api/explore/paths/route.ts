@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { notifyPathDrawn } from "@/lib/pathMonitorNotify";
 
 export const dynamic = "force-dynamic";
 
@@ -158,6 +159,17 @@ export async function POST(request: NextRequest) {
       discordId: user.id,
     });
     await doc.save();
+
+    const userLabel =
+      (user as { global_name?: string | null }).global_name?.trim() ||
+      user.username?.trim() ||
+      user.id ||
+      "unknown";
+    notifyPathDrawn({
+      partyId: partyId || "—",
+      userLabel,
+      kind: "drawn",
+    });
 
     const saved = doc.toObject() as Record<string, unknown>;
     return NextResponse.json({

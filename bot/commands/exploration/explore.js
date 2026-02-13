@@ -2120,11 +2120,12 @@ module.exports = {
     party.markModified("quadrantState");
     const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
     const quadrantStateLabel = destinationQuadrantState === "secured" ? "secured" : "explored";
+    const directionLabel = newLocation.direction || "to";
     pushProgressLog(
      party,
      character.name,
      "move",
-     `Moved from ${currentSquare} ${currentQuadrant} to ${locationMove} (quadrant ${quadrantStateLabel}). (-${staminaCost} stamina)`,
+     `Moved ${directionLabel} **${locationMove}** (quadrant ${quadrantStateLabel}). (-${staminaCost} stamina)`,
      undefined,
      { staminaLost: staminaCost }
     );

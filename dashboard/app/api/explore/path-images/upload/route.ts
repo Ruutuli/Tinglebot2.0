@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { gcsUploadService } from "@/lib/services/gcsUploadService";
+import { notifyPathDrawn } from "@/lib/pathMonitorNotify";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,17 @@ export async function POST(request: NextRequest) {
       },
       { upsert: true, new: true }
     );
+
+    const userLabel =
+      (user as { global_name?: string | null }).global_name?.trim() ||
+      user.username?.trim() ||
+      user.id ||
+      "unknown";
+    notifyPathDrawn({
+      partyId: safePartyId,
+      userLabel,
+      kind: "image",
+    });
 
     return NextResponse.json({ success: true, url: result.url });
   } catch (err) {

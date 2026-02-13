@@ -477,7 +477,7 @@ export default function ExplorePartyPage() {
         setSquarePreview(null);
       });
     return () => controller.abort();
-  }, [party?.square, party?.quadrant]);
+  }, [party?.square, party?.quadrant, party?.quadrantState]);
 
   // Load path image for current party+square so the map can show it (and refetch after upload via success URL)
   useEffect(() => {
@@ -1711,7 +1711,7 @@ export default function ExplorePartyPage() {
                           </ul>
                         </div>
                       )}
-                      {party.quadrantState === "secured" && wasSecuredThisSession(party.progressLog, party.square, party.quadrant) && (
+                      {party.quadrantState === "secured" && wasSecuredThisSession(party.progressLog, party.square, party.quadrant) && !pathImageForSquare && (
                         <div className="mb-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-mid-ocher)]/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-ivory)]">
                             <i className="fa-solid fa-route text-[10px] opacity-80" aria-hidden />
@@ -1779,6 +1779,7 @@ export default function ExplorePartyPage() {
                                       ? "Path image uploaded and saved to Google Cloud. It will appear on the main Map page. Verify the image:"
                                       : "Path image uploaded! It appears on the main Map page."
                                   );
+                                  fetchParty();
                                 } catch (e) {
                                   console.error("[page.tsx]❌ Path image upload failed:", e);
                                   setPathImageSuccessUrl(null);
