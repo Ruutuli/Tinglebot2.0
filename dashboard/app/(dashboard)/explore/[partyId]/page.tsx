@@ -1032,6 +1032,15 @@ export default function ExplorePartyPage() {
                   ) : (
                     <span className="text-xs text-[var(--totk-grey-200)]">Thread link not available.</span>
                   )}
+                  {(party.quadrantState === "secured" || (party.quadrantStatuses && Object.values(party.quadrantStatuses).includes("secured"))) && (
+                    <Link
+                      href={`/map?drawPath=1&partyId=${encodeURIComponent(party.partyId)}`}
+                      className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-mid-ocher)]/30 px-3 py-2 text-xs font-bold text-[var(--totk-ivory)] transition hover:opacity-90 sm:text-sm sm:px-4 sm:py-2.5"
+                    >
+                      <i className="fa-solid fa-route shrink-0 text-xs opacity-90" aria-hidden />
+                      <span className="truncate">Draw path on map</span>
+                    </Link>
+                  )}
                 </>
               )}
               {party.isLeader && party.status === "open" && (

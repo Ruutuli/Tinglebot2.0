@@ -574,7 +574,35 @@ function handleMapClick(event) {
     const lat = latlng.lat;
     const lng = latlng.lng;
     
-    // Handle exploration mode
+    // Handle path drawing: add point (bounds-clamped, max points) and update preview line
+    if (pathDrawingMode && currentExplorationId) {
+        if (pathDrawingPoints.length >= PATH_MAX_POINTS) {
+            const statusEl = document.getElementById('exploration-mode-status');
+            if (statusEl) statusEl.textContent = 'Maximum ' + PATH_MAX_POINTS + ' points. Click "Finish path" to save this path.';
+            return;
+        }
+        const clampedLat = Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, Number(lat) || 0));
+        const clampedLng = Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, Number(lng) || 0));
+        pathDrawingPoints.push({ lat: clampedLat, lng: clampedLng });
+        try {
+            const map = mapEngine.getMap();
+            if (map) {
+                if (pathPreviewPolyline) map.removeLayer(pathPreviewPolyline);
+                if (pathDrawingPoints.length >= 2 && typeof L !== 'undefined') {
+                    const latlngs = pathDrawingPoints.map(p => [p.lat, p.lng]);
+                    pathPreviewPolyline = L.polyline(latlngs, { color: '#22c55e', weight: 4, opacity: 0.7, dashArray: '8,4' });
+                    pathPreviewPolyline.addTo(map);
+                }
+            }
+        } catch (e) { /* ignore */ }
+        const statusEl = document.getElementById('exploration-mode-status');
+        if (statusEl) statusEl.textContent = pathDrawingPoints.length >= PATH_MAX_POINTS
+            ? 'Maximum ' + PATH_MAX_POINTS + ' points. Click "Finish path" to save.'
+            : pathDrawingPoints.length + ' point(s). Click "Finish path" to save.';
+        updateFinishPathButtonState();
+        return;
+    }
+    // Handle exploration mode (markers)
     if (explorationMode && currentExplorationId) {
         const activeMarker = document.querySelector('.marker-btn.active');
         if (activeMarker) {
@@ -584,8 +612,6 @@ function handleMapClick(event) {
             return;
         }
     }
-    
-    
     // Default behavior - show square info
     const hitTest = mapEngine.hitTest(lng, lat);
     
@@ -719,14 +745,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (mapEngine && mapEngine.isInitialized) {
             // Setup zoom display monitoring
             setInterval(updateZoomDisplay, 1000);
-            
             // Add map click handler
             mapEngine.addEventListener('click', handleMapClick);
-            
+            // User-drawn paths layer (secured paths)
+            userPathsLayer = L.layerGroup().addTo(mapEngine.getMap());
+            loadUserPaths();
             // Initialize pins system
             initializePinsWhenReady();
-            
-            
+            // URL: open exploration panel in path-draw mode for this expedition
+            const params = new URLSearchParams(window.location.search);
+            const drawPath = params.get('drawPath');
+            const partyId = params.get('partyId');
+            if (drawPath === '1' && partyId && partyId.trim().toUpperCase().startsWith('E')) {
+                const input = document.querySelector('#exploration-id');
+                if (input) { input.value = partyId.trim(); }
+                if (typeof window.setExplorationId === 'function') window.setExplorationId();
+                if (typeof window.toggleExplorationMode === 'function') window.toggleExplorationMode();
+                setTimeout(() => { if (typeof window.togglePathDrawing === 'function') window.togglePathDrawing(); }, 300);
+            }
             // Map system ready
         } else {
             // Initialization failed, error already shown
@@ -2632,6 +2668,18 @@ window.demonstrateSquareMetadata = demonstrateSquareMetadata;
 let currentExplorationId = null;
 let explorationMode = false;
 let pathDrawingMode = false;
+/** Points for the path currently being drawn: [{ lat, lng }, ...] */
+let pathDrawingPoints = [];
+/** Preview polyline while drawing */
+let pathPreviewPolyline = null;
+/** Layer group for saved user-drawn paths (secured paths) */
+let userPathsLayer = null;
+/** Prevent double-submit when saving path */
+let pathDrawingSaving = false;
+/** Max points per path (must match server MAP_PATH_LIMITS.MAX_POINTS) */
+const PATH_MAX_POINTS = 500;
+/** Map coordinate bounds (CRS.Simple) */
+const PATH_LAT_MIN = 0, PATH_LAT_MAX = 20000, PATH_LNG_MIN = 0, PATH_LNG_MAX = 24000;
 
 /**
  * Toggle exploration mode (inline panel)
@@ -2644,19 +2692,29 @@ function toggleExplorationMode() {
             console.log('[exploration] Exploration panel shown');
         } else {
             panel.style.display = 'none';
-            // Reset exploration state when hiding
             explorationMode = false;
             pathDrawingMode = false;
-            
-            // Re-enable map interactions
-            const map = mapEngine.getMap();
-            map.dragging.enable();
-            map.touchZoom.enable();
-            map.doubleClickZoom.enable();
-            map.scrollWheelZoom.enable();
-            map.boxZoom.enable();
-            map.keyboard.enable();
-            
+            pathDrawingPoints = [];
+            if (pathPreviewPolyline && mapEngine) {
+                try {
+                    const map = mapEngine.getMap();
+                    if (map) map.removeLayer(pathPreviewPolyline);
+                } catch (e) { /* ignore */ }
+                pathPreviewPolyline = null;
+            }
+            if (mapEngine) {
+                try {
+                    const map = mapEngine.getMap();
+                    if (map) {
+                        map.dragging.enable();
+                        map.touchZoom.enable();
+                        map.doubleClickZoom.enable();
+                        map.scrollWheelZoom.enable();
+                        map.boxZoom.enable();
+                        map.keyboard.enable();
+                    }
+                } catch (e) { /* ignore */ }
+            }
             console.log('[exploration] Exploration panel hidden');
         }
     }
@@ -2719,39 +2777,195 @@ function togglePathDrawing() {
     
     pathDrawingMode = !pathDrawingMode;
     explorationMode = false;
-    
-    // Reset drawing state
-    isDrawingPath = false;
-    currentPath = null;
-    pathDrawingStartPoint = null;
-    
-    // Update button states
+    pathDrawingPoints = [];
+    if (pathPreviewPolyline && mapEngine) {
+        try {
+            const map = mapEngine.getMap();
+            if (map) map.removeLayer(pathPreviewPolyline);
+        } catch (e) { /* ignore */ }
+        pathPreviewPolyline = null;
+    }
     document.querySelectorAll('.marker-btn').forEach(btn => btn.classList.remove('active'));
-    
-            if (pathDrawingMode) {
-                document.querySelector('.path-btn').classList.add('active');
-                document.getElementById('exploration-mode-status').textContent = 'Click once to start, move mouse to draw, click to end. Zoom in for smooth lines!';
-        
-        // Disable map dragging for path drawing
-        const map = mapEngine.getMap();
-        map.dragging.disable();
-        map.touchZoom.disable();
-        map.doubleClickZoom.disable();
-        map.scrollWheelZoom.disable();
-        map.boxZoom.disable();
-        map.keyboard.disable();
+    if (pathDrawingMode) {
+        document.querySelector('.path-btn')?.classList.add('active');
+        const statusEl = document.getElementById('exploration-mode-status');
+        if (statusEl) statusEl.textContent = 'Click on the map to add points (max ' + PATH_MAX_POINTS + '). When done, click "Finish path" to save.';
+        if (mapEngine) {
+            try {
+                const map = mapEngine.getMap();
+                if (map) {
+                    map.dragging.disable();
+                    map.touchZoom.disable();
+                    map.doubleClickZoom.disable();
+                    map.scrollWheelZoom.disable();
+                    map.boxZoom.disable();
+                    map.keyboard.disable();
+                }
+            } catch (e) { /* ignore */ }
+        }
     } else {
-        document.querySelector('.path-btn').classList.remove('active');
-        document.getElementById('exploration-mode-status').textContent = 'Path drawing mode off';
-        
-        // Re-enable map interactions
-        const map = mapEngine.getMap();
-        map.dragging.enable();
-        map.touchZoom.enable();
-        map.doubleClickZoom.enable();
-        map.scrollWheelZoom.enable();
-        map.boxZoom.enable();
-        map.keyboard.enable();
+        document.querySelector('.path-btn')?.classList.remove('active');
+        const statusEl = document.getElementById('exploration-mode-status');
+        if (statusEl) statusEl.textContent = 'Path drawing mode off';
+        if (mapEngine) {
+            try {
+                const map = mapEngine.getMap();
+                if (map) {
+                    map.dragging.enable();
+                    map.touchZoom.enable();
+                    map.doubleClickZoom.enable();
+                    map.scrollWheelZoom.enable();
+                    map.boxZoom.enable();
+                    map.keyboard.enable();
+                }
+            } catch (e) { /* ignore */ }
+        }
+    }
+    updateFinishPathButtonState();
+}
+
+/**
+ * Update Finish path button disabled state and label
+ */
+function updateFinishPathButtonState() {
+    const btn = document.querySelector('.finish-path-btn');
+    if (!btn) return;
+    const canSave = pathDrawingPoints.length >= 2 && !pathDrawingSaving;
+    btn.disabled = !canSave;
+    btn.title = pathDrawingSaving ? 'Saving…' : (pathDrawingPoints.length < 2 ? 'Add at least 2 points first' : 'Save the path you drew');
+}
+
+/**
+ * Load saved paths from API and draw them on the map. Retries once on failure.
+ */
+async function loadUserPaths(retryCount = 0) {
+    if (!mapEngine || !userPathsLayer || typeof L === 'undefined') return;
+    const maxRetries = 1;
+    try {
+        const res = await fetch('/api/explore/paths', { credentials: 'include' });
+        if (!res.ok) {
+            if (retryCount < maxRetries) setTimeout(() => loadUserPaths(retryCount + 1), 2000);
+            return;
+        }
+        const text = await res.text();
+        let data;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (e) {
+            if (retryCount < maxRetries) setTimeout(() => loadUserPaths(retryCount + 1), 2000);
+            return;
+        }
+        const paths = Array.isArray(data.paths) ? data.paths : [];
+        userPathsLayer.clearLayers();
+        paths.forEach(p => {
+            const coords = Array.isArray(p?.coordinates) ? p.coordinates : [];
+            if (coords.length < 2) return;
+            const latlngs = [];
+            for (let i = 0; i < coords.length; i++) {
+                const c = coords[i];
+                const lat = Number(c?.lat);
+                const lng = Number(c?.lng);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                latlngs.push([
+                    Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, lat)),
+                    Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, lng))
+                ]);
+            }
+            if (latlngs.length >= 2) {
+                try {
+                    const line = L.polyline(latlngs, { color: '#22c55e', weight: 4, opacity: 0.9 });
+                    userPathsLayer.addLayer(line);
+                } catch (e) { /* skip bad path */ }
+            }
+        });
+    } catch (e) {
+        console.warn('[exploration] Failed to load paths:', e);
+        if (retryCount < maxRetries) setTimeout(() => loadUserPaths(retryCount + 1), 2000);
+    }
+}
+
+/**
+ * Add a single path to the user paths layer (after saving)
+ */
+function addPathToMap(path) {
+    if (!userPathsLayer || !path || typeof L === 'undefined') return;
+    const coords = Array.isArray(path.coordinates) ? path.coordinates : [];
+    if (coords.length < 2) return;
+    const latlngs = [];
+    for (let i = 0; i < coords.length; i++) {
+        const c = coords[i];
+        const lat = Number(c?.lat);
+        const lng = Number(c?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        latlngs.push([
+            Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, lat)),
+            Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, lng))
+        ]);
+    }
+    if (latlngs.length < 2) return;
+    try {
+        const line = L.polyline(latlngs, { color: '#22c55e', weight: 4, opacity: 0.9 });
+        userPathsLayer.addLayer(line);
+    } catch (e) { /* ignore */ }
+}
+
+/**
+ * Finish the current path: save to API and add to map
+ */
+async function finishPathDrawing() {
+    if (pathDrawingSaving) return;
+    if (!pathDrawingMode || pathDrawingPoints.length < 2) {
+        if (pathDrawingPoints.length < 2 && !pathDrawingSaving) {
+            const statusEl = document.getElementById('exploration-mode-status');
+            if (statusEl) statusEl.textContent = 'Add at least 2 points by clicking the map, then click "Finish path".';
+        }
+        return;
+    }
+    pathDrawingSaving = true;
+    updateFinishPathButtonState();
+    const statusEl = document.getElementById('exploration-mode-status');
+    if (statusEl) statusEl.textContent = 'Saving path…';
+    try {
+        const payload = {
+            partyId: currentExplorationId || null,
+            coordinates: pathDrawingPoints.map(p => ({
+                lat: Math.max(PATH_LAT_MIN, Math.min(PATH_LAT_MAX, Number(p.lat) || 0)),
+                lng: Math.max(PATH_LNG_MIN, Math.min(PATH_LNG_MAX, Number(p.lng) || 0))
+            }))
+        };
+        const res = await fetch('/api/explore/paths', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        let data = {};
+        try {
+            const text = await res.text();
+            data = text ? JSON.parse(text) : {};
+        } catch (e) { /* use empty data */ }
+        if (!res.ok) {
+            if (statusEl) statusEl.textContent = (data.error || 'Failed to save path') + (res.status === 413 ? ' (path too long)' : '');
+            pathDrawingSaving = false;
+            updateFinishPathButtonState();
+            return;
+        }
+        if (data.path) addPathToMap(data.path);
+        pathDrawingPoints = [];
+        if (pathPreviewPolyline && mapEngine) {
+            try {
+                const map = mapEngine.getMap();
+                if (map) map.removeLayer(pathPreviewPolyline);
+            } catch (e) { /* ignore */ }
+            pathPreviewPolyline = null;
+        }
+        if (statusEl) statusEl.textContent = 'Path saved! You can draw another or turn off path drawing.';
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Failed to save path. Try again.';
+        console.warn('[exploration] Save path error:', e);
+    } finally {
+        pathDrawingSaving = false;
+        updateFinishPathButtonState();
     }
 }
 
@@ -2822,6 +3036,7 @@ window.closeExplorationPanel = closeExplorationPanel;
 window.setExplorationId = setExplorationId;
 window.setMarkerType = setMarkerType;
 window.togglePathDrawing = togglePathDrawing;
+window.finishPathDrawing = finishPathDrawing;
 window.addExplorationMarker = addExplorationMarker;
 window.removeExplorationMarker = removeExplorationMarker;
 

@@ -259,6 +259,41 @@ export default function MapPage() {
       <button type="button" className="ui-toggle" onClick={() => (window as unknown as { toggleSidebar?: () => void }).toggleSidebar?.()}>
         <i className="fas fa-chevron-right" />
       </button>
+
+      {/* Exploration panel: expedition ID, place markers, draw path (secured paths) */}
+      <div id="exploration-panel" className="exploration-panel" style={{ display: "none" }}>
+        <div className="exploration-header">
+          <h3>Draw secured path</h3>
+          <button type="button" className="close-btn" onClick={() => (window as unknown as { toggleExplorationMode?: () => void }).toggleExplorationMode?.()} title="Close" aria-label="Close">
+            <i className="fas fa-times" />
+          </button>
+        </div>
+        <div className="exploration-content">
+          <div className="exploration-section">
+            <h4>Expedition ID</h4>
+            <label htmlFor="exploration-id">Enter expedition ID (e.g. E123456) to draw a path for that expedition</label>
+            <input type="text" id="exploration-id" placeholder="E123456" />
+            <button type="button" className="action-btn" onClick={() => (window as unknown as { setExplorationId?: () => void }).setExplorationId?.()}>
+              Set ID
+            </button>
+            <p id="current-id-display" className="exploration-status" style={{ marginTop: 8 }} />
+          </div>
+          <div className="exploration-section">
+            <h4>Draw path</h4>
+            <p className="exploration-status" id="exploration-mode-status">Set an expedition ID, then click &quot;Draw path&quot;. Click on the map to add points, then &quot;Finish path&quot; to save.</p>
+            <div className="marker-buttons" style={{ marginTop: 8 }}>
+              <button type="button" className="marker-btn path-btn" onClick={() => (window as unknown as { togglePathDrawing?: () => void }).togglePathDrawing?.()} title="Draw a path (secured path)">
+                <i className="fas fa-route" />
+                <span>Draw path</span>
+              </button>
+              <button type="button" className="marker-btn finish-path-btn" onClick={() => (window as unknown as { finishPathDrawing?: () => void }).finishPathDrawing?.()} title="Save the path you drew">
+                <i className="fas fa-check" />
+                <span>Finish path</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

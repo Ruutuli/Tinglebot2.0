@@ -457,6 +457,42 @@ module.exports = {
       }
      }
 
+     // Secured quadrants cannot be rolled — prompt to Move, Item, or Camp instead
+     if (party.quadrantState === "secured") {
+      const nextCharacter = party.characters[party.currentTurn];
+      const location = `${party.square} ${party.quadrant}`;
+      const securedNoRollEmbed = new EmbedBuilder()
+       .setTitle("🔒 **Quadrant Secured — No Roll**")
+       .setColor(regionColors[party.region] || "#FF9800")
+       .setDescription(
+        `This quadrant (**${location}**) is already secured. You cannot roll here.\n\nUse **Move** to go to another quadrant, **Item** to use a healing item, or **Camp** to rest and recover hearts.`
+       )
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+      addExplorationStandardFields(securedNoRollEmbed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: nextCharacter ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+        commandsLast: true,
+      });
+      addExplorationCommandsField(securedNoRollEmbed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: nextCharacter ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+        showSecuredQuadrantOnly: true,
+        isAtStartQuadrant: (() => {
+          const start = START_POINTS_BY_REGION[party.region];
+          return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+        })(),
+      });
+      return interaction.editReply({ embeds: [securedNoRollEmbed] });
+     }
+
      let staminaCost = 0;
 
      if (party.quadrantState === "unexplored") {
@@ -513,13 +549,14 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
-      // Mark quadrant as explored in the canonical map (exploringMap)
+      // Mark quadrant as explored in the canonical map (exploringMap) — case-insensitive squareId to match dashboard
       try {
        const mapSquareId = (party.square && String(party.square).trim()) || "";
        const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
        if (mapSquareId && mapQuadrantId) {
+        const squareIdRegexExplored = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
         const result = await Square.updateOne(
-         { squareId: mapSquareId, "quadrants.quadrantId": mapQuadrantId },
+         { squareId: squareIdRegexExplored, "quadrants.quadrantId": mapQuadrantId },
          {
           $set: {
            "quadrants.$[q].status": "explored",
@@ -1664,13 +1701,14 @@ module.exports = {
     }
     party.markModified("characters");
 
-    // Mark quadrant as secured in the canonical map (exploringMap)
+    // Mark quadrant as secured in the canonical map (exploringMap) — use case-insensitive squareId to match dashboard
     const mapSquareId = (party.square && String(party.square).trim()) || "";
     const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
     if (mapSquareId && mapQuadrantId) {
      try {
+      const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
       const mapResult = await Square.updateOne(
-       { squareId: mapSquareId, "quadrants.quadrantId": mapQuadrantId },
+       { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
        { $set: { "quadrants.$[q].status": "secured" } },
        { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
       );
@@ -1685,10 +1723,19 @@ module.exports = {
     party.quadrantState = "secured";
     party.markModified("quadrantState");
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+
+    const locationSecure = `${party.square} ${party.quadrant}`;
+    pushProgressLog(
+     party,
+     character.name,
+     "secure",
+     `Secured ${locationSecure} using Wood and Eldin Ore (-${staminaCost} party stamina). Quadrant secured; no stamina cost to explore here.`,
+     undefined,
+     { staminaLost: staminaCost }
+    );
     await party.save();
 
     const nextCharacterSecure = party.characters[party.currentTurn];
-    const locationSecure = `${party.square} ${party.quadrant}`;
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Secured ${locationSecure}**`)
      .setColor(regionColors[party.region] || "#FF9800")
@@ -2053,11 +2100,16 @@ module.exports = {
     const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
     const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
     const membersText = memberNames.length > 0 ? memberNames.join(", ") : "—";
+    const retreatExpeditionId = party.partyId;
+    const retreatReportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com";
+    const retreatReportUrl = `${retreatReportBaseUrl.replace(/\/$/, "")}/explore/${retreatExpeditionId}`;
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#FF5722")
      .setDescription(
-      `The expedition has ended. The following members returned to **${villageLabel}**:\n\n${membersText}`
+      `The expedition has ended.\n\n` +
+      `**Returned to ${villageLabel}:**\n${membersText}\n\n` +
+      `**View the expedition report here:** [Open expedition report](${retreatReportUrl})`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
 
@@ -2159,11 +2211,15 @@ module.exports = {
     const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
     const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
     const membersText = memberNames.length > 0 ? memberNames.join(", ") : "—";
+    const reportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com";
+    const reportUrl = `${reportBaseUrl.replace(/\/$/, "")}/explore/${expeditionId}`;
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
-      `The expedition has ended. The following members returned to **${villageLabel}**:\n\n${membersText}`
+      `The expedition has ended.\n\n` +
+      `**Returned to ${villageLabel}:**\n${membersText}\n\n` +
+      `**View the expedition report here:** [Open expedition report](${reportUrl})`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
 

@@ -513,13 +513,26 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
 };
 
 // Adds the Commands field to an embed (call last when commandsLast was used in addExplorationStandardFields)
-const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false }) => {
+// showSecuredQuadrantOnly: true = quadrant is secured, no Roll/Secure — show only Move, Item, Camp (and End if at start)
+const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showSecuredQuadrantOnly = false, isAtStartQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (!showNextAndCommands || !nextCharacter?.userId || !nextCharacter?.name) return embed;
  const nextName = nextCharacter.name;
  const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
- if (showRestSecureMove === true) {
+ if (showSecuredQuadrantOnly === true) {
+  const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
+  const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
+  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+  const cmdEnd = `</explore end:${EXPLORE_CMD_ID}>`;
+  commandsValue += `**This quadrant is secured — you cannot roll here.** Use one of:\n\n` +
+   `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands.\n\n` +
+   `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
+   `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.`;
+  if (isAtStartQuadrant) {
+   commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
+  }
+ } else if (showRestSecureMove === true) {
   const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
   const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
   const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
