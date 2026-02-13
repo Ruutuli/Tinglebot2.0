@@ -14,7 +14,7 @@ const {
  generateAttackBuffMessage,
  generateFinalOutcomeMessage,
 } = require("../../modules/flavorTextModule.js");
-const { handleKO } = require("../../modules/characterStatsModule.js");
+const { handleKO, healKoCharacter } = require("../../modules/characterStatsModule.js");
 const { triggerRaid } = require("../../modules/raidModule.js");
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
 const { addOldMapToCharacter, hasOldMap } = require('@/utils/oldMapUtils.js');
@@ -462,16 +462,17 @@ module.exports = {
 
      const location = `${party.square} ${party.quadrant}`;
 
-     // Single outcome per roll: one of monster, raid, item, explored, chest, old_map, ruins, relic, camp, monster_camp, grotto
+     // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto
      const outcomeRoll = Math.random();
      let outcomeType;
      if (outcomeRoll < 0.45) outcomeType = "monster";
-     else if (outcomeRoll < 0.70) outcomeType = "item";
-     else if (outcomeRoll < 0.85) outcomeType = "explored";
-     else if (outcomeRoll < 0.86) outcomeType = "chest";
-     else if (outcomeRoll < 0.87) outcomeType = "old_map";
-     else if (outcomeRoll < 0.93) outcomeType = "ruins";
-     else if (outcomeRoll < 0.935) outcomeType = "relic";
+     else if (outcomeRoll < 0.67) outcomeType = "item";
+     else if (outcomeRoll < 0.82) outcomeType = "explored";
+     else if (outcomeRoll < 0.86) outcomeType = "fairy";
+     else if (outcomeRoll < 0.87) outcomeType = "chest";
+     else if (outcomeRoll < 0.88) outcomeType = "old_map";
+     else if (outcomeRoll < 0.94) outcomeType = "ruins";
+     else if (outcomeRoll < 0.945) outcomeType = "relic";
      else if (outcomeRoll < 0.985) outcomeType = "camp";
      else if (outcomeRoll < 0.995) outcomeType = "monster_camp";
      else outcomeType = "grotto";
@@ -528,6 +529,73 @@ module.exports = {
       });
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      return;
+     }
+
+     if (outcomeType === "fairy") {
+      const fairyHealsOnSpot = Math.random() < 0.5;
+      if (fairyHealsOnSpot) {
+       let totalHeartsRecovered = 0;
+       for (let i = 0; i < party.characters.length; i++) {
+        const partyChar = party.characters[i];
+        const char = await Character.findById(partyChar._id);
+        if (!char) continue;
+        const maxH = char.maxHearts ?? 0;
+        const currentH = char.currentHearts ?? 0;
+        const needed = Math.max(0, maxH - currentH);
+        if (char.ko) {
+         await healKoCharacter(char._id);
+        }
+        char.currentHearts = maxH;
+        char.currentStamina = Math.min(char.maxStamina ?? 0, (char.currentStamina ?? 0) + Math.floor((char.maxStamina ?? 0) * 0.25));
+        await char.save();
+        party.characters[i].currentHearts = char.currentHearts;
+        party.characters[i].currentStamina = char.currentStamina;
+        totalHeartsRecovered += needed;
+       }
+       party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+       party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+       pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored.`, undefined, { heartsRecovered: totalHeartsRecovered });
+       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+       await party.save();
+       const nextChar = party.characters[party.currentTurn];
+       const fairyEmbed = new EmbedBuilder()
+        .setTitle(`🧚 **Expedition: A Fairy Appeared!**`)
+        .setDescription(`**${character.name}** encountered a fairy in **${location}**! The fairy swept over the party, restoring everyone to full hearts and a bit of stamina.`)
+        .setColor(regionColors[party.region] || "#E8D5F2")
+        .setThumbnail("https://via.placeholder.com/100x100")
+        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+       const healedChar = party.characters[characterIndex];
+       addExplorationStandardFields(fairyEmbed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: nextChar ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: true,
+        extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${healedChar?.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
+       });
+       fairyEmbed.addFields({ name: "📋 Recovery", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false });
+       addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: true });
+       await interaction.editReply({ embeds: [fairyEmbed] });
+       await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
+       return;
+      }
+      const fairyItem = await ItemModel.findOne({ itemName: "Fairy" }).lean().catch(() => null) || { itemName: "Fairy", emoji: "🧚", image: null };
+      pushProgressLog(party, character.name, "fairy", `Found a Fairy in ${location}.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
+      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      await party.save();
+      const nextChar = party.characters[party.currentTurn];
+      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true);
+      if (!party.gatheredItems) party.gatheredItems = [];
+      party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
+      await interaction.editReply({ embeds: [embed] });
+      await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
+      try {
+       await addItemInventoryDatabase(character._id, "Fairy", 1, interaction, "Exploration");
+      } catch (err) {
+       handleInteractionError(err, interaction, { source: "explore.js fairy" });
+      }
       return;
      }
 

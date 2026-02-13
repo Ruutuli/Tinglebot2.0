@@ -599,13 +599,21 @@ module.exports = {
         return; // Handler will continue processing after user selection
       }
 
-      // ------------------- Teacher Stamina: Booster must have manually used 2nd voucher -------------------
-      if (teacherStaminaContribution > 0) {
-        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
-        if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
-          const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
-          const voucherEmbed = voucherError.embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
-          return interaction.editReply({ embeds: [voucherEmbed], flags: [MessageFlags.Ephemeral] });
+      // ------------------- Teacher Stamina: Booster must have manually used 2nd voucher (only if Teacher via voucher) -------------------
+      if (teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+        const { fetchCharacterByName } = require('@/database/db');
+        const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+        const isBoosterNativeTeacher = boosterCharacter && boosterCharacter.job === 'Teacher' && !boosterCharacter.jobVoucher;
+        if (!isBoosterNativeTeacher) {
+          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+          if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
+            const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
+            const voucherEmbed = voucherError.embed.setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png');
+            for (const mat of materialsUsed) {
+              await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - Booster Must Use Second Voucher');
+            }
+            return interaction.editReply({ embeds: [voucherEmbed], content: '⚠️ **Materials have been refunded.**', flags: [MessageFlags.Ephemeral] });
+          }
         }
       }
 

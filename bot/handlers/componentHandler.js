@@ -2653,12 +2653,19 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
       });
     }
 
-    // ------------------- Teacher Stamina: Booster must have manually used 2nd voucher -------------------
-    if (continueData.teacherStaminaContribution > 0) {
-      const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
-      if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
-        const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
-        return interaction.followUp({ embeds: [voucherError.embed], flags: [MessageFlags.Ephemeral] });
+    // ------------------- Teacher Stamina: Booster must have manually used 2nd voucher (only if Teacher via voucher) -------------------
+    if (continueData.teacherStaminaContribution > 0 && freshCharacter.boostedBy) {
+      const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
+      const isBoosterNativeTeacher = boosterCharacter && boosterCharacter.job === 'Teacher' && !boosterCharacter.jobVoucher;
+      if (!isBoosterNativeTeacher) {
+        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+        if (!activeBoost || !activeBoost.boosterUsedSecondVoucher) {
+          const voucherError = getJobVoucherErrorMessage('BOOSTER_MUST_USE_SECOND_VOUCHER_FIRST', { boosterName: freshCharacter.boostedBy || 'Teacher', targetName: freshCharacter.name });
+          for (const mat of materialsUsed) {
+            await addItemInventoryDatabase(freshCharacter._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund - Booster Must Use Second Voucher');
+          }
+          return interaction.followUp({ embeds: [voucherError.embed], content: '⚠️ **Materials have been refunded.**', flags: [MessageFlags.Ephemeral] });
+        }
       }
     }
 

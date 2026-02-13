@@ -571,6 +571,7 @@ const createExplorationItemEmbed = (
   nextCharacter: nextCharacter ?? null,
   showNextAndCommands: !!nextCharacter && showNextAndCommands,
   showRestSecureMove: false,
+  extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
  });
  return embed;
 };
