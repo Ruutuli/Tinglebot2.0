@@ -1716,13 +1716,13 @@ export default function ExplorePartyPage() {
                   );
                 })()}
                 {/* Progress log */}
-                <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner min-w-0">
+                <section className="flex min-h-0 flex-col rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner min-w-0">
                   <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
                     <i className="fa-solid fa-list text-[10px] opacity-80" aria-hidden />
                     Progress log
                   </h3>
                   {party.gatheredItems && party.gatheredItems.length > 0 && (
-                    <div className="mb-2 rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-2 py-1.5">
+                    <div className="mb-2 flex-shrink-0 rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-2 py-1.5">
                       <span className="text-[10px] uppercase text-[var(--totk-grey-200)]">Items gathered</span>
                       <p className="truncate text-xs text-[var(--botw-pale)]" title={party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName} x${g.quantity} (${g.characterName})`.trim()).join(" · ")}>
                         {party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName}×${g.quantity}`).join(" · ")}
@@ -1734,7 +1734,7 @@ export default function ExplorePartyPage() {
                       No rolls yet. Use <code className="rounded bg-[var(--totk-dark-ocher)]/40 px-1">/explore roll</code> in Discord.
                     </p>
                   ) : (
-                    <ul className="max-h-[20rem] overflow-y-auto rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 py-1.5" role="list">
+                    <ul className="max-h-[40rem] min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 py-1.5" role="list">
                       {[...(party.progressLog ?? [])].reverse().map((entry, i) => (
                         <li key={i} className="flex flex-col gap-0.5 border-b border-[var(--totk-dark-ocher)]/20 px-2 py-1.5 last:border-0">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
@@ -1746,9 +1746,9 @@ export default function ExplorePartyPage() {
                             {(entry.heartsLost != null && entry.heartsLost > 0) || (entry.staminaLost != null && entry.staminaLost > 0) || (entry.heartsRecovered != null && entry.heartsRecovered > 0) || (entry.staminaRecovered != null && entry.staminaRecovered > 0) ? (
                               <span className="ml-auto flex flex-wrap items-center gap-1.5 text-[var(--totk-grey-200)]">
                                 {entry.heartsLost != null && entry.heartsLost > 0 && <span className="text-red-400/90">−{entry.heartsLost} ❤</span>}
-                                {entry.staminaLost != null && entry.staminaLost > 0 && <span className="text-amber-400/90">−{entry.staminaLost}</span>}
+                                {entry.staminaLost != null && entry.staminaLost > 0 && <span className="text-amber-400/90" title="Stamina">−{entry.staminaLost} <i className="fa-solid fa-bolt text-[10px] opacity-90" aria-hidden /></span>}
                                 {entry.heartsRecovered != null && entry.heartsRecovered > 0 && <span className="text-red-400/90">+{entry.heartsRecovered} ❤</span>}
-                                {entry.staminaRecovered != null && entry.staminaRecovered > 0 && <span className="text-[var(--totk-light-green)]/90">+{entry.staminaRecovered}</span>}
+                                {entry.staminaRecovered != null && entry.staminaRecovered > 0 && <span className="text-[var(--totk-light-green)]/90" title="Stamina">+{entry.staminaRecovered} <i className="fa-solid fa-bolt text-[10px] opacity-90" aria-hidden /></span>}
                               </span>
                             ) : null}
                           </div>
@@ -1799,47 +1799,8 @@ export default function ExplorePartyPage() {
                 </div>
               </section>
 
-              {/* 2. Party | Journey — two columns */}
+              {/* 2. Journey | Party — two columns */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* Party — turn order (same content as sidebar) */}
-                <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
-                  <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
-                    <i className="fa-solid fa-list-ol text-[10px] opacity-80" aria-hidden />
-                    Party
-                  </h3>
-                  <p className="mb-3 text-[10px] text-[var(--totk-grey-200)]">Turn order. {party.members.length}/4 slots.</p>
-                  <div className="mb-3 flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="text-[10px] uppercase text-[var(--totk-grey-200)]">Total</span>
-                    <span className="flex items-center gap-2 text-sm font-bold text-[var(--totk-ivory)]">
-                      <span className="flex items-center gap-1"><i className="fa-solid fa-heart text-[10px] text-red-400/90" aria-hidden />{party.totalHearts}</span>
-                      <span className="flex items-center gap-1"><i className="fa-solid fa-bolt text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />{party.totalStamina}</span>
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {party.members.map((m, index) => {
-                      const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
-                      const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
-                      const displayHearts = typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts);
-                      const displayStamina = typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina);
-                      const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
-                      return (
-                        <div key={m.characterId} className="flex items-start gap-2">
-                          <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
-                            {index + 1}
-                          </span>
-                          <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "(you)"].filter(Boolean).join(" ") || undefined} />
-                        </div>
-                      );
-                    })}
-                    {showYourSlotPreview && (
-                      <div className="flex items-start gap-2">
-                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
-                        <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.currentHearts ?? selectedCharacter?.maxHearts} stamina={selectedCharacter?.currentStamina ?? selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" />
-                      </div>
-                    )}
-                  </div>
-                </section>
-
                 {/* Journey */}
                 <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
                   <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">Journey</h2>
@@ -1901,6 +1862,45 @@ export default function ExplorePartyPage() {
                       </div>
                     );
                   })()}
+                </section>
+
+                {/* Party — turn order (same content as sidebar) */}
+                <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
+                  <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
+                    <i className="fa-solid fa-list-ol text-[10px] opacity-80" aria-hidden />
+                    Party
+                  </h3>
+                  <p className="mb-3 text-[10px] text-[var(--totk-grey-200)]">Turn order. {party.members.length}/4 slots.</p>
+                  <div className="mb-3 flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
+                    <span className="text-[10px] uppercase text-[var(--totk-grey-200)]">Total</span>
+                    <span className="flex items-center gap-2 text-sm font-bold text-[var(--totk-ivory)]">
+                      <span className="flex items-center gap-1"><i className="fa-solid fa-heart text-[10px] text-red-400/90" aria-hidden />{party.totalHearts}</span>
+                      <span className="flex items-center gap-1"><i className="fa-solid fa-bolt text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />{party.totalStamina}</span>
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {party.members.map((m, index) => {
+                      const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
+                      const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
+                      const displayHearts = typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts);
+                      const displayStamina = typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina);
+                      const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
+                      return (
+                        <div key={m.characterId} className="flex items-start gap-2">
+                          <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
+                            {index + 1}
+                          </span>
+                          <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "(you)"].filter(Boolean).join(" ") || undefined} />
+                        </div>
+                      );
+                    })}
+                    {showYourSlotPreview && (
+                      <div className="flex items-start gap-2">
+                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
+                        <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.currentHearts ?? selectedCharacter?.maxHearts} stamina={selectedCharacter?.currentStamina ?? selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" />
+                      </div>
+                    )}
+                  </div>
                 </section>
               </div>
             </>

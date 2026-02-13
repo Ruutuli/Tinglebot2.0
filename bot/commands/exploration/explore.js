@@ -1650,6 +1650,38 @@ module.exports = {
     party.characters[characterIndex].currentStamina = character.currentStamina;
     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
 
+    // Remove Wood and Eldin Ore (or their bundles) from the party — one of each from whoever has them
+    for (const resource of requiredResources) {
+     for (let ci = 0; ci < party.characters.length; ci++) {
+      const idx = (party.characters[ci].items || []).findIndex(
+       (item) => item.itemName === resource || item.itemName === `${resource} Bundle`
+      );
+      if (idx !== -1) {
+       party.characters[ci].items.splice(idx, 1);
+       break;
+      }
+     }
+    }
+    party.markModified("characters");
+
+    // Mark quadrant as secured in the canonical map (exploringMap)
+    const mapSquareId = (party.square && String(party.square).trim()) || "";
+    const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
+    if (mapSquareId && mapQuadrantId) {
+     try {
+      const mapResult = await Square.updateOne(
+       { squareId: mapSquareId, "quadrants.quadrantId": mapQuadrantId },
+       { $set: { "quadrants.$[q].status": "secured" } },
+       { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+      );
+      if (mapResult.matchedCount === 0) {
+       console.warn("[explore.js] Secure map update: no square found for", mapSquareId, "quadrant", mapQuadrantId);
+      }
+     } catch (mapErr) {
+      console.error("[explore.js] Failed to update map quadrant status to secured:", mapErr.message);
+     }
+    }
+
     party.quadrantState = "secured";
     party.markModified("quadrantState");
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
