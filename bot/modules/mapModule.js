@@ -21,50 +21,66 @@ class MapModule {
             }
         };
     
+        // Quadrant layout (row increases south, col increases east):
+        //   Q4 | Q3   (north row)
+        //   ---+---
+        //   Q2 | Q1   (south row)
         switch (quadrant) {
             case 'Q1':
-                // H6 Q1 connections
-                addSquare(colIndex, rowIndex, 'Q2'); // H6 Q2
-                addSquare(colIndex, rowIndex, 'Q3'); // H6 Q3
-                addSquare(colIndex, rowIndex, 'Q4'); // H6 Q4
-                addSquare(colIndex, rowIndex + 1, 'Q2'); // H7 Q2
-                addSquare(colIndex, rowIndex + 1, 'Q4'); // H7 Q4
-                addSquare(colIndex - 1, rowIndex + 1, 'Q4'); // G7 Q4
-                addSquare(colIndex - 1, rowIndex, 'Q3'); // G6 Q3
-                addSquare(colIndex - 1, rowIndex, 'Q4'); // G6 Q4
+                // Same square: Q2 (west), Q3 (north), Q4 (north-west)
+                addSquare(colIndex, rowIndex, 'Q2');
+                addSquare(colIndex, rowIndex, 'Q3');
+                addSquare(colIndex, rowIndex, 'Q4');
+                // East (col+1)
+                addSquare(colIndex + 1, rowIndex, 'Q2');
+                addSquare(colIndex + 1, rowIndex, 'Q4');
+                // South (row+1)
+                addSquare(colIndex, rowIndex + 1, 'Q3');
+                addSquare(colIndex, rowIndex + 1, 'Q4');
+                // South-east (col+1, row+1)
+                addSquare(colIndex + 1, rowIndex + 1, 'Q4');
                 break;
             case 'Q2':
-                // H6 Q2 connections
-                addSquare(colIndex, rowIndex, 'Q1'); // H6 Q1
-                addSquare(colIndex, rowIndex, 'Q3'); // H6 Q3
-                addSquare(colIndex, rowIndex, 'Q4'); // H6 Q4
-                addSquare(colIndex - 1, rowIndex, 'Q3'); // G6 Q3
-                addSquare(colIndex - 1, rowIndex, 'Q4'); // G6 Q4
-                addSquare(colIndex - 1, rowIndex - 1, 'Q3'); // G5 Q3
-                addSquare(colIndex, rowIndex - 1, 'Q1'); // H5 Q1
-                addSquare(colIndex, rowIndex - 1, 'Q3'); // H5 Q3
+                // Same square: Q1 (east), Q3 (north-east), Q4 (north)
+                addSquare(colIndex, rowIndex, 'Q1');
+                addSquare(colIndex, rowIndex, 'Q3');
+                addSquare(colIndex, rowIndex, 'Q4');
+                // North (row-1): H7 Q4, H7 Q3
+                addSquare(colIndex, rowIndex - 1, 'Q4');
+                addSquare(colIndex, rowIndex - 1, 'Q3');
+                // East (col+1): I8 Q1, I8 Q3
+                addSquare(colIndex + 1, rowIndex, 'Q1');
+                addSquare(colIndex + 1, rowIndex, 'Q3');
+                // North-east (col+1, row-1): I7 Q3
+                addSquare(colIndex + 1, rowIndex - 1, 'Q3');
                 break;
             case 'Q3':
-                // H6 Q3 connections
-                addSquare(colIndex, rowIndex, 'Q2'); // H6 Q2
-                addSquare(colIndex, rowIndex, 'Q1'); // H6 Q1
-                addSquare(colIndex, rowIndex, 'Q4'); // H6 Q4
-                addSquare(colIndex, rowIndex + 1, 'Q4'); // H7 Q4
-                addSquare(colIndex, rowIndex + 1, 'Q2'); // H7 Q2
-                addSquare(colIndex + 1, rowIndex + 1, 'Q2'); // I7 Q2
-                addSquare(colIndex + 1, rowIndex, 'Q1'); // I6 Q1
-                addSquare(colIndex + 1, rowIndex, 'Q2'); // I6 Q2
+                // Same square: Q1 (south), Q2 (south-west), Q4 (west)
+                addSquare(colIndex, rowIndex, 'Q1');
+                addSquare(colIndex, rowIndex, 'Q2');
+                addSquare(colIndex, rowIndex, 'Q4');
+                // North (row-1)
+                addSquare(colIndex, rowIndex - 1, 'Q1');
+                addSquare(colIndex, rowIndex - 1, 'Q2');
+                // East (col+1)
+                addSquare(colIndex + 1, rowIndex, 'Q4');
+                addSquare(colIndex + 1, rowIndex, 'Q1');
+                // North-east (col+1, row-1)
+                addSquare(colIndex + 1, rowIndex - 1, 'Q1');
                 break;
             case 'Q4':
-                // H6 Q4 connections
-                addSquare(colIndex, rowIndex, 'Q2'); // H6 Q2
-                addSquare(colIndex, rowIndex, 'Q3'); // H6 Q3
-                addSquare(colIndex, rowIndex, 'Q1'); // H6 Q1
-                addSquare(colIndex + 1, rowIndex, 'Q1'); // I6 Q1
-                addSquare(colIndex + 1, rowIndex, 'Q2'); // I6 Q2
-                addSquare(colIndex + 1, rowIndex - 1, 'Q1'); // I5 Q1
-                addSquare(colIndex, rowIndex - 1, 'Q1'); // H5 Q1
-                addSquare(colIndex, rowIndex - 1, 'Q3'); // H5 Q3
+                // Same square: Q1 (south-east), Q2 (south), Q3 (east)
+                addSquare(colIndex, rowIndex, 'Q1');
+                addSquare(colIndex, rowIndex, 'Q2');
+                addSquare(colIndex, rowIndex, 'Q3');
+                // North (row-1)
+                addSquare(colIndex, rowIndex - 1, 'Q2');
+                addSquare(colIndex, rowIndex - 1, 'Q1');
+                // West (col-1)
+                addSquare(colIndex - 1, rowIndex, 'Q3');
+                addSquare(colIndex - 1, rowIndex, 'Q1');
+                // North-west (col-1, row-1)
+                addSquare(colIndex - 1, rowIndex - 1, 'Q1');
                 break;
             default:
                 throw new Error('Invalid quadrant specified');
