@@ -660,6 +660,7 @@ export function CreateForm({
   // Refs always hold latest weapon/shield so submit uses current selection (avoids stale closure)
   const equippedWeaponRef = useRef<GearItemOption | null>(null);
   const equippedShieldRef = useRef<GearItemOption | null>(null);
+  const submitInFlightRef = useRef(false);
   equippedWeaponRef.current = equippedWeapon;
   equippedShieldRef.current = equippedShield;
   const [extras, setExtras] = useState(initialCharacter?.extras || "");
@@ -1284,7 +1285,8 @@ export function CreateForm({
         setSubmitError(err);
         return;
       }
-
+      if (submitInFlightRef.current) return;
+      submitInFlightRef.current = true;
       setSubmitLoading(true);
       try {
         const submitLockedString = (fieldName: string, value: string, initialValue?: string) => {
@@ -1590,6 +1592,7 @@ export function CreateForm({
       } catch (e) {
         setSubmitError(e instanceof Error ? e.message : String(e));
       } finally {
+        submitInFlightRef.current = false;
         setSubmitLoading(false);
       }
     },

@@ -7,6 +7,13 @@ const {
  getMonstersByRegion,
 } = require("../../modules/rngModule.js");
 const { getEncounterOutcome } = require("../../modules/encounterModule.js");
+const {
+ generateVictoryMessage,
+ generateDamageMessage,
+ generateDefenseBuffMessage,
+ generateAttackBuffMessage,
+ generateFinalOutcomeMessage,
+} = require("../../modules/flavorTextModule.js");
 const { handleKO } = require("../../modules/characterStatsModule.js");
 const { triggerRaid } = require("../../modules/raidModule.js");
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
@@ -1275,13 +1282,39 @@ module.exports = {
         true
        );
 
+       const battleOutcomeDisplay = (() => {
+        if (outcome.hearts && outcome.hearts > 0) {
+         return outcome.result === "KO" ? generateDamageMessage("KO") : generateDamageMessage(outcome.hearts);
+        }
+        if (outcome.defenseSuccess) {
+         return generateDefenseBuffMessage(outcome.defenseSuccess, outcome.adjustedRandomValue, outcome.damageValue);
+        }
+        if (outcome.attackSuccess) {
+         return generateAttackBuffMessage(outcome.attackSuccess, outcome.adjustedRandomValue, outcome.damageValue);
+        }
+        if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
+         if (character && character.isModCharacter && outcome.result === "Win!/Loot (1HKO)") {
+          const { generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
+          return generateModCharacterVictoryMessage(character.name, character.modTitle, character.modType);
+         }
+         return generateVictoryMessage(outcome.adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess);
+        }
+        if (outcome.result && typeof outcome.result === "string" && outcome.result.includes("HEART(S)")) {
+         const heartMatch = outcome.result.match(/(\d+)\s*HEART\(S\)/);
+         if (heartMatch) return generateDamageMessage(parseInt(heartMatch[1]));
+        }
+        if (outcome.result && (outcome.result.includes("divine power") || outcome.result.includes("legendary prowess") || outcome.result.includes("ancient") || outcome.result.includes("divine authority"))) {
+         return outcome.result;
+        }
+        return generateFinalOutcomeMessage(outcome.damageValue || 0, outcome.defenseSuccess || false, outcome.attackSuccess || false, outcome.adjustedRandomValue || 0, outcome.damageValue || 0);
+       })();
        embed.addFields(
         {
          name: `❤️ __${character.name} Hearts__`,
          value: `${character.currentHearts}/${character.maxHearts}`,
          inline: true,
         },
-        { name: `⚔️ __Battle Outcome__`, value: outcome.result, inline: false }
+        { name: `⚔️ __Battle Outcome__`, value: battleOutcomeDisplay, inline: false }
        );
 
        if (outcome.canLoot && lootedItem) {

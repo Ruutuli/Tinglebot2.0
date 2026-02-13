@@ -33,6 +33,7 @@ import {
 import { logger } from "@/utils/logger";
 import { isFieldEditable, type CharacterStatus } from "@/lib/character-field-editability";
 import { gcsUploadService } from "@/lib/services/gcsUploadService";
+import { revalidatePath } from "next/cache";
 
 // ------------------- Placeholder URLs (fallback if GCS not configured) -------------------
 const PLACEHOLDER_ICON = "/placeholder-icon.png";
@@ -138,8 +139,8 @@ function gearItemMeaningfullyChanged(
 }
 
 // ------------------- Route Segment Config (Caching) -------------------
-// Cache character data for 2 minutes - characters change more frequently than models
-export const revalidate = 120;
+// Do not cache: after "Update Character" we must show fresh data so users and mods see saved changes
+export const dynamic = "force-dynamic";
 
 // ------------------- GET handler -------------------
 
@@ -408,12 +409,8 @@ export async function GET(
     
     const response = NextResponse.json({ character: out });
     
-    // Add cache headers for browser/CDN caching
-    // Character data changes more frequently, so shorter cache time
-    response.headers.set(
-      "Cache-Control",
-      "public, s-maxage=120, stale-while-revalidate=300"
-    );
+    // Prevent caching so "Update Character" → redirect shows fresh data (fixes "saved but didn't save" after needs_changes)
+    response.headers.set("Cache-Control", "private, no-store, no-cache, must-revalidate");
     
     return response;
   } catch (e) {
@@ -478,14 +475,26 @@ export async function PUT(
         }
       }
     } else {
-      // Try by name - use case-insensitive regex
-      const nameRegex = new RegExp(`^${slugOrId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      char = await Character.findOne({ name: nameRegex }) as CharDoc | null;
-      
+      // Try by slug (same as GET): match createSlug(name) or publicSlug so "my-character-name" finds "My Character Name"
+      const slug = slugOrId.toLowerCase().trim();
+      type CharSlug = Pick<CharDoc, "_id" | "name"> & { publicSlug?: string | null };
+      const regularChars = await Character.find({}).select("name publicSlug").lean<CharSlug[]>();
+      let slugMatch = regularChars.find((c) => createSlug(c.name) === slug);
+      if (!slugMatch) {
+        slugMatch = regularChars.find((c) => (c.publicSlug ?? "").toLowerCase() === slug) ?? undefined;
+      }
+      if (slugMatch) {
+        char = (await (Character as { findById: (id: string) => Promise<CharDoc | null> }).findById(String(slugMatch._id))) as CharDoc | null;
+      }
       if (!char) {
-        char = await ModCharacter.findOne({ name: nameRegex }) as CharDoc | null;
-        if (char) {
+        const modChars = await ModCharacter.find({}).select("name publicSlug").lean<CharSlug[]>();
+        let modSlugMatch = modChars.find((c) => createSlug(c.name) === slug);
+        if (!modSlugMatch) {
+          modSlugMatch = modChars.find((c) => (c.publicSlug ?? "").toLowerCase() === slug) ?? undefined;
+        }
+        if (modSlugMatch) {
           isModCharacter = true;
+          char = (await (ModCharacter as { findById: (id: string) => Promise<CharDoc | null> }).findById(String(modSlugMatch._id))) as CharDoc | null;
         }
       }
     }
@@ -1032,6 +1041,14 @@ export async function PUT(
     recalculateStats(char);
     
     await char.save();
+
+    // Invalidate cached character page so redirect and mod queue see fresh data
+    try {
+      const slug = createSlug(char.name);
+      if (slug) revalidatePath(`/characters/${slug}`);
+    } catch (revalErr) {
+      logger.warn("api/characters/[id] PUT", `Revalidate failed: ${revalErr instanceof Error ? revalErr.message : String(revalErr)}`);
+    }
 
     const out = typeof char.toObject === "function" ? char.toObject() : (char as unknown as Record<string, unknown>);
     return NextResponse.json({ character: out });
