@@ -27,6 +27,7 @@ const Square = require('@/models/mapModel.js');
 const MapModule = require('@/modules/mapModule.js');
 const {
  addExplorationStandardFields,
+ addExplorationCommandsField,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
  regionColors,
@@ -552,14 +553,13 @@ module.exports = {
       if (outcomeType === "old_map") {
        chosenMapOldMap = getRandomOldMap();
        const mapItemName = `Map #${chosenMapOldMap.number}`;
-       const leadsToLabel = chosenMapOldMap.leadsTo.charAt(0).toUpperCase() + chosenMapOldMap.leadsTo.slice(1);
        try {
         await addOldMapToCharacter(character.name, chosenMapOldMap.number, location);
        } catch (err) {
         handleInteractionError(err, interaction, { source: "explore.js old_map" });
        }
        const userIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
-       const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** leads to **${leadsToLabel}** at **${chosenMapOldMap.coordinates}**.\n\nSaved to **${character.name}**'s map collection. More info: ${OLD_MAPS_LINK}`;
+       const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered. More info: ${OLD_MAPS_LINK}`;
        const client = interaction.client;
        if (client) {
         for (const uid of userIds) {
@@ -573,7 +573,7 @@ module.exports = {
 
       const progressMessages = {
        chest: `Found a chest in ${location} (open for 1 stamina).`,
-       old_map: chosenMapOldMap ? `Found Map #${chosenMapOldMap.number} in ${location}; saved to ${character.name}'s map collection (leads to ${chosenMapOldMap.leadsTo} at ${chosenMapOldMap.coordinates}).` : `Found an old map in ${location}; take to Inariko Library to decipher.`,
+       old_map: chosenMapOldMap ? `Found Map #${chosenMapOldMap.number} in ${location}; saved to ${character.name}'s map collection. Take to Inariko Library to decipher.` : `Found an old map in ${location}; take to Inariko Library to decipher.`,
        ruins: `Found ruins in ${location} (explore for 3 stamina or skip).`,
        relic: `Found a relic in ${location}; take to Artist/Researcher to appraise.`,
        camp: `Found a safe space in ${location} and rested. Recovered ${campHeartsRecovered} heart(s), ${campStaminaRecovered} stamina.`,
@@ -786,19 +786,18 @@ module.exports = {
          } else if (ruinsOutcome === "old_map") {
           const chosenMap = getRandomOldMap();
           const mapItemName = `Map #${chosenMap.number}`;
-          const leadsToLabel = chosenMap.leadsTo.charAt(0).toUpperCase() + chosenMap.leadsTo.slice(1);
           try {
            await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
           resultDescription = `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins!\n\n${chosenMap.flavorText}\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
-          progressMsg += `Found ${mapItemName} (leads to ${chosenMap.leadsTo} at ${chosenMap.coordinates}).`;
+          progressMsg += `Found ${mapItemName}; saved to map collection. Take to Inariko Library to decipher.`;
           lootForLog = { itemName: mapItemName, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
-          // DM all expedition members with the map location
+          // DM all expedition members (no coordinates until appraised)
           const userIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
-          const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** leads to **${leadsToLabel}** at **${chosenMap.coordinates}**.\n\nMore info: ${OLD_MAPS_LINK}`;
+          const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered. More info: ${OLD_MAPS_LINK}`;
           const client = i.client;
           if (client) {
            for (const uid of userIds) {
@@ -1344,6 +1343,15 @@ module.exports = {
         });
        }
 
+       addExplorationCommandsField(embed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: nextCharacterTier ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+       });
+
        await interaction.editReply({ embeds: [embed] });
        await interaction.followUp({ content: `<@${nextCharacterTier.userId}> it's your turn now` });
       }
@@ -1551,13 +1559,22 @@ module.exports = {
      .setDescription(
       `${character.name} secured the quadrant using resources (-${staminaCost} party stamina).`
      )
-     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
-     .addFields({
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationSecure,
+      nextCharacter: nextCharacterSecure ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+      commandsLast: true,
+    });
+    embed.addFields({
       name: "📋 **__Benefits__**",
       value: "Quadrant secured. No stamina cost to explore here, increased safety.",
       inline: false,
      });
-    addExplorationStandardFields(embed, {
+    addExplorationCommandsField(embed, {
       party,
       expeditionId,
       location: locationSecure,
@@ -1663,12 +1680,20 @@ module.exports = {
     }
     party.quadrantState = mapQuadrantState;
     party.markModified("quadrantState");
+    const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
+    const quadrantStateLabel = mapQuadrantState === "secured" ? "secured" : mapQuadrantState === "explored" ? "explored" : "unexplored";
+    pushProgressLog(
+     party,
+     character.name,
+     "move",
+     `Moved from ${currentSquare} ${currentQuadrant} to ${locationMove} (quadrant ${quadrantStateLabel}). (-${staminaCost} stamina)`,
+     undefined,
+     { staminaLost: staminaCost }
+    );
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
     const nextCharacterMove = party.characters[party.currentTurn];
-    const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
-    const quadrantStateLabel = mapQuadrantState === "secured" ? "secured" : mapQuadrantState === "explored" ? "explored" : "unexplored";
     let moveDescription = `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
 
     // If this quadrant is an old map location, check if any party member has that map and show prompt
@@ -1868,35 +1893,15 @@ module.exports = {
     await party.save();
 
     const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
-    const locationRetreat = `${party.square} ${party.quadrant} → ${villageLabel}`;
+    const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
+    const membersText = memberNames.length > 0 ? memberNames.join(", ") : "—";
     const embed = new EmbedBuilder()
-     .setTitle(`🗺️ **Expedition: Retreat**`)
+     .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#FF5722")
      .setDescription(
-      `${character.name} ordered a retreat. All party members return to **${villageLabel}**.`
+      `The expedition has ended. The following members returned to **${villageLabel}**:\n\n${membersText}`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-    addExplorationStandardFields(embed, {
-      party,
-      expeditionId: party.partyId,
-      location: locationRetreat,
-      nextCharacter: null,
-      showNextAndCommands: false,
-      showRestSecureMove: false,
-    });
-    embed.addFields({
-      name: "📦 **__Items Gathered__**",
-      value:
-       party.gatheredItems?.length > 0
-        ? party.gatheredItems
-           .map(
-            (item) =>
-             `${item.emoji} ${item.itemName} x${item.quantity} (${item.characterName})`
-           )
-           .join("\n")
-        : "None",
-      inline: false,
-     });
 
     await interaction.editReply({ embeds: [embed] });
 
@@ -1958,35 +1963,15 @@ module.exports = {
     await party.save();
 
     const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
-    const locationEnd = `${party.square} ${party.quadrant} → ${villageLabel}`;
+    const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
+    const membersText = memberNames.length > 0 ? memberNames.join(", ") : "—";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
-      `${character.name} ended the expedition. All party members return to **${villageLabel}**.`
+      `The expedition has ended. The following members returned to **${villageLabel}**:\n\n${membersText}`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-    addExplorationStandardFields(embed, {
-      party,
-      expeditionId: party.partyId,
-      location: locationEnd,
-      nextCharacter: null,
-      showNextAndCommands: false,
-      showRestSecureMove: false,
-    });
-    embed.addFields({
-      name: "📦 **__Items Gathered__**",
-      value:
-       party.gatheredItems?.length > 0
-        ? party.gatheredItems
-           .map(
-            (item) =>
-             `${item.emoji} ${item.itemName} x${item.quantity} (${item.characterName})`
-           )
-           .join("\n")
-        : "None",
-      inline: false,
-     });
 
     await interaction.editReply({ embeds: [embed] });
 
@@ -2062,6 +2047,7 @@ module.exports = {
     party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
     party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
 
+    const locationCamp = `${party.square} ${party.quadrant}`;
     const totalHeartsRecovered = recoveryPerMember.reduce((s, r) => s + r.hearts, 0);
     const costsForLog = staminaCost > 0 ? { staminaLost: staminaCost, heartsRecovered: totalHeartsRecovered } : { heartsRecovered: totalHeartsRecovered };
     pushProgressLog(
@@ -2077,7 +2063,6 @@ module.exports = {
     await party.save();
 
     const nextCharacterCamp = party.characters[party.currentTurn];
-    const locationCamp = `${party.square} ${party.quadrant}`;
     const recoveryValue = recoveryPerMember
      .map((r) => `${r.name}: +${r.hearts} ❤️`)
      .join("\n");
@@ -2089,13 +2074,22 @@ module.exports = {
      .setDescription(
       `${character.name} set up camp. ${campNote}${costNote}`
      )
-     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
-     .addFields({
+     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+    addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationCamp,
+      nextCharacter: nextCharacterCamp ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+      commandsLast: true,
+    });
+    embed.addFields({
       name: "📋 **__Recovery__**",
       value: recoveryValue,
       inline: false,
      });
-    addExplorationStandardFields(embed, {
+    addExplorationCommandsField(embed, {
       party,
       expeditionId,
       location: locationCamp,

@@ -640,11 +640,16 @@ export default function ExplorePartyPage() {
                     <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                     <h1 className="text-lg font-bold tracking-tight text-[var(--totk-ivory)] sm:text-xl md:text-2xl">
                       Expedition {party.partyId}
+                      {party.status === "completed" && (
+                        <span className="ml-2 inline-block rounded-full bg-[var(--totk-dark-ocher)]/60 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
+                          Ended
+                        </span>
+                      )}
                     </h1>
                     <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                   </div>
                   <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
-                    {regionInfo?.label ?? party.region} · Start {party.square} {party.quadrant}
+                    {regionInfo?.label ?? party.region} · {party.status === "completed" ? "Ended at" : "Start"} {party.square} {party.quadrant}
                   </p>
                 </div>
               </div>
@@ -654,11 +659,16 @@ export default function ExplorePartyPage() {
                   <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                   <h1 className="text-lg font-bold tracking-tight text-[var(--totk-ivory)] sm:text-xl md:text-2xl">
                     Expedition {party.partyId}
+                    {party.status === "completed" && (
+                      <span className="ml-2 inline-block rounded-full bg-[var(--totk-dark-ocher)]/60 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
+                        Ended
+                      </span>
+                    )}
                   </h1>
                   <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                 </div>
                 <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
-                  {regionInfo?.label ?? party.region} · Start {party.square} {party.quadrant}
+                  {regionInfo?.label ?? party.region} · {party.status === "completed" ? "Ended at" : "Start"} {party.square} {party.quadrant}
                 </p>
               </div>
             )}
@@ -1098,12 +1108,14 @@ export default function ExplorePartyPage() {
             </section>
           )}
 
-          {party.status === "started" && (
+          {(party.status === "started" || party.status === "completed") && (
             <>
               <section className="mb-6 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-lg md:p-6">
                 <p className="mb-4 flex items-center gap-2 text-sm text-[var(--totk-light-green)]">
-                  <i className="fa-solid fa-play text-xs opacity-80" aria-hidden />
-                  This expedition has started. Use Discord to continue.
+                  <i className={party.status === "completed" ? "fa-solid fa-flag-checkered text-xs opacity-80" : "fa-solid fa-play text-xs opacity-80"} aria-hidden />
+                  {party.status === "completed"
+                    ? "This expedition has ended. View the summary below."
+                    : "This expedition has started. Use Discord to continue."}
                 </p>
                 {party.discordThreadUrl ? (
                   <a
@@ -1123,24 +1135,34 @@ export default function ExplorePartyPage() {
               <section className="mb-8 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-lg md:p-6">
                 <div className="mb-4 flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]">
-                    <i className="fa-solid fa-compass text-sm" aria-hidden />
+                    <i className={party.status === "completed" ? "fa-solid fa-flag-checkered text-sm" : "fa-solid fa-compass text-sm"} aria-hidden />
                   </span>
                   <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
-                    Expedition progress
+                    {party.status === "completed" ? "Expedition summary" : "Expedition progress"}
                   </h2>
                 </div>
                 <p className="mb-4 text-xs text-[var(--totk-grey-200)]">
-                  Live reference: rolls and actions happen in Discord; this page updates as the party state changes.
+                  {party.status === "completed"
+                    ? "Final state of the expedition. All rolls and actions are recorded below."
+                    : "Live reference: rolls and actions happen in Discord; this page updates as the party state changes."}
                 </p>
+                {party.gatheredItems && party.gatheredItems.length > 0 && (
+                  <div className="mb-4 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-3">
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Items gathered</span>
+                    <p className="mt-1 text-sm text-[var(--botw-pale)]">
+                      {party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName} x${g.quantity} (${g.characterName})`.trim()).join(" · ")}
+                    </p>
+                  </div>
+                )}
                 <div className="mb-4 flex flex-wrap gap-3">
                   <div className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-2.5">
-                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Current turn</span>
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Last turn" : "Current turn"}</span>
                     <p className="mt-0.5 font-bold text-[var(--totk-ivory)]">
                       {party.members[party.currentTurn ?? 0]?.name ?? "—"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-2.5">
-                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Current quadrant</span>
+                    <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Final quadrant" : "Current quadrant"}</span>
                     <p className="mt-0.5 font-bold text-[var(--totk-ivory)]">
                       {party.quadrant ?? "—"} {party.square ? `· ${party.square}` : ""}
                     </p>

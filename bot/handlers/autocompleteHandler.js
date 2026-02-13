@@ -3270,6 +3270,7 @@ async function handleExploreIdAutocomplete(interaction, focusedOption) {
   const value = (focusedOption.value || '').toString().toLowerCase();
 
   const parties = await Party.find({
+   status: { $ne: "completed" },
    $or: [
     { leaderId: userId },
     { 'characters.userId': userId },
