@@ -1,7 +1,7 @@
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { fetchAllItems, fetchItemsByMonster } = require('@/database/db.js');
+const { fetchAllItems, fetchItemsByMonster, createRelic } = require('@/database/db.js');
 const {
  calculateFinalValue,
  getMonstersByRegion,
@@ -570,6 +570,163 @@ module.exports = {
        collector.on("collect", async (i) => {
         await i.deferUpdate();
         const isYes = i.customId.endsWith("_yes");
+        const disabledRow = new ActionRowBuilder().addComponents(
+         new ButtonBuilder()
+          .setCustomId(`explore_${outcomeType}_yes`)
+          .setLabel("Yes")
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(true),
+         new ButtonBuilder()
+          .setCustomId(`explore_${outcomeType}_no`)
+          .setLabel("No")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true)
+        );
+
+        if (outcomeType === "ruins" && isYes) {
+         // Ruins exploration: charge 3 stamina, then roll one of chest/camp/landmark/relic/old_map/star_fragment/blight/goddess_plume
+         const freshParty = await Party.findOne({ partyId: expeditionId });
+         if (!freshParty) {
+          await i.update({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], components: [disabledRow] }).catch(() => {});
+          return;
+         }
+         const ruinsCharIndex = (freshParty.currentTurn - 1 + freshParty.characters.length) % freshParty.characters.length;
+         const ruinsCharSlot = freshParty.characters[ruinsCharIndex];
+         const ruinsCharacter = await Character.findById(ruinsCharSlot._id);
+         if (!ruinsCharacter) {
+          await i.update({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Character not found.").setColor(0xff0000)], components: [disabledRow] }).catch(() => {});
+          return;
+         }
+         const ruinsStaminaCost = 3;
+         const currentStamina = typeof ruinsCharacter.currentStamina === "number" ? ruinsCharacter.currentStamina : (ruinsCharacter.maxStamina ?? 0);
+         if (currentStamina < ruinsStaminaCost) {
+          const noStaminaEmbed = new EmbedBuilder()
+           .setTitle(title)
+           .setColor(regionColors[freshParty.region] || "#00ff99")
+           .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to explore the ruins.** " + ruinsCharacter.name + " has " + currentStamina + " 🟩 (need 3). Continue with </explore roll>.")
+           .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
+          addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+          await i.update({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
+          return;
+         }
+         ruinsCharacter.currentStamina = Math.max(0, currentStamina - ruinsStaminaCost);
+         await ruinsCharacter.save();
+         freshParty.characters[ruinsCharIndex].currentStamina = ruinsCharacter.currentStamina;
+         freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+         await freshParty.save();
+
+         // Weighted roll: chest 7, camp 3, landmark 2, relic 2, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20)
+         const roll = Math.random() * 20;
+         let ruinsOutcome;
+         if (roll < 7) ruinsOutcome = "chest";
+         else if (roll < 10) ruinsOutcome = "camp";
+         else if (roll < 12) ruinsOutcome = "landmark";
+         else if (roll < 14) ruinsOutcome = "relic";
+         else if (roll < 16) ruinsOutcome = "old_map";
+         else if (roll < 18) ruinsOutcome = "star_fragment";
+         else if (roll < 19) ruinsOutcome = "blight";
+         else ruinsOutcome = "goddess_plume";
+
+         let resultTitle = `🗺️ **Expedition: Explored the ruins!**`;
+         let resultDescription = "";
+         let progressMsg = `Explored ruins in ${location} (-3 stamina). `;
+         let lootForLog = undefined;
+
+         if (ruinsOutcome === "chest") {
+          resultDescription = `**${ruinsCharacter.name}** explored the ruins and found a chest! Use the chest flow to open it (cost 1 stamina).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found a chest (open for 1 stamina).";
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+         } else if (ruinsOutcome === "camp") {
+          const recover = 1;
+          ruinsCharacter.currentStamina = Math.min(ruinsCharacter.maxStamina ?? ruinsCharacter.currentStamina, ruinsCharacter.currentStamina + recover);
+          await ruinsCharacter.save();
+          const idx = freshParty.characters.findIndex((c) => c._id.toString() === ruinsCharacter._id.toString());
+          if (idx >= 0) { freshParty.characters[idx].currentStamina = ruinsCharacter.currentStamina; }
+          freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+          await freshParty.save();
+          resultDescription = `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found a camp spot; recovered 1 stamina.";
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost, staminaRecovered: recover });
+         } else if (ruinsOutcome === "landmark") {
+          resultDescription = `**${ruinsCharacter.name}** found nothing special in the ruins—but an interesting landmark. It's been marked on the map.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found an interesting landmark (marked on map).";
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+         } else if (ruinsOutcome === "relic") {
+          try {
+           await createRelic({
+            name: "Unknown Relic",
+            discoveredBy: ruinsCharacter.name,
+            discoveredDate: new Date(),
+            locationFound: location,
+            appraised: false,
+          });
+          } catch (err) {
+           console.error("[explore.js] createRelic error:", err?.message || err);
+          }
+          resultDescription = `**${ruinsCharacter.name}** found a relic in the ruins! Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+         } else if (ruinsOutcome === "old_map") {
+          try {
+           await addItemInventoryDatabase(ruinsCharacter._id, "Old Map", 1, i, "Exploration - Ruins");
+          } catch (err) {
+           handleInteractionError(err, i, { source: "explore.js ruins old_map" });
+          }
+          resultDescription = `**${ruinsCharacter.name}** found a really old map in the ruins! Take it to the Inariko Library to get it deciphered. More info [here](https://www.rootsofthewild.com/oldmaps).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found an old map (take to Inariko Library to decipher).";
+          lootForLog = { itemName: "Old Map", emoji: "" };
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
+         } else if (ruinsOutcome === "star_fragment") {
+          try {
+           await addItemInventoryDatabase(ruinsCharacter._id, "Star Fragment", 1, i, "Exploration - Ruins");
+          } catch (err) {
+           handleInteractionError(err, i, { source: "explore.js ruins star_fragment" });
+          }
+          resultDescription = `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found a Star Fragment.";
+          lootForLog = { itemName: "Star Fragment", emoji: "" };
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
+         } else if (ruinsOutcome === "blight") {
+          ruinsCharacter.blighted = true;
+          if (!ruinsCharacter.blightedAt) ruinsCharacter.blightedAt = new Date();
+          if (!ruinsCharacter.blightStage || ruinsCharacter.blightStage === 0) {
+           ruinsCharacter.blightStage = 1;
+           ruinsCharacter.blightEffects = { rollMultiplier: 1.0, noMonsters: false, noGathering: false };
+          }
+          await ruinsCharacter.save();
+          resultDescription = `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. You're blighted! Use the </blight:...> command for healing and info.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found blight; character is now blighted.";
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+         } else {
+          // goddess_plume
+          try {
+           await addItemInventoryDatabase(ruinsCharacter._id, "Goddess Plume", 1, i, "Exploration - Ruins");
+          } catch (err) {
+           handleInteractionError(err, i, { source: "explore.js ruins goddess_plume" });
+          }
+          resultDescription = `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Excavated a Goddess Plume.";
+          lootForLog = { itemName: "Goddess Plume", emoji: "" };
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
+         }
+         const finalParty = await Party.findOne({ partyId: expeditionId });
+         const resultEmbed = new EmbedBuilder()
+          .setTitle(resultTitle)
+          .setDescription(resultDescription)
+          .setColor(regionColors[finalParty?.region] || "#00ff99")
+          .setImage(regionImages[finalParty?.region] || EXPLORATION_IMAGE_FALLBACK);
+         addExplorationStandardFields(resultEmbed, {
+          party: finalParty,
+          expeditionId,
+          location,
+          nextCharacter: nextCharacter ?? null,
+          showNextAndCommands: true,
+          showRestSecureMove: false,
+        });
+         await i.update({ embeds: [resultEmbed], components: [disabledRow] }).catch(() => {});
+         return;
+        }
+
         const intro = description.split("\n\n")[0];
         const choiceEmbed = new EmbedBuilder()
          .setTitle(title)
@@ -600,18 +757,6 @@ module.exports = {
           showNextAndCommands: true,
           showRestSecureMove: false,
         });
-        const disabledRow = new ActionRowBuilder().addComponents(
-         new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_yes`)
-          .setLabel("Yes")
-          .setStyle(ButtonStyle.Success)
-          .setDisabled(true),
-         new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_no`)
-          .setLabel("No")
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(true)
-        );
         await i.update({ embeds: [choiceEmbed], components: [disabledRow] });
        });
        collector.on("end", (collected, reason) => {

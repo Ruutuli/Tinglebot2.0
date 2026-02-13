@@ -479,7 +479,6 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
   { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
   { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
-  { name: "🔗 **__Dashboard__**", value: expId ? `${EXPLORE_DASHBOARD_BASE}/${expId}` : "—", inline: false },
  ];
  if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
   const nextName = nextCharacter.name;
