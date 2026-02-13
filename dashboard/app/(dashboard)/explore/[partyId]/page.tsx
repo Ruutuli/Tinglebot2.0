@@ -25,7 +25,7 @@ const SQUARE_W = 2400;
 const SQUARE_H = 1666;
 
 /** Parse "H8 Q3" from messages like "Found a monster camp in H8 Q3...", "Found ruins in H8 Q3...", "Found a grotto in H8 Q3..." */
-const REPORTABLE_LOC_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])/i;
+const REPORTABLE_LOC_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])(?:\s|;|,|\.|$)/i;
 
 const REPORTABLE_OUTCOMES: Record<string, string> = {
   monster_camp: "Monster Camp",
@@ -1402,16 +1402,22 @@ export default function ExplorePartyPage() {
                   };
                   return (
                     <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
-                      {userId && unreported.length > 0 && (
+                      {reportableDiscoveries.length > 0 && (
                         <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
                             <i className="fa-solid fa-landmark text-[10px] opacity-80" aria-hidden />
                             Report to town hall
                           </h3>
-                          <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
-                            You found something to report. Click &quot;Place on map&quot; then click <strong>inside the highlighted quadrant</strong> for that discovery (it will be saved and appear on the main Map page).
-                          </p>
-                          {placePinError && (
+                          {!userId ? (
+                            <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
+                              You found something to report. <Link href="/api/auth/discord" className="font-medium text-amber-300 underline">Log in</Link> to place these on the map (saved pins appear on the main Map page).
+                            </p>
+                          ) : (
+                            <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
+                              You found something to report. Click &quot;Place on map&quot; then click <strong>inside the highlighted quadrant</strong> for that discovery (it will be saved and appear on the main Map page).
+                            </p>
+                          )}
+                          {placePinError && userId && (
                             <div className="mb-2 rounded border border-red-500/60 bg-red-950/40 px-2 py-1.5 text-xs text-red-300" role="alert">
                               {placePinError}
                               {placePinError.includes("log in") && (
@@ -1420,7 +1426,7 @@ export default function ExplorePartyPage() {
                             </div>
                           )}
                           <ul className="flex flex-wrap gap-2">
-                            {unreported.map((d) => {
+                            {reportableDiscoveries.map((d) => {
                               const key = discoveryKey(d);
                               const reported = isDiscoveryReported(d);
                               const isThisPlacing = placingForDiscovery && discoveryKey(placingForDiscovery) === key;
@@ -1433,6 +1439,8 @@ export default function ExplorePartyPage() {
                                       <i className="fa-solid fa-check" aria-hidden />
                                       <Link href="/map" className="text-amber-300 underline">Map</Link>
                                     </span>
+                                  ) : !userId ? (
+                                    <span className="text-[10px] text-amber-400/90">Log in to place on map</span>
                                   ) : (
                                     <button
                                       type="button"
