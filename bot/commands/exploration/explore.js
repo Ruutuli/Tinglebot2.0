@@ -154,23 +154,13 @@ async function handleExplorationChestOpen(interaction, expeditionId, location) {
 
  const nextCharacter = party.characters[party.currentTurn];
  const lootValue = lootLines.length > 0 ? lootLines.join("\n") : "Nothing found.";
- const resultEmbed = new EmbedBuilder()
-  .setTitle("🗺️ **Expedition: Chest opened!**")
-  .setDescription(
-   `Chest opened! Here is what was found!\n\n${lootValue}\n\n(-1 stamina)\n\n↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`
-  )
+ const lootEmbed = new EmbedBuilder()
+  .setTitle("📦 **Chest loot**")
+  .setDescription(`Here is what was in the chest!\n\n${lootValue}\n\n(-1 stamina)`)
   .setColor(regionColors[party.region] || "#00ff99")
   .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
- addExplorationStandardFields(resultEmbed, {
-  party,
-  expeditionId,
-  location,
-  nextCharacter: nextCharacter ?? null,
-  showNextAndCommands: true,
-  showRestSecureMove: false,
- });
  pushProgressLog(party, character.name, "chest_open", `Opened chest in ${location}; loot: ${lootLines.join("; ")}.`, undefined, { staminaLost: staminaCost });
- return { embed: resultEmbed, party, nextCharacter };
+ return { lootEmbed, party, nextCharacter };
 }
 
 /** Outcomes that count toward the per-square special-event limit (reportable on map). */
@@ -193,10 +183,10 @@ function countSpecialEventsInSquare(party, square) {
  return count;
 }
 
-function pushProgressLog(party, characterName, outcome, message, loot, costs) {
+function pushProgressLog(party, characterName, outcome, message, loot, costs, at) {
  if (!party.progressLog) party.progressLog = [];
  const entry = {
-  at: new Date(),
+  at: at instanceof Date ? at : new Date(),
   characterName: characterName || "Unknown",
   outcome,
   message: message || "",
@@ -211,6 +201,28 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs) {
   if (typeof costs.staminaRecovered === "number" && costs.staminaRecovered > 0) entry.staminaRecovered = costs.staminaRecovered;
  }
  party.progressLog.push(entry);
+}
+
+/** Reportable outcomes that get logged to the map path (Square.quadrants[].discoveries). */
+const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto", "relic"]);
+
+/** Push a discovery to the Square document so it appears on the map path and can be pinned. */
+async function pushDiscoveryToMap(party, outcomeType, at, userId) {
+ const squareId = (party.square && String(party.square).trim()) || "";
+ const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
+ if (!squareId || !quadrantId) return;
+ const discoveryKey = `${outcomeType}|${squareId}|${quadrantId}|${(at instanceof Date ? at : new Date()).toISOString()}`;
+ const discovery = {
+  type: outcomeType,
+  discoveredBy: userId || party.leaderId || "",
+  discoveredAt: at instanceof Date ? at : new Date(),
+  discoveryKey,
+ };
+ await Square.updateOne(
+  { squareId },
+  { $push: { "quadrants.$[q].discoveries": discovery } },
+  { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+ );
 }
 
 /** When party reveals or travels through a blighted quadrant, increment exposure (stacks on repeated travel). */
@@ -840,13 +852,18 @@ module.exports = {
         : outcomeType === "relic"
           ? { itemName: "Unknown Relic", emoji: "🔸" }
           : undefined;
+      const at = new Date();
+      if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType)) {
+       await pushDiscoveryToMap(party, outcomeType, at, interaction.user?.id);
+      }
       pushProgressLog(
        party,
        character.name,
        outcomeType,
        progressMessages[outcomeType] || `Found something in ${location}.`,
        lootForProgressLog,
-       chestRuinsCosts
+       chestRuinsCosts,
+       at
       );
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
@@ -1166,8 +1183,16 @@ module.exports = {
               await ci.update({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
               return;
              }
-             if (result?.embed) {
-              await ci.update({ embeds: [result.embed], components: [chestDisabledRow] }).catch(() => {});
+             if (result?.lootEmbed) {
+              const fp = await Party.findOne({ partyId: expeditionId });
+              const openedEmbed = new EmbedBuilder()
+               .setTitle(resultTitle)
+               .setColor(regionColors[fp?.region] || "#00ff99")
+               .setDescription(resultDescription.split("\n\n")[0] + `\n\n✅ **Chest was opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+               .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
+              addExplorationStandardFields(openedEmbed, { party: fp, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+              await ci.update({ embeds: [openedEmbed], components: [chestDisabledRow] }).catch(() => {});
+              await ci.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
               if (result.nextCharacter?.userId) await ci.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
              }
             } else {
@@ -1213,8 +1238,16 @@ module.exports = {
            await i.update({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
           return;
           }
-          if (result?.embed) {
-           await i.update({ embeds: [result.embed], components: [disabledRow] }).catch(() => {});
+          if (result?.lootEmbed) {
+           const freshParty = await Party.findOne({ partyId: expeditionId });
+           const openedEmbed = new EmbedBuilder()
+            .setTitle(title)
+            .setColor(regionColors[freshParty?.region] || "#00ff99")
+            .setDescription(description.split("\n\n")[0] + `\n\n✅ **Chest was opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+            .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
+           addExplorationStandardFields(openedEmbed, { party: freshParty, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+           await i.update({ embeds: [openedEmbed], components: [disabledRow] }).catch(() => {});
+           await i.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
            if (result.nextCharacter?.userId) {
             await i.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
            }

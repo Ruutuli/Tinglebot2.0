@@ -41,22 +41,27 @@ export async function GET() {
       Item = ItemModel as unknown as Model<unknown>;
     }
 
-    // Healing items only (crafted/cooked, fairy); raw Eldin Ore / Wood are not slot options — use bundles instead
+    // Healing items (crafted/cooked, fairy) and Goddess Plume (for grotto cleanse); raw Eldin Ore / Wood use bundles
     const items = await Item.find({
       categoryGear: { $nin: ["Weapon", "Armor"] },
-      $and: [
+      $or: [
         {
-          $or: [
-            { modifierHearts: { $gt: 0 } },
-            { staminaRecovered: { $gt: 0 } },
+          $and: [
+            {
+              $or: [
+                { modifierHearts: { $gt: 0 } },
+                { staminaRecovered: { $gt: 0 } },
+              ],
+            },
+            {
+              $or: [
+                { crafting: true },
+                { itemName: new RegExp("Fairy", "i") },
+              ],
+            },
           ],
         },
-        {
-          $or: [
-            { crafting: true },
-            { itemName: new RegExp("Fairy", "i") },
-          ],
-        },
+        { itemName: new RegExp("Goddess Plume", "i") },
       ],
     })
       .select("_id itemName emoji modifierHearts staminaRecovered image")

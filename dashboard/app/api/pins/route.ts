@@ -203,12 +203,13 @@ export async function POST(request: Request) {
         }
       }
 
-      // Always add discovery to exploringMap (Square.quadrants[].discoveries) so the map DB stays in sync
+      // Mark discovery as pinned on the map (or push if bot hadn't logged it yet)
       try {
         const parts = String(sourceDiscoveryKey).split("|");
         const outcome = (parts[0] ?? "").trim();
         const squareIdRaw = (parts[1] ?? "").trim();
         const quadrantId = (parts[2] ?? "").trim().toUpperCase();
+        const atStr = (parts[3] ?? "").trim();
         if (outcome && squareIdRaw && (quadrantId === "Q1" || quadrantId === "Q2" || quadrantId === "Q3" || quadrantId === "Q4")) {
           const Square =
             mongoose.models.Square ??
@@ -217,27 +218,50 @@ export async function POST(request: Request) {
             `^${squareIdRaw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
             "i"
           );
-          const mapResult = await Square.updateOne(
-            { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
+          const now = new Date();
+          const pinIdStr = (pin as { _id?: unknown })._id != null ? String((pin as { _id: { toString: () => string } })._id.toString()) : "";
+
+          // Prefer: mark existing discovery (with matching discoveryKey) as pinned
+          const markPinnedResult = await Square.updateOne(
             {
-              $push: {
-                "quadrants.$[q].discoveries": {
-                  type: outcome.slice(0, 50),
-                  discoveredBy: auth.discordId,
-                  discoveredAt: new Date(),
-                },
+              squareId: squareIdRegex,
+              "quadrants.quadrantId": quadrantId,
+              "quadrants.discoveries.discoveryKey": key,
+            },
+            {
+              $set: {
+                "quadrants.$[q].discoveries.$[d].pinned": true,
+                "quadrants.$[q].discoveries.$[d].pinnedAt": now,
+                "quadrants.$[q].discoveries.$[d].pinId": pinIdStr,
               },
             },
-            { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+            { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.discoveryKey": key }] }
           );
-          if (mapResult.matchedCount === 0) {
-            console.warn("[api/pins] exploringMap: no Square found for", squareIdRaw, quadrantId);
-          } else if (mapResult.modifiedCount === 0) {
-            console.warn("[api/pins] exploringMap: Square matched but not modified", squareIdRaw, quadrantId);
+
+          if (markPinnedResult.modifiedCount === 0) {
+            // Fallback: push a new discovery (e.g. old data without discoveryKey, or bot hadn't written yet)
+            const discoveredAt = atStr ? new Date(atStr) : now;
+            await Square.updateOne(
+              { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
+              {
+                $push: {
+                  "quadrants.$[q].discoveries": {
+                    type: outcome.slice(0, 50),
+                    discoveredBy: auth.discordId,
+                    discoveredAt,
+                    discoveryKey: key,
+                    pinned: true,
+                    pinnedAt: now,
+                    pinId: pinIdStr,
+                  },
+                },
+              },
+              { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+            );
           }
         }
       } catch (mapErr) {
-        console.error("[api/pins] Failed to add discovery to exploringMap (Square quadrant):", mapErr);
+        console.error("[api/pins] Failed to mark discovery pinned / add to exploringMap:", mapErr);
       }
     }
 

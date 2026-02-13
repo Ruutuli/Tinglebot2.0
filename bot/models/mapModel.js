@@ -7,7 +7,11 @@ const DiscoverySchema = new Schema({
   type: { type: String, required: true },
   number: { type: String, required: false },
   discoveredBy: { type: String, default: '' }, // Discord ID of discoverer
-  discoveredAt: { type: Date, default: Date.now }
+  discoveredAt: { type: Date, default: Date.now },
+  discoveryKey: { type: String, default: null }, // outcome|square|quadrant|at ISO — matches party progressLog for "Report to town hall"
+  pinned: { type: Boolean, default: false },
+  pinnedAt: { type: Date, default: null },
+  pinId: { type: String, default: null } // Pin _id when discovery was pinned on the map
 });
 
 // Define Quadrant Schema with an array of discoveries

@@ -10,6 +10,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
+import { explorationIconValue, getExplorationIconUrl, isExplorationIcon } from "@/lib/explorationIcons";
 
 // ============================================================================
 // ------------------- Constants & types -------------------
@@ -121,6 +122,17 @@ const QUADRANT_PCT: Record<string, { x: number; y: number; w: number; h: number 
   Q3: { x: 0, y: 0.5, w: 0.5, h: 0.5 },
   Q4: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
 };
+
+/** Z-index for explore map layers so base is under blight, blight under borders/paths, fog rendered separately on top. */
+function getExploreLayerZIndex(layerName: string): number {
+  if (layerName === "MAP_0002_Map-Base") return 0;
+  if (layerName === "MAP_0000_BLIGHT") return 1;
+  if (layerName === "MAP_0001_hidden-areas") return 20; // fog is rendered in its own div with z-10
+  if (layerName === "MAP_0001s_0003_Region-Borders") return 2;
+  if (layerName.startsWith("MAP_0002s_") && layerName.includes("CIRCLE")) return 3;
+  if (layerName.startsWith("MAP_0003s_")) return 4; // path layers
+  return 1;
+}
 
 /** CSS clip-path polygon for fog to show only given quadrants (1–4). Matches map-layers.js _fogClipPathForQuadrants. */
 function fogClipPathForQuadrants(quads: number[]): string | null {
@@ -894,7 +906,7 @@ export default function ExplorePartyPage() {
           coordinates: coords,
           category: "points-of-interest",
           color: "#b91c1c",
-          icon: d.outcome === "monster_camp" ? "fas fa-skull" : d.outcome === "grotto" ? "fas fa-tree" : d.outcome === "relic" ? "fas fa-gem" : "fas fa-landmark",
+          icon: explorationIconValue(d.outcome),
           sourceDiscoveryKey: key,
           partyId: partyId || undefined,
         };
@@ -1168,6 +1180,7 @@ export default function ExplorePartyPage() {
                       src={layer.name === "MAP_0002_Map-Base" && pathImageForSquare ? pathImageForSquare : layer.url}
                       alt=""
                       className="absolute inset-0 h-full w-full object-cover"
+                      style={{ zIndex: getExploreLayerZIndex(layer.name) }}
                       onError={(e) => { e.currentTarget.style.display = "none"; }}
                     />
                   ))}
@@ -1653,6 +1666,7 @@ export default function ExplorePartyPage() {
                   const showMap = displayPreview?.layers?.length;
                   const canPlacePins = !!(userId && party.currentUserJoined);
                   const unreported = reportableDiscoveries.filter((d) => !isDiscoveryReported(d));
+                  const pinned = reportableDiscoveries.filter((d) => isDiscoveryReported(d));
                   const showReportToTownHall = unreported.length > 0;
                   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
                     if (!isPlacing || !placingForDiscovery) return;
@@ -1733,6 +1747,19 @@ export default function ExplorePartyPage() {
                               );
                             })}
                           </ul>
+                          {pinned.length > 0 && (
+                            <div className="mt-2 border-t border-amber-500/20 pt-2">
+                              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-amber-400/80">Already on map</p>
+                              <ul className="flex flex-wrap gap-2">
+                                {pinned.map((d) => (
+                                  <li key={discoveryKey(d)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600/30 bg-emerald-950/30 px-2.5 py-1.5">
+                                    <span className="text-xs font-medium text-[var(--totk-ivory)]">{d.square} {d.quadrant} — {d.label}</span>
+                                    <span className="text-[10px] font-medium text-emerald-400">Discovery pinned</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       )}
                       {party.quadrantState === "secured" && wasSecuredThisSession(party.progressLog, party.square, party.quadrant) && !pathImageForSquare && (
@@ -1884,8 +1911,11 @@ export default function ExplorePartyPage() {
                                 src={layer.name === "MAP_0002_Map-Base" && displayPreview === squarePreview && pathImageForSquare ? pathImageForSquare : layer.url}
                                 alt=""
                                 className="absolute inset-0 h-full w-full object-cover"
+                                style={{
+                                  zIndex: getExploreLayerZIndex(layer.name),
+                                  ...(isPlacing ? { pointerEvents: "none" as const } : {}),
+                                }}
                                 onError={(e) => { e.currentTarget.style.display = "none"; }}
-                                style={isPlacing ? { pointerEvents: "none" } : undefined}
                               />
                             ))}
                           {(() => {
@@ -1963,21 +1993,35 @@ export default function ExplorePartyPage() {
                                 {pinsInSquare.map((pin) => {
                                   const pctX = (pin.coordinates.lng - b.lngMin) / (b.lngMax - b.lngMin);
                                   const pctY = (pin.coordinates.lat - b.latMin) / (b.latMax - b.latMin);
+                                  const isExploration = isExplorationIcon(pin.icon) && getExplorationIconUrl(pin.icon);
                                   return (
                                     <div
                                       key={pin._id}
-                                      className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 shadow-md"
+                                      className={
+                                        isExploration
+                                          ? "absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                                          : "absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 shadow-md"
+                                      }
                                       style={{
                                         left: `${pctX * 100}%`,
                                         top: `${pctY * 100}%`,
                                       }}
                                       title={pin.name}
                                     >
-                                      <i
-                                        className={`${pin.icon ?? "fas fa-map-marker-alt"} text-sm`}
-                                        style={{ color: pin.color ?? "#00A3DA" }}
-                                        aria-hidden
-                                      />
+                                      {isExploration ? (
+                                        <img
+                                          src={getExplorationIconUrl(pin.icon)!}
+                                          alt=""
+                                          className="h-8 w-8 object-contain"
+                                          aria-hidden
+                                        />
+                                      ) : (
+                                        <i
+                                          className={`${pin.icon ?? "fas fa-map-marker-alt"} text-sm`}
+                                          style={{ color: pin.color ?? "#00A3DA" }}
+                                          aria-hidden
+                                        />
+                                      )}
                                     </div>
                                   );
                                 })}

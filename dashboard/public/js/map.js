@@ -1269,6 +1269,23 @@ function getPinTextShadow(category) {
         : '-1px -1px 0 white, 1px -1px 0 white, -1px 1px 0 white, 1px 1px 0 white, 0 0 3px white';
 }
 
+// Exploration discovery icons (custom PNGs only); pin.icon may be "exploration:grotto" etc.
+var EXPLORATION_ICON_URLS = {
+    grotto: 'https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png',
+    monster_camp: 'https://storage.googleapis.com/tinglebot/maps/monstercamproots2024.png',
+    ruins: 'https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png',
+    relic: 'https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png'
+};
+function getPinIconHtml(pin) {
+    var icon = pin.icon;
+    if (typeof icon === 'string' && icon.indexOf('exploration:') === 0) {
+        var type = icon.slice(12);
+        var url = EXPLORATION_ICON_URLS[type] || EXPLORATION_ICON_URLS.ruins;
+        if (url) return '<img src="' + url + '" alt="" class="exploration-pin-icon" style="width:28px;height:28px;object-fit:contain;display:block;">';
+    }
+    return '<i class="' + (icon || 'fas fa-map-marker-alt') + '"></i>';
+}
+
 // Get location information for a pin
 function getPinLocationInfo(gridLocation, coordinates) {
     const info = {
@@ -1829,9 +1846,9 @@ function addPinToMap(pin) {
     const marker = L.marker([leafletLat, leafletLng], {
         icon: L.divIcon({
             className: 'custom-pin',
-            html: `<div style="color: ${pin.color}; font-size: 20px; text-shadow: ${textShadow}; z-index: 50000; position: relative;"><i class="${pin.icon}"></i></div>`,
-            iconSize: [20, 20],
-            iconAnchor: [10, 20]
+            html: `<div style="color: ${pin.color}; font-size: 20px; text-shadow: ${textShadow}; z-index: 50000; position: relative;">${getPinIconHtml(pin)}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 28]
         })
     });
     
@@ -1860,7 +1877,7 @@ function addPinToMap(pin) {
         <div class="pin-popup">
             <div class="pin-popup-header">
                 <div class="pin-popup-icon" style="color: ${pin.color};">
-                    <i class="${pin.icon}"></i>
+                    ${getPinIconHtml(pin)}
                 </div>
                 <div class="pin-popup-title">
                     <h4>${pin.name}</h4>
@@ -2038,8 +2055,8 @@ function showPinEditModal(pin) {
             <div class="modal-content" onclick="event.stopPropagation()">
                 <div class="modal-header">
                     <div class="header-left">
-                        <div class="pin-icon-preview">
-                            <i class="${pin.icon || 'fas fa-map-marker-alt'}" id="preview-icon"></i>
+                        <div class="pin-icon-preview" id="preview-icon-wrap">
+                            ${getPinIconHtml(pin)}
                         </div>
                         <div class="header-text">
                             <h3>Edit Pin</h3>
@@ -2485,8 +2502,8 @@ function updatePinsListDisplay(pins) {
         const canDelete = canEdit || (pinManager.isAuthenticated && (pinManager.isMod || pinManager.isAdmin));
         return `
             <div class="pin-item">
-                <div class="pin-icon">
-                    <i class="${pin.icon}" style="color: ${pin.color}; text-shadow: ${getPinTextShadow(pin.category)};"></i>
+                <div class="pin-icon" style="color: ${pin.color}; text-shadow: ${getPinTextShadow(pin.category)};">
+                    ${getPinIconHtml(pin)}
                 </div>
                 <div class="pin-info">
                     <span class="pin-name">${pin.name}</span>
@@ -2965,10 +2982,11 @@ async function finishPathDrawing() {
 function addExplorationMarker(lat, lng, type) {
     if (!currentExplorationId) return;
     
+    // Canonical exploration marker icons (grottos, monster camp, ruins/camp)
     const iconUrls = {
-        ruins: 'https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png',
+        grotto: 'https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png',
         monster: 'https://storage.googleapis.com/tinglebot/maps/monstercamproots2024.png',
-        grotto: 'https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png'
+        ruins: 'https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png'
     };
     
     const icon = L.icon({
