@@ -1868,6 +1868,11 @@ async function handleComponentInteraction(interaction) {
   const [action] = interaction.customId.split('|');
 
   try {
+    // Explore buttons (ruins/chest/grotto) are handled by message collectors in explore.js
+    if (interaction.customId.startsWith('explore_')) {
+      return;
+    }
+
     // Handle shop navigation buttons first
     if (interaction.customId.startsWith('shop-')) {
       // These buttons are handled by their own collectors in the shop view

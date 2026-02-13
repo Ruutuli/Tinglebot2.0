@@ -547,10 +547,8 @@ module.exports = {
          await healKoCharacter(char._id);
         }
         char.currentHearts = maxH;
-        char.currentStamina = Math.min(char.maxStamina ?? 0, (char.currentStamina ?? 0) + Math.floor((char.maxStamina ?? 0) * 0.25));
         await char.save();
         party.characters[i].currentHearts = char.currentHearts;
-        party.characters[i].currentStamina = char.currentStamina;
         totalHeartsRecovered += needed;
        }
        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
@@ -561,7 +559,7 @@ module.exports = {
        const nextChar = party.characters[party.currentTurn];
        const fairyEmbed = new EmbedBuilder()
         .setTitle(`🧚 **Expedition: A Fairy Appeared!**`)
-        .setDescription(`**${character.name}** encountered a fairy in **${location}**! The fairy swept over the party, restoring everyone to full hearts and a bit of stamina.`)
+        .setDescription(`**${character.name}** encountered a fairy in **${location}**! The fairy swept over the party, restoring everyone to full hearts.`)
         .setColor(regionColors[party.region] || "#E8D5F2")
         .setThumbnail("https://via.placeholder.com/100x100")
         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
@@ -732,11 +730,11 @@ module.exports = {
       if (isYesNoChoice) {
        const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-         .setCustomId(`explore_${outcomeType}_yes`)
+         .setCustomId(`explore_${outcomeType}_yes|${expeditionId}`)
          .setLabel("Yes")
          .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-         .setCustomId(`explore_${outcomeType}_no`)
+         .setCustomId(`explore_${outcomeType}_no|${expeditionId}`)
          .setLabel("No")
          .setStyle(ButtonStyle.Secondary)
        );
@@ -754,15 +752,15 @@ module.exports = {
        });
        collector.on("collect", async (i) => {
         await i.deferUpdate();
-        const isYes = i.customId.endsWith("_yes");
+        const isYes = i.customId.endsWith("_yes") || i.customId.includes("_yes|");
         const disabledRow = new ActionRowBuilder().addComponents(
          new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_yes`)
+          .setCustomId(`explore_${outcomeType}_yes|${expeditionId}`)
           .setLabel("Yes")
           .setStyle(ButtonStyle.Success)
           .setDisabled(true),
          new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_no`)
+          .setCustomId(`explore_${outcomeType}_no|${expeditionId}`)
           .setLabel("No")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
@@ -925,12 +923,12 @@ module.exports = {
 
          if (ruinsOutcome === "chest") {
           const chestRow = new ActionRowBuilder().addComponents(
-           new ButtonBuilder().setCustomId("explore_chest_yes").setLabel("Yes").setStyle(ButtonStyle.Success),
-           new ButtonBuilder().setCustomId("explore_chest_no").setLabel("No").setStyle(ButtonStyle.Secondary)
+           new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}`).setLabel("Yes").setStyle(ButtonStyle.Success),
+           new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}`).setLabel("No").setStyle(ButtonStyle.Secondary)
           );
           const chestDisabledRow = new ActionRowBuilder().addComponents(
-           new ButtonBuilder().setCustomId("explore_chest_yes").setLabel("Yes").setStyle(ButtonStyle.Success).setDisabled(true),
-           new ButtonBuilder().setCustomId("explore_chest_no").setLabel("No").setStyle(ButtonStyle.Secondary).setDisabled(true)
+           new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}`).setLabel("Yes").setStyle(ButtonStyle.Success).setDisabled(true),
+           new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}`).setLabel("No").setStyle(ButtonStyle.Secondary).setDisabled(true)
           );
           const updatedMsg = await i.update({ embeds: [resultEmbed], components: [chestRow] }).catch(() => null);
           if (updatedMsg) {
@@ -992,8 +990,8 @@ module.exports = {
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
            await i.update({ embeds: [noStaminaEmbed], components: [new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId("explore_chest_yes").setLabel("Yes").setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId("explore_chest_no").setLabel("No").setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}`).setLabel("Yes").setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}`).setLabel("No").setStyle(ButtonStyle.Secondary)
            )] }).catch(() => {});
            return;
           }
@@ -1050,19 +1048,19 @@ module.exports = {
        });
        collector.on("end", (collected, reason) => {
         if (reason === "time" && collected.size === 0 && msg.editable) {
-         const disabledRow = new ActionRowBuilder().addComponents(
+         const timeoutDisabledRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-           .setCustomId(`explore_${outcomeType}_yes`)
+           .setCustomId(`explore_${outcomeType}_yes|${expeditionId}`)
            .setLabel("Yes")
            .setStyle(ButtonStyle.Success)
            .setDisabled(true),
           new ButtonBuilder()
-           .setCustomId(`explore_${outcomeType}_no`)
+           .setCustomId(`explore_${outcomeType}_no|${expeditionId}`)
            .setLabel("No")
            .setStyle(ButtonStyle.Secondary)
            .setDisabled(true)
          );
-         msg.edit({ components: [disabledRow] }).catch(() => {});
+         msg.edit({ components: [timeoutDisabledRow] }).catch(() => {});
         }
        });
       }
