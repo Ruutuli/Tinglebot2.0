@@ -14,6 +14,9 @@ export const dynamic = "force-dynamic";
 
 const DISCORD_EXPEDITION_CHANNEL_ID = "1391812848099004578";
 
+// Discord thread auto-archive (minutes). Discord allows: 60, 1440, 4320, 10080 — no 5h, using 24h
+const EXPLORATION_THREAD_AUTO_ARCHIVE_MINUTES = 1440;
+
 const REGIONS: Record<string, { label: string; village: string }> = {
   eldin: { label: "Eldin", village: "Rudania" },
   lanayru: { label: "Lanayru", village: "Inariko" },
@@ -217,7 +220,7 @@ export async function POST(
         const newThread = await discordApiRequest<{ id: string }>(
           `channels/${DISCORD_EXPEDITION_CHANNEL_ID}/threads`,
           "POST",
-          { name: threadName, type: 11 }
+          { name: threadName, type: 11, auto_archive_duration: EXPLORATION_THREAD_AUTO_ARCHIVE_MINUTES }
         );
         if (!newThread?.id) {
           console.error("[explore/parties/start] Discord thread creation failed");
@@ -232,7 +235,7 @@ export async function POST(
       const newThread = await discordApiRequest<{ id: string }>(
         `channels/${DISCORD_EXPEDITION_CHANNEL_ID}/threads`,
         "POST",
-        { name: threadName, type: 11 }
+        { name: threadName, type: 11, auto_archive_duration: EXPLORATION_THREAD_AUTO_ARCHIVE_MINUTES }
       );
       if (!newThread?.id) {
         console.error("[explore/parties/start] Discord thread creation failed");

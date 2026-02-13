@@ -1117,9 +1117,13 @@ module.exports = {
     );
 
     if (!hasResources) {
-     return interaction.editReply(
-      "Party needs Wood and Eldin Ore to secure this quadrant."
-     );
+     const embed = new EmbedBuilder()
+      .setTitle("🚫 Cannot Secure Quadrant")
+      .setColor(regionColors[party.region] || "#FF9800")
+      .setDescription(
+        "Party needs Wood and Eldin Ore to secure this quadrant.\n\nPlease continue to roll."
+      );
+     return interaction.editReply({ embeds: [embed] });
     }
 
     // Apply secure cost to current character so party total stays correct
