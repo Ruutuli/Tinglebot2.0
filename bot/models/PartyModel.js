@@ -43,6 +43,8 @@ const PartySchema = new Schema({
   totalHearts: { type: Number, default: 0 },
   totalStamina: { type: Number, default: 0 },
   quadrantState: { type: String, default: 'unexplored', enum: ['unexplored', 'explored', 'secured'] },
+  /** Blight exposure: incremented when party reveals or travels through a blighted quadrant; stacks on repeated travel. */
+  blightExposure: { type: Number, default: 0 },
   progressLog: [
     {
       at: { type: Date, default: Date.now },

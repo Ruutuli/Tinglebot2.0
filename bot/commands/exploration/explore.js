@@ -213,6 +213,23 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs) {
  party.progressLog.push(entry);
 }
 
+/** When party reveals or travels through a blighted quadrant, increment exposure (stacks on repeated travel). */
+async function applyBlightExposure(party, square, quadrant, reason, characterName) {
+ const prev = typeof party.blightExposure === "number" ? party.blightExposure : 0;
+ party.blightExposure = prev + 1;
+ party.markModified("blightExposure");
+ const location = `${square} ${quadrant}`;
+ pushProgressLog(
+  party,
+  characterName || "Party",
+  "blight_exposure",
+  `Blight exposure +1 (${reason}) at ${location}. Total exposure: ${party.blightExposure}.`,
+  undefined,
+  undefined
+ );
+ await party.save();
+}
+
 async function handleExpeditionFailed(party, interaction) {
  const start = START_POINTS_BY_REGION[party.region];
  if (!start) {
@@ -503,6 +520,12 @@ module.exports = {
         }
         party.quadrantState = "explored";
         party.markModified("quadrantState");
+        const qSync = mapSquare.quadrants.find(
+         (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
+        );
+        if (qSync && qSync.blighted) {
+         await applyBlightExposure(party, party.square, party.quadrant, "reveal", character?.name);
+        }
        }
       }
       // Known ruin-rest spot: auto-recover stamina when rolling here again
@@ -639,6 +662,14 @@ module.exports = {
        }
       } catch (mapErr) {
        console.error("[explore.js] Failed to update map quadrant status:", mapErr.message);
+      }
+
+      const mapSquareForBlight = await Square.findOne({ squareId: party.square });
+      const quadBlight = mapSquareForBlight?.quadrants?.find(
+       (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
+      );
+      if (quadBlight && quadBlight.blighted) {
+       await applyBlightExposure(party, party.square, party.quadrant, "reveal", character.name);
       }
 
       const nextCharacter = party.characters[party.currentTurn];
@@ -2004,6 +2035,7 @@ module.exports = {
       destinationQuadrantState = destQ.status;
      }
     }
+    const moveWasReveal = destinationQuadrantState === "unexplored";
     const staminaCost = destinationQuadrantState === "unexplored" ? 2 : 1;
     if (party.totalStamina < staminaCost) {
      return interaction.editReply(
@@ -2076,8 +2108,18 @@ module.exports = {
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
+    if (destQ && destQ.blighted) {
+     await applyBlightExposure(
+      party,
+      newLocation.square,
+      newLocation.quadrant,
+      moveWasReveal ? "reveal" : "travel",
+      character.name
+     );
+    }
+
     const nextCharacterMove = party.characters[party.currentTurn];
-    const moveToUnexplored = destinationQuadrantState === "unexplored";
+    const moveToUnexplored = moveWasReveal;
     let moveDescription = moveToUnexplored
      ? `Moved to a new location!`
      : `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
