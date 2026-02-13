@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -24,27 +24,43 @@ const QUADRANT_STATUS_COLORS: Record<string, string> = {
 const SQUARE_W = 2400;
 const SQUARE_H = 1666;
 
-/** Parse "H8 Q3" from messages like "Found a monster camp in H8 Q3; report to town hall..." */
+/** Parse "H8 Q3" from messages like "Found a monster camp in H8 Q3...", "Found ruins in H8 Q3...", "Found a grotto in H8 Q3..." */
 const REPORTABLE_LOC_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])/i;
 
-function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Array<{ square: string; quadrant: string; outcome: string; label: string }> {
+const REPORTABLE_OUTCOMES: Record<string, string> = {
+  monster_camp: "Monster Camp",
+  ruins: "Ruins",
+  grotto: "Grotto",
+};
+
+type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string };
+
+function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): ReportableDiscovery[] {
   if (!Array.isArray(progressLog)) return [];
-  const seen = new Set<string>();
-  const out: Array<{ square: string; quadrant: string; outcome: string; label: string }> = [];
+  const countByKey = new Map<string, number>();
+  const out: ReportableDiscovery[] = [];
   for (const e of progressLog) {
-    if (e.outcome !== "monster_camp") continue;
+    const baseLabel = REPORTABLE_OUTCOMES[e.outcome];
+    if (!baseLabel) continue;
     const m = REPORTABLE_LOC_RE.exec(e.message);
     if (!m || !m[1]) continue;
     const parts = m[1].trim().split(/\s+/);
     const square = parts[0] ?? "";
     const quadrant = parts[1] ?? "";
     if (!square || !quadrant) continue;
-    const key = `${square} ${quadrant}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ square, quadrant, outcome: e.outcome, label: "Monster Camp" });
+    const locKey = `${e.outcome}|${square}|${quadrant}`;
+    const occurrenceIndex = (countByKey.get(locKey) ?? 0) + 1;
+    countByKey.set(locKey, occurrenceIndex);
+    const label = occurrenceIndex > 1 ? `${baseLabel} #${occurrenceIndex}` : baseLabel;
+    const at = typeof e.at === "string" ? e.at : "";
+    out.push({ square, quadrant, outcome: e.outcome, label, occurrenceIndex, at });
   }
   return out;
+}
+
+/** Stable key for a discovery (uses log entry timestamp so it survives party refetch/poll). */
+function discoveryKey(d: { outcome: string; square: string; quadrant: string; at: string }): string {
+  return `${d.outcome}|${d.square}|${d.quadrant}|${d.at}`;
 }
 
 /** Return map coordinates (lat, lng) for the center of a square+quadrant. Canvas: lng 0–24000, lat 0–20000. */
@@ -64,6 +80,34 @@ function squareQuadrantToCoordinates(square: string, quadrant: string): { lat: n
   };
   const off = offsets[q] ?? offsets["1"];
   return { lat: latBase + off.lat, lng: lngBase + off.lng };
+}
+
+/** Bounds of a square in map coordinates (lat 0–20000, lng 0–24000). */
+function getSquareBounds(square: string): { lngMin: number; lngMax: number; latMin: number; latMax: number } {
+  const letter = (square.charAt(0) ?? "A").toUpperCase();
+  const num = Math.min(12, Math.max(1, parseInt((square.slice(1) ?? "1"), 10) || 1));
+  const colIndex = Math.max(0, Math.min(9, letter.charCodeAt(0) - 65));
+  const rowIndex = num - 1;
+  const lngMin = colIndex * SQUARE_W;
+  const lngMax = lngMin + SQUARE_W;
+  const latMin = rowIndex * SQUARE_H;
+  const latMax = latMin + SQUARE_H;
+  return { lngMin, lngMax, latMin, latMax };
+}
+
+/** Quadrant Q1–Q4 as percentage of square (0–1). Q1=top-left, Q2=top-right, Q3=bottom-left, Q4=bottom-right. */
+const QUADRANT_PCT: Record<string, { x: number; y: number; w: number; h: number }> = {
+  Q1: { x: 0, y: 0, w: 0.5, h: 0.5 },
+  Q2: { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+  Q3: { x: 0, y: 0.5, w: 0.5, h: 0.5 },
+  Q4: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+};
+
+/** True if (pctX, pctY) in 0–1 is inside the given quadrant (Q1–Q4). */
+function isClickInQuadrant(pctX: number, pctY: number, quadrant: string): boolean {
+  const q = QUADRANT_PCT[quadrant.toUpperCase()];
+  if (!q) return true;
+  return pctX >= q.x && pctX < q.x + q.w && pctY >= q.y && pctY < q.y + q.h;
 }
 
 const REGIONS: Record<string, { label: string; village: string; square: string; quadrant: string }> = {
@@ -187,10 +231,31 @@ export default function ExplorePartyPage() {
   const [reportedDiscoveryKeys, setReportedDiscoveryKeys] = useState<Set<string>>(new Set());
   const [placingPinForKey, setPlacingPinForKey] = useState<string | null>(null);
   const [placePinError, setPlacePinError] = useState<string | null>(null);
+  const [discoveryPreviewBySquare, setDiscoveryPreviewBySquare] = useState<Record<string, { layers: Array<{ name: string; url: string }>; quadrantBounds: { x: number; y: number; w: number; h: number } | null } | null>>({});
+  const discoveryPreviewFetchedRef = useRef<Set<string>>(new Set());
+  const [placingForDiscovery, setPlacingForDiscovery] = useState<ReportableDiscovery | null>(null);
+  const [mapHovered, setMapHovered] = useState(false);
+  const [mapHoverPct, setMapHoverPct] = useState({ x: 0.5, y: 0.5 });
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [userPins, setUserPins] = useState<Array<{ _id: string; name: string; coordinates: { lat: number; lng: number }; gridLocation: string; icon?: string; color?: string; sourceDiscoveryKey?: string | null }>>([]);
   const [squarePreview, setSquarePreview] = useState<{
     layers: Array<{ name: string; url: string }>;
     quadrantBounds: { x: number; y: number; w: number; h: number } | null;
   } | null>(null);
+
+  /** Discovery is reported if we have it in session state or a pin was already saved (by key or by same square+name). */
+  const isDiscoveryReported = useCallback(
+    (d: ReportableDiscovery) => {
+      const key = discoveryKey(d);
+      if (reportedDiscoveryKeys.has(key)) return true;
+      return userPins.some(
+        (p) =>
+          p.sourceDiscoveryKey === key ||
+          (p.gridLocation === d.square && p.name === d.label)
+      );
+    },
+    [reportedDiscoveryKeys, userPins]
+  );
 
   const regionVillage = party?.region ? normalizeVillage(REGIONS[party.region]?.village ?? party.region) : "";
   const eligibleCharacters = regionVillage
@@ -248,6 +313,50 @@ export default function ExplorePartyPage() {
       })
       .catch(() => setSquarePreview(null));
   }, [party?.square, party?.quadrant]);
+
+  // Load square previews for unreported discoveries (for click-to-place map)
+  useEffect(() => {
+    const list = getReportableDiscoveries(party?.progressLog);
+    const unreported = list.filter((d) => !isDiscoveryReported(d));
+    const squares = Array.from(new Set(unreported.map((d) => d.square)));
+    squares.forEach((square) => {
+      if (discoveryPreviewFetchedRef.current.has(square)) return;
+      discoveryPreviewFetchedRef.current.add(square);
+      fetch(`/api/explore/square-preview?square=${encodeURIComponent(square)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.layers) {
+            setDiscoveryPreviewBySquare((prev) => ({
+              ...prev,
+              [square]: { layers: data.layers, quadrantBounds: data.quadrantBounds ?? null },
+            }));
+          }
+        })
+        .catch(() => setDiscoveryPreviewBySquare((prev) => ({ ...prev, [square]: null })));
+    });
+  }, [party?.progressLog, isDiscoveryReported]);
+
+  const fetchPins = useCallback(() => {
+    if (!userId) return;
+    fetch("/api/pins", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.pins && Array.isArray(data.pins)) {
+          setUserPins(data.pins);
+        } else {
+          setUserPins([]);
+        }
+      })
+      .catch(() => setUserPins([]));
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setUserPins([]);
+      return;
+    }
+    fetchPins();
+  }, [userId, fetchPins]);
 
   useEffect(() => {
     if (!userId) return;
@@ -513,24 +622,28 @@ export default function ExplorePartyPage() {
   }, [partyId, fetchParty]);
 
   const reportableDiscoveries = getReportableDiscoveries(party?.progressLog);
-  const placeMarkerAt = useCallback(
-    async (square: string, quadrant: string, label: string) => {
-      const key = `${square} ${quadrant}`;
+
+  /** Create a pin at the given coordinates (from map click). Saves to DB and shows on /map. */
+  const createDiscoveryPinAt = useCallback(
+    async (coords: { lat: number; lng: number }, d: ReportableDiscovery) => {
+      const key = discoveryKey(d);
       setPlacePinError(null);
       setPlacingPinForKey(key);
       try {
-        const coords = squareQuadrantToCoordinates(square, quadrant);
+        const body: Record<string, unknown> = {
+          name: d.label,
+          description: `Reported from expedition. Discovered in ${d.square} ${d.quadrant}.`,
+          coordinates: coords,
+          category: "points-of-interest",
+          color: "#b91c1c",
+          icon: d.outcome === "monster_camp" ? "fas fa-skull" : d.outcome === "grotto" ? "fas fa-tree" : "fas fa-landmark",
+          sourceDiscoveryKey: key,
+        };
         const res = await fetch("/api/pins", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: label,
-            description: `Reported from expedition. Discovered in ${square} ${quadrant}.`,
-            coordinates: coords,
-            category: "points-of-interest",
-            color: "#b91c1c",
-            icon: "fas fa-skull",
-          }),
+          credentials: "include",
+          body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -538,17 +651,19 @@ export default function ExplorePartyPage() {
             setPlacePinError("Please log in to place a marker.");
             return;
           }
-          setPlacePinError((data.error as string) ?? "Failed to save marker.");
+          setPlacePinError((data.error as string) ?? `Failed to save marker (${res.status}).`);
           return;
         }
         setReportedDiscoveryKeys((prev) => new Set(prev).add(key));
+        setPlacingForDiscovery(null);
+        fetchPins();
       } catch (e) {
         setPlacePinError(e instanceof Error ? e.message : "Failed to save marker.");
       } finally {
         setPlacingPinForKey(null);
       }
     },
-    []
+    [fetchPins]
   );
 
   if (sessionLoading) {
@@ -813,10 +928,10 @@ export default function ExplorePartyPage() {
                       return (
                         <div
                           key={qId}
-                          className="flex items-center justify-center p-1 text-xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                          className="flex items-center justify-center p-1 text-3xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
                           style={{
                             color,
-                            WebkitTextStroke: "1px white",
+                            WebkitTextStroke: "2px white",
                             paintOrder: "stroke fill",
                           } as React.CSSProperties}
                           title={`${qId}: ${status}`}
@@ -827,22 +942,22 @@ export default function ExplorePartyPage() {
                     })}
                   </div>
                 </div>
-                {/* Quadrant status legend (same as ROTW map page) */}
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[10px] text-[var(--totk-grey-200)]">
+                {/* Quadrant status legend: Inaccessible, Unexplored, Explored, Secured */}
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--totk-grey-200)]">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 shrink-0 rounded-sm bg-[#1a1a1a]" aria-hidden />
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#1a1a1a]" aria-hidden />
                     Inaccessible
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 shrink-0 rounded-sm bg-[#b91c1c]" aria-hidden />
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#b91c1c]" aria-hidden />
                     Unexplored
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 shrink-0 rounded-sm bg-[#ca8a04]" aria-hidden />
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#ca8a04]" aria-hidden />
                     Explored
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 shrink-0 rounded-sm bg-[#15803d]" aria-hidden />
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#15803d]" aria-hidden />
                     Secured
                   </span>
                 </div>
@@ -1259,50 +1374,260 @@ export default function ExplorePartyPage() {
             <>
               {/* 1. Map | Journey — side by side */}
               <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* Map */}
-                {squarePreview && squarePreview.layers.length > 0 && (
-                  <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
-                    <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">Map · {party.square} {party.quadrant}</h2>
-                    <div className="relative mx-auto max-w-md overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)]/50" style={{ aspectRatio: "2400/1666" }}>
-                      {squarePreview.layers.map((layer) => (
-                        <img
-                          key={layer.name}
-                          src={layer.url}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-cover"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      ))}
-                      {squarePreview.quadrantBounds && (
-                        <div
-                          className="pointer-events-none absolute border-2 border-[var(--totk-light-green)]/90 bg-[var(--totk-light-green)]/10"
-                          style={{
-                            left: `${squarePreview.quadrantBounds.x}%`,
-                            top: `${squarePreview.quadrantBounds.y}%`,
-                            width: `${squarePreview.quadrantBounds.w}%`,
-                            height: `${squarePreview.quadrantBounds.h}%`,
-                          }}
-                          aria-hidden
-                        />
-                      )}
-                      <div className="pointer-events-none absolute inset-0" aria-hidden>
-                        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40" style={{ transform: "translateX(-50%)" }} />
-                        <div className="absolute top-1/2 left-0 right-0 h-px bg-white/40" style={{ transform: "translateY(-50%)" }} />
-                      </div>
-                      <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
-                        {(["Q1", "Q2", "Q3", "Q4"] as const).map((qId) => {
-                          const status = party.quadrantStatuses?.[qId] ?? "unexplored";
-                          const color = QUADRANT_STATUS_COLORS[status] ?? QUADRANT_STATUS_COLORS.unexplored;
-                          return (
-                            <div key={qId} className="flex items-center justify-center p-1 text-sm font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" style={{ color, WebkitTextStroke: "1px white", paintOrder: "stroke fill" } as React.CSSProperties}>
-                              {qId}
+                {/* Map — same container used for current location and for placing discovery markers */}
+                {(() => {
+                  const isPlacing = placingForDiscovery != null;
+                  const displayPreview = isPlacing
+                    ? discoveryPreviewBySquare[placingForDiscovery!.square]
+                    : squarePreview;
+                  const displaySquare = isPlacing ? placingForDiscovery!.square : party.square;
+                  const displayQuadrant = isPlacing ? placingForDiscovery!.quadrant : party.quadrant;
+                  const showMap = displayPreview?.layers?.length;
+                  const unreported = reportableDiscoveries.filter((d) => !isDiscoveryReported(d));
+                  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+                    if (!isPlacing || !placingForDiscovery) return;
+                    const el = e.currentTarget;
+                    const rect = el.getBoundingClientRect();
+                    const pctX = (e.clientX - rect.left) / rect.width;
+                    const pctY = (e.clientY - rect.top) / rect.height;
+                    if (!isClickInQuadrant(pctX, pctY, placingForDiscovery.quadrant)) {
+                      setPlacePinError(`Click inside the highlighted quadrant (${placingForDiscovery.quadrant}) to place this marker.`);
+                      return;
+                    }
+                    setPlacePinError(null);
+                    const bounds = getSquareBounds(placingForDiscovery.square);
+                    const lng = bounds.lngMin + pctX * (bounds.lngMax - bounds.lngMin);
+                    const lat = bounds.latMin + pctY * (bounds.latMax - bounds.latMin);
+                    createDiscoveryPinAt({ lat, lng }, placingForDiscovery);
+                  };
+                  return (
+                    <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
+                      {userId && unreported.length > 0 && (
+                        <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2">
+                          <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                            <i className="fa-solid fa-landmark text-[10px] opacity-80" aria-hidden />
+                            Report to town hall
+                          </h3>
+                          <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
+                            You found something to report. Click &quot;Place on map&quot; then click <strong>inside the highlighted quadrant</strong> for that discovery (it will be saved and appear on the main Map page).
+                          </p>
+                          {placePinError && (
+                            <div className="mb-2 rounded border border-red-500/60 bg-red-950/40 px-2 py-1.5 text-xs text-red-300" role="alert">
+                              {placePinError}
+                              {placePinError.includes("log in") && (
+                                <Link href="/api/auth/discord" className="ml-1 font-medium text-amber-300 underline">Log in</Link>
+                              )}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </section>
-                )}
+                          )}
+                          <ul className="flex flex-wrap gap-2">
+                            {unreported.map((d) => {
+                              const key = discoveryKey(d);
+                              const reported = isDiscoveryReported(d);
+                              const isThisPlacing = placingForDiscovery && discoveryKey(placingForDiscovery) === key;
+                              const isSaving = placingPinForKey === key;
+                              return (
+                                <li key={key} className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-[var(--botw-warm-black)]/50 px-2.5 py-1.5">
+                                  <span className="text-xs font-medium text-[var(--totk-ivory)]">{d.label} — {d.square} {d.quadrant}</span>
+                                  {reported ? (
+                                    <span className="flex items-center gap-1 text-[10px] text-[var(--totk-light-green)]">
+                                      <i className="fa-solid fa-check" aria-hidden />
+                                      <Link href="/map" className="text-amber-300 underline">Map</Link>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={isSaving || (isPlacing && !isThisPlacing)}
+                                      onClick={() => {
+                                        setPlacingForDiscovery(d);
+                                        setPlacePinError(null);
+                                        setTimeout(() => mapContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
+                                      }}
+                                      className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium transition ${isThisPlacing ? "border-2 border-amber-400 bg-amber-900/60 text-amber-200" : "border border-amber-500/60 bg-amber-900/50 text-amber-200 hover:bg-amber-800/50"} disabled:opacity-50`}
+                                    >
+                                      {isSaving ? <i className="fa-solid fa-spinner fa-spin" aria-hidden /> : <i className="fa-solid fa-map-pin" aria-hidden />}
+                                      {isSaving ? "Saving…" : isThisPlacing ? "Click map below" : "Place on map"}
+                                    </button>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                      <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                        {isPlacing ? `Place marker — ${placingForDiscovery!.label} · ${displaySquare} ${displayQuadrant}` : `Map · ${party.square} ${party.quadrant}`}
+                      </h2>
+                      {showMap ? (
+                        <>
+                        <div
+                          ref={mapContainerRef}
+                          role={isPlacing ? "button" : undefined}
+                          tabIndex={isPlacing ? 0 : undefined}
+                          onClick={isPlacing ? handleMapClick : undefined}
+                          onKeyDown={isPlacing ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const coords = squareQuadrantToCoordinates(placingForDiscovery!.square, placingForDiscovery!.quadrant); createDiscoveryPinAt(coords, placingForDiscovery!); } } : undefined}
+                          onMouseEnter={isPlacing ? () => setMapHovered(true) : undefined}
+                          onMouseLeave={isPlacing ? () => setMapHovered(false) : undefined}
+                          onMouseMove={isPlacing ? (e) => {
+                            const el = mapContainerRef.current;
+                            if (!el) return;
+                            const rect = el.getBoundingClientRect();
+                            const x = (e.clientX - rect.left) / rect.width;
+                            const y = (e.clientY - rect.top) / rect.height;
+                            setMapHoverPct({ x, y });
+                          } : undefined}
+                          className={`relative mx-auto max-w-2xl overflow-hidden rounded-lg border-2 ${isPlacing ? "cursor-crosshair border-amber-500/70" : "border-[var(--totk-dark-ocher)]/50"}`}
+                          style={{ aspectRatio: "2400/1666" }}
+                          aria-label={isPlacing ? `Click to place marker for ${placingForDiscovery!.label}` : undefined}
+                        >
+                          <div
+                            className="absolute inset-0 transition-transform duration-200 ease-out"
+                            style={{
+                              transform: isPlacing && mapHovered ? "scale(1.75)" : "scale(1)",
+                              transformOrigin: `${mapHoverPct.x * 100}% ${mapHoverPct.y * 100}%`,
+                            }}
+                            aria-hidden
+                          >
+                          {isPlacing && placingPinForKey === discoveryKey(placingForDiscovery!) && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60">
+                              <span className="text-sm font-medium text-amber-200"><i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden />Saving…</span>
+                            </div>
+                          )}
+                          {displayPreview!.layers.map((layer) => (
+                            <img
+                              key={layer.name}
+                              src={layer.url}
+                              alt=""
+                              className="absolute inset-0 h-full w-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
+                              style={isPlacing ? { pointerEvents: "none" } : undefined}
+                            />
+                          ))}
+                          {isPlacing && placingForDiscovery && (() => {
+                            const q = QUADRANT_PCT[placingForDiscovery.quadrant.toUpperCase()];
+                            if (!q) return null;
+                            return (
+                              <>
+                                <div className="pointer-events-none absolute inset-0 bg-black/50" aria-hidden />
+                                <div
+                                  className="pointer-events-none absolute border-2 border-amber-400 bg-amber-400/20"
+                                  style={{
+                                    left: `${q.x * 100}%`,
+                                    top: `${q.y * 100}%`,
+                                    width: `${q.w * 100}%`,
+                                    height: `${q.h * 100}%`,
+                                  }}
+                                  aria-hidden
+                                />
+                                <div
+                                  className="pointer-events-none absolute flex items-center justify-center text-sm font-bold text-amber-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                                  style={{
+                                    left: `${q.x * 100}%`,
+                                    top: `${q.y * 100}%`,
+                                    width: `${q.w * 100}%`,
+                                    height: `${q.h * 100}%`,
+                                  }}
+                                  aria-hidden
+                                >
+                                  {placingForDiscovery.quadrant}
+                                </div>
+                              </>
+                            );
+                          })()}
+                          {!isPlacing && (() => {
+                            const b = getSquareBounds(displaySquare);
+                            const pinsInSquare = userPins.filter(
+                              (pin) =>
+                                pin.coordinates.lng >= b.lngMin &&
+                                pin.coordinates.lng < b.lngMax &&
+                                pin.coordinates.lat >= b.latMin &&
+                                pin.coordinates.lat < b.latMax
+                            );
+                            return (
+                              <div className="pointer-events-none absolute inset-0" aria-hidden>
+                                {pinsInSquare.map((pin) => {
+                                  const pctX = (pin.coordinates.lng - b.lngMin) / (b.lngMax - b.lngMin);
+                                  const pctY = (pin.coordinates.lat - b.latMin) / (b.latMax - b.latMin);
+                                  return (
+                                    <div
+                                      key={pin._id}
+                                      className="absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 shadow-md"
+                                      style={{
+                                        left: `${pctX * 100}%`,
+                                        top: `${pctY * 100}%`,
+                                      }}
+                                      title={pin.name}
+                                    >
+                                      <i
+                                        className={`${pin.icon ?? "fas fa-map-marker-alt"} text-sm`}
+                                        style={{ color: pin.color ?? "#00A3DA" }}
+                                        aria-hidden
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                          {!isPlacing && squarePreview?.quadrantBounds && displayPreview === squarePreview && (
+                            <div
+                              className="pointer-events-none absolute border-2 border-[var(--totk-light-green)]/90 bg-[var(--totk-light-green)]/10"
+                              style={{
+                                left: `${squarePreview.quadrantBounds!.x}%`,
+                                top: `${squarePreview.quadrantBounds!.y}%`,
+                                width: `${squarePreview.quadrantBounds!.w}%`,
+                                height: `${squarePreview.quadrantBounds!.h}%`,
+                              }}
+                              aria-hidden
+                            />
+                          )}
+                          <div className="pointer-events-none absolute inset-0" aria-hidden>
+                            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40" style={{ transform: "translateX(-50%)" }} />
+                            <div className="absolute top-1/2 left-0 right-0 h-px bg-white/40" style={{ transform: "translateY(-50%)" }} />
+                          </div>
+                          <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2">
+                            {(["Q1", "Q2", "Q3", "Q4"] as const).map((qId) => {
+                              const status = party.quadrantStatuses?.[qId] ?? "unexplored";
+                              const color = QUADRANT_STATUS_COLORS[status] ?? QUADRANT_STATUS_COLORS.unexplored;
+                              return (
+                                <div key={qId} className="flex items-center justify-center p-1 text-2xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" style={{ color, WebkitTextStroke: "2px white", paintOrder: "stroke fill" } as React.CSSProperties}>
+                                  {qId}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          </div>
+                        </div>
+                        {/* Quadrant status legend: Inaccessible, Unexplored, Explored, Secured */}
+                        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--totk-grey-200)]">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#1a1a1a]" aria-hidden />
+                            Inaccessible
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#b91c1c]" aria-hidden />
+                            Unexplored
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#ca8a04]" aria-hidden />
+                            Explored
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#15803d]" aria-hidden />
+                            Secured
+                          </span>
+                        </div>
+                      </>
+                      ) : (
+                        <div ref={mapContainerRef} className="relative mx-auto flex max-w-2xl items-center justify-center rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60" style={{ aspectRatio: "2400/1666" }}>
+                          <i className="fa-solid fa-spinner fa-spin text-2xl text-[var(--totk-grey-200)]" aria-hidden />
+                        </div>
+                      )}
+                      {isPlacing && showMap && placingForDiscovery && (
+                        <p className="mt-1.5 text-[10px] text-amber-400/90">Hover over the map to zoom in. Click inside the highlighted {placingForDiscovery.quadrant} quadrant to place your marker.</p>
+                      )}
+                    </section>
+                  );
+                })()}
                 {/* Journey */}
                 <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
                   <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">Journey</h2>
@@ -1404,69 +1729,6 @@ export default function ExplorePartyPage() {
                   </div>
                 </div>
               </section>
-
-              {/* Report to town hall — place marker for Monster Camp (and similar) discoveries */}
-              {userId &&
-                reportableDiscoveries.length > 0 &&
-                (() => {
-                  const toShow = reportableDiscoveries.filter((d) => !reportedDiscoveryKeys.has(`${d.square} ${d.quadrant}`));
-                  if (toShow.length === 0) return null;
-                  return (
-                    <section className="rounded-2xl border border-amber-500/50 bg-amber-950/30 p-4 shadow-inner">
-                      <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
-                        <i className="fa-solid fa-landmark text-[10px] opacity-80" aria-hidden />
-                        Report to town hall
-                      </h3>
-                      <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
-                        You found something to report. Place a marker on the map so it’s saved for later.
-                      </p>
-                      {placePinError && (
-                        <p className="mb-2 text-xs text-red-400">{placePinError}</p>
-                      )}
-                      <ul className="space-y-2">
-                        {toShow.map((d) => {
-                          const key = `${d.square} ${d.quadrant}`;
-                          const isPlacing = placingPinForKey === key;
-                          const reported = reportedDiscoveryKeys.has(key);
-                          return (
-                            <li
-                              key={key}
-                              className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-[var(--botw-warm-black)]/50 px-3 py-2"
-                            >
-                              <span className="font-medium text-[var(--totk-ivory)]">
-                                {d.label} — {d.square} {d.quadrant}
-                              </span>
-                              {reported ? (
-                                <span className="text-xs text-[var(--totk-light-green)]">
-                                  <i className="fa-solid fa-check mr-1" aria-hidden /> Marked on map
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={isPlacing}
-                                  onClick={() => placeMarkerAt(d.square, d.quadrant, d.label)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/60 bg-amber-900/50 px-3 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-800/50 disabled:opacity-60"
-                                >
-                                  {isPlacing ? (
-                                    <>
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden />
-                                      Saving…
-                                    </>
-                                  ) : (
-                                    <>
-                                      <i className="fa-solid fa-map-pin" aria-hidden />
-                                      Place marker on map
-                                    </>
-                                  )}
-                                </button>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </section>
-                  );
-                })()}
 
               {/* 2. Progress log | Party — two columns */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

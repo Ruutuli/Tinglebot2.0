@@ -77,6 +77,8 @@ export async function POST(request: Request) {
     let category: string;
     let isPublic = true;
     let characterId: string | null = null;
+    let imageUrl: string | null = null;
+    let sourceDiscoveryKey: string | null = null;
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
@@ -94,6 +96,10 @@ export async function POST(request: Request) {
       isPublic = (formData.get("isPublic") as string) !== "false";
       const charId = formData.get("characterId") as string | null;
       characterId = charId && String(charId).trim() ? String(charId).trim() : null;
+      const imgUrl = formData.get("imageUrl") as string | null;
+      imageUrl = imgUrl && String(imgUrl).trim() ? String(imgUrl).trim() : null;
+      const srcKey = formData.get("sourceDiscoveryKey") as string | null;
+      sourceDiscoveryKey = srcKey && String(srcKey).trim() ? String(srcKey).trim() : null;
     } else {
       body = (await request.json()) as Record<string, unknown>;
       const coords = body.coordinates as { lat?: number; lng?: number };
@@ -109,6 +115,10 @@ export async function POST(request: Request) {
       isPublic = (body.isPublic as boolean) !== false;
       const charId = body.characterId;
       characterId = charId && String(charId).trim() ? String(charId).trim() : null;
+      const imgUrl = body.imageUrl;
+      imageUrl = imgUrl != null && String(imgUrl).trim() ? String(imgUrl).trim() : null;
+      const srcKey = body.sourceDiscoveryKey;
+      sourceDiscoveryKey = srcKey != null && String(srcKey).trim() ? String(srcKey).trim() : null;
     }
 
     if (!name) {
@@ -153,6 +163,12 @@ export async function POST(request: Request) {
     };
     if (characterObjId) {
       pinData.character = characterObjId;
+    }
+    if (imageUrl) {
+      pinData.imageUrl = imageUrl;
+    }
+    if (sourceDiscoveryKey) {
+      pinData.sourceDiscoveryKey = sourceDiscoveryKey.slice(0, 200);
     }
     const pin = new Pin(pinData);
 

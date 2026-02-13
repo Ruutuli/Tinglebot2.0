@@ -95,7 +95,13 @@ const pinSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  
+
+  // When pin was created from "Report to town hall" (explore), links back to the discovery
+  sourceDiscoveryKey: {
+    type: String,
+    default: null
+  },
+
   // Timestamps
   createdAt: {
     type: Date,
