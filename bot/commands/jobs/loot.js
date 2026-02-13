@@ -774,10 +774,21 @@ module.exports = {
     }
 
     if (errorMessage) {
-      await interaction.editReply({
-        content: errorMessage,
-        ephemeral: true
-      });
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply({
+            content: errorMessage,
+            ephemeral: true
+          });
+        } else {
+          await interaction.reply({
+            content: errorMessage,
+            ephemeral: true
+          });
+        }
+      } catch (replyError) {
+        logger.error('LOOT', `Failed to send error message to user: ${replyError.message}`);
+      }
     }
   }
  },
