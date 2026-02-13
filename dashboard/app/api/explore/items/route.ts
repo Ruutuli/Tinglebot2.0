@@ -1,5 +1,5 @@
 // GET /api/explore/items — items valid for expedition: healing items and/or bundles for paving
-// Bundles: 5 Eldin Ore = 1 bundle = 1 item slot; 10 Wood = 1 bundle = 1 item slot
+// Bundles: 5 Eldin Ore = 1 bundle = 1 item slot; 5 Wood = 1 bundle = 1 item slot
 
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";

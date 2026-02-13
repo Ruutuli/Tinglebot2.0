@@ -14,10 +14,10 @@ const REGION_TO_VILLAGE: Record<string, string> = {
   faron: "vhintl",
 };
 
-/** Paving bundles: 5 Eldin Ore = 1 bundle = 1 slot, 10 Wood = 1 bundle = 1 slot */
+/** Paving bundles: 5 Eldin Ore = 1 bundle = 1 slot, 5 Wood = 1 bundle = 1 slot */
 const PAVING_BUNDLES: Record<string, { material: string; requiredPerSlot: number }> = {
   "Eldin Ore Bundle": { material: "Eldin Ore", requiredPerSlot: 5 },
-  "Wood Bundle": { material: "Wood", requiredPerSlot: 10 },
+  "Wood Bundle": { material: "Wood", requiredPerSlot: 5 },
 };
 
 function normalizeVillage(v: string): string {
@@ -234,7 +234,7 @@ export async function POST(
       });
     }
 
-    // Deduct all brought items from inventory: bundles = material qty (5 ore / 10 wood), normal items = 1 each
+    // Deduct all brought items from inventory: bundles = material qty (5 Eldin Ore / 5 Wood per bundle), normal items = 1 each
     const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
     const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
     if (eldinBundles > 0) {

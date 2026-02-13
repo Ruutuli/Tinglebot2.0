@@ -785,7 +785,7 @@ module.exports = {
        description =
         `**${character.name}** found some ruins in **${location}**!\n\n` +
         "You found some ruins! Do you want to explore them?\n\n" +
-        "**Yes** — Use the ruins flow when available (cost 3 stamina).\n" +
+        "**Yes** — Explore ruins (cost 3 stamina).\n" +
         `**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else if (outcomeType === "relic") {
        title = `🗺️ **Expedition: Relic found!**`;
@@ -863,6 +863,7 @@ module.exports = {
         if (outcomeType === "ruins" && isYes) {
          // Disable Yes/No buttons immediately so the original message stays with greyed-out buttons
          await i.update({ embeds: [embed], components: [disabledRow] }).catch(() => {});
+         await msg.edit({ embeds: [embed], components: [disabledRow] }).catch(() => {});
          // Ruins exploration: charge 3 stamina, then roll one of chest/camp/landmark/relic/old_map/star_fragment/blight/goddess_plume
          const freshParty = await Party.findOne({ partyId: expeditionId });
          if (!freshParty) {
@@ -885,7 +886,7 @@ module.exports = {
            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to explore the ruins.** " + ruinsCharacter.name + " has " + currentStamina + " 🟩 (need 3). Continue with </explore roll>.")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
-          await i.followUp({ embeds: [noStaminaEmbed] }).catch(() => {});
+          await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
           return;
          }
          ruinsCharacter.currentStamina = Math.max(0, currentStamina - ruinsStaminaCost);
@@ -1017,6 +1018,12 @@ module.exports = {
           showNextAndCommands: true,
           showRestSecureMove: false,
         });
+         const explorePageUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+         resultEmbed.addFields({
+          name: "📍 **__Set pin on webpage__**",
+          value: `Set a pin for this discovery on the **explore/${expeditionId}** page: ${explorePageUrl}`,
+          inline: false,
+         });
 
          if (ruinsOutcome === "chest") {
           const chestRow = new ActionRowBuilder().addComponents(
@@ -1125,7 +1132,7 @@ module.exports = {
           intro +
           "\n\n" +
           (isYes
-           ? "✅ **You chose to explore the ruins!** (Cost 3 stamina — ruins flow TBD.)"
+           ? "✅ **You chose to explore the ruins!** (Cost 3 stamina.)"
            : `✅ **You left the ruins for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
          );
         } else {
@@ -1815,7 +1822,10 @@ module.exports = {
     });
 
     await interaction.editReply({ embeds: [embed] });
-    await interaction.followUp({ content: `<@${nextCharacterSecure.userId}> it's your turn now` });
+    const explorePageUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+    await interaction.followUp({
+      content: `Hey, you secured it! Use the **explore/${expeditionId}** page to place pins and draw your path: ${explorePageUrl}\n\n<@${nextCharacterSecure.userId}> it's your turn now`,
+    });
 
     // ------------------- Move to Adjacent Quadrant -------------------
    } else if (subcommand === "move") {
@@ -1855,13 +1865,6 @@ module.exports = {
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
-    const staminaCost = 2;
-    if (party.totalStamina < staminaCost) {
-     return interaction.editReply(
-      `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
-     );
-    }
-
     const currentSquare = party.square;
     const currentQuadrant = party.quadrant;
     const adjacent = getAdjacentQuadrants(currentSquare, currentQuadrant);
@@ -1891,6 +1894,24 @@ module.exports = {
      );
     }
 
+    // Move cost: 1 stamina if destination is already explored or secured, 2 if unexplored
+    let destinationQuadrantState = "unexplored";
+    const destMapSquare = await Square.findOne({ squareId: newLocation.square });
+    if (destMapSquare && destMapSquare.quadrants && destMapSquare.quadrants.length) {
+     const destQ = destMapSquare.quadrants.find(
+      (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
+     );
+     if (destQ && (destQ.status === "explored" || destQ.status === "secured")) {
+      destinationQuadrantState = destQ.status;
+     }
+    }
+    const staminaCost = destinationQuadrantState === "unexplored" ? 2 : 1;
+    if (party.totalStamina < staminaCost) {
+     return interaction.editReply(
+      `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
+     );
+    }
+
     // When leaving a square, clear any reportable discoveries (monster_camp, ruins, grotto) in that square from progressLog — unmarked discoveries are considered lost
     const leavingSquare = String(currentSquare || "").trim().toUpperCase();
     let clearedCount = 0;
@@ -1917,21 +1938,11 @@ module.exports = {
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
-    // Sync quadrant state from map: if this quadrant is already explored/secured, party gets that state (1 or 0 stamina to roll)
-    let mapQuadrantState = "unexplored";
-    const mapSquare = await Square.findOne({ squareId: newLocation.square });
-    if (mapSquare && mapSquare.quadrants && mapSquare.quadrants.length) {
-     const q = mapSquare.quadrants.find(
-      (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
-     );
-     if (q && (q.status === "explored" || q.status === "secured")) {
-      mapQuadrantState = q.status;
-     }
-    }
-    party.quadrantState = mapQuadrantState;
+    // Sync quadrant state from map (we already looked up destination above)
+    party.quadrantState = destinationQuadrantState;
     party.markModified("quadrantState");
     const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
-    const quadrantStateLabel = mapQuadrantState === "secured" ? "secured" : mapQuadrantState === "explored" ? "explored" : "unexplored";
+    const quadrantStateLabel = destinationQuadrantState === "secured" ? "secured" : destinationQuadrantState === "explored" ? "explored" : "unexplored";
     pushProgressLog(
      party,
      character.name,
@@ -1950,7 +1961,7 @@ module.exports = {
     }
 
     // If this quadrant is an old map location, check if any party member has that map and show prompt
-    const quadWithMap = mapSquare && mapSquare.quadrants ? mapSquare.quadrants.find(
+    const quadWithMap = destMapSquare && destMapSquare.quadrants ? destMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
     ) : null;
     if (quadWithMap && quadWithMap.oldMapNumber != null) {

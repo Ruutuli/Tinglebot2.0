@@ -514,7 +514,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
 
 // Adds the Commands field to an embed (call last when commandsLast was used in addExplorationStandardFields)
 // showSecuredQuadrantOnly: true = quadrant is secured, no Roll/Secure — show only Move, Item, Camp (and End if at start)
-// showFairyRollOnly: true = fairy just appeared — only Roll (and Item, Camp); no Secure/Move
+// showFairyRollOnly: true = fairy just appeared — only instruct to use /explore roll
 const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showSecuredQuadrantOnly = false, showFairyRollOnly = false, isAtStartQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (!showNextAndCommands || !nextCharacter?.userId || !nextCharacter?.name) return embed;
@@ -534,12 +534,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
  } else if (showFairyRollOnly === true) {
-  const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
-  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
-  commandsValue += `**A fairy appeared — roll to continue exploring.**\n\n` +
-   `• **Roll** — ${cmdRoll}\n> Continue exploring. (Costs 1 stamina)\n\n` +
-   `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout.\n\n` +
-   `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina.`;
+  commandsValue += `**A fairy appeared — use ${cmdRoll} to continue exploring.**`;
  } else if (showRestSecureMove === true) {
   const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
   const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;

@@ -8,10 +8,10 @@ import mongoose, { type Model } from "mongoose";
 
 export const dynamic = "force-dynamic";
 
-/** Paving bundles: 5 Eldin Ore = 1 bundle = 1 slot, 10 Wood = 1 bundle = 1 slot */
+/** Paving bundles: 5 Eldin Ore = 1 bundle = 1 slot, 5 Wood = 1 bundle = 1 slot */
 const PAVING_BUNDLES: Record<string, { material: string; requiredPerSlot: number }> = {
   "Eldin Ore Bundle": { material: "Eldin Ore", requiredPerSlot: 5 },
-  "Wood Bundle": { material: "Wood", requiredPerSlot: 10 },
+  "Wood Bundle": { material: "Wood", requiredPerSlot: 5 },
 };
 
 function escapeRegExp(s: string): string {

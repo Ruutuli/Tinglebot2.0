@@ -446,14 +446,14 @@ export default function ExplorePartyPage() {
 
   const selectedCharacter = eligibleCharacters.find((c) => String(c._id) === String(selectedCharacterId));
 
-  // Paving bundles: 5 Eldin Ore = 1 bundle, 10 Wood = 1 bundle (per plan)
+  // Paving bundles: 5 Eldin Ore = 1 bundle, 5 Wood = 1 bundle
   const bundleQuantities = useCallback(
     (byName: Map<string, number>) => {
       const eldin = byName.get("eldin ore") ?? 0;
       const wood = byName.get("wood") ?? 0;
       return {
         "Eldin Ore Bundle": Math.floor(eldin / 5),
-        "Wood Bundle": Math.floor(wood / 10),
+        "Wood Bundle": Math.floor(wood / 5),
       };
     },
     []
