@@ -1307,14 +1307,7 @@ module.exports = {
         }
         return generateFinalOutcomeMessage(outcome.damageValue || 0, outcome.defenseSuccess || false, outcome.attackSuccess || false, outcome.adjustedRandomValue || 0, outcome.damageValue || 0);
        })();
-       embed.addFields(
-        {
-         name: `❤️ __${character.name} Hearts__`,
-         value: `${character.currentHearts}/${character.maxHearts}`,
-         inline: true,
-        },
-        { name: `⚔️ __Battle Outcome__`, value: battleOutcomeDisplay, inline: false }
-       );
+       embed.addFields({ name: `⚔️ __Battle Outcome__`, value: battleOutcomeDisplay, inline: false });
 
        if (outcome.canLoot && lootedItem) {
         embed.addFields({
@@ -2010,14 +2003,13 @@ module.exports = {
      );
     }
 
-    const isExploredOrSecured = party.quadrantState === "explored" || party.quadrantState === "secured";
     const isSecured = party.quadrantState === "secured";
-    const staminaCost = isExploredOrSecured ? 0 : 3;
+    const staminaCost = isSecured ? 0 : 3;
     const heartsPct = isSecured ? 0.5 : 0.25;
 
     if (staminaCost > 0 && party.totalStamina < staminaCost) {
      return interaction.editReply(
-      `Not enough party stamina to camp here. Requires ${staminaCost} stamina (explored quadrants cost 0).`
+      `Not enough party stamina to camp here. Requires ${staminaCost} stamina (secured quadrants cost 0).`
      );
     }
 
@@ -2066,7 +2058,7 @@ module.exports = {
     const recoveryValue = recoveryPerMember
      .map((r) => `${r.name}: +${r.hearts} ❤️`)
      .join("\n");
-    const campNote = isSecured ? "The secured quadrant made for a restful night." : isExploredOrSecured ? "The party rested." : "The party kept watch — risky terrain meant light rest.";
+    const campNote = isSecured ? "The secured quadrant made for a restful night." : "The party rested.";
     const costNote = staminaCost > 0 ? ` (-${staminaCost} stamina)` : "";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)

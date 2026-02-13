@@ -19,6 +19,20 @@ const REGIONS: Record<string, { label: string; village: string; square: string; 
   faron: { label: "Faron", village: "Vhintl", square: "F10", quadrant: "Q4" },
 };
 
+/** Build journey path from start (region-based) + move entries in progress log */
+function buildJourneyPath(region: string, progressLog: ProgressEntry[], currentSquare: string, currentQuadrant: string): string[] {
+  const start = REGIONS[region?.toLowerCase()];
+  const startLoc = start ? `${start.square} ${start.quadrant}` : `${currentSquare} ${currentQuadrant}`;
+  const path: string[] = [startLoc];
+  const moveRe = /Moved from \S+ \S+ to (\S+ \S+)/;
+  for (const e of progressLog ?? []) {
+    if (e.outcome !== "move") continue;
+    const m = moveRe.exec(e.message);
+    if (m && m[1]) path.push(m[1]);
+  }
+  return path;
+}
+
 const POLL_INTERVAL_MS = 6000;
 
 type PartyMember = {
@@ -1188,6 +1202,37 @@ export default function ExplorePartyPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Journey: start quadrant → moves → current */}
+                {(() => {
+                  const journey = buildJourneyPath(party.region, party.progressLog ?? [], party.square, party.quadrant);
+                  const currentLoc = `${party.square} ${party.quadrant}`;
+                  const hasMoves = journey.length > 1;
+                  return (
+                    <div className="mb-6 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-4 py-3">
+                      <span className="text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">Journey</span>
+                      <p className="mt-1.5 text-sm text-[var(--botw-pale)]">
+                        {!hasMoves ? (
+                          <>
+                            <span className="font-medium text-[var(--totk-ivory)]">{journey[0] ?? currentLoc}</span>
+                            <span className="ml-1.5 text-[var(--totk-grey-200)]">(start & current)</span>
+                          </>
+                        ) : (
+                          journey.map((loc, i) => (
+                            <span key={`${loc}-${i}`}>
+                              {i > 0 && <span className="mx-1.5 text-[var(--totk-grey-200)]">→</span>}
+                              <span className={loc === currentLoc ? "font-semibold text-[var(--totk-light-green)]" : "text-[var(--totk-ivory)]"}>
+                                {loc}
+                              </span>
+                              {i === 0 && <span className="ml-1 text-[10px] text-[var(--totk-grey-200)]">(start)</span>}
+                              {i === journey.length - 1 && i > 0 && <span className="ml-1 text-[10px] text-[var(--totk-grey-200)]">(current)</span>}
+                            </span>
+                          ))
+                        )}
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 <div className="mt-6">
                   <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">

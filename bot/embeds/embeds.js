@@ -471,14 +471,15 @@ function createVendingSetupInstructionsEmbed(character = null) {
 // showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
 const EXPLORE_DASHBOARD_BASE = "https://tinglebot.xyz/explore";
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [] }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const fields = [
-  { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
-  { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
   { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
   { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
+  ...(Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []),
+  { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
+  { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
  ];
  if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
   const nextName = nextCharacter.name;
@@ -610,6 +611,7 @@ const createExplorationMonsterEmbed = (
   showNextAndCommands: !!nextCharacter && showNextAndCommands,
   showRestSecureMove: false,
   commandsLast: true,
+  extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
  });
  return embed;
 };
@@ -2931,7 +2933,7 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null, status =
   if (requestData.category === 'Crafting' && (requestData.boosterJob || '').toString().toLowerCase() === 'teacher') {
     fields.push({
       name: '📌 **Note**',
-      value: '> The booster must **manually activate both** job vouchers: one to accept (e.g. use a voucher to be Teacher), and one before the crafting character uses stamina assistance (run `/boosting use-second-voucher`).',
+      value: '> The booster must **manually activate both** job vouchers: one to accept (e.g. use a voucher to be Teacher), and one before the crafting character uses stamina assistance (use a Job Voucher via `/item` with job Teacher).',
       inline: false
     });
   }
@@ -3113,7 +3115,7 @@ const createBoostAppliedEmbed = (boostData) => {
   if (boostData.category === 'Crafting' && (boostData.boosterJob || '').toString().toLowerCase() === 'teacher') {
     appliedFields.push({
       name: '📌 **Note**',
-      value: '> The booster must **manually activate both** job vouchers: one to accept (e.g. use a voucher to be Teacher), and one before the crafting character uses stamina assistance (run `/boosting use-second-voucher`).',
+      value: '> The booster must **manually activate both** job vouchers: one to accept (e.g. use a voucher to be Teacher), and one before the crafting character uses stamina assistance (use a Job Voucher via `/item` with job Teacher).',
       inline: false
     });
   }

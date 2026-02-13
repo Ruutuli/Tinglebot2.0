@@ -128,8 +128,8 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             title: '❌ Booster Must Have Job Voucher When Using Second Voucher',
             description: `The booster (**${data.boosterName || 'Teacher'}**) must have at least 1 Job Voucher in inventory to use their second voucher for this boost.`,
             fields: [
-                { name: 'Note', value: '> Ask the booster to add a Job Voucher to their inventory, then they can run `/boosting use-second-voucher` again.' },
-                { name: 'How to Fix', value: '> The boosting character needs to have a Job Voucher available when they manually use their second voucher.' }
+                { name: 'Note', value: '> Ask the booster to add a Job Voucher to their inventory, then they can use their second voucher via **/item** (use Job Voucher with job Teacher).' },
+                { name: 'How to Fix', value: '> The boosting character needs to have a Job Voucher available when they use their second voucher via `/item`.' }
             ],
             color: '#FF0000'
         },
@@ -137,8 +137,8 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             title: '❌ Booster Must Use Second Voucher First',
             description: `**${data.targetName || 'The crafting character'}** cannot use Teacher stamina assistance until the booster has manually used their second job voucher.`,
             fields: [
-                { name: 'Note', value: '> The booster must run **/boosting use-second-voucher** with their Teacher character before you can use the stamina assistance.' },
-                { name: 'How to Fix', value: '> Ask **' + (data.boosterName || 'the booster') + '** to use `/boosting use-second-voucher` and choose their boosting character, then try crafting again.' }
+                { name: 'Note', value: '> The booster must use a Job Voucher via **/item** (use Job Voucher with job Teacher) before you can use the stamina assistance.' },
+                { name: 'How to Fix', value: '> Ask **' + (data.boosterName || 'the booster') + '** to use their second voucher via `/item` (Job Voucher, job Teacher), then try crafting again.' }
             ],
             color: '#FF0000'
         },
