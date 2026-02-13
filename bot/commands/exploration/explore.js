@@ -1366,11 +1366,18 @@ module.exports = {
     const currentQuadrant = party.quadrant;
     const adjacent = getAdjacentQuadrants(currentSquare, currentQuadrant);
 
-    // Parse "H8 Q1" or "H8 Q2" format
+    // Parse "H8 - Q1" or "H8 Q1" format
     const trimmed = quadrantInput.trim();
-    const spaceIdx = trimmed.lastIndexOf(" ");
-    const targetSquare = spaceIdx > 0 ? trimmed.slice(0, spaceIdx).trim().toUpperCase() : trimmed.toUpperCase();
-    const targetQuadrant = spaceIdx > 0 ? trimmed.slice(spaceIdx + 1).trim().toUpperCase() : null;
+    let targetSquare, targetQuadrant;
+    if (trimmed.includes(" - ")) {
+     const parts = trimmed.split(" - ");
+     targetSquare = (parts[0] || "").trim().toUpperCase();
+     targetQuadrant = (parts[1] || "").trim().toUpperCase();
+    } else {
+     const spaceIdx = trimmed.lastIndexOf(" ");
+     targetSquare = spaceIdx > 0 ? trimmed.slice(0, spaceIdx).trim().toUpperCase() : trimmed.toUpperCase();
+     targetQuadrant = spaceIdx > 0 ? trimmed.slice(spaceIdx + 1).trim().toUpperCase() : null;
+    }
 
     const newLocation = adjacent.find(
      (a) =>

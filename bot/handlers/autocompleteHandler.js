@@ -3447,7 +3447,7 @@ async function handleExploreMoveQuadrantAutocomplete(interaction, focusedOption)
 
   const value = (focusedOption.value || "").toLowerCase();
   const choices = adjacent.map((a) => {
-   const loc = `${a.square} ${a.quadrant}`;
+   const loc = `${a.square} - ${a.quadrant}`;
    return { name: loc, value: loc };
   });
   const filtered = value
