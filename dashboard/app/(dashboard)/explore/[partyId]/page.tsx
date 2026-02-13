@@ -263,6 +263,9 @@ export default function ExplorePartyPage() {
   const [placingForDiscovery, setPlacingForDiscovery] = useState<ReportableDiscovery | null>(null);
   const [mapHovered, setMapHovered] = useState(false);
   const [mapHoverPct, setMapHoverPct] = useState({ x: 0.5, y: 0.5 });
+  const [pathImageFile, setPathImageFile] = useState<File | null>(null);
+  const [pathImageUploading, setPathImageUploading] = useState(false);
+  const [pathImageStatus, setPathImageStatus] = useState("");
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [userPins, setUserPins] = useState<Array<{ _id: string; name: string; coordinates: { lat: number; lng: number }; gridLocation: string; icon?: string; color?: string; sourceDiscoveryKey?: string | null }>>([]);
   const [squarePreview, setSquarePreview] = useState<{
@@ -1032,15 +1035,6 @@ export default function ExplorePartyPage() {
                   ) : (
                     <span className="text-xs text-[var(--totk-grey-200)]">Thread link not available.</span>
                   )}
-                  {(party.quadrantState === "secured" || (party.quadrantStatuses && Object.values(party.quadrantStatuses).includes("secured"))) && (
-                    <Link
-                      href={`/map?drawPath=1&partyId=${encodeURIComponent(party.partyId)}`}
-                      className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-mid-ocher)]/30 px-3 py-2 text-xs font-bold text-[var(--totk-ivory)] transition hover:opacity-90 sm:text-sm sm:px-4 sm:py-2.5"
-                    >
-                      <i className="fa-solid fa-route shrink-0 text-xs opacity-90" aria-hidden />
-                      <span className="truncate">Draw path on map</span>
-                    </Link>
-                  )}
                 </>
               )}
               {party.isLeader && party.status === "open" && (
@@ -1541,6 +1535,79 @@ export default function ExplorePartyPage() {
                               );
                             })}
                           </ul>
+                        </div>
+                      )}
+                      {(party.quadrantState === "secured" || (party.quadrantStatuses && Object.values(party.quadrantStatuses).includes("secured"))) && (
+                        <div className="mb-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-mid-ocher)]/20 px-3 py-2">
+                          <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-ivory)]">
+                            <i className="fa-solid fa-route text-[10px] opacity-80" aria-hidden />
+                            Draw path on map
+                          </h3>
+                          <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
+                            Download the full square image below, draw your path on it (e.g. in Paint or any image editor), save the image, then upload it here. It will appear on the main Map page and update automatically if you upload again.
+                          </p>
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <a
+                              href={`/api/images/maps/squares/MAP_0002_Map-Base/MAP_0002_Map-Base_${party.square}.png`}
+                              download={`square-${party.square}.png`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/50 px-2 py-1 text-[10px] font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/30"
+                            >
+                              <i className="fa-solid fa-download" aria-hidden />
+                              Download square image ({party.square})
+                            </a>
+                            <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/50 px-2 py-1 text-[10px] font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/30">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0];
+                                  setPathImageFile(f ?? null);
+                                  setPathImageStatus("");
+                                }}
+                              />
+                              <i className="fa-solid fa-file-image" aria-hidden />
+                              {pathImageFile ? pathImageFile.name : "Choose image"}
+                            </label>
+                            <button
+                              type="button"
+                              disabled={!pathImageFile || pathImageUploading}
+                              onClick={async () => {
+                                if (!pathImageFile || pathImageUploading) return;
+                                setPathImageUploading(true);
+                                setPathImageStatus("Uploading…");
+                                try {
+                                  const form = new FormData();
+                                  form.append("file", pathImageFile);
+                                  form.append("partyId", party.partyId ?? "");
+                                  form.append("squareId", party.square);
+                                  const res = await fetch("/api/explore/path-images/upload", {
+                                    method: "POST",
+                                    credentials: "include",
+                                    body: form,
+                                  });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) {
+                                    setPathImageStatus((data.error as string) || "Upload failed.");
+                                    return;
+                                  }
+                                  setPathImageFile(null);
+                                  setPathImageStatus("Path image uploaded! It appears on the main Map page and will update if you upload again.");
+                                } catch {
+                                  setPathImageStatus("Upload failed. Try again.");
+                                } finally {
+                                  setPathImageUploading(false);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 rounded border border-[var(--totk-light-green)]/60 bg-[var(--totk-dark-green)]/50 px-2 py-1 text-[10px] font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-green)]/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {pathImageUploading ? <i className="fa-solid fa-spinner fa-spin" aria-hidden /> : <i className="fa-solid fa-upload" aria-hidden />}
+                              Upload path image
+                            </button>
+                          </div>
+                          {pathImageStatus && <p className="text-[11px] text-[var(--totk-grey-200)]">{pathImageStatus}</p>}
                         </div>
                       )}
                       <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">

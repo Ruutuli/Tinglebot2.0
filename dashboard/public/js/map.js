@@ -750,6 +750,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // User-drawn paths layer (secured paths)
             userPathsLayer = L.layerGroup().addTo(mapEngine.getMap());
             loadUserPaths();
+            // User-uploaded path images (draw on square image, upload; same GCS URL auto-updates)
+            userPathImagesLayer = L.layerGroup().addTo(mapEngine.getMap());
+            loadUserPathImages();
             // Initialize pins system
             initializePinsWhenReady();
             // URL: open exploration panel in path-draw mode for this expedition
@@ -2674,6 +2677,8 @@ let pathDrawingPoints = [];
 let pathPreviewPolyline = null;
 /** Layer group for saved user-drawn paths (secured paths) */
 let userPathsLayer = null;
+/** Layer group for user-uploaded path images (drawn on square, then uploaded) */
+let userPathImagesLayer = null;
 /** Prevent double-submit when saving path */
 let pathDrawingSaving = false;
 /** Max points per path (must match server MAP_PATH_LIMITS.MAX_POINTS) */
@@ -2881,6 +2886,48 @@ async function loadUserPaths(retryCount = 0) {
     } catch (e) {
         console.warn('[exploration] Failed to load paths:', e);
         if (retryCount < maxRetries) setTimeout(() => loadUserPaths(retryCount + 1), 2000);
+    }
+}
+
+/**
+ * Load user-uploaded path images from API and add as image overlays per square.
+ * Images are at GCS; re-upload overwrites so the same URL auto-updates.
+ */
+async function loadUserPathImages() {
+    if (!mapEngine || !userPathImagesLayer || typeof L === 'undefined') return;
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const partyId = params.get('partyId')?.trim() || '';
+        const url = partyId ? `/api/explore/path-images?partyId=${encodeURIComponent(partyId)}` : '/api/explore/path-images';
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const list = Array.isArray(data.pathImages) ? data.pathImages : [];
+        userPathImagesLayer.clearLayers();
+        const CANVAS_H = typeof MAP_CONFIG !== 'undefined' ? MAP_CONFIG.CANVAS_H : 20000;
+        list.forEach((item) => {
+            const squareId = item.squareId;
+            let imageUrl = item.imageUrl;
+            if (!squareId || !imageUrl) return;
+            if (item.updatedAt) imageUrl = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + item.updatedAt;
+            try {
+                const bounds = mapEngine.geometry.getSquareBounds(squareId);
+                const leafletBounds = [
+                    [CANVAS_H - bounds.y1, bounds.x0],
+                    [CANVAS_H - bounds.y0, bounds.x1]
+                ];
+                const overlay = L.imageOverlay(imageUrl, leafletBounds, {
+                    opacity: 0.85,
+                    interactive: false,
+                    className: 'map-overlay user-path-image'
+                });
+                userPathImagesLayer.addLayer(overlay);
+            } catch (e) {
+                console.warn('[map] Failed to add path image overlay:', squareId, e);
+            }
+        });
+    } catch (e) {
+        console.warn('[map] Failed to load path images:', e);
     }
 }
 

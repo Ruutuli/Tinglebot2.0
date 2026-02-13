@@ -1986,6 +1986,11 @@ module.exports = {
      .setColor(regionColors[party.region] || "#2196F3")
      .setDescription(moveDescription)
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+    const moveToSecured = destinationQuadrantState === "secured";
+    const moveIsAtStart = (() => {
+     const start = START_POINTS_BY_REGION[party.region];
+     return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+    })();
     addExplorationStandardFields(embed, {
       party,
       expeditionId,
@@ -1993,6 +1998,17 @@ module.exports = {
       nextCharacter: nextCharacterMove ?? null,
       showNextAndCommands: true,
       showRestSecureMove: false,
+      commandsLast: true,
+    });
+    addExplorationCommandsField(embed, {
+      party,
+      expeditionId,
+      location: locationMove,
+      nextCharacter: nextCharacterMove ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: !moveToSecured,
+      showSecuredQuadrantOnly: moveToSecured,
+      isAtStartQuadrant: moveIsAtStart,
     });
 
     await interaction.editReply({ embeds: [embed] });

@@ -438,8 +438,8 @@ class MapLoader {
             return layers.filter(layer => layer.startsWith('MAP_0002s_') && layer.includes('CIRCLE-'));
         }
         // Only request circle layers for squares that have the assets (prevents 404s in console)
-        const inarikoSquares = ['H8'];
-        const vhintlSquares = ['F10'];
+        const inarikoSquares = ['G8', 'H8'];
+        const vhintlSquares = ['F9', 'F10'];
         const rudaniaSquares = ['H5'];
         const circleLayers = [];
         if (inarikoSquares.includes(squareId)) {
