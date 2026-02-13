@@ -1052,6 +1052,24 @@ export default function ExplorePartyPage() {
             </div>
           </header>
 
+          {party.status === "completed" && (
+            <section className="mb-6 rounded-2xl border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-dark-ocher)]/20 px-5 py-4 shadow-lg sm:px-6 sm:py-5" role="status" aria-live="polite">
+              <div className="flex flex-wrap items-center justify-center gap-3 text-center">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]">
+                  <i className="fa-solid fa-flag-checkered text-lg" aria-hidden />
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold uppercase tracking-wider text-[var(--totk-ivory)] sm:text-xl">
+                    Expedition ended!
+                  </h2>
+                  <p className="mt-0.5 text-sm text-[var(--totk-grey-200)]">
+                    This expedition has been completed. Members returned to the village with remaining stamina and items.
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
+
           {!userId && (
             <section className="mb-8 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-lg md:p-6">
               <p className="text-sm text-[var(--botw-pale)]">

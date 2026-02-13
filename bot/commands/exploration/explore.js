@@ -2117,6 +2117,22 @@ module.exports = {
      }
     }
 
+    // Return any remaining loadout items to each character's inventory
+    for (const partyCharacter of party.characters || []) {
+     const items = partyCharacter.items || [];
+     for (const item of items) {
+      if (item && item.itemName) {
+       await addItemInventoryDatabase(
+        partyCharacter._id,
+        item.itemName,
+        1,
+        interaction,
+        "Expedition ended — returned from party"
+       ).catch((err) => console.error("[explore.js] Return item to owner:", err.message));
+      }
+     }
+    }
+
     party.status = "completed";
     await party.save();
 
