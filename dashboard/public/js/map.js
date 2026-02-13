@@ -2539,79 +2539,68 @@ async function initializePinsWhenReady() {
         await initializePinManager();
         
         // Test metadata integration
-        testMetadataIntegration();
+        if (MAP_DEBUG) testMetadataIntegration();
     } else {
         // Wait a bit and try again
         setTimeout(initializePinsWhenReady, 1000);
     }
 }
 
-// Test metadata integration
+// Test metadata integration (only runs when MAP_DEBUG is true)
 function testMetadataIntegration() {
     if (!mapEngine) return;
     
-    console.log('[map] Testing metadata integration...');
+    if (MAP_DEBUG) console.log('[map] Testing metadata integration...');
     
-    // Test getting metadata for a known square
     const testSquare = 'H5'; // Rudania
     const metadata = mapEngine.getSquareMetadata(testSquare);
-    console.log(`[map] Metadata for ${testSquare}:`, metadata);
+    if (MAP_DEBUG) console.log(`[map] Metadata for ${testSquare}:`, metadata);
     
-    // Test region and status
     const region = mapEngine.getRegion(testSquare);
     const status = mapEngine.getStatus(testSquare);
-    console.log(`[map] ${testSquare} - Region: ${region}, Status: ${status}`);
+    if (MAP_DEBUG) console.log(`[map] ${testSquare} - Region: ${region}, Status: ${status}`);
     
-    // Test explorable check
     const isExplorable = mapEngine.isExplorable(testSquare);
-    console.log(`[map] ${testSquare} is explorable: ${isExplorable}`);
+    if (MAP_DEBUG) console.log(`[map] ${testSquare} is explorable: ${isExplorable}`);
     
-    // Test getting all regions
     const regions = mapEngine.getRegions();
-    console.log('[map] Available regions:', regions);
+    if (MAP_DEBUG) console.log('[map] Available regions:', regions);
     
-    // Test getting squares by region
     const eldinSquares = mapEngine.getSquaresByRegion('Eldin');
-    console.log('[map] Eldin squares:', eldinSquares.length, 'squares');
+    if (MAP_DEBUG) console.log('[map] Eldin squares:', eldinSquares.length, 'squares');
     
-    // Test getting squares by status
     const explorableSquares = mapEngine.getSquaresByStatus('Explorable');
-    console.log('[map] Explorable squares:', explorableSquares.length, 'squares');
+    if (MAP_DEBUG) console.log('[map] Explorable squares:', explorableSquares.length, 'squares');
     
-    console.log('[map] Metadata integration test complete!');
+    if (MAP_DEBUG) console.log('[map] Metadata integration test complete!');
 }
 
 // Demonstration function for using square metadata
 function demonstrateSquareMetadata() {
     if (!mapEngine) {
-        console.log('[map] Map engine not available');
+        if (MAP_DEBUG) console.log('[map] Map engine not available');
         return;
     }
     
+    if (!MAP_DEBUG) return;
     console.log('=== Square Metadata Demonstration ===');
     
-    // Example 1: Get metadata for a specific square
     const squareId = 'H5'; // Rudania
     const metadata = MapAPI.getSquareMetadata(squareId);
     console.log(`Square ${squareId} metadata:`, metadata);
     
-    // Example 2: Check if a square is explorable
     const isExplorable = MapAPI.isExplorable(squareId);
     console.log(`Square ${squareId} is explorable: ${isExplorable}`);
     
-    // Example 3: Get region information
     const region = MapAPI.getRegion(squareId);
     console.log(`Square ${squareId} is in region: ${region}`);
     
-    // Example 4: Get all squares in a region
     const eldinSquares = MapAPI.getSquaresByRegion('Eldin');
     console.log(`Eldin region has ${eldinSquares.length} squares:`, eldinSquares.slice(0, 5), '...');
     
-    // Example 5: Get all explorable squares
     const explorableSquares = MapAPI.getSquaresByStatus('Explorable');
     console.log(`There are ${explorableSquares.length} explorable squares`);
     
-    // Example 6: Get all available regions
     const regions = MapAPI.getRegions();
     console.log('Available regions:', regions);
     

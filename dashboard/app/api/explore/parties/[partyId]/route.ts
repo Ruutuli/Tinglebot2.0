@@ -110,22 +110,33 @@ export async function GET(
         })
       : [];
 
-    // Area status: use canonical map (Square) so dashboard matches DB even if party.quadrantState is stale
+    // Quadrant state and statuses: read from exploring map model (Square / exploringMap collection) so dashboard colors match DB
     let quadrantState: string = typeof p.quadrantState === "string" ? p.quadrantState : "unexplored";
     const squareId = typeof p.square === "string" ? p.square.trim() : "";
     const quadrantId = typeof p.quadrant === "string" ? String(p.quadrant).trim().toUpperCase() : "";
-    if (squareId && quadrantId) {
+    const quadrantStatuses: Record<string, string> = { Q1: "unexplored", Q2: "unexplored", Q3: "unexplored", Q4: "unexplored" };
+    if (squareId) {
       const Square =
         mongoose.models.Square ??
         ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
-      const mapSquare = await Square.findOne({ squareId }).lean();
+      const squareIdRegex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const mapSquare = await Square.findOne({ squareId: squareIdRegex }).lean();
       if (mapSquare && Array.isArray((mapSquare as Record<string, unknown>).quadrants)) {
         const quads = (mapSquare as Record<string, unknown>).quadrants as Array<Record<string, unknown>>;
-        const q = quads.find(
-          (qu) => String(qu.quadrantId).toUpperCase() === quadrantId
-        );
-        if (q && typeof q.status === "string" && ["explored", "secured"].includes(q.status)) {
-          quadrantState = q.status;
+        for (const qu of quads) {
+          const id = String(qu.quadrantId ?? "").trim().toUpperCase();
+          if (id === "Q1" || id === "Q2" || id === "Q3" || id === "Q4") {
+            const raw = typeof qu.status === "string" ? String(qu.status).trim().toLowerCase() : "";
+            const s = ["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored";
+            quadrantStatuses[id] = s;
+          }
+        }
+        if (quadrantId) {
+          const q = quads.find((qu) => String(qu.quadrantId).toUpperCase() === quadrantId);
+          const raw = q && typeof q.status === "string" ? String(q.status).trim().toLowerCase() : "";
+          if (["explored", "secured"].includes(raw)) {
+            quadrantState = raw;
+          }
         }
       }
     }
@@ -146,6 +157,7 @@ export async function GET(
       discordThreadUrl,
       currentTurn: typeof p.currentTurn === "number" ? p.currentTurn : 0,
       quadrantState,
+      quadrantStatuses,
       gatheredItems,
       progressLog,
     });

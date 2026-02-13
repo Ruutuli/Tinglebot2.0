@@ -56,12 +56,22 @@ const VILLAGE_CIRCLE_LAYERS = [
   "MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK",
 ];
 
-/** Build ordered layer list for a square (matches map-loader logic) */
-function getLayersForSquare(squareId: string): string[] {
+/** Quadrant status from DB; used to skip hidden/fog for explored/secured quads */
+type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
+
+/** Build ordered layer list for a square (matches map-loader logic). Omit hidden-areas when current quadrant is explored/secured. */
+function getLayersForSquare(
+  squareId: string,
+  options?: { currentQuadrantStatus?: QuadrantStatus }
+): string[] {
   const layers: string[] = [];
 
-  // 1. Mask/fog (hidden areas)
-  layers.push("MAP_0001_hidden-areas");
+  // 1. Mask/fog (hidden areas) — only for unexplored/inaccessible quadrants; no fog on explored/secured
+  const skipHidden =
+    options?.currentQuadrantStatus === "explored" || options?.currentQuadrantStatus === "secured";
+  if (!skipHidden) {
+    layers.push("MAP_0001_hidden-areas");
+  }
 
   // 2. Blight (if square has blight)
   if (BLIGHT_SQUARES.includes(squareId)) {
@@ -116,22 +126,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid or missing square" }, { status: 400 });
     }
 
-    let layers = getLayersForSquare(square);
-    if (noMask) {
-      layers = layers.filter((l) => l !== "MAP_0001_hidden-areas");
-    }
-    const layerUrls = layers.map((name) => ({
-      name,
-      url: getLayerImageUrl(square, name),
-    }));
-
-    // Optional: fetch Square from DB for image URL / metadata
+    // Fetch Square from exploring map model (exploringMap collection); quadrant statuses drive map colors and layer list
     let dbImage: string | null = null;
     let mapCoordinates: { center: { lat: number; lng: number }; bounds: { north: number; south: number; east: number; west: number } } | null = null;
+    const quadrantStatuses: Record<string, QuadrantStatus> = { Q1: "unexplored", Q2: "unexplored", Q3: "unexplored", Q4: "unexplored" };
+    let currentQuadrantStatus: QuadrantStatus | undefined;
     try {
       await connect();
-      const Square = (await import("@/models/mapModel")).default;
-      const doc = await Square.findOne({ squareId: square }).lean();
+      const Square = (await import("@/models/mapModel.js")).default;
+      const squareIdRegex = new RegExp(`^${square.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const doc = await Square.findOne({ squareId: squareIdRegex }).lean() as {
+        image?: string;
+        mapCoordinates?: { center?: { lat: number; lng: number }; bounds?: { north: number; south: number; east: number; west: number } };
+        quadrants?: Array<{ quadrantId: string; status?: string }>;
+      } | null;
       if (doc) {
         dbImage = doc.image ?? null;
         const coords = doc.mapCoordinates;
@@ -141,10 +149,33 @@ export async function GET(request: NextRequest) {
             bounds: { north: coords.bounds.north, south: coords.bounds.south, east: coords.bounds.east, west: coords.bounds.west },
           };
         }
+        if (Array.isArray(doc.quadrants)) {
+          for (const q of doc.quadrants) {
+            const id = String(q.quadrantId || "").trim().toUpperCase();
+            if (id && (id === "Q1" || id === "Q2" || id === "Q3" || id === "Q4")) {
+              const raw = typeof q.status === "string" ? String(q.status).trim().toLowerCase() : "";
+              quadrantStatuses[id] = (["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored") as QuadrantStatus;
+            }
+          }
+          const requestedQuad = quadrant.match(/^Q([1-4])$/) ? quadrant : "";
+          if (requestedQuad && quadrantStatuses[requestedQuad]) {
+            currentQuadrantStatus = quadrantStatuses[requestedQuad];
+          }
+        }
       }
     } catch {
       // DB optional – continue without it
     }
+
+    // Build layers: omit hidden/fog when current quadrant is explored or secured
+    let layers = getLayersForSquare(square, { currentQuadrantStatus });
+    if (noMask) {
+      layers = layers.filter((l) => l !== "MAP_0001_hidden-areas");
+    }
+    const layerUrls = layers.map((name) => ({
+      name,
+      url: getLayerImageUrl(square, name),
+    }));
 
     const quadrantNum = quadrant.match(/^Q([1-4])$/) ? parseInt(quadrant.slice(1), 10) : null;
     const quadrantBounds = quadrantNum ? getQuadrantBounds(quadrantNum) : null;
@@ -153,6 +184,7 @@ export async function GET(request: NextRequest) {
       squareId: square,
       quadrant: quadrant || null,
       layers: layerUrls,
+      quadrantStatuses,
       dbImage,
       mapCoordinates,
       quadrantBounds,

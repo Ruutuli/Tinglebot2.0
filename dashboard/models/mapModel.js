@@ -108,5 +108,5 @@ SquareSchema.methods.getExplorationProgress = function() {
   };
 };
 
-// Export as 'exploringMap' collection
-module.exports = mongoose.model('Square', SquareSchema, 'exploringMap');
+// Export as 'exploringMap' collection (reuse if already compiled to avoid OverwriteModelError)
+module.exports = mongoose.models.Square || mongoose.model('Square', SquareSchema, 'exploringMap');

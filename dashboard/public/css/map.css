@@ -999,6 +999,40 @@ body.map-page .action-btn span {
     opacity: 0;
 }
 
+/* Quadrant status legend (Q1–Q4 label colors) */
+.quadrant-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.quadrant-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.quadrant-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.quadrant-legend-label {
+    font-weight: 500;
+}
+
+.quadrant-legend-note {
+    margin: 10px 0 0;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1.35;
+}
+
 /* Navigation Section */
 .nav-section {
     margin-bottom: 20px;

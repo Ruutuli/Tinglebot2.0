@@ -93,10 +93,10 @@ const MAP_CONFIG = {
             0: 48      // Maximum size for zoom in
         },
         quadrantLabels: {
-            '-3': 12,  // Small for maximum zoom out
-            '-2': 16,  // Medium for zoom out
-            '-1': 20,  // Large for medium zoom
-            0: 24      // Maximum size for zoom in
+            '-3': 16,  // Small for maximum zoom out
+            '-2': 20,  // Medium for zoom out
+            '-1': 24,  // Large for medium zoom
+            0: 28      // Maximum size for zoom in
         }
     }
 };

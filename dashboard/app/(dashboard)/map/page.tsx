@@ -188,6 +188,34 @@ export default function MapPage() {
             </div>
           </div>
 
+          <div className="quadrant-legend-section collapsible-section">
+            <h3 className="section-header" onClick={() => (window as unknown as { toggleSection?: (s: string) => void }).toggleSection?.("quadrant-legend-section")}>
+              <i className="fas fa-palette" /> Quadrant status
+              <i className="fas fa-chevron-down section-arrow" />
+            </h3>
+            <div className="section-content">
+              <div className="quadrant-legend">
+                <div className="quadrant-legend-item" title="Blocked; cannot be explored">
+                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#1a1a1a" }} />
+                  <span className="quadrant-legend-label">Inaccessible</span>
+                </div>
+                <div className="quadrant-legend-item" title="Not yet visited; 2 stamina to enter">
+                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#b91c1c" }} />
+                  <span className="quadrant-legend-label">Unexplored</span>
+                </div>
+                <div className="quadrant-legend-item" title="Visited; 1 stamina to continue">
+                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#ca8a04" }} />
+                  <span className="quadrant-legend-label">Explored</span>
+                </div>
+                <div className="quadrant-legend-item" title="Secured path; 0 stamina">
+                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#15803d" }} />
+                  <span className="quadrant-legend-label">Secured</span>
+                </div>
+              </div>
+              <p className="quadrant-legend-note">Q1–Q4 label color on the map shows each quadrant’s status.</p>
+            </div>
+          </div>
+
           <div className="pins-section collapsible-section">
             <h3 className="section-header" onClick={() => (window as unknown as { toggleSection?: (s: string) => void }).toggleSection?.("pins-section")}>
               <i className="fas fa-map-pin" /> Pins

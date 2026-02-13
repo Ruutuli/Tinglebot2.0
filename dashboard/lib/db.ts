@@ -13,12 +13,16 @@ import { logger } from "@/utils/logger";
 // ============================================================================
 
 // ------------------- getMongoUri ------------------
-// Retrieves MongoDB URI from environment variables -
-
+// Retrieves MongoDB URI. Prefer MONGODB_TINGLEBOT_URI so Party + exploringMap (Square) data
+// come from the same DB as the bot; fall back to MONGODB_URI.
 function getMongoUri(): string {
-  const uri = process.env.MONGODB_URI;
+  const uri =
+    process.env.MONGODB_TINGLEBOT_URI ||
+    process.env.MONGODB_URI;
   if (!uri) {
-    throw new Error("[db.ts]❌ MONGODB_URI is not defined. Add it to your .env file.");
+    throw new Error(
+      "[db.ts]❌ Set MONGODB_TINGLEBOT_URI or MONGODB_URI in your .env (same DB as the bot for exploring map + parties)."
+    );
   }
   return uri;
 }

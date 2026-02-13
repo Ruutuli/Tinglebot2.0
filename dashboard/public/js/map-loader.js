@@ -5,11 +5,12 @@
 
 
 class MapLoader {
-    constructor(config, geometry, manifest, layers) {
+    constructor(config, geometry, manifest, layers, metadata) {
         this.config = config;
         this.geometry = geometry;
         this.manifest = manifest;
         this.layers = layers;
+        this.metadata = metadata || null;
         
         // Loading state
         this.loadingQueue = [];
@@ -256,9 +257,10 @@ class MapLoader {
             // Load layers in priority order (fog first, then blight, then base, then region borders, then village markers)
             let layersToLoad = [];
             
-            // Add hidden areas layer first (fog layer - highest priority)
-            // Manifest may use 'mask' (legacy) or 'MAP_0001_hidden-areas'
-            if (layers.includes('MAP_0001_hidden-areas') || layers.includes('mask')) {
+            // Add hidden areas layer first (fog layer) only if square has unexplored/inaccessible quadrants
+            // Skip fog when all 4 quadrants are explored or secured (from DB metadata)
+            const shouldShowFog = this._shouldShowFogForSquare(squareId, layers);
+            if (shouldShowFog) {
                 layersToLoad.push('MAP_0001_hidden-areas');
             }
             
@@ -277,27 +279,16 @@ class MapLoader {
                 layersToLoad.push('MAP_0002_Map-Base');
             }
             
-            // Add region borders layer (above base, below village markers)
-            if (layers.includes('MAP_0001s_0003_Region-Borders') || layers.includes('region-borders')) {
+            // Add region borders layer only for squares that have the asset (avoids 404s)
+            if ((layers.includes('MAP_0001s_0003_Region-Borders') || layers.includes('region-borders')) && this._shouldHaveRegionBorders(squareId)) {
                 layersToLoad.push('MAP_0001s_0003_Region-Borders');
             }
             // Add region names layer (only for squares that have region name images)
             if (this._shouldHaveRegionNames(squareId)) {
                 layersToLoad.push('MAP_0001s_0004_REGIONS-NAMES');
             }
-            // Add village circle layers (above base, below village markers) – cyan outer, pink inner
-            const hasVillageBordersLegacy = layers.includes('village-borders-inner') || layers.includes('village-borders-outer');
-            const villageCircleLayerNames = [
-                'MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN',
-                'MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK',
-                'MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN',
-                'MAP_0002s_0001s_0001_CIRCLE-VHINTL-PINK',
-                'MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN',
-                'MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK'
-            ];
-            const villageCircleLayers = hasVillageBordersLegacy
-                ? villageCircleLayerNames
-                : layers.filter(layer => layer.startsWith('MAP_0002s_') && layer.includes('CIRCLE-'));
+            // Add village circle layers only for squares that have those assets (avoids 404s in console)
+            const villageCircleLayers = this._getVillageCircleLayersForSquare(squareId, layers);
             layersToLoad.push(...villageCircleLayers);
 
             // Add village marker layers (appear above village borders)
@@ -338,6 +329,32 @@ class MapLoader {
     }
     
     /**
+     * Whether to show the fog/hidden-areas layer for this square.
+     * When metadata is available: skip fog if any quadrant is explored or secured (so explored quads are never covered).
+     * Fog only shows when all 4 quadrants are unexplored or inaccessible.
+     * @param {string} squareId - Square ID
+     * @param {Array<string>} layers - Layer list from manifest
+     * @returns {boolean}
+     */
+    _shouldShowFogForSquare(squareId, layers) {
+        if (!(layers.includes('MAP_0001_hidden-areas') || layers.includes('mask'))) {
+            return false;
+        }
+        if (!this.metadata || typeof this.metadata.getQuadrants !== 'function') {
+            return true;
+        }
+        const quadrants = this.metadata.getQuadrants(squareId);
+        if (!quadrants || quadrants.length !== 4) {
+            return true;
+        }
+        const anyExploredOrSecured = quadrants.some(function (q) {
+            const s = (q.status || '').toLowerCase();
+            return s === 'explored' || s === 'secured';
+        });
+        return !anyExploredOrSecured;
+    }
+
+    /**
      * Check if a square should have region names based on the specific squares that have region name images
      * @param {string} squareId - Square ID to check
      * @returns {boolean} Whether the square should have region names
@@ -348,6 +365,17 @@ class MapLoader {
             'B10', 'C3', 'E6', 'G10', 'G4', 'G7', 'G8', 'H4', 'H7', 'H8'
         ];
         return regionNameSquares.includes(squareId);
+    }
+    
+    /**
+     * Check if a square has Region-Borders image in GCS (avoids 404s).
+     * Add square IDs here when the asset exists in GCS.
+     * @param {string} squareId - Square ID to check
+     * @returns {boolean} Whether to load Region-Borders for this square
+     */
+    _shouldHaveRegionBorders(squareId) {
+        const regionBordersSquares = [];
+        return regionBordersSquares.includes(squareId);
     }
     
     /**
@@ -377,6 +405,34 @@ class MapLoader {
         }
         
         return pathLayers;
+    }
+    
+    /**
+     * Get village circle layers only for squares that have those assets (avoids 404s).
+     * @param {string} squareId - Square ID to check
+     * @param {Array<string>} layers - Manifest layers for this square
+     * @returns {Array<string>} Village circle layer names to load
+     */
+    _getVillageCircleLayersForSquare(squareId, layers) {
+        const hasVillageBordersLegacy = layers.includes('village-borders-inner') || layers.includes('village-borders-outer');
+        if (!hasVillageBordersLegacy) {
+            return layers.filter(layer => layer.startsWith('MAP_0002s_') && layer.includes('CIRCLE-'));
+        }
+        // Only request circle layers for squares that have the assets (prevents 404s in console)
+        const inarikoSquares = ['H8'];
+        const vhintlSquares = ['F10'];
+        const rudaniaSquares = ['H5'];
+        const circleLayers = [];
+        if (inarikoSquares.includes(squareId)) {
+            circleLayers.push('MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN', 'MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK');
+        }
+        if (vhintlSquares.includes(squareId)) {
+            circleLayers.push('MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN', 'MAP_0002s_0001s_0001_CIRCLE-VHINTL-PINK');
+        }
+        if (rudaniaSquares.includes(squareId)) {
+            circleLayers.push('MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN', 'MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK');
+        }
+        return circleLayers;
     }
     
     /**

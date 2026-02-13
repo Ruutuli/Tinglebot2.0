@@ -46,6 +46,11 @@ class MapEngine {
         try {
             // Create module instances
             this._createModules();
+
+            // Load map metadata from database (exploringMap)
+            if (typeof this.metadata.loadFromAPI === 'function') {
+                await this.metadata.loadFromAPI();
+            }
             
         // Initialize Leaflet map
         this._initializeLeaflet(containerId);
@@ -182,8 +187,8 @@ class MapEngine {
             this.toggles.isAdmin = true;
         }
         
-        // Create loader (needs all other modules)
-        this.loader = new MapLoader(this.config, this.geometry, this.manifest, this.layers);
+        // Create loader (needs all other modules; metadata used to skip fog for fully explored squares)
+        this.loader = new MapLoader(this.config, this.geometry, this.manifest, this.layers, this.metadata);
         this.loader.initialize();
         
         // All modules initialized

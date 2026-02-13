@@ -663,6 +663,9 @@ async function birthdayAnnouncements(client, _data = {}) {
       .setDescription(description.trim())
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setTimestamp();
+    if (birthdayCharacters.length > 0 && birthdayCharacters[0].icon) {
+      embed.setThumbnail(birthdayCharacters[0].icon);
+    }
     
     await channel.send({ content: '@everyone', embeds: [embed] });
     logger.success('SCHEDULED', `birthday-announcements: Posted announcement for ${birthdayUsers.length} user(s) and ${birthdayCharacters.length} character(s)`);

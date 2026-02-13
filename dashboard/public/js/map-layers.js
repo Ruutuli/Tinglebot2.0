@@ -468,56 +468,119 @@ class MapLayers {
     }
     
     /**
-     * Add quadrant labels for a square (Q1-Q4 at quadrant corners)
+     * Quadrant status -> label text color (exploring map model). Matches explore party page and legend.
+     */
+    _quadrantStatusTextColors() {
+        return {
+            inaccessible: '#1a1a1a',
+            unexplored: '#b91c1c',
+            explored: '#ca8a04',
+            secured: '#15803d'
+        };
+    }
+
+    /**
+     * Get the DOM element that shows "Q1"/"Q2"/etc (Leaflet 1.9.4 uses _icon; no getElement).
+     * @param {L.Marker} marker
+     * @returns {HTMLElement|null}
+     */
+    _getQuadrantLabelElement(marker) {
+        const icon = marker._icon;
+        if (!icon) return null;
+        return icon.querySelector('.quadrant-label') || icon.firstElementChild || null;
+    }
+
+    /**
+     * Set text color and white outline on the quadrant label element (matches explore party page).
+     * @param {HTMLElement} labelEl
+     * @param {string} color
+     */
+    _setQuadrantLabelColor(labelEl, color) {
+        if (!labelEl) return;
+        labelEl.style.setProperty('color', color, 'important');
+        labelEl.style.setProperty('-webkit-text-fill-color', color, 'important');
+        labelEl.style.setProperty('-webkit-text-stroke', '1px white', 'important');
+        labelEl.style.setProperty('paint-order', 'stroke fill', 'important');
+    }
+
+    /**
+     * Fetch quadrant statuses from API (exploring map model) and apply text color to labels only.
+     * @param {string} squareId - Square ID
+     * @param {L.Marker[]} quadrantMarkers - Array of 4 markers (Q1-Q4)
+     */
+    _applyQuadrantLabelColors(squareId, quadrantMarkers) {
+        const base = (typeof window !== 'undefined' && window.__NEXT_DATA__?.basePath) || '';
+        const apiBase = base.replace(/\/$/, '');
+        const url = `${apiBase}/api/explore/map-quadrant-statuses?square=${encodeURIComponent(squareId)}`;
+        const self = this;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+                const statuses = (data && data.quadrantStatuses) || {};
+                const colors = self._quadrantStatusTextColors();
+                quadrantMarkers.forEach(function(marker, i) {
+                    const qId = 'Q' + (i + 1);
+                    const status = statuses[qId] || 'unexplored';
+                    const color = colors[status] || colors.unexplored;
+                    const labelEl = self._getQuadrantLabelElement(marker);
+                    self._setQuadrantLabelColor(labelEl, color);
+                });
+            })
+            .catch(function() {});
+    }
+
+    /**
+     * Add quadrant labels for a square (Q1-Q4 at quadrant corners). Text color by status from exploring map model.
      * @param {string} squareId - Square ID
      */
     addQuadrantLabels(squareId) {
         const quadrantMarkers = [];
-        
+        const defaultTextColor = this._quadrantStatusTextColors().unexplored;
+        const baseStyle = [
+            'position: absolute;',
+            'pointer-events: none;',
+            'font-family: \'Segoe UI\', sans-serif;',
+            'font-weight: bold;',
+            'text-align: center;',
+            'text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5);',
+            '-webkit-text-stroke: 1px white;',
+            'paint-order: stroke fill;',
+            'z-index: 700;',
+            'font-size: 20px;',
+            'line-height: 1;',
+            'white-space: nowrap;',
+            'display: flex;',
+            'align-items: center;',
+            'justify-content: center;',
+            'width: 100%;',
+            'height: 100%;'
+        ].join(' ');
+
         for (let quadrant = 1; quadrant <= 4; quadrant++) {
             const corner = this.geometry.getQuadrantCorner(squareId, quadrant);
-            
-            const labelDiv = document.createElement('div');
-            labelDiv.className = 'quadrant-label';
-            labelDiv.textContent = `Q${quadrant}`;
-            labelDiv.style.cssText = `
-                position: absolute;
-                pointer-events: none;
-                font-family: 'Segoe UI', sans-serif;
-                font-weight: bold;
-                text-align: center;
-                color: #ffffff;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.5);
-                z-index: 700;
-                font-size: 16px;
-                line-height: 1;
-                white-space: nowrap;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                width: 100%;
-                height: 100%;
-            `;
-            
-            // Create marker with Leaflet coordinate system: [lat, lng] = [y, x]
-            // Flip Y coordinate so A1 is at top-left
-            // Use appropriate icon size for quadrant labels at higher zoom levels
+            const qText = 'Q' + quadrant;
+            const html = '<div class="quadrant-label" style="' + baseStyle + '">' + qText + '</div>';
+
             const marker = L.marker([this.config.CANVAS_H - corner.y, corner.x], {
                 icon: L.divIcon({
-                    html: labelDiv,
+                    html: html,
                     className: 'quadrant-label-marker',
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]  // Exactly half of iconSize for perfect centering
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
                 }),
                 pane: 'quadrant-labels',
                 interactive: false
             });
-            
+
             quadrantMarkers.push(marker);
             marker.addTo(this.map);
+            // Apply default color immediately so CSS doesn't override (API will update when loaded)
+            const labelEl = this._getQuadrantLabelElement(marker);
+            this._setQuadrantLabelColor(labelEl, defaultTextColor);
         }
-        
-        this.labelMarkers.set(`${squareId}-quadrants`, quadrantMarkers);
+
+        this.labelMarkers.set(squareId + '-quadrants', quadrantMarkers);
+        this._applyQuadrantLabelColors(squareId, quadrantMarkers);
         return quadrantMarkers;
     }
     
@@ -576,9 +639,10 @@ class MapLayers {
         // Update existing square labels
         this.labelMarkers.forEach((marker, key) => {
             if (!key.includes('-quadrants')) {
-                const div = marker.getElement();
+                const div = (marker.getElement && marker.getElement()) || marker._icon;
                 if (div) {
-                    div.querySelector('.square-label').style.fontSize = `${squareLabelSize}px`;
+                    const squareLabel = div.querySelector && div.querySelector('.square-label');
+                    if (squareLabel) squareLabel.style.fontSize = `${squareLabelSize}px`;
                 }
             }
         });
@@ -587,9 +651,10 @@ class MapLayers {
         this.labelMarkers.forEach((markers, key) => {
             if (key.includes('-quadrants') && Array.isArray(markers)) {
                 markers.forEach(marker => {
-                    const div = marker.getElement();
+                    const div = (marker.getElement && marker.getElement()) || marker._icon;
                     if (div) {
-                        div.querySelector('.quadrant-label').style.fontSize = `${quadrantLabelSize}px`;
+                        const quadrantLabel = div.querySelector && div.querySelector('.quadrant-label');
+                        if (quadrantLabel) quadrantLabel.style.fontSize = `${quadrantLabelSize}px`;
                     }
                 });
             }
