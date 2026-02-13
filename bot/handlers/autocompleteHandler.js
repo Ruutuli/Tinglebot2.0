@@ -56,6 +56,7 @@ const {
  modCharacters
 } = require("../modules/modCharacters");
 const { normalPets, specialPets, speciesRollPermissions } = require("../modules/petModule");
+const MapModule = require("../modules/mapModule");
 const { getAllRaces } = require("../modules/raceModule");
 const { NPCs } = require("../modules/NPCsModule");
 
@@ -857,6 +858,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleExploreRollCharacterAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "item") {
               await handleExploreUseItemAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "quadrant" && interaction.options.getSubcommand() === "move") {
+              await handleExploreMoveQuadrantAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -3414,6 +3417,50 @@ async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("Error during explore use-item autocomplete:", error);
+  await interaction.respond([]);
+ }
+}
+
+// ------------------- Explore: Move Quadrant Autocomplete -------------------
+// Lists adjacent quadrants from the map module for /explore move.
+async function handleExploreMoveQuadrantAutocomplete(interaction, focusedOption) {
+ try {
+  const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
+  if (!expeditionId) return await interaction.respond([]);
+
+  const party = await Party.findOne({ partyId: expeditionId }).select("square quadrant").lean();
+  if (!party || !party.square || !party.quadrant) {
+   return await interaction.respond([{ name: "No expedition location", value: "none" }]);
+  }
+
+  const mapModule = new MapModule();
+  const square = String(party.square || "").trim();
+  const quadrant = String(party.quadrant || "").trim().toUpperCase();
+  if (!square || !quadrant) return await interaction.respond([]);
+
+  let adjacent;
+  try {
+   adjacent = mapModule.getAdjacentSquares(square, quadrant) || [];
+  } catch {
+   return await interaction.respond([]);
+  }
+
+  const value = (focusedOption.value || "").toLowerCase();
+  const choices = adjacent.map((a) => {
+   const loc = `${a.square} ${a.quadrant}`;
+   return { name: loc, value: loc };
+  });
+  const filtered = value
+   ? choices.filter((c) => c.value.toLowerCase().includes(value))
+   : choices;
+
+  return await safeRespondWithValidation(
+   interaction,
+   filtered.length > 0 ? filtered.slice(0, 25) : choices.slice(0, 25)
+  );
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore move quadrant autocomplete:", error);
   await interaction.respond([]);
  }
 }

@@ -16,6 +16,7 @@ const Party = require('@/models/PartyModel.js');
 const Character = require('@/models/CharacterModel.js');
 const ItemModel = require('@/models/ItemModel.js');
 const Square = require('@/models/mapModel.js');
+const MapModule = require('@/modules/mapModule.js');
 const {
  addExplorationStandardFields,
  createExplorationItemEmbed,
@@ -127,24 +128,17 @@ addExplorationStandardFields(embed, {
  await interaction.editReply({ embeds: [embed] });
 }
 
-// Helper function for calculating new location
-function calculateNewLocation(currentSquare, currentQuadrant, direction) {
- const quadrantMap = {
-  Q1: { north: null, south: "Q3", east: "Q2", west: null },
-  Q2: { north: null, south: "Q4", east: null, west: "Q1" },
-  Q3: { north: "Q1", south: null, east: "Q4", west: null },
-  Q4: { north: "Q2", south: null, east: null, west: "Q3" },
- };
-
- const currentQuadrantMoves = quadrantMap[currentQuadrant];
- if (!currentQuadrantMoves) return null;
-
- const newQuadrant = currentQuadrantMoves[direction];
- if (newQuadrant) {
-  return { square: currentSquare, quadrant: newQuadrant };
+// Helper: get adjacent quadrants from map module (square+quadrant format from map model)
+function getAdjacentQuadrants(currentSquare, currentQuadrant) {
+ const mapModule = new MapModule();
+ try {
+  const sq = String(currentSquare || "").trim();
+  const quad = String(currentQuadrant || "").trim().toUpperCase();
+  if (!sq || !quad) return [];
+  return mapModule.getAdjacentSquares(sq, quad) || [];
+ } catch {
+  return [];
  }
-
- return null;
 }
 
 // ------------------- Expedition Command Definition -------------------
@@ -213,15 +207,10 @@ module.exports = {
     )
     .addStringOption((option) =>
      option
-      .setName("direction")
-      .setDescription("Direction to move")
+      .setName("quadrant")
+      .setDescription("Quadrant to move to (adjacent to current location)")
       .setRequired(true)
-      .addChoices(
-       { name: "North", value: "north" },
-       { name: "South", value: "south" },
-       { name: "East", value: "east" },
-       { name: "West", value: "west" }
-      )
+      .setAutocomplete(true)
     )
   )
   .addSubcommand((subcommand) =>
@@ -274,14 +263,6 @@ module.exports = {
       .setDescription("Your character name")
       .setRequired(true)
       .setAutocomplete(true)
-    )
-    .addIntegerOption((option) =>
-     option
-      .setName("duration")
-      .setDescription("Hours to camp (1-8)")
-      .setRequired(true)
-      .setMinValue(1)
-      .setMaxValue(8)
     )
   ),
 
@@ -1342,7 +1323,7 @@ module.exports = {
    } else if (subcommand === "move") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
-    const direction = interaction.options.getString("direction");
+    const quadrantInput = interaction.options.getString("quadrant") || "";
     const userId = interaction.user.id;
 
     const party = await Party.findOne({ partyId: expeditionId });
@@ -1383,16 +1364,23 @@ module.exports = {
 
     const currentSquare = party.square;
     const currentQuadrant = party.quadrant;
+    const adjacent = getAdjacentQuadrants(currentSquare, currentQuadrant);
 
-    const newLocation = calculateNewLocation(
-     currentSquare,
-     currentQuadrant,
-     direction
+    // Parse "H8 Q1" or "H8 Q2" format
+    const trimmed = quadrantInput.trim();
+    const spaceIdx = trimmed.lastIndexOf(" ");
+    const targetSquare = spaceIdx > 0 ? trimmed.slice(0, spaceIdx).trim().toUpperCase() : trimmed.toUpperCase();
+    const targetQuadrant = spaceIdx > 0 ? trimmed.slice(spaceIdx + 1).trim().toUpperCase() : null;
+
+    const newLocation = adjacent.find(
+     (a) =>
+      String(a.square || "").toUpperCase() === targetSquare &&
+      String(a.quadrant || "").toUpperCase() === (targetQuadrant || "").toUpperCase()
     );
 
     if (!newLocation) {
      return interaction.editReply(
-      "Cannot move in that direction from current location."
+      "That quadrant is not adjacent to your current location. Pick one of the suggested quadrants."
      );
     }
 
@@ -1452,7 +1440,7 @@ module.exports = {
     }
 
     const embed = new EmbedBuilder()
-     .setTitle(`🗺️ **Expedition: Moved ${direction.charAt(0).toUpperCase() + direction.slice(1)}**`)
+     .setTitle(`🗺️ **Expedition: Moved to ${newLocation.square} ${newLocation.quadrant}**`)
      .setColor(regionColors[party.region] || "#2196F3")
      .setDescription(moveDescription)
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
@@ -1663,7 +1651,6 @@ module.exports = {
    } else if (subcommand === "camp") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");
-    const duration = interaction.options.getInteger("duration");
     const userId = interaction.user.id;
 
     const party = await Party.findOne({ partyId: expeditionId });
@@ -1699,60 +1686,43 @@ module.exports = {
      return interaction.editReply("You can only camp in secured quadrants.");
     }
 
-    const staminaPerHour = 2;
-    const heartsPerHour = 1;
-    const totalStaminaRecovered = duration * staminaPerHour;
-    const totalHeartsRecovered = duration * heartsPerHour;
+    const recoveryPerMember = [];
 
-    for (const partyChar of party.characters) {
+    for (let i = 0; i < party.characters.length; i++) {
+     const partyChar = party.characters[i];
      const char = await Character.findById(partyChar._id);
      if (char) {
-      char.currentStamina = Math.min(
-       char.maxStamina,
-       char.currentStamina +
-        Math.floor(totalStaminaRecovered / party.characters.length)
-      );
-      char.currentHearts = Math.min(
-       char.maxHearts,
-       char.currentHearts +
-        Math.floor(totalHeartsRecovered / party.characters.length)
-      );
+      const staminaRecovered = Math.floor(Math.random() * 4) + 1;
+      const heartsRecovered = Math.floor(Math.random() * 4) + 1;
+      recoveryPerMember.push({ name: char.name, stamina: staminaRecovered, hearts: heartsRecovered });
+      char.currentStamina = Math.min(char.maxStamina, char.currentStamina + staminaRecovered);
+      char.currentHearts = Math.min(char.maxHearts, char.currentHearts + heartsRecovered);
+      party.characters[i].currentStamina = char.currentStamina;
+      party.characters[i].currentHearts = char.currentHearts;
       await char.save();
      }
     }
-
-    const updatedCharacters = await Character.find({
-     _id: { $in: party.characters.map((char) => char._id) },
-    });
-
-    party.totalStamina = updatedCharacters.reduce(
-     (total, char) => total + char.currentStamina,
-     0
-    );
-    party.totalHearts = updatedCharacters.reduce(
-     (total, char) => total + char.currentHearts,
-     0
-    );
+    party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
+    party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
 
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
     const nextCharacterCamp = party.characters[party.currentTurn];
     const locationCamp = `${party.square} ${party.quadrant}`;
+    const recoveryValue = recoveryPerMember
+     .map((r) => `${r.name}: +${r.stamina} 🟩, +${r.hearts} ❤️`)
+     .join("\n");
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
-      `${character.name} set up camp for ${duration} hours. The party rested and recovered.`
+      `${character.name} set up camp. The party rested and recovered.`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
      .addFields({
       name: "📋 **__Recovery__**",
-      value: `+${Math.floor(
-        totalStaminaRecovered / party.characters.length
-       )} stamina, +${Math.floor(
-        totalHeartsRecovered / party.characters.length
-       )} hearts per member`,
+      value: recoveryValue,
       inline: false,
      });
     addExplorationStandardFields(embed, {
