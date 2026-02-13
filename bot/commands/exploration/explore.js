@@ -2089,11 +2089,31 @@ module.exports = {
     };
     const targetVillage = regionToVillage[party.region];
 
-    for (const partyCharacter of party.characters) {
-     const char = await Character.findById(partyCharacter._id);
-     if (char) {
-      char.currentVillage = targetVillage;
-      await char.save();
+    // Divide remaining party stamina among all members (each gets equal share, capped at maxStamina)
+    const remainingStamina = Math.max(0, party.totalStamina ?? 0);
+    const memberCount = (party.characters || []).length;
+    if (memberCount > 0 && remainingStamina > 0) {
+     const perMember = Math.floor(remainingStamina / memberCount);
+     const remainder = remainingStamina % memberCount;
+     for (let idx = 0; idx < party.characters.length; idx++) {
+      const partyCharacter = party.characters[idx];
+      const char = await Character.findById(partyCharacter._id);
+      if (char) {
+       const share = perMember + (idx < remainder ? 1 : 0);
+       const current = typeof char.currentStamina === "number" ? char.currentStamina : 0;
+       const max = char.maxStamina ?? current;
+       char.currentStamina = Math.min(max, current + share);
+       char.currentVillage = targetVillage;
+       await char.save();
+      }
+     }
+    } else {
+     for (const partyCharacter of party.characters) {
+      const char = await Character.findById(partyCharacter._id);
+      if (char) {
+       char.currentVillage = targetVillage;
+       await char.save();
+      }
      }
     }
 
