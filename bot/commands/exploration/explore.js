@@ -1884,22 +1884,36 @@ module.exports = {
      );
     }
 
+    const isExploredOrSecured = party.quadrantState === "explored" || party.quadrantState === "secured";
     const isSecured = party.quadrantState === "secured";
-    const pct = isSecured ? 0.5 : 0.25;
-    const recoveryPerMember = [];
+    const staminaCost = isExploredOrSecured ? 0 : 3;
+    const heartsPct = isSecured ? 0.5 : 0.25;
 
+    if (staminaCost > 0 && party.totalStamina < staminaCost) {
+     return interaction.editReply(
+      `Not enough party stamina to camp here. Requires ${staminaCost} stamina (explored quadrants cost 0).`
+     );
+    }
+
+    if (staminaCost > 0) {
+     const campChar = party.characters[characterIndex];
+     const campCharDoc = await Character.findById(campChar._id);
+     if (campCharDoc) {
+      campCharDoc.currentStamina = Math.max(0, (campCharDoc.currentStamina ?? 0) - staminaCost);
+      await campCharDoc.save();
+      party.characters[characterIndex].currentStamina = campCharDoc.currentStamina;
+     }
+    }
+
+    const recoveryPerMember = [];
     for (let i = 0; i < party.characters.length; i++) {
      const partyChar = party.characters[i];
      const char = await Character.findById(partyChar._id);
      if (char) {
-      const maxSta = char.maxStamina ?? 0;
       const maxHrt = char.maxHearts ?? 0;
-      const staminaRecovered = Math.floor(maxSta * pct);
-      const heartsRecovered = Math.floor(maxHrt * pct);
-      recoveryPerMember.push({ name: char.name, stamina: staminaRecovered, hearts: heartsRecovered });
-      char.currentStamina = Math.min(char.maxStamina, char.currentStamina + staminaRecovered);
+      const heartsRecovered = Math.floor(maxHrt * heartsPct);
+      recoveryPerMember.push({ name: char.name, hearts: heartsRecovered });
       char.currentHearts = Math.min(char.maxHearts, char.currentHearts + heartsRecovered);
-      party.characters[i].currentStamina = char.currentStamina;
       party.characters[i].currentHearts = char.currentHearts;
       await char.save();
      }
@@ -1907,20 +1921,32 @@ module.exports = {
     party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
     party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
 
+    const totalHeartsRecovered = recoveryPerMember.reduce((s, r) => s + r.hearts, 0);
+    const costsForLog = staminaCost > 0 ? { staminaLost: staminaCost, heartsRecovered: totalHeartsRecovered } : { heartsRecovered: totalHeartsRecovered };
+    pushProgressLog(
+     party,
+     character.name,
+     "camp",
+     `Camped at ${locationCamp}. Party recovered hearts (${Math.round(heartsPct * 100)}% of max).${staminaCost > 0 ? ` (-${staminaCost} stamina)` : ""}`,
+     undefined,
+     costsForLog
+    );
+
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
     const nextCharacterCamp = party.characters[party.currentTurn];
     const locationCamp = `${party.square} ${party.quadrant}`;
     const recoveryValue = recoveryPerMember
-     .map((r) => `${r.name}: +${r.stamina} 🟩, +${r.hearts} ❤️`)
+     .map((r) => `${r.name}: +${r.hearts} ❤️`)
      .join("\n");
-    const campNote = isSecured ? "The secured quadrant made for a restful night." : "The party kept watch — risky terrain meant light rest.";
+    const campNote = isSecured ? "The secured quadrant made for a restful night." : isExploredOrSecured ? "The party rested." : "The party kept watch — risky terrain meant light rest.";
+    const costNote = staminaCost > 0 ? ` (-${staminaCost} stamina)` : "";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
-      `${character.name} set up camp. ${campNote}`
+      `${character.name} set up camp. ${campNote}${costNote}`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
      .addFields({
