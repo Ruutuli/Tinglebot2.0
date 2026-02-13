@@ -30,7 +30,7 @@ export async function GET() {
       .select("squareId region status quadrants")
       .sort({ squareId: 1 });
 
-    const squares = (docs as SquareDoc[]).map((doc) => {
+    const squares = (docs as unknown as SquareDoc[]).map((doc) => {
       const match = String(doc.squareId || "").match(/^([A-J])(\d+)$/);
       const letter = match ? match[1] : doc.squareId?.charAt(0) ?? "";
       const number = match ? parseInt(match[2], 10) : 0;

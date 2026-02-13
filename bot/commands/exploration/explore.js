@@ -811,12 +811,13 @@ module.exports = {
          else ruinsOutcome = "goddess_plume";
 
          let resultTitle = `🗺️ **Expedition: Explored the ruins!**`;
+         const summaryLine = `The party explored the ruins in **${location}** (−3 stamina).\n\n`;
          let resultDescription = "";
          let progressMsg = `Explored ruins in ${location} (-3 stamina). `;
          let lootForLog = undefined;
 
          if (ruinsOutcome === "chest") {
-          resultDescription = `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
           progressMsg += "Found a chest (open for 1 stamina).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else if (ruinsOutcome === "camp") {
@@ -827,11 +828,11 @@ module.exports = {
           if (idx >= 0) { freshParty.characters[idx].currentStamina = ruinsCharacter.currentStamina; }
           freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
           await freshParty.save();
-          resultDescription = `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a camp spot; recovered 1 stamina.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost, staminaRecovered: recover });
          } else if (ruinsOutcome === "landmark") {
-          resultDescription = `**${ruinsCharacter.name}** found nothing special in the ruins—but an interesting landmark. It's been marked on the map.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found nothing special in the ruins—but an interesting landmark. It's been marked on the map.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found an interesting landmark (marked on map).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else if (ruinsOutcome === "relic") {
@@ -846,7 +847,7 @@ module.exports = {
           } catch (err) {
            console.error("[explore.js] createRelic error:", err?.message || err);
           }
-          resultDescription = `**${ruinsCharacter.name}** found a relic in the ruins! Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else if (ruinsOutcome === "old_map") {
@@ -857,7 +858,7 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
-          resultDescription = `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins!\n\n${chosenMap.flavorText}\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins!\n\n${chosenMap.flavorText}\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += `Found ${mapItemName}; saved to map collection. Take to Inariko Library to decipher.`;
           lootForLog = { itemName: mapItemName, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
@@ -879,7 +880,7 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins star_fragment" });
           }
-          resultDescription = `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a Star Fragment.";
           lootForLog = { itemName: "Star Fragment", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
@@ -891,7 +892,7 @@ module.exports = {
            ruinsCharacter.blightEffects = { rollMultiplier: 1.0, noMonsters: false, noGathering: false };
           }
           await ruinsCharacter.save();
-          resultDescription = `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. You're blighted! Use the </blight:...> command for healing and info.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. You're blighted! Use the </blight:...> command for healing and info.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found blight; character is now blighted.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else {
@@ -901,7 +902,7 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins goddess_plume" });
           }
-          resultDescription = `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Excavated a Goddess Plume.";
           lootForLog = { itemName: "Goddess Plume", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
@@ -974,6 +975,13 @@ module.exports = {
           }
          } else {
           await i.update({ embeds: [resultEmbed], components: [disabledRow] }).catch(() => {});
+          const nextUserId = nextCharacter?.userId;
+          const nextName = nextCharacter?.name ?? "Next player";
+          await i.followUp({
+            content: nextUserId
+              ? `OK, keep going — <@${nextUserId}> it's your turn. Use \`/explore roll\` to continue.`
+              : `OK, keep going — **${nextName}**, use \`/explore roll\` to continue.`,
+          }).catch(() => {});
          }
          return;
         }

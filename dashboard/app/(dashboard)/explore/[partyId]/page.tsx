@@ -20,6 +20,52 @@ const QUADRANT_STATUS_COLORS: Record<string, string> = {
   secured: "#15803d",
 };
 
+// Map grid: 10 cols x 12 rows, each square 2400 x 1666 (canvas 24000 x 20000)
+const SQUARE_W = 2400;
+const SQUARE_H = 1666;
+
+/** Parse "H8 Q3" from messages like "Found a monster camp in H8 Q3; report to town hall..." */
+const REPORTABLE_LOC_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])/i;
+
+function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Array<{ square: string; quadrant: string; outcome: string; label: string }> {
+  if (!Array.isArray(progressLog)) return [];
+  const seen = new Set<string>();
+  const out: Array<{ square: string; quadrant: string; outcome: string; label: string }> = [];
+  for (const e of progressLog) {
+    if (e.outcome !== "monster_camp") continue;
+    const m = REPORTABLE_LOC_RE.exec(e.message);
+    if (!m || !m[1]) continue;
+    const parts = m[1].trim().split(/\s+/);
+    const square = parts[0] ?? "";
+    const quadrant = parts[1] ?? "";
+    if (!square || !quadrant) continue;
+    const key = `${square} ${quadrant}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ square, quadrant, outcome: e.outcome, label: "Monster Camp" });
+  }
+  return out;
+}
+
+/** Return map coordinates (lat, lng) for the center of a square+quadrant. Canvas: lng 0–24000, lat 0–20000. */
+function squareQuadrantToCoordinates(square: string, quadrant: string): { lat: number; lng: number } {
+  const letter = (square.charAt(0) ?? "A").toUpperCase();
+  const num = Math.min(12, Math.max(1, parseInt((square.slice(1) ?? "1"), 10) || 1));
+  const colIndex = letter.charCodeAt(0) - 65; // A=0 .. J=9
+  const rowIndex = num - 1; // 1–12 -> 0–11
+  const lngBase = Math.max(0, Math.min(9, colIndex)) * SQUARE_W;
+  const latBase = Math.max(0, Math.min(11, rowIndex)) * SQUARE_H;
+  const q = (quadrant.toUpperCase().match(/Q([1-4])/)?.[1] ?? "1") as "1" | "2" | "3" | "4";
+  const offsets: Record<string, { lng: number; lat: number }> = {
+    "1": { lng: 0.25 * SQUARE_W, lat: 0.25 * SQUARE_H },
+    "2": { lng: 0.75 * SQUARE_W, lat: 0.25 * SQUARE_H },
+    "3": { lng: 0.25 * SQUARE_W, lat: 0.75 * SQUARE_H },
+    "4": { lng: 0.75 * SQUARE_W, lat: 0.75 * SQUARE_H },
+  };
+  const off = offsets[q] ?? offsets["1"];
+  return { lat: latBase + off.lat, lng: lngBase + off.lng };
+}
+
 const REGIONS: Record<string, { label: string; village: string; square: string; quadrant: string }> = {
   eldin: { label: "Eldin", village: "Rudania", square: "H5", quadrant: "Q3" },
   lanayru: { label: "Lanayru", village: "Inariko", square: "H8", quadrant: "Q2" },
@@ -138,6 +184,9 @@ export default function ExplorePartyPage() {
   const [editSuggestionsOpen, setEditSuggestionsOpen] = useState(false);
   const [startingExpedition, setStartingExpedition] = useState(false);
   const [startExpeditionError, setStartExpeditionError] = useState<string | null>(null);
+  const [reportedDiscoveryKeys, setReportedDiscoveryKeys] = useState<Set<string>>(new Set());
+  const [placingPinForKey, setPlacingPinForKey] = useState<string | null>(null);
+  const [placePinError, setPlacePinError] = useState<string | null>(null);
   const [squarePreview, setSquarePreview] = useState<{
     layers: Array<{ name: string; url: string }>;
     quadrantBounds: { x: number; y: number; w: number; h: number } | null;
@@ -462,6 +511,45 @@ export default function ExplorePartyPage() {
       setStartingExpedition(false);
     }
   }, [partyId, fetchParty]);
+
+  const reportableDiscoveries = getReportableDiscoveries(party?.progressLog);
+  const placeMarkerAt = useCallback(
+    async (square: string, quadrant: string, label: string) => {
+      const key = `${square} ${quadrant}`;
+      setPlacePinError(null);
+      setPlacingPinForKey(key);
+      try {
+        const coords = squareQuadrantToCoordinates(square, quadrant);
+        const res = await fetch("/api/pins", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: label,
+            description: `Reported from expedition. Discovered in ${square} ${quadrant}.`,
+            coordinates: coords,
+            category: "points-of-interest",
+            color: "#b91c1c",
+            icon: "fas fa-skull",
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 401) {
+            setPlacePinError("Please log in to place a marker.");
+            return;
+          }
+          setPlacePinError((data.error as string) ?? "Failed to save marker.");
+          return;
+        }
+        setReportedDiscoveryKeys((prev) => new Set(prev).add(key));
+      } catch (e) {
+        setPlacePinError(e instanceof Error ? e.message : "Failed to save marker.");
+      } finally {
+        setPlacingPinForKey(null);
+      }
+    },
+    []
+  );
 
   if (sessionLoading) {
     return (
@@ -1316,6 +1404,69 @@ export default function ExplorePartyPage() {
                   </div>
                 </div>
               </section>
+
+              {/* Report to town hall — place marker for Monster Camp (and similar) discoveries */}
+              {userId &&
+                reportableDiscoveries.length > 0 &&
+                (() => {
+                  const toShow = reportableDiscoveries.filter((d) => !reportedDiscoveryKeys.has(`${d.square} ${d.quadrant}`));
+                  if (toShow.length === 0) return null;
+                  return (
+                    <section className="rounded-2xl border border-amber-500/50 bg-amber-950/30 p-4 shadow-inner">
+                      <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                        <i className="fa-solid fa-landmark text-[10px] opacity-80" aria-hidden />
+                        Report to town hall
+                      </h3>
+                      <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
+                        You found something to report. Place a marker on the map so it’s saved for later.
+                      </p>
+                      {placePinError && (
+                        <p className="mb-2 text-xs text-red-400">{placePinError}</p>
+                      )}
+                      <ul className="space-y-2">
+                        {toShow.map((d) => {
+                          const key = `${d.square} ${d.quadrant}`;
+                          const isPlacing = placingPinForKey === key;
+                          const reported = reportedDiscoveryKeys.has(key);
+                          return (
+                            <li
+                              key={key}
+                              className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-[var(--botw-warm-black)]/50 px-3 py-2"
+                            >
+                              <span className="font-medium text-[var(--totk-ivory)]">
+                                {d.label} — {d.square} {d.quadrant}
+                              </span>
+                              {reported ? (
+                                <span className="text-xs text-[var(--totk-light-green)]">
+                                  <i className="fa-solid fa-check mr-1" aria-hidden /> Marked on map
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={isPlacing}
+                                  onClick={() => placeMarkerAt(d.square, d.quadrant, d.label)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/60 bg-amber-900/50 px-3 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-800/50 disabled:opacity-60"
+                                >
+                                  {isPlacing ? (
+                                    <>
+                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden />
+                                      Saving…
+                                    </>
+                                  ) : (
+                                    <>
+                                      <i className="fa-solid fa-map-pin" aria-hidden />
+                                      Place marker on map
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  );
+                })()}
 
               {/* 2. Progress log | Party — two columns */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

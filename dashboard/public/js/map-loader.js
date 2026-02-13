@@ -329,9 +329,7 @@ class MapLoader {
     }
     
     /**
-     * Whether to show the fog/hidden-areas layer for this square.
-     * When metadata is available: skip fog if any quadrant is explored or secured (so explored quads are never covered).
-     * Fog only shows when all 4 quadrants are unexplored or inaccessible.
+     * Whether to show the fog/hidden-areas layer for this square (when at least one quadrant is unexplored/inaccessible).
      * @param {string} squareId - Square ID
      * @param {Array<string>} layers - Layer list from manifest
      * @returns {boolean}
@@ -347,11 +345,36 @@ class MapLoader {
         if (!quadrants || quadrants.length !== 4) {
             return true;
         }
-        const anyExploredOrSecured = quadrants.some(function (q) {
+        const anyUnexploredOrInaccessible = quadrants.some(function (q) {
             const s = (q.status || '').toLowerCase();
-            return s === 'explored' || s === 'secured';
+            return s === 'unexplored' || s === 'inaccessible';
         });
-        return !anyExploredOrSecured;
+        return anyUnexploredOrInaccessible;
+    }
+
+    /**
+     * Get quadrant numbers (1-4) that should show fog (unexplored or inaccessible). Used for per-quadrant clip-path.
+     * Layout: Q1 Q2 / Q3 Q4 (top-left, top-right, bottom-left, bottom-right).
+     * @param {string} squareId - Square ID
+     * @returns {Array<number>} e.g. [1, 3] for left column only
+     */
+    _getFogQuadrants(squareId) {
+        const out = [];
+        if (!this.metadata || typeof this.metadata.getQuadrants !== 'function') {
+            return [1, 2, 3, 4];
+        }
+        const quadrants = this.metadata.getQuadrants(squareId);
+        if (!quadrants || quadrants.length !== 4) {
+            return [1, 2, 3, 4];
+        }
+        quadrants.forEach(function (q) {
+            const id = (q.quadrantId || '').toUpperCase();
+            const num = id === 'Q1' ? 1 : id === 'Q2' ? 2 : id === 'Q3' ? 3 : id === 'Q4' ? 4 : 0;
+            if (num && ((q.status || '').toLowerCase() === 'unexplored' || (q.status || '').toLowerCase() === 'inaccessible')) {
+                out.push(num);
+            }
+        });
+        return out.length ? out : [1, 2, 3, 4];
     }
 
     /**
@@ -505,12 +528,14 @@ class MapLoader {
      */
     async _loadSquareLayer(squareId, layerName, usePreview) {
         const imageUrl = this._getImageUrl(squareId, layerName, usePreview);
-        
+        const options = (layerName === 'MAP_0001_hidden-areas')
+            ? { fogQuadrants: this._getFogQuadrants(squareId) }
+            : undefined;
         try {
             if (this._isLayerLoaded(squareId, layerName, usePreview)) return;
             await this._preloadImage(imageUrl);
             if (!this.loadedSquares.has(squareId) && !this.loadingSet.has(squareId)) return;
-            this.layers.addRasterOverlay(squareId, layerName, imageUrl, usePreview);
+            this.layers.addRasterOverlay(squareId, layerName, imageUrl, usePreview, options);
         } catch (error) {
             if (usePreview) {
                 try {
@@ -518,7 +543,7 @@ class MapLoader {
                     const fullUrl = this._getImageUrl(squareId, layerName, false);
                     await this._preloadImage(fullUrl);
                     if (!this.loadedSquares.has(squareId) && !this.loadingSet.has(squareId)) return;
-                    this.layers.addRasterOverlay(squareId, layerName, fullUrl, false);
+                    this.layers.addRasterOverlay(squareId, layerName, fullUrl, false, options);
                     return;
                 } catch (_) { /* fallback failed, warn below */ }
             }

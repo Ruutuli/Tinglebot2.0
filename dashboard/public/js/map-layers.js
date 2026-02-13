@@ -251,7 +251,37 @@ class MapLayers {
      * @param {boolean} isPreview - Whether this is a preview image
      * @returns {L.ImageOverlay} The created overlay
      */
-    addRasterOverlay(squareId, layerName, imageUrl, isPreview = false) {
+    /**
+     * CSS clip-path polygon for fog layer to show only given quadrants (1-4). Each quad is 50%x50%.
+     * Layout: Q1 Q2 / Q3 Q4 (top-left, top-right, bottom-left, bottom-right).
+     * @param {Array<number>} quads - e.g. [1, 3] for left column (Q1 + Q3)
+     * @returns {string|null} polygon(...) or null for no clip (show all)
+     */
+    _fogClipPathForQuadrants(quads) {
+        if (!quads || quads.length === 0 || quads.length === 4) return null;
+        const q = quads.slice().sort((a, b) => a - b);
+        const key = q.join(',');
+        const polygons = {
+            '1': '0% 0%, 50% 0%, 50% 50%, 0% 50%',
+            '2': '50% 0%, 100% 0%, 100% 50%, 50% 50%',
+            '3': '0% 50%, 50% 50%, 50% 100%, 0% 100%',
+            '4': '50% 50%, 100% 50%, 100% 100%, 50% 100%',
+            '1,2': '0% 0%, 100% 0%, 100% 50%, 0% 50%',
+            '1,3': '0% 0%, 50% 0%, 50% 50%, 0% 50%, 0% 100%, 50% 100%, 50% 50%, 0% 50%',
+            '1,4': '0% 0%, 50% 0%, 50% 50%, 0% 50%, 50% 50%, 100% 50%, 100% 100%, 50% 100%, 50% 50%, 0% 50%',
+            '2,3': '50% 0%, 100% 0%, 100% 50%, 50% 50%, 50% 100%, 0% 100%, 0% 50%, 50% 50%',
+            '2,4': '50% 0%, 100% 0%, 100% 100%, 50% 100%, 50% 50%, 100% 50%',
+            '3,4': '0% 50%, 100% 50%, 100% 100%, 0% 100%',
+            '1,2,3': '0% 0%, 100% 0%, 100% 50%, 50% 50%, 50% 100%, 0% 100%, 0% 50%, 50% 50%',
+            '1,2,4': '0% 0%, 100% 0%, 100% 100%, 50% 100%, 50% 50%, 0% 50%',
+            '1,3,4': '0% 0%, 50% 0%, 50% 100%, 100% 100%, 100% 50%, 50% 50%, 0% 50%',
+            '2,3,4': '50% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 50%, 50% 50%'
+        };
+        const poly = polygons[key];
+        return poly ? 'polygon(' + poly + ')' : null;
+    }
+
+    addRasterOverlay(squareId, layerName, imageUrl, isPreview = false, options = null) {
         const layerGroup = this.layerGroups.get(layerName);
         if (!layerGroup) {
             console.warn('[layers] Unknown layer:', layerName);
@@ -308,11 +338,27 @@ class MapLayers {
         
         layerGroup.addLayer(overlay);
         
-        // For fog layer, ensure it's visible immediately to prevent base map showing through
+        // For fog layer: apply per-quadrant clip-path so only unexplored/inaccessible quads show fog
         if (layerName === 'MAP_0001_hidden-areas') {
-            overlay.setOpacity(1); // Show immediately without fade
+            overlay.setOpacity(1);
+            const fogQuadrants = options && options.fogQuadrants;
+            if (fogQuadrants && fogQuadrants.length > 0 && fogQuadrants.length < 4) {
+                const clipPath = this._fogClipPathForQuadrants(fogQuadrants);
+                if (clipPath) {
+                    overlay._fogClipPath = clipPath;
+                    const applyClip = function () {
+                        const el = overlay._icon || (overlay.getElement && overlay.getElement());
+                        if (el) {
+                            el.style.clipPath = clipPath;
+                            el.style.webkitClipPath = clipPath;
+                        }
+                    };
+                    applyClip();
+                    overlay.once('add', applyClip);
+                    setTimeout(applyClip, 0);
+                }
+            }
         } else {
-            // Fade in other layers
             this._fadeInOverlay(overlay);
         }
         
@@ -406,8 +452,24 @@ class MapLayers {
         
         fullOverlay._mapKey = key;
         fullOverlay._isPreview = false;
+        if (layerName === 'MAP_0001_hidden-areas' && previewOverlay._fogClipPath) {
+            fullOverlay._fogClipPath = previewOverlay._fogClipPath;
+        }
         
         layerGroup.addLayer(fullOverlay);
+        
+        if (fullOverlay._fogClipPath) {
+            const clipPath = fullOverlay._fogClipPath;
+            const applyClip = function () {
+                const el = fullOverlay._icon;
+                if (el) {
+                    el.style.clipPath = clipPath;
+                    el.style.webkitClipPath = clipPath;
+                }
+            };
+            applyClip();
+            if (!fullOverlay._icon) fullOverlay.once('add', applyClip);
+        }
         
         // Crossfade animation
         this._crossfadeOverlays(previewOverlay, fullOverlay, () => {
