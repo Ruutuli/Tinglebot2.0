@@ -27,6 +27,8 @@ const {
 
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
+const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
+const DatabaseConnectionManager = require("../../database/connectionManager.js");
 
 // Region start squares (party returned here on full party KO)
 const START_POINTS_BY_REGION = {
@@ -667,15 +669,30 @@ module.exports = {
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else if (ruinsOutcome === "old_map") {
+          const chosenMap = getRandomOldMap();
+          const mapItemName = `Map #${chosenMap.number}`;
+          const leadsToLabel = chosenMap.leadsTo.charAt(0).toUpperCase() + chosenMap.leadsTo.slice(1);
           try {
-           await addItemInventoryDatabase(ruinsCharacter._id, "Old Map", 1, i, "Exploration - Ruins");
+           await addItemInventoryDatabase(ruinsCharacter._id, mapItemName, 1, i, "Exploration - Ruins");
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
-          resultDescription = `**${ruinsCharacter.name}** found a really old map in the ruins! Take it to the Inariko Library to get it deciphered. More info [here](https://www.rootsofthewild.com/oldmaps).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
-          progressMsg += "Found an old map (take to Inariko Library to decipher).";
-          lootForLog = { itemName: "Old Map", emoji: "" };
+          resultDescription = `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins!\n\n${chosenMap.flavorText}\n\nFind out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += `Found ${mapItemName} (leads to ${chosenMap.leadsTo} at ${chosenMap.coordinates}).`;
+          lootForLog = { itemName: mapItemName, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
+          // DM all expedition members with the map location
+          const userIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
+          const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** leads to **${leadsToLabel}** at **${chosenMap.coordinates}**.\n\nMore info: ${OLD_MAPS_LINK}`;
+          const client = i.client;
+          if (client) {
+           for (const uid of userIds) {
+            try {
+             const user = await client.users.fetch(uid).catch(() => null);
+             if (user) await user.send(dmContent).catch(() => {});
+            } catch (_) {}
+           }
+          }
          } else if (ruinsOutcome === "star_fragment") {
           try {
            await addItemInventoryDatabase(ruinsCharacter._id, "Star Fragment", 1, i, "Exploration - Ruins");
@@ -1407,12 +1424,37 @@ module.exports = {
     const nextCharacterMove = party.characters[party.currentTurn];
     const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
     const quadrantStateLabel = mapQuadrantState === "secured" ? "secured" : mapQuadrantState === "explored" ? "explored" : "unexplored";
+    let moveDescription = `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
+
+    // If this quadrant is an old map location, check if any party member has that map and show prompt
+    const quadWithMap = mapSquare && mapSquare.quadrants ? mapSquare.quadrants.find(
+      (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
+    ) : null;
+    if (quadWithMap && quadWithMap.oldMapNumber != null) {
+      const mapItemName = `Map #${quadWithMap.oldMapNumber}`;
+      const leadsToLabel = (quadWithMap.oldMapLeadsTo || "treasure").charAt(0).toUpperCase() + (quadWithMap.oldMapLeadsTo || "").slice(1);
+      const whoHasMap = [];
+      try {
+        for (const pc of party.characters) {
+          const invColl = await DatabaseConnectionManager.getInventoryCollection(pc.name);
+          const entry = await invColl.findOne({
+            itemName: new RegExp(`^${mapItemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+            quantity: { $gt: 0 }
+          });
+          if (entry) whoHasMap.push(pc.name);
+        }
+        if (whoHasMap.length > 0) {
+          moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}**. ${whoHasMap.join(", ")} ${whoHasMap.length === 1 ? "has" : "have"} the map — you've found the location of a **${leadsToLabel}**! More info: ${OLD_MAPS_LINK}`;
+        }
+      } catch (invErr) {
+        console.warn("[explore.js] Could not check inventory for old map prompt:", invErr?.message || invErr);
+      }
+    }
+
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Moved ${direction.charAt(0).toUpperCase() + direction.slice(1)}**`)
      .setColor(regionColors[party.region] || "#2196F3")
-     .setDescription(
-      `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`
-     )
+     .setDescription(moveDescription)
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     addExplorationStandardFields(embed, {
       party,

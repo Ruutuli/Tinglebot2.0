@@ -17,7 +17,10 @@ const QuadrantSchema = new Schema({
   blighted: { type: Boolean, default: false }, // Boolean field for blighted status
   discoveries: [DiscoverySchema], // Array of objects using the DiscoverySchema
   exploredBy: { type: String, default: '' }, // Discord ID of explorer
-  exploredAt: { type: Date, default: null }
+  exploredAt: { type: Date, default: null },
+  // Old map location: when a party reaches this quadrant, prompt if someone has Map #N
+  oldMapNumber: { type: Number, default: null },
+  oldMapLeadsTo: { type: String, default: null } // 'chest' | 'ruins' | 'relic' | 'shrine'
 });
 
 // Define Square Schema, including image URL and map coordinates
