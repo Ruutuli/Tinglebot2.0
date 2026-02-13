@@ -48,12 +48,96 @@ const REGION_TO_VILLAGE = {
 // TODO: remove when done testing - treats tier 5+ monsters as regular encounters (no raid)
 const DISABLE_EXPLORATION_RAIDS = true;
 
+const EXPLORATION_CHEST_RELIC_CHANCE = 0.08;
+
 // Autocomplete can show "E402960 | Lanayru | started | H8 Q2"; value sent may be that full string. Use only the partyId (before first "|").
 function normalizeExpeditionId(value) {
  if (!value || typeof value !== "string") return value;
  const trimmed = value.trim();
  const pipe = trimmed.indexOf("|");
  return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
+}
+
+async function handleExplorationChestOpen(interaction, expeditionId, location) {
+ const party = await Party.findOne({ partyId: expeditionId });
+ if (!party) return null;
+ if (party.totalStamina < 1) return { notEnoughStamina: true };
+
+ // Deduct from the character who just acted (found the chest) - currentTurn was already advanced
+ const characterIndex = (party.currentTurn - 1 + party.characters.length) % party.characters.length;
+ const partyChar = party.characters[characterIndex];
+ const character = await Character.findById(partyChar._id);
+ if (!character) return null;
+
+ const staminaCost = 1;
+ character.currentStamina = Math.max(0, (character.currentStamina ?? 0) - staminaCost);
+ await character.save();
+ party.characters[characterIndex].currentStamina = character.currentStamina;
+ party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+ party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+ await party.save();
+
+ const allItems = await fetchAllItems();
+ const lootLines = [];
+ for (const pc of party.characters) {
+  const char = await Character.findById(pc._id);
+  if (!char) continue;
+  const isRelic = Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
+  if (isRelic) {
+   try {
+    await createRelic({
+     name: "Unknown Relic",
+     discoveredBy: char.name,
+     discoveredDate: new Date(),
+     locationFound: location,
+     appraised: false,
+    });
+    lootLines.push(`${char.name}: 🔸 Unknown Relic`);
+   } catch (err) {
+    console.error("[explore.js] createRelic error:", err?.message || err);
+    if (allItems && allItems.length > 0) {
+     const fallback = allItems[Math.floor(Math.random() * allItems.length)];
+     try {
+      await addItemInventoryDatabase(char._id, fallback.itemName, 1, interaction, "Exploration Chest");
+      lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName}`);
+     } catch (_) {}
+    }
+   }
+  } else {
+   if (!allItems || allItems.length === 0) {
+    lootLines.push(`${char.name}: (no items available)`);
+    continue;
+   }
+   const item = allItems[Math.floor(Math.random() * allItems.length)];
+   try {
+    await addItemInventoryDatabase(char._id, item.itemName, 1, interaction, "Exploration Chest");
+    lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName}`);
+   } catch (err) {
+    handleInteractionError(err, interaction, { source: "explore.js chest open" });
+    lootLines.push(`${char.name}: (failed to add item)`);
+   }
+  }
+ }
+
+ const nextCharacter = party.characters[party.currentTurn];
+ const lootValue = lootLines.length > 0 ? lootLines.join("\n") : "Nothing found.";
+ const resultEmbed = new EmbedBuilder()
+  .setTitle("🗺️ **Expedition: Chest opened!**")
+  .setDescription(
+   `The party opened the chest in **${location}** and found:\n\n${lootValue}\n\n(-1 stamina)\n\n↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`
+  )
+  .setColor(regionColors[party.region] || "#00ff99")
+  .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+ addExplorationStandardFields(resultEmbed, {
+  party,
+  expeditionId,
+  location,
+  nextCharacter: nextCharacter ?? null,
+  showNextAndCommands: true,
+  showRestSecureMove: false,
+ });
+ pushProgressLog(party, character.name, "chest_open", `Opened chest in ${location}; loot: ${lootLines.join("; ")}.`, undefined, { staminaLost: staminaCost });
+ return { embed: resultEmbed, party, nextCharacter };
 }
 
 function pushProgressLog(party, characterName, outcome, message, loot, costs) {
@@ -478,8 +562,9 @@ module.exports = {
        title = `🗺️ **Expedition: Chest found!**`;
        description =
         `**${character.name}** found a chest in **${location}**!\n\n` +
-        "You found a chest! Use the chest flow to open it (cost 1 stamina).\n\n" +
-        `↳ **Continue** ➾ Use </explore roll:${EXPLORE_CMD_ID}> with this Expedition ID to take your turn.`;
+        "Open chest? Costs 1 stamina.\n\n" +
+        "**Yes** — Open the chest (1 item per party member, relics possible).\n" +
+        `**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else if (outcomeType === "old_map") {
        title = `🗺️ **Expedition: Old map found!**`;
        description =
@@ -525,7 +610,7 @@ module.exports = {
         showRestSecureMove: false,
       });
 
-      const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto";
+      const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest";
       let components = [];
       if (isYesNoChoice) {
        const row = new ActionRowBuilder().addComponents(
@@ -616,7 +701,7 @@ module.exports = {
          let lootForLog = undefined;
 
          if (ruinsOutcome === "chest") {
-          resultDescription = `**${ruinsCharacter.name}** explored the ruins and found a chest! Use the chest flow to open it (cost 1 stamina).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
           progressMsg += "Found a chest (open for 1 stamina).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else if (ruinsOutcome === "camp") {
@@ -721,7 +806,97 @@ module.exports = {
           showNextAndCommands: true,
           showRestSecureMove: false,
         });
-         await i.update({ embeds: [resultEmbed], components: [disabledRow] }).catch(() => {});
+
+         if (ruinsOutcome === "chest") {
+          const chestRow = new ActionRowBuilder().addComponents(
+           new ButtonBuilder().setCustomId("explore_chest_yes").setLabel("Yes").setStyle(ButtonStyle.Success),
+           new ButtonBuilder().setCustomId("explore_chest_no").setLabel("No").setStyle(ButtonStyle.Secondary)
+          );
+          const chestDisabledRow = new ActionRowBuilder().addComponents(
+           new ButtonBuilder().setCustomId("explore_chest_yes").setLabel("Yes").setStyle(ButtonStyle.Success).setDisabled(true),
+           new ButtonBuilder().setCustomId("explore_chest_no").setLabel("No").setStyle(ButtonStyle.Secondary).setDisabled(true)
+          );
+          const updatedMsg = await i.update({ embeds: [resultEmbed], components: [chestRow] }).catch(() => null);
+          if (updatedMsg) {
+           const chestCollector = updatedMsg.createMessageComponentCollector({
+            filter: (ci) => ci.user.id === i.user.id,
+            time: 5 * 60 * 1000,
+            max: 1,
+           });
+           chestCollector.on("collect", async (ci) => {
+            await ci.deferUpdate();
+            if (ci.customId.endsWith("_yes")) {
+             const result = await handleExplorationChestOpen(ci, expeditionId, location);
+             if (result?.notEnoughStamina) {
+              const fp = await Party.findOne({ partyId: expeditionId });
+              const noStamEmbed = new EmbedBuilder()
+               .setTitle(resultTitle)
+               .setColor(regionColors[fp?.region] || "#00ff99")
+               .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
+               .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
+              addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+              await ci.update({ embeds: [noStamEmbed], components: [chestRow] }).catch(() => {});
+              return;
+             }
+             if (result?.embed) {
+              await ci.update({ embeds: [result.embed], components: [chestDisabledRow] }).catch(() => {});
+              if (result.nextCharacter?.userId) await ci.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
+             }
+            } else {
+             const skipEmbed = new EmbedBuilder()
+              .setTitle(resultTitle)
+              .setColor(regionColors[finalParty?.region] || "#00ff99")
+              .setDescription(resultDescription.split("\n\n")[0] + `\n\n✅ **You left the chest.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+              .setImage(regionImages[finalParty?.region] || EXPLORATION_IMAGE_FALLBACK);
+             addExplorationStandardFields(skipEmbed, { party: finalParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+             await ci.update({ embeds: [skipEmbed], components: [chestDisabledRow] }).catch(() => {});
+            }
+           });
+           chestCollector.on("end", (collected, reason) => {
+            if (reason === "time" && collected.size === 0 && updatedMsg.editable) {
+             updatedMsg.edit({ components: [chestDisabledRow] }).catch(() => {});
+            }
+           });
+          }
+         } else {
+          await i.update({ embeds: [resultEmbed], components: [disabledRow] }).catch(() => {});
+         }
+         return;
+        }
+
+        if (outcomeType === "chest") {
+         if (isYes) {
+          const result = await handleExplorationChestOpen(i, expeditionId, location);
+          if (result?.notEnoughStamina) {
+           const freshParty = await Party.findOne({ partyId: expeditionId });
+           const noStaminaEmbed = new EmbedBuilder()
+            .setTitle(title)
+            .setColor(regionColors[freshParty?.region] || "#00ff99")
+            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
+            .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
+           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+           await i.update({ embeds: [noStaminaEmbed], components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("explore_chest_yes").setLabel("Yes").setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId("explore_chest_no").setLabel("No").setStyle(ButtonStyle.Secondary)
+           )] }).catch(() => {});
+           return;
+          }
+          if (result?.embed) {
+           await i.update({ embeds: [result.embed], components: [disabledRow] }).catch(() => {});
+           if (result.nextCharacter?.userId) {
+            await i.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
+           }
+           return;
+          }
+          return;
+         }
+         const skipEmbed = new EmbedBuilder()
+          .setTitle(title)
+          .setColor(regionColors[party.region] || "#00ff99")
+          .setDescription(description.split("\n\n")[0] + `\n\n✅ **You left the chest.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+          .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+         addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false });
+         await i.update({ embeds: [skipEmbed], components: [disabledRow] });
          return;
         }
 
