@@ -867,6 +867,12 @@ async function initializePinManager() {
                 await loadPins();
                 updatePinUI();
                 initializeSearch();
+                // Poll pins so when someone else adds a pin, everyone sees it
+                if (pinPollIntervalId) clearInterval(pinPollIntervalId);
+                pinPollIntervalId = setInterval(loadPins, PIN_POLL_INTERVAL_MS);
+                document.addEventListener('visibilitychange', function onPinVisibility() {
+                    if (document.visibilityState === 'visible') loadPins();
+                });
             } else {
                 showPinAuthRequired();
                 initializeSearch();
@@ -880,8 +886,15 @@ async function initializePinManager() {
     }
 }
 
+// Avoid overlapping pin loads when polling
+let pinLoadInProgress = false;
+const PIN_POLL_INTERVAL_MS = 10000;
+let pinPollIntervalId = null;
+
 // Load pins from server
 async function loadPins() {
+    if (pinLoadInProgress) return;
+    pinLoadInProgress = true;
     try {
         const response = await fetch('/api/pins', {
             method: 'GET',
@@ -899,6 +912,8 @@ async function loadPins() {
         }
     } catch (error) {
         console.error('[map.js]: Error loading pins:', error);
+    } finally {
+        pinLoadInProgress = false;
     }
 }
 

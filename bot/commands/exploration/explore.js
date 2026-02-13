@@ -436,12 +436,14 @@ module.exports = {
       );
      }
 
-     if (party.currentTurn !== characterIndex) {
+    if (party.currentTurn !== characterIndex) {
       const nextCharacter = party.characters[party.currentTurn];
-      return interaction.editReply(
-       `It is not your turn. Next turn: ${nextCharacter?.name || "Unknown"}`
-      );
-     }
+      const notYourTurnEmbed = new EmbedBuilder()
+        .setTitle("⏳ Not Your Turn")
+        .setColor(regionColors[party.region] || "#FF9800")
+        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+      return interaction.editReply({ embeds: [notYourTurnEmbed] });
+    }
 
      // Sync quadrant state from map so stamina cost matches canonical explored/secured status
      const mapSquare = await Square.findOne({ squareId: party.square });
@@ -1492,9 +1494,11 @@ module.exports = {
 
     if (party.currentTurn !== characterIndex) {
      const nextCharacter = party.characters[party.currentTurn];
-     return interaction.editReply(
-      `It is not your turn. Next turn: ${nextCharacter?.name || "Unknown"}`
-     );
+     const notYourTurnEmbed = new EmbedBuilder()
+       .setTitle("⏳ Not Your Turn")
+       .setColor(regionColors[party.region] || "#FF9800")
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+     return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
     if (
@@ -1601,9 +1605,11 @@ module.exports = {
 
     if (party.currentTurn !== characterIndex) {
      const nextCharacter = party.characters[party.currentTurn];
-     return interaction.editReply(
-      `It is not your turn. Next turn: ${nextCharacter?.name || "Unknown"}`
-     );
+     const notYourTurnEmbed = new EmbedBuilder()
+       .setTitle("⏳ Not Your Turn")
+       .setColor(regionColors[party.region] || "#FF9800")
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+     return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
     if (party.quadrantState !== "explored") {
@@ -1620,7 +1626,9 @@ module.exports = {
     const requiredResources = ["Wood", "Eldin Ore"];
     const availableResources = party.characters.flatMap((char) => char.items);
     const hasResources = requiredResources.every((resource) =>
-     availableResources.some((item) => item.itemName === resource)
+     availableResources.some((item) =>
+      item.itemName === resource || item.itemName === `${resource} Bundle`
+     )
     );
 
     if (!hasResources) {
@@ -1711,9 +1719,11 @@ module.exports = {
 
     if (party.currentTurn !== characterIndex) {
      const nextCharacter = party.characters[party.currentTurn];
-     return interaction.editReply(
-      `It is not your turn. Next turn: ${nextCharacter?.name || "Unknown"}`
-     );
+     const notYourTurnEmbed = new EmbedBuilder()
+       .setTitle("⏳ Not Your Turn")
+       .setColor(regionColors[party.region] || "#FF9800")
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+     return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
     const staminaCost = 2;
@@ -2099,9 +2109,11 @@ module.exports = {
 
     if (party.currentTurn !== characterIndex) {
      const nextCharacter = party.characters[party.currentTurn];
-     return interaction.editReply(
-      `It is not your turn. Next turn: ${nextCharacter?.name || "Unknown"}`
-     );
+     const notYourTurnEmbed = new EmbedBuilder()
+       .setTitle("⏳ Not Your Turn")
+       .setColor(regionColors[party.region] || "#FF9800")
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+     return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
     const isSecured = party.quadrantState === "secured";
