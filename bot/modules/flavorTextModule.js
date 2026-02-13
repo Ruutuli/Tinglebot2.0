@@ -381,7 +381,11 @@ const generateModCharacterVictoryMessage = (characterName, modTitle, modType) =>
 };
 
 // Attack Buff Messages
-const generateAttackBuffMessage = (attackSuccess, adjustedRandomValue, finalDamage) => {
+// When hasEquippedWeapon is false, returns a generic victory message instead of weapon-specific text.
+const generateAttackBuffMessage = (attackSuccess, adjustedRandomValue, finalDamage, hasEquippedWeapon = true) => {
+  if (hasEquippedWeapon === false) {
+    return getRandomMessage(COMBAT_MESSAGES.victory.normal);
+  }
   return getRandomMessage(COMBAT_MESSAGES.buff.attack.success);
 };
 

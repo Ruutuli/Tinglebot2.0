@@ -39,6 +39,31 @@ const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
 
+/**
+ * Resolve loot for Chuchu monsters: always give Chuchu Jelly (or elemental variant)
+ * instead of Chuchu Egg. Matches loot.js behavior.
+ */
+async function resolveExplorationMonsterLoot(monsterName, rawLootedItem) {
+  if (!rawLootedItem) return null;
+  if (!monsterName.includes("Chuchu")) {
+    return { ...rawLootedItem, quantity: rawLootedItem.quantity ?? 1 };
+  }
+
+  let jellyType;
+  if (monsterName.includes("Ice")) jellyType = "White Chuchu Jelly";
+  else if (monsterName.includes("Fire")) jellyType = "Red Chuchu Jelly";
+  else if (monsterName.includes("Electric")) jellyType = "Yellow Chuchu Jelly";
+  else jellyType = "Chuchu Jelly";
+
+  const quantity = monsterName.includes("Large") ? 3 : monsterName.includes("Medium") ? 2 : 1;
+  const result = { ...rawLootedItem, itemName: jellyType, quantity };
+  try {
+    const jellyItem = await ItemModel.findOne({ itemName: jellyType }).select("emoji");
+    if (jellyItem?.emoji) result.emoji = jellyItem.emoji;
+  } catch (_) {}
+  return result;
+}
+
 // Region start squares (party returned here on full party KO)
 const START_POINTS_BY_REGION = {
  eldin: { square: "H5", quadrant: "Q3" },
@@ -643,7 +668,7 @@ module.exports = {
        fairyEmbed.addFields(
         { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
        );
-       addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: true });
+       addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showFairyRollOnly: true });
        await interaction.editReply({ embeds: [fairyEmbed] });
        await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
        return;
@@ -1291,22 +1316,21 @@ module.exports = {
 
         if (monsterDefeated) {
          const items = await fetchItemsByMonster(selectedMonster.name);
-         const lootedItem =
-          items.length > 0
-           ? items[Math.floor(Math.random() * items.length)]
-           : null;
+         const rawItem = items.length > 0 ? items[Math.floor(Math.random() * items.length)] : null;
+         const lootedItem = await resolveExplorationMonsterLoot(selectedMonster.name, rawItem);
 
          if (lootedItem) {
+          const qty = lootedItem.quantity ?? 1;
           embed.addFields({
            name: `🎉 __Loot Found__`,
-           value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**`,
+           value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**${qty > 1 ? ` x${qty}` : ""}`,
            inline: false,
           });
 
           await addItemInventoryDatabase(
            character._id,
            lootedItem.itemName,
-           1,
+           qty,
            interaction,
            "Exploration Loot"
           );
@@ -1318,7 +1342,7 @@ module.exports = {
            characterId: character._id,
            characterName: character.name,
            itemName: lootedItem.itemName,
-           quantity: 1,
+           quantity: qty,
            emoji: lootedItem.emoji || "",
           });
          }
@@ -1393,10 +1417,8 @@ module.exports = {
        let lootedItem = null;
        if (outcome.canLoot) {
         const items = await fetchItemsByMonster(selectedMonster.name);
-        lootedItem =
-         items.length > 0
-          ? items[Math.floor(Math.random() * items.length)]
-          : null;
+        const rawItem = items.length > 0 ? items[Math.floor(Math.random() * items.length)] : null;
+        lootedItem = await resolveExplorationMonsterLoot(selectedMonster.name, rawItem);
        }
 
        const monsterMsg = outcome.hearts > 0
@@ -1423,6 +1445,7 @@ module.exports = {
         true
        );
 
+       const hasEquippedWeapon = !!(character?.gearWeapon?.name);
        const battleOutcomeDisplay = (() => {
         if (outcome.hearts && outcome.hearts > 0) {
          return outcome.result === "KO" ? generateDamageMessage("KO") : generateDamageMessage(outcome.hearts);
@@ -1431,7 +1454,7 @@ module.exports = {
          return generateDefenseBuffMessage(outcome.defenseSuccess, outcome.adjustedRandomValue, outcome.damageValue);
         }
         if (outcome.attackSuccess) {
-         return generateAttackBuffMessage(outcome.attackSuccess, outcome.adjustedRandomValue, outcome.damageValue);
+         return generateAttackBuffMessage(outcome.attackSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedWeapon);
         }
         if (outcome.result === "Win!/Loot" || outcome.result === "Win!/Loot (1HKO)") {
          if (character && character.isModCharacter && outcome.result === "Win!/Loot (1HKO)") {
@@ -1452,16 +1475,17 @@ module.exports = {
        embed.addFields({ name: `⚔️ __Battle Outcome__`, value: battleOutcomeDisplay, inline: false });
 
        if (outcome.canLoot && lootedItem) {
+        const qty = lootedItem.quantity ?? 1;
         embed.addFields({
          name: `🎉 __Loot Found__`,
-         value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**`,
+         value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**${qty > 1 ? ` x${qty}` : ""}`,
          inline: false,
         });
 
         await addItemInventoryDatabase(
          character._id,
          lootedItem.itemName,
-         1,
+         qty,
          interaction,
          "Exploration Loot"
         );
@@ -1473,7 +1497,7 @@ module.exports = {
          characterId: character._id,
          characterName: character.name,
          itemName: lootedItem.itemName,
-         quantity: 1,
+         quantity: qty,
          emoji: lootedItem.emoji || "",
         });
        }
@@ -1671,12 +1695,36 @@ module.exports = {
     );
 
     if (!hasResources) {
+     const locationSecure = `${party.square} ${party.quadrant}`;
+     const nextChar = party.characters[party.currentTurn];
      const embed = new EmbedBuilder()
-      .setTitle("🚫 Cannot Secure Quadrant")
+      .setTitle("🚫 **Cannot Secure Quadrant**")
       .setColor(regionColors[party.region] || "#FF9800")
       .setDescription(
-        "Party needs Wood and Eldin Ore to secure this quadrant.\n\nPlease continue to roll."
-      );
+        `To secure **${locationSecure}**, the party needs **Wood** and **Eldin Ore** (in someone's expedition loadout).\n\nContinue exploring to find these resources, then try **Secure** again. Use the commands below for your next action.`
+      )
+      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+     addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location: locationSecure,
+      nextCharacter: nextChar ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: true,
+      commandsLast: true,
+     });
+     addExplorationCommandsField(embed, {
+      party,
+      expeditionId,
+      location: locationSecure,
+      nextCharacter: nextChar ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: true,
+      isAtStartQuadrant: (() => {
+       const start = START_POINTS_BY_REGION[party.region];
+       return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+      })(),
+     });
      return interaction.editReply({ embeds: [embed] });
     }
 
