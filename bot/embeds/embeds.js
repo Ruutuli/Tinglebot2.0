@@ -493,7 +493,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    commandsValue += `**Next actions**\nYou can do the following:\n\n` +
     `• **Roll** — ${cmdRoll}\n> Take your turn. Costs 1 stamina (2 in unexplored quad, 0 in secured). Use id: \`${expId || "—"}\` charactername: **${nextName}**\n\n` +
     `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
-    `• **Camp** — ${cmdCamp}\n> Extended rest. Recovers stamina and hearts for the party.\n\n` +
+    `• **Camp** — ${cmdCamp}\n> Extended rest. Recovers stamina and hearts for the party. Better recovery in secured quadrants.\n\n` +
     `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
     `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands.`;
   } else {

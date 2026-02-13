@@ -1884,14 +1884,18 @@ module.exports = {
      );
     }
 
+    const isSecured = party.quadrantState === "secured";
+    const pct = isSecured ? 0.5 : 0.25;
     const recoveryPerMember = [];
 
     for (let i = 0; i < party.characters.length; i++) {
      const partyChar = party.characters[i];
      const char = await Character.findById(partyChar._id);
      if (char) {
-      const staminaRecovered = Math.floor(Math.random() * 4) + 1;
-      const heartsRecovered = Math.floor(Math.random() * 4) + 1;
+      const maxSta = char.maxStamina ?? 0;
+      const maxHrt = char.maxHearts ?? 0;
+      const staminaRecovered = Math.floor(maxSta * pct);
+      const heartsRecovered = Math.floor(maxHrt * pct);
       recoveryPerMember.push({ name: char.name, stamina: staminaRecovered, hearts: heartsRecovered });
       char.currentStamina = Math.min(char.maxStamina, char.currentStamina + staminaRecovered);
       char.currentHearts = Math.min(char.maxHearts, char.currentHearts + heartsRecovered);
@@ -1911,11 +1915,12 @@ module.exports = {
     const recoveryValue = recoveryPerMember
      .map((r) => `${r.name}: +${r.stamina} 🟩, +${r.hearts} ❤️`)
      .join("\n");
+    const campNote = isSecured ? "The secured quadrant made for a restful night." : "The party kept watch — risky terrain meant light rest.";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
-      `${character.name} set up camp. The party rested and recovered.`
+      `${character.name} set up camp. ${campNote}`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK)
      .addFields({
