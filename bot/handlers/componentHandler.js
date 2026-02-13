@@ -35,6 +35,7 @@ const {
 const ItemModel = require('@/models/ItemModel');
 const RuuGame = require('@/models/RuuGameModel');
 const Character = require('@/models/CharacterModel');
+const TempData = require('@/models/TempDataModel');
 const { Village } = require('@/models/VillageModel');
 const { finalizeBlightApplication, completeBlightHealing } = require('./blightHandler');
 
@@ -63,6 +64,8 @@ const {
 
 const { handleModalSubmission } = require('./modalHandler');
 const { syncInventory } = require('../handlers/syncHandler');
+const { handleTravelInteraction } = require('./travelHandler');
+const { getMonstersByPath } = require('../modules/rngModule');
 const { handleVendingViewVillage, handleSyncButton, handlePouchUpgradeConfirm, handlePouchUpgradeCancel } = require('./vendingHandler');
 
 // ------------------- Utility Functions -------------------
@@ -1868,6 +1871,64 @@ async function handleComponentInteraction(interaction) {
   const [action] = interaction.customId.split('|');
 
   try {
+    // Travel encounter Fight/Flee failsafe: handle when collector is gone (e.g. bot restarted)
+    if (interaction.isButton() && (interaction.customId === 'fight' || interaction.customId === 'flee')) {
+      setImmediate(async () => {
+        try {
+          const encounterKey = `${interaction.channelId}_${interaction.message?.id}`;
+          const stateDoc = await TempData.findByTypeAndKey('travelEncounter', encounterKey);
+          if (!stateDoc || !stateDoc.data) return;
+          const state = stateDoc.data;
+          if (state.userId !== interaction.user.id) return;
+          try {
+            await interaction.deferUpdate();
+          } catch (deferErr) {
+            if (deferErr.code === 10062 || deferErr.code === 10008) return;
+            throw deferErr;
+          }
+          await TempData.findOneAndDelete({ type: 'travelEncounter', key: encounterKey });
+          const character = await fetchCharacterById(state.characterId);
+          if (!character) {
+            await interaction.followUp({ content: '❌ Character no longer found. Use /travel again.', flags: 64 }).catch(() => {});
+            return;
+          }
+          const monsters = await getMonstersByPath(state.currentPath);
+          const monster = monsters.find(m => m.name === state.monsterName);
+          if (!monster) {
+            await interaction.followUp({ content: '❌ Could not resolve monster for this encounter. Use /travel again.', flags: 64 }).catch(() => {});
+            return;
+          }
+          const travelLog = Array.isArray(state.travelLog) ? state.travelLog : [];
+          const decision = await handleTravelInteraction(
+            interaction,
+            character,
+            state.pathEmoji ?? '🛤️',
+            state.currentPath,
+            interaction.message,
+            monster,
+            travelLog,
+            state.startingVillage,
+            undefined,
+            null
+          );
+          if (decision && typeof decision === 'string' && !decision.startsWith('❌')) {
+            await interaction.followUp({
+              content: `⚠️ **Encounter resolved.** The bot may have restarted—use \`/travel\` again to continue your journey.`,
+              flags: 64
+            }).catch(() => {});
+          }
+        } catch (err) {
+          handleError(err, 'componentHandler.js (travel encounter recovery)');
+          if (!interaction.replied && !interaction.deferred) {
+            interaction.reply({ content: '❌ This encounter has expired or could not be resolved. Use /travel again.', flags: 64 }).catch(() => {});
+          } else {
+            interaction.followUp({ content: '❌ Something went wrong resolving this encounter. Use /travel again.', flags: 64 }).catch(() => {});
+          }
+        }
+      });
+      return;
+    }
+
     // Explore buttons (ruins/chest/grotto) are handled by message collectors in explore.js
     if (interaction.customId.startsWith('explore_')) {
       return;

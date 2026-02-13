@@ -142,6 +142,7 @@ const tempDataSchema = new mongoose.Schema({
       
       // World & Environment
       'travel',        // Travel cooldowns
+      'travelEncounter', // Travel monster encounter state (failsafe after bot restart)
       'gather',        // Gathering cooldowns
       'weather',       // Weather data caching
       'location',      // Location tracking
@@ -212,6 +213,9 @@ tempDataSchema.pre('save', function(next) {
       break;
     case 'craftingMaterialSelection':
       this.expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      break;
+    case 'travelEncounter':
+      this.expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes (match encounter timeout)
       break;
     default:
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours

@@ -1569,11 +1569,18 @@ async function completeQuest(userId, questId) {
 // ============================================================================
 
 // ------------------- createRelic -------------------
+// When name is "Unknown Relic", appends a short id (last 6 chars of _id) so it displays as "Unknown Relic a3f2c1".
 const createRelic = async (relicData) => {
  try {
   await connectToTinglebot();
   const newRelic = new RelicModel(relicData);
-  return await newRelic.save();
+  const saved = await newRelic.save();
+  if (saved.name === "Unknown Relic") {
+   const shortId = saved._id.toString().slice(-6).toLowerCase();
+   saved.name = `Unknown Relic ${shortId}`;
+   return await saved.save();
+  }
+  return saved;
  } catch (error) {
   handleError(error, "relicService.js");
   console.error("[relicService.js]: ❌ Error creating relic:", error);

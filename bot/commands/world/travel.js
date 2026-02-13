@@ -68,6 +68,7 @@ const { checkInventorySync } = require('@/utils/characterUtils');
 const { enforceJail } = require('@/utils/jailCheck');
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { retrieveAllByType } = require('@/utils/storage.js');
+const TempData = require('@/models/TempDataModel');
 const { getWeatherWithoutGeneration } = require('@/services/weatherService');
 const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../../modules/elixirModule');
 const { applyTravelWeatherBoost } = require('../../modules/boostIntegration');
@@ -1309,6 +1310,27 @@ async function processTravelDay(day, context) {
           new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
         );
         const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
+
+        // Persist encounter state for failsafe (e.g. bot restart) so Fight/Flee can be resolved
+        const encounterKey = `${channel.id}_${encounterMessage.id}`;
+        try {
+          await TempData.create({
+            type: 'travelEncounter',
+            key: encounterKey,
+            data: {
+              userId: interaction.user.id,
+              characterId: character._id.toString(),
+              monsterName: monster.name,
+              currentPath,
+              startingVillage,
+              pathEmoji,
+              travelLog: context.travelLog || []
+            },
+            expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+          });
+        } catch (saveErr) {
+          console.warn(`[travel.js]: ⚠️ Could not save travel encounter state for failsafe: ${saveErr.message}`);
+        }
         
         // Delete traveling message immediately after encounter is posted
         try {
@@ -1323,17 +1345,21 @@ async function processTravelDay(day, context) {
         
         let encounterInteractionProcessed = false; // Flag to prevent multiple interactions
         const collector = encounterMessage.createMessageComponentCollector({ 
-          filter: i => {
+          filter: async (i) => {
             if (i.user.id !== interaction.user.id) {
-              i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
+              i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true }).catch(() => {});
               return false;
             }
             if (encounterInteractionProcessed) {
-              i.reply({ content: '❌ You have already made a choice for this encounter.', ephemeral: true });
+              i.reply({ content: '❌ You have already made a choice for this encounter.', ephemeral: true }).catch(() => {});
               return false;
             }
+            // Claim this interaction so recovery handler (componentHandler) won't also handle it
+            try {
+              await TempData.findOneAndDelete({ type: 'travelEncounter', key: `${i.channelId}_${i.message?.id}` });
+            } catch (_) { /* ignore */ }
             return true;
-          }, 
+          },
           time: 120000 // Reduced from 300000 (5 min) to 120000 (2 min)
         });
 
@@ -1351,6 +1377,13 @@ async function processTravelDay(day, context) {
           await encounterMessage.edit({ components: [disabledButtons] }).catch(console.error);
           
           try {
+            // In case recovery path already responded (e.g. race), don't throw
+            try {
+              await i.deferUpdate();
+            } catch (deferErr) {
+              if (deferErr.code === 10062 || deferErr.code === 10008) return; // already responded / unknown
+              throw deferErr;
+            }
             const decision = await handleTravelInteraction(
               i,
               character,

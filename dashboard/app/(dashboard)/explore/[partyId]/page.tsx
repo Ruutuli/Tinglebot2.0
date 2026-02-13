@@ -39,6 +39,7 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
   monster_camp: "Monster Camp",
   ruins: "Ruins",
   grotto: "Grotto",
+  relic: "Relic",
 };
 
 type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string };
@@ -531,6 +532,34 @@ export default function ExplorePartyPage() {
     return () => controller.abort();
   }, [party?.progressLog, isDiscoveryReported]);
 
+  // When user clicks "Place on map", ensure we have the preview for that discovery's square (fetch on demand if missing)
+  useEffect(() => {
+    const square = placingForDiscovery?.square;
+    if (!square) return;
+    const existing = discoveryPreviewBySquare[square];
+    if (existing?.layers?.length) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch(`/api/explore/square-preview?square=${encodeURIComponent(square)}`, { signal })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (signal.aborted) return;
+        if (data?.layers) {
+          setDiscoveryPreviewBySquare((prev) => ({
+            ...prev,
+            [square]: { layers: data.layers, quadrantBounds: data.quadrantBounds ?? null, quadrantStatuses: data.quadrantStatuses ?? undefined },
+          }));
+        } else {
+          setDiscoveryPreviewBySquare((prev) => ({ ...prev, [square]: null }));
+        }
+      })
+      .catch(() => {
+        if (signal.aborted) return;
+        setDiscoveryPreviewBySquare((prev) => ({ ...prev, [square]: null }));
+      });
+    return () => controller.abort();
+  }, [placingForDiscovery?.square, discoveryPreviewBySquare]);
+
   const fetchPins = useCallback((signal?: AbortSignal) => {
     if (!userId) return;
     fetch("/api/pins", { credentials: "include", ...(signal && { signal }) })
@@ -865,7 +894,7 @@ export default function ExplorePartyPage() {
           coordinates: coords,
           category: "points-of-interest",
           color: "#b91c1c",
-          icon: d.outcome === "monster_camp" ? "fas fa-skull" : d.outcome === "grotto" ? "fas fa-tree" : "fas fa-landmark",
+          icon: d.outcome === "monster_camp" ? "fas fa-skull" : d.outcome === "grotto" ? "fas fa-tree" : d.outcome === "relic" ? "fas fa-gem" : "fas fa-landmark",
           sourceDiscoveryKey: key,
           partyId: partyId || undefined,
         };
@@ -1624,6 +1653,7 @@ export default function ExplorePartyPage() {
                   const showMap = displayPreview?.layers?.length;
                   const canPlacePins = !!(userId && party.currentUserJoined);
                   const unreported = reportableDiscoveries.filter((d) => !isDiscoveryReported(d));
+                  const showReportToTownHall = unreported.length > 0;
                   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
                     if (!isPlacing || !placingForDiscovery) return;
                     const el = e.currentTarget;
@@ -1642,7 +1672,7 @@ export default function ExplorePartyPage() {
                   };
                   return (
                     <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
-                      {reportableDiscoveries.length > 0 && (
+                      {showReportToTownHall && (
                         <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
                             <i className="fa-solid fa-landmark text-[10px] opacity-80" aria-hidden />
@@ -1673,20 +1703,14 @@ export default function ExplorePartyPage() {
                             </div>
                           )}
                           <ul className="flex flex-wrap gap-2">
-                            {reportableDiscoveries.map((d) => {
+                            {unreported.map((d) => {
                               const key = discoveryKey(d);
-                              const reported = isDiscoveryReported(d);
                               const isThisPlacing = placingForDiscovery && discoveryKey(placingForDiscovery) === key;
                               const isSaving = placingPinForKey === key;
                               return (
                                 <li key={key} className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-[var(--botw-warm-black)]/50 px-2.5 py-1.5">
                                   <span className="text-xs font-medium text-[var(--totk-ivory)]">{d.square} {d.quadrant} — {d.label}</span>
-                                  {reported ? (
-                                    <span className="flex items-center gap-1 text-[10px] text-[var(--totk-light-green)]">
-                                      <i className="fa-solid fa-check" aria-hidden />
-                                      <Link href={partyId ? `/map?partyId=${encodeURIComponent(partyId)}` : "/map"} className="text-amber-300 underline">Map</Link>
-                                    </span>
-                                  ) : !userId ? (
+                                  {!userId ? (
                                     <span className="text-[10px] text-amber-400/90">Log in to place on map</span>
                                   ) : !canPlacePins ? (
                                     <span className="text-[10px] text-amber-400/90">Party members only</span>

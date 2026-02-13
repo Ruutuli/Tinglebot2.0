@@ -400,7 +400,11 @@ const generateAttackBuffMessageKOPrevented = (originalDamage) => {
 };
 
 // Defense Buff Messages
-const generateDefenseBuffMessage = (defenseSuccess, adjustedRandomValue, finalDamage) => {
+// When hasEquippedArmor is false, returns a generic victory message instead of armor-specific text.
+const generateDefenseBuffMessage = (defenseSuccess, adjustedRandomValue, finalDamage, hasEquippedArmor = true) => {
+  if (hasEquippedArmor === false) {
+    return getRandomMessage(COMBAT_MESSAGES.victory.normal);
+  }
   return getRandomMessage(COMBAT_MESSAGES.buff.defense.success);
 };
 
@@ -442,20 +446,19 @@ const getFailedToDefeatMessage = (character, randomMonster, originalDamage) => {
   return `${character.name} blocked the attack! You would have taken ${originalDamage} ❤️ hearts of damage but your gear protected you! You got away from the fight with no injuries.`;
 };
 
-const generateFinalOutcomeMessage = (randomValue, defenseSuccess = false, attackSuccess = false, adjustedRandomValue = 0, finalDamage = 0) => {
-  console.log(`[DEBUG3] Input to generateFinalOutcomeMessage - randomValue: ${randomValue}, defenseSuccess: ${defenseSuccess}, attackSuccess: ${attackSuccess}, adjustedRandomValue: ${adjustedRandomValue}, finalDamage: ${finalDamage}`);
-
+const generateFinalOutcomeMessage = (randomValue, defenseSuccess = false, attackSuccess = false, adjustedRandomValue = 0, finalDamage = 0, hasEquippedWeapon = true, hasEquippedArmor = true) => {
   let message;
 
-  if (attackSuccess) {
-    message = generateAttackBuffMessage(defenseSuccess, attackSuccess, adjustedRandomValue, finalDamage);
-  } else if (defenseSuccess) {
-    message = generateDefenseBuffMessage(defenseSuccess, attackSuccess, adjustedRandomValue);
+  if (attackSuccess && hasEquippedWeapon) {
+    message = generateAttackBuffMessage(attackSuccess, adjustedRandomValue, finalDamage, hasEquippedWeapon);
+  } else if (defenseSuccess && hasEquippedArmor) {
+    message = generateDefenseBuffMessage(defenseSuccess, adjustedRandomValue, finalDamage, hasEquippedArmor);
+  } else if (attackSuccess || defenseSuccess) {
+    message = getRandomMessage(COMBAT_MESSAGES.victory.normal);
   } else {
     message = generateDamageMessage(finalDamage);
   }
 
-  console.log(`[DEBUG4] Output from generateFinalOutcomeMessage: ${message}`);
   return message;
 };
 

@@ -1129,18 +1129,20 @@ async function handleTravelInteraction(
     try {
       // Check if this is a button interaction and handle potential expiration
       if (interaction?.isButton?.()) {
-        try {
-          await interaction.deferUpdate();
-        } catch (err) {
-          if (err.code === 10062) {
-            warn('INTERACTION', `Interaction expired for user ${interaction.user?.id || 'unknown'}`);
-            return '❌ This interaction has expired. Please try again or reissue the command.';
-          } else if (err.code === 10008) {
-            warn('INTERACTION', `Unknown interaction for user ${interaction.user?.id || 'unknown'}`);
-            return '❌ This interaction is no longer valid. Please try again or reissue the command.';
-          } else {
-            error('INTERACTION', 'Unexpected interaction error', err);
-            throw err;
+        if (!interaction.replied && !interaction.deferred) {
+          try {
+            await interaction.deferUpdate();
+          } catch (err) {
+            if (err.code === 10062) {
+              warn('INTERACTION', `Interaction expired for user ${interaction.user?.id || 'unknown'}`);
+              return '❌ This interaction has expired. Please try again or reissue the command.';
+            } else if (err.code === 10008) {
+              warn('INTERACTION', `Unknown interaction for user ${interaction.user?.id || 'unknown'}`);
+              return '❌ This interaction is no longer valid. Please try again or reissue the command.';
+            } else {
+              error('INTERACTION', 'Unexpected interaction error', err);
+              throw err;
+            }
           }
         }
       }

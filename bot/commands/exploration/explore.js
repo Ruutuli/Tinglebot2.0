@@ -804,6 +804,20 @@ module.exports = {
        }
       }
 
+      if (outcomeType === "relic") {
+       try {
+        await createRelic({
+         name: "Unknown Relic",
+         discoveredBy: character.name,
+         discoveredDate: new Date(),
+         locationFound: location,
+         appraised: false,
+        });
+       } catch (err) {
+        console.error("[explore.js] createRelic error (roll outcome):", err?.message || err);
+       }
+      }
+
       const progressMessages = {
        chest: `Found a chest in ${location} (open for 1 stamina).`,
        old_map: chosenMapOldMap ? `Found Map #${chosenMapOldMap.number} in ${location}; saved to ${character.name}'s map collection. Take to Inariko Library to decipher.` : `Found an old map in ${location}; take to Inariko Library to decipher.`,
@@ -820,12 +834,18 @@ module.exports = {
             ...(outcomeType === "camp" && { heartsRecovered: campHeartsRecovered, staminaRecovered: campStaminaRecovered }),
           }
         : undefined;
+      const lootForProgressLog =
+       outcomeType === "old_map" && chosenMapOldMap
+        ? { itemName: `Map #${chosenMapOldMap.number}`, emoji: "" }
+        : outcomeType === "relic"
+          ? { itemName: "Unknown Relic", emoji: "🔸" }
+          : undefined;
       pushProgressLog(
        party,
        character.name,
        outcomeType,
        progressMessages[outcomeType] || `Found something in ${location}.`,
-       outcomeType === "old_map" && chosenMapOldMap ? { itemName: `Map #${chosenMapOldMap.number}`, emoji: "" } : undefined,
+       lootForProgressLog,
        chestRuinsCosts
       );
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
@@ -857,9 +877,8 @@ module.exports = {
        title = `🗺️ **Expedition: Ruins found!**`;
        description =
         `**${character.name}** found some ruins in **${location}**!\n\n` +
-        "You found some ruins! Do you want to explore them?\n\n" +
-        "**Yes** — Explore ruins (cost 3 stamina).\n" +
-        `**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
+        "**Yes** — Decided to explore the ruins (cost 3 stamina).\n" +
+        `**No** — Decided to move on. Use </explore roll:${EXPLORE_CMD_ID}> to continue.`;
       } else if (outcomeType === "relic") {
        title = `🗺️ **Expedition: Relic found!**`;
        description =
@@ -1036,6 +1055,7 @@ module.exports = {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "relic", `Found a relic in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
          } else if (ruinsOutcome === "old_map") {
           const chosenMap = getRandomOldMap();
           const mapItemName = `Map #${chosenMap.number}`;
@@ -1547,12 +1567,17 @@ module.exports = {
        );
 
        const hasEquippedWeapon = !!(character?.gearWeapon?.name);
+       const hasEquippedArmor = !!(
+        character?.gearArmor?.head?.name ||
+        character?.gearArmor?.chest?.name ||
+        character?.gearArmor?.legs?.name
+       );
        const battleOutcomeDisplay = (() => {
         if (outcome.hearts && outcome.hearts > 0) {
          return outcome.result === "KO" ? generateDamageMessage("KO") : generateDamageMessage(outcome.hearts);
         }
         if (outcome.defenseSuccess) {
-         return generateDefenseBuffMessage(outcome.defenseSuccess, outcome.adjustedRandomValue, outcome.damageValue);
+         return generateDefenseBuffMessage(outcome.defenseSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedArmor);
         }
         if (outcome.attackSuccess) {
          return generateAttackBuffMessage(outcome.attackSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedWeapon);
@@ -1571,7 +1596,7 @@ module.exports = {
         if (outcome.result && (outcome.result.includes("divine power") || outcome.result.includes("legendary prowess") || outcome.result.includes("ancient") || outcome.result.includes("divine authority"))) {
          return outcome.result;
         }
-        return generateFinalOutcomeMessage(outcome.damageValue || 0, outcome.defenseSuccess || false, outcome.attackSuccess || false, outcome.adjustedRandomValue || 0, outcome.damageValue || 0);
+        return generateFinalOutcomeMessage(outcome.damageValue || 0, outcome.defenseSuccess || false, outcome.attackSuccess || false, outcome.adjustedRandomValue || 0, outcome.damageValue || 0, hasEquippedWeapon, hasEquippedArmor);
        })();
        embed.addFields({ name: `⚔️ __Battle Outcome__`, value: battleOutcomeDisplay, inline: false });
 
@@ -1932,17 +1957,17 @@ module.exports = {
       showRestSecureMove: false,
       commandsLast: true,
     });
+    const explorePageUrlSecure = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
     embed.addFields({
       name: "📋 **__Benefits__**",
-      value: "Quadrant secured. No stamina cost to explore here, increased safety.",
+      value: "Quadrant secured. No stamina cost to explore here, increased safety. You can draw your path on the dashboard before moving:\n🔗 " + explorePageUrlSecure,
       inline: false,
      });
-    const explorePageUrl = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
-    embed.addFields({
-      name: "📋 **__Draw path (do this now)__**",
-      value: `**Check the dashboard** — open the explore page, **download the square image**, draw your path, and **upload it**. You **cannot do this later**; you must do it **before you move**.\n\n🔗 ${explorePageUrl}`,
-      inline: false,
-     });
+    const startPointSecure = START_POINTS_BY_REGION[party.region];
+    const isAtStartQuadrantSecure =
+      startPointSecure &&
+      String(party.square || "").toUpperCase() === String(startPointSecure.square || "").toUpperCase() &&
+      String(party.quadrant || "").toUpperCase() === String(startPointSecure.quadrant || "").toUpperCase();
     addExplorationCommandsField(embed, {
       party,
       expeditionId,
@@ -1950,11 +1975,13 @@ module.exports = {
       nextCharacter: nextCharacterSecure ?? null,
       showNextAndCommands: true,
       showRestSecureMove: false,
+      showSecuredQuadrantOnly: true,
+      isAtStartQuadrant: !!isAtStartQuadrantSecure,
     });
 
     await interaction.editReply({ embeds: [embed] });
     await interaction.followUp({
-      content: `**Draw your path now:** Check the dashboard → download the square image, draw your path, and upload it. You must do this **before you move** (you cannot do it later). ${explorePageUrl}\n\n<@${nextCharacterSecure.userId}> it's your turn now`,
+      content: `**Next:** Camp, Item, or Move. <@${nextCharacterSecure.userId}> it's your turn.`,
     });
 
     // ------------------- Move to Adjacent Quadrant -------------------
