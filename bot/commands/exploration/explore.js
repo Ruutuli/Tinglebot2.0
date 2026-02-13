@@ -2026,9 +2026,10 @@ module.exports = {
 
     // Move cost: 1 stamina if destination is already explored or secured, 2 if unexplored
     let destinationQuadrantState = "unexplored";
+    let destQ = null;
     const destMapSquare = await Square.findOne({ squareId: newLocation.square });
     if (destMapSquare && destMapSquare.quadrants && destMapSquare.quadrants.length) {
-     const destQ = destMapSquare.quadrants.find(
+     destQ = destMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
      );
      if (destQ && (destQ.status === "explored" || destQ.status === "secured")) {
@@ -2041,6 +2042,28 @@ module.exports = {
      return interaction.editReply(
       `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
      );
+    }
+
+    // Block leaving the square until all quadrants (except inaccessible) are explored or secured
+    const targetSquareNorm = String(newLocation.square || "").trim().toUpperCase();
+    const currentSquareNorm = String(currentSquare || "").trim().toUpperCase();
+    if (targetSquareNorm !== currentSquareNorm) {
+     const currentMapSquare = await Square.findOne({ squareId: currentSquare });
+     if (currentMapSquare && currentMapSquare.quadrants && currentMapSquare.quadrants.length) {
+      const unexplored = currentMapSquare.quadrants
+       .filter((q) => {
+        const s = (q.status || "").toLowerCase();
+        return s !== "inaccessible" && s !== "explored" && s !== "secured";
+       })
+       .map((q) => (q.quadrantId || "").trim().toUpperCase())
+       .filter(Boolean);
+      if (unexplored.length > 0) {
+       const quadList = unexplored.join(", ");
+       return interaction.editReply(
+        `Oops! Can't leave until **${currentSquare}** is explored! The following quads are still unexplored: **${quadList}**.`
+       );
+      }
+     }
     }
 
     // When leaving a square, clear any reportable discoveries (monster_camp, ruins, grotto) in that square from progressLog — unmarked discoveries are considered lost
