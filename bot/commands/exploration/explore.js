@@ -44,6 +44,7 @@ const {
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
+const { getRandomCampFlavor } = require("../../data/explorationMessages.js");
 const logger = require("@/utils/logger.js");
 
 /**
@@ -1889,8 +1890,10 @@ module.exports = {
         "**Yes** — Cleanse the grotto (1 Goddess Plume + 1 stamina).\n" +
         "**No** — Mark it on the map for later (counts toward this square's 3 discovery limit).";
       } else if (outcomeType === "camp") {
+       const campFlavorRoll = getRandomCampFlavor();
        title = `🗺️ **Expedition: Found a safe space and rested!**`;
-       description = `**${character.name}** found a safe space in **${location}** and rested! Recovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
+       description =
+        `**${character.name}** found a safe space in **${location}** and rested!\n\n\`\`\`\n${campFlavorRoll}\n\`\`\`\n\nRecovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
       }
 
       const embed = new EmbedBuilder()
@@ -3914,13 +3917,13 @@ module.exports = {
       return parts.join(" ");
      })
      .join("\n");
-    const campNote = stuckInWild ? "The party camped in the wild and recovered (random stamina)." : (isSecured ? "The secured quadrant made for a restful night." : "The party rested.");
+    const campFlavor = getRandomCampFlavor();
     const costNote = staminaCost > 0 ? ` (-${staminaCost} stamina)` : (stuckInWild ? " (no cost — camp in the wild)" : "");
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
-      `${character.name} set up camp. ${campNote}${costNote}`
+      `${character.name} set up camp.${costNote}\n\n\`\`\`\n${campFlavor}\n\`\`\``
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     addExplorationStandardFields(embed, {
