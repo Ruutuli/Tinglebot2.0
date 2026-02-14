@@ -45,6 +45,20 @@ const encounterProbabilitiesBloodMoon = {
   tier10: 10
 };
 
+// ------------------- Exploration monster tier weights (tier 5+ intentionally lower) -------------------
+const explorationTierWeights = {
+  1: 42,
+  2: 23,
+  3: 9,
+  4: 6,
+  5: 2,
+  6: 1,
+  7: 0.5,
+  8: 0.3,
+  9: 0.2,
+  10: 0.1
+};
+
 // ============================================================================
 // Rarity Weights and Weighted List Creation
 // ------------------- Define initial rarity weights -------------------
@@ -337,6 +351,34 @@ function getRandomBloodMoonEncounter() {
 
 // ============================================================================
 // Monster Encounter Functions
+// ------------------- Get Exploration Monster from List (tier-weighted; tier 5+ rarer) -------------------
+// Picks one monster from the list using explorationTierWeights so tier 5+ appear less often.
+function getExplorationMonsterFromList(monsters) {
+  if (!monsters || monsters.length === 0) return null;
+  const byTier = {};
+  for (const m of monsters) {
+    const t = m.tier >= 1 && m.tier <= 10 ? m.tier : 1;
+    if (!byTier[t]) byTier[t] = [];
+    byTier[t].push(m);
+  }
+  let totalWeight = 0;
+  const tierWeights = [];
+  for (let tier = 1; tier <= 10; tier++) {
+    const list = byTier[tier];
+    if (!list || list.length === 0) continue;
+    const w = (explorationTierWeights[tier] ?? 0) * list.length;
+    if (w > 0) {
+      totalWeight += w;
+      tierWeights.push({ tier, weight: totalWeight, list });
+    }
+  }
+  if (totalWeight <= 0) return monsters[Math.floor(Math.random() * monsters.length)];
+  const r = Math.random() * totalWeight;
+  const chosen = tierWeights.find(({ weight }) => r < weight) || tierWeights[tierWeights.length - 1];
+  const list = chosen.list;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 // ------------------- Get Monster Encounter from List -------------------
 // Determines a monster encounter from a provided list of monsters based on the random encounter type.
 // If no monsters are found at the selected tier, it falls back to lower tiers.
@@ -545,6 +587,7 @@ async function attemptFlee(character, monster, options = {}) {
 module.exports = {
   createWeightedItemList,
   getMonsterEncounterFromList,
+  getExplorationMonsterFromList,
   getMonstersByCriteria,
   calculateFinalValue,
   calculateRaidFinalValue,

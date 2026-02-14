@@ -92,8 +92,13 @@ export async function POST(request: NextRequest) {
     console.log("[explore/path-images/upload] GCS upload OK:", result.url);
 
     const conn = await connect();
-    const dbName = conn?.connection?.db?.databaseName ?? "unknown";
+    const db = conn.connection.db;
+    const dbName = db?.databaseName ?? "unknown";
     console.log("[explore/path-images/upload] DB:", dbName, "partyId:", safePartyId, "squareId:", squareId);
+    if (!db) {
+      console.error("[explore/path-images/upload] No DB on connection.");
+      return NextResponse.json({ error: "Database connection not ready" }, { status: 503 });
+    }
 
     const MapPathImage =
       mongoose.models.MapPathImage ??
@@ -111,47 +116,28 @@ export async function POST(request: NextRequest) {
       { upsert: true, new: true }
     );
 
-    // Save path image URL to map database (Square/exploringMap) so it's the canonical latest for this square
-    const Square =
-      mongoose.models.Square ??
-      ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
-    const squareDoc = await Square.findOne({ squareId }).select("_id").lean();
-    let squareUpdateResult = { matchedCount: 0, modifiedCount: 0 };
-    if (squareDoc) {
-      squareUpdateResult = await Square.updateOne(
-        { _id: (squareDoc as { _id: unknown })._id },
-        { $set: { pathImageUrl: result.url, updatedAt: new Date() } }
-      );
-    }
-    if (squareUpdateResult.matchedCount === 0 && !squareDoc) {
-      const squareIdRegex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      const existing = await Square.findOne({ squareId: squareIdRegex }).select("_id").lean();
-      if (existing) {
-        squareUpdateResult = await Square.updateOne(
-          { _id: (existing as { _id: unknown })._id },
-          { $set: { pathImageUrl: result.url, updatedAt: new Date() } }
-        );
-      }
-    }
+    // Save path image URL to map database (exploringMap) — use native driver so pathImageUrl is actually persisted
+    const exploringMapCollection = db.collection("exploringMap");
+    const squareUpdateResult = await exploringMapCollection.updateOne(
+      { squareId },
+      { $set: { pathImageUrl: result.url, updatedAt: new Date() } }
+    );
     console.log("[explore/path-images/upload] Square update:", { matched: squareUpdateResult.matchedCount, modified: squareUpdateResult.modifiedCount });
     if (squareUpdateResult.matchedCount === 0) {
-      console.warn("[explore/path-images/upload] Square not found for squareId:", squareId, "- pathImageUrl not saved. Check DB name above matches where you view exploringMap.");
+      console.warn("[explore/path-images/upload] Square not found for squareId:", squareId, "- pathImageUrl not saved. Check exploringMap has a doc with this squareId.");
     }
 
-    // Mark on the party that a path image was uploaded for this square so the "draw path" prompt stays hidden
-    const Party =
-      mongoose.models.Party ??
-      ((await import("@/models/PartyModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
-    const updatedParty = await Party.findOneAndUpdate(
+    // Mark on the party that a path image was uploaded for this square so the "draw path" prompt stays hidden.
+    const partyCollection = db.collection("parties");
+    const partyResult = await partyCollection.updateOne(
       { partyId: safePartyId },
-      { $addToSet: { pathImageUploadedSquares: squareId } },
-      { new: true }
-    ).lean();
-    const partyUpdated = !!updatedParty;
+      { $addToSet: { pathImageUploadedSquares: squareId } }
+    );
+    const partyUpdated = partyResult.matchedCount > 0;
     if (!partyUpdated) {
       console.warn("[explore/path-images/upload] Party not found for partyId:", safePartyId, "- pathImageUploadedSquares not updated. Check DB name above.");
     } else {
-      console.log("[explore/path-images/upload] Party update: pathImageUploadedSquares now", (updatedParty as { pathImageUploadedSquares?: string[] }).pathImageUploadedSquares);
+      console.log("[explore/path-images/upload] Party update: matched", partyResult.matchedCount, "modified", partyResult.modifiedCount);
     }
 
     const userLabel =

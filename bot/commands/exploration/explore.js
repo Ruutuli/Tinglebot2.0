@@ -5,6 +5,7 @@ const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCo
 const {
  calculateFinalValue,
  getMonstersByRegion,
+ getExplorationMonsterFromList,
 } = require("../../modules/rngModule.js");
 const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const {
@@ -2565,8 +2566,7 @@ module.exports = {
        return interaction.editReply("No monsters available for this region.");
       }
 
-      const selectedMonster =
-       monsters[Math.floor(Math.random() * monsters.length)];
+      const selectedMonster = getExplorationMonsterFromList(monsters);
       logger.info("EXPLORE", `Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`);
 
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {

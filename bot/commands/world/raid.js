@@ -7,6 +7,7 @@ const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid, scheduleRaidTurnSkip } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
 const Raid = require('@/models/RaidModel');
+const Party = require('@/models/PartyModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 
 // ============================================================================
@@ -1079,6 +1080,21 @@ async function handleRaidVictory(interaction, raidData, monster) {
           }
           await thread.send({ embeds: [victoryEmbed] });
           console.log(`[raid.js]: ✅ Victory embed sent to raid thread`);
+          // Expedition raid: ping next character so they know it's their turn to /explore roll
+          if (raidData.expeditionId) {
+            try {
+              const party = await Party.findActiveByPartyId(raidData.expeditionId);
+              if (party && party.characters && party.characters.length > 0) {
+                const idx = party.currentTurn != null ? party.currentTurn % party.characters.length : 0;
+                const nextCharacter = party.characters[idx];
+                if (nextCharacter?.userId) {
+                  await thread.send({ content: `<@${nextCharacter.userId}> it's your turn now` });
+                }
+              }
+            } catch (e) {
+              console.warn(`[raid.js]: Could not send expedition turn ping:`, e?.message || e);
+            }
+          }
         }
       } catch (error) {
         console.error(`[raid.js]: ❌ Error sending victory embed to thread:`, error);
