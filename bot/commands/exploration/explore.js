@@ -609,13 +609,15 @@ module.exports = {
        const curStam = typeof character.currentStamina === "number" ? character.currentStamina : 0;
        const add = Math.min(restStamina, Math.max(0, maxStam - curStam));
        if (add > 0) {
-        character.currentStamina = curStam + add;
+        character.currentStamina = Math.min(maxStam, curStam + add);
         await character.save();
         party.characters[characterIndex].currentStamina = character.currentStamina;
         party.markModified("characters");
         party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
         await party.save();
         ruinRestRecovered = add;
+        const locationRuinRest = `${party.square} ${party.quadrant}`;
+        pushProgressLog(party, character.name, "ruin_rest", `Known ruin-rest spot in ${locationRuinRest}: +${add} stamina.`, undefined, { staminaRecovered: add });
        }
       }
      }
@@ -962,13 +964,15 @@ module.exports = {
           ? { itemName: "Unknown Relic", emoji: "🔸" }
           : undefined;
       const at = new Date();
-      if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType)) {
+      // Ruins: only add to map and reportable log when user chooses Yes (done in button handler)
+      if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType) && outcomeType !== "ruins") {
        await pushDiscoveryToMap(party, outcomeType, at, interaction.user?.id);
       }
+      const progressOutcome = outcomeType === "ruins" ? "ruins_found" : outcomeType;
       pushProgressLog(
        party,
        character.name,
-       outcomeType,
+       progressOutcome,
        progressMessages[outcomeType] || `Found something in ${location}.`,
        lootForProgressLog,
        chestRuinsCosts,
@@ -1103,22 +1107,48 @@ module.exports = {
           return;
          }
          const ruinsStaminaCost = 3;
-         const currentStamina = typeof ruinsCharacter.currentStamina === "number" ? ruinsCharacter.currentStamina : (ruinsCharacter.maxStamina ?? 0);
-         if (currentStamina < ruinsStaminaCost) {
+         const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
+         if (partyTotalStamina < ruinsStaminaCost) {
           const noStaminaEmbed = new EmbedBuilder()
            .setTitle("❌ Not enough stamina to explore the ruins")
            .setColor(regionColors[freshParty.region] || "#00ff99")
-           .setDescription("**" + ruinsCharacter.name + "** has " + currentStamina + " 🟩 (need 3). Continue with </explore roll:" + EXPLORE_CMD_ID + ">.")
+           .setDescription("Party has " + partyTotalStamina + " 🟩 (need 3). Continue with </explore roll:" + EXPLORE_CMD_ID + ">.")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
           await i.followUp({ embeds: [noStaminaEmbed] }).catch(() => {});
           return;
          }
-         ruinsCharacter.currentStamina = Math.max(0, currentStamina - ruinsStaminaCost);
-         await ruinsCharacter.save();
-         freshParty.characters[ruinsCharIndex].currentStamina = ruinsCharacter.currentStamina;
+         // Deduct cost from party stamina pool (character who chose to explore first, then others)
+         let remainingCost = ruinsStaminaCost;
+         const order = [ruinsCharIndex, ...freshParty.characters.map((_, idx) => idx).filter((idx) => idx !== ruinsCharIndex)];
+         for (const idx of order) {
+          if (remainingCost <= 0) break;
+          const slot = freshParty.characters[idx];
+          const charDoc = await Character.findById(slot._id);
+          if (!charDoc) continue;
+          const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
+          const take = Math.min(remainingCost, have);
+          if (take > 0) {
+           charDoc.currentStamina = Math.max(0, have - take);
+           await charDoc.save();
+           slot.currentStamina = charDoc.currentStamina;
+           remainingCost -= take;
+          }
+         }
+         freshParty.markModified("characters");
          freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
          await freshParty.save();
+         // Reload ruinsCharacter for later use (camp outcome etc. may add stamina to them)
+         const ruinsCharacterReload = await Character.findById(ruinsCharSlot._id);
+         if (ruinsCharacterReload) {
+          ruinsCharacter.currentStamina = ruinsCharacterReload.currentStamina;
+          ruinsCharacter.currentHearts = ruinsCharacterReload.currentHearts;
+         }
+
+         // Now that user chose Yes, add ruins to map and reportable progress log (so dashboard shows "Set pin" only after Yes)
+         const ruinsAt = new Date();
+         await pushDiscoveryToMap(freshParty, "ruins", ruinsAt, i.user?.id);
+         pushProgressLog(freshParty, ruinsCharacter.name, "ruins", `Explored ruins in ${location}.`, undefined, { staminaLost: ruinsStaminaCost }, ruinsAt);
 
          // Weighted roll: chest 7, camp 3, landmark 2, relic 2, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20)
          const roll = Math.random() * 20;
@@ -1133,7 +1163,7 @@ module.exports = {
          else ruinsOutcome = "goddess_plume";
 
          let resultTitle = `🗺️ **Expedition: Explored the ruins!**`;
-         const summaryLine = `The party explored the ruins in **${location}** (−3 stamina).\n\n`;
+         const summaryLine = `**${ruinsCharacter.name}** chose to explore the ruins! The party explored the ruins in **${location}** (−3 stamina).\n\n`;
          let resultDescription = "";
          let progressMsg = `Explored ruins in ${location} (-3 stamina). `;
          let lootForLog = undefined;
@@ -2522,6 +2552,8 @@ module.exports = {
      0
     );
 
+    // Using an item counts as a turn — advance to next character
+    party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await character.save();
     await party.save();
 
@@ -2529,6 +2561,13 @@ module.exports = {
     const staminaText = stamina > 0 ? `+${stamina} 🟩` : "";
     const effect = [heartsText, staminaText].filter(Boolean).join(", ");
     const locationItem = `${party.square} ${party.quadrant}`;
+
+    const nextCharacterItem = party.characters[party.currentTurn] ?? null;
+    pushProgressLog(party, character.name, "item", `${character.name} used ${carried.itemName} in ${locationItem} (${effect}).`, undefined, {
+     ...(hearts > 0 ? { heartsRecovered: hearts } : {}),
+     ...(stamina > 0 ? { staminaRecovered: stamina } : {}),
+    });
+    await party.save();
 
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Used item — ${carried.itemName}**`)
@@ -2553,12 +2592,23 @@ module.exports = {
       party,
       expeditionId,
       location: locationItem,
-      nextCharacter: null,
-      showNextAndCommands: false,
+      nextCharacter: nextCharacterItem,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+    });
+    addExplorationCommandsField(embed, {
+      party,
+      expeditionId,
+      location: locationItem,
+      nextCharacter: nextCharacterItem,
+      showNextAndCommands: true,
       showRestSecureMove: false,
     });
 
     await interaction.editReply({ embeds: [embed] });
+    if (nextCharacterItem?.userId) {
+     await interaction.followUp({ content: `<@${nextCharacterItem.userId}> it's your turn now` }).catch(() => {});
+    }
 
     // ------------------- Retreat to Village -------------------
    } else if (subcommand === "retreat") {
@@ -2859,7 +2909,8 @@ module.exports = {
        const room = Math.max(0, maxStam - curStam);
        if (room > 0) {
         staminaRecovered = Math.min(room, Math.floor(Math.random() * 3) + 1);
-        char.currentStamina = curStam + staminaRecovered;
+        char.currentStamina = Math.min(maxStam, curStam + staminaRecovered);
+        staminaRecovered = char.currentStamina - curStam;
         party.characters[i].currentStamina = char.currentStamina;
        }
       }
