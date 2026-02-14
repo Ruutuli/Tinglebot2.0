@@ -63,6 +63,8 @@ const PartySchema = new Schema({
   ],
   /** Discovery keys (outcome|square|quadrant|at) that have been placed as a pin on the map; tracks whether pin was placed or not. */
   reportedDiscoveryKeys: [{ type: String }],
+  /** Quadrants this expedition marked as Explored (reset to Unexplored on full party KO). */
+  exploredQuadrantsThisRun: [{ squareId: { type: String }, quadrantId: { type: String } }],
 });
 
 module.exports = mongoose.model('Party', PartySchema);

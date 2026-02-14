@@ -83,6 +83,26 @@ const DISABLE_EXPLORATION_RAIDS = true;
 
 const EXPLORATION_CHEST_RELIC_CHANCE = 0.08;
 
+/**
+ * Builds an embed for when the party is out of stamina and stuck in the wild.
+ * Recovery is via /explore camp only (no table rolls).
+ * @param {object} party - Party document (for region color)
+ * @param {string} [location] - Optional location string (e.g. "H5 Q3") for context
+ * @returns {EmbedBuilder}
+ */
+function createStuckInWildEmbed(party, location) {
+  return new EmbedBuilder()
+    .setTitle("🏕️ Stuck in the wild — camp to recover")
+    .setColor(regionColors[party?.region] || "#8B4513")
+    .setDescription(
+      `Your party has run out of stamina and cannot move or roll. **Camp in the wild** to recover.\n\n` +
+      `**What to do:** Use **/explore camp** (id: your expedition ID, charactername: your character). Camping when out of stamina has no stamina cost and restores some hearts and stamina so you can continue.\n\n` +
+      `After you've recovered, use **/explore roll** or **/explore move** to continue the expedition.`
+    )
+    .setImage(EXPLORATION_IMAGE_FALLBACK)
+    .setFooter({ text: location ? `Current location: ${location}` : "Expedition" });
+}
+
 // Autocomplete can show "E402960 | Lanayru | started | H8 Q2"; value sent may be that full string. Use only the partyId (before first "|").
 function normalizeExpeditionId(value) {
  if (!value || typeof value !== "string") return value;
@@ -242,6 +262,10 @@ async function applyBlightExposure(party, square, quadrant, reason, characterNam
  await party.save();
 }
 
+// Village name for character.currentVillage (lowercase to match join/explore)
+const REGION_TO_VILLAGE_LOWER = { eldin: "rudania", lanayru: "inariko", faron: "vhintl" };
+const EXPLORATION_KO_DEBUFF_DAYS = 7;
+
 async function handleExpeditionFailed(party, interaction) {
  const start = START_POINTS_BY_REGION[party.region];
  if (!start) {
@@ -249,12 +273,34 @@ async function handleExpeditionFailed(party, interaction) {
   return;
  }
 
+ const targetVillage = REGION_TO_VILLAGE_LOWER[party.region] || "rudania";
+ const debuffEndDate = new Date(Date.now() + EXPLORATION_KO_DEBUFF_DAYS * 24 * 60 * 60 * 1000);
+
  for (const partyChar of party.characters) {
   const char = await Character.findById(partyChar._id);
   if (char) {
    await handleKO(char._id);
    char.currentStamina = 0;
+   char.currentVillage = targetVillage;
+   char.debuff = char.debuff || {};
+   char.debuff.active = true;
+   char.debuff.endDate = debuffEndDate;
    await char.save();
+  }
+ }
+
+ // Reset any quadrants this expedition marked as Explored back to Unexplored
+ const exploredThisRun = party.exploredQuadrantsThisRun || [];
+ if (exploredThisRun.length > 0) {
+  for (const { squareId, quadrantId } of exploredThisRun) {
+   if (squareId && quadrantId) {
+    const squareIdRegex = new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+    await Square.updateOne(
+     { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
+     { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+     { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+    ).catch((err) => console.warn("[explore.js] Failed to reset quadrant to unexplored:", err?.message));
+   }
   }
  }
 
@@ -271,26 +317,28 @@ async function handleExpeditionFailed(party, interaction) {
  }
  await party.save();
 
+ const villageLabel = (targetVillage || "").charAt(0).toUpperCase() + (targetVillage || "").slice(1);
  const regionLabel = (party.region || "").charAt(0).toUpperCase() + (party.region || "").slice(1);
  const locationStr = `${start.square} ${start.quadrant} (${regionLabel} start)`;
  const embed = new EmbedBuilder()
   .setTitle("💀 **Expedition: Expedition Failed — Party KO'd**")
   .setColor(0x8b0000)
   .setDescription(
-   "The party lost all hearts. The expedition has failed.\n\n" +
-   "**Return:** Party is returned to the starting area for the region.\n" +
-   "**Items:** All items brought on the expedition and any found during the expedition are lost.\n" +
-   "**Party:** All members are KO'd with 0 stamina."
+   "The party lost all collective hearts. The expedition has failed.\n\n" +
+   "**Return:** Party wakes in **" + villageLabel + "** (the village you began from) with 0 hearts and 0 stamina.\n\n" +
+   "**Items:** All items brought on the expedition and any found during the expedition are lost.\n\n" +
+   "**Map:** Any quadrants this expedition had marked as Explored return to Unexplored status.\n\n" +
+   "**Recovery debuff:** For **" + EXPLORATION_KO_DEBUFF_DAYS + " days**, characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. They must recover their strength. (A future boosting perk may allow removing this debuff.)"
   )
   .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-addExplorationStandardFields(embed, {
+ addExplorationStandardFields(embed, {
   party: { partyId: party.partyId, totalHearts: 0, totalStamina: 0 },
   expeditionId: party.partyId,
   location: locationStr,
   nextCharacter: null,
   showNextAndCommands: false,
   showRestSecureMove: false,
-});
+ });
  await interaction.editReply({ embeds: [embed] });
 }
 
@@ -476,6 +524,16 @@ module.exports = {
       );
      }
 
+     if (character.debuff?.active && character.debuff?.endDate) {
+      const endDate = new Date(character.debuff.endDate);
+      if (endDate > new Date()) {
+       const daysLeft = Math.ceil((endDate - new Date()) / (24 * 60 * 60 * 1000));
+       return interaction.editReply(
+        `**${character.name}** is recovering from a full party KO and cannot explore for **${daysLeft}** more day(s). During this time they cannot use healing or stamina items, healer services, or join expeditions.`
+       );
+      }
+     }
+
      if (party.status !== "started") {
       return interaction.editReply("This expedition has not been started yet.");
      }
@@ -527,6 +585,9 @@ module.exports = {
          },
          { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
         );
+        if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
+        party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
+        party.markModified("exploredQuadrantsThisRun");
         } catch (mapErr) {
          console.error("[explore.js] Failed to mark quadrant explored on roll sync:", mapErr.message);
         }
@@ -550,6 +611,7 @@ module.exports = {
         character.currentStamina = curStam + add;
         await character.save();
         party.characters[characterIndex].currentStamina = character.currentStamina;
+        party.markModified("characters");
         party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
         await party.save();
         ruinRestRecovered = add;
@@ -604,9 +666,10 @@ module.exports = {
      }
 
      if (party.totalStamina < staminaCost) {
-      return interaction.editReply(
-       `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
-      );
+      const location = `${party.square} ${party.quadrant}`;
+      return interaction.editReply({
+        embeds: [createStuckInWildEmbed(party, location)],
+      });
      }
 
     // Apply roll cost to current character so party totals stay correct when recalc'd later (e.g. after monster fight)
@@ -614,6 +677,7 @@ module.exports = {
     character.currentStamina = Math.max(0, currentStamina - staminaCost);
     await character.save();
     party.characters[characterIndex].currentStamina = character.currentStamina;
+    party.markModified("characters");
     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
     party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
     await party.save();
@@ -670,6 +734,11 @@ module.exports = {
          console.warn("[explore.js] Map update: no square found for", mapSquareId, "quadrant", mapQuadrantId);
         } else if (result.modifiedCount === 0) {
          console.warn("[explore.js] Map update: square found but quadrant not updated for", mapSquareId, mapQuadrantId);
+        } else {
+         if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
+         party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
+         party.markModified("exploredQuadrantsThisRun");
+         await party.save();
         }
        }
       } catch (mapErr) {
@@ -726,6 +795,7 @@ module.exports = {
         party.characters[i].currentHearts = char.currentHearts;
         totalHeartsRecovered += needed;
        }
+       party.markModified("characters");
        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
        pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored.`, undefined, { heartsRecovered: totalHeartsRecovered });
@@ -791,6 +861,7 @@ module.exports = {
        if (campCharIndex >= 0) {
         party.characters[campCharIndex].currentHearts = character.currentHearts;
         party.characters[campCharIndex].currentStamina = character.currentStamina;
+        party.markModified("characters");
        }
        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
@@ -1034,12 +1105,12 @@ module.exports = {
          const currentStamina = typeof ruinsCharacter.currentStamina === "number" ? ruinsCharacter.currentStamina : (ruinsCharacter.maxStamina ?? 0);
          if (currentStamina < ruinsStaminaCost) {
           const noStaminaEmbed = new EmbedBuilder()
-           .setTitle(title)
+           .setTitle("❌ Not enough stamina to explore the ruins")
            .setColor(regionColors[freshParty.region] || "#00ff99")
-           .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to explore the ruins.** " + ruinsCharacter.name + " has " + currentStamina + " 🟩 (need 3). Continue with </explore roll>.")
+           .setDescription("**" + ruinsCharacter.name + "** has " + currentStamina + " 🟩 (need 3). Continue with </explore roll:" + EXPLORE_CMD_ID + ">.")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-          await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
+          await i.followUp({ embeds: [noStaminaEmbed] }).catch(() => {});
           return;
          }
          ruinsCharacter.currentStamina = Math.max(0, currentStamina - ruinsStaminaCost);
@@ -1638,6 +1709,7 @@ module.exports = {
 
         party.characters[characterIndex].currentHearts = character.currentHearts;
         party.characters[characterIndex].currentStamina = character.currentStamina;
+        party.markModified("characters");
         party.totalHearts = party.characters.reduce(
          (sum, c) => sum + (c.currentHearts ?? 0),
          0
@@ -1718,6 +1790,14 @@ module.exports = {
         return generateFinalOutcomeMessage(outcome.damageValue || 0, outcome.defenseSuccess || false, outcome.attackSuccess || false, outcome.adjustedRandomValue || 0, outcome.damageValue || 0, hasEquippedWeapon, hasEquippedArmor);
        })();
        embed.addFields({ name: `⚔️ __Battle Outcome__`, value: battleOutcomeDisplay, inline: false });
+
+       if (outcome.hearts > 0 && character.currentHearts === 0) {
+        embed.addFields({
+         name: "💀 __Party member KO'd__",
+         value: `**${character.name}** is KO'd! They had **${outcome.hearts}** heart(s). The party loses **${outcome.hearts}** heart(s). A fairy or tonic must be used to revive them (use </explore item:${EXPLORE_CMD_ID}> when the expedition prompts you).`,
+         inline: false,
+        });
+       }
 
        if (outcome.canLoot && lootedItem) {
         const qty = lootedItem.quantity ?? 1;
@@ -1820,9 +1900,10 @@ module.exports = {
 
     const staminaCost = 3;
     if (party.totalStamina < staminaCost) {
-     return interaction.editReply(
-      `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
-     );
+     const location = `${party.square} ${party.quadrant}`;
+     return interaction.editReply({
+      embeds: [createStuckInWildEmbed(party, location)],
+     });
     }
 
     // Apply rest cost to current character so party total stays correct
@@ -1830,6 +1911,7 @@ module.exports = {
     character.currentStamina = Math.max(0, restCharStamina - staminaCost);
     await character.save();
     party.characters[characterIndex].currentStamina = character.currentStamina;
+    party.markModified("characters");
 
     let revivedCount = 0;
     for (let i = 0; i < party.characters.length; i++) {
@@ -1842,6 +1924,7 @@ module.exports = {
       party.characters[i].currentHearts = char.currentHearts;
      }
     }
+    party.markModified("characters");
     party.totalHearts = party.characters.reduce(
      (sum, c) => sum + (c.currentHearts ?? 0),
      0
@@ -2009,6 +2092,7 @@ module.exports = {
     character.currentStamina = Math.max(0, secureCharStamina - staminaCost);
     await character.save();
     party.characters[characterIndex].currentStamina = character.currentStamina;
+    party.markModified("characters");
     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
 
     // Remove Wood and Eldin Ore (or their bundles) from the party — one of each from whoever has them
@@ -2185,9 +2269,10 @@ module.exports = {
     const moveWasReveal = destinationQuadrantState === "unexplored";
     const staminaCost = destinationQuadrantState === "unexplored" ? 2 : 1;
     if (party.totalStamina < staminaCost) {
-     return interaction.editReply(
-      `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
-     );
+     const location = `${party.square} ${party.quadrant}`;
+     return interaction.editReply({
+      embeds: [createStuckInWildEmbed(party, location)],
+     });
     }
 
     // Block leaving the square until all quadrants (except inaccessible) are explored or secured
@@ -2234,6 +2319,7 @@ module.exports = {
     character.currentStamina = Math.max(0, moveCharStamina - staminaCost);
     await character.save();
     party.characters[characterIndex].currentStamina = character.currentStamina;
+    party.markModified("characters");
     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
 
     party.square = newLocation.square;
@@ -2256,6 +2342,9 @@ module.exports = {
         },
         { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
        );
+       if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
+       party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
+       party.markModified("exploredQuadrantsThisRun");
       } catch (mapErr) {
        console.error("[explore.js] Failed to mark quadrant explored on move:", mapErr.message);
       }
@@ -2499,20 +2588,55 @@ module.exports = {
 
     const targetVillage = regionToVillage[party.region];
 
-    for (const partyCharacter of party.characters) {
-     const char = await Character.findById(partyCharacter._id);
-     if (char) {
-      char.currentVillage = targetVillage;
-      await char.save();
+    // Divide remaining hearts and stamina evenly among the group (set each to their share, capped at max)
+    const memberCount = (party.characters || []).length;
+    const remainingHearts = Math.max(0, party.totalHearts ?? 0);
+    const remainingStamina = Math.max(0, party.totalStamina ?? 0);
+    if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
+     const heartsPerMember = Math.floor(remainingHearts / memberCount);
+     const heartsRemainder = remainingHearts % memberCount;
+     const staminaPerMember = Math.floor(remainingStamina / memberCount);
+     const staminaRemainder = remainingStamina % memberCount;
+     for (let idx = 0; idx < party.characters.length; idx++) {
+      const partyCharacter = party.characters[idx];
+      const char = await Character.findById(partyCharacter._id);
+      if (char) {
+       const heartShare = heartsPerMember + (idx < heartsRemainder ? 1 : 0);
+       const staminaShare = staminaPerMember + (idx < staminaRemainder ? 1 : 0);
+       const maxH = char.maxHearts ?? 0;
+       const maxS = char.maxStamina ?? 0;
+       char.currentHearts = Math.min(maxH, heartShare);
+       char.currentStamina = Math.min(maxS, staminaShare);
+       char.currentVillage = targetVillage;
+       await char.save();
+      }
+     }
+    } else if (memberCount > 0) {
+     for (const partyCharacter of party.characters) {
+      const char = await Character.findById(partyCharacter._id);
+      if (char) {
+       char.currentVillage = targetVillage;
+       await char.save();
+      }
+     }
+    } else {
+     for (const partyCharacter of party.characters) {
+      const char = await Character.findById(partyCharacter._id);
+      if (char) {
+       char.currentVillage = targetVillage;
+       await char.save();
+      }
      }
     }
+
+    const villageLabelRetreat = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
+    const memberNamesRetreat = (party.characters || []).map((c) => c.name).filter(Boolean);
+    const membersTextRetreat = memberNamesRetreat.length > 0 ? memberNamesRetreat.join(", ") : "—";
+    pushProgressLog(party, character.name, "retreat", `Expedition retreated. Returned to ${villageLabelRetreat}: ${membersTextRetreat}.`, undefined, undefined);
 
     party.status = "completed";
     await party.save();
 
-    const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
-    const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
-    const membersText = memberNames.length > 0 ? memberNames.join(", ") : "—";
     const retreatExpeditionId = party.partyId;
     const retreatReportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com";
     const retreatReportUrl = `${retreatReportBaseUrl.replace(/\/$/, "")}/explore/${retreatExpeditionId}`;
@@ -2521,7 +2645,8 @@ module.exports = {
      .setColor(regionColors[party.region] || "#FF5722")
      .setDescription(
       `The expedition has ended.\n\n` +
-      `**Returned to ${villageLabel}:**\n${membersText}\n\n` +
+      `**Returned to ${villageLabelRetreat}:**\n${membersTextRetreat}\n\n` +
+      `Once an expedition is over, any remaining hearts and stamina are evenly divided among the group.\n\n` +
       `**View the expedition report here:** [Open expedition report](${retreatReportUrl})`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
@@ -2574,25 +2699,30 @@ module.exports = {
     };
     const targetVillage = regionToVillage[party.region];
 
-    // Divide remaining party stamina among all members (each gets equal share, capped at maxStamina)
+    // Divide remaining hearts and stamina evenly among the group (each gets equal share, capped at max)
+    const remainingHearts = Math.max(0, party.totalHearts ?? 0);
     const remainingStamina = Math.max(0, party.totalStamina ?? 0);
     const memberCount = (party.characters || []).length;
-    if (memberCount > 0 && remainingStamina > 0) {
-     const perMember = Math.floor(remainingStamina / memberCount);
-     const remainder = remainingStamina % memberCount;
+    if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
+     const heartsPerMember = Math.floor(remainingHearts / memberCount);
+     const heartsRemainder = remainingHearts % memberCount;
+     const staminaPerMember = Math.floor(remainingStamina / memberCount);
+     const staminaRemainder = remainingStamina % memberCount;
      for (let idx = 0; idx < party.characters.length; idx++) {
       const partyCharacter = party.characters[idx];
       const char = await Character.findById(partyCharacter._id);
       if (char) {
-       const share = perMember + (idx < remainder ? 1 : 0);
-       const current = typeof char.currentStamina === "number" ? char.currentStamina : 0;
-       const max = char.maxStamina ?? current;
-       char.currentStamina = Math.min(max, current + share);
+       const heartShare = heartsPerMember + (idx < heartsRemainder ? 1 : 0);
+       const staminaShare = staminaPerMember + (idx < staminaRemainder ? 1 : 0);
+       const maxH = char.maxHearts ?? 0;
+       const maxS = char.maxStamina ?? 0;
+       char.currentHearts = Math.min(maxH, heartShare);
+       char.currentStamina = Math.min(maxS, staminaShare);
        char.currentVillage = targetVillage;
        await char.save();
       }
      }
-    } else {
+    } else if (memberCount > 0) {
      for (const partyCharacter of party.characters) {
       const char = await Character.findById(partyCharacter._id);
       if (char) {
@@ -2618,12 +2748,14 @@ module.exports = {
      }
     }
 
+    const villageLabelEnd = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
+    const memberNamesEnd = (party.characters || []).map((c) => c.name).filter(Boolean);
+    const membersTextEnd = memberNamesEnd.length > 0 ? memberNamesEnd.join(", ") : "—";
+    pushProgressLog(party, character.name, "end", `Expedition ended. Returned to ${villageLabelEnd}: ${membersTextEnd}.`, undefined, undefined);
+
     party.status = "completed";
     await party.save();
 
-    const villageLabel = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
-    const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
-    const membersText = memberNames.length > 0 ? memberNames.join(", ") : "—";
     const reportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com";
     const reportUrl = `${reportBaseUrl.replace(/\/$/, "")}/explore/${expeditionId}`;
     const embed = new EmbedBuilder()
@@ -2631,7 +2763,8 @@ module.exports = {
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
       `The expedition has ended.\n\n` +
-      `**Returned to ${villageLabel}:**\n${membersText}\n\n` +
+      `**Returned to ${villageLabelEnd}:**\n${membersTextEnd}\n\n` +
+      `Once an expedition is over, any remaining hearts and stamina are evenly divided among the group.\n\n` +
       `**View the expedition report here:** [Open expedition report](${reportUrl})`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
@@ -2676,13 +2809,12 @@ module.exports = {
     }
 
     const isSecured = party.quadrantState === "secured";
-    const staminaCost = isSecured ? 0 : 3;
-    const heartsPct = isSecured ? 0.5 : 0.25;
-
-    if (staminaCost > 0 && party.totalStamina < staminaCost) {
-     return interaction.editReply(
-      `Not enough party stamina to camp here. Requires ${staminaCost} stamina (secured quadrants cost 0).`
-     );
+    let staminaCost = isSecured ? 0 : 3;
+    let heartsPct = isSecured ? 0.5 : 0.25;
+    const stuckInWild = staminaCost > 0 && party.totalStamina < staminaCost;
+    if (stuckInWild) {
+     staminaCost = 0;
+     heartsPct = 0.25;
     }
 
     if (staminaCost > 0) {
@@ -2692,6 +2824,7 @@ module.exports = {
       campCharDoc.currentStamina = Math.max(0, (campCharDoc.currentStamina ?? 0) - staminaCost);
       await campCharDoc.save();
       party.characters[characterIndex].currentStamina = campCharDoc.currentStamina;
+      party.markModified("characters");
      }
     }
 
@@ -2702,23 +2835,41 @@ module.exports = {
      if (char) {
       const maxHrt = char.maxHearts ?? 0;
       const heartsRecovered = Math.floor(maxHrt * heartsPct);
-      recoveryPerMember.push({ name: char.name, hearts: heartsRecovered });
+      let staminaRecovered = 0;
+      if (stuckInWild) {
+       const maxStam = char.maxStamina ?? 0;
+       const curStam = char.currentStamina ?? 0;
+       const room = Math.max(0, maxStam - curStam);
+       if (room > 0) {
+        staminaRecovered = Math.min(room, Math.floor(Math.random() * 3) + 1);
+        char.currentStamina = curStam + staminaRecovered;
+        party.characters[i].currentStamina = char.currentStamina;
+       }
+      }
+      recoveryPerMember.push({ name: char.name, hearts: heartsRecovered, stamina: staminaRecovered });
       char.currentHearts = Math.min(char.maxHearts, char.currentHearts + heartsRecovered);
       party.characters[i].currentHearts = char.currentHearts;
       await char.save();
      }
     }
+    party.markModified("characters");
     party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
     party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
 
     const locationCamp = `${party.square} ${party.quadrant}`;
     const totalHeartsRecovered = recoveryPerMember.reduce((s, r) => s + r.hearts, 0);
-    const costsForLog = staminaCost > 0 ? { staminaLost: staminaCost, heartsRecovered: totalHeartsRecovered } : { heartsRecovered: totalHeartsRecovered };
+    const totalStaminaRecovered = recoveryPerMember.reduce((s, r) => s + (r.stamina ?? 0), 0);
+    const costsForLog = staminaCost > 0
+     ? { staminaLost: staminaCost, heartsRecovered: totalHeartsRecovered }
+     : { heartsRecovered: totalHeartsRecovered, ...(stuckInWild && totalStaminaRecovered > 0 && { staminaRecovered: totalStaminaRecovered }) };
+    const campLogStamina = stuckInWild
+     ? (totalStaminaRecovered > 0 ? ` (camp in the wild — no cost; recovered ${totalStaminaRecovered} stamina)` : " (camp in the wild — no cost)")
+     : (staminaCost > 0 ? ` (-${staminaCost} stamina)` : "");
     pushProgressLog(
      party,
      character.name,
      "camp",
-     `Camped at ${locationCamp}. Party recovered hearts (${Math.round(heartsPct * 100)}% of max).${staminaCost > 0 ? ` (-${staminaCost} stamina)` : ""}`,
+     `Camped at ${locationCamp}. Party recovered hearts (${Math.round(heartsPct * 100)}% of max).${campLogStamina}`,
      undefined,
      costsForLog
     );
@@ -2728,10 +2879,14 @@ module.exports = {
 
     const nextCharacterCamp = party.characters[party.currentTurn];
     const recoveryValue = recoveryPerMember
-     .map((r) => `${r.name}: +${r.hearts} ❤️`)
+     .map((r) => {
+      const parts = [`${r.name}: +${r.hearts} ❤️`];
+      if ((r.stamina ?? 0) > 0) parts.push(`+${r.stamina} 🟩`);
+      return parts.join(" ");
+     })
      .join("\n");
-    const campNote = isSecured ? "The secured quadrant made for a restful night." : "The party rested.";
-    const costNote = staminaCost > 0 ? ` (-${staminaCost} stamina)` : "";
+    const campNote = stuckInWild ? "The party camped in the wild and recovered (random stamina)." : (isSecured ? "The secured quadrant made for a restful night." : "The party rested.");
+    const costNote = staminaCost > 0 ? ` (-${staminaCost} stamina)` : (stuckInWild ? " (no cost — camp in the wild)" : "");
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
      .setColor(regionColors[party.region] || "#4CAF50")

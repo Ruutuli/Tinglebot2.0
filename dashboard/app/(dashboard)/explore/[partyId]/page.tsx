@@ -360,6 +360,8 @@ export default function ExplorePartyPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [editingItems, setEditingItems] = useState(false);
   const [editItems, setEditItems] = useState<string[]>([]);
   const [editInventoryWithQuantity, setEditInventoryWithQuantity] = useState<Array<{ itemName: string; quantity: number }>>([]);
@@ -866,6 +868,26 @@ export default function ExplorePartyPage() {
     }
   }, [partyId, selectedCharacterId, selectedItems, fetchParty]);
 
+  const leaveParty = useCallback(async () => {
+    if (!partyId) return;
+    setLeaving(true);
+    setLeaveError(null);
+    try {
+      const res = await fetch(`/api/explore/parties/${encodeURIComponent(partyId)}/leave`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setLeaveError(data.error ?? "Failed to leave");
+        return;
+      }
+      await fetchParty();
+    } catch (e) {
+      console.error("[page.tsx]❌ Leave request failed:", e);
+      setLeaveError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setLeaving(false);
+    }
+  }, [partyId, fetchParty]);
+
   const copyShareLink = useCallback(() => {
     const url = typeof window !== "undefined" ? `${window.location.origin}/explore/${partyId}` : "";
     void navigator.clipboard.writeText(url);
@@ -1304,7 +1326,7 @@ export default function ExplorePartyPage() {
             </section>
           )}
 
-          {userId && party.status === "open" && party.members.length < 4 && (
+          {userId && ((party.status === "open" && party.members.length < 4) || party.currentUserJoined) && (
             <section className="mb-8 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-lg md:p-6">
               <div className="mb-4 flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]">
@@ -1338,16 +1360,31 @@ export default function ExplorePartyPage() {
                       <p className="text-xs text-[var(--totk-light-green)]">In party · turn order in panel →</p>
                     </div>
                   </div>
-                  {party.status === "open" && (
-                    <button
-                      type="button"
-                      onClick={startEditingItems}
-                      className="ml-auto shrink-0 rounded-lg border border-[var(--totk-mid-ocher)]/60 bg-[var(--botw-warm-black)]/80 px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] transition-colors hover:border-[var(--totk-mid-ocher)] hover:bg-[var(--totk-dark-ocher)]/30"
-                    >
-                      <i className="fa-solid fa-pen-to-square mr-2 text-xs opacity-80" aria-hidden />
-                      Edit items
-                    </button>
+                  {leaveError && (
+                    <p className="mt-2 text-sm text-red-400">{leaveError}</p>
                   )}
+                  <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+                    {party.status === "open" && (
+                      <button
+                        type="button"
+                        onClick={startEditingItems}
+                        className="rounded-lg border border-[var(--totk-mid-ocher)]/60 bg-[var(--botw-warm-black)]/80 px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] transition-colors hover:border-[var(--totk-mid-ocher)] hover:bg-[var(--totk-dark-ocher)]/30"
+                      >
+                        <i className="fa-solid fa-pen-to-square mr-2 text-xs opacity-80" aria-hidden />
+                        Edit items
+                      </button>
+                    )}
+                    {party.status !== "completed" && (
+                      <button
+                        type="button"
+                        onClick={leaveParty}
+                        disabled={leaving}
+                        className="rounded-lg border border-red-500/50 bg-red-950/30 px-4 py-2 text-sm font-medium text-red-200 transition-colors hover:border-red-500/70 hover:bg-red-950/50 disabled:opacity-50"
+                      >
+                        {leaving ? "Leaving…" : "Leave expedition"}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 );
               })()}

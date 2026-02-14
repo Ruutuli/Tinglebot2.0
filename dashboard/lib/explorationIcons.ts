@@ -23,7 +23,7 @@ export function isExplorationIcon(icon: string | undefined): boolean {
 
 /** Get PNG URL for a pin icon; returns null if not an exploration icon. */
 export function getExplorationIconUrl(icon: string | undefined): string | null {
-  if (!isExplorationIcon(icon)) return null;
+  if (typeof icon !== "string" || !icon.startsWith(PREFIX)) return null;
   const type = icon.slice(PREFIX.length);
   return EXPLORATION_ICON_URLS[type] ?? EXPLORATION_ICON_URLS.ruins ?? null;
 }

@@ -503,13 +503,15 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
     commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
    }
   } else {
-   commandsValue += `**Take your turn:** ${cmdRoll} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+   const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+   commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
   }
   if (!commandsLast) {
    fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
   }
  }
  embed.addFields(...fields);
+ embed.setFooter({ text: "Each unexplored quadrant requires 2 stamina to explore. Quadrants are considered explored when certain conditions are met." });
  return embed;
 };
 
@@ -555,7 +557,8 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
  } else {
-  commandsValue += `**Take your turn:** ${cmdRoll} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+  commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
  }
  embed.addFields({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
  return embed;

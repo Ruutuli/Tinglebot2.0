@@ -24,7 +24,7 @@ const { healKoCharacter, updateCurrentHearts, updateCurrentStamina } = require('
 const { getJobPerk } = require('../../modules/jobsModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
-const { createDebuffEmbed } = require('../../embeds/embeds.js');
+const { createDebuffEmbed, EXPLORE_CMD_ID } = require('../../embeds/embeds.js');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
 const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = require('../../modules/elixirModule');
@@ -39,6 +39,7 @@ const { enforceJail } = require('@/utils/jailCheck');
 // ------------------- Database Models -------------------
 const User = require('@/models/UserModel');
 const Pet = require('@/models/PetModel');
+const Party = require('@/models/PartyModel');
 
 // ------------------- Command Definition -------------------
 // Defines the /item command schema and its execution logic.
@@ -1154,6 +1155,23 @@ module.exports = {
       // Check inventory sync before proceeding (no longer required, but kept for compatibility)
       await checkInventorySync(character);
 
+      // ------------------- Block /item during active expedition — must use /explore item when prompted -------------------
+      const activeExpedition = await Party.findOne({
+        status: 'started',
+        'characters._id': character._id,
+      }).lean();
+      if (activeExpedition) {
+        const exploreItemCmd = `</explore item:${EXPLORE_CMD_ID}>`;
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xff6600)
+          .setTitle('🗺️ Cannot use /item during an expedition')
+          .setDescription(
+            `**${character.name}** is on an active expedition. Use **${exploreItemCmd}** only when the expedition embed prompts you (e.g. after damage or when the quadrant is explored and "Item" is offered).\n\n` +
+            `The general \`/item\` command is not allowed for expedition characters — use ${exploreItemCmd} when it's offered.`
+          )
+          .setFooter({ text: 'Take your turn with /explore roll or /explore item (both count as a turn).' });
+        return void await interaction.editReply({ embeds: [errorEmbed] });
+      }
 
       // ------------------- KO and Max-Health Handling -------------------
       // Handle KO status (non-fairy items) and prevent overhealing.

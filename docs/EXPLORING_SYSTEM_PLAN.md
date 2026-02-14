@@ -203,7 +203,7 @@ Stamina is consumed while exploring via:
 - **Week-long debuff:** For an entire week, the character cannot use any healing or stamina items, cannot use healer services, and **cannot explore** (recovering strength). Stamina recovers **1 per day** during this period. There may be a future option (e.g. boosting perk) to remove the debuff.
 - After the week, the character can use healing/stamina items to return to full stats.
 
-**Running out of stamina (can’t get home):** The character/party is stuck until they recover enough stamina (e.g. camping in the wild). During this time the system runs **camping** logic (camping command/flag in the database) to determine what happens; the bot/dashboard records the outcome and state.
+**Running out of stamina (can’t get home):** The character/party is stuck until they recover enough stamina (e.g. camping in the wild). Use **/explore camp** to set up camp in the wild; when out of stamina, camping has no stamina cost and restores some hearts and stamina so the party can continue. The bot shows this when the party tries to roll, move, or rest with insufficient stamina. All exploration uses **/explore** commands only (no table rolls).
 
 ---
 
@@ -532,3 +532,6 @@ Summary of what is implemented vs not, as of the current codebase.
 | **Bot** | Retreat (tier 5+) | Retreat during tier 5+ monster encounter: 1 stamina per attempt, retreat command/flag — retreat subcommand exists; in-encounter retreat flow to confirm. |
 | **Optional** | Explore monster pool | Use Monster.exploreEldin / exploreLanayru / exploreFaron for exploration-only pools. |
 | **Future** | Mount exploring | Not in scope; Basic/Mid/High stamina documented for later. |
+
+
+i think i wanna add an option to upgrade exploring pouch size later too

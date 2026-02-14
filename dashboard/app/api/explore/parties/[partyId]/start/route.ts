@@ -283,7 +283,7 @@ export async function POST(
 
     await Party.updateOne(
       { partyId },
-      { $set: { status: "started", discordThreadId: threadId } }
+      { $set: { status: "started", discordThreadId: threadId, exploredQuadrantsThisRun: [] } }
     );
 
     const threadUrl = `https://discord.com/channels/${process.env.GUILD_ID ?? ""}/${threadId}`;

@@ -146,6 +146,20 @@ export async function POST(
       );
     }
 
+    const debuff = character.debuff as { active?: boolean; endDate?: string | Date } | undefined;
+    if (debuff?.active && debuff?.endDate) {
+      const endDate = new Date(debuff.endDate);
+      if (endDate > new Date()) {
+        const daysLeft = Math.ceil((endDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        return NextResponse.json(
+          {
+            error: `This character is recovering from a full party KO and cannot join expeditions for ${daysLeft} more day(s). During this time they cannot use healing or stamina items, healer services, or explore.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const characterName = String(character.name ?? "").trim();
     const db = await getInventoriesDb();
     const collectionName = characterName.toLowerCase();
