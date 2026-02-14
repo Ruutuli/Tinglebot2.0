@@ -2596,6 +2596,7 @@ module.exports = {
     const memberCount = (party.characters || []).length;
     const remainingHearts = Math.max(0, party.totalHearts ?? 0);
     const remainingStamina = Math.max(0, party.totalStamina ?? 0);
+    const splitLinesRetreat = [];
     if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
      const heartsPerMember = Math.floor(remainingHearts / memberCount);
      const heartsRemainder = remainingHearts % memberCount;
@@ -2613,6 +2614,8 @@ module.exports = {
        char.currentStamina = Math.min(maxS, staminaShare);
        char.currentVillage = targetVillage;
        await char.save();
+       const name = partyCharacter.name || char.name || "Unknown";
+       splitLinesRetreat.push(`${name}: ${heartShare} ❤, ${staminaShare} stamina`);
       }
      }
     } else if (memberCount > 0) {
@@ -2642,15 +2645,18 @@ module.exports = {
     await party.save();
 
     const retreatExpeditionId = party.partyId;
-    const retreatReportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com";
+    const retreatReportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz";
     const retreatReportUrl = `${retreatReportBaseUrl.replace(/\/$/, "")}/explore/${retreatExpeditionId}`;
+    const splitSectionRetreat = splitLinesRetreat.length > 0
+      ? `**Split (remaining hearts & stamina):**\n${splitLinesRetreat.join("\n")}\n\n`
+      : "No remaining hearts or stamina to divide.\n\n";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#FF5722")
      .setDescription(
       `The expedition has ended.\n\n` +
       `**Returned to ${villageLabelRetreat}:**\n${membersTextRetreat}\n\n` +
-      `Once an expedition is over, any remaining hearts and stamina are evenly divided among the group.\n\n` +
+      splitSectionRetreat +
       `**View the expedition report here:** [Open expedition report](${retreatReportUrl})`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
@@ -2707,6 +2713,7 @@ module.exports = {
     const remainingHearts = Math.max(0, party.totalHearts ?? 0);
     const remainingStamina = Math.max(0, party.totalStamina ?? 0);
     const memberCount = (party.characters || []).length;
+    const splitLinesEnd = [];
     if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
      const heartsPerMember = Math.floor(remainingHearts / memberCount);
      const heartsRemainder = remainingHearts % memberCount;
@@ -2724,6 +2731,8 @@ module.exports = {
        char.currentStamina = Math.min(maxS, staminaShare);
        char.currentVillage = targetVillage;
        await char.save();
+       const name = partyCharacter.name || char.name || "Unknown";
+       splitLinesEnd.push(`${name}: ${heartShare} ❤, ${staminaShare} stamina`);
       }
      }
     } else if (memberCount > 0) {
@@ -2760,15 +2769,18 @@ module.exports = {
     party.status = "completed";
     await party.save();
 
-    const reportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://www.rootsofthewild.com";
+    const reportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz";
     const reportUrl = `${reportBaseUrl.replace(/\/$/, "")}/explore/${expeditionId}`;
+    const splitSectionEnd = splitLinesEnd.length > 0
+      ? `**Split (remaining hearts & stamina):**\n${splitLinesEnd.join("\n")}\n\n`
+      : "No remaining hearts or stamina to divide.\n\n";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
       `The expedition has ended.\n\n` +
       `**Returned to ${villageLabelEnd}:**\n${membersTextEnd}\n\n` +
-      `Once an expedition is over, any remaining hearts and stamina are evenly divided among the group.\n\n` +
+      splitSectionEnd +
       `**View the expedition report here:** [Open expedition report](${reportUrl})`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
