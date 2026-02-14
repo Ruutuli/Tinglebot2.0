@@ -75,7 +75,7 @@ export async function POST(
       { discordId: request.mapOwnerUserId },
       { $set: { tokens: balanceAfter } }
     );
-    await (TokenTransaction as { createTransaction: (data: unknown) => Promise<unknown> }).createTransaction({
+    await (TokenTransaction as unknown as { createTransaction: (data: unknown) => Promise<unknown> }).createTransaction({
       userId: request.mapOwnerUserId,
       amount: 500,
       type: "spent",
