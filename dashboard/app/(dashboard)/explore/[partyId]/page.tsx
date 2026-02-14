@@ -43,7 +43,7 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
   relic: "Relic",
 };
 
-type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string };
+type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string; characterName?: string };
 
 // ------------------- Map / discovery helpers ------------------
 // getReportableDiscoveries, discoveryKey, wasSecuredThisSession, squareQuadrantToCoordinates, getSquareBounds, fogClipPathForQuadrants, isClickInQuadrant -
@@ -66,7 +66,7 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
     countByKey.set(locKey, occurrenceIndex);
     const label = occurrenceIndex > 1 ? `${baseLabel} #${occurrenceIndex}` : baseLabel;
     const at = typeof e.at === "string" ? e.at : "";
-    out.push({ square, quadrant, outcome: e.outcome, label, occurrenceIndex, at });
+    out.push({ square, quadrant, outcome: e.outcome, label, occurrenceIndex, at, characterName: e.characterName ?? "" });
   }
   return out;
 }
@@ -981,7 +981,9 @@ export default function ExplorePartyPage() {
       setPlacePinError(null);
       setPlacingPinForKey(key);
       try {
-        let description = `Reported from expedition. ${d.label} discovered in ${d.square} ${d.quadrant}.`;
+        const expeditionPart = partyId ? `Reported from expedition ${partyId}. ` : "Reported from expedition. ";
+        const foundByPart = d.characterName ? ` Found by ${d.characterName}.` : "";
+        let description = `${expeditionPart}${d.label} discovered in ${d.square} ${d.quadrant}.${foundByPart}`;
         if (d.outcome === "ruins") {
           try {
             const previewRes = await fetch(
@@ -991,7 +993,7 @@ export default function ExplorePartyPage() {
             const preview = await previewRes.json().catch(() => ({}));
             const restStamina = typeof preview.ruinRestStamina === "number" && preview.ruinRestStamina > 0 ? preview.ruinRestStamina : null;
             if (restStamina != null) {
-              description = `Reported from expedition. ${d.label} (rest spot: +${restStamina} stamina) discovered in ${d.square} ${d.quadrant}.`;
+              description = `${expeditionPart}${d.label} (rest spot: +${restStamina} stamina) discovered in ${d.square} ${d.quadrant}.${foundByPart}`;
             }
           } catch {
             // keep default description if fetch fails

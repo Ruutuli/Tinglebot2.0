@@ -2366,11 +2366,12 @@ module.exports = {
 
         if (outcomeType === "monster_camp") {
          const at = new Date();
+         const monsterCampCosts = staminaCost > 0 ? { staminaLost: staminaCost } : undefined;
          if (isYes) {
           await pushDiscoveryToMap(party, "monster_camp", at, i.user?.id);
-          pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map for later.`, undefined, undefined, at);
+          pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map for later.`, undefined, monsterCampCosts, at);
          } else {
-          pushProgressLog(party, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, undefined, at);
+          pushProgressLog(party, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, monsterCampCosts, at);
          }
          await party.save();
          const monsterCampEmbed = new EmbedBuilder()
@@ -2461,7 +2462,7 @@ module.exports = {
          const fp = await Party.findActiveByPartyId(expeditionId);
          if (fp) {
           if (outcomeType === "monster_camp") {
-           pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, undefined, new Date());
+           pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined, new Date());
           } else if (outcomeType === "ruins") {
            pushProgressLog(fp, character.name, "ruins_skipped", `Found ruins in ${location}; choice timed out (left for later).`, undefined, undefined, new Date());
           } else if (outcomeType === "grotto") {
