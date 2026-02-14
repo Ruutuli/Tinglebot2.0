@@ -178,14 +178,16 @@ export async function POST(request: Request) {
     }
     const pin = new Pin(pinData);
 
+    // 1. Save to pins collection (Pin model)
     await pin.save();
     await pin.populate("character", "name");
     const pinObj = pin.toObject();
 
-    // If this pin was placed from an expedition discovery: update party (reportedDiscoveryKeys) and exploringMap (Square quadrant discoveries)
+    // If this pin was placed from "Report to town hall": also update Party and Map (Square) so all three stay in sync.
     if (sourceDiscoveryKey) {
       const key = sourceDiscoveryKey.slice(0, 200);
 
+      // 2. Save to Party model (reportedDiscoveryKeys)
       if (partyId) {
         try {
           const Party =
@@ -203,7 +205,7 @@ export async function POST(request: Request) {
         }
       }
 
-      // Mark discovery as pinned on the map (or push if bot hadn't logged it yet)
+      // 3. Save to Map model (Square: mark discovery pinned in quadrants[].discoveries, or push if new)
       try {
         const parts = String(sourceDiscoveryKey).split("|");
         const outcome = (parts[0] ?? "").trim();

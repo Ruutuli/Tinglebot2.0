@@ -777,6 +777,8 @@ module.exports = {
      }
 
      if (outcomeType === "chest" || outcomeType === "old_map" || outcomeType === "ruins" || outcomeType === "relic" || outcomeType === "camp" || outcomeType === "monster_camp" || outcomeType === "grotto") {
+      let failedNotifyUserIds = [];
+      let failedNotifyEmbed = null;
       let campHeartsRecovered = 0;
       let campStaminaRecovered = 0;
       if (outcomeType === "camp") {
@@ -804,14 +806,26 @@ module.exports = {
         handleInteractionError(err, interaction, { source: "explore.js old_map" });
        }
        const userIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
-       const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered. More info: ${OLD_MAPS_LINK}`;
+       const dmEmbed = new EmbedBuilder()
+        .setTitle("🗺️ Expedition map found")
+        .setDescription(`${mapItemName} found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
+        .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
+        .setURL(OLD_MAPS_LINK)
+        .setColor("#2ecc71")
+        .setFooter({ text: "More info" });
        const client = interaction.client;
        if (client) {
+        failedNotifyEmbed = dmEmbed;
         for (const uid of userIds) {
          try {
           const user = await client.users.fetch(uid).catch(() => null);
-          if (user) await user.send(dmContent).catch(() => {});
-         } catch (_) {}
+          if (user) {
+           const sent = await user.send({ embeds: [dmEmbed] }).catch(() => null);
+           if (!sent) failedNotifyUserIds.push(uid);
+          }
+         } catch (_) {
+          failedNotifyUserIds.push(uid);
+         }
         }
        }
       }
@@ -827,6 +841,29 @@ module.exports = {
         });
        } catch (err) {
         console.error("[explore.js] createRelic error (roll outcome):", err?.message || err);
+       }
+       const relicUserIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
+       const relicDmEmbed = new EmbedBuilder()
+        .setTitle("🔸 Expedition relic found")
+        .setDescription(`**Unknown Relic** discovered by **${character.name}** in ${location}. Take it to an Inarikian Artist or Researcher to get it appraised.`)
+        .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
+        .setURL("https://www.rootsofthewild.com/relics")
+        .setColor("#e67e22")
+        .setFooter({ text: "More info" });
+       const relicClient = interaction.client;
+       if (relicClient) {
+        failedNotifyEmbed = relicDmEmbed;
+        for (const uid of relicUserIds) {
+         try {
+          const user = await relicClient.users.fetch(uid).catch(() => null);
+          if (user) {
+           const sent = await user.send({ embeds: [relicDmEmbed] }).catch(() => null);
+           if (!sent) failedNotifyUserIds.push(uid);
+          }
+         } catch (_) {
+          failedNotifyUserIds.push(uid);
+         }
+        }
        }
       }
 
@@ -946,6 +983,12 @@ module.exports = {
       }
 
       const msg = await interaction.editReply({ embeds: [embed], components });
+      if (failedNotifyUserIds.length > 0 && failedNotifyEmbed) {
+       await interaction.followUp({
+        content: failedNotifyUserIds.map((uid) => `<@${uid}>`).join(" ") + " — Couldn't DM you:",
+        embeds: [failedNotifyEmbed],
+       }).catch(() => {});
+      }
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
 
       if (isYesNoChoice) {
@@ -1022,6 +1065,8 @@ module.exports = {
          let resultDescription = "";
          let progressMsg = `Explored ruins in ${location} (-3 stamina). `;
          let lootForLog = undefined;
+         let ruinsFailedNotifyUserIds = [];
+         let ruinsFailedNotifyEmbed = null;
 
          if (ruinsOutcome === "chest") {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
@@ -1073,6 +1118,29 @@ module.exports = {
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
           pushProgressLog(freshParty, ruinsCharacter.name, "relic", `Found a relic in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
+          const relicUserIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
+          const relicDmEmbed = new EmbedBuilder()
+           .setTitle("🔸 Expedition relic found")
+           .setDescription(`**Unknown Relic** discovered by **${ruinsCharacter.name}** in ${location}. Take it to an Inarikian Artist or Researcher to get it appraised.`)
+           .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
+           .setURL("https://www.rootsofthewild.com/relics")
+           .setColor("#e67e22")
+           .setFooter({ text: "More info" });
+          const relicClient = i.client;
+          if (relicClient) {
+           ruinsFailedNotifyEmbed = relicDmEmbed;
+           for (const uid of relicUserIds) {
+            try {
+             const user = await relicClient.users.fetch(uid).catch(() => null);
+             if (user) {
+              const sent = await user.send({ embeds: [relicDmEmbed] }).catch(() => null);
+              if (!sent) ruinsFailedNotifyUserIds.push(uid);
+             }
+            } catch (_) {
+             ruinsFailedNotifyUserIds.push(uid);
+            }
+           }
+          }
          } else if (ruinsOutcome === "old_map") {
           const chosenMap = getRandomOldMap();
           const mapItemName = `Map #${chosenMap.number}`;
@@ -1087,14 +1155,26 @@ module.exports = {
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
           // DM all expedition members (no coordinates until appraised)
           const userIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
-          const dmContent = `🗺️ **Expedition map found** (expedition \`${expeditionId}\`)\n\n**${mapItemName}** found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered. More info: ${OLD_MAPS_LINK}`;
+          const dmEmbed = new EmbedBuilder()
+           .setTitle("🗺️ Expedition map found")
+           .setDescription(`${mapItemName} found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
+           .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
+           .setURL(OLD_MAPS_LINK)
+           .setColor("#2ecc71")
+           .setFooter({ text: "More info" });
           const client = i.client;
           if (client) {
+           ruinsFailedNotifyEmbed = dmEmbed;
            for (const uid of userIds) {
             try {
              const user = await client.users.fetch(uid).catch(() => null);
-             if (user) await user.send(dmContent).catch(() => {});
-            } catch (_) {}
+             if (user) {
+              const sent = await user.send({ embeds: [dmEmbed] }).catch(() => null);
+              if (!sent) ruinsFailedNotifyUserIds.push(uid);
+             }
+            } catch (_) {
+             ruinsFailedNotifyUserIds.push(uid);
+            }
            }
           }
          } else if (ruinsOutcome === "star_fragment") {
@@ -1213,6 +1293,12 @@ module.exports = {
           }
          } else {
           await i.followUp({ embeds: [resultEmbed] }).catch(() => {});
+          if (ruinsFailedNotifyUserIds.length > 0 && ruinsFailedNotifyEmbed) {
+           await i.followUp({
+            content: ruinsFailedNotifyUserIds.map((uid) => `<@${uid}>`).join(" ") + " — Couldn't DM you:",
+            embeds: [ruinsFailedNotifyEmbed],
+           }).catch(() => {});
+          }
           const nextUserId = nextCharacter?.userId;
           const nextName = nextCharacter?.name ?? "Next player";
           await i.followUp({
