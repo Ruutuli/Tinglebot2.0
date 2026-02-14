@@ -7,9 +7,9 @@ import Image from "next/image";
 import { useSession } from "@/hooks/use-session";
 
 const REGIONS = [
-  { value: "eldin" as const, label: "Eldin", village: "Rudania", square: "H5", quadrant: "Q3", banner: "/assets/banners/Rudania1.png", crest: "/assets/icons/[RotW] village crest_rudania_.png" },
-  { value: "lanayru" as const, label: "Lanayru", village: "Inariko", square: "H8", quadrant: "Q2", banner: "/assets/banners/Inariko1.png", crest: "/assets/icons/[RotW] village crest_inariko_.png" },
-  { value: "faron" as const, label: "Faron", village: "Vhintl", square: "F10", quadrant: "Q4", banner: "/assets/banners/Vhintl1.png", crest: "/assets/icons/[RotW] village crest_vhintl_.png" },
+  { value: "eldin" as const, label: "Eldin", village: "Rudania", square: "H5", quadrant: "Q3", banner: "/assets/banners/Rudania1.png", crest: `/assets/icons/${encodeURIComponent("[RotW] village crest_rudania_.png")}` },
+  { value: "lanayru" as const, label: "Lanayru", village: "Inariko", square: "H8", quadrant: "Q2", banner: "/assets/banners/Inariko1.png", crest: `/assets/icons/${encodeURIComponent("[RotW] village crest_inariko_.png")}` },
+  { value: "faron" as const, label: "Faron", village: "Vhintl", square: "F10", quadrant: "Q4", banner: "/assets/banners/Vhintl1.png", crest: `/assets/icons/${encodeURIComponent("[RotW] village crest_vhintl_.png")}` },
 ] as const;
 
 type RegionValue = (typeof REGIONS)[number]["value"];

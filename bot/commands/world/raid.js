@@ -827,7 +827,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ 
-      text: `Raid ID: ${raidId} • Use </raid:1470659276287774734> to take your turn (1 minute per turn)! • Use </item:1463789335626125378> to heal!` 
+      text: `Raid ID: ${raidId}` 
     })
     .setTimestamp();
 
