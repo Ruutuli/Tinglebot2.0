@@ -111,6 +111,9 @@ export async function GET(req: NextRequest) {
     const filter: Record<string, unknown> = {};
     const orConditions: Record<string, unknown>[] = [];
 
+    // Exclude old maps (Map #1, Map #2, ...) from the items model page
+    filter.itemName = { $not: /^Map #\d+$/ };
+
     // Search filter (creates $or condition)
     const re = buildSearchRegex(search);
     if (re) {

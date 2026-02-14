@@ -97,8 +97,8 @@ function createStuckInWildEmbed(party, location) {
     .setColor(regionColors[party?.region] || "#8B4513")
     .setDescription(
       `Your party has run out of stamina and cannot move or roll. **Camp in the wild** to recover.\n\n` +
-      `**What to do:** Use **/explore camp** (id: your expedition ID, charactername: your character). Camping when out of stamina has no stamina cost and restores some hearts and stamina so you can continue.\n\n` +
-      `After you've recovered, use **/explore roll** or **/explore move** to continue the expedition.`
+      `**What to do:** Use </explore camp:${getExploreCommandId()}> (id: your expedition ID, charactername: your character). Camping when out of stamina has no stamina cost and restores some hearts and stamina so you can continue.\n\n` +
+      `After you've recovered, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
     )
     .setImage(EXPLORATION_IMAGE_FALLBACK)
     .setFooter({ text: location ? `Current location: ${location}` : "Expedition" });
@@ -260,6 +260,15 @@ function getLastProgressOutcomeForLocation(party, square, quadrant) {
   } else if (e.outcome === "secure") {
    const m = msg.match(/Secured\s+(\S+\s+Q[1-4])/i);
    if (m) entryLoc = m[1].trim().toUpperCase();
+  } else {
+   // Outcomes like monster, raid, item, fairy, etc. — they occur at a location but do NOT prompt Move
+   const mIn = msg.match(LOC_IN_MESSAGE_RE);
+   if (mIn && mIn[1] && mIn[2]) {
+    entryLoc = `${String(mIn[1]).trim().toUpperCase()} ${String(mIn[2]).trim().toUpperCase()}`;
+   } else {
+    const mBold = msg.match(/\*\*(\S+ \S+)\*\*/);
+    if (mBold) entryLoc = mBold[1].trim().toUpperCase();
+   }
   }
   if (entryLoc === loc) return e.outcome;
  }
@@ -2872,6 +2881,9 @@ module.exports = {
        char.currentStamina = Math.min(maxS, staminaShare);
        char.currentVillage = targetVillage;
        await char.save();
+       // Sync party document so dashboard expedition report shows same split as embed
+       partyCharacter.currentHearts = char.currentHearts;
+       partyCharacter.currentStamina = char.currentStamina;
        const name = partyCharacter.name || char.name || "Unknown";
        splitLinesEnd.push(`${name}: ${heartShare} ❤, ${staminaShare} stamina`);
       }
