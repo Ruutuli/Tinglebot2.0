@@ -40,7 +40,7 @@ const { Client, GatewayIntentBits, Partials, REST, Routes, EmbedBuilder } = requ
 // ------------------- Database Connections -------------------
 // ============================================================================
 const DatabaseConnectionManager = require('./database/connectionManager');
-const { connectToTinglebot, connectToInventories } = require('./database/db');
+const { connectToTinglebot, connectToInventories, getTokenBalance, updateTokenBalance } = require('./database/db');
 const TempData = require('./models/TempDataModel');
 
 // ============================================================================
@@ -746,6 +746,17 @@ async function initializeClient() {
     // ------------------- Welcome Message System ------------------
     client.on("guildMemberAdd", async (member) => {
       try {
+        // ------------------- New Member Welcome Token Bonus ------------------
+        try {
+          await updateTokenBalance(member.id, 500, {
+            category: 'welcome_bonus',
+            description: 'New member welcome bonus (500 tokens)'
+          });
+          logger.info('WELCOME', `[index.js]✅ Granted 500 tokens to new member ${member.user.tag} (${member.id})`);
+        } catch (tokenErr) {
+          logger.error('WELCOME', `[index.js]❌ Failed to grant welcome tokens to ${member.user.tag}: ${tokenErr.message}`);
+        }
+
         // ------------------- Create Welcome Embed ------------------
         const welcomeEmbed = new EmbedBuilder()
           .setColor(0x00ff88)
@@ -1034,6 +1045,46 @@ async function initializeClient() {
         const username = member.user.tag;
         
         logger.info('CLEANUP', `User ${username} (${discordId}) left the server. Starting data cleanup...`);
+
+        // Redistribute leaver's tokens evenly to all Resident members (before any deletions)
+        const RESIDENT_ROLE_ID = '788137728943325185';
+        let leaverTokens = 0;
+        try {
+          leaverTokens = await getTokenBalance(discordId);
+        } catch (balanceErr) {
+          logger.warn('CLEANUP', `[index.js] Could not read token balance for ${discordId}: ${balanceErr.message}`);
+        }
+        if (leaverTokens > 0) {
+          try {
+            await member.guild.members.fetch();
+            const residentMembers = member.guild.members.cache.filter(
+              m => !m.user.bot && m.roles.cache.has(RESIDENT_ROLE_ID)
+            );
+            if (residentMembers.size > 0) {
+              const perPerson = Math.floor(leaverTokens / residentMembers.size);
+              if (perPerson > 0) {
+                const meta = {
+                  category: 'member_leave_redistribution',
+                  description: `Tokens redistributed from ${username} who left the server`
+                };
+                for (const [recipientId, _m] of residentMembers) {
+                  try {
+                    await updateTokenBalance(recipientId, perPerson, meta);
+                  } catch (recipientErr) {
+                    logger.warn('CLEANUP', `[index.js] Failed to credit tokens to ${recipientId}: ${recipientErr.message}`);
+                  }
+                }
+                logger.success('CLEANUP', `[index.js] Redistributed ${leaverTokens} tokens from ${discordId} to ${residentMembers.size} Resident(s), ${perPerson} each`);
+              } else {
+                logger.info('CLEANUP', `[index.js] Skipped token redistribution: ${leaverTokens} tokens split among ${residentMembers.size} would be 0 per person`);
+              }
+            } else {
+              logger.info('CLEANUP', `[index.js] Skipped token redistribution: no Resident members to receive ${leaverTokens} tokens`);
+            }
+          } catch (redistErr) {
+            logger.warn('CLEANUP', `[index.js] Token redistribution failed for ${discordId}: ${redistErr.message}`);
+          }
+        }
         
         // Import necessary models
         const User = require('@/models/UserModel');

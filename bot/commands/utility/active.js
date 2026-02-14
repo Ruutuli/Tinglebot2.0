@@ -10,6 +10,9 @@ const INACTIVE_ROLE_ID = '788148064182730782';
 // Active role ID
 const ACTIVE_ROLE_ID = '788137728943325185';
 
+// Channel to notify when members become active/inactive (via /inactive and /active commands)
+const ACTIVE_INACTIVE_LOG_CHANNEL_ID = '658148069212422194';
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('active')
@@ -104,6 +107,17 @@ module.exports = {
 
       // Send confirmation to command user
       await interaction.editReply({ embeds: [embed], ephemeral: true });
+
+      // Notify activity log channel
+      try {
+        const logChannel = await interaction.client.channels.fetch(ACTIVE_INACTIVE_LOG_CHANNEL_ID);
+        if (logChannel) {
+          const displayName = targetMember.displayName ?? targetUser.username;
+          await logChannel.send(`🟢 **${displayName}** is now **active**`);
+        }
+      } catch (err) {
+        console.error('[active.js]: Could not post to activity log channel:', err);
+      }
 
       // Try to DM the target user (if not the same as command user)
       if (targetUser.id !== interaction.user.id) {

@@ -1599,8 +1599,30 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       }
       const itemMatch = item.match(/^(.*) x(\d+)$/i);
       if (!itemMatch) {
+        const invalidFormatEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Invalid Item Format')
+          .setDescription('Your submission didn\'t use the required format. The healer needs the item name and quantity in a specific way.')
+          .addFields(
+            {
+              name: '📋 Required Format',
+              value: '**Item Name xQuantity**\nUse the letter **x** (not the multiplication symbol ×) between the item name and the number.'
+            },
+            {
+              name: '✅ Example',
+              value: '`Bright-Eyed Crab x4`\n• Item name: Bright-Eyed Crab\n• Quantity: 4'
+            },
+            {
+              name: '💡 Tips',
+              value: '• Spell the item name **exactly** as it appears in your healing prompt\n• Use a space before **x** and the number (e.g. `Amber x5`)\n• The quantity must be a whole number (no decimals)'
+            }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: 'Healing Submission Error', iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/blight_white.png' })
+          .setTimestamp();
+
         await interaction.editReply({
-          content: `❌ Invalid item format. Please use: Item Name xQuantity (e.g., Bright-Eyed Crab x4).`,
+          embeds: [invalidFormatEmbed],
           flags: [4096]
         });
         return;
