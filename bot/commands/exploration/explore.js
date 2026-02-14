@@ -134,12 +134,105 @@ function createStuckInWildEmbed(party, location) {
     .setTitle("🏕️ Stuck in the wild — camp to recover")
     .setColor(regionColors[party?.region] || "#8B4513")
     .setDescription(
-      `Your party has run out of stamina and cannot move or roll. **Camp in the wild** to recover.\n\n` +
-      `**What to do:** Use </explore camp:${getExploreCommandId()}> (id: your expedition ID, charactername: your character). Camping when out of stamina has no stamina cost and restores some hearts and stamina so you can continue.\n\n` +
-      `After you've recovered, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
+      `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> to recover stamina with no heart cost.\n\n` +
+      `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
     )
     .setImage(EXPLORATION_IMAGE_FALLBACK)
     .setFooter({ text: location ? `Current location: ${location}` : "Expedition" });
+}
+
+const EXPLORE_STRUGGLE_CONTEXT = { commandName: "explore", operation: "struggle" };
+
+/**
+ * Pay action cost from party: stamina first, then hearts (struggle) for shortfall.
+ * @param {object} party - Party document (mutated)
+ * @param {number} characterIndex - Current actor index (for currentFirst order)
+ * @param {number} staminaCost - Required cost (0, 1, 2, 3, or 5)
+ * @param {{ order?: 'currentFirst'|'openerFirst', openerIndex?: number }} [options]
+ * @returns {Promise<{ ok: boolean, reason?: string, staminaPaid?: number, heartsPaid?: number }>}
+ */
+async function payStaminaOrStruggle(party, characterIndex, staminaCost, options = {}) {
+  if (!party || !party.characters || party.characters.length === 0) {
+    return { ok: false, reason: "not_enough" };
+  }
+  const n = party.characters.length;
+  const openerIndex = options.openerIndex != null && options.openerIndex >= 0 && options.openerIndex < n ? options.openerIndex : (party.currentTurn - 1 + n) % n;
+  const order = options.order === "openerFirst"
+    ? [openerIndex, ...party.characters.map((_, i) => i).filter((i) => i !== openerIndex)]
+    : [characterIndex, ...party.characters.map((_, i) => i).filter((i) => i !== characterIndex)];
+
+  const totalStamina = Math.max(0, party.totalStamina ?? 0);
+  const totalHearts = Math.max(0, party.totalHearts ?? 0);
+  const shortfall = Math.max(0, staminaCost - totalStamina);
+
+  if (shortfall > 0 && totalHearts < shortfall) {
+    return { ok: false, reason: "not_enough" };
+  }
+
+  if (shortfall === 0) {
+    let remaining = staminaCost;
+    for (const idx of order) {
+      if (remaining <= 0) break;
+      const slot = party.characters[idx];
+      const charDoc = await Character.findById(slot._id);
+      if (!charDoc) continue;
+      const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
+      const take = Math.min(remaining, have);
+      if (take > 0) {
+        charDoc.currentStamina = Math.max(0, have - take);
+        await charDoc.save();
+        slot.currentStamina = charDoc.currentStamina;
+        remaining -= take;
+      }
+    }
+    party.markModified("characters");
+    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+    await party.save();
+    return { ok: true, staminaPaid: staminaCost, heartsPaid: 0 };
+  }
+
+  let remainingStamina = staminaCost;
+  for (const idx of order) {
+    if (remainingStamina <= 0) break;
+    const slot = party.characters[idx];
+    const charDoc = await Character.findById(slot._id);
+    if (!charDoc) continue;
+    const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
+    const take = Math.min(remainingStamina, have);
+    if (take > 0) {
+      charDoc.currentStamina = Math.max(0, have - take);
+      await charDoc.save();
+      slot.currentStamina = charDoc.currentStamina;
+      remainingStamina -= take;
+    }
+  }
+  let remainingHearts = shortfall;
+  const { fetchCharacterById } = require("@/database/db.js");
+  for (const idx of order) {
+    if (remainingHearts <= 0) break;
+    const slot = party.characters[idx];
+    const charDoc = await Character.findById(slot._id);
+    if (!charDoc) continue;
+    const currentH = typeof charDoc.currentHearts === "number" ? charDoc.currentHearts : 0;
+    const take = Math.min(remainingHearts, currentH);
+    if (take > 0) {
+      try {
+        await useHearts(charDoc._id, take, EXPLORE_STRUGGLE_CONTEXT);
+      } catch (err) {
+        logger.warn("EXPLORE", `payStaminaOrStruggle useHearts: ${err?.message || err}`);
+      }
+      const updated = await fetchCharacterById(slot._id);
+      if (updated) {
+        party.characters[idx].currentHearts = updated.currentHearts ?? 0;
+      }
+      remainingHearts -= take;
+    }
+  }
+  party.markModified("characters");
+  party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+  party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+  await party.save();
+  return { ok: true, staminaPaid: staminaCost - shortfall, heartsPaid: shortfall };
 }
 
 // Autocomplete can show "E402960 | Lanayru | started | H8 Q2"; value sent may be that full string. Use only the partyId (before first "|").
@@ -153,7 +246,6 @@ function normalizeExpeditionId(value) {
 async function handleExplorationChestOpen(interaction, expeditionId, location, openerCharacterIndex) {
  const party = await Party.findActiveByPartyId(expeditionId);
  if (!party) return null;
- if (party.totalStamina < 1) return { notEnoughStamina: true };
 
  const n = party.characters.length;
  if (!n) return null;
@@ -164,25 +256,9 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  const character = await Character.findById(partyChar._id);
  if (!character) return null;
 
- const staminaCost = 1;
- let remainingCost = staminaCost;
- const order = [openerIndex, ...party.characters.map((_, idx) => idx).filter((idx) => idx !== openerIndex)];
- for (const idx of order) {
-  if (remainingCost <= 0) break;
-  const slot = party.characters[idx];
-  const charDoc = await Character.findById(slot._id);
-  if (!charDoc) continue;
-  const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
-  const take = Math.min(remainingCost, have);
-  if (take > 0) {
-   charDoc.currentStamina = Math.max(0, have - take);
-   await charDoc.save();
-   slot.currentStamina = charDoc.currentStamina;
-   remainingCost -= take;
-  }
- }
- party.markModified("characters");
- party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+ const chestPayResult = await payStaminaOrStruggle(party, openerIndex, 1, { order: "openerFirst", openerIndex });
+ if (!chestPayResult.ok) return { notEnoughStamina: true };
+
  party.currentTurn = (party.currentTurn + 1) % n;
  await party.save();
 
@@ -261,7 +337,8 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  const lootSummary = lootLines.length > 0
   ? lootLines.map((line) => line.trim()).join(" · ")
   : "Nothing found.";
- pushProgressLog(party, character.name, "chest_open", `Opened chest in **${location}**. **Found:** ${lootSummary}`, undefined, { staminaLost: staminaCost });
+ const chestCostsForLog = { ...(chestPayResult.staminaPaid > 0 && { staminaLost: chestPayResult.staminaPaid }), ...(chestPayResult.heartsPaid > 0 && { heartsLost: chestPayResult.heartsPaid }) };
+ pushProgressLog(party, character.name, "chest_open", `Opened chest in **${location}**. **Found:** ${lootSummary}`, undefined, Object.keys(chestCostsForLog).length ? chestCostsForLog : undefined);
  return { lootEmbed, party, nextCharacter };
 }
 
@@ -417,12 +494,14 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
   return;
  }
- const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
- if (partyTotalStamina < 1) {
+ const grottoPayResult = await payStaminaOrStruggle(freshParty, characterIndex, 1, { order: "currentFirst" });
+ if (!grottoPayResult.ok) {
+  const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
+  const partyTotalHearts = Math.max(0, freshParty.totalHearts ?? 0);
   const noStaminaEmbed = new EmbedBuilder()
-   .setTitle("❌ Not enough stamina to cleanse the grotto")
+   .setTitle("❌ Not enough stamina or hearts to cleanse the grotto")
    .setColor(regionColors[freshParty.region] || "#00ff99")
-   .setDescription("Party has " + partyTotalStamina + " 🟩 (need 1). Mark the grotto for later or continue exploring.")
+   .setDescription("Party has " + partyTotalStamina + " 🟩 and " + partyTotalHearts + " ❤ (need 1 total). **Camp** to recover, or use hearts to **Struggle**. Mark the grotto for later otherwise.")
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
   await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
@@ -457,32 +536,15 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    return;
   }
  }
- let remainingCost = 1;
- const order = [plumeHolder.characterIndex, ...freshParty.characters.map((_, idx) => idx).filter((idx) => idx !== plumeHolder.characterIndex)];
- for (const idx of order) {
-  if (remainingCost <= 0) break;
-  const slot = freshParty.characters[idx];
-  const charDoc = await Character.findById(slot._id);
-  if (!charDoc) continue;
-  const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
-  const take = Math.min(remainingCost, have);
-  if (take > 0) {
-   charDoc.currentStamina = Math.max(0, have - take);
-   await charDoc.save();
-   slot.currentStamina = charDoc.currentStamina;
-   remainingCost -= take;
-  }
- }
- freshParty.markModified("characters");
- freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
- await freshParty.save();
+ // Cost already applied by payStaminaOrStruggle
 
  const at = new Date();
  const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
  const quadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
  const discoveryKey = `grotto|${squareId}|${quadrantId}|${at.toISOString()}`;
  await pushDiscoveryToMap(freshParty, "grotto", at, i.user?.id);
- pushProgressLog(freshParty, cleanseCharacter.name, "grotto_cleansed", `Cleansed grotto in ${location} (1 Goddess Plume + 1 stamina).`, undefined, { staminaLost: 1 }, at);
+ const grottoCostsForLog = { ...(grottoPayResult.staminaPaid > 0 && { staminaLost: grottoPayResult.staminaPaid }), ...(grottoPayResult.heartsPaid > 0 && { heartsLost: grottoPayResult.heartsPaid }) };
+ pushProgressLog(freshParty, cleanseCharacter.name, "grotto_cleansed", `Cleansed grotto in ${location} (1 Goddess Plume + 1 stamina).`, undefined, Object.keys(grottoCostsForLog).length ? grottoCostsForLog : { staminaLost: 1 }, at);
 
  const trialType = rollGrottoTrialType();
  const grottoDoc = new Grotto({
@@ -1509,35 +1571,19 @@ module.exports = {
       staminaCost = 0;
      }
 
-     if (party.totalStamina < staminaCost) {
+     const payResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst" });
+     if (!payResult.ok) {
       const location = `${party.square} ${party.quadrant}`;
       return interaction.editReply({
         embeds: [createStuckInWildEmbed(party, location)],
       });
      }
-
-    // Apply roll cost to party stamina pool (current character first, then others) so we always deduct when party has enough
-    let remainingRollCost = staminaCost;
-    const rollCostOrder = [characterIndex, ...party.characters.map((_, idx) => idx).filter((idx) => idx !== characterIndex)];
-    for (const idx of rollCostOrder) {
-     if (remainingRollCost <= 0) break;
-     const slot = party.characters[idx];
-     const charDoc = await Character.findById(slot._id);
-     if (!charDoc) continue;
-     const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
-     const take = Math.min(remainingRollCost, have);
-     if (take > 0) {
-      charDoc.currentStamina = Math.max(0, have - take);
-      await charDoc.save();
-      slot.currentStamina = charDoc.currentStamina;
-      remainingRollCost -= take;
-     }
-    }
-    party.markModified("characters");
-    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
-    party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
-    await party.save();
-    character.currentStamina = party.characters[characterIndex].currentStamina;
+     const rollCostsForLog = {
+      ...(payResult.staminaPaid > 0 && { staminaLost: payResult.staminaPaid }),
+      ...(payResult.heartsPaid > 0 && { heartsLost: payResult.heartsPaid }),
+     };
+     character.currentStamina = party.characters[characterIndex].currentStamina;
+     character.currentHearts = party.characters[characterIndex].currentHearts;
 
      const location = `${party.square} ${party.quadrant}`;
 
@@ -1579,7 +1625,7 @@ module.exports = {
      if (outcomeType === "explored") {
       party.quadrantState = "explored";
       party.markModified("quadrantState");
-      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Secure, Roll again, or Move.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
+      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Secure, Roll again, or Move.`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
@@ -1668,7 +1714,7 @@ module.exports = {
        party.markModified("characters");
        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
-       pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored (+${totalHeartsRecovered} ❤ from 1 fairy).`, undefined, { heartsRecovered: totalHeartsRecovered, ...(staminaCost > 0 && { staminaLost: staminaCost }) });
+       pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored (+${totalHeartsRecovered} ❤ from 1 fairy).`, undefined, { heartsRecovered: totalHeartsRecovered, ...rollCostsForLog });
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save();
        const nextChar = party.characters[party.currentTurn];
@@ -1699,7 +1745,7 @@ module.exports = {
        return;
       }
       const fairyItem = await ItemModel.findOne({ itemName: "Fairy" }).lean().catch(() => null) || { itemName: "Fairy", emoji: "🧚", image: null };
-      pushProgressLog(party, character.name, "fairy", `Found a Fairy in ${location}.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
+      pushProgressLog(party, character.name, "fairy", `Found a Fairy in ${location}.`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextChar = party.characters[party.currentTurn];
@@ -1820,9 +1866,9 @@ module.exports = {
        grotto: `Found a grotto in ${location} (cleanse for 1 plume + 1 stamina or mark for later).`,
       };
       const chestRuinsCosts =
-       staminaCost > 0 || outcomeType === "camp"
+       Object.keys(rollCostsForLog).length > 0 || outcomeType === "camp"
         ? {
-            ...(staminaCost > 0 && { staminaLost: staminaCost }),
+            ...rollCostsForLog,
             ...(outcomeType === "camp" && { heartsRecovered: campHeartsRecovered, staminaRecovered: campStaminaRecovered }),
           }
         : undefined;
@@ -1983,48 +2029,31 @@ module.exports = {
           return;
          }
          const ruinsStaminaCost = 3;
-         const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
-         if (partyTotalStamina < ruinsStaminaCost) {
+         const ruinsPayResult = await payStaminaOrStruggle(freshParty, ruinsCharIndex, ruinsStaminaCost, { order: "currentFirst" });
+         if (!ruinsPayResult.ok) {
+          const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
+          const partyTotalHearts = Math.max(0, freshParty.totalHearts ?? 0);
           const noStaminaEmbed = new EmbedBuilder()
-           .setTitle("❌ Not enough stamina to explore the ruins")
+           .setTitle("❌ Not enough stamina or hearts to explore the ruins")
            .setColor(regionColors[freshParty.region] || "#00ff99")
-           .setDescription("Party has " + partyTotalStamina + " 🟩 (need 3). Continue with </explore roll:" + getExploreCommandId() + ">.")
+           .setDescription("Party has " + partyTotalStamina + " 🟩 and " + partyTotalHearts + " ❤ (need 3 total). **Camp** to recover, or use hearts to **Struggle** (1 heart = 1 stamina).")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
           await i.followUp({ embeds: [noStaminaEmbed] }).catch(() => {});
           return;
          }
-         // Deduct cost from party stamina pool (character who chose to explore first, then others)
-         let remainingCost = ruinsStaminaCost;
-         const order = [ruinsCharIndex, ...freshParty.characters.map((_, idx) => idx).filter((idx) => idx !== ruinsCharIndex)];
-         for (const idx of order) {
-          if (remainingCost <= 0) break;
-          const slot = freshParty.characters[idx];
-          const charDoc = await Character.findById(slot._id);
-          if (!charDoc) continue;
-          const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
-          const take = Math.min(remainingCost, have);
-          if (take > 0) {
-           charDoc.currentStamina = Math.max(0, have - take);
-           await charDoc.save();
-           slot.currentStamina = charDoc.currentStamina;
-           remainingCost -= take;
-          }
-         }
-         freshParty.markModified("characters");
-         freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
-         await freshParty.save();
          // Reload ruinsCharacter for later use (camp outcome etc. may add stamina to them)
          const ruinsCharacterReload = await Character.findById(ruinsCharSlot._id);
          if (ruinsCharacterReload) {
           ruinsCharacter.currentStamina = ruinsCharacterReload.currentStamina;
           ruinsCharacter.currentHearts = ruinsCharacterReload.currentHearts;
          }
+         const ruinsCostsForLog = { ...(ruinsPayResult.staminaPaid > 0 && { staminaLost: ruinsPayResult.staminaPaid }), ...(ruinsPayResult.heartsPaid > 0 && { heartsLost: ruinsPayResult.heartsPaid }) };
 
          // Now that user chose Yes, add ruins to map and reportable progress log (so dashboard shows "Set pin" only after Yes)
          const ruinsAt = new Date();
          await pushDiscoveryToMap(freshParty, "ruins", ruinsAt, i.user?.id);
-         pushProgressLog(freshParty, ruinsCharacter.name, "ruins", `Explored ruins in ${location}.`, undefined, { staminaLost: ruinsStaminaCost }, ruinsAt);
+         pushProgressLog(freshParty, ruinsCharacter.name, "ruins", `Explored ruins in ${location}.`, undefined, ruinsCostsForLog, ruinsAt);
 
          // Weighted roll: chest 7, camp 3, landmark 2, relic 2, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20)
          const roll = Math.random() * 20;
@@ -2049,7 +2078,7 @@ module.exports = {
          if (ruinsOutcome === "chest") {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
           progressMsg += "Found a chest (open for 1 stamina).";
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else if (ruinsOutcome === "camp") {
           const recover = 1;
           ruinsCharacter.currentStamina = Math.min(ruinsCharacter.maxStamina ?? ruinsCharacter.currentStamina, ruinsCharacter.currentStamina + recover);
@@ -2075,11 +2104,11 @@ module.exports = {
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a camp spot; recovered 1 stamina.";
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost, staminaRecovered: recover });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { ...ruinsCostsForLog, staminaRecovered: recover });
          } else if (ruinsOutcome === "landmark") {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found nothing special in the ruins—but an interesting landmark. It's been marked on the map.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found an interesting landmark (marked on map).";
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else if (ruinsOutcome === "relic") {
           let ruinsSavedRelic = null;
           try {
@@ -2097,7 +2126,7 @@ module.exports = {
           const ruinsRelicIdStr = ruinsSavedRelic?.relicId ? ` (ID: \`${ruinsSavedRelic.relicId}\`)` : '';
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins!${ruinsRelicIdStr} Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
           pushProgressLog(freshParty, ruinsCharacter.name, "relic", `Found a relic in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
           const relicUserIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
           const relicDmEmbed = new EmbedBuilder()
@@ -2133,7 +2162,7 @@ module.exports = {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found an old map in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found an old map; saved to map collection. Take to Inariko Library to decipher.";
           lootForLog = { itemName: "An old map", emoji: "" };
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
           // DM all expedition members (no coordinates until appraised)
           const userIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
           const dmEmbed = new EmbedBuilder()
@@ -2168,7 +2197,7 @@ module.exports = {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a Star Fragment.";
           lootForLog = { itemName: "Star Fragment", emoji: "" };
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          } else if (ruinsOutcome === "blight") {
           ruinsCharacter.blighted = true;
           if (!ruinsCharacter.blightedAt) ruinsCharacter.blightedAt = new Date();
@@ -2179,7 +2208,7 @@ module.exports = {
           await ruinsCharacter.save();
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. You're blighted! Use the </blight:...> command for healing and info.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found blight; character is now blighted.";
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else {
           // goddess_plume
           logger.info("EXPLORE", `Ruins item: outcome=goddess_plume, character=${ruinsCharacter.name}, item=Goddess Plume`);
@@ -2191,7 +2220,7 @@ module.exports = {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Excavated a Goddess Plume.";
           lootForLog = { itemName: "Goddess Plume", emoji: "" };
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
+          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          }
          const finalParty = await Party.findActiveByPartyId(expeditionId);
          const resultEmbed = new EmbedBuilder()
@@ -2256,7 +2285,7 @@ module.exports = {
               const noStamEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
                .setColor(regionColors[fp?.region] || "#00ff99")
-               .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or camp first.")
+               .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina or hearts to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 and " + (fp?.totalHearts ?? 0) + " ❤ (need 1). **Camp** to recover, or use hearts to **Struggle** (1 heart = 1 stamina).")
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
               await resultMsg.edit({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
@@ -2332,7 +2361,7 @@ module.exports = {
            const noStaminaEmbed = new EmbedBuilder()
             .setTitle("🗺️ **Expedition: Chest found!**")
             .setColor(regionColors[freshParty?.region] || "#00ff99")
-            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or camp first.")
+            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina or hearts to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 and " + (freshParty?.totalHearts ?? 0) + " ❤ (need 1). **Camp** to recover, or use hearts to **Struggle** (1 heart = 1 stamina).")
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
            await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
@@ -2367,7 +2396,7 @@ module.exports = {
 
         if (outcomeType === "monster_camp") {
          const at = new Date();
-         const monsterCampCosts = staminaCost > 0 ? { staminaLost: staminaCost } : undefined;
+         const monsterCampCosts = Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined;
          if (isYes) {
           await pushDiscoveryToMap(party, "monster_camp", at, i.user?.id);
           pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map for later.`, undefined, monsterCampCosts, at);
@@ -2463,7 +2492,7 @@ module.exports = {
          const fp = await Party.findActiveByPartyId(expeditionId);
          if (fp) {
           if (outcomeType === "monster_camp") {
-           pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined, new Date());
+           pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined, new Date());
           } else if (outcomeType === "ruins") {
            pushProgressLog(fp, character.name, "ruins_skipped", `Found ruins in ${location}; choice timed out (left for later).`, undefined, undefined, new Date());
           } else if (outcomeType === "grotto") {
@@ -2514,7 +2543,7 @@ module.exports = {
 
       logger.info("EXPLORE", `Item found (roll outcome): ${selectedItem.itemName} | location=${location} | character=${character.name}`);
 
-      pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
+      pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
@@ -2612,7 +2641,7 @@ module.exports = {
          : { current: selectedMonster.hearts, max: selectedMonster.hearts };
         const monsterDefeated = monsterHearts.current === 0;
 
-        pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
+        pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
         await party.save();
 
@@ -2750,8 +2779,8 @@ module.exports = {
         ? `Fought ${selectedMonster.name} in ${location}. ${outcome.result}. Lost ${outcome.hearts} heart(s).${outcome.canLoot ? " Got loot." : ""}`
         : `Fought ${selectedMonster.name} in ${location}. ${outcome.result}.${outcome.canLoot ? " Got loot." : ""}`;
        const monsterCosts =
-        outcome.hearts > 0 || staminaCost > 0
-         ? { ...(outcome.hearts > 0 && { heartsLost: outcome.hearts }), ...(staminaCost > 0 && { staminaLost: staminaCost }) }
+        outcome.hearts > 0 || Object.keys(rollCostsForLog).length > 0
+         ? { ...(outcome.hearts > 0 && { heartsLost: outcome.hearts }), ...rollCostsForLog }
          : undefined;
        pushProgressLog(party, character.name, "monster", monsterMsg, lootedItem ? { itemName: lootedItem.itemName, emoji: lootedItem.emoji || "" } : undefined, monsterCosts);
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
@@ -2936,11 +2965,14 @@ module.exports = {
     }
 
     const staminaCost = 5;
-    if (party.totalStamina < staminaCost) {
+    const securePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst" });
+    if (!securePayResult.ok) {
      return interaction.editReply(
-      `Not enough party stamina! Required: ${staminaCost}, Available: ${party.totalStamina}`
+      `Not enough stamina or hearts to secure (need ${staminaCost} total). Party has ${party.totalStamina ?? 0} stamina and ${party.totalHearts ?? 0} hearts. **Camp** to recover stamina, or use hearts to **Struggle** (1 heart = 1 stamina).`
      );
     }
+    character.currentStamina = party.characters[characterIndex].currentStamina;
+    character.currentHearts = party.characters[characterIndex].currentHearts;
 
     const requiredResources = ["Wood", "Eldin Ore"];
     const availableResources = party.characters.flatMap((char) => char.items);
@@ -2984,13 +3016,7 @@ module.exports = {
      return interaction.editReply({ embeds: [embed] });
     }
 
-    // Apply secure cost to current character so party total stays correct
-    const secureCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
-    character.currentStamina = Math.max(0, secureCharStamina - staminaCost);
-    await character.save();
-    party.characters[characterIndex].currentStamina = character.currentStamina;
-    party.markModified("characters");
-    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+    // Cost already applied by payStaminaOrStruggle
 
     // Remove Wood and Eldin Ore (or their bundles) from the party — one of each from whoever has them
     for (const resource of requiredResources) {
@@ -3030,13 +3056,14 @@ module.exports = {
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
 
     const locationSecure = `${party.square} ${party.quadrant}`;
+    const secureCostsForLog = { ...(securePayResult.staminaPaid > 0 && { staminaLost: securePayResult.staminaPaid }), ...(securePayResult.heartsPaid > 0 && { heartsLost: securePayResult.heartsPaid }) };
     pushProgressLog(
      party,
      character.name,
      "secure",
      `Secured ${locationSecure} using Wood and Eldin Ore (-${staminaCost} party stamina). Quadrant secured; no stamina cost to explore here.`,
      undefined,
-     { staminaLost: staminaCost }
+     Object.keys(secureCostsForLog).length ? secureCostsForLog : undefined
     );
     await party.save();
 
@@ -3157,7 +3184,7 @@ module.exports = {
       .setColor(regionColors[party.region] || "#b91c1c")
       .setDescription(
        "You can't use **Move** right now. This quadrant hasn't been explored yet.\n\n" +
-       "Use **/explore roll** to explore the current quadrant first. **Move** only becomes available when the expedition prompts you (e.g. after exploring, or when the quadrant is secured)."
+       `Use </explore roll:${getExploreCommandId()}> to explore the current quadrant first. **Move** only becomes available when the expedition prompts you (e.g. after exploring, or when the quadrant is secured).`
       )
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      addExplorationStandardFields(moveBlockedEmbed, {
@@ -3179,7 +3206,7 @@ module.exports = {
        .setColor(regionColors[party.region] || "#b91c1c")
        .setDescription(
         "You can't use **Move** right now. The expedition hasn't prompted you to move.\n\n" +
-        "Use **/explore roll** (or respond to the current prompt) until you see the **Quadrant Explored** menu with Roll, Item, Camp, Secure, and **Move**. Only then can you use **Move**."
+        `Use </explore roll:${getExploreCommandId()}> (or respond to the current prompt) until you see the **Quadrant Explored** menu with Roll, Item, Camp, Secure, and **Move**. Only then can you use **Move**.`
        )
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(moveBlockedEmbed, {
@@ -3237,13 +3264,21 @@ module.exports = {
     }
     const moveWasReveal = destinationQuadrantState === "unexplored";
     const staminaCost = destinationQuadrantState === "secured" ? 0 : destinationQuadrantState === "unexplored" ? 2 : 1;
-    if (staminaCost > 0 && party.totalStamina < staminaCost) {
-     const location = `${party.square} ${party.quadrant}`;
-     return interaction.editReply({
-      embeds: [createStuckInWildEmbed(party, location)],
-     });
+    let movePayResult = null;
+    if (staminaCost > 0) {
+     movePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst" });
+     if (!movePayResult.ok) {
+      const location = `${party.square} ${party.quadrant}`;
+      return interaction.editReply({
+       embeds: [createStuckInWildEmbed(party, location)],
+      });
+     }
+     character.currentStamina = party.characters[characterIndex].currentStamina;
+     character.currentHearts = party.characters[characterIndex].currentHearts;
     }
-
+    const moveCostsForLog = staminaCost > 0 && movePayResult
+     ? { ...(movePayResult.staminaPaid > 0 && { staminaLost: movePayResult.staminaPaid }), ...(movePayResult.heartsPaid > 0 && { heartsLost: movePayResult.heartsPaid }) }
+     : undefined;
     // Block leaving the square until all quadrants (except inaccessible) are explored or secured
     // Exception: allow moving to the starting square (where they can end the expedition) even if current square isn't fully explored
     const targetSquareNorm = String(newLocation.square || "").trim().toUpperCase();
@@ -3328,15 +3363,7 @@ module.exports = {
      }
     }
 
-    // Apply move cost to current character so party total stays correct (0 for secured quadrants)
-    if (staminaCost > 0) {
-     const moveCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
-     character.currentStamina = Math.max(0, moveCharStamina - staminaCost);
-     await character.save();
-     party.characters[characterIndex].currentStamina = character.currentStamina;
-     party.markModified("characters");
-     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
-    }
+    // Cost already applied by payStaminaOrStruggle when staminaCost > 0
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
@@ -3376,12 +3403,12 @@ module.exports = {
      party,
      character.name,
      "move",
-     staminaCost > 0
+    staminaCost > 0
       ? `Moved ${directionLabel} **${locationMove}** (quadrant ${quadrantStateLabel}). (-${staminaCost} stamina)`
       : `Moved ${directionLabel} **${locationMove}** (quadrant ${quadrantStateLabel}).`,
-     undefined,
-     staminaCost > 0 ? { staminaLost: staminaCost } : undefined
-    );
+    undefined,
+    moveCostsForLog
+   );
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();
 
@@ -3757,38 +3784,18 @@ module.exports = {
      });
     }
 
-    if (party.totalStamina < 1) {
+    const retreatPayResult = await payStaminaOrStruggle(party, characterIndex, 1, { order: "currentFirst" });
+    if (!retreatPayResult.ok) {
      return interaction.editReply(
-      "Not enough stamina. A retreat attempt costs **1** stamina. The party has " + (party.totalStamina ?? 0) + " stamina."
+      "Not enough stamina or hearts. A retreat attempt costs **1** (stamina or heart). The party has " + (party.totalStamina ?? 0) + " stamina and " + (party.totalHearts ?? 0) + " hearts. **Camp** to recover, or use hearts to **Struggle**."
      );
     }
-
-    // Deduct 1 stamina from party (current turn first, then others — same pattern as roll)
-    let remainingCost = 1;
-    const retreatCostOrder = [party.currentTurn, ...party.characters.map((_, idx) => idx).filter((idx) => idx !== party.currentTurn)];
-    for (const idx of retreatCostOrder) {
-     if (remainingCost <= 0) break;
-     const slot = party.characters[idx];
-     const charDoc = await Character.findById(slot._id);
-     if (!charDoc) continue;
-     const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
-     const take = Math.min(remainingCost, have);
-     if (take > 0) {
-      charDoc.currentStamina = Math.max(0, have - take);
-      await charDoc.save();
-      slot.currentStamina = charDoc.currentStamina;
-      remainingCost -= take;
-     }
-    }
-    party.markModified("characters");
-    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
-    party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
-    await party.save();
+    const retreatCostsForLog = { ...(retreatPayResult.staminaPaid > 0 && { staminaLost: retreatPayResult.staminaPaid }), ...(retreatPayResult.heartsPaid > 0 && { heartsLost: retreatPayResult.heartsPaid }) };
 
     const success = Math.random() < RETREAT_SUCCESS_CHANCE;
     if (success) {
      await endExplorationRaidAsRetreat(raid, interaction.client);
-     pushProgressLog(party, character.name, "retreat", "Party attempted to retreat and escaped.", undefined, { staminaLost: 1 });
+     pushProgressLog(party, character.name, "retreat", "Party attempted to retreat and escaped.", undefined, retreatCostsForLog);
      const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
      const embed = new EmbedBuilder()
       .setTitle("🏃 **Retreat successful**")
@@ -3802,7 +3809,7 @@ module.exports = {
      return interaction.editReply({ embeds: [embed] });
     }
 
-    pushProgressLog(party, character.name, "retreat_failed", "Party attempted to retreat but could not get away.", undefined, { staminaLost: 1 });
+    pushProgressLog(party, character.name, "retreat_failed", "Party attempted to retreat but could not get away.", undefined, retreatCostsForLog);
     return interaction.editReply({
      content: "Couldn't get away! You can try again with **/explore retreat** (costs 1 stamina).",
      ephemeral: false

@@ -554,7 +554,8 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
  } else if (showFairyRollOnly === true) {
-  commandsValue += `**A fairy appeared — use ${cmdRoll} to continue exploring.**`;
+  const cmdItem = `</explore item:${cmdId}>`;
+  commandsValue += `**A fairy appeared — use ${cmdRoll} or ${cmdItem} to continue exploring.**`;
  } else if (showRestSecureMove === true) {
   const cmdCamp = `</explore camp:${cmdId}>`;
   const cmdSecure = `</explore secure:${cmdId}>`;
@@ -612,6 +613,8 @@ const createExplorationItemEmbed = (
   extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
   ruinRestRecovered,
  });
+ const rarity = item.itemRarity ?? 1;
+ embed.setFooter({ text: `Rarity: ${rarity}` });
  return embed;
 };
 
@@ -655,6 +658,8 @@ const createExplorationMonsterEmbed = (
   extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
   ruinRestRecovered,
  });
+ const tier = monster.tier ?? 1;
+ embed.setFooter({ text: `Tier: ${tier}` });
  return embed;
 };
 
