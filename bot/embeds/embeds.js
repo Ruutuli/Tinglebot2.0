@@ -43,7 +43,19 @@ const regionColors = {
  hebra: "#800080",
 };
 
-// ------------------- Explore command IDs (for clickable slash command mentions) ------------------
+// ------------------- Explore command ID (for clickable slash command mentions) ------------------
+// Fetched dynamically on bot ready; fallback used until then or if fetch fails
+let _exploreCmdId = "1471454947089580107";
+
+function getExploreCommandId() {
+  return _exploreCmdId;
+}
+
+function setExploreCommandId(id) {
+  if (id && typeof id === "string") _exploreCmdId = id;
+}
+
+// Legacy export for backwards compatibility (returns fallback; prefer getExploreCommandId())
 const EXPLORE_CMD_ID = "1471454947089580107";
 
 // ------------------- Region Image Mapping ------------------
@@ -484,15 +496,16 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  ];
  if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
   const nextName = nextCharacter.name;
-  const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+  const cmdId = getExploreCommandId();
+  const cmdRoll = `</explore roll:${cmdId}>`;
   let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
   // Only add rest/secure/move options when explicitly requested (Quadrant Explored! embed only).
   if (showRestSecureMove === true) {
-   const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
-   const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
-   const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
-   const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
-   const cmdEnd = `</explore end:${EXPLORE_CMD_ID}>`;
+   const cmdCamp = `</explore camp:${cmdId}>`;
+   const cmdSecure = `</explore secure:${cmdId}>`;
+   const cmdMove = `</explore move:${cmdId}>`;
+   const cmdItem = `</explore item:${cmdId}>`;
+   const cmdEnd = `</explore end:${cmdId}>`;
    commandsValue += `**Next actions**\nYou can do the following:\n\n` +
     `• **Roll** — ${cmdRoll}\n> Continue exploring current quadrant. (Costs 1 stamina)\n\n` +
     `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
@@ -503,7 +516,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
     commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
    }
   } else {
-   const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+   const cmdItem = `</explore item:${cmdId}>`;
    commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
   }
   if (!commandsLast) {
@@ -522,16 +535,17 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
  const expId = expeditionId || party?.partyId || "";
  if (!showNextAndCommands || !nextCharacter?.userId || !nextCharacter?.name) return embed;
  const nextName = nextCharacter.name;
- const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+ const cmdId = getExploreCommandId();
+ const cmdRoll = `</explore roll:${cmdId}>`;
  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
  if (showMoveToUnexploredOnly === true) {
-  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+  const cmdItem = `</explore item:${cmdId}>`;
   commandsValue += `**Moved to a new location — use ${cmdRoll} to explore this quadrant, or ${cmdItem} to use a healing item.**`;
  } else if (showSecuredQuadrantOnly === true) {
-  const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
-  const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
-  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
-  const cmdEnd = `</explore end:${EXPLORE_CMD_ID}>`;
+  const cmdCamp = `</explore camp:${cmdId}>`;
+  const cmdMove = `</explore move:${cmdId}>`;
+  const cmdItem = `</explore item:${cmdId}>`;
+  const cmdEnd = `</explore end:${cmdId}>`;
   commandsValue += `**This quadrant is secured — you cannot roll here.** Use one of:\n\n` +
    `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands.\n\n` +
    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
@@ -542,11 +556,11 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
  } else if (showFairyRollOnly === true) {
   commandsValue += `**A fairy appeared — use ${cmdRoll} to continue exploring.**`;
  } else if (showRestSecureMove === true) {
-  const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
-  const cmdSecure = `</explore secure:${EXPLORE_CMD_ID}>`;
-  const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;
-  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
-  const cmdEnd = `</explore end:${EXPLORE_CMD_ID}>`;
+  const cmdCamp = `</explore camp:${cmdId}>`;
+  const cmdSecure = `</explore secure:${cmdId}>`;
+  const cmdMove = `</explore move:${cmdId}>`;
+  const cmdItem = `</explore item:${cmdId}>`;
+  const cmdEnd = `</explore end:${cmdId}>`;
   commandsValue += `**Next actions**\nYou can do the following:\n\n` +
    `• **Roll** — ${cmdRoll}\n> Continue exploring current quadrant. (Costs 1 stamina)\n\n` +
    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
@@ -557,7 +571,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
  } else {
-  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+  const cmdItem = `</explore item:${cmdId}>`;
   commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
  }
  embed.addFields({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
@@ -3402,6 +3416,8 @@ module.exports = {
  regionColors,
  regionImages,
  EXPLORE_CMD_ID,
+ getExploreCommandId,
+ setExploreCommandId,
  PATH_IMAGES,
  villageEmojis,
  pathEmojis,

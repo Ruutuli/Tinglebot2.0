@@ -5,7 +5,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid, scheduleRaidTurnSkip } = require('../../modules/raidModule');
-const { createRaidKOEmbed, createBlightRaidParticipationEmbed, EXPLORE_CMD_ID } = require('../../embeds/embeds.js');
+const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
 const Raid = require('@/models/RaidModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 
@@ -1059,7 +1059,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
 
     // Expedition raid: add clear "raid over — use /explore roll" so party knows to continue
     if (raidData.expeditionId) {
-      const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+      const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
       victoryEmbed.addFields({
         name: '🗺️ **Raid over — continue your expedition**',
         value: `Use ${cmdRoll} with id \`${raidData.expeditionId}\` and your character to continue.`,
@@ -1074,7 +1074,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
         if (thread) {
           // Expedition raid: send a separate message first so "raid over, use /explore roll" is obvious
           if (raidData.expeditionId) {
-            const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+            const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
             await thread.send(`**Raid over!** Please use ${cmdRoll} with id \`${raidData.expeditionId}\` to continue your expedition.`);
           }
           await thread.send({ embeds: [victoryEmbed] });

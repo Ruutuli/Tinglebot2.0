@@ -20,7 +20,7 @@ const { capitalizeVillageName } = require('@/utils/stringUtils');
 const { monsterMapping } = require('@/models/MonsterModel');
 const Raid = require('@/models/RaidModel');
 const { finalizeBlightApplication } = require('../handlers/blightHandler');
-const { EXPLORE_CMD_ID } = require('../embeds/embeds.js');
+const { getExploreCommandId } = require('../embeds/embeds.js');
 
 // ============================================================================
 // ---- Constants ----
@@ -551,7 +551,7 @@ async function joinRaid(character, raidId, options = {}) {
         (c) => c._id && character._id && c._id.toString() === character._id.toString()
       );
       if (!isInExpedition) {
-        const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+        const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
         throw new Error(`Only members of expedition **${raid.expeditionId}** can join this raid. This raid was triggered during that expedition. Use ${cmdRoll} with id \`${raid.expeditionId}\` and your character if you're in the party.`);
       }
     }
@@ -778,7 +778,7 @@ async function notifyExpeditionRaidOver(raid, client, result) {
     });
     await party.save();
 
-    const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+    const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
     const embed = new EmbedBuilder()
       .setColor(result === 'defeated' ? 0x4CAF50 : 0xFF9800)
       .setTitle('🗺️ **Raid over — continue your expedition**')
@@ -1239,7 +1239,7 @@ function createRaidEmbed(raid, monsterImage) {
     .setTimestamp();
 
   if (raid.expeditionId) {
-    const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
+    const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
     embed.addFields({
       name: '🗺️ __Expedition raid__',
       value: `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.`,

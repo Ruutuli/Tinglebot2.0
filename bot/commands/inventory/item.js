@@ -24,7 +24,7 @@ const { healKoCharacter, updateCurrentHearts, updateCurrentStamina } = require('
 const { getJobPerk } = require('../../modules/jobsModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
-const { createDebuffEmbed, EXPLORE_CMD_ID } = require('../../embeds/embeds.js');
+const { createDebuffEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
 const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = require('../../modules/elixirModule');
@@ -229,7 +229,7 @@ module.exports = {
         'characters._id': character._id,
       }).lean();
       if (activeExpedition) {
-        const exploreItemCmd = `</explore item:${EXPLORE_CMD_ID}>`;
+        const exploreItemCmd = `</explore item:${getExploreCommandId()}>`;
         const errorEmbed = new EmbedBuilder()
           .setColor(0xff6600)
           .setTitle('🗺️ Cannot use /item while on an expedition')

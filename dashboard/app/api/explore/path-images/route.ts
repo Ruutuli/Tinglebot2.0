@@ -50,19 +50,37 @@ export async function GET(request: NextRequest) {
       // By party: MapPathImage for that expedition
       const docs = await MapPathImage.find({ partyId }).sort({ createdAt: -1 }).lean();
       pathImages = (docs as unknown as PathImageDoc[]).map((d) => ({
-        squareId: d.squareId,
+        squareId: (d.squareId ?? "").trim().toUpperCase(),
         imageUrl: d.imageUrl,
         updatedAt: d.createdAt ? new Date(d.createdAt).getTime() : 0,
       }));
     } else {
-      // No params: canonical latest per square from map DB (used by /map)
+      // No params: canonical latest per square (used by /map). Prefer Square.pathImageUrl; fall back to latest MapPathImage per square so uploads show even when Square doc is missing or wasn't updated.
       const squares = await Square.find({ pathImageUrl: { $exists: true, $nin: [null, ""] } })
         .select("squareId pathImageUrl updatedAt")
         .lean();
-      pathImages = (squares as unknown as Array<{ squareId: string; pathImageUrl: string; updatedAt?: Date }>).map((s) => ({
-        squareId: s.squareId,
-        imageUrl: s.pathImageUrl,
-        updatedAt: s.updatedAt ? new Date(s.updatedAt).getTime() : 0,
+      const bySquare = new Map<string, { imageUrl: string; updatedAt: number }>();
+      for (const s of squares as unknown as Array<{ squareId: string; pathImageUrl: string; updatedAt?: Date }>) {
+        const id = (s.squareId ?? "").trim().toUpperCase();
+        if (!id) continue;
+        bySquare.set(id, {
+          imageUrl: s.pathImageUrl,
+          updatedAt: s.updatedAt ? new Date(s.updatedAt).getTime() : 0,
+        });
+      }
+      const pathDocs = await MapPathImage.find({}).sort({ createdAt: -1 }).lean();
+      for (const d of pathDocs as unknown as PathImageDoc[]) {
+        const id = (d.squareId ?? "").trim().toUpperCase();
+        if (!id || !d.imageUrl || bySquare.has(id)) continue;
+        bySquare.set(id, {
+          imageUrl: d.imageUrl,
+          updatedAt: d.createdAt ? new Date(d.createdAt).getTime() : 0,
+        });
+      }
+      pathImages = Array.from(bySquare.entries()).map(([squareId, v]) => ({
+        squareId,
+        imageUrl: v.imageUrl,
+        updatedAt: v.updatedAt,
       }));
     }
 

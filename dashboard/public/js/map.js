@@ -2856,9 +2856,10 @@ async function fetchPathImageOverrides() {
         const overrides = {};
         const base = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
         list.forEach((item) => {
-            const squareId = item.squareId;
+            const rawId = item.squareId;
             let imageUrl = item.imageUrl;
-            if (!squareId || !imageUrl) return;
+            if (!rawId || !imageUrl) return;
+            const squareId = String(rawId).trim().toUpperCase();
             if (item.updatedAt) imageUrl = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + item.updatedAt;
             // Use same-origin proxy for GCS URLs to avoid CORS (matches map tile loading)
             if (imageUrl.startsWith('https://') || imageUrl.startsWith('http://')) {
@@ -2888,9 +2889,10 @@ async function loadUserPathImages() {
         const overrides = {};
         const base = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : '';
         list.forEach((item) => {
-            const squareId = item.squareId;
+            const rawId = item.squareId;
             let imageUrl = item.imageUrl;
-            if (!squareId || !imageUrl) return;
+            if (!rawId || !imageUrl) return;
+            const squareId = String(rawId).trim().toUpperCase();
             if (item.updatedAt) imageUrl = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + item.updatedAt;
             // Use same-origin proxy for GCS URLs to avoid CORS
             if (imageUrl.startsWith('https://') || imageUrl.startsWith('http://')) {

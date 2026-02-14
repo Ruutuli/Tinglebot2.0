@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { getAppUrl } from "@/lib/config";
-import { discordApiRequest, discordApiPostWithFile } from "@/lib/discord";
+import { discordApiRequest, discordApiPostWithFile, getExploreCommandId } from "@/lib/discord";
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs/promises";
@@ -31,9 +31,6 @@ const REGION_BANNER_FILES: Record<string, string> = {
 };
 
 const EMBED_ATTACHMENT_FILENAME = "banner.png";
-
-// Discord slash command ID for /explore (must match bot embeds EXPLORE_CMD_ID)
-const EXPLORE_CMD_ID = "1471454947089580107";
 
 type PartyMemberDoc = {
   _id: unknown;
@@ -186,7 +183,7 @@ export async function POST(
           name: "__📋 Commands__",
           value:
             characters.length > 0
-              ? `**Take your turn:**\n• </explore roll:${EXPLORE_CMD_ID}> — id: \`${partyId}\` charactername: **${String(characters[0].name)}**`
+              ? `**Take your turn:**\n• </explore roll:${await getExploreCommandId()}> — id: \`${partyId}\` charactername: **${String(characters[0].name)}**`
               : "Use the expedition page link below to manage the party.",
           inline: false,
         },

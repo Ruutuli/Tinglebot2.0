@@ -1919,8 +1919,11 @@ async function generateDailyQuests() {
       availableTimes = FIXED_CRON_TIMES.filter(cronTime => cronToHour(cronTime) < 12);
     }
     
-    // Exclude midnight (00:00 UTC) so Help Wanted never posts at midnight
-    availableTimes = availableTimes.filter(cronTime => cronToHour(cronTime) !== 0);
+    // Exclude midnight so Help Wanted never posts at midnight in any relevant timezone:
+    // - 00:00 UTC (midnight UTC)
+    // - 05:00 UTC = midnight EST (daily rollover; generation runs then)
+    const excludedHours = [0, 5];
+    availableTimes = availableTimes.filter(cronTime => !excludedHours.includes(cronToHour(cronTime)));
     
     const selectedTimes = selectTimesWithVariableBuffer(availableTimes, totalQuestsNeeded);
     

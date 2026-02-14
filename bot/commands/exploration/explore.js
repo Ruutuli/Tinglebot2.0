@@ -32,7 +32,7 @@ const {
  createExplorationMonsterEmbed,
  regionColors,
  regionImages,
- EXPLORE_CMD_ID,
+ getExploreCommandId,
 } = require("../../embeds/embeds.js");
 
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
@@ -466,21 +466,6 @@ module.exports = {
   )
   .addSubcommand((subcommand) =>
    subcommand
-    .setName("rest")
-    .setDescription("Rest at current location (3 stamina) — heals all party hearts, revives KO'd")
-    .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("Your character name")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-  )
-  .addSubcommand((subcommand) =>
-   subcommand
     .setName("secure")
     .setDescription("Secure the current quadrant (costs resources)")
     .addStringOption((option) =>
@@ -534,21 +519,6 @@ module.exports = {
      option
       .setName("item")
       .setDescription("Item to use (healing items only)")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-  )
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("retreat")
-    .setDescription("Return to starting village")
-    .addStringOption((option) =>
-     option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("Your character name")
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -825,7 +795,7 @@ module.exports = {
      if (outcomeType === "explored") {
       party.quadrantState = "explored";
       party.markModified("quadrantState");
-      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Rest, Secure, Roll again, or Move.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
+      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Secure, Roll again, or Move.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
 
@@ -874,7 +844,7 @@ module.exports = {
       const isAtStartQuadrant = startPoint && String(party.square || "").toUpperCase() === String(startPoint.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
-       .setDescription(`**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or rest, secure, or move.`)
+       .setDescription(`**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or secure, or move.`)
        .setColor(regionColors[party.region] || "#00ff99")
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
@@ -1105,14 +1075,14 @@ module.exports = {
         `**${character.name}** found something unsettling in **${location}**.\n\n` +
         "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there.\n\n" +
         "**Yes** — Mark it on the map for later (counts toward this square's 3 discovery limit).\n" +
-        `**No** — Don't mark it. Won't be recorded as a discovery. Continue with </explore roll:${EXPLORE_CMD_ID}>.`;
+        `**No** — Don't mark it. Won't be recorded as a discovery. Continue with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
        description =
         `**${character.name}** found a chest in **${location}**!\n\n` +
         "Open chest? Costs 1 stamina.\n\n" +
         "**Yes** — Open the chest (1 item per party member, relics possible).\n" +
-        `**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
+        `**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "old_map") {
        const mapInfo = chosenMapOldMap
         ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`
@@ -1125,7 +1095,7 @@ module.exports = {
        description =
         `**${character.name}** found some ruins in **${location}**!\n\n` +
         "**Yes** — Explore the ruins (cost 3 stamina; counts toward discovery limit).\n" +
-        `**No** — Leave for later. Won't be recorded as a discovery. Use </explore roll:${EXPLORE_CMD_ID}> to continue.`;
+        `**No** — Leave for later. Won't be recorded as a discovery. Use </explore roll:${getExploreCommandId()}> to continue.`;
       } else if (outcomeType === "relic") {
        title = `🗺️ **Expedition: Relic found!**`;
        description =
@@ -1138,7 +1108,7 @@ module.exports = {
         `**${character.name}** stumbled across something strange in **${location}**.\n\n` +
         "You stumble across an interesting looking stump with roots covered in talismans, do you have the means to cleanse them? More info about grottos can be found [here](https://www.rootsofthewild.com/grottos).\n\n" +
         "**Yes** — Mark it on the map for later (counts toward this square's 3 discovery limit).\n" +
-        `**No** — Don't mark it. Won't be recorded as a discovery. Continue with </explore roll:${EXPLORE_CMD_ID}>.`;
+        `**No** — Don't mark it. Won't be recorded as a discovery. Continue with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "camp") {
        title = `🗺️ **Expedition: Found a safe space and rested!**`;
        description = `**${character.name}** found a safe space in **${location}** and rested! Recovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
@@ -1232,7 +1202,7 @@ module.exports = {
           const noStaminaEmbed = new EmbedBuilder()
            .setTitle("❌ Not enough stamina to explore the ruins")
            .setColor(regionColors[freshParty.region] || "#00ff99")
-           .setDescription("Party has " + partyTotalStamina + " 🟩 (need 3). Continue with </explore roll:" + EXPLORE_CMD_ID + ">.")
+           .setDescription("Party has " + partyTotalStamina + " 🟩 (need 3). Continue with </explore roll:" + getExploreCommandId() + ">.")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
           await i.followUp({ embeds: [noStaminaEmbed] }).catch(() => {});
@@ -1291,7 +1261,7 @@ module.exports = {
          let ruinsFailedNotifyEmbed = null;
 
          if (ruinsOutcome === "chest") {
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
           progressMsg += "Found a chest (open for 1 stamina).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else if (ruinsOutcome === "camp") {
@@ -1317,11 +1287,11 @@ module.exports = {
           } catch (mapErr) {
            logger.warn("EXPLORE", `Failed to mark ruin-rest on map: ${mapErr?.message || mapErr}`);
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a camp spot; recovered 1 stamina.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost, staminaRecovered: recover });
          } else if (ruinsOutcome === "landmark") {
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found nothing special in the ruins—but an interesting landmark. It's been marked on the map.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found nothing special in the ruins—but an interesting landmark. It's been marked on the map.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found an interesting landmark (marked on map).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else if (ruinsOutcome === "relic") {
@@ -1336,7 +1306,7 @@ module.exports = {
           } catch (err) {
            logger.error("EXPLORE", `createRelic error (ruins): ${err?.message || err}`);
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
           pushProgressLog(freshParty, ruinsCharacter.name, "relic", `Found a relic in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
@@ -1372,7 +1342,7 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += `Found ${mapItemName}; saved to map collection. Take to Inariko Library to decipher.`;
           lootForLog = { itemName: mapItemName, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
@@ -1407,7 +1377,7 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins star_fragment" });
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a Star Fragment.";
           lootForLog = { itemName: "Star Fragment", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
@@ -1419,7 +1389,7 @@ module.exports = {
            ruinsCharacter.blightEffects = { rollMultiplier: 1.0, noMonsters: false, noGathering: false };
           }
           await ruinsCharacter.save();
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. You're blighted! Use the </blight:...> command for healing and info.\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. You're blighted! Use the </blight:...> command for healing and info.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found blight; character is now blighted.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else {
@@ -1430,7 +1400,7 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins goddess_plume" });
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Excavated a Goddess Plume.";
           lootForLog = { itemName: "Goddess Plume", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
@@ -1498,7 +1468,7 @@ module.exports = {
               const noStamEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
                .setColor(regionColors[fp?.region] || "#00ff99")
-               .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
+               .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or camp first.")
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
               await resultMsg.edit({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
@@ -1509,7 +1479,7 @@ module.exports = {
               const openedEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
                .setColor(regionColors[fp?.region] || "#00ff99")
-               .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+               .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest opened!** Continue with </explore roll:${getExploreCommandId()}>.`)
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(openedEmbed, { party: fp, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
               await resultMsg.edit({ embeds: [openedEmbed], components: [chestDisabledRow] }).catch(() => {});
@@ -1520,7 +1490,7 @@ module.exports = {
              const skipEmbed = new EmbedBuilder()
               .setTitle(resultTitle)
               .setColor(regionColors[finalParty?.region] || "#00ff99")
-              .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+              .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${getExploreCommandId()}>.`)
               .setImage(regionImages[finalParty?.region] || EXPLORATION_IMAGE_FALLBACK);
              addExplorationStandardFields(skipEmbed, { party: finalParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
              await resultMsg.edit({ embeds: [skipEmbed], components: [chestDisabledRow] }).catch(() => {});
@@ -1574,7 +1544,7 @@ module.exports = {
            const noStaminaEmbed = new EmbedBuilder()
             .setTitle("🗺️ **Expedition: Chest found!**")
             .setColor(regionColors[freshParty?.region] || "#00ff99")
-            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
+            .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or camp first.")
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
            await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
@@ -1585,7 +1555,7 @@ module.exports = {
            const openedEmbed = new EmbedBuilder()
             .setTitle("🗺️ **Expedition: Chest opened!**")
             .setColor(regionColors[freshParty?.region] || "#00ff99")
-            .setDescription(description.split("\n\n")[0] + `\n\n**Chest opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+            .setDescription(description.split("\n\n")[0] + `\n\n**Chest opened!** Continue with </explore roll:${getExploreCommandId()}>.`)
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(openedEmbed, { party: freshParty, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
            await msg.edit({ embeds: [openedEmbed], components: [disabledRow] }).catch(() => {});
@@ -1600,7 +1570,7 @@ module.exports = {
          const skipEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Expedition: Chest wasn't opened!**")
           .setColor(regionColors[party.region] || "#00ff99")
-          .setDescription(description.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+          .setDescription(description.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${getExploreCommandId()}>.`)
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
          addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
          await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
@@ -1622,8 +1592,8 @@ module.exports = {
           .setDescription(
            description.split("\n\n")[0] + "\n\n" +
            (isYes
-             ? `✅ **You marked it on the map for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`
-             : `✅ **You didn't mark it.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+             ? `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`
+             : `✅ **You didn't mark it.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${getExploreCommandId()}>.`)
           )
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
          addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
@@ -1646,8 +1616,8 @@ module.exports = {
           .setDescription(
            description.split("\n\n")[0] + "\n\n" +
            (isYes
-             ? `✅ **You marked it on the map for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`
-             : `✅ **You didn't mark it.** Won't be recorded as a discovery. Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+             ? `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`
+             : `✅ **You didn't mark it.** Won't be recorded as a discovery. Continue with </explore roll:${getExploreCommandId()}>.`)
           )
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
          addExplorationStandardFields(grottoEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
@@ -1680,7 +1650,7 @@ module.exports = {
           "\n\n" +
           (isYes
            ? "✅ **You'll attempt to cleanse the grotto!** (Cost 1 goddess plume + 1 stamina — grotto flow TBD.)"
-           : `✅ **You marked it on the map for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+           : `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`)
          );
         }
         addExplorationStandardFields(choiceEmbed, {
@@ -2047,7 +2017,7 @@ module.exports = {
        if (outcome.hearts > 0 && character.currentHearts === 0) {
         embed.addFields({
          name: "💀 __Party member KO'd__",
-         value: `**${character.name}** is KO'd! They had **${outcome.hearts}** heart(s). The party loses **${outcome.hearts}** heart(s). A fairy or tonic must be used to revive them (use </explore item:${EXPLORE_CMD_ID}> when the expedition prompts you).`,
+         value: `**${character.name}** is KO'd! They had **${outcome.hearts}** heart(s). The party loses **${outcome.hearts}** heart(s). A fairy or tonic must be used to revive them (use </explore item:${getExploreCommandId()}> when the expedition prompts you).`,
          inline: false,
         });
        }
@@ -2100,125 +2070,6 @@ module.exports = {
       "An error occurred while processing the roll command."
      );
     }
-
-    // ------------------- Rest Command -------------------
-   } else if (subcommand === "rest") {
-    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
-    const userId = interaction.user.id;
-
-    const party = await Party.findActiveByPartyId(expeditionId);
-    if (!party) {
-     return interaction.editReply("Expedition ID not found.");
-    }
-
-    const character = await Character.findOne({ name: characterName, userId });
-    if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
-    }
-
-    if (party.status !== "started") {
-     return interaction.editReply("This expedition has not been started yet.");
-    }
-
-    const characterIndex = party.characters.findIndex(
-     (char) => char.name === characterName
-    );
-
-    if (characterIndex === -1) {
-     return interaction.editReply(
-      "Your character is not part of this expedition."
-     );
-    }
-
-    if (party.currentTurn !== characterIndex) {
-     const nextCharacter = party.characters[party.currentTurn];
-     const notYourTurnEmbed = new EmbedBuilder()
-       .setTitle("⏳ Not Your Turn")
-       .setColor(regionColors[party.region] || "#FF9800")
-       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-     return interaction.editReply({ embeds: [notYourTurnEmbed] });
-    }
-
-    if (
-     party.quadrantState !== "explored" &&
-     party.quadrantState !== "secured"
-    ) {
-     return interaction.editReply(
-      "You can only rest in explored or secured quadrants."
-     );
-    }
-
-    const staminaCost = 3;
-    if (party.totalStamina < staminaCost) {
-     const location = `${party.square} ${party.quadrant}`;
-     return interaction.editReply({
-      embeds: [createStuckInWildEmbed(party, location)],
-     });
-    }
-
-    // Apply rest cost to current character so party total stays correct
-    const restCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
-    character.currentStamina = Math.max(0, restCharStamina - staminaCost);
-    await character.save();
-    party.characters[characterIndex].currentStamina = character.currentStamina;
-    party.markModified("characters");
-
-    let revivedCount = 0;
-    for (let i = 0; i < party.characters.length; i++) {
-     const partyChar = party.characters[i];
-     const char = await Character.findById(partyChar._id);
-     if (char) {
-      if (char.currentHearts === 0) revivedCount++;
-      char.currentHearts = char.maxHearts;
-      await char.save();
-      party.characters[i].currentHearts = char.currentHearts;
-     }
-    }
-    party.markModified("characters");
-    party.totalHearts = party.characters.reduce(
-     (sum, c) => sum + (c.currentHearts ?? 0),
-     0
-    );
-    party.totalStamina = party.characters.reduce(
-     (sum, c) => sum + (c.currentStamina ?? 0),
-     0
-    );
-
-    pushProgressLog(
-     party,
-     character.name,
-     "rest",
-     `Rested at ${party.square} ${party.quadrant}. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} stamina)`,
-     undefined,
-     { staminaLost: staminaCost }
-    );
-    party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-    await party.save();
-
-    const nextCharacterRest = party.characters[party.currentTurn];
-    const locationRest = `${party.square} ${party.quadrant}`;
-    const embed = new EmbedBuilder()
-     .setTitle(`🗺️ **Expedition: Rest at ${locationRest}**`)
-     .setColor(regionColors[party.region] || "#4CAF50")
-     .setDescription(
-      `${character.name} rested. All party hearts healed.${revivedCount > 0 ? ` Revived ${revivedCount} KO'd member(s).` : ""} (-${staminaCost} party stamina)`
-     )
-     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-    addExplorationStandardFields(embed, {
-      party,
-      expeditionId,
-      location: locationRest,
-      nextCharacter: nextCharacterRest ?? null,
-      showNextAndCommands: true,
-      showRestSecureMove: false,
-    });
-
-    await interaction.editReply({ embeds: [embed] });
-    await interaction.followUp({ content: `<@${nextCharacterRest.userId}> it's your turn now` });
 
     // ------------------- Secure Quadrant Command -------------------
    } else if (subcommand === "secure") {
@@ -2611,7 +2462,17 @@ module.exports = {
      targetSquareNorm === String(startPoint.square || "").trim().toUpperCase() &&
      String(newLocation.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").trim().toUpperCase();
 
-    if (targetSquareNorm !== currentSquareNorm && !isMovingToStart) {
+    // Exception: allow moving to a square that is fully explored (retreat/backtrack - "go back the way you came")
+    let isMovingToFullyExploredSquare = false;
+    if (destMapSquare && destMapSquare.quadrants && destMapSquare.quadrants.length) {
+     const targetUnexplored = destMapSquare.quadrants.filter((q) => {
+      const s = (q.status || "").toLowerCase();
+      return s !== "inaccessible" && s !== "explored" && s !== "secured";
+     });
+     isMovingToFullyExploredSquare = targetUnexplored.length === 0;
+    }
+
+    if (targetSquareNorm !== currentSquareNorm && !isMovingToStart && !isMovingToFullyExploredSquare) {
      const currentMapSquare = await Square.findOne({ squareId: currentSquare });
      if (currentMapSquare && currentMapSquare.quadrants && currentMapSquare.quadrants.length) {
       const unexplored = currentMapSquare.quadrants
@@ -2943,109 +2804,6 @@ module.exports = {
      await interaction.followUp({ content: `<@${nextCharacterItem.userId}> it's your turn now` }).catch(() => {});
     }
 
-    // ------------------- Retreat to Village -------------------
-   } else if (subcommand === "retreat") {
-    const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
-    const userId = interaction.user.id;
-
-    const party = await Party.findActiveByPartyId(expeditionId);
-    if (!party) {
-     return interaction.editReply("Expedition ID not found.");
-    }
-
-    const character = await Character.findOne({ name: characterName, userId });
-    if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
-    }
-
-    if (interaction.user.id !== party.leaderId) {
-     return interaction.editReply(
-      "Only the expedition leader can order a retreat."
-     );
-    }
-
-    const regionToVillage = {
-     eldin: "rudania",
-     lanayru: "inariko",
-     faron: "vhintl",
-    };
-
-    const targetVillage = regionToVillage[party.region];
-
-    // Divide remaining hearts and stamina evenly among the group (set each to their share, capped at max)
-    const memberCount = (party.characters || []).length;
-    const remainingHearts = Math.max(0, party.totalHearts ?? 0);
-    const remainingStamina = Math.max(0, party.totalStamina ?? 0);
-    const splitLinesRetreat = [];
-    if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
-     const heartsPerMember = Math.floor(remainingHearts / memberCount);
-     const heartsRemainder = remainingHearts % memberCount;
-     const staminaPerMember = Math.floor(remainingStamina / memberCount);
-     const staminaRemainder = remainingStamina % memberCount;
-     for (let idx = 0; idx < party.characters.length; idx++) {
-      const partyCharacter = party.characters[idx];
-      const char = await Character.findById(partyCharacter._id);
-      if (char) {
-       const heartShare = heartsPerMember + (idx < heartsRemainder ? 1 : 0);
-       const staminaShare = staminaPerMember + (idx < staminaRemainder ? 1 : 0);
-       const maxH = char.maxHearts ?? 0;
-       const maxS = char.maxStamina ?? 0;
-       char.currentHearts = Math.min(maxH, heartShare);
-       char.currentStamina = Math.min(maxS, staminaShare);
-       char.currentVillage = targetVillage;
-       await char.save();
-       const name = partyCharacter.name || char.name || "Unknown";
-       splitLinesRetreat.push(`${name}: ${heartShare} ❤, ${staminaShare} stamina`);
-      }
-     }
-    } else if (memberCount > 0) {
-     for (const partyCharacter of party.characters) {
-      const char = await Character.findById(partyCharacter._id);
-      if (char) {
-       char.currentVillage = targetVillage;
-       await char.save();
-      }
-     }
-    } else {
-     for (const partyCharacter of party.characters) {
-      const char = await Character.findById(partyCharacter._id);
-      if (char) {
-       char.currentVillage = targetVillage;
-       await char.save();
-      }
-     }
-    }
-
-    const villageLabelRetreat = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
-    const memberNamesRetreat = (party.characters || []).map((c) => c.name).filter(Boolean);
-    const membersTextRetreat = memberNamesRetreat.length > 0 ? memberNamesRetreat.join(", ") : "—";
-    pushProgressLog(party, character.name, "retreat", `Expedition retreated. Returned to ${villageLabelRetreat}: ${membersTextRetreat}.`, undefined, undefined);
-
-    party.status = "completed";
-    await party.save();
-
-    const retreatExpeditionId = party.partyId;
-    const retreatReportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz";
-    const retreatReportUrl = `${retreatReportBaseUrl.replace(/\/$/, "")}/explore/${retreatExpeditionId}`;
-    const splitSectionRetreat = splitLinesRetreat.length > 0
-      ? `**Split (remaining hearts & stamina):**\n${splitLinesRetreat.join("\n")}\n\n`
-      : "No remaining hearts or stamina to divide.\n\n";
-    const embed = new EmbedBuilder()
-     .setTitle(`🗺️ **Expedition: Returned Home**`)
-     .setColor(regionColors[party.region] || "#FF5722")
-     .setDescription(
-      `The expedition has ended.\n\n` +
-      `**Returned to ${villageLabelRetreat}:**\n${membersTextRetreat}\n\n` +
-      splitSectionRetreat +
-      `**View the expedition report here:** [Open expedition report](${retreatReportUrl})`
-     )
-     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-
-    await interaction.editReply({ embeds: [embed] });
-
     // ------------------- End Expedition (at starting quadrant) -------------------
    } else if (subcommand === "end") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
@@ -3081,7 +2839,7 @@ module.exports = {
      String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
     if (!isAtStartQuadrant) {
      return interaction.editReply(
-      "You can only end the expedition when at the starting quadrant for your region. Use **Retreat** to leave from elsewhere, or **Move** to return to the start first."
+      "You can only end the expedition when at the starting quadrant for your region. Use **Move** to return to the start first."
      );
     }
 

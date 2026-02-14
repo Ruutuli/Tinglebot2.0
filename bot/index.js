@@ -472,7 +472,22 @@ async function initializeClient() {
         logger.section('Command Registration');
         logger.divider();
         await registerCommands(client);
-        
+        // Fetch explore command ID for clickable slash mentions (IDs can change on re-register)
+        try {
+          const guildId = process.env.GUILD_ID;
+          if (guildId) {
+            const guild = await client.guilds.fetch(guildId);
+            const commands = await guild.commands.fetch();
+            const exploreCmd = commands.find((c) => c.name === "explore");
+            if (exploreCmd) {
+              const { setExploreCommandId } = require("./embeds/embeds");
+              setExploreCommandId(exploreCmd.id);
+              logger.info("COMMANDS", `Explore command ID updated to ${exploreCmd.id} (clickable mentions)`);
+            }
+          }
+        } catch (err) {
+          logger.warn("COMMANDS", `Could not fetch explore command ID: ${err?.message || err}`);
+        }
         logger.divider();
         
         // ------------------- System Modules ------------------

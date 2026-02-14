@@ -315,6 +315,41 @@ export async function discordApiRequest<T = unknown>(
   }
 }
 
+/** Fallback explore command ID when Discord API fetch fails */
+const EXPLORE_CMD_ID_FALLBACK = "1471454947089580107";
+
+let exploreCmdIdCache: { id: string; expiresAt: number } | null = null;
+const EXPLORE_CMD_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Fetch the /explore command ID from Discord for clickable slash mentions.
+ * Command IDs can change when commands are re-registered.
+ */
+export async function getExploreCommandId(): Promise<string> {
+  const clientId = process.env.CLIENT_ID || process.env.DISCORD_CLIENT_ID;
+  const guildId = process.env.GUILD_ID;
+  if (!clientId || !guildId) return EXPLORE_CMD_ID_FALLBACK;
+
+  const now = Date.now();
+  if (exploreCmdIdCache && exploreCmdIdCache.expiresAt > now) {
+    return exploreCmdIdCache.id;
+  }
+
+  const commands = await discordApiRequest<Array<{ id: string; name: string }>>(
+    `applications/${clientId}/guilds/${guildId}/commands`,
+    "GET"
+  );
+  const explore = commands?.find((c) => c.name === "explore");
+  if (explore?.id) {
+    exploreCmdIdCache = {
+      id: explore.id,
+      expiresAt: now + EXPLORE_CMD_CACHE_TTL_MS,
+    };
+    return explore.id;
+  }
+  return EXPLORE_CMD_ID_FALLBACK;
+}
+
 /**
  * Add a role to a guild member. Returns the Discord API error message on failure
  * so callers can log it (e.g. role hierarchy, missing permission).
