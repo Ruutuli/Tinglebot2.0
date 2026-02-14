@@ -1190,8 +1190,29 @@ export default function ExplorePartyPage() {
               Back to Explore
             </Link>
           </div>
+          {/* Start expedition error modal */}
           {startExpeditionError && (
-            <p className="mb-2 text-sm text-red-400">{startExpeditionError}</p>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="start-error-title">
+              <div className="absolute inset-0 bg-black/60" onClick={() => setStartExpeditionError(null)} aria-hidden />
+              <div className="relative w-full max-w-md rounded-2xl border border-red-500/50 bg-[var(--botw-warm-black)] p-5 shadow-xl">
+                <div className="mb-4 flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/20 text-red-400">
+                    <i className="fa-solid fa-circle-exclamation text-lg" aria-hidden />
+                  </span>
+                  <h2 id="start-error-title" className="text-lg font-bold text-[var(--totk-ivory)]">Couldn&apos;t start expedition</h2>
+                </div>
+                <p className="mb-5 text-sm text-[var(--botw-pale)]">{startExpeditionError}</p>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setStartExpeditionError(null)}
+                    className="rounded-xl border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2.5 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/40"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
           {/* Hero: banner + title + meta */}
           <header className="relative mb-6 overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/60 shadow-lg">

@@ -111,23 +111,40 @@ function normalizeExpeditionId(value) {
  return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
 }
 
-async function handleExplorationChestOpen(interaction, expeditionId, location) {
+async function handleExplorationChestOpen(interaction, expeditionId, location, openerCharacterIndex) {
  const party = await Party.findActiveByPartyId(expeditionId);
  if (!party) return null;
  if (party.totalStamina < 1) return { notEnoughStamina: true };
 
- // Deduct from the character who just acted (found the chest) - currentTurn was already advanced
- const characterIndex = (party.currentTurn - 1 + party.characters.length) % party.characters.length;
- const partyChar = party.characters[characterIndex];
+ const n = party.characters.length;
+ if (!n) return null;
+ const openerIndex = typeof openerCharacterIndex === "number" && openerCharacterIndex >= 0 && openerCharacterIndex < n
+  ? openerCharacterIndex
+  : (party.currentTurn - 1 + n) % n;
+ const partyChar = party.characters[openerIndex];
  const character = await Character.findById(partyChar._id);
  if (!character) return null;
 
  const staminaCost = 1;
- character.currentStamina = Math.max(0, (character.currentStamina ?? 0) - staminaCost);
- await character.save();
- party.characters[characterIndex].currentStamina = character.currentStamina;
+ let remainingCost = staminaCost;
+ const order = [openerIndex, ...party.characters.map((_, idx) => idx).filter((idx) => idx !== openerIndex)];
+ for (const idx of order) {
+  if (remainingCost <= 0) break;
+  const slot = party.characters[idx];
+  const charDoc = await Character.findById(slot._id);
+  if (!charDoc) continue;
+  const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
+  const take = Math.min(remainingCost, have);
+  if (take > 0) {
+   charDoc.currentStamina = Math.max(0, have - take);
+   await charDoc.save();
+   slot.currentStamina = charDoc.currentStamina;
+   remainingCost -= take;
+  }
+ }
+ party.markModified("characters");
  party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
- party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+ party.currentTurn = (party.currentTurn + 1) % n;
  await party.save();
 
  const allItems = await fetchAllItems();
@@ -1394,12 +1411,12 @@ module.exports = {
 
          if (ruinsOutcome === "chest") {
           const chestRow = new ActionRowBuilder().addComponents(
-           new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}`).setLabel("Yes").setStyle(ButtonStyle.Success),
-           new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}`).setLabel("No").setStyle(ButtonStyle.Secondary)
+           new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}|${ruinsCharIndex}`).setLabel("Yes").setStyle(ButtonStyle.Success),
+           new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}|${ruinsCharIndex}`).setLabel("No").setStyle(ButtonStyle.Secondary)
           );
           const chestDisabledRow = new ActionRowBuilder().addComponents(
-           new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}`).setLabel("Yes").setStyle(ButtonStyle.Success).setDisabled(true),
-           new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}`).setLabel("No").setStyle(ButtonStyle.Secondary).setDisabled(true)
+           new ButtonBuilder().setCustomId(`explore_chest_yes|${expeditionId}|${ruinsCharIndex}`).setLabel("Yes").setStyle(ButtonStyle.Success).setDisabled(true),
+           new ButtonBuilder().setCustomId(`explore_chest_no|${expeditionId}|${ruinsCharIndex}`).setLabel("No").setStyle(ButtonStyle.Secondary).setDisabled(true)
           );
           const resultMsg = await i.followUp({ embeds: [resultEmbed], components: [chestRow], fetchReply: true }).catch(() => null);
           if (resultMsg) {
@@ -1410,9 +1427,24 @@ module.exports = {
            });
            chestCollector.on("collect", async (ci) => {
             await ci.deferUpdate();
-            if (ci.customId.endsWith("_yes")) {
-             const result = await handleExplorationChestOpen(ci, expeditionId, location);
-             if (result?.notEnoughStamina) {
+            if (ci.customId.endsWith("_yes") || ci.customId.includes("_yes|")) {
+             const chestParts = ci.customId.split("|");
+             const chestOpenerIndex = chestParts.length >= 3 && /^\d+$/.test(chestParts[2])
+              ? parseInt(chestParts[2], 10)
+              : ruinsCharIndex;
+             const result = await handleExplorationChestOpen(ci, expeditionId, location, chestOpenerIndex);
+             if (result === null) {
+              const fp = await Party.findActiveByPartyId(expeditionId);
+              const errEmbed = new EmbedBuilder()
+               .setTitle("❌ **Couldn't open chest**")
+               .setColor("#b91c1c")
+               .setDescription("Something went wrong opening the chest. Try </explore roll> to continue.")
+               .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
+              addExplorationStandardFields(errEmbed, { party: fp || {}, expeditionId, location, nextCharacter: fp?.characters?.[fp.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+              await ci.update({ embeds: [errEmbed], components: [chestDisabledRow] }).catch(() => {});
+              return;
+             }
+             if (result.notEnoughStamina) {
               const fp = await Party.findActiveByPartyId(expeditionId);
               const noStamEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
@@ -1472,8 +1504,23 @@ module.exports = {
 
         if (outcomeType === "chest") {
          if (isYes) {
-          const result = await handleExplorationChestOpen(i, expeditionId, location);
-          if (result?.notEnoughStamina) {
+          const chestParts = i.customId.split("|");
+          const chestOpenerIndex = chestParts.length >= 3 && /^\d+$/.test(chestParts[2])
+           ? parseInt(chestParts[2], 10)
+           : undefined;
+          const result = await handleExplorationChestOpen(i, expeditionId, location, chestOpenerIndex);
+          if (result === null) {
+           const freshParty = await Party.findActiveByPartyId(expeditionId);
+           const errEmbed = new EmbedBuilder()
+            .setTitle("❌ **Couldn't open chest**")
+            .setColor("#b91c1c")
+            .setDescription("Something went wrong opening the chest. Try </explore roll> to continue.")
+            .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
+           addExplorationStandardFields(errEmbed, { party: freshParty || {}, expeditionId, location, nextCharacter: freshParty?.characters?.[freshParty.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+           await i.update({ embeds: [errEmbed], components: [disabledRow] }).catch(() => {});
+           return;
+          }
+          if (result.notEnoughStamina) {
            const freshParty = await Party.findActiveByPartyId(expeditionId);
            const noStaminaEmbed = new EmbedBuilder()
             .setTitle(title)
