@@ -38,6 +38,7 @@ const {
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
+const logger = require("@/utils/logger.js");
 
 /**
  * Resolve loot for Chuchu monsters: always give Chuchu Jelly (or elemental variant)
@@ -148,6 +149,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  await party.save();
 
  const allItems = await fetchAllItems();
+ logger.info("EXPLORE", `Chest open: location=${location}, allItems=${allItems?.length ?? 0}`);
  const lootLines = [];
  for (const pc of party.characters) {
   const char = await Character.findById(pc._id);
@@ -162,11 +164,13 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
      locationFound: location,
      appraised: false,
     });
+    logger.info("EXPLORE", `Chest item (relic): character=${char.name}, item=Unknown Relic`);
     lootLines.push(`${char.name}: 🔸 Unknown Relic`);
    } catch (err) {
-    console.error("[explore.js] createRelic error:", err?.message || err);
+    logger.error("EXPLORE", `createRelic error (chest): ${err?.message || err}`);
     if (allItems && allItems.length > 0) {
      const fallback = allItems[Math.floor(Math.random() * allItems.length)];
+     logger.info("EXPLORE", `Chest item (relic fallback): character=${char.name}, item=${fallback.itemName}`);
      try {
       await addItemInventoryDatabase(char._id, fallback.itemName, 1, interaction, "Exploration Chest");
       lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName}`);
@@ -175,10 +179,12 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
    }
   } else {
    if (!allItems || allItems.length === 0) {
+    logger.warn("EXPLORE", `Chest: no items available for ${char.name}`);
     lootLines.push(`${char.name}: (no items available)`);
     continue;
    }
    const item = allItems[Math.floor(Math.random() * allItems.length)];
+   logger.info("EXPLORE", `Chest item: character=${char.name}, item=${item.itemName}`);
    try {
     await addItemInventoryDatabase(char._id, item.itemName, 1, interaction, "Exploration Chest");
     lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName}`);
@@ -190,13 +196,33 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  }
 
  const nextCharacter = party.characters[party.currentTurn];
- const lootValue = lootLines.length > 0 ? lootLines.join("\n") : "Nothing found.";
  const lootEmbed = new EmbedBuilder()
-  .setTitle("📦 **Chest loot**")
-  .setDescription(`Here is what was in the chest!\n\n${lootValue}\n\n(-1 stamina)`)
+  .setTitle("📦 **Chest opened!**")
   .setColor(regionColors[party.region] || "#00ff99")
   .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
- pushProgressLog(party, character.name, "chest_open", `Opened chest in ${location}; loot: ${lootLines.join("; ")}.`, undefined, { staminaLost: staminaCost });
+ if (lootLines.length > 0) {
+  lootEmbed.addFields({
+   name: "Loot",
+   value: lootLines.map((line) => `• ${line}`).join("\n"),
+   inline: false,
+  });
+ } else {
+  lootEmbed.setDescription("Nothing found inside.");
+ }
+ lootEmbed.setFooter({ text: "−1 stamina" });
+ addExplorationStandardFields(lootEmbed, {
+  party,
+  expeditionId,
+  location,
+  nextCharacter: nextCharacter ?? null,
+  showNextAndCommands: true,
+  showRestSecureMove: false,
+  ruinRestRecovered: 0,
+ });
+ const lootSummary = lootLines.length > 0
+  ? lootLines.map((line) => line.trim()).join(" · ")
+  : "Nothing found.";
+ pushProgressLog(party, character.name, "chest_open", `Opened chest in **${location}**. **Found:** ${lootSummary}`, undefined, { staminaLost: staminaCost });
  return { lootEmbed, party, nextCharacter };
 }
 
@@ -251,6 +277,19 @@ function countSpecialEventsInSquare(party, square) {
   if (m && m[1] && String(m[1]).trim().toUpperCase() === sq) count += 1;
  }
  return count;
+}
+
+/** Each square can have at most one grotto. Returns true if this square already has a grotto. */
+function hasGrottoInSquare(party, square) {
+ if (!party.progressLog || !Array.isArray(party.progressLog)) return false;
+ const sq = String(square || "").trim().toUpperCase();
+ if (!sq) return false;
+ for (const e of party.progressLog) {
+  if (e.outcome !== "grotto") continue;
+  const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
+  if (m && m[1] && String(m[1]).trim().toUpperCase() === sq) return true;
+ }
+ return false;
 }
 
 function pushProgressLog(party, characterName, outcome, message, loot, costs, at) {
@@ -349,7 +388,7 @@ async function handleExpeditionFailed(party, interaction) {
      { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
      { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
      { arrayFilters: [{ "q.quadrantId": quadrantId }] }
-    ).catch((err) => console.warn("[explore.js] Failed to reset quadrant to unexplored:", err?.message));
+    ).catch((err) => logger.warn("EXPLORE", `Failed to reset quadrant to unexplored: ${err?.message}`));
    }
   }
  }
@@ -551,9 +590,7 @@ module.exports = {
    await interaction.deferReply();
 
    const subcommand = interaction.options.getSubcommand();
-   console.log(
-    `Executing subcommand: ${subcommand}, User ID: ${interaction.user.id}`
-   );
+   logger.info("EXPLORE", `Executing subcommand: ${subcommand}, User ID: ${interaction.user.id}`);
 
    // ------------------- Roll for Encounter -------------------
    if (subcommand === "roll") {
@@ -640,7 +677,7 @@ module.exports = {
         party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
         party.markModified("exploredQuadrantsThisRun");
         } catch (mapErr) {
-         console.error("[explore.js] Failed to mark quadrant explored on roll sync:", mapErr.message);
+         logger.error("EXPLORE", `Failed to mark quadrant explored on roll sync: ${mapErr.message}`);
         }
         party.quadrantState = "explored";
         party.markModified("quadrantState");
@@ -751,14 +788,14 @@ module.exports = {
      const location = `${party.square} ${party.quadrant}`;
 
      // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto
-     // Reroll if we get a special place (monster_camp/ruins/grotto) and this square already has 3
+     // Reroll if: square has 3 discoveries; or grotto and square already has a grotto (1 grotto max per square)
      function rollOutcome() {
       const r = Math.random();
       if (r < 0.45) return "monster";
       if (r < 0.67) return "item";
       if (r < 0.83) return "explored";
       if (r < 0.86) return "fairy";
-      if (r < 0.87) return "chest";
+      if (r < 0.87) return "chest"; 
       if (r < 0.88) return "old_map";
       if (r < 0.90) return "ruins";
       if (r < 0.905) return "relic";
@@ -771,6 +808,10 @@ module.exports = {
      for (;;) {
       if (!SPECIAL_OUTCOMES.includes(outcomeType)) break;
       if (specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
+       outcomeType = rollOutcome();
+       continue;
+      }
+      if (outcomeType === "grotto" && hasGrottoInSquare(party, party.square)) {
        outcomeType = rollOutcome();
        continue;
       }
@@ -806,9 +847,9 @@ module.exports = {
          { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
         );
         if (result.matchedCount === 0) {
-         console.warn("[explore.js] Map update: no square found for", mapSquareId, "quadrant", mapQuadrantId);
+         logger.warn("EXPLORE", `Map update: no square found for ${mapSquareId} quadrant ${mapQuadrantId}`);
         } else if (result.modifiedCount === 0) {
-         console.warn("[explore.js] Map update: square found but quadrant not updated for", mapSquareId, mapQuadrantId);
+         logger.warn("EXPLORE", `Map update: square found but quadrant not updated for ${mapSquareId} ${mapQuadrantId}`);
         } else {
          if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
          party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
@@ -817,7 +858,7 @@ module.exports = {
         }
        }
       } catch (mapErr) {
-       console.error("[explore.js] Failed to update map quadrant status:", mapErr.message);
+       logger.error("EXPLORE", `Failed to update map quadrant status: ${mapErr.message}`);
       }
 
       const mapSquareForBlight = await Square.findOne({ squareId: party.square });
@@ -986,7 +1027,7 @@ module.exports = {
          appraised: false,
         });
        } catch (err) {
-        console.error("[explore.js] createRelic error (roll outcome):", err?.message || err);
+        logger.error("EXPLORE", `createRelic error (roll outcome): ${err?.message || err}`);
        }
        const relicUserIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
        const relicDmEmbed = new EmbedBuilder()
@@ -1037,19 +1078,23 @@ module.exports = {
           : undefined;
       const at = new Date();
       // Ruins: only add to map and reportable log when user chooses Yes (done in button handler)
-      if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType) && outcomeType !== "ruins") {
+      // Monster camp: only add when user chooses Yes (No = don't mark, won't count toward 3-per-square)
+      if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType) && outcomeType !== "ruins" && outcomeType !== "monster_camp") {
        await pushDiscoveryToMap(party, outcomeType, at, interaction.user?.id);
       }
       const progressOutcome = outcomeType === "ruins" ? "ruins_found" : outcomeType;
-      pushProgressLog(
-       party,
-       character.name,
-       progressOutcome,
-       progressMessages[outcomeType] || `Found something in ${location}.`,
-       lootForProgressLog,
-       chestRuinsCosts,
-       at
-      );
+      // Monster camp: defer progressLog until button choice (Yes = monster_camp counts, No = monster_camp_skipped doesn't)
+      if (outcomeType !== "monster_camp") {
+       pushProgressLog(
+        party,
+        character.name,
+        progressOutcome,
+        progressMessages[outcomeType] || `Found something in ${location}.`,
+        lootForProgressLog,
+        chestRuinsCosts,
+        at
+       );
+      }
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextCharacter = party.characters[party.currentTurn];
@@ -1059,8 +1104,9 @@ module.exports = {
        title = `🗺️ **Expedition: Monster Camp found!**`;
        description =
         `**${character.name}** found something unsettling in **${location}**.\n\n` +
-        "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there. Report it back to the town hall to have it marked on the map for later.\n\n" +
-        "↳ **Continue** ➾ See **Commands** below to take your turn.";
+        "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there.\n\n" +
+        "**Yes** — Mark it on the map for later (counts toward this square's 3 discovery limit).\n" +
+        `**No** — Don't mark it. Won't be recorded as a discovery. Continue with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
        description =
@@ -1114,7 +1160,7 @@ module.exports = {
         ruinRestRecovered,
       });
 
-      const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest";
+      const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest" || outcomeType === "monster_camp";
       let components = [];
       if (isYesNoChoice) {
        const row = new ActionRowBuilder().addComponents(
@@ -1160,10 +1206,10 @@ module.exports = {
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
         );
+        await msg.edit({ components: [disabledRow] }).catch(() => {});
 
         if (outcomeType === "ruins" && isYes) {
          // Disable Yes/No buttons immediately so the original message stays with greyed-out buttons
-         await i.update({ embeds: [embed], components: [disabledRow] }).catch(() => {});
          await msg.edit({ embeds: [embed], components: [disabledRow] }).catch(() => {});
          // Ruins exploration: charge 3 stamina, then roll one of chest/camp/landmark/relic/old_map/star_fragment/blight/goddess_plume
          const freshParty = await Party.findActiveByPartyId(expeditionId);
@@ -1270,7 +1316,7 @@ module.exports = {
             );
            }
           } catch (mapErr) {
-           console.warn("[explore.js] Failed to mark ruin-rest on map:", mapErr?.message || mapErr);
+           logger.warn("EXPLORE", `Failed to mark ruin-rest on map: ${mapErr?.message || mapErr}`);
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a camp spot; recovered 1 stamina.";
@@ -1289,7 +1335,7 @@ module.exports = {
             appraised: false,
           });
           } catch (err) {
-           console.error("[explore.js] createRelic error:", err?.message || err);
+           logger.error("EXPLORE", `createRelic error (ruins): ${err?.message || err}`);
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${EXPLORE_CMD_ID}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
@@ -1321,6 +1367,7 @@ module.exports = {
          } else if (ruinsOutcome === "old_map") {
           const chosenMap = getRandomOldMap();
           const mapItemName = `Map #${chosenMap.number}`;
+          logger.info("EXPLORE", `Ruins item: outcome=old_map, character=${ruinsCharacter.name}, item=${mapItemName}`);
           try {
            await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
           } catch (err) {
@@ -1355,6 +1402,7 @@ module.exports = {
            }
           }
          } else if (ruinsOutcome === "star_fragment") {
+          logger.info("EXPLORE", `Ruins item: outcome=star_fragment, character=${ruinsCharacter.name}, item=Star Fragment`);
           try {
            await addItemInventoryDatabase(ruinsCharacter._id, "Star Fragment", 1, i, "Exploration - Ruins");
           } catch (err) {
@@ -1377,6 +1425,7 @@ module.exports = {
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { staminaLost: ruinsStaminaCost });
          } else {
           // goddess_plume
+          logger.info("EXPLORE", `Ruins item: outcome=goddess_plume, character=${ruinsCharacter.name}, item=Goddess Plume`);
           try {
            await addItemInventoryDatabase(ruinsCharacter._id, "Goddess Plume", 1, i, "Exploration - Ruins");
           } catch (err) {
@@ -1427,6 +1476,7 @@ module.exports = {
            });
            chestCollector.on("collect", async (ci) => {
             await ci.deferUpdate();
+            await resultMsg.edit({ components: [chestDisabledRow] }).catch(() => {});
             if (ci.customId.endsWith("_yes") || ci.customId.includes("_yes|")) {
              const chestParts = ci.customId.split("|");
              const chestOpenerIndex = chestParts.length >= 3 && /^\d+$/.test(chestParts[2])
@@ -1441,7 +1491,7 @@ module.exports = {
                .setDescription("Something went wrong opening the chest. Try </explore roll> to continue.")
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(errEmbed, { party: fp || {}, expeditionId, location, nextCharacter: fp?.characters?.[fp.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-              await ci.update({ embeds: [errEmbed], components: [chestDisabledRow] }).catch(() => {});
+              await resultMsg.edit({ embeds: [errEmbed], components: [chestDisabledRow] }).catch(() => {});
               return;
              }
              if (result.notEnoughStamina) {
@@ -1452,7 +1502,7 @@ module.exports = {
                .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-              await ci.update({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
+              await resultMsg.edit({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
               return;
              }
              if (result?.lootEmbed) {
@@ -1460,10 +1510,10 @@ module.exports = {
               const openedEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
                .setColor(regionColors[fp?.region] || "#00ff99")
-               .setDescription(resultDescription.split("\n\n")[0] + `\n\n✅ **Chest was opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+               .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(openedEmbed, { party: fp, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-              await ci.update({ embeds: [openedEmbed], components: [chestDisabledRow] }).catch(() => {});
+              await resultMsg.edit({ embeds: [openedEmbed], components: [chestDisabledRow] }).catch(() => {});
               await ci.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
               if (result.nextCharacter?.userId) await ci.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
              }
@@ -1471,10 +1521,10 @@ module.exports = {
              const skipEmbed = new EmbedBuilder()
               .setTitle(resultTitle)
               .setColor(regionColors[finalParty?.region] || "#00ff99")
-              .setDescription(resultDescription.split("\n\n")[0] + `\n\n✅ **You left the chest.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+              .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
               .setImage(regionImages[finalParty?.region] || EXPLORATION_IMAGE_FALLBACK);
              addExplorationStandardFields(skipEmbed, { party: finalParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-             await ci.update({ embeds: [skipEmbed], components: [chestDisabledRow] }).catch(() => {});
+             await resultMsg.edit({ embeds: [skipEmbed], components: [chestDisabledRow] }).catch(() => {});
             }
            });
            chestCollector.on("end", (collected, reason) => {
@@ -1517,29 +1567,29 @@ module.exports = {
             .setDescription("Something went wrong opening the chest. Try </explore roll> to continue.")
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(errEmbed, { party: freshParty || {}, expeditionId, location, nextCharacter: freshParty?.characters?.[freshParty.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-           await i.update({ embeds: [errEmbed], components: [disabledRow] }).catch(() => {});
+           await msg.edit({ embeds: [errEmbed], components: [disabledRow] }).catch(() => {});
            return;
           }
           if (result.notEnoughStamina) {
            const freshParty = await Party.findActiveByPartyId(expeditionId);
            const noStaminaEmbed = new EmbedBuilder()
-            .setTitle(title)
+            .setTitle("🗺️ **Expedition: Chest found!**")
             .setColor(regionColors[freshParty?.region] || "#00ff99")
             .setDescription(description.split("\n\n")[0] + "\n\n❌ **Not enough stamina to open the chest.** Party has " + (freshParty?.totalStamina ?? 0) + " 🟩 (need 1). Continue with </explore roll> or rest/camp first.")
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-           await i.update({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
+           await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
           return;
           }
           if (result?.lootEmbed) {
            const freshParty = await Party.findActiveByPartyId(expeditionId);
            const openedEmbed = new EmbedBuilder()
-            .setTitle(title)
+            .setTitle("🗺️ **Expedition: Chest opened!**")
             .setColor(regionColors[freshParty?.region] || "#00ff99")
-            .setDescription(description.split("\n\n")[0] + `\n\n✅ **Chest was opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+            .setDescription(description.split("\n\n")[0] + `\n\n**Chest opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
             .setImage(regionImages[freshParty?.region] || EXPLORATION_IMAGE_FALLBACK);
            addExplorationStandardFields(openedEmbed, { party: freshParty, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-           await i.update({ embeds: [openedEmbed], components: [disabledRow] }).catch(() => {});
+           await msg.edit({ embeds: [openedEmbed], components: [disabledRow] }).catch(() => {});
            await i.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
            if (result.nextCharacter?.userId) {
             await i.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
@@ -1549,13 +1599,37 @@ module.exports = {
           return;
          }
          const skipEmbed = new EmbedBuilder()
-          .setTitle(title)
+          .setTitle("🗺️ **Expedition: Chest wasn't opened!**")
           .setColor(regionColors[party.region] || "#00ff99")
-          .setDescription(description.split("\n\n")[0] + `\n\n✅ **You left the chest.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+          .setDescription(description.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
          addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-         await i.update({ embeds: [skipEmbed], components: [disabledRow] });
+         await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
         return;
+        }
+
+        if (outcomeType === "monster_camp") {
+         const at = new Date();
+         if (isYes) {
+          await pushDiscoveryToMap(party, "monster_camp", at, i.user?.id);
+          pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map for later.`, undefined, undefined, at);
+         } else {
+          pushProgressLog(party, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, undefined, at);
+         }
+         await party.save();
+         const monsterCampEmbed = new EmbedBuilder()
+          .setTitle("🗺️ **Expedition: Monster Camp found!**")
+          .setColor(regionColors[party.region] || "#00ff99")
+          .setDescription(
+           description.split("\n\n")[0] + "\n\n" +
+           (isYes
+             ? `✅ **You marked it on the map for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`
+             : `✅ **You didn't mark it.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+          )
+          .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+         addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+         await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
+         return;
         }
 
         const intro = description.split("\n\n")[0];
@@ -1589,10 +1663,17 @@ module.exports = {
           showRestSecureMove: false,
           ruinRestRecovered,
         });
-        await i.update({ embeds: [choiceEmbed], components: [disabledRow] });
+        await msg.edit({ embeds: [choiceEmbed], components: [disabledRow] }).catch(() => {});
        });
-       collector.on("end", (collected, reason) => {
+       collector.on("end", async (collected, reason) => {
         if (reason === "time" && collected.size === 0 && msg.editable) {
+         if (outcomeType === "monster_camp") {
+          const fp = await Party.findActiveByPartyId(expeditionId);
+          if (fp) {
+           pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, undefined, new Date());
+           await fp.save();
+          }
+         }
          const timeoutDisabledRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
            .setCustomId(`explore_${outcomeType}_yes|${expeditionId}|${characterIndex}`)
@@ -1614,16 +1695,22 @@ module.exports = {
 
      if (outcomeType === "item") {
       const allItems = await fetchAllItems();
+      const regionKey = party.region?.toLowerCase() || "";
       const availableItems = allItems.filter(
-       (item) => item[party.region.toLowerCase()]
+       (item) => item[regionKey]
       );
 
+      logger.info("EXPLORE", `Item outcome: region=${regionKey}, allItems=${allItems?.length ?? 0}, availableForRegion=${availableItems.length}`);
+
       if (availableItems.length === 0) {
+       logger.warn("EXPLORE", `No items available for region "${regionKey}" — check item schema has region field`);
        return interaction.editReply("No items available for this region.");
       }
 
       const selectedItem =
        availableItems[Math.floor(Math.random() * availableItems.length)];
+
+      logger.info("EXPLORE", `Item found (roll outcome): ${selectedItem.itemName} | location=${location} | character=${character.name}`);
 
       pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`, undefined, staminaCost > 0 ? { staminaLost: staminaCost } : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
@@ -1668,9 +1755,7 @@ module.exports = {
        );
       } catch (error) {
        handleInteractionError(error, interaction, { source: "explore.js" });
-       console.error(
-        `[ERROR] Could not add item to inventory: ${error.message}`
-       );
+       logger.error("EXPLORE", `Could not add item to inventory: ${error.message}`);
       }
      } else if (outcomeType === "monster") {
       // Check if character has blight stage 3 or higher (monsters don't attack them)
@@ -1688,9 +1773,7 @@ module.exports = {
 
       const selectedMonster =
        monsters[Math.floor(Math.random() * monsters.length)];
-      console.log(
-       `[explore.js]: Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`
-      );
+      logger.info("EXPLORE", `Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`);
 
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
        try {
@@ -1708,12 +1791,12 @@ module.exports = {
         if (!raidResult || !raidResult.success) {
          // Check if it's a cooldown error
          if (raidResult?.error && raidResult.error.includes('Raid cooldown active')) {
-          console.error(`[ERROR] Raid cooldown active during exploration: ${raidResult.error}`);
+          logger.warn("EXPLORE", `Raid cooldown active during exploration: ${raidResult.error}`);
           await interaction.editReply(
            `⏰ **${raidResult.error}**\n\n🗺️ **The monster has retreated due to recent raid activity. Try exploring again later.**`
           );
          } else {
-          console.error(`[ERROR] Failed to trigger raid for battle: ${raidResult?.error || 'Unknown error'}`);
+          logger.error("EXPLORE", `Failed to trigger raid for battle: ${raidResult?.error || "Unknown error"}`);
           await interaction.editReply(
            "**An error occurred during the raid setup.**"
           );
@@ -1798,13 +1881,10 @@ module.exports = {
         await interaction.followUp({ content: `<@${nextCharacterRaid.userId}> it's your turn now` });
        } catch (error) {
         handleInteractionError(error, interaction, { source: "explore.js" });
-        console.error(`[ERROR] Raid processing failed:`, error);
+        logger.error("EXPLORE", `Raid processing failed: ${error?.message || error}`);
         await interaction.editReply("**An error occurred during the raid.**");
        }
       } else {
-       console.log(
-        `[explore.js]: Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`
-       );
 
        const diceRoll = Math.floor(Math.random() * 100) + 1;
        const {
@@ -1813,9 +1893,7 @@ module.exports = {
         attackSuccess,
         defenseSuccess,
        } = calculateFinalValue(character, diceRoll);
-       console.log(
-        `[explore.js]: Battle Stats - Damage: ${damageValue}, Roll: ${adjustedRandomValue}/100`
-       );
+       logger.info("CMBT", `Exploration battle - Damage: ${damageValue}, Roll: ${adjustedRandomValue}/100`);
 
        const outcome = await getEncounterOutcome(
         character,
@@ -1835,9 +1913,7 @@ module.exports = {
         );
 
         if (character.currentHearts === 0) {
-         console.log(
-          `[explore.js]: ${character.name} has been defeated by ${selectedMonster.name}!`
-         );
+         logger.info("CMBT", `${character.name} defeated by ${selectedMonster.name}`);
          await handleKO(character._id);
         }
 
@@ -1866,6 +1942,7 @@ module.exports = {
         const items = await fetchItemsByMonster(selectedMonster.name);
         const rawItem = items.length > 0 ? items[Math.floor(Math.random() * items.length)] : null;
         lootedItem = await resolveExplorationMonsterLoot(selectedMonster.name, rawItem);
+        logger.info("LOOT", `Monster loot: ${selectedMonster.name} → ${lootedItem?.itemName ?? "none"} (pool=${items.length})`);
        }
 
        const monsterMsg = outcome.hearts > 0
@@ -1978,7 +2055,7 @@ module.exports = {
      }
     } catch (error) {
      handleInteractionError(error, interaction, { source: "explore.js" });
-     console.error(`[Roll Command Error]`, error);
+     logger.error("EXPLORE", `Roll command error: ${error?.message || error}`);
      await interaction.editReply(
       "An error occurred while processing the roll command."
      );
@@ -2259,10 +2336,10 @@ module.exports = {
        { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
       );
       if (mapResult.matchedCount === 0) {
-       console.warn("[explore.js] Secure map update: no square found for", mapSquareId, "quadrant", mapQuadrantId);
+       logger.warn("EXPLORE", `Secure map update: no square found for ${mapSquareId} quadrant ${mapQuadrantId}`);
       }
      } catch (mapErr) {
-      console.error("[explore.js] Failed to update map quadrant status to secured:", mapErr.message);
+      logger.error("EXPLORE", `Failed to update map quadrant status to secured: ${mapErr.message}`);
      }
     }
 
@@ -2486,9 +2563,15 @@ module.exports = {
     }
 
     // Block leaving the square until all quadrants (except inaccessible) are explored or secured
+    // Exception: allow moving to the starting square (where they can end the expedition) even if current square isn't fully explored
     const targetSquareNorm = String(newLocation.square || "").trim().toUpperCase();
     const currentSquareNorm = String(currentSquare || "").trim().toUpperCase();
-    if (targetSquareNorm !== currentSquareNorm) {
+    const startPoint = START_POINTS_BY_REGION[party.region];
+    const isMovingToStart = startPoint &&
+     targetSquareNorm === String(startPoint.square || "").trim().toUpperCase() &&
+     String(newLocation.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").trim().toUpperCase();
+
+    if (targetSquareNorm !== currentSquareNorm && !isMovingToStart) {
      const currentMapSquare = await Square.findOne({ squareId: currentSquare });
      if (currentMapSquare && currentMapSquare.quadrants && currentMapSquare.quadrants.length) {
       const unexplored = currentMapSquare.quadrants
@@ -2557,14 +2640,7 @@ module.exports = {
      });
      if (clearedCount > 0) party.markModified("progressLog");
      if (clearedKeys.length > 0 || skippedKeys.length > 0) {
-      console.log("[explore.js] Leave square discovery cleanup", {
-       partyId: party.partyId,
-       leavingSquare,
-       clearedCount,
-       clearedKeys,
-       skippedReportedCount: skippedKeys.length,
-       skippedKeys,
-      });
+      logger.info("EXPLORE", `Leave square discovery cleanup: partyId=${party.partyId}, square=${leavingSquare}, cleared=${clearedKeys.length}, skipped=${skippedKeys.length}`);
      }
     }
 
@@ -2600,7 +2676,7 @@ module.exports = {
        party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
        party.markModified("exploredQuadrantsThisRun");
       } catch (mapErr) {
-       console.error("[explore.js] Failed to mark quadrant explored on move:", mapErr.message);
+       logger.error("EXPLORE", `Failed to mark quadrant explored on move: ${mapErr.message}`);
       }
      }
      destinationQuadrantState = "explored";
@@ -2657,7 +2733,7 @@ module.exports = {
           moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}**. ${whoHasMap.join(", ")} ${whoHasMap.length === 1 ? "has" : "have"} the map — you've found the location of a **${leadsToLabel}**! More info: ${OLD_MAPS_LINK}`;
         }
       } catch (invErr) {
-        console.warn("[explore.js] Could not check old map collection:", invErr?.message || invErr);
+        logger.warn("EXPLORE", `Could not check old map collection: ${invErr?.message || invErr}`);
       }
     }
 
@@ -3027,7 +3103,7 @@ module.exports = {
         1,
         interaction,
         "Expedition ended — returned from party"
-       ).catch((err) => console.error("[explore.js] Return item to owner:", err.message));
+       ).catch((err) => logger.error("EXPLORE", `Return item to owner: ${err.message}`));
       }
      }
     }

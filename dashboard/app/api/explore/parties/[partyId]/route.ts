@@ -158,6 +158,10 @@ export async function GET(
       ? (p.reportedDiscoveryKeys as string[]).filter((k) => typeof k === "string" && k.length > 0)
       : [];
 
+    const pathImageUploadedSquares = Array.isArray(p.pathImageUploadedSquares)
+      ? (p.pathImageUploadedSquares as string[]).filter((s) => typeof s === "string" && s.trim().length > 0).map((s) => s.trim().toUpperCase())
+      : [];
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
@@ -178,6 +182,7 @@ export async function GET(
       gatheredItems,
       progressLog,
       reportedDiscoveryKeys,
+      pathImageUploadedSquares,
     });
   } catch (err) {
     console.error("[explore/parties/[partyId] GET]", err);

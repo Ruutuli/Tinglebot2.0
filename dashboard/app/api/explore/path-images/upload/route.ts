@@ -78,6 +78,16 @@ export async function POST(request: NextRequest) {
       { upsert: true, new: true }
     );
 
+    // Failsafe: mark on the party that a path image was uploaded for this square so the "draw path" prompt stays hidden
+    const Party =
+      mongoose.models.Party ??
+      ((await import("@/models/PartyModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+    await Party.findOneAndUpdate(
+      { partyId: safePartyId },
+      { $addToSet: { pathImageUploadedSquares: squareId } },
+      { new: true }
+    );
+
     const userLabel =
       (user as { global_name?: string | null }).global_name?.trim() ||
       user.username?.trim() ||

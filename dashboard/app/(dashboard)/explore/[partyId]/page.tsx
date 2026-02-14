@@ -86,8 +86,8 @@ function renderMessageWithBold(message: string): React.ReactNode {
 /** True if the current quadrant was secured during this expedition (progress log has "secure" for this location). */
 function wasSecuredThisSession(progressLog: ProgressEntry[] | undefined, square: string, quadrant: string): boolean {
   if (!Array.isArray(progressLog)) return false;
-  const loc = `${square} ${quadrant}`;
-  return progressLog.some((e) => e.outcome === "secure" && e.message.includes(loc));
+  const loc = `${String(square).trim()} ${String(quadrant).trim()}`.toLowerCase();
+  return progressLog.some((e) => e.outcome === "secure" && (e.message ?? "").toLowerCase().includes(loc));
 }
 
 /** Return map coordinates (lat, lng) for the center of a square+quadrant. Canvas: lng 0–24000, lat 0–20000. */
@@ -183,6 +183,8 @@ const REGIONS: Record<string, { label: string; village: string; square: string; 
 
 
 const POLL_INTERVAL_MS = 6000;
+/** When expedition is active (started), poll more often so quadrant/secured state and path UI update quickly. */
+const POLL_INTERVAL_ACTIVE_MS = 2500;
 
 // ------------------- Types ------------------
 // PartyMember, GatheredItem, ProgressEntry, PartyData, Character, ExploreItem -
@@ -239,6 +241,8 @@ type PartyData = {
   progressLog?: ProgressEntry[];
   /** Discovery keys that have been placed as a pin (stored in DB). */
   reportedDiscoveryKeys?: string[];
+  /** Square IDs for which a path image was uploaded; when current square is in this list, hide "draw path" prompt. */
+  pathImageUploadedSquares?: string[];
 };
 
 type Character = {
@@ -480,18 +484,24 @@ export default function ExplorePartyPage() {
 
   useEffect(() => {
     if (!partyId || !party) return;
-    const t = setInterval(fetchParty, POLL_INTERVAL_MS);
+    const intervalMs = party.status === "started" ? POLL_INTERVAL_ACTIVE_MS : POLL_INTERVAL_MS;
+    const t = setInterval(fetchParty, intervalMs);
     return () => clearInterval(t);
   }, [partyId, party, fetchParty]);
 
-  // Refetch when user returns to tab (e.g. after moving via Discord) so journey/location update immediately
+  // Refetch when user returns to tab or window (e.g. after securing quadrant or moving via Discord) so path UI and journey update immediately
   useEffect(() => {
     if (!partyId || !party) return;
     const onVisibility = () => {
       if (document.visibilityState === "visible") fetchParty();
     };
+    const onFocus = () => fetchParty();
     document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [partyId, party, fetchParty]);
 
   useEffect(() => {
@@ -1475,7 +1485,7 @@ export default function ExplorePartyPage() {
                         Edit items
                       </button>
                     )}
-                    {party.status !== "completed" && (
+                    {party.status === "open" && (
                       <button
                         type="button"
                         onClick={leaveParty}
@@ -2052,7 +2062,12 @@ export default function ExplorePartyPage() {
                           )}
                         </div>
                       )}
-                      {party.quadrantState === "secured" && wasSecuredThisSession(party.progressLog, party.square, party.quadrant) && !pathImageForSquare && (
+                      {party.quadrantState === "secured" && (() => {
+                        const currentSquareUpper = (party.square ?? "").trim().toUpperCase();
+                        const pathImageUploadedForThisSquare = Array.isArray(party.pathImageUploadedSquares) && party.pathImageUploadedSquares.some((s) => String(s).trim().toUpperCase() === currentSquareUpper);
+                        const showPathPrompt = !pathImageForSquare && !pathImageUploadedForThisSquare;
+                        return showPathPrompt;
+                      })() && (
                         <div className="mb-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-mid-ocher)]/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-ivory)]">
                             <i className="fa-solid fa-route text-[10px] opacity-80" aria-hidden />

@@ -97,6 +97,12 @@ export async function POST(
     if (partyObj.status === "cancelled") {
       return NextResponse.json({ error: "Expedition was cancelled." }, { status: 404 });
     }
+    if (partyObj.status === "started" || partyObj.status === "completed") {
+      return NextResponse.json(
+        { error: "You can only leave while the expedition is open, not after it has started." },
+        { status: 400 }
+      );
+    }
     if (partyObj.status === "open") {
       const createdAt = partyObj.createdAt instanceof Date ? partyObj.createdAt.getTime() : typeof partyObj.createdAt === "string" ? new Date(partyObj.createdAt).getTime() : NaN;
       if (!Number.isNaN(createdAt) && createdAt < Date.now() - 24 * 60 * 60 * 1000) {

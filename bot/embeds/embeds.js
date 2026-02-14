@@ -525,7 +525,8 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
  const cmdRoll = `</explore roll:${EXPLORE_CMD_ID}>`;
  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
  if (showMoveToUnexploredOnly === true) {
-  commandsValue += `**Moved to a new location — use ${cmdRoll} to explore this quadrant.**`;
+  const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
+  commandsValue += `**Moved to a new location — use ${cmdRoll} to explore this quadrant, or ${cmdItem} to use a healing item.**`;
  } else if (showSecuredQuadrantOnly === true) {
   const cmdCamp = `</explore camp:${EXPLORE_CMD_ID}>`;
   const cmdMove = `</explore move:${EXPLORE_CMD_ID}>`;

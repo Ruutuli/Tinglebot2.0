@@ -66,6 +66,8 @@ const PartySchema = new Schema({
   reportedDiscoveryKeys: [{ type: String }],
   /** Quadrants this expedition marked as Explored (so we can reset them to Unexplored on full party KO). */
   exploredQuadrantsThisRun: [{ squareId: { type: String }, quadrantId: { type: String } }],
+  /** Square IDs for which a path image was uploaded from this expedition; used to hide "draw path" prompt. */
+  pathImageUploadedSquares: [{ type: String }],
 });
 
 /** Find party by partyId, excluding cancelled and open parties older than 24h (ghost explores). */

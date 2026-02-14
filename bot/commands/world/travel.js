@@ -1377,11 +1377,12 @@ async function processTravelDay(day, context) {
           await encounterMessage.edit({ components: [disabledButtons] }).catch(console.error);
           
           try {
-            // In case recovery path already responded (e.g. race), don't throw
+            // In case recovery path or duplicate event already responded, don't throw
             try {
               await i.deferUpdate();
             } catch (deferErr) {
-              if (deferErr.code === 10062 || deferErr.code === 10008) return; // already responded / unknown
+              const alreadyReplied = deferErr.code === 'InteractionAlreadyReplied' || deferErr.name === 'InteractionAlreadyReplied';
+              if (alreadyReplied || deferErr.code === 10062 || deferErr.code === 10008) return;
               throw deferErr;
             }
             const decision = await handleTravelInteraction(
