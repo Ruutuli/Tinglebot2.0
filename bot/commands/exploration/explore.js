@@ -6,6 +6,7 @@ const {
  calculateFinalValue,
  getMonstersByRegion,
  getExplorationMonsterFromList,
+ createWeightedItemList,
 } = require("../../modules/rngModule.js");
 const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const {
@@ -45,7 +46,7 @@ const {
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
-const { getRandomCampFlavor } = require("../../data/explorationMessages.js");
+const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 const { syncPartyMemberStats } = require("../../modules/exploreModule.js");
 const logger = require("@/utils/logger.js");
 
@@ -1667,7 +1668,7 @@ module.exports = {
        party.markModified("characters");
        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
-       pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored (+${totalHeartsRecovered} ❤ from 1 fairy).`, undefined, { heartsRecovered: totalHeartsRecovered });
+       pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored (+${totalHeartsRecovered} ❤ from 1 fairy).`, undefined, { heartsRecovered: totalHeartsRecovered, ...(staminaCost > 0 && { staminaLost: staminaCost }) });
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save();
        const nextChar = party.characters[party.currentTurn];
@@ -1893,10 +1894,10 @@ module.exports = {
         "**Yes** — Cleanse the grotto (1 Goddess Plume + 1 stamina).\n" +
         "**No** — Mark it on the map for later (counts toward this square's 3 discovery limit).";
       } else if (outcomeType === "camp") {
-       const campFlavorRoll = getRandomCampFlavor();
+       const safeSpaceFlavorRoll = getRandomSafeSpaceFlavor();
        title = `🗺️ **Expedition: Found a safe space and rested!**`;
        description =
-        `**${character.name}** found a safe space in **${location}** and rested!\n\n\`\`\`\n${campFlavorRoll}\n\`\`\`\n\nRecovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
+        `**${character.name}** found a safe space in **${location}** and rested!\n\n\`\`\`\n${safeSpaceFlavorRoll}\n\`\`\`\n\nRecovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
       }
 
       const embed = new EmbedBuilder()
@@ -2505,8 +2506,11 @@ module.exports = {
        return interaction.editReply("No items available for this region.");
       }
 
-      const selectedItem =
-       availableItems[Math.floor(Math.random() * availableItems.length)];
+      // Rarity-weighted pick: common items (low rarity) more likely, rare less likely. FV 50 = neutral spread. Fallback to uniform if no itemRarity.
+      const weightedList = createWeightedItemList(availableItems, 50);
+      const selectedItem = weightedList.length > 0
+       ? weightedList[Math.floor(Math.random() * weightedList.length)]
+       : availableItems[Math.floor(Math.random() * availableItems.length)];
 
       logger.info("EXPLORE", `Item found (roll outcome): ${selectedItem.itemName} | location=${location} | character=${character.name}`);
 
