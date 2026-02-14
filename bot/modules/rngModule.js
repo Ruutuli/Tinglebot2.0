@@ -45,34 +45,34 @@ const encounterProbabilitiesBloodMoon = {
   tier10: 10
 };
 
-// ------------------- Exploration monster tier weights (tier 5+ intentionally lower) -------------------
+// ------------------- Exploration monster tier weights (flatter spread so harder tiers show up more evenly) -------------------
 const explorationTierWeights = {
-  1: 42,
-  2: 23,
-  3: 9,
-  4: 6,
-  5: 2,
-  6: 1,
-  7: 0.5,
-  8: 0.3,
-  9: 0.2,
-  10: 0.1
+  1: 32,
+  2: 22,
+  3: 14,
+  4: 10,
+  5: 7,
+  6: 5,
+  7: 4,
+  8: 3,
+  9: 2.5,
+  10: 2
 };
 
 // ============================================================================
 // Rarity Weights and Weighted List Creation
-// ------------------- Define initial rarity weights -------------------
+// ------------------- Define initial rarity weights (flatter spread for exploration so rarer items show up more evenly) -------------------
 const rarityWeights = {
-  '1': 20,
-  '2': 18,
-  '3': 15,
-  '4': 13,
-  '5': 11,
+  '1': 14,
+  '2': 13,
+  '3': 12,
+  '4': 11,
+  '5': 10,
   '6': 9,
-  '7': 7,
-  '8': 5,
-  '9': 2,
-  '10': 1
+  '7': 8,
+  '8': 7,
+  '9': 6,
+  '10': 5
 };
 
 // ------------------- Adjust Rarity Weights -------------------
