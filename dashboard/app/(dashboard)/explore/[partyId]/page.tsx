@@ -2062,30 +2062,33 @@ export default function ExplorePartyPage() {
                           )}
                         </div>
                       )}
-                      {party.quadrantState === "secured" && (() => {
-                        const currentSquareUpper = (party.square ?? "").trim().toUpperCase();
-                        const pathImageUploadedForThisSquare = Array.isArray(party.pathImageUploadedSquares) && party.pathImageUploadedSquares.some((s) => String(s).trim().toUpperCase() === currentSquareUpper);
-                        const showPathPrompt = !pathImageForSquare && !pathImageUploadedForThisSquare;
-                        return showPathPrompt;
-                      })() && (
+                      {party.square && (
                         <div className="mb-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-mid-ocher)]/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-ivory)]">
                             <i className="fa-solid fa-route text-[10px] opacity-80" aria-hidden />
                             Draw path on map
                           </h3>
                           <p className="mb-2 text-[11px] text-[var(--totk-grey-200)]">
-                            Download the full square image below, draw your path on it (e.g. in Paint or any image editor), save the image, then upload it here. It will appear on the main Map page and update automatically if you upload again.
+                            {party.quadrant
+                              ? `Download the quadrant image (${party.square} ${party.quadrant}) below, draw your path on it, save, then upload. Only your quadrant is needed.`
+                              : "Download the full square image below, draw your path on it (e.g. in Paint or any image editor), save the image, then upload it here. It will appear on the main Map page and update automatically if you upload again."}
                           </p>
                           <div className="mb-2 flex flex-wrap items-center gap-2">
                             <a
-                              href={`/api/images/maps/squares/MAP_0002_Map-Base/MAP_0002_Map-Base_${party.square}.png`}
-                              download={`square-${party.square}.png`}
+                              href={
+                                party.quadrant
+                                  ? `/api/explore/path-images/quadrant?squareId=${encodeURIComponent(party.square)}&quadrantId=${encodeURIComponent(party.quadrant)}`
+                                  : pathImageForSquare ?? `/api/images/maps/squares/MAP_0002_Map-Base/MAP_0002_Map-Base_${party.square}.png`
+                              }
+                              download={`${party.square}${party.quadrant ? `-${party.quadrant}` : ""}${pathImageForSquare && !party.quadrant ? "-with-path" : ""}.png`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 rounded border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/50 px-2 py-1 text-[10px] font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/30"
                             >
                               <i className="fa-solid fa-download" aria-hidden />
-                              Download square image ({party.square})
+                              {party.quadrant
+                                ? `Download ${party.square} ${party.quadrant} quadrant`
+                                : `Download square image (${party.square})${pathImageForSquare ? " (with path)" : ""}`}
                             </a>
                             <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/50 px-2 py-1 text-[10px] font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/30">
                               <input
@@ -2114,6 +2117,7 @@ export default function ExplorePartyPage() {
                                   form.append("file", pathImageFile);
                                   form.append("partyId", party.partyId ?? "");
                                   form.append("squareId", party.square);
+                                  if (party.quadrant) form.append("quadrantId", party.quadrant);
                                   const res = await fetch("/api/explore/path-images/upload", {
                                     method: "POST",
                                     credentials: "include",

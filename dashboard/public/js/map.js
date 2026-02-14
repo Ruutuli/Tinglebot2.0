@@ -1913,6 +1913,16 @@ function addPinToMap(pin) {
                         <span>${pin.description}</span>
                     </div>
                     ` : ''}
+                    ${pin.partyId ? (() => {
+                        const pid = String(pin.partyId);
+                        const safe = pid.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        return `
+                    <div class="pin-popup-expedition">
+                        <i class="fas fa-compass"></i>
+                        <span>Found in expedition: <a href="/explore/${encodeURIComponent(pid)}" target="_blank" rel="noopener noreferrer">${safe}</a></span>
+                    </div>
+                    `;
+                    })() : ''}
                     ${pin.imageUrl ? `
                     <div class="pin-popup-image">
                         <img src="${pin.imageUrl}" alt="${pin.name}" class="pin-popup-img" onclick="openImageModal('${pin.imageUrl}', '${pin.name}')" loading="lazy">

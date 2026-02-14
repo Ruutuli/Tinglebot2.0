@@ -228,8 +228,8 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
 
 /** Roll outcomes that are "discoveries" (reportable on map); reroll when square at cap or applying reduced chance. */
 const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic"];
-/** Outcomes to count toward the 3-per-square limit. Use "ruins_found" so initial ruins find is counted (we log "ruins_found", not "ruins", on find). */
-const DISCOVERY_COUNT_OUTCOMES = ["monster_camp", "grotto", "relic", "ruins_found"];
+/** Outcomes to count toward the 3-per-square limit. Yes-only: ruins, grotto, monster_camp count when user chooses Yes; No = skipped, doesn't count. */
+const DISCOVERY_COUNT_OUTCOMES = ["monster_camp", "grotto", "relic", "ruins", "ruins_found"];
 /** When leaving a square, clear these from progressLog if not reported (include ruins_found). */
 const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic", "ruins_found"];
 const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
@@ -1077,14 +1077,13 @@ module.exports = {
           ? { itemName: "Unknown Relic", emoji: "🔸" }
           : undefined;
       const at = new Date();
-      // Ruins: only add to map and reportable log when user chooses Yes (done in button handler)
-      // Monster camp: only add when user chooses Yes (No = don't mark, won't count toward 3-per-square)
-      if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType) && outcomeType !== "ruins" && outcomeType !== "monster_camp") {
+      // Ruins, grotto, monster camp: only add to map and progressLog when user chooses Yes (No = doesn't count)
+      if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType) && outcomeType !== "ruins" && outcomeType !== "monster_camp" && outcomeType !== "grotto") {
        await pushDiscoveryToMap(party, outcomeType, at, interaction.user?.id);
       }
       const progressOutcome = outcomeType === "ruins" ? "ruins_found" : outcomeType;
-      // Monster camp: defer progressLog until button choice (Yes = monster_camp counts, No = monster_camp_skipped doesn't)
-      if (outcomeType !== "monster_camp") {
+      // Ruins, grotto, monster camp: defer progressLog until button choice (Yes = counts, No = skipped, doesn't count)
+      if (outcomeType !== "monster_camp" && outcomeType !== "ruins" && outcomeType !== "grotto") {
        pushProgressLog(
         party,
         character.name,
@@ -1125,8 +1124,8 @@ module.exports = {
        title = `🗺️ **Expedition: Ruins found!**`;
        description =
         `**${character.name}** found some ruins in **${location}**!\n\n` +
-        "**Yes** — Decided to explore the ruins (cost 3 stamina).\n" +
-        `**No** — Decided to move on. Use </explore roll:${EXPLORE_CMD_ID}> to continue.`;
+        "**Yes** — Explore the ruins (cost 3 stamina; counts toward discovery limit).\n" +
+        `**No** — Leave for later. Won't be recorded as a discovery. Use </explore roll:${EXPLORE_CMD_ID}> to continue.`;
       } else if (outcomeType === "relic") {
        title = `🗺️ **Expedition: Relic found!**`;
        description =
@@ -1138,8 +1137,8 @@ module.exports = {
        description =
         `**${character.name}** stumbled across something strange in **${location}**.\n\n` +
         "You stumble across an interesting looking stump with roots covered in talismans, do you have the means to cleanse them? More info about grottos can be found [here](https://www.rootsofthewild.com/grottos).\n\n" +
-        "**Yes** — Use the grotto flow when available (cost 1 goddess plume + 1 stamina).\n" +
-        `**No** (mark it on the map for later!) — Continue exploring with </explore roll:${EXPLORE_CMD_ID}>.`;
+        "**Yes** — Mark it on the map for later (counts toward this square's 3 discovery limit).\n" +
+        `**No** — Don't mark it. Won't be recorded as a discovery. Continue with </explore roll:${EXPLORE_CMD_ID}>.`;
       } else if (outcomeType === "camp") {
        title = `🗺️ **Expedition: Found a safe space and rested!**`;
        description = `**${character.name}** found a safe space in **${location}** and rested! Recovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
@@ -1632,6 +1631,36 @@ module.exports = {
          return;
         }
 
+        if (outcomeType === "grotto") {
+         const at = new Date();
+         if (isYes) {
+          await pushDiscoveryToMap(party, "grotto", at, i.user?.id);
+          pushProgressLog(party, character.name, "grotto", `Found a grotto in ${location}; marked on map for later.`, undefined, undefined, at);
+         } else {
+          pushProgressLog(party, character.name, "grotto_skipped", `Found a grotto in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, undefined, at);
+         }
+         await party.save();
+         const grottoEmbed = new EmbedBuilder()
+          .setTitle("🗺️ **Expedition: Grotto found!**")
+          .setColor(regionColors[party.region] || "#00ff99")
+          .setDescription(
+           description.split("\n\n")[0] + "\n\n" +
+           (isYes
+             ? `✅ **You marked it on the map for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`
+             : `✅ **You didn't mark it.** Won't be recorded as a discovery. Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+          )
+          .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+         addExplorationStandardFields(grottoEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+         await msg.edit({ embeds: [grottoEmbed], components: [disabledRow] }).catch(() => {});
+         return;
+        }
+
+        if (outcomeType === "ruins" && !isYes) {
+         const at = new Date();
+         pushProgressLog(party, character.name, "ruins_skipped", `Found ruins in ${location}; left for later (won't count toward discovery limit).`, undefined, undefined, at);
+         await party.save();
+        }
+
         const intro = description.split("\n\n")[0];
         const choiceEmbed = new EmbedBuilder()
          .setTitle(title)
@@ -1643,7 +1672,7 @@ module.exports = {
           "\n\n" +
           (isYes
            ? "✅ **You chose to explore the ruins!** (Cost 3 stamina.)"
-           : `✅ **You left the ruins for later.** Continue with </explore roll:${EXPLORE_CMD_ID}>.`)
+           : `✅ **${character.name} left the ruins for later.**`)
          );
         } else {
          choiceEmbed.setDescription(
@@ -1664,13 +1693,24 @@ module.exports = {
           ruinRestRecovered,
         });
         await msg.edit({ embeds: [choiceEmbed], components: [disabledRow] }).catch(() => {});
+        if (outcomeType === "ruins" && !isYes && nextCharacter?.userId) {
+         await i.followUp({
+          content: `**${character.name}** decided not to explore the ruins! <@${nextCharacter.userId}> take your turn.`,
+         }).catch(() => {});
+        }
        });
        collector.on("end", async (collected, reason) => {
         if (reason === "time" && collected.size === 0 && msg.editable) {
-         if (outcomeType === "monster_camp") {
-          const fp = await Party.findActiveByPartyId(expeditionId);
-          if (fp) {
+         const fp = await Party.findActiveByPartyId(expeditionId);
+         if (fp) {
+          if (outcomeType === "monster_camp") {
            pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, undefined, new Date());
+          } else if (outcomeType === "ruins") {
+           pushProgressLog(fp, character.name, "ruins_skipped", `Found ruins in ${location}; choice timed out (left for later).`, undefined, undefined, new Date());
+          } else if (outcomeType === "grotto") {
+           pushProgressLog(fp, character.name, "grotto_skipped", `Found a grotto in ${location}; choice timed out (not marked).`, undefined, undefined, new Date());
+          }
+          if (outcomeType === "monster_camp" || outcomeType === "ruins" || outcomeType === "grotto") {
            await fp.save();
           }
          }
@@ -2541,7 +2581,7 @@ module.exports = {
      );
     }
 
-    // Move cost: 1 stamina if destination is already explored or secured, 2 if unexplored
+    // Move cost: 2 if unexplored, 1 if explored, 0 if secured
     let destinationQuadrantState = "unexplored";
     let destQ = null;
     const destMapSquare = await Square.findOne({ squareId: newLocation.square });
@@ -2554,8 +2594,8 @@ module.exports = {
      }
     }
     const moveWasReveal = destinationQuadrantState === "unexplored";
-    const staminaCost = destinationQuadrantState === "unexplored" ? 2 : 1;
-    if (party.totalStamina < staminaCost) {
+    const staminaCost = destinationQuadrantState === "secured" ? 0 : destinationQuadrantState === "unexplored" ? 2 : 1;
+    if (staminaCost > 0 && party.totalStamina < staminaCost) {
      const location = `${party.square} ${party.quadrant}`;
      return interaction.editReply({
       embeds: [createStuckInWildEmbed(party, location)],
@@ -2601,14 +2641,6 @@ module.exports = {
         showNextAndCommands: true,
         showRestSecureMove: false,
       });
-       addExplorationCommandsField(cantLeaveEmbed, {
-        party,
-        expeditionId,
-        location: locationMove,
-        nextCharacter: party.characters[party.currentTurn] ?? null,
-        showNextAndCommands: true,
-        showRestSecureMove: false,
-      });
        return interaction.editReply({ embeds: [cantLeaveEmbed] });
       }
      }
@@ -2644,13 +2676,15 @@ module.exports = {
      }
     }
 
-    // Apply move cost to current character so party total stays correct
-    const moveCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
-    character.currentStamina = Math.max(0, moveCharStamina - staminaCost);
-    await character.save();
-    party.characters[characterIndex].currentStamina = character.currentStamina;
-    party.markModified("characters");
-    party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+    // Apply move cost to current character so party total stays correct (0 for secured quadrants)
+    if (staminaCost > 0) {
+     const moveCharStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
+     character.currentStamina = Math.max(0, moveCharStamina - staminaCost);
+     await character.save();
+     party.characters[characterIndex].currentStamina = character.currentStamina;
+     party.markModified("characters");
+     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+    }
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
@@ -2690,9 +2724,11 @@ module.exports = {
      party,
      character.name,
      "move",
-     `Moved ${directionLabel} **${locationMove}** (quadrant ${quadrantStateLabel}). (-${staminaCost} stamina)`,
+     staminaCost > 0
+      ? `Moved ${directionLabel} **${locationMove}** (quadrant ${quadrantStateLabel}). (-${staminaCost} stamina)`
+      : `Moved ${directionLabel} **${locationMove}** (quadrant ${quadrantStateLabel}).`,
      undefined,
-     { staminaLost: staminaCost }
+     staminaCost > 0 ? { staminaLost: staminaCost } : undefined
     );
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save();

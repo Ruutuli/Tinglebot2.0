@@ -102,6 +102,13 @@ const pinSchema = new mongoose.Schema({
     default: null
   },
 
+  // Expedition (party) this discovery was reported from; shown in popup with link to /explore/{partyId}
+  partyId: {
+    type: String,
+    default: null,
+    maxlength: 32
+  },
+
   // Timestamps
   createdAt: {
     type: Date,

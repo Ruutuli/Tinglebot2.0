@@ -498,7 +498,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
     `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
     `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.\n\n` +
     `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
-    `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands.`;
+    `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands.`;
    if (isAtStartQuadrant) {
     commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
    }
@@ -533,7 +533,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   const cmdItem = `</explore item:${EXPLORE_CMD_ID}>`;
   const cmdEnd = `</explore end:${EXPLORE_CMD_ID}>`;
   commandsValue += `**This quadrant is secured — you cannot roll here.** Use one of:\n\n` +
-   `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands.\n\n` +
+   `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands.\n\n` +
    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
    `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.`;
   if (isAtStartQuadrant) {
@@ -552,7 +552,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
    `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.\n\n` +
    `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
-   `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands. **Only use when the expedition prompts you to move.**`;
+   `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands. **Only use when the expedition prompts you to move.**`;
   if (isAtStartQuadrant) {
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }

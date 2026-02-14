@@ -176,6 +176,9 @@ export async function POST(request: Request) {
     if (sourceDiscoveryKey) {
       pinData.sourceDiscoveryKey = sourceDiscoveryKey.slice(0, 200);
     }
+    if (partyId) {
+      pinData.partyId = String(partyId).trim().slice(0, 32);
+    }
     const pin = new Pin(pinData);
 
     // 1. Save to pins collection (Pin model)

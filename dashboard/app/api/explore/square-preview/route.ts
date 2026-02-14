@@ -124,6 +124,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch Square from exploring map model (exploringMap collection); quadrant statuses drive map colors and layer list
     let dbImage: string | null = null;
+    let pathImageUrl: string | null = null;
     let mapCoordinates: { center: { lat: number; lng: number }; bounds: { north: number; south: number; east: number; west: number } } | null = null;
     const quadrantStatuses: Record<string, QuadrantStatus> = { Q1: "unexplored", Q2: "unexplored", Q3: "unexplored", Q4: "unexplored" };
     const quadrantRuinRest: Record<string, number | null> = { Q1: null, Q2: null, Q3: null, Q4: null };
@@ -131,13 +132,15 @@ export async function GET(request: NextRequest) {
       await connect();
       const Square = (await import("@/models/mapModel.js")).default;
       const squareIdRegex = new RegExp(`^${square.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      const doc = await Square.findOne({ squareId: squareIdRegex }).lean() as {
+      const doc = await Square.findOne({ squareId: squareIdRegex }).select("image pathImageUrl mapCoordinates quadrants").lean() as {
         image?: string;
+        pathImageUrl?: string | null;
         mapCoordinates?: { center?: { lat: number; lng: number }; bounds?: { north: number; south: number; east: number; west: number } };
         quadrants?: Array<{ quadrantId: string; status?: string; ruinRestStamina?: number | null }>;
       } | null;
       if (doc) {
         dbImage = doc.image ?? null;
+        pathImageUrl = doc.pathImageUrl ?? null;
         const coords = doc.mapCoordinates;
         if (coords?.center && coords?.bounds) {
           mapCoordinates = {
@@ -166,10 +169,15 @@ export async function GET(request: NextRequest) {
     if (noMask) {
       layers = layers.filter((l) => l !== "MAP_0001_hidden-areas");
     }
-    const layerUrls = layers.map((name) => ({
-      name,
-      url: getLayerImageUrl(square, name),
-    }));
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+    const prefix = basePath ? basePath.replace(/\/$/, "") : "";
+    const layerUrls = layers.map((name) => {
+      const defaultUrl = getLayerImageUrl(square, name);
+      if (name === "MAP_0002_Map-Base" && pathImageUrl) {
+        return { name, url: `${prefix}/api/images/${encodeURIComponent(pathImageUrl)}` };
+      }
+      return { name, url: defaultUrl };
+    });
 
     const quadrantNum = quadrant.match(/^Q([1-4])$/) ? parseInt(quadrant.slice(1), 10) : null;
     const quadrantBounds = quadrantNum ? getQuadrantBounds(quadrantNum) : null;
