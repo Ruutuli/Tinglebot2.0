@@ -76,6 +76,13 @@ function discoveryKey(d: { outcome: string; square: string; quadrant: string; at
   return `${d.outcome}|${d.square}|${d.quadrant}|${d.at}`;
 }
 
+/** Render message with Discord-style **bold** (for progress log). */
+function renderMessageWithBold(message: string): React.ReactNode {
+  const parts = (message ?? "").split(/\*\*/);
+  if (parts.length <= 1) return message;
+  return parts.map((part, i) => (i % 2 === 1 ? <strong key={i} className="font-semibold text-[var(--totk-ivory)]">{part}</strong> : part));
+}
+
 /** True if the current quadrant was secured during this expedition (progress log has "secure" for this location). */
 function wasSecuredThisSession(progressLog: ProgressEntry[] | undefined, square: string, quadrant: string): boolean {
   if (!Array.isArray(progressLog)) return false;
@@ -951,9 +958,25 @@ export default function ExplorePartyPage() {
       setPlacePinError(null);
       setPlacingPinForKey(key);
       try {
+        let description = `Reported from expedition. ${d.label} discovered in ${d.square} ${d.quadrant}.`;
+        if (d.outcome === "ruins") {
+          try {
+            const previewRes = await fetch(
+              `/api/explore/square-preview?square=${encodeURIComponent(d.square)}&quadrant=${encodeURIComponent(d.quadrant)}`,
+              { credentials: "include" }
+            );
+            const preview = await previewRes.json().catch(() => ({}));
+            const restStamina = typeof preview.ruinRestStamina === "number" && preview.ruinRestStamina > 0 ? preview.ruinRestStamina : null;
+            if (restStamina != null) {
+              description = `Reported from expedition. ${d.label} (rest spot: +${restStamina} stamina) discovered in ${d.square} ${d.quadrant}.`;
+            }
+          } catch {
+            // keep default description if fetch fails
+          }
+        }
         const body: Record<string, unknown> = {
           name: d.label,
-          description: `Reported from expedition. Discovered in ${d.square} ${d.quadrant}.`,
+          description,
           coordinates: coords,
           category: "points-of-interest",
           color: "#b91c1c",
@@ -2340,7 +2363,7 @@ export default function ExplorePartyPage() {
                               </span>
                             ) : null}
                           </div>
-                          <p className="text-xs text-[var(--botw-pale)] leading-snug">{entry.message}</p>
+                          <p className="text-xs text-[var(--botw-pale)] leading-snug">{renderMessageWithBold(entry.message ?? "")}</p>
                           {entry.loot?.itemName && <p className="text-[11px] text-[var(--totk-light-green)]">Loot: {entry.loot.itemName}</p>}
                         </li>
                       ))}
@@ -2396,13 +2419,18 @@ export default function ExplorePartyPage() {
                     const start = REGIONS[party.region?.toLowerCase()];
                     const startLoc = start ? `${start.square} ${start.quadrant}` : `${party.square} ${party.quadrant}`;
                     const journey: string[] = [startLoc];
-                    const moveRe = /Moved from \S+ \S+ to (\S+ \S+)/;
+                    // Bot logs moves as "Moved to **H6 Q2** (quadrant explored). (-1 stamina)" — capture location in **
+                    const moveRe = /\*\*(\S+ \S+)\*\*/;
                     for (const e of party.progressLog ?? []) {
                       if (e.outcome !== "move") continue;
-                      const m = moveRe.exec(e.message);
+                      const m = moveRe.exec(e.message ?? "");
                       if (m && m[1]) journey.push(m[1]);
                     }
                     const currentLoc = `${party.square} ${party.quadrant}`;
+                    // Ensure journey ends with current location (in case of polling/format mismatch)
+                    if (journey.length > 0 && journey[journey.length - 1] !== currentLoc) {
+                      journey.push(currentLoc);
+                    }
                     const hasMoves = journey.length > 1;
                     return (
                       <div className="flex flex-wrap items-center gap-2" title={hasMoves ? journey.join(" → ") : undefined}>

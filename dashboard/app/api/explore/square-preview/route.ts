@@ -133,8 +133,9 @@ export async function GET(request: NextRequest) {
       const doc = await Square.findOne({ squareId: squareIdRegex }).lean() as {
         image?: string;
         mapCoordinates?: { center?: { lat: number; lng: number }; bounds?: { north: number; south: number; east: number; west: number } };
-        quadrants?: Array<{ quadrantId: string; status?: string }>;
+        quadrants?: Array<{ quadrantId: string; status?: string; ruinRestStamina?: number | null }>;
       } | null;
+      const quadrantRuinRest: Record<string, number | null> = { Q1: null, Q2: null, Q3: null, Q4: null };
       if (doc) {
         dbImage = doc.image ?? null;
         const coords = doc.mapCoordinates;
@@ -150,6 +151,8 @@ export async function GET(request: NextRequest) {
             if (id && (id === "Q1" || id === "Q2" || id === "Q3" || id === "Q4")) {
               const raw = typeof q.status === "string" ? String(q.status).trim().toLowerCase() : "";
               quadrantStatuses[id] = (["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored") as QuadrantStatus;
+              const rest = q.ruinRestStamina;
+              quadrantRuinRest[id] = typeof rest === "number" && rest > 0 ? rest : null;
             }
           }
         }
@@ -171,11 +174,14 @@ export async function GET(request: NextRequest) {
     const quadrantNum = quadrant.match(/^Q([1-4])$/) ? parseInt(quadrant.slice(1), 10) : null;
     const quadrantBounds = quadrantNum ? getQuadrantBounds(quadrantNum) : null;
 
+    const quadId = quadrant.match(/^Q[1-4]$/i) ? quadrant.trim().toUpperCase() : null;
     return NextResponse.json({
       squareId: square,
       quadrant: quadrant || null,
       layers: layerUrls,
       quadrantStatuses,
+      quadrantRuinRest,
+      ruinRestStamina: quadId ? quadrantRuinRest[quadId] ?? null : null,
       dbImage,
       mapCoordinates,
       quadrantBounds,

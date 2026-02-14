@@ -188,7 +188,7 @@ const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto"];
 const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
 
 /** Parse square from progress message like "Found X in H8 Q2; ..." -> "H8". */
-const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+Q[1-4]/i;
+const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 
 function countSpecialEventsInSquare(party, square) {
  if (!party.progressLog || !Array.isArray(party.progressLog)) return 0;
@@ -693,13 +693,13 @@ module.exports = {
       const r = Math.random();
       if (r < 0.45) return "monster";
       if (r < 0.67) return "item";
-      if (r < 0.82) return "explored";
+      if (r < 0.83) return "explored";
       if (r < 0.86) return "fairy";
       if (r < 0.87) return "chest";
       if (r < 0.88) return "old_map";
-      if (r < 0.94) return "ruins";
-      if (r < 0.945) return "relic";
-      if (r < 0.985) return "camp";
+      if (r < 0.90) return "ruins";
+      if (r < 0.905) return "relic";
+      if (r < 0.945) return "camp";
       if (r < 0.995) return "monster_camp";
       return "grotto";
      }
@@ -2324,28 +2324,72 @@ module.exports = {
        .filter(Boolean);
       if (unexplored.length > 0) {
        const quadList = unexplored.join(", ");
-       return interaction.editReply(
-        `Oops! Can't leave until **${currentSquare}** is explored! The following quads are still unexplored: **${quadList}**.`
-       );
+       const locationMove = `${currentSquare} ${party.quadrant}`;
+       const cantLeaveEmbed = new EmbedBuilder()
+        .setTitle("🚫 **Can't leave yet**")
+        .setColor(regionColors[party.region] || "#b91c1c")
+        .setDescription(
+         `You can't leave **${currentSquare}** until the whole square is explored.\n\n` +
+         `**Still unexplored:** ${quadList}\n\n` +
+         `Use the **Move** command again to explore the remaining quadrant(s), then you can move to an adjacent square.`
+        )
+        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+       addExplorationStandardFields(cantLeaveEmbed, {
+        party,
+        expeditionId,
+        location: locationMove,
+        nextCharacter: party.characters[party.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+      });
+       addExplorationCommandsField(cantLeaveEmbed, {
+        party,
+        expeditionId,
+        location: locationMove,
+        nextCharacter: party.characters[party.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+      });
+       return interaction.editReply({ embeds: [cantLeaveEmbed] });
       }
      }
     }
 
-    // When leaving a square, clear any reportable discoveries (monster_camp, ruins, grotto) in that square from progressLog — unmarked discoveries are considered lost
+    // When leaving a square, clear reportable discoveries in that square that were NOT pinned (not in reportedDiscoveryKeys). Marked discoveries are kept.
     const leavingSquare = String(currentSquare || "").trim().toUpperCase();
+    const reportedSet = new Set(Array.isArray(party.reportedDiscoveryKeys) ? party.reportedDiscoveryKeys.filter((k) => typeof k === "string" && k.length > 0) : []);
     let clearedCount = 0;
+    const clearedKeys = [];
+    const skippedKeys = [];
     if (leavingSquare && party.progressLog && Array.isArray(party.progressLog)) {
-     const before = party.progressLog.length;
      party.progressLog = party.progressLog.filter((e) => {
       if (!SPECIAL_OUTCOMES.includes(e.outcome)) return true;
       const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
       if (!m || !m[1]) return true;
       const entrySquare = String(m[1]).trim().toUpperCase();
+      const entryQuadrant = (m[2] || "").trim().toUpperCase();
       if (entrySquare !== leavingSquare) return true;
+      const atStr = e.at instanceof Date ? e.at.toISOString() : (typeof e.at === "string" ? e.at : "");
+      const key = `${e.outcome}|${entrySquare}|${entryQuadrant}|${atStr}`;
+      if (reportedSet.has(key)) {
+       skippedKeys.push(key);
+       return true;
+      }
       clearedCount += 1;
+      clearedKeys.push(key);
       return false;
      });
      if (clearedCount > 0) party.markModified("progressLog");
+     if (clearedKeys.length > 0 || skippedKeys.length > 0) {
+      console.log("[explore.js] Leave square discovery cleanup", {
+       partyId: party.partyId,
+       leavingSquare,
+       clearedCount,
+       clearedKeys,
+       skippedReportedCount: skippedKeys.length,
+       skippedKeys,
+      });
+     }
     }
 
     // Apply move cost to current character so party total stays correct
@@ -2595,6 +2639,7 @@ module.exports = {
       nextCharacter: nextCharacterItem,
       showNextAndCommands: true,
       showRestSecureMove: false,
+      commandsLast: true,
     });
     addExplorationCommandsField(embed, {
       party,
