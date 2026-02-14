@@ -74,7 +74,7 @@ const raidSchema = new mongoose.Schema({
   },
   result: {
     type: String,
-    enum: ['defeated', 'timeout', null],
+    enum: ['defeated', 'timeout', 'fled', null],
     default: null
   },
   

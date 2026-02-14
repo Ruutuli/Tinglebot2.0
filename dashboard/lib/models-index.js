@@ -23,6 +23,7 @@ try { require("../models/CharacterModel"); } catch (e) { if (e.name !== 'Overwri
 try { require("../models/CharacterModerationModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] CharacterModerationModel:", e.message); }
 try { require("../models/CharacterOfWeekModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] CharacterOfWeekModel:", e.message); }
 try { require("../models/GeneralItemModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] GeneralItemModel:", e.message); }
+try { require("../models/GrottoModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] GrottoModel:", e.message); }
 try { require("../models/HelpWantedQuestModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] HelpWantedQuestModel:", e.message); }
 try { require("../models/InventoryLogModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] InventoryLogModel:", e.message); }
 try { require("../models/InventoryModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] InventoryModel:", e.message); }
@@ -32,6 +33,7 @@ try { require("../models/MemberLoreModel"); } catch (e) { if (e.name !== 'Overwr
 try { require("../models/MessageTrackingModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MessageTrackingModel:", e.message); }
 try { require("../models/MinigameModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MinigameModel:", e.message); }
 try { require("../models/ModCharacterModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] ModCharacterModel:", e.message); }
+try { require("../models/OldMapFoundModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] OldMapFoundModel:", e.message); }
 try { require("../models/MonsterModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MonsterModel:", e.message); }
 try { require("../models/MountModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MountModel:", e.message); }
 try { require("../models/NotificationModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] NotificationModel:", e.message); }
@@ -43,6 +45,8 @@ try { require("../models/QuestModel"); } catch (e) { if (e.name !== 'OverwriteMo
 try { require("../models/RaidModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] RaidModel:", e.message); }
 try { require("../models/RelationshipModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] RelationshipModel:", e.message); }
 try { require("../models/RelicModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] RelicModel:", e.message); }
+try { require("../models/RelicAppraisalRequestModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] RelicAppraisalRequestModel:", e.message); }
+try { require("../models/MapAppraisalRequestModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MapAppraisalRequestModel:", e.message); }
 try { require("../models/RuuGameModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] RuuGameModel:", e.message); }
 try { require("../models/SecretSantaModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] SecretSantaModel:", e.message); }
 try { require("../models/StableModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] StableModel:", e.message); }

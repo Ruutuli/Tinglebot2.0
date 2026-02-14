@@ -22,6 +22,9 @@ async function addOldMapToCharacter(characterName, mapNumber, locationFound = ''
   return doc;
 }
 
+const charNameRegex = (name) =>
+  new RegExp(`^${String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+
 /**
  * Check if a character has at least one of the given map number.
  * @param {string} characterName - Character to check
@@ -31,8 +34,25 @@ async function addOldMapToCharacter(characterName, mapNumber, locationFound = ''
 async function hasOldMap(characterName, mapNumber) {
   if (!characterName || typeof mapNumber !== 'number') return false;
   const count = await OldMapFound.countDocuments({
-    characterName: new RegExp(`^${String(characterName).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+    characterName: charNameRegex(characterName),
     mapNumber,
+  });
+  return count > 0;
+}
+
+/**
+ * Check if a character has at least one appraised map of the given number.
+ * Used for quadrant "map location" prompt (only appraised maps count).
+ * @param {string} characterName - Character to check
+ * @param {number} mapNumber - Map number (1-46)
+ * @returns {Promise<boolean>}
+ */
+async function hasAppraisedOldMap(characterName, mapNumber) {
+  if (!characterName || typeof mapNumber !== 'number') return false;
+  const count = await OldMapFound.countDocuments({
+    characterName: charNameRegex(characterName),
+    mapNumber,
+    appraised: true,
   });
   return count > 0;
 }
@@ -45,15 +65,36 @@ async function hasOldMap(characterName, mapNumber) {
 async function getCharacterOldMaps(characterName) {
   if (!characterName) return [];
   const docs = await OldMapFound.aggregate([
-    { $match: { characterName: new RegExp(`^${String(characterName).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+    { $match: { characterName: charNameRegex(characterName) } },
     { $group: { _id: '$mapNumber', quantity: { $sum: 1 } } },
     { $sort: { _id: 1 } },
   ]);
   return docs.map((d) => ({ mapNumber: d._id, quantity: d.quantity }));
 }
 
+/**
+ * Get all old maps for a character with full details (for /map list and appraisal-request).
+ * @param {string} characterName - Character to check
+ * @returns {Promise<Array<{_id: import('mongoose').Types.ObjectId, mapNumber: number, appraised: boolean, foundAt: Date, locationFound: string}>>}
+ */
+async function getCharacterOldMapsWithDetails(characterName) {
+  if (!characterName) return [];
+  const docs = await OldMapFound.find({ characterName: charNameRegex(characterName) })
+    .sort({ foundAt: 1 })
+    .lean();
+  return docs.map((d) => ({
+    _id: d._id,
+    mapNumber: d.mapNumber,
+    appraised: !!d.appraised,
+    foundAt: d.foundAt,
+    locationFound: d.locationFound || '',
+  }));
+}
+
 module.exports = {
   addOldMapToCharacter,
   hasOldMap,
+  hasAppraisedOldMap,
   getCharacterOldMaps,
+  getCharacterOldMapsWithDetails,
 };

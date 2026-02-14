@@ -1,429 +1,388 @@
-// // ============================================================================
-// // Standard Libraries
-// // ============================================================================
-// // ------------------- File system and path modules -------------------
-// const fs = require('fs');
-// const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
-// const path = require('path');
+// ============================================================================
+// ------------------- Relic Command -------------------
+// Manages relic appraisals, reveal (replaces /tableroll relic), and archival.
+// ============================================================================
 
-// // ============================================================================
-// // Discord.js Components
-// // ============================================================================
-// // ------------------- Import SlashCommandBuilder from discord.js -------------------
-// const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
+const {
+  fetchRelicById,
+  fetchRelicsByCharacter,
+  appraiseRelic,
+  archiveRelic,
+  fetchCharacterByName,
+  fetchCharacterByNameAndUserId,
+  fetchAnyCharacterByNameAndUserId,
+  getOrCreateToken,
+  updateTokenBalance,
+} = require('@/database/db.js');
+const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
+const { rollRelicOutcome } = require('@/utils/relicUtils.js');
+const RelicModel = require('@/models/RelicModel.js');
+const RelicAppraisalRequest = require('@/models/RelicAppraisalRequestModel.js');
+const Character = require('@/models/CharacterModel.js');
+const ModCharacter = require('@/models/ModCharacterModel.js');
 
-// // ============================================================================
-// // Database Services
-// // ============================================================================
-// // ------------------- Import Relic Service functions -------------------
-// const { 
-//   fetchRelicById, 
-//   archiveRelic, 
-//   appraiseRelic
-// } = require('@/database/db.js');
+function normalizeVillage(v) {
+  return (v || '').trim().toLowerCase();
+}
 
+// ============================================================================
+// ------------------- Command Definition -------------------
+// ============================================================================
 
-// // ============================================================================
-// // Modules
-// // ============================================================================
-// // ------------------- Import game location modules -------------------
-// const locationsModule = require('../../modules/locationsModule.js');
-// const MapModule = require('../../modules/mapModule.js');
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('relic')
+    .setDescription('Manage relic appraisals, reveal outcomes, and archival')
 
-// // ============================================================================
-// // Utility Functions
-// // ============================================================================
-// // ------------------- Import unique ID generator -------------------
-// const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
-// // ------------------- Import submission storage operations -------------------
-// const { saveSubmissionToStorage, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('@/utils/storage.js');
-// const { checkInventorySync } = require('@/utils/characterUtils');
+    .addSubcommand(sub =>
+      sub
+        .setName('list')
+        .setDescription('List relics discovered by a character')
+        .addStringOption(opt =>
+          opt.setName('character').setDescription('Character who discovered the relics').setRequired(true).setAutocomplete(true)
+        )
+    )
 
-// // ============================================================================
-// // Configuration and Paths
-// // ============================================================================
-// // ------------------- Define the path for relicStorage.json -------------------
-// const relicStoragePath = path.join(__dirname, '..', 'data', 'relicStorage.json');
+    .addSubcommand(sub =>
+      sub
+        .setName('info')
+        .setDescription('View info on an appraised relic')
+        .addStringOption(opt =>
+          opt.setName('relic_id').setDescription('Relic ID (e.g. R12345 or MongoDB _id)').setRequired(true)
+        )
+    )
 
-// // ============================================================================
-// // Command Definition for Relic Operations
-// // ============================================================================
-// // ------------------- Define the /relic command and its subcommands -------------------
-// module.exports = {
-//   data: new SlashCommandBuilder()
-//     .setName('relic')
-//     .setDescription('📜 Manage Relic Appraisals and Archival')
+    .addSubcommand(sub =>
+      sub
+        .setName('reveal')
+        .setDescription('Reveal what relic was found (after mod-approved appraisal)')
+        .addStringOption(opt =>
+          opt.setName('relic_id').setDescription('Relic ID to reveal').setRequired(true)
+        )
+    )
 
-//     // ------------------- /relic info: View info on an appraised relic -------------------
-//     .addSubcommand(sub =>
-//       sub
-//         .setName('info')
-//         .setDescription('View info on an appraised relic')
-//         .addStringOption(opt =>
-//           opt
-//             .setName('relic_id')
-//             .setDescription('Relic ID')
-//             .setRequired(true)
-//         )
-//     )
+    .addSubcommand(sub =>
+      sub
+        .setName('submit')
+        .setDescription('Submit art for an appraised relic to the archives')
+        .addStringOption(opt =>
+          opt.setName('relic_id').setDescription('Appraised Relic ID').setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('image_url').setDescription('PNG image URL (1:1, min 500x500, transparent bg)').setRequired(true)
+        )
+    )
 
-//     // ------------------- /relic submit: Submit an appraised relic to the archives -------------------
-//     .addSubcommand(sub =>
-//       sub
-//         .setName('submit')
-//         .setDescription('Submit an appraised relic to the archives')
-//         .addStringOption(opt =>
-//           opt
-//             .setName('relic_id')
-//             .setDescription('Appraised Relic ID')
-//             .setRequired(true)
-//         )
-//         .addStringOption(opt =>
-//           opt
-//             .setName('image_url')
-//             .setDescription('PNG image URL for the relic (must be 1:1 and at least 500x500)')
-//             .setRequired(true)
-//         )
-//     )
+    .addSubcommand(sub =>
+      sub
+        .setName('appraisal-request')
+        .setDescription('Request appraisal for a found relic')
+        .addStringOption(opt =>
+          opt.setName('character').setDescription('Character who found the relic').setRequired(true).setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('relic_id').setDescription('Relic ID (e.g. R12345)').setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('appraiser').setDescription('PC Artist/Researcher or NPC').setRequired(true).setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('payment').setDescription('Payment offered (from inventory)').setRequired(false)
+        )
+    )
 
-//     // ------------------- /relic appraisalrequest: Request appraisal for a found relic -------------------
-//     .addSubcommand(sub =>
-//       sub
-//         .setName('appraisalrequest')
-//         .setDescription('Request appraisal for a found relic (Discovery is via /explore – integration pending)')
-//         .addStringOption(opt =>
-//           opt
-//             .setName('character')
-//             .setDescription('Name of the relic owner')
-//             .setRequired(true)
-//             .setAutocomplete(true)
-//         )
-//         .addStringOption(opt =>
-//           opt
-//             .setName('relic_id')
-//             .setDescription('ID of the relic to be appraised')
-//             .setRequired(true)
-//         )
-//         .addStringOption(opt =>
-//           opt
-//             .setName('appraiser')
-//             .setDescription('Name of the intended appraiser')
-//             .setRequired(true)
-//             .setAutocomplete(true)
-//         )
-//         .addStringOption(opt =>
-//           opt
-//             .setName('payment')
-//             .setDescription('Payment offered for appraisal')
-//             .setRequired(true)
-//         )
-//     )
+    .addSubcommand(sub =>
+      sub
+        .setName('appraisal-accept')
+        .setDescription('Accept an appraisal request (Artist/Researcher in Inariko; costs 3 stamina)')
+        .addStringOption(opt =>
+          opt.setName('appraiser').setDescription('Your character (appraiser)').setRequired(true).setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('request_id').setDescription('Appraisal request ID (MongoDB _id)').setRequired(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('description').setDescription('Appraisal description of the relic').setRequired(true)
+        )
+    ),
 
-//     // ------------------- /relic appraisalaccept: Accept an appraisal request and process appraisal -------------------
-//     .addSubcommand(sub =>
-//       sub
-//         .setName('appraisalaccept')
-//         .setDescription('Accept an appraisal request and process appraisal (automatic table roll)')
-//         .addStringOption(opt =>
-//           opt
-//             .setName('appraiser')
-//             .setDescription('Name of the appraiser (must match request)')
-//             .setRequired(true)
-//             .setAutocomplete(true)
-//         )
-//         .addStringOption(opt =>
-//           opt
-//             .setName('appraisal_id')
-//             .setDescription('ID of the appraisal request to accept')
-//             .setRequired(true)
-//         )
-//     )
+  async execute(interaction) {
+    try {
+      const sub = interaction.options.getSubcommand();
 
-//     // ------------------- /relic test: Assign a random unappraised relic to a character for testing -------------------
-//     .addSubcommand(sub =>
-//       sub
-//         .setName('test')
-//         .setDescription('Test: Assign a random unappraised relic to a character')
-//         .addStringOption(opt =>
-//           opt
-//             .setName('character')
-//             .setDescription('Name of the character')
-//             .setRequired(true)
-//         )
-//     ),
+      if (Date.now() - interaction.createdTimestamp > 2500) {
+        return interaction.reply({ content: '❌ Interaction expired. Please try again.', ephemeral: true });
+      }
 
-//   // ============================================================================ 
-//   // Command Execution Handler for Relic Operations
-//   // ============================================================================ 
-//   async execute(interaction) {
-//     try {
-//       const sub = interaction.options.getSubcommand();
+      const deferSubs = ['list', 'reveal', 'submit', 'appraisal-request', 'appraisal-accept'];
+      if (deferSubs.includes(sub)) {
+        await interaction.deferReply();
+      }
 
-//       // Get character name from options
-//       const characterName = interaction.options.getString('character');
-//       if (characterName) {
-//         const character = await fetchCharacterByName(characterName);
-//         if (character) {
-//           try {
-//             await checkInventorySync(character);
-//           } catch (error) {
-//             await interaction.reply({
-//               content: error.message,
-//               ephemeral: true
-//             });
-//             return;
-//           }
-//         }
-//       }
+      // ------------------- /relic list -------------------
+      if (sub === 'list') {
+        const characterName = interaction.options.getString('character');
+        const relics = await fetchRelicsByCharacter(characterName);
+        if (!relics || relics.length === 0) {
+          return interaction.editReply({ content: `❌ No relics found for **${characterName}**.` });
+        }
+        const lines = relics.map(r => {
+          const id = r.relicId || r._id;
+          const status = r.deteriorated ? '⚠️ Deteriorated' : r.archived ? '✅ Archived' : r.appraised ? (r.rollOutcome ? '🎲 Revealed' : '⏳ Awaiting reveal') : '🔸 Unappraised';
+          return `• \`${id}\` — ${status}${r.rollOutcome ? ` — **${r.rollOutcome}**` : ''}`;
+        });
+        const embed = new EmbedBuilder()
+          .setTitle(`📜 Relics: ${characterName}`)
+          .setDescription(lines.join('\n'))
+          .setColor(0xe67e22);
+        return interaction.editReply({ embeds: [embed] });
+      }
 
-//       // ------------------- Check Interaction Age -------------------
-//       if (Date.now() - interaction.createdTimestamp > 2500) {
-//         console.warn(`[relic.js]: Interaction token is too old (${Date.now() - interaction.createdTimestamp}ms) for subcommand "${sub}".`);
-//         return interaction.reply({ content: '❌ Interaction expired. Please try again.', ephemeral: true });
-//       }
+      // ------------------- /relic info -------------------
+      if (sub === 'info') {
+        const relicId = interaction.options.getString('relic_id');
+        const relic = await fetchRelicById(relicId);
+        if (!relic) {
+          return interaction.reply({ content: '❌ No relic found by that ID.', ephemeral: true });
+        }
+        if (!relic.appraised) {
+          return interaction.reply({ content: '❌ This relic has not been appraised yet.', ephemeral: true });
+        }
+        const embed = new EmbedBuilder()
+          .setTitle(`${relic.rollOutcome || relic.name} (\`${relic.relicId || relic._id}\`)`)
+          .setDescription(relic.appraisalDescription || 'No description.')
+          .addFields(
+            { name: 'Discovered By', value: relic.discoveredBy || '—', inline: true },
+            { name: 'Location', value: relic.locationFound || 'Unknown', inline: true },
+            { name: 'Appraised By', value: relic.appraisedBy || '—', inline: true },
+            { name: 'Art Submitted', value: relic.artSubmitted ? '✅' : '❌', inline: true },
+            { name: 'Archived', value: relic.archived ? '✅' : '❌', inline: true },
+            { name: 'Deteriorated', value: relic.deteriorated ? '⚠️ Yes' : 'No', inline: true }
+          )
+          .setColor(0xe67e22);
+        return (interaction.deferred ? interaction.editReply : interaction.reply).call(interaction, { embeds: [embed] });
+      }
 
-//       // ------------------- Defer reply for asynchronous subcommands -------------------
-//       if (["test", "appraisalrequest", "appraisalaccept"].includes(sub)) {
-//         try {
-//           if (!interaction.deferred && !interaction.replied) {
-//             await interaction.deferReply();
-//           }
-//         } catch (error) {
-//           handleInteractionError(error, 'relic.js');
+      // ------------------- /relic reveal -------------------
+      if (sub === 'reveal') {
+        const relicId = interaction.options.getString('relic_id');
+        const relic = await fetchRelicById(relicId);
+        if (!relic) {
+          return interaction.editReply({ content: '❌ No relic found by that ID.' });
+        }
+        if (!relic.appraised) {
+          return interaction.editReply({ content: '❌ This relic must be appraised before you can reveal it.' });
+        }
+        if (relic.rollOutcome) {
+          return interaction.editReply({ content: `❌ This relic has already been revealed: **${relic.rollOutcome}**` });
+        }
+        if (relic.archived || relic.deteriorated) {
+          return interaction.editReply({ content: '❌ This relic cannot be revealed (archived or deteriorated).' });
+        }
 
-//           if (error.code === 40060) {
-//             console.warn(`[relic.js]: Interaction already acknowledged for subcommand "${sub}".`);
-//           } else if (error.code === 10062) {
-//             console.error(`[relic.js]: Interaction expired or no longer valid for subcommand "${sub}".`);
-//             return;
-//           } else {
-//             console.error(`[relic.js]: Unexpected error deferring reply for subcommand "${sub}":`, error);
-//             return;
-//           }
-//         }
-//       }
+        const char = await fetchCharacterByNameAndUserId(relic.discoveredBy, interaction.user.id) ||
+          await (async () => {
+            const mod = await ModCharacter.findOne({ name: new RegExp(`^${relic.discoveredBy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+            return mod && String(mod.userId) === interaction.user.id ? mod : null;
+          })();
+        if (!char) {
+          return interaction.editReply({ content: '❌ Only the owner of the character who found this relic can reveal it.' });
+        }
 
-//       // ------------------- /relic test: Assign a random unappraised relic to a character -------------------
-//       if (sub === 'test') {
-//         // Generate a random location.
-//         const regionNames = Object.keys(locationsModule.locations.Regions);
-//         const randomRegion = regionNames[Math.floor(Math.random() * regionNames.length)];
-//         const mapModule = new MapModule();
-//         const randomColumn = mapModule.columns[Math.floor(Math.random() * mapModule.columns.length)];
-//         const randomRow = mapModule.rows[Math.floor(Math.random() * mapModule.rows.length)];
-//         const randomQuadrant = mapModule.quadrants[Math.floor(Math.random() * mapModule.quadrants.length)];
-//         const generatedLocation = `${randomRegion} - ${randomColumn}${randomRow}, ${randomQuadrant}`;
+        const isAlreadyDiscovered = async (relicName) => {
+          const existing = await RelicModel.findOne({ rollOutcome: relicName });
+          return !!existing;
+        };
 
-//         // ------------------- Create relic data object locally -------------------
-//         // Generate a custom relic ID using generateUniqueId('R').
-//         const customRelicID = generateUniqueId('R');
-//         const relicData = {
-//           relicId: customRelicID, // This value should be "R" followed by a number.
-//           name: 'Unappraised Relic',
-//           discoveredBy: interaction.options.getString('character'),
-//           locationFound: generatedLocation,
-//           discoveredDate: new Date()
-//         };
+        const result = await rollRelicOutcome({ isArchived: isAlreadyDiscovered });
+        const { outcome, isDuplicate } = result;
 
-//         // IMPORTANT: For the test subcommand, we DO NOT write to MongoDB.
-//         // Simply use the locally created relicData as our relic object.
-//         const relic = relicData;  // Do not call createRelic() here!
+        const updateData = {
+          name: outcome.name,
+          rollOutcome: outcome.name,
+          appraisalDescription: relic.appraisalDescription || outcome.description,
+        };
+        if (isDuplicate) {
+          const existingArchived = await RelicModel.findOne({ rollOutcome: outcome.name, archived: true });
+          if (existingArchived) {
+            updateData.duplicateOf = existingArchived._id;
+            updateData.artSubmitted = true;
+            updateData.archived = true;
+          }
+        }
 
-//         // ------------------- Save relic info to relicStorage.json locally -------------------
-//         let relicStorage = [];
-//         if (fs.existsSync(relicStoragePath)) {
-//           try {
-//             const fileData = fs.readFileSync(relicStoragePath, 'utf8');
-//             relicStorage = fileData.trim() ? JSON.parse(fileData) : [];
-//           } catch (err) {
-//             handleInteractionError(err, 'relic.js');
+        await RelicModel.findByIdAndUpdate(relic._id, updateData);
 
-//             console.error('[relic.js]: Error reading relicStorage.json:', err);
-//             relicStorage = [];
-//           }
-//         }
-//         relicStorage.push({
-//           relicId: relic.relicId,
-//           name: relic.name,
-//           discoveredBy: relic.discoveredBy,
-//           locationFound: relic.locationFound,
-//           discoveredDate: relic.discoveredDate.toISOString()
-//         });
-//         try {
-//           // Ensure the directory exists before writing the file
-//           const relicStorageDir = path.dirname(relicStoragePath);
-//           if (!fs.existsSync(relicStorageDir)) {
-//             fs.mkdirSync(relicStorageDir, { recursive: true });
-//           }
+        const embed = new EmbedBuilder()
+          .setTitle(`🔸 Relic Revealed: ${outcome.name}`)
+          .setDescription(outcome.description)
+          .addFields(
+            { name: 'Relic', value: outcome.name, inline: true },
+            { name: 'Duplicate?', value: isDuplicate ? 'Yes (no art required)' : 'No', inline: true },
+            { name: 'Next Step', value: isDuplicate ? 'Relic submitted as duplicate.' : 'Provide art and use `/relic submit` to archive.', inline: false }
+          )
+          .setColor(0xe67e22);
+        return interaction.editReply({ embeds: [embed] });
+      }
 
-//           fs.writeFileSync(relicStoragePath, JSON.stringify(relicStorage, null, 2));
-//         } catch (err) {
-//           handleInteractionError(err, 'relic.js');
-//           console.error('[relic.js]: Error writing to relicStorage.json:', err);
-//         }
+      // ------------------- /relic submit -------------------
+      if (sub === 'submit') {
+        const relicId = interaction.options.getString('relic_id');
+        const imageUrl = interaction.options.getString('image_url');
+        const relic = await fetchRelicById(relicId);
+        if (!relic) {
+          return interaction.editReply({ content: '❌ Relic not found.' });
+        }
+        if (!relic.appraised) {
+          return interaction.editReply({ content: '❌ Only appraised relics can be submitted.' });
+        }
+        if (!relic.rollOutcome) {
+          return interaction.editReply({ content: '❌ Reveal the relic first with `/relic reveal`.' });
+        }
+        if (relic.archived) {
+          return interaction.editReply({ content: '❌ This relic has already been submitted to the archives.' });
+        }
 
+        const char = await fetchCharacterByNameAndUserId(relic.discoveredBy, interaction.user.id) ||
+          await ModCharacter.findOne({ name: new RegExp(`^${relic.discoveredBy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+            .then(m => m && String(m.userId) === interaction.user.id ? m : null);
+        if (!char) {
+          return interaction.editReply({ content: '❌ Only the owner of the character who found this relic can submit it.' });
+        }
 
-//         // ------------------- Final Response for test subcommand with failsafe -------------------
-//         try {
-//           await interaction.editReply(`🗺️ **Test Relic Given to ${relic.discoveredBy}!**
-// > **Relic ID:** \`${relic.relicId}\`
-// > **Location:** ${relic.locationFound}
+        const updated = await archiveRelic(relicId, imageUrl);
+        if (!updated) {
+          return interaction.editReply({ content: '❌ Failed to archive the relic.' });
+        }
+        return interaction.editReply({ content: `🖼️ **Relic submitted to the archives!** [View image](${imageUrl})` });
+      }
 
-// *You can now use /relic appraisalrequest to request its appraisal.*`);
-//         } catch (finalError) {
-//           handleInteractionError(finalError, 'relic.js');
+      // ------------------- /relic appraisal-request -------------------
+      if (sub === 'appraisal-request') {
+        const characterName = interaction.options.getString('character');
+        const relicId = interaction.options.getString('relic_id');
+        const appraiser = interaction.options.getString('appraiser');
+        const payment = interaction.options.getString('payment') || '';
 
-//           // If editReply fails because no reply was sent, fall back to a direct reply.
-//           if (finalError.code === 'InteractionNotReplied' || finalError.message.includes("has not been sent or deferred")) {
-//             try {
-//               await interaction.reply(`🗺️ **Test Relic Given to ${relic.discoveredBy}!**
-// > **Relic ID:** \`${relic.relicId}\`
-// > **Location:** ${relic.locationFound}
+        const relic = await fetchRelicById(relicId);
+        if (!relic) {
+          return interaction.editReply({ content: '❌ Relic not found.' });
+        }
+        if (relic.appraised) {
+          return interaction.editReply({ content: '❌ This relic has already been appraised.' });
+        }
+        if (relic.deteriorated) {
+          return interaction.editReply({ content: '❌ This relic has deteriorated and cannot be appraised.' });
+        }
+        if (relic.discoveredBy !== characterName) {
+          return interaction.editReply({ content: `❌ This relic was discovered by **${relic.discoveredBy}**, not ${characterName}.` });
+        }
 
-// *You can now use /relic appraisalrequest to request its appraisal.*`);
-//             } catch (fallbackError) {
-//               handleInteractionError(fallbackError, 'relic.js');
+        const finderChar = await fetchCharacterByNameAndUserId(characterName, interaction.user.id) ||
+          await ModCharacter.findOne({ name: new RegExp(`^${characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+            .then(m => m && String(m.userId) === interaction.user.id ? m : null);
+        if (!finderChar) {
+          return interaction.editReply({ content: '❌ You must own the character who found the relic.' });
+        }
 
-//               console.error('[relic.js]: Failed to send fallback reply in test subcommand:', fallbackError);
-//             }
-//           } else {
-//             console.error('[relic.js]: Failed to send final response in test subcommand:', finalError);
-//           }
-//         }
-//         return;
-//       }
-      
-//       // ------------------- /relic info: View information on an appraised relic -------------------
-//       else if (sub === 'info') {
-//         const relicId = interaction.options.getString('relic_id');
-//         const relic = await fetchRelicById(relicId);
-//         if (!relic) {
-//           return interaction.reply({ content: '❌ No relic found by that ID.', ephemeral: true });
-//         }
-//         if (!relic.appraised) {
-//           return interaction.reply({ content: '❌ This relic has not been appraised yet.', ephemeral: true });
-//         }
-//         // Construct an embed message for the relic.
-//         const embed = {
-//           title: `${relic.name} (\`${relic._id}\`)`,
-//           description: relic.appraisalDescription,
-//           fields: [
-//             { name: 'Discovered By', value: relic.discoveredBy, inline: true },
-//             { name: 'Location', value: relic.locationFound || 'Unknown', inline: true },
-//             { name: 'Appraised By', value: relic.appraisedBy || '—', inline: true },
-//             { name: 'Art Submitted', value: relic.artSubmitted ? '✅' : '❌', inline: true },
-//             { name: 'Archived', value: relic.archived ? '✅' : '❌', inline: true },
-//             { name: 'Deteriorated', value: relic.deteriorated ? '⚠️ Yes' : 'No', inline: true }
-//           ]
-//         };
-//         return interaction.reply({ embeds: [embed] });
-//       }
-      
-//       // ------------------- /relic submit: Submit an appraised relic to the archives -------------------
-//       else if (sub === 'submit') {
-//         const relicId = interaction.options.getString('relic_id');
-//         const imageUrl = interaction.options.getString('image_url');
-//         const relic = await fetchRelicById(relicId);
-//         if (!relic) {
-//           return interaction.reply({ content: '❌ Relic not found.', ephemeral: true });
-//         }
-//         if (!relic.appraised) {
-//           return interaction.reply({ content: '❌ Only appraised relics can be submitted to the archives.', ephemeral: true });
-//         }
-//         if (relic.archived) {
-//           return interaction.reply({ content: '❌ This relic has already been submitted to the archives.', ephemeral: true });
-//         }
-//         // Archive the relic with the provided image URL.
-//         const updatedRelic = await archiveRelic(relicId, imageUrl);
-//         if (!updatedRelic) {
-//           return interaction.reply({ content: '❌ Failed to update the relic.', ephemeral: true });
-//         }
-//         return interaction.reply(`🖼️ **Relic submitted to the archives!** View: ${imageUrl}`);
-//       }
-      
-//       // ------------------- /relic appraisalrequest: Request appraisal for a found relic -------------------
-//       else if (sub === 'appraisalrequest') {
-//         const character = interaction.options.getString('character');
-//         const relicId = interaction.options.getString('relic_id');
-//         const appraiser = interaction.options.getString('appraiser');
-//         const payment = interaction.options.getString('payment');
-//         const appraisalId = generateUniqueId('A');
-        
-//         // Build the appraisal request data object.
-//         const appraisalData = {
-//           type: "appraisalRequest",
-//           character,
-//           relic_id: relicId,
-//           appraiser,
-//           payment,
-//           createdAt: Date.now()
-//         };
-        
-//         // Save the appraisal request to persistent storage.
-//         saveSubmissionToStorage(appraisalId, appraisalData);
-        
-//         return interaction.editReply(`📜 Appraisal request created!
-// > **Appraisal ID:** \`${appraisalId}\`
-// > Owner: **${character}**
-// > Intended Appraiser: **${appraiser}**
-// > Payment: **${payment}**
+        const npcAppraisal = appraiser.trim().toLowerCase() === 'npc';
+        if (npcAppraisal) {
+          const user = await getOrCreateToken(interaction.user.id);
+          const balance = user?.tokens ?? 0;
+          if (balance < 500) {
+            return interaction.editReply({ content: '❌ NPC appraisal costs 500 tokens. You do not have enough. Mod will deduct when approving on dashboard.' });
+          }
+        }
 
-// *(Note: Discovery is handled by /explore – integration pending.)*`);
-//       }
-      
-//       // ------------------- /relic appraisalaccept: Accept an appraisal request and process appraisal -------------------
-//       else if (sub === 'appraisalaccept') {
-//         const providedAppraiser = interaction.options.getString('appraiser');
-//         const appraisalId = interaction.options.getString('appraisal_id');
-        
-//         // Retrieve the appraisal request from persistent storage.
-//         const request = retrieveSubmissionFromStorage(appraisalId);
-//         if (!request) {
-//           return interaction.editReply({ content: `❌ No appraisal request found with ID \`${appraisalId}\`.`, ephemeral: true });
-//         }
-        
-//         // Validate the appraiser name (case-insensitive).
-//         if (request.appraiser.toLowerCase() !== providedAppraiser.toLowerCase()) {
-//           return interaction.editReply({ content: `❌ Appraiser mismatch. This request is assigned to **${request.appraiser}**.`, ephemeral: true });
-//         }
-        
-//         // Execute an automatic table roll to determine appraisal outcome.
-//         const outcomes = [
-//           'a blank',
-//           'an ancient scroll',
-//           'a mystical amulet',
-//           'a weathered coin'
-//         ];
-//         const randomOutcome = outcomes[Math.floor(Math.random() * outcomes.length)];
-//         const autoDescription = `Item appraised! It's ${randomOutcome}!`;
-        
-//         // Update the relic with appraisal details and outcome.
-//         const updatedRelic = await appraiseRelic(request.relic_id, providedAppraiser, autoDescription, randomOutcome);
-//         if (!updatedRelic) {
-//           return interaction.editReply({ content: '❌ Failed to update relic appraisal. Please check the relic ID.', ephemeral: true });
-//         }
-        
-//         // Remove the processed appraisal request from storage.
-//         deleteSubmissionFromStorage(appraisalId);
-        
-//         return interaction.editReply(`📜 **Relic appraised by ${providedAppraiser}!**
-// > ${autoDescription}
-// > **Relic ID:** \`${request.relic_id}\``);
-//       }
-      
-//       // ------------------- Unknown subcommand: Respond when an invalid subcommand is used -------------------
-//       else {
-//         return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
-//       }
-//     } catch (error) {
-//       handleInteractionError(error, 'relic.js');
+        const existing = await RelicAppraisalRequest.findOne({
+          relicMongoId: relic._id,
+          status: 'pending',
+        });
+        if (existing) {
+          return interaction.editReply({ content: '❌ An appraisal request for this relic is already pending.' });
+        }
 
-//       console.error('[relic.js]: Error executing relic command:', error);
-//       if (interaction.deferred || interaction.replied) {
-//         return interaction.editReply({ content: '❌ Something went wrong.', ephemeral: true });
-//       } else {
-//         return interaction.reply({ content: '❌ Something went wrong.', ephemeral: true });
-//       }
-//     }
-//   }
-// };
+        const request = new RelicAppraisalRequest({
+          relicId: relic.relicId || String(relic._id),
+          relicMongoId: relic._id,
+          characterName,
+          finderOwnerUserId: interaction.user.id,
+          appraiserName: appraiser,
+          npcAppraisal,
+          payment,
+          status: 'pending',
+        });
+        await request.save();
+
+        const modNote = npcAppraisal ? '\n*(NPC appraisal: 500 tokens will be deducted when a mod approves on the dashboard.)*' : '\n*(An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise.)*';
+        return interaction.editReply({
+          content: `📜 **Appraisal request created!**\n> **Request ID:** \`${request._id}\`\n> Owner: **${characterName}**\n> Appraiser: **${appraiser}**\n> Payment: ${payment || 'None'}${modNote}`,
+        });
+      }
+
+      // ------------------- /relic appraisal-accept -------------------
+      if (sub === 'appraisal-accept') {
+        const appraiserName = interaction.options.getString('appraiser');
+        const requestId = interaction.options.getString('request_id');
+        const description = interaction.options.getString('description');
+
+        const request = await RelicAppraisalRequest.findById(requestId);
+        if (!request) {
+          return interaction.editReply({ content: '❌ Appraisal request not found.' });
+        }
+        if (request.status !== 'pending') {
+          return interaction.editReply({ content: '❌ This request has already been processed.' });
+        }
+        if (request.npcAppraisal) {
+          return interaction.editReply({ content: '❌ NPC appraisals are approved on the dashboard only.' });
+        }
+
+        const appraiserChar = await fetchCharacterByNameAndUserId(appraiserName, interaction.user.id) ||
+          await ModCharacter.findOne({ name: new RegExp(`^${appraiserName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
+            .then(m => m && String(m.userId) === interaction.user.id ? m : null);
+        if (!appraiserChar) {
+          return interaction.editReply({ content: '❌ You must own the appraiser character.' });
+        }
+        if (appraiserChar.job !== 'Artist' && appraiserChar.job !== 'Researcher') {
+          return interaction.editReply({ content: '❌ Only Artists or Researchers can appraise relics.' });
+        }
+        const village = normalizeVillage(appraiserChar.currentVillage);
+        if (village !== 'inariko') {
+          return interaction.editReply({ content: '❌ The appraiser must reside in Inariko.' });
+        }
+        if (String(request.appraiserName).toLowerCase() !== appraiserName.toLowerCase()) {
+          return interaction.editReply({ content: `❌ This request is assigned to **${request.appraiserName}**, not ${appraiserName}.` });
+        }
+
+        const stamina = appraiserChar.currentStamina ?? 0;
+        if (stamina < 3) {
+          return interaction.editReply({ content: '❌ Appraisal costs 3 stamina. The appraiser does not have enough.' });
+        }
+
+        const newStamina = Math.max(0, (appraiserChar.currentStamina ?? 0) - 3);
+        await updateCurrentStamina(appraiserChar._id, newStamina, true);
+        await appraiseRelic(request.relicMongoId || request.relicId, appraiserName, description, null, { npcAppraisal: false });
+        request.status = 'approved';
+        request.appraisalDescription = description;
+        request.modApprovedBy = interaction.user.id;
+        request.modApprovedAt = new Date();
+        request.updatedAt = new Date();
+        await request.save();
+
+        return interaction.editReply({
+          content: `📜 **Relic appraised by ${appraiserName}!**\n> ${description}\n> **Relic ID:** \`${request.relicId}\`\n\nThe finder can now use \`/relic reveal relic_id:${request.relicId}\` to reveal what relic it is.`,
+        });
+      }
+
+      return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+    } catch (error) {
+      handleInteractionError(error, 'relic.js');
+      if (interaction.deferred || interaction.replied) {
+        return interaction.editReply({ content: '❌ Something went wrong.' }).catch(() => {});
+      }
+      return interaction.reply({ content: '❌ Something went wrong.', ephemeral: true }).catch(() => {});
+    }
+  },
+};

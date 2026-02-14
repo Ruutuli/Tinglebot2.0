@@ -769,7 +769,9 @@ async function notifyExpeditionRaidOver(raid, client, result) {
     if (!party.progressLog) party.progressLog = [];
     const msg = result === 'defeated'
       ? `Raid defeated ${raid.monster?.name || 'monster'}! Continue the expedition.`
-      : `Raid timed out. Continue the expedition.`;
+      : result === 'fled'
+        ? `The party escaped from ${raid.monster?.name || 'the monster'}! Continue the expedition.`
+        : `Raid timed out. Continue the expedition.`;
     party.progressLog.push({
       at: new Date(),
       characterName: 'Raid',
@@ -779,14 +781,15 @@ async function notifyExpeditionRaidOver(raid, client, result) {
     await party.save();
 
     const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
+    const desc = result === 'defeated'
+      ? `The monster was defeated! Use ${cmdRoll} with id \`${raid.expeditionId}\` and your character to continue.`
+      : result === 'fled'
+        ? `The party escaped! Use ${cmdRoll} with id \`${raid.expeditionId}\` and your character to continue.`
+        : `The raid timed out. Use ${cmdRoll} with id \`${raid.expeditionId}\` and your character to continue.`;
     const embed = new EmbedBuilder()
-      .setColor(result === 'defeated' ? 0x4CAF50 : 0xFF9800)
+      .setColor(result === 'defeated' ? 0x4CAF50 : result === 'fled' ? 0x9C27B0 : 0xFF9800)
       .setTitle('🗺️ **Raid over — continue your expedition**')
-      .setDescription(
-        result === 'defeated'
-          ? `The monster was defeated! Use ${cmdRoll} with id \`${raid.expeditionId}\` and your character to continue.`
-          : `The raid timed out. Use ${cmdRoll} with id \`${raid.expeditionId}\` and your character to continue.`
-      )
+      .setDescription(desc)
       .addFields({ name: '🆔 **Expedition ID**', value: raid.expeditionId, inline: true })
       .setTimestamp();
 
@@ -808,6 +811,22 @@ async function cancelRaidTurnSkip(raidId) {
   const scheduler = require('@/utils/scheduler');
   const n = await scheduler.cancelJob(RAID_TURN_SKIP_JOB_NAME, { raidId });
   if (n > 0) logger.info('RAID', `Cancelled ${n} turn-skip job(s) for raid ${raidId}`);
+}
+
+// ---- Function: endExplorationRaidAsRetreat ----
+// Called when party successfully retreats from an exploration raid. Ends the raid as 'fled' and notifies expedition.
+async function endExplorationRaidAsRetreat(raid, client) {
+  if (!raid || raid.status !== 'active') return;
+  try {
+    await cancelRaidTurnSkip(raid.raidId);
+    await raid.completeRaid('fled');
+    if (raid.expeditionId && client) {
+      await notifyExpeditionRaidOver(raid, client, 'fled');
+    }
+  } catch (err) {
+    logger.error('RAID', `endExplorationRaidAsRetreat: ${err.message}`);
+    throw err;
+  }
 }
 
 // ---- Function: leaveRaid ----
@@ -1240,9 +1259,10 @@ function createRaidEmbed(raid, monsterImage) {
 
   if (raid.expeditionId) {
     const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
+    const cmdRetreat = `</explore retreat:${getExploreCommandId()}>`;
     embed.addFields({
       name: '🗺️ __Expedition raid__',
-      value: `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.`,
+      value: `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.\n\n**To try to flee:** ${cmdRetreat} (1 stamina per attempt, not guaranteed).`,
       inline: false
     });
   }
@@ -1495,8 +1515,10 @@ module.exports = {
   createRaidEmbed,
   createRaidThread,
   triggerRaid,
+  endExplorationRaidAsRetreat,
   calculateRaidDuration,
   scheduleRaidTurnSkip,
+  cancelRaidTurnSkip,
   applyPartySizeScalingToRaid,
   RAID_EXPIRATION_JOB_NAME,
   RAID_TURN_SKIP_JOB_NAME

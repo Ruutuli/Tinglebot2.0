@@ -46,7 +46,8 @@ const {
 const { generateDailyQuests: runHelpWantedGeneration } = require('@/modules/helpWantedModule');
 const { updateSubmissionData } = require('@/utils/storage');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
-const { fetchAllCharacters, getCharacterInventoryCollection, connectToInventoriesNative } = require('@/database/db');
+const { fetchAllCharacters, getCharacterInventoryCollection, connectToInventoriesNative, markRelicDeteriorated } = require('@/database/db');
+const RelicModel = require('@/models/RelicModel');
 
 const APPROVAL_CHANNEL_ID = '1381479893090566144';
 const COMMUNITY_BOARD_CHANNEL_ID = process.env.COMMUNITY_BOARD_CHANNEL_ID || '651614266046152705';
@@ -1937,6 +1938,106 @@ async function submissionModReminder(client, _data = {}) {
 }
 
 // ============================================================================
+// ------------------- Relic Deadline Tasks -------------------
+// ============================================================================
+
+// Deteriorate unappraised relics past 7 days from discovery
+async function relicAppraisalDeadline(client, _data = {}) {
+  try {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const relics = await RelicModel.find({
+      appraised: false,
+      deteriorated: false,
+      discoveredDate: { $lt: cutoff },
+    }).lean();
+    for (const r of relics) {
+      try {
+        await markRelicDeteriorated(r._id);
+        logger.info('SCHEDULED', `relic-appraisal-deadline: Deteriorated relic ${r.relicId || r._id} (discovered ${r.discoveredDate})`);
+      } catch (e) {
+        logger.error('SCHEDULED', `relic-appraisal-deadline: Failed for ${r._id}: ${e?.message || e}`);
+      }
+    }
+    if (relics.length > 0) {
+      logger.success('SCHEDULED', `relic-appraisal-deadline: Deteriorated ${relics.length} relic(s)`);
+    }
+  } catch (err) {
+    logger.error('SCHEDULED', `relic-appraisal-deadline: ${err.message}`);
+  }
+}
+
+// Mark appraised relics as lost if art not submitted within 2 months
+async function relicArtDeadline(client, _data = {}) {
+  try {
+    const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 2 months
+    const relics = await RelicModel.find({
+      appraised: true,
+      artSubmitted: false,
+      archived: false,
+      deteriorated: false,
+      appraisalDate: { $lt: cutoff },
+    }).lean();
+    for (const r of relics) {
+      try {
+        await RelicModel.findByIdAndUpdate(r._id, { deteriorated: true });
+        logger.info('SCHEDULED', `relic-art-deadline: Marked relic ${r.relicId || r._id} as lost (art deadline passed)`);
+      } catch (e) {
+        logger.error('SCHEDULED', `relic-art-deadline: Failed for ${r._id}: ${e?.message || e}`);
+      }
+    }
+    if (relics.length > 0) {
+      logger.success('SCHEDULED', `relic-art-deadline: Marked ${relics.length} relic(s) as lost`);
+    }
+  } catch (err) {
+    logger.error('SCHEDULED', `relic-art-deadline: ${err.message}`);
+  }
+}
+
+// Send map coordinates DM for approved map appraisal requests (e.g. NPC approved on dashboard)
+async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
+  try {
+    const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
+    const OldMapFound = require('@/models/OldMapFoundModel.js');
+    const { getOldMapByNumber } = require('@/data/oldMaps.js');
+    const { sendDiscordDM } = require('@/utils/notificationService.js');
+    const OLD_MAPS_LINK = 'https://www.rootsofthewild.com/oldmaps';
+
+    const requests = await MapAppraisalRequest.find({
+      status: 'approved',
+      coordinatesDmSentAt: null,
+    }).lean();
+    for (const req of requests) {
+      try {
+        const mapDoc = await OldMapFound.findById(req.oldMapFoundId).lean();
+        if (!mapDoc) continue;
+        const mapInfo = getOldMapByNumber(mapDoc.mapNumber);
+        const coordinates = mapInfo ? mapInfo.coordinates : '—';
+        const mapLabel = `Map #${mapDoc.mapNumber}`;
+        let desc = `Your old map has been deciphered.\n\n**${mapLabel}**\n**Coordinates:** ${coordinates}`;
+        if (mapInfo && mapInfo.leadsTo) desc += `\n**Leads to:** ${mapInfo.leadsTo}`;
+        const dmEmbed = {
+          title: '🗺️ Map appraised — your coordinates',
+          description: desc,
+          color: 0x2ecc71,
+          footer: { text: 'Roots of the Wild • Old Maps' },
+          url: OLD_MAPS_LINK,
+        };
+        const sent = await sendDiscordDM(req.mapOwnerUserId, dmEmbed);
+        await MapAppraisalRequest.updateOne(
+          { _id: req._id },
+          { $set: { coordinatesDmSentAt: sent ? new Date() : null, updatedAt: new Date() } }
+        );
+        if (sent) logger.info('SCHEDULED', `map-appraisal-dm: Sent coordinates to ${req.mapOwnerUserId} for request ${req._id}`);
+      } catch (e) {
+        logger.error('SCHEDULED', `map-appraisal-dm: Failed request ${req._id}: ${e?.message || e}`);
+      }
+    }
+  } catch (err) {
+    logger.error('SCHEDULED', `map-appraisal-dm: ${err.message}`);
+  }
+}
+
+// ============================================================================
 // ------------------- Task Registry -------------------
 // ============================================================================
 
@@ -1997,7 +2098,14 @@ const TASKS = [
   // Expiration Cleanup Tasks
   { name: 'cleanup-boost-expirations', cron: '0 * * * *', handler: cleanupBoostExpirations }, // Every hour
   { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings }, // Every 6 hours
-  { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder } // Every hour - @mods if art/writing pending 12+ hours
+  { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder }, // Every hour - @mods if art/writing pending 12+ hours
+
+  // Relic Deadline Tasks
+  { name: 'relic-appraisal-deadline', cron: '0 6 * * *', handler: relicAppraisalDeadline }, // Daily 6am UTC: deteriorate unappraised relics past 7 days
+  { name: 'relic-art-deadline', cron: '0 6 * * *', handler: relicArtDeadline }, // Daily 6am UTC: mark relics lost if art not submitted within 2 months
+
+  // Map Appraisal: send coordinates DM for approved requests (e.g. NPC on dashboard)
+  { name: 'map-appraisal-send-coordinates-dm', cron: '*/10 * * * *', handler: mapAppraisalSendCoordinatesDm } // Every 10 minutes
 ];
 
 /**

@@ -13,6 +13,9 @@ const OldMapFoundSchema = new Schema({
   mapNumber: { type: Number, required: true, min: 1, max: 46 },
   foundAt: { type: Date, default: Date.now },
   locationFound: { type: String, default: '' },
+  appraised: { type: Boolean, default: false },
+  appraisedAt: { type: Date, default: null },
+  appraisedBy: { type: String, default: null },
 }, { collection: 'oldMapsFound' });
 
 OldMapFoundSchema.index({ characterName: 1, mapNumber: 1 });

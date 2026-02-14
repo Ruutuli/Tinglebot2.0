@@ -170,6 +170,24 @@ export async function POST(
     }
 
     const characterName = String(character.name ?? "").trim();
+
+    // Block if character has unappraised relic
+    const Relic =
+      mongoose.models.Relic ??
+      ((await import("@/models/RelicModel.js")) as unknown as { default: Model<unknown> }).default;
+    const unappraised = await Relic.findOne({
+      discoveredBy: characterName,
+      appraised: false,
+      deteriorated: false,
+    });
+    if (unappraised) {
+      return NextResponse.json(
+        {
+          error: `${characterName} has an unappraised relic and must get it appraised before joining expeditions.`,
+        },
+        { status: 400 }
+      );
+    }
     const db = await getInventoriesDb();
     const collectionName = characterName.toLowerCase();
     const collection = db.collection(collectionName);

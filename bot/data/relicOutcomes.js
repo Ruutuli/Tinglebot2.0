@@ -1,0 +1,76 @@
+// ============================================================================
+// ------------------- Relic Outcomes Configuration -------------------
+// Weighted table for relic reveal. Source: ROTW_exploring_2023 - relics Info.csv
+// 1 = unique (only one in world), Unlimited/26/TBD = non-unique
+// ============================================================================
+
+/**
+ * Weighted relic outcomes. Each entry:
+ * - name: Display name of the relic
+ * - description: Appraisal description (used when revealed)
+ * - weight: Relative weight for random selection (higher = more common)
+ * - unique: If true, only one instance exists in the world; duplicates possible
+ */
+const RELIC_OUTCOMES = [
+  { name: "Ancient Sheikah Orb", description: "A mysterious artifact of ancient Sheikah origin, renowned for its enigmatic properties and intricate design.", weight: 1, unique: true },
+  { name: "Ancient Tablet", description: "A revered relic steeped in the lore of Hyrule, embodying the timeless virtues of Power, Courage, and Wisdom.", weight: 1, unique: true },
+  { name: "Ancient Tablet of Courage", description: "A testament to bravery and heroism, adorned with symbols of valor and resilience.", weight: 1, unique: true },
+  { name: "Ancient Tablet of Power", description: "A monument to strength and determination, etched with symbols of valor and resilience.", weight: 1, unique: true },
+  { name: "Ancient Tablet of Wisdom", description: "Embodies profound insights and enlightenment, adorned with intricate glyphs and symbols of knowledge.", weight: 1, unique: true },
+  { name: "Ancient Zonai Bottle", description: "A relic of the mysterious Zonai civilization with an intricate design and verdant unidentified liquid within.", weight: 1, unique: false },
+  { name: "Ancient Zonai Dragon Idol", description: "A majestic relic from the enigmatic Zonai civilization, carved from jade depicting a powerful dragon.", weight: 1, unique: false },
+  { name: "Ancient Zonai Owl Statue", description: "A testament to Zonai craftsmanship, depicting an owl with outstretched wings and an aura of wisdom.", weight: 1, unique: false },
+  { name: "Ancient Zonai Tapestry", description: "Weaves together the history and mystique of the Zonai civilization with intricate patterns and vibrant colors.", weight: 1, unique: true },
+  { name: "Blessed Hourglass", description: "A rare artifact imbued with ancient magic, able to manipulate the flow of time in the face of blight.", weight: 1, unique: false },
+  { name: "Blight Candle", description: "An artifact with the remarkable ability to sense and repel blight, its wax flickering with an otherworldly glow.", weight: 1, unique: false },
+  { name: "Blight Knight - Chest Plate", description: "A cursed relic forged to combat darkness, adorned with ominous runes. Offers protection but ensnares wearers in a thirst for battle.", weight: 1, unique: false },
+  { name: "Blight Knight - Faulds", description: "A vital piece of the Blight Knight armor set, tainted by the darkness it seeks to combat.", weight: 1, unique: false },
+  { name: "Blight Knight - Helmet", description: "Forged in ancient strife, a symbol of protection and a conduit for corruption. Offers formidable defense at a cost.", weight: 1, unique: false },
+  { name: "Blight Knight - Left Arm", description: "A corrupted limb offering unparalleled strength and resilience, but consuming the wearer with the Blight's malevolence.", weight: 1, unique: false },
+  { name: "Blight Knight - Left Leg", description: "A corrupted limb granting unmatched agility and endurance, yet ensnaring the wearer in the Blight's dark influence.", weight: 1, unique: false },
+  { name: "Blight Knight - Right Arm", description: "A dread artifact bestowing unparalleled strength upon its wearer, but drawing them into the Blight's grasp.", weight: 1, unique: false },
+  { name: "Blight Knight - Right Leg", description: "A relic steeped in ancient malevolence, granting unmatched speed and resilience with a sinister twist.", weight: 1, unique: false },
+  { name: "Blighted Dragon Parts", description: "Ominous blight-infused remnants of unknown origin—scales, talons—emanating an unsettling aura.", weight: 1, unique: false },
+  { name: "Book Of Mudora", description: "An ancient tome of unparalleled knowledge, bound in weathered leather and adorned with intricate sigils.", weight: 1, unique: true },
+  { name: "Lense Of Truth", description: "A mystical artifact of unparalleled clarity that bestows the ability to peer beyond illusions and deceptions.", weight: 1, unique: false },
+  { name: "Moon Pearl", description: "A radiant orb of celestial essence that grants immunity against the corrupting influence of the blight.", weight: 1, unique: true },
+  { name: "Old Key", description: "Weathered by time, holding the promise of unlocking mysteries long forgotten within its rusted grooves.", weight: 1, unique: false },
+  { name: "Poe's Lantern", description: "A mysterious artifact from blight-filled crypts, its spectral flame piercing through gloom to reveal hidden passages.", weight: 1, unique: false },
+  { name: "Power Bracelet", description: "A relic of formidable might bearing the legacy of a previous oracle of power, forged by Goron blacksmiths.", weight: 1, unique: true },
+  { name: "Shard of Agony", description: "A translucent crystal fragment pulsating with ominous energy, able to detect hidden secrets and concealed passages.", weight: 1, unique: false },
+  { name: "Talisman", description: "A potent artifact associated with an ancient clan with ties to the Sheikah, imbued with dark magic.", weight: 1, unique: false },
+  { name: "Tattered Diary", description: "Weathered journals discovered across Hyrule, bearing witness to a mysterious life shrouded in enigma.", weight: 1, unique: false },
+  { name: "The Moon's Tear", description: "A celestial artifact revered by the Twili, granting immunity against the harsh influence of the sun.", weight: 1, unique: false },
+  { name: "The Tainted Idol", description: "A relic steeped in darkness, carved from obsidian with sinister glyphs and a corrupting influence.", weight: 1, unique: false },
+  { name: "Wooden Totem", description: "A rustic artifact from the Kokiri Forest, carved with intricate patterns and emanating a serene aura.", weight: 1, unique: false },
+  { name: "Translation Scrolls", description: "Ancient parchments inscribed with mystical runes, keys to unlocking the secrets of the Book of Mudora.", weight: 1, unique: false },
+  { name: "Tattered Diary: Entry 12", description: "An entry speaking of a voice from the moon and the author's realization of power over the blight.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 01", description: "Scroll of Alphabetic Conversion—reveals the letter Y as A within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 02", description: "Scroll of Phonetic Transformation—transmutes P into B within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 03", description: "Scroll of Lexical Metamorphosis—transcribes L into C within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 04", description: "Scroll of Transcendent Transmutation—metamorphoses T into D within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 05", description: "Scroll of Esoteric Transcription—transposes A into E within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 06", description: "Scroll of Verbal Revelation—transforms V into F within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 07", description: "Scroll of Glyphic Conversion—transmutes K into G within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 08", description: "Scroll of Hieroglyphic Transmutation—transforms R into H within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 09", description: "Scroll of Enigmatic Translation—transposes E into I within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 10", description: "Scroll of Arcane Deciphering—metamorphoses Z into J within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 11", description: "Scroll of Mystical Conversion—transmutes G into K within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 12", description: "Scroll of Linguistic Metamorphosis—transmutes M into L within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 13", description: "Scroll of Symbolic Transcription—transcribes S into M within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 14", description: "Scroll of Arcane Metamorphosis—transforms H into N within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 15", description: "Scroll of Transcendental Transcription—transcribes U into O within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 16", description: "Scroll of Linguistic Revelation—metamorphoses B into P within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 17", description: "Scroll of Symbolic Transmutation—transmutes X into Q within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 18", description: "Scroll of Sacred Conversion—transcribes N into R within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 19", description: "Scroll of Mystical Transcription—transforms C into S within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 20", description: "Scroll of Arcane Metamorphosis—transmutes D into T within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 21", description: "Scroll of Universal Translation—transcribes I into U within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 22", description: "Scroll of Esoteric Conversion—metamorphoses J into V within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 23", description: "Scroll of Mystic Transmutation—transmutes F into W within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 24", description: "Scroll of Enigmatic Revelation—transcribes Q into X within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 25", description: "Scroll of Mystical Metamorphosis—transmutes O into Y within the Book of Mudora.", weight: 1, unique: true },
+  { name: "Translation Scroll Volume 26", description: "Scroll of Celestial Transcription—transmutes W into Z within the Book of Mudora.", weight: 1, unique: true },
+];
+
+module.exports = { RELIC_OUTCOMES };

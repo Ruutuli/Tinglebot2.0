@@ -863,6 +863,84 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             }
             break;
 
+          // ------------------- Relic Command -------------------
+          case "relic":
+            if (interaction.options._subcommand) {
+              const relicSub = interaction.options.getSubcommand();
+              if (focusedOption.name === "character" && (relicSub === "list" || relicSub === "appraisal-request")) {
+                await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "relic");
+              } else if (focusedOption.name === "appraiser") {
+                if (relicSub === "appraisal-request") {
+                  const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                  const npcChoice = { name: "NPC (500 tokens)", value: "NPC" };
+                  const chars = await fetchCharactersByUserId(interaction.user.id);
+                  const modChars = await fetchModCharactersByUserId(interaction.user.id) || [];
+                  const artistResearchers = [...chars, ...modChars]
+                    .filter(c => c && ["Artist", "Researcher"].includes(c.job))
+                    .map(c => ({ name: `${c.name} | ${c.job} | ${(c.currentVillage || "").charAt(0).toUpperCase() + (c.currentVillage || "").slice(1)}`, value: c.name }));
+                  let choices = artistResearchers.filter(c => c.name.toLowerCase().includes(focusedValue));
+                  if (!focusedValue || "npc".includes(focusedValue)) {
+                    choices = [npcChoice, ...choices];
+                  }
+                  await interaction.respond(choices.slice(0, 25));
+                } else if (relicSub === "appraisal-accept") {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "relic");
+                }
+              }
+            }
+            break;
+
+          // ------------------- Map Command -------------------
+          case "map":
+            if (interaction.options._subcommand) {
+              const mapSub = interaction.options.getSubcommand();
+              if (focusedOption.name === "character" && (mapSub === "list" || mapSub === "appraisal-request")) {
+                await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "map");
+              } else if (focusedOption.name === "map_id" && mapSub === "appraisal-request") {
+                const characterName = (interaction.options.get("character")?.value || "").toString().trim();
+                if (!characterName) {
+                  await interaction.respond([]);
+                  break;
+                }
+                const { getCharacterOldMapsWithDetails } = require('@/utils/oldMapUtils.js');
+                const maps = await getCharacterOldMapsWithDetails(characterName);
+                const unappraised = maps.filter(m => !m.appraised);
+                const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                const choices = unappraised
+                  .map(m => ({
+                    name: `Unidentified – ${(m.locationFound || "exploration").slice(0, 40)}${(m.locationFound || "").length > 40 ? "…" : ""}`,
+                    value: String(m._id),
+                  }))
+                  .filter(c => c.value.includes(focusedValue) || c.name.toLowerCase().includes(focusedValue));
+                await interaction.respond(choices.slice(0, 25));
+              } else if (focusedOption.name === "appraiser") {
+                if (mapSub === "appraisal-request") {
+                  const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                  const npcChoice = { name: "NPC (500 tokens)", value: "NPC" };
+                  const chars = await fetchCharactersByUserId(interaction.user.id);
+                  const modChars = await fetchModCharactersByUserId(interaction.user.id) || [];
+                  const scholarsInariko = [...chars, ...modChars]
+                    .filter(c => c && c.job === "Scholar" && (c.currentVillage || "").toLowerCase() === "inariko")
+                    .map(c => ({ name: `${c.name} | Scholar | Inariko`, value: c.name }));
+                  let choices = scholarsInariko.filter(c => c.name.toLowerCase().includes(focusedValue));
+                  if (!focusedValue || "npc".includes(focusedValue)) {
+                    choices = [npcChoice, ...choices];
+                  }
+                  await interaction.respond(choices.slice(0, 25));
+                } else if (mapSub === "appraisal-accept") {
+                  const chars = await fetchCharactersByUserId(interaction.user.id);
+                  const modChars = await fetchModCharactersByUserId(interaction.user.id) || [];
+                  const scholars = [...chars, ...modChars]
+                    .filter(c => c && c.job === "Scholar")
+                    .map(c => ({ name: `${c.name} | Scholar | ${(c.currentVillage || "").charAt(0).toUpperCase() + (c.currentVillage || "").slice(1)}`, value: c.name }));
+                  const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                  const filtered = scholars.filter(c => c.name.toLowerCase().includes(focusedValue));
+                  await interaction.respond(filtered.slice(0, 25));
+                }
+              }
+            }
+            break;
+
           // ------------------- Mod Character Command -------------------
           // Note: ModCharacter autocomplete is handled locally in the command file
 

@@ -1569,23 +1569,41 @@ async function completeQuest(userId, questId) {
 // ============================================================================
 
 // ------------------- createRelic -------------------
-// When name is "Unknown Relic", appends a short id (last 6 chars of _id) so it displays as "Unknown Relic a3f2c1".
+// Sets relicId in R12345 format, appraisalDeadline (7 days from discoveredDate).
 const createRelic = async (relicData) => {
  try {
   await connectToTinglebot();
-  const newRelic = new RelicModel(relicData);
-  const saved = await newRelic.save();
-  if (saved.name === "Unknown Relic") {
-   const shortId = saved._id.toString().slice(-6).toLowerCase();
-   saved.name = `Unknown Relic ${shortId}`;
-   return await saved.save();
-  }
-  return saved;
+  const discoveredDate = relicData.discoveredDate || new Date();
+  const appraisalDeadline = new Date(discoveredDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const count = await RelicModel.countDocuments({});
+  const relicId = `R${count + 1}`;
+  const data = {
+   ...relicData,
+   relicId,
+   appraisalDeadline,
+   discoveredDate,
+  };
+  const newRelic = new RelicModel(data);
+  return await newRelic.save();
  } catch (error) {
   handleError(error, "relicService.js");
   console.error("[relicService.js]: ❌ Error creating relic:", error);
   throw error;
  }
+};
+
+// ------------------- findRelicByIdOrRelicId -------------------
+// Resolves by MongoDB _id (24 hex) or relicId string (e.g. R12345).
+const findRelicByIdOrRelicId = async (id) => {
+ if (!id) return null;
+ const str = String(id).trim();
+ if (/^R\d+$/.test(str)) {
+  return await RelicModel.findOne({ relicId: str }).lean();
+ }
+ if (/^[a-fA-F0-9]{24}$/.test(str)) {
+  return await RelicModel.findById(str).lean();
+ }
+ return null;
 };
 
 // ------------------- fetchRelicsByCharacter -------------------
@@ -1604,24 +1622,32 @@ const fetchRelicsByCharacter = async (characterName) => {
 };
 
 // ------------------- appraiseRelic -------------------
+// Sets artDeadline to 2 months from appraisalDate. relicIdOrMongoId can be MongoDB _id or relicId string (R12345).
 const appraiseRelic = async (
- relicId,
+ relicIdOrMongoId,
  appraiserName,
  description,
- rollOutcome
+ rollOutcome,
+ options = {}
 ) => {
  try {
   await connectToTinglebot();
+  const appraisalDate = new Date();
+  const artDeadline = new Date(appraisalDate.getTime() + 60 * 24 * 60 * 60 * 1000); // 2 months
   const updateData = {
    appraised: true,
    appraisedBy: appraiserName,
-   appraisalDate: new Date(),
+   appraisalDate,
    appraisalDescription: description,
+   artDeadline,
+   ...(options.npcAppraisal !== undefined && { npcAppraisal: options.npcAppraisal }),
   };
   if (rollOutcome) {
    updateData.rollOutcome = rollOutcome;
   }
-  return await RelicModel.findByIdAndUpdate(relicId, updateData, { new: true });
+  const relic = await findRelicByIdOrRelicId(relicIdOrMongoId);
+  if (!relic) return null;
+  return await RelicModel.findByIdAndUpdate(relic._id, updateData, { new: true });
  } catch (error) {
   handleError(error, "relicService.js");
   console.error("[relicService.js]: ❌ Error appraising relic:", error);
@@ -1630,18 +1656,28 @@ const appraiseRelic = async (
 };
 
 // ------------------- archiveRelic -------------------
-const archiveRelic = async (relicId, imageUrl) => {
+// relicIdOrMongoId can be MongoDB _id or relicId string (R12345).
+// Grants 1,000 tokens to finder's owner if first archived relic; sets firstCompletionRewardGiven.
+const archiveRelic = async (relicIdOrMongoId, imageUrl) => {
  try {
   await connectToTinglebot();
-  return await RelicModel.findByIdAndUpdate(
-   relicId,
-   {
-    artSubmitted: true,
-    imageUrl: imageUrl,
-    archived: true,
-   },
-   { new: true }
-  );
+  const relic = await findRelicByIdOrRelicId(relicIdOrMongoId);
+  if (!relic) return null;
+  const wasFirstArchived = (await RelicModel.countDocuments({ archived: true })) === 0;
+  const updateData = {
+   artSubmitted: true,
+   imageUrl: imageUrl || '',
+   archived: true,
+   ...(wasFirstArchived && { firstCompletionRewardGiven: true }),
+  };
+  const updated = await RelicModel.findByIdAndUpdate(relic._id, updateData, { new: true });
+  if (wasFirstArchived && updated?.discoveredBy) {
+   const char = await Character.findOne({ name: new RegExp(`^${escapeRegExp(updated.discoveredBy)}$`, 'i') }).lean();
+   if (char?.userId) {
+    await updateTokenBalance(char.userId, 1000, { category: 'relic_first_completion' });
+   }
+  }
+  return updated;
  } catch (error) {
   handleError(error, "relicService.js");
   console.error("[relicService.js]: ❌ Error archiving relic:", error);
@@ -1681,10 +1717,11 @@ const fetchArchivedRelics = async () => {
 };
 
 // ------------------- fetchRelicById -------------------
-const fetchRelicById = async (relicId) => {
+// Accepts MongoDB _id or relicId string (R12345).
+const fetchRelicById = async (relicIdOrMongoId) => {
  try {
   await connectToTinglebot();
-  return await RelicModel.findById(relicId).lean();
+  return await findRelicByIdOrRelicId(relicIdOrMongoId);
  } catch (error) {
   handleError(error, "relicService.js");
   console.error("[relicService.js]: ❌ Error fetching relic by ID:", error);

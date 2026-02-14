@@ -7,6 +7,7 @@
 //     already 'unexplored' as-is. pathImageUrl -> null for all squares.
 //   - mapPathImages: delete all documents
 //   - Party: pathImageUploadedSquares -> []
+//   - pins: delete pins placed during expeditions (partyId or sourceDiscoveryKey set)
 //
 // Does NOT delete files from GCS (path images remain in bucket but are no longer referenced).
 //
@@ -58,6 +59,9 @@ const PartySchema = new mongoose.Schema({
   partyId: String,
   pathImageUploadedSquares: [String],
 }, { strict: false });
+
+// Pins placed during expeditions have partyId or sourceDiscoveryKey set (from "Report to town hall")
+const Pin = mongoose.models.Pin || mongoose.model('Pin', new mongoose.Schema({}, { strict: false }), 'pins');
 
 const Square = mongoose.model('Square', SquareSchema, 'exploringMap');
 const MapPathImage = mongoose.models.MapPathImage || mongoose.model('MapPathImage', new mongoose.Schema({
@@ -126,6 +130,15 @@ async function run() {
     { $set: { pathImageUploadedSquares: [] } }
   );
   console.log(`[parties] Cleared pathImageUploadedSquares on ${partyResult.modifiedCount} party/parties`);
+
+  // 4) Delete pins placed during expeditions (partyId or sourceDiscoveryKey set)
+  const pinResult = await Pin.deleteMany({
+    $or: [
+      { partyId: { $exists: true, $nin: [null, ''] } },
+      { sourceDiscoveryKey: { $exists: true, $nin: [null, ''] } },
+    ],
+  });
+  console.log(`[pins] Deleted ${pinResult.deletedCount} expedition pin(s)`);
 
   console.log('Done.');
 }

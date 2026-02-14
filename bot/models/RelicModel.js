@@ -6,6 +6,7 @@ const { Schema } = mongoose;
 // This schema defines the structure for relic documents stored in MongoDB.
 const RelicSchema = new Schema({
   // ------------------- Identification Fields -------------------
+  relicId: { type: String, default: '' },               // Short display ID in R12345 format.
   name: { type: String, required: true },            // Internal relic name.
   emoji: { type: String, default: '🔸' },              // Optional emoji for visual representation.
   unique: { type: Boolean, default: false },           // Indicates if the relic is one-of-a-kind.
@@ -14,6 +15,7 @@ const RelicSchema = new Schema({
 
   // ------------------- Discovery Information -------------------
   discoveredBy: { type: String, default: '' },         // Character who discovered the relic.
+  characterId: { type: Schema.Types.ObjectId, ref: 'Character', default: null }, // Optional link to Character who found it.
   discoveredDate: { type: Date, default: null },         // Date when the relic was discovered.
   locationFound: { type: String, default: '' },        // Location details (e.g., quadrant, ruin).
 
@@ -21,7 +23,11 @@ const RelicSchema = new Schema({
   appraised: { type: Boolean, default: false },        // Indicates if the relic has been appraised.
   appraisedBy: { type: String, default: null },        // Appraising character or NPC.
   appraisalDate: { type: Date, default: null },        // Date when appraisal occurred.
+  appraisalDeadline: { type: Date, default: null },    // 7 days from discoveredDate.
+  artDeadline: { type: Date, default: null },          // 2 months from appraisalDate (set when appraised).
   appraisalDescription: { type: String, default: '' }, // Description revealed during appraisal.
+  npcAppraisal: { type: Boolean, default: false },     // True if 500 tokens paid for NPC appraisal.
+  appraisalRequestId: { type: String, default: '' },   // Links to RelicAppraisalRequest.
 
   // ------------------- Art and Visual Information -------------------
   artSubmitted: { type: Boolean, default: false },     // Indicates if the art has been submitted.
@@ -30,6 +36,8 @@ const RelicSchema = new Schema({
   // ------------------- Status Flags -------------------
   archived: { type: Boolean, default: false },         // Flag indicating if the relic is archived in the Library.
   deteriorated: { type: Boolean, default: false },     // Indicates if the relic has deteriorated due to late appraisal.
+  firstCompletionRewardGiven: { type: Boolean, default: false }, // 1,000 tokens for first full completion.
+  duplicateRewardGiven: { type: Boolean, default: false },       // Reward for turning in duplicate.
 
   // ------------------- Lore and Description Fields -------------------
   description: { type: String, default: '' },          // Additional lore or description of the relic.

@@ -31,6 +31,7 @@ export const navItems: NavItem[] = [
   { href: "/stats", label: "Statistics", icon: "fa-chart-bar" },
   { href: "/calendar", label: "Calendar", icon: "fa-calendar" },
   { href: "/map", label: "ROTW Map", icon: "fa-map" },
+  { href: "/library/archives", label: "Library Archives", icon: "fa-book" },
   { href: "/profile", label: "Profile", icon: "fa-user-circle" },
   {
     label: "Admin",
@@ -39,6 +40,8 @@ export const navItems: NavItem[] = [
       { href: "/characters/moderation", label: "Approvals", icon: "fa-check-circle" },
       { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
       { href: "/admin/quests", label: "Quests", icon: "fa-scroll" },
+      { href: "/admin/relics", label: "Relic Appraisals", icon: "fa-gem" },
+      { href: "/admin/maps", label: "Map Appraisals", icon: "fa-map" },
     ],
   },
 ];
