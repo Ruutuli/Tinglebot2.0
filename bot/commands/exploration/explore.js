@@ -49,6 +49,18 @@ const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 const { syncPartyMemberStats } = require("../../modules/exploreModule.js");
 const logger = require("@/utils/logger.js");
+const fs = require("fs");
+const path = require("path");
+
+/** Append a line to exploreStats.txt (bot/exploreStats.txt) for roll debugging. */
+function appendExploreStat(line) {
+ const filePath = path.join(__dirname, "..", "..", "exploreStats.txt");
+ try {
+  fs.appendFileSync(filePath, line + "\n");
+ } catch (e) {
+  logger.warn("EXPLORE", "exploreStats write failed: " + (e?.message || e));
+ }
+}
 
 /**
  * Resolve loot for Chuchu monsters: always give Chuchu Jelly (or elemental variant)
@@ -1588,20 +1600,25 @@ module.exports = {
      const location = `${party.square} ${party.quadrant}`;
 
      // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto
-     // Reroll if: square has 3 discoveries; or grotto and square already has a grotto (1 grotto max per square)
+     // Nominal probabilities: monster 45%, item 22%, explored 16%, fairy 3%, chest 1%, old_map 1%, ruins 2%, relic 0.5%, camp 4%, monster_camp 5%, grotto 0.5%
+     // Reroll if: explored twice in a row; or special (ruins/relic/camp/monster_camp/grotto) and square has 3 discoveries; or grotto and square already has grotto; or special and discovery-reduce roll fails
      function rollOutcome() {
       const r = Math.random();
-      if (r < 0.45) return "monster";
-      if (r < 0.67) return "item";
-      if (r < 0.83) return "explored";
-      if (r < 0.86) return "fairy";
-      if (r < 0.87) return "chest"; 
-      if (r < 0.88) return "old_map";
-      if (r < 0.90) return "ruins";
-      if (r < 0.905) return "relic";
-      if (r < 0.945) return "camp";
-      if (r < 0.995) return "monster_camp";
-      return "grotto";
+      let outcome;
+      if (r < 0.45) outcome = "monster";
+      else if (r < 0.67) outcome = "item";
+      else if (r < 0.83) outcome = "explored";
+      else if (r < 0.86) outcome = "fairy";
+      else if (r < 0.87) outcome = "chest";
+      else if (r < 0.88) outcome = "old_map";
+      else if (r < 0.90) outcome = "ruins";
+      else if (r < 0.905) outcome = "relic";
+      else if (r < 0.945) outcome = "camp";
+      else if (r < 0.995) outcome = "monster_camp";
+      else outcome = "grotto";
+      logger.info("EXPLORE", `Roll outcome: r=${r.toFixed(4)} -> ${outcome} (location=${location})`);
+      appendExploreStat(`${new Date().toISOString()}\troll\tr=${r.toFixed(4)}\t${outcome}\t${location}`);
+      return outcome;
      }
      let outcomeType = rollOutcome();
      const specialCount = countSpecialEventsInSquare(party, party.square);
@@ -1609,23 +1626,31 @@ module.exports = {
      for (;;) {
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
+       logger.info("EXPLORE", `Reroll: explored twice in a row at ${location}`);
        outcomeType = rollOutcome();
        continue;
       }
       if (!SPECIAL_OUTCOMES.includes(outcomeType)) break;
       if (specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
+       logger.info("EXPLORE", `Reroll: special count ${specialCount} >= max at ${location}, was ${outcomeType}`);
        outcomeType = rollOutcome();
        continue;
       }
       if (outcomeType === "grotto" && hasGrottoInSquare(party, party.square)) {
+       logger.info("EXPLORE", `Reroll: grotto already in square at ${location}`);
        outcomeType = rollOutcome();
        continue;
       }
       if (specialCount >= 1 && Math.random() > DISCOVERY_REDUCE_CHANCE_WHEN_ANY) {
+       logger.info("EXPLORE", `Reroll: discovery-reduce failed at ${location}, was ${outcomeType}`);
        outcomeType = rollOutcome();
        continue;
       }
       break;
+     }
+     logger.info("EXPLORE", `Roll final outcome: ${outcomeType} at ${location}`);
+     if (outcomeType !== "monster" && outcomeType !== "item") {
+      appendExploreStat(`${new Date().toISOString()}\tfinal\t${outcomeType}\t${location}`);
      }
 
      if (outcomeType === "explored") {
@@ -2548,6 +2573,7 @@ module.exports = {
        : availableItems[Math.floor(Math.random() * availableItems.length)];
 
       logger.info("EXPLORE", `Item found (roll outcome): ${selectedItem.itemName} | location=${location} | character=${character.name}`);
+      appendExploreStat(`${new Date().toISOString()}\tfinal\titem\t${location}\trarity=${selectedItem.itemRarity ?? "?"}`);
 
       pushProgressLog(party, character.name, "item", `Found ${selectedItem.itemName} in ${location}.`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
@@ -2610,6 +2636,7 @@ module.exports = {
 
       const selectedMonster = getExplorationMonsterFromList(monsters);
       logger.info("EXPLORE", `Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`);
+      appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}`);
 
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
        try {
@@ -3802,26 +3829,51 @@ module.exports = {
     if (success) {
      await endExplorationRaidAsRetreat(raid, interaction.client);
      pushProgressLog(party, character.name, "retreat", "Party attempted to retreat and escaped.", undefined, retreatCostsForLog);
-     const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
+     await party.save();
+     const monsterName = raid.monster?.name || "the monster";
+     const location = [party.square, party.quadrant].filter(Boolean).join(" ") || "Current location";
+     const nextCharacter = party.characters[party.currentTurn] ?? null;
      const embed = new EmbedBuilder()
       .setTitle("🏃 **Retreat successful**")
       .setColor(regionColors[party.region] || 0x9C27B0)
-      .setDescription(
-        `The party escaped from the monster!\n\n` +
-        `Use ${cmdRoll} with id \`${expeditionId}\` and your character to continue the expedition.`
-      )
-      .addFields({ name: "🆔 **Expedition ID**", value: expeditionId, inline: true })
+      .setDescription(`The party escaped from **${monsterName}**!`)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+     addExplorationStandardFields(embed, {
+      party,
+      expeditionId,
+      location,
+      nextCharacter,
+      showNextAndCommands: true,
+      showRestSecureMove: false
+     });
      return interaction.editReply({ embeds: [embed] });
     }
 
     pushProgressLog(party, character.name, "retreat_failed", "Party attempted to retreat but could not get away.", undefined, retreatCostsForLog);
-    return interaction.editReply({
-     content: "Couldn't get away! You can try again with **/explore retreat** (costs 1 stamina).",
-     ephemeral: false
-    });
+    await party.save();
 
-    // ------------------- Camp Command -------------------
+    const monsterName = raid.monster?.name || "the monster";
+    const location = [party.square, party.quadrant].filter(Boolean).join(" ") || "Current location";
+    const nextCharacter = party.characters[party.currentTurn] ?? null;
+    const cmdRetreat = `</explore retreat:${getExploreCommandId()}>`;
+    const retreatFailedEmbed = new EmbedBuilder()
+      .setTitle("🏃 **Retreat failed**")
+      .setColor(regionColors[party.region] || 0xFF9800)
+      .setDescription(
+        `The party couldn't get away from **${monsterName}**!\n\n` +
+        `**Try again:** ${cmdRetreat} with id \`${expeditionId}\` and your character — costs 1 stamina (or 1 heart if you're out of stamina).`
+      )
+      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+    addExplorationStandardFields(retreatFailedEmbed, {
+      party,
+      expeditionId,
+      location,
+      nextCharacter,
+      showNextAndCommands: true,
+      showRestSecureMove: false
+    });
+    return interaction.editReply({ embeds: [retreatFailedEmbed] });
+   // ------------------- Camp Command -------------------
    } else if (subcommand === "camp") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = interaction.options.getString("charactername");

@@ -1029,6 +1029,29 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error(`Failed to update raid after ${maxRaidRetries} retries`);
     }
 
+    // When raid was triggered from exploration, keep Party in sync with Character (hearts/stamina) so dashboard and bot agree
+    if (raid.expeditionId && character?._id) {
+      try {
+        const Party = require('@/models/PartyModel');
+        const party = await Party.findActiveByPartyId(raid.expeditionId);
+        if (party && party.characters && party.characters.length) {
+          const idx = party.characters.findIndex(
+            (c) => c._id && character._id && c._id.toString() === character._id.toString()
+          );
+          if (idx !== -1) {
+            party.characters[idx].currentHearts = character.currentHearts ?? party.characters[idx].currentHearts;
+            party.characters[idx].currentStamina = character.currentStamina ?? party.characters[idx].currentStamina;
+            party.markModified('characters');
+            party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
+            party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
+            await party.save();
+          }
+        }
+      } catch (syncErr) {
+        logger.warn('RAID', `Failed to sync expedition party hearts after raid turn: ${syncErr?.message || syncErr}`);
+      }
+    }
+
     // Turn completion logged only in debug mode
     
     return {
@@ -1180,7 +1203,7 @@ async function createRaidThread(interaction, raid) {
 
     // Create the initial thread message - use universal raid role for all villages; @ in content, rest in embed
     const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
-    const raidAnnounceEmbed = createRaidEmbed(raid, raid.monster?.image);
+    const raidAnnounceEmbed = await createRaidEmbed(raid, raid.monster?.image);
 
     // Send embed to the thread (mention in content so it pings)
     await thread.send({ content: roleMention, embeds: [raidAnnounceEmbed] });
@@ -1198,8 +1221,8 @@ async function createRaidThread(interaction, raid) {
 }
 
 // ---- Function: createRaidEmbed ----
-// Creates an embed for displaying raid information
-function createRaidEmbed(raid, monsterImage) {
+// Creates an embed for displaying raid information. Async when raid.expeditionId is set (loads party for hearts/stamina).
+async function createRaidEmbed(raid, monsterImage) {
   const villageName = capitalizeVillageName(raid.village);
   const villageEmoji = getVillageEmojiByName(raid.village) || '';
 
@@ -1260,11 +1283,28 @@ function createRaidEmbed(raid, monsterImage) {
   if (raid.expeditionId) {
     const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
     const cmdRetreat = `</explore retreat:${getExploreCommandId()}>`;
+    let expeditionValue = `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.\n\n**Escape:** You can try to escape with ${cmdRetreat} (id: \`${raid.expeditionId}\`, your character) — costs 1 stamina per attempt, not guaranteed.`;
     embed.addFields({
       name: '🗺️ __Expedition raid__',
-      value: `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.\n\n**To try to flee:** ${cmdRetreat} (1 stamina per attempt, not guaranteed).`,
+      value: expeditionValue,
       inline: false
     });
+    // Add party hearts and stamina for expedition raids
+    try {
+      const Party = require('@/models/PartyModel');
+      const party = await Party.findActiveByPartyId(raid.expeditionId);
+      if (party && (typeof party.totalHearts === 'number' || typeof party.totalStamina === 'number')) {
+        const hearts = typeof party.totalHearts === 'number' ? party.totalHearts : 0;
+        const stamina = typeof party.totalStamina === 'number' ? party.totalStamina : 0;
+        embed.addFields({
+          name: '❤️ __Party hearts__',
+          value: `**${hearts}** ❤ · **${stamina}** 🟩 stamina`,
+          inline: true
+        });
+      }
+    } catch (e) {
+      logger.warn('RAID', `Could not load party for expedition raid embed: ${e?.message || e}`);
+    }
   }
 
   // Add monster image as thumbnail if available
@@ -1371,7 +1411,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       ? monsterMapping[monster.nameMapping] 
       : { image: monster.image };
     const monsterImage = monsterDetails.image || monster.image;
-    const embed = createRaidEmbed(raidData, monsterImage);
+    const embed = await createRaidEmbed(raidData, monsterImage);
 
     console.log(`[raidModule.js]: 📤 Sending raid announcement to channel ${interaction.channel.id}`);
     console.log(`[raidModule.js]: 📤 Interaction deferred: ${interaction.deferred}`);
@@ -1430,7 +1470,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       
       // Send initial thread message: @ in content, nice embed with clickable raid
       const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
-      const threadRaidEmbed = createRaidEmbed(raidData, raidData.monster?.image);
+      const threadRaidEmbed = await createRaidEmbed(raidData, raidData.monster?.image);
       await thread.send({ content: roleMention, embeds: [threadRaidEmbed] });
       console.log(`[raidModule.js]: 💬 Thread message sent`);
 
@@ -1447,7 +1487,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       
       // Send the raid information as a follow-up: @ in content, embed for raid info (nice embed + clickable raid)
       const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
-      const raidAnnounceEmbed = createRaidEmbed(raidData, raidData.monster?.image);
+      const raidAnnounceEmbed = await createRaidEmbed(raidData, raidData.monster?.image);
       raidAnnounceEmbed.addFields({
         name: '📌 Note',
         value: '*No thread was created in this channel. Use the Raid ID above with </raid:1470659276287774734> to participate!*',

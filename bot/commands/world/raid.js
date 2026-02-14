@@ -821,9 +821,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
         name: 'Want to join in?',
         value: 'Use </raid:1470659276287774734> to join (new players are added at the end of turn order).',
         inline: false
-      },
-
-
+      }
     )
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
@@ -831,6 +829,30 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       text: `Raid ID: ${raidId}` 
     })
     .setTimestamp();
+
+  // For exploration raids: add party hearts/stamina and escape info
+  if (raidData.expeditionId) {
+    try {
+      const party = await Party.findActiveByPartyId(raidData.expeditionId);
+      if (party && (typeof party.totalHearts === 'number' || typeof party.totalStamina === 'number')) {
+        const hearts = typeof party.totalHearts === 'number' ? party.totalHearts : 0;
+        const stamina = typeof party.totalStamina === 'number' ? party.totalStamina : 0;
+        embed.addFields({
+          name: '❤️ __Party hearts__',
+          value: `**${hearts}** ❤ · **${stamina}** 🟩 stamina`,
+          inline: true
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+    const cmdRetreat = `</explore retreat:${getExploreCommandId()}>`;
+    embed.addFields({
+      name: '🗺️ __Expedition raid__',
+      value: `Only members of expedition **${raidData.expeditionId}** can join. **Escape:** ${cmdRetreat} with id \`${raidData.expeditionId}\` and your character (1 stamina per attempt, not guaranteed).`,
+      inline: false
+    });
+  }
 
   // Add KO warning if character is down
   if (battleResult.playerHearts.current <= 0) {

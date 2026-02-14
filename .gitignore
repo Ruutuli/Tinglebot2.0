@@ -10,6 +10,7 @@ config/credentials.json
 eslint.config.mjs
 node_modules
 nodemon.log
+bot/exploreStats.txt
 testingCode/
 .tmp.driveupload/
 .tmp.drivedownload/
