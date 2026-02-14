@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connect } from "@/lib/db";
+import { SQUARE_W, SQUARE_H } from "@/lib/explorePathImageConstants";
 
 export const dynamic = "force-dynamic";
 
-const SQUARE_W = 2400;
-const SQUARE_H = 1666;
 const GRID_COLS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const GCS_IMAGES_PATH = "maps/squares/";
 

@@ -2,15 +2,13 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
+import { SQUARE_ID_REGEX } from "@/lib/explorePathImageConstants";
 
 export const dynamic = "force-dynamic";
 
-/** Valid square ID: A-J and 1-12, e.g. H8 */
-const SQUARE_ID_REGEX = /^([A-Ja-j])(1[0-2]|[1-9])$/;
-
 /** GET /api/explore/path-images — list path images. Query: partyId (optional), squareId (optional).
- *  When squareId: return latest path for that square (any expedition).
- *  When partyId: return path images for that expedition.
+ *  When squareId: return latest path for that square from Square (single source of truth).
+ *  When partyId: return path images for that expedition (MapPathImage).
  *  When neither: return latest path per square from map DB (Square.pathImageUrl) — used by /map to show all path images.
  */
 export async function GET(request: NextRequest) {
@@ -30,19 +28,23 @@ export async function GET(request: NextRequest) {
     type PathImageDoc = { squareId: string; imageUrl: string; createdAt?: Date };
     let pathImages: Array<{ squareId: string; imageUrl: string; updatedAt: number }> = [];
 
-    if (squareId && /^[A-J](1[0-2]|[1-9])$/.test(squareId)) {
-      // Single square: MapPathImage first, fallback to Square.pathImageUrl
-      const docs = await MapPathImage.find({ squareId }).sort({ createdAt: -1 }).lean();
-      pathImages = (docs as unknown as PathImageDoc[]).map((d) => ({
-        squareId: d.squareId,
-        imageUrl: d.imageUrl,
-        updatedAt: d.createdAt ? new Date(d.createdAt).getTime() : 0,
-      }));
-      if (pathImages.length === 0) {
-        const squareIdRegex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-        const square = await Square.findOne({ squareId: squareIdRegex }).select("pathImageUrl").lean();
-        const url = (square as { pathImageUrl?: string } | null)?.pathImageUrl;
-        if (url) pathImages = [{ squareId, imageUrl: url, updatedAt: 0 }];
+    if (squareId && SQUARE_ID_REGEX.test(squareId)) {
+      // Single square: read only from Square (canonical source)
+      const squareIdRegex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const doc = await Square.findOne({ squareId: squareIdRegex })
+        .select("pathImageUrl updatedAt")
+        .lean();
+      type SquareDoc = { pathImageUrl?: string; updatedAt?: Date } | null;
+      const d = doc as SquareDoc;
+      const pathImageUrl = d?.pathImageUrl;
+      if (pathImageUrl) {
+        pathImages = [
+          {
+            squareId,
+            imageUrl: pathImageUrl,
+            updatedAt: d?.updatedAt ? new Date(d.updatedAt).getTime() : 0,
+          },
+        ];
       }
     } else if (partyId) {
       // By party: MapPathImage for that expedition

@@ -36,7 +36,7 @@ const SquareSchema = new Schema({
   status: { type: String, enum: ['inaccessible', 'explorable'], required: true },
   quadrants: [QuadrantSchema],
   image: { type: String, required: true }, // Field to store base map image URL
-  pathImageUrl: { type: String, default: null }, // Latest user-drawn path image (uploaded from expeditions); used for download and map display
+  pathImageUrl: { type: String, default: null }, // Single source of truth for current path image per square (uploaded from expeditions); used for download, map display, and quadrant resolution
 
   // Interactive map coordinates
   mapCoordinates: {
