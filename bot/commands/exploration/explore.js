@@ -356,7 +356,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
 
 /** Roll outcomes that are "discoveries" (reportable on map); reroll when square at cap or applying reduced chance. */
 const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic"];
-/** Outcomes to count toward the 3-per-square limit. Yes-only: ruins, grotto, monster_camp count when user chooses Yes; No = skipped, doesn't count. */
+/** Outcomes to count toward the 3-per-square limit. Only when user chooses Yes: monster_camp, grotto, relic, ruins. monster_camp_skipped is NOT included so "No" does not count. */
 const DISCOVERY_COUNT_OUTCOMES = ["monster_camp", "grotto", "relic", "ruins", "ruins_found"];
 /** When leaving a square, clear these from progressLog if not reported (include ruins_found). */
 const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic", "ruins_found"];
@@ -403,28 +403,53 @@ function getLastProgressOutcomeForLocation(party, square, quadrant) {
  return null;
 }
 
+/** Normalize square id for comparison (e.g. "H8" vs "h8"). */
+function normalizeSquareId(square) {
+ return String(square || "").trim().toUpperCase();
+}
+
 function countSpecialEventsInSquare(party, square) {
  if (!party.progressLog || !Array.isArray(party.progressLog)) return 0;
- const sq = String(square || "").trim().toUpperCase();
+ const sq = normalizeSquareId(square);
  if (!sq) return 0;
  let count = 0;
  for (const e of party.progressLog) {
   if (!DISCOVERY_COUNT_OUTCOMES.includes(e.outcome)) continue;
-  const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
-  if (m && m[1] && String(m[1]).trim().toUpperCase() === sq) count += 1;
+  const msg = e.message || "";
+  const m = LOC_IN_MESSAGE_RE.exec(msg);
+  if (!m || !m[1]) continue;
+  if (String(m[1]).trim().toUpperCase() !== sq) continue;
+  count += 1;
  }
  return count;
 }
 
-/** Each square can have at most one grotto. Returns true if this square already has a grotto. */
-function hasGrottoInSquare(party, square) {
- if (!party.progressLog || !Array.isArray(party.progressLog)) return false;
- const sq = String(square || "").trim().toUpperCase();
+/** Each square can have at most one grotto. Returns true if this square already has a grotto (from this party's progressLog or from the map/Square). */
+function hasGrottoInSquare(party, square, squareDoc) {
+ const sq = normalizeSquareId(square);
  if (!sq) return false;
- for (const e of party.progressLog) {
-  if (e.outcome !== "grotto") continue;
-  const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
-  if (m && m[1] && String(m[1]).trim().toUpperCase() === sq) return true;
+ // Map: only use squareDoc if it refers to this square (avoid wrong-doc false positives)
+ if (squareDoc && squareDoc.quadrants && Array.isArray(squareDoc.quadrants)) {
+  const docSquareId = normalizeSquareId(squareDoc.squareId);
+  if (docSquareId === sq) {
+   for (const q of squareDoc.quadrants) {
+    const discoveries = q.discoveries || [];
+    if (!Array.isArray(discoveries)) continue;
+    for (const d of discoveries) {
+     if (d && String(d.type).toLowerCase() === "grotto") return true;
+    }
+   }
+  }
+ }
+ // Party progressLog: only outcome "grotto" (not skipped), and message must match this square
+ if (party.progressLog && Array.isArray(party.progressLog)) {
+  for (const e of party.progressLog) {
+   if (e.outcome !== "grotto") continue;
+   const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
+   if (!m || !m[1]) continue;
+   if (String(m[1]).trim().toUpperCase() !== sq) continue;
+   return true;
+  }
  }
  return false;
 }
@@ -1621,28 +1646,42 @@ module.exports = {
       return outcome;
      }
      let outcomeType = rollOutcome();
+     const currentSquareNorm = normalizeSquareId(party.square);
      const specialCount = countSpecialEventsInSquare(party, party.square);
      const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
+     // Only use map doc that matches this square (avoid wrong square false positives)
+     let mapSquareForGrotto = null;
+     if (currentSquareNorm) {
+      const found = await Square.findOne({ squareId: new RegExp(`^${String(party.square).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+      if (found && normalizeSquareId(found.squareId) === currentSquareNorm) mapSquareForGrotto = found;
+     }
      for (;;) {
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
-       logger.info("EXPLORE", `Reroll: explored twice in a row at ${location}`);
+       const reason = "explored twice in a row at this location (blocked by rule)";
+       logger.info("EXPLORE", `Skipped ${outcomeType} at ${location}: ${reason}`);
        outcomeType = rollOutcome();
        continue;
       }
       if (!SPECIAL_OUTCOMES.includes(outcomeType)) break;
       if (specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
-       logger.info("EXPLORE", `Reroll: special count ${specialCount} >= max at ${location}, was ${outcomeType}`);
+       const reason = `special discovery count for this square is ${specialCount} (max ${MAX_SPECIAL_EVENTS_PER_SQUARE}); only counted outcomes: monster_camp/grotto/relic/ruins when accepted (monster_camp_skipped does not count)`;
+       logger.info("EXPLORE", `Skipped ${outcomeType} at ${location}: ${reason}`);
        outcomeType = rollOutcome();
        continue;
       }
-      if (outcomeType === "grotto" && hasGrottoInSquare(party, party.square)) {
-       logger.info("EXPLORE", `Reroll: grotto already in square at ${location}`);
-       outcomeType = rollOutcome();
-       continue;
+      if (outcomeType === "grotto") {
+       const alreadyHasGrotto = hasGrottoInSquare(party, party.square, mapSquareForGrotto);
+       if (alreadyHasGrotto) {
+        const reason = "this square already has a grotto (from map or this run); one grotto per square only";
+        logger.info("EXPLORE", `Skipped ${outcomeType} at ${location}: ${reason}`);
+        outcomeType = rollOutcome();
+        continue;
+       }
       }
       if (specialCount >= 1 && Math.random() > DISCOVERY_REDUCE_CHANCE_WHEN_ANY) {
-       logger.info("EXPLORE", `Reroll: discovery-reduce failed at ${location}, was ${outcomeType}`);
+       const reason = `square already has ${specialCount} special discovery/discoveries; roll failed discovery-reduce (${(DISCOVERY_REDUCE_CHANCE_WHEN_ANY * 100).toFixed(0)}% keep chance)`;
+       logger.info("EXPLORE", `Skipped ${outcomeType} at ${location}: ${reason}`);
        outcomeType = rollOutcome();
        continue;
       }
@@ -2431,8 +2470,10 @@ module.exports = {
          if (isYes) {
           await pushDiscoveryToMap(party, "monster_camp", at, i.user?.id);
           pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map for later.`, undefined, monsterCampCosts, at);
+          logger.info("EXPLORE", `Counted monster_camp at ${location}: user marked on map (counts toward 3-per-square discovery limit).`);
          } else {
           pushProgressLog(party, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, monsterCampCosts, at);
+          logger.info("EXPLORE", `Skipped counting monster_camp at ${location}: user chose No (not marked on map; does not count toward 3-per-square discovery limit).`);
          }
          await party.save();
          const monsterCampEmbed = new EmbedBuilder()
@@ -2477,6 +2518,7 @@ module.exports = {
         if (outcomeType === "ruins" && !isYes) {
          const at = new Date();
          pushProgressLog(party, character.name, "ruins_skipped", `Found ruins in ${location}; left for later (won't count toward discovery limit).`, undefined, undefined, at);
+         logger.info("EXPLORE", `Skipped counting ruins at ${location}: user chose No / left for later (does not count toward 3-per-square discovery limit).`);
          await party.save();
         }
 
@@ -2524,10 +2566,13 @@ module.exports = {
          if (fp) {
           if (outcomeType === "monster_camp") {
            pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined, new Date());
+           logger.info("EXPLORE", `Skipped counting monster_camp at ${location}: choice timed out (not marked; does not count toward discovery limit).`);
           } else if (outcomeType === "ruins") {
            pushProgressLog(fp, character.name, "ruins_skipped", `Found ruins in ${location}; choice timed out (left for later).`, undefined, undefined, new Date());
+           logger.info("EXPLORE", `Skipped counting ruins at ${location}: choice timed out (not marked; does not count toward discovery limit).`);
           } else if (outcomeType === "grotto") {
            pushProgressLog(fp, character.name, "grotto_skipped", `Found a grotto in ${location}; choice timed out (no action).`, undefined, undefined, new Date());
+           logger.info("EXPLORE", `Skipped grotto at ${location}: choice timed out (no action; does not count toward discovery limit).`);
           }
           if (outcomeType === "monster_camp" || outcomeType === "ruins" || outcomeType === "grotto") {
            await fp.save();
@@ -3764,6 +3809,27 @@ module.exports = {
     party.status = "completed";
     await party.save();
 
+    // Stats and highlights from progressLog and gatheredItems (use saved party with "end" entry)
+    const log = party.progressLog || [];
+    const turnsOrActions = log.filter((e) => e.outcome !== "end").length;
+    const itemsGathered = Array.isArray(party.gatheredItems)
+      ? party.gatheredItems.reduce((sum, g) => sum + (typeof g.quantity === "number" ? g.quantity : 1), 0)
+      : 0;
+    const highlightOutcomes = new Set();
+    for (const e of log) {
+      const o = e.outcome;
+      if (o === "ruins" || o === "ruin_rest") highlightOutcomes.add("Found ruins");
+      else if (o === "grotto" || o === "grotto_cleansed" || o === "grotto_maze_success" || o === "grotto_travel" || o === "grotto_puzzle_success" || o === "grotto_target_success" || o === "grotto_maze_raid") highlightOutcomes.add("Found grotto");
+      else if (o === "monster_camp") highlightOutcomes.add("Monster camp");
+      else if (o === "raid") highlightOutcomes.add("Raid");
+      else if (o === "fairy") highlightOutcomes.add("Fairy");
+      else if (o === "chest_open") highlightOutcomes.add("Chest opened");
+      else if (o === "secure") highlightOutcomes.add("Secured quadrant");
+      else if (o === "monster") highlightOutcomes.add("Defeated monster");
+      else if (o === "retreat") highlightOutcomes.add("Escaped raid");
+    }
+    const highlightsList = [...highlightOutcomes];
+
     const reportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz";
     const reportUrl = `${reportBaseUrl.replace(/\/$/, "")}/explore/${expeditionId}`;
     const splitSectionEnd = splitLinesEnd.length > 0
@@ -3779,6 +3845,19 @@ module.exports = {
       `**View the expedition report here:** [Open expedition report](${reportUrl})`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+
+    embed.addFields({
+     name: "📊 **Expedition stats**",
+     value: `**${turnsOrActions}** actions · **${itemsGathered}** item(s) gathered`,
+     inline: false
+    });
+    if (highlightsList.length > 0) {
+     embed.addFields({
+      name: "✨ **Highlights**",
+      value: highlightsList.join(" · "),
+      inline: false
+     });
+    }
 
     await interaction.editReply({ embeds: [embed] });
 

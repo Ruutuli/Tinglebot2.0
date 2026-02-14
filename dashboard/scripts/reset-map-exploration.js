@@ -8,6 +8,11 @@
 //   - mapPathImages: delete all documents
 //   - Party: pathImageUploadedSquares -> []
 //   - pins: delete pins placed during expeditions (partyId or sourceDiscoveryKey set)
+//   - grottos: delete all grotto records (cleansed grotto trials)
+//   - relics: delete all relics (discovered during exploration)
+//   - oldMapsFound: delete all old maps found during exploration
+//   - quadrant extras: clear oldMapNumber, oldMapLeadsTo, ruinRestStamina (exploration discoveries)
+//   - discoveries (grottos, monster_camp, ruins, relic) are cleared via quadrants
 //
 // Does NOT delete files from GCS (path images remain in bucket but are no longer referenced).
 //
@@ -72,6 +77,9 @@ const MapPathImage = mongoose.models.MapPathImage || mongoose.model('MapPathImag
   createdAt: Date,
 }, { strict: false }), 'mapPathImages');
 const Party = mongoose.model('Party', PartySchema, 'parties');
+const Grotto = mongoose.models.Grotto || mongoose.model('Grotto', new mongoose.Schema({}, { strict: false }), 'grottos');
+const Relic = mongoose.models.Relic || mongoose.model('Relic', new mongoose.Schema({}, { strict: false }), 'relics');
+const OldMapFound = mongoose.models.OldMapFound || mongoose.model('OldMapFound', new mongoose.Schema({}, { strict: false }), 'oldMapsFound');
 
 async function run() {
   await mongoose.connect(MONGODB_URI);
@@ -95,6 +103,9 @@ async function run() {
           exploredBy: '',
           exploredAt: null,
           discoveries: [],
+          oldMapNumber: null,
+          oldMapLeadsTo: null,
+          ruinRestStamina: null,
         };
       }
       quadrantsReset++;
@@ -104,6 +115,9 @@ async function run() {
         exploredBy: '',
         exploredAt: null,
         discoveries: [],
+        oldMapNumber: null,
+        oldMapLeadsTo: null,
+        ruinRestStamina: null,
       };
     });
     await Square.updateOne(
@@ -139,6 +153,18 @@ async function run() {
     ],
   });
   console.log(`[pins] Deleted ${pinResult.deletedCount} expedition pin(s)`);
+
+  // 5) Delete all grotto records (cleansed grotto trials)
+  const grottoResult = await Grotto.deleteMany({});
+  console.log(`[grottos] Deleted ${grottoResult.deletedCount} grotto record(s)`);
+
+  // 6) Delete all relics (exploration discoveries)
+  const relicResult = await Relic.deleteMany({});
+  console.log(`[relics] Deleted ${relicResult.deletedCount} relic(s)`);
+
+  // 7) Delete all old maps found during exploration
+  const oldMapResult = await OldMapFound.deleteMany({});
+  console.log(`[oldMapsFound] Deleted ${oldMapResult.deletedCount} old map(s)`);
 
   console.log('Done.');
 }

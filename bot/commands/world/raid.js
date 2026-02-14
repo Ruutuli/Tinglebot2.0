@@ -6,6 +6,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid, scheduleRaidTurnSkip } = require('../../modules/raidModule');
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
+const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
 const Raid = require('@/models/RaidModel');
 const Party = require('@/models/PartyModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
@@ -846,7 +847,10 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     } catch (e) {
       // ignore
     }
-    const cmdRetreat = `</explore retreat:${getExploreCommandId()}>`;
+    const exploreCmdId = getExploreCommandId();
+    const cmdRetreat = typeof exploreCmdId === 'string' && exploreCmdId
+      ? chatInputApplicationCommandMention('explore', 'retreat', exploreCmdId)
+      : '`/explore retreat`';
     embed.addFields({
       name: '🗺️ __Expedition raid__',
       value: `Only members of expedition **${raidData.expeditionId}** can join. **Escape:** ${cmdRetreat} with id \`${raidData.expeditionId}\` and your character (1 stamina per attempt, not guaranteed).`,

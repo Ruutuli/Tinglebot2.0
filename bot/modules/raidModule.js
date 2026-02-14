@@ -21,6 +21,7 @@ const { monsterMapping } = require('@/models/MonsterModel');
 const Raid = require('@/models/RaidModel');
 const { finalizeBlightApplication } = require('../handlers/blightHandler');
 const { getExploreCommandId } = require('../embeds/embeds.js');
+const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
 
 // ============================================================================
 // ---- Constants ----
@@ -1281,8 +1282,13 @@ async function createRaidEmbed(raid, monsterImage) {
     .setTimestamp();
 
   if (raid.expeditionId) {
-    const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
-    const cmdRetreat = `</explore retreat:${getExploreCommandId()}>`;
+    const exploreCmdId = getExploreCommandId();
+    const cmdRoll = typeof exploreCmdId === 'string' && exploreCmdId
+      ? chatInputApplicationCommandMention('explore', 'roll', exploreCmdId)
+      : '`/explore roll`';
+    const cmdRetreat = typeof exploreCmdId === 'string' && exploreCmdId
+      ? chatInputApplicationCommandMention('explore', 'retreat', exploreCmdId)
+      : '`/explore retreat`';
     let expeditionValue = `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.\n\n**Escape:** You can try to escape with ${cmdRetreat} (id: \`${raid.expeditionId}\`, your character) — costs 1 stamina per attempt, not guaranteed.`;
     embed.addFields({
       name: '🗺️ __Expedition raid__',
