@@ -427,7 +427,10 @@ export default function ExplorePartyPage() {
   const fetchParty = useCallback(async () => {
     if (!partyId) return;
     try {
-      const res = await fetch(`/api/explore/parties/${encodeURIComponent(partyId)}`, { cache: "no-store" });
+      const res = await fetch(
+        `/api/explore/parties/${encodeURIComponent(partyId)}?_t=${Date.now()}`,
+        { cache: "no-store", headers: { Pragma: "no-cache", "Cache-Control": "no-cache" } }
+      );
       if (res.status === 404) {
         const data = await res.json().catch(() => ({}));
         const code = (data as { code?: string })?.code;
@@ -481,6 +484,16 @@ export default function ExplorePartyPage() {
     return () => clearInterval(t);
   }, [partyId, party, fetchParty]);
 
+  // Refetch when user returns to tab (e.g. after moving via Discord) so journey/location update immediately
+  useEffect(() => {
+    if (!partyId || !party) return;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchParty();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [partyId, party, fetchParty]);
+
   useEffect(() => {
     if (!party?.square) {
       setSquarePreview(null);
@@ -510,20 +523,20 @@ export default function ExplorePartyPage() {
     return () => controller.abort();
   }, [party?.square, party?.quadrant, party?.quadrantState]);
 
-  // Load path image for current party+square so the map can show it (and refetch after upload via success URL)
+  // Load path image for current square — fetch by squareId so we get the latest from ANY expedition (same as /map)
   useEffect(() => {
-    if (!partyId || !party?.square) {
+    if (!party?.square) {
       setPathImageForSquare(null);
       return;
     }
     const controller = new AbortController();
     const { signal } = controller;
-    fetch(`/api/explore/path-images?partyId=${encodeURIComponent(partyId)}`, { signal })
+    fetch(`/api/explore/path-images?squareId=${encodeURIComponent(party.square)}`, { signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data: { pathImages?: Array<{ squareId: string; imageUrl: string }> }) => {
         if (signal.aborted) return;
         const list = Array.isArray(data?.pathImages) ? data.pathImages : [];
-        const forSquare = list.find((p) => p.squareId === party.square);
+        const forSquare = list.find((p) => String(p.squareId || "").toUpperCase() === String(party.square || "").toUpperCase());
         setPathImageForSquare(forSquare?.imageUrl ?? null);
       })
       .catch(() => {
@@ -531,7 +544,7 @@ export default function ExplorePartyPage() {
         setPathImageForSquare(null);
       });
     return () => controller.abort();
-  }, [partyId, party?.square]);
+  }, [party?.square]);
 
   // Load square previews for unreported discoveries (for click-to-place map)
   useEffect(() => {
