@@ -1605,7 +1605,13 @@ module.exports = {
      }
      let outcomeType = rollOutcome();
      const specialCount = countSpecialEventsInSquare(party, party.square);
+     const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
      for (;;) {
+      // Don't allow "explored" twice in a row at the same location
+      if (outcomeType === "explored" && lastOutcomeHere === "explored") {
+       outcomeType = rollOutcome();
+       continue;
+      }
       if (!SPECIAL_OUTCOMES.includes(outcomeType)) break;
       if (specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
        outcomeType = rollOutcome();
