@@ -1055,33 +1055,51 @@ async function initializeClient() {
           logger.warn('CLEANUP', `[index.js] Could not read token balance for ${discordId}: ${balanceErr.message}`);
         }
         if (leaverTokens > 0) {
-          try {
-            await member.guild.members.fetch();
-            const residentMembers = member.guild.members.cache.filter(
-              m => !m.user.bot && m.roles.cache.has(RESIDENT_ROLE_ID)
-            );
-            if (residentMembers.size > 0) {
-              const perPerson = Math.floor(leaverTokens / residentMembers.size);
-              if (perPerson > 0) {
-                const meta = {
-                  category: 'member_leave_redistribution',
-                  description: `Tokens redistributed from ${username} who left the server`
-                };
-                for (const [recipientId, _m] of residentMembers) {
-                  try {
-                    await updateTokenBalance(recipientId, perPerson, meta);
-                  } catch (recipientErr) {
-                    logger.warn('CLEANUP', `[index.js] Failed to credit tokens to ${recipientId}: ${recipientErr.message}`);
+          const maxRedistRetries = 3;
+          let redistErr;
+          for (let attempt = 0; attempt <= maxRedistRetries; attempt++) {
+            try {
+              await member.guild.members.fetch();
+              const residentMembers = member.guild.members.cache.filter(
+                m => !m.user.bot && m.roles.cache.has(RESIDENT_ROLE_ID)
+              );
+              if (residentMembers.size > 0) {
+                const perPerson = Math.floor(leaverTokens / residentMembers.size);
+                if (perPerson > 0) {
+                  const meta = {
+                    category: 'member_leave_redistribution',
+                    description: `Tokens redistributed from ${username} who left the server`
+                  };
+                  for (const [recipientId, _m] of residentMembers) {
+                    try {
+                      await updateTokenBalance(recipientId, perPerson, meta);
+                    } catch (recipientErr) {
+                      logger.warn('CLEANUP', `[index.js] Failed to credit tokens to ${recipientId}: ${recipientErr.message}`);
+                    }
                   }
+                  logger.success('CLEANUP', `[index.js] Redistributed ${leaverTokens} tokens from ${discordId} to ${residentMembers.size} Resident(s), ${perPerson} each`);
+                } else {
+                  logger.info('CLEANUP', `[index.js] Skipped token redistribution: ${leaverTokens} tokens split among ${residentMembers.size} would be 0 per person`);
                 }
-                logger.success('CLEANUP', `[index.js] Redistributed ${leaverTokens} tokens from ${discordId} to ${residentMembers.size} Resident(s), ${perPerson} each`);
               } else {
-                logger.info('CLEANUP', `[index.js] Skipped token redistribution: ${leaverTokens} tokens split among ${residentMembers.size} would be 0 per person`);
+                logger.info('CLEANUP', `[index.js] Skipped token redistribution: no Resident members to receive ${leaverTokens} tokens`);
               }
-            } else {
-              logger.info('CLEANUP', `[index.js] Skipped token redistribution: no Resident members to receive ${leaverTokens} tokens`);
+              redistErr = null;
+              break;
+            } catch (err) {
+              redistErr = err;
+              const isRateLimited = /rate limit/i.test(err.message) && /retry after/i.test(err.message);
+              const retryAfterMatch = err.message.match(/retry after ([\d.]+) seconds?/i);
+              const retryAfterSec = retryAfterMatch ? parseFloat(retryAfterMatch[1]) : 5;
+              if (isRateLimited && attempt < maxRedistRetries) {
+                logger.info('CLEANUP', `[index.js] Token redistribution rate limited, waiting ${retryAfterSec}s before retry (${attempt + 1}/${maxRedistRetries})`);
+                await new Promise((resolve) => setTimeout(resolve, (retryAfterSec + 0.5) * 1000));
+              } else {
+                break;
+              }
             }
-          } catch (redistErr) {
+          }
+          if (redistErr) {
             logger.warn('CLEANUP', `[index.js] Token redistribution failed for ${discordId}: ${redistErr.message}`);
           }
         }
