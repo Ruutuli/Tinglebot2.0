@@ -183,12 +183,45 @@ async function handleExplorationChestOpen(interaction, expeditionId, location) {
  return { lootEmbed, party, nextCharacter };
 }
 
-/** Outcomes that count toward the per-square special-event limit (reportable on map). */
-const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto"];
+/** Roll outcomes that are "discoveries" (reportable on map); reroll when square at cap or applying reduced chance. */
+const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic"];
+/** Outcomes to count toward the 3-per-square limit. Use "ruins_found" so initial ruins find is counted (we log "ruins_found", not "ruins", on find). */
+const DISCOVERY_COUNT_OUTCOMES = ["monster_camp", "grotto", "relic", "ruins_found"];
+/** When leaving a square, clear these from progressLog if not reported (include ruins_found). */
+const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic", "ruins_found"];
 const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
+/** When square already has 1+ discovery, keep a discovery outcome only this fraction of the time (75% less chance). */
+const DISCOVERY_REDUCE_CHANCE_WHEN_ANY = 0.25;
 
 /** Parse square from progress message like "Found X in H8 Q2; ..." -> "H8". */
 const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
+
+
+/** Outcome of the most recent progress log entry that applies to the given (square, quadrant). Used to know if Move was prompted. */
+function getLastProgressOutcomeForLocation(party, square, quadrant) {
+ const sq = String(square || "").trim().toUpperCase();
+ const q = String(quadrant || "").trim().toUpperCase();
+ const loc = `${sq} ${q}`;
+ const log = party.progressLog;
+ if (!log || !log.length) return null;
+ for (let i = log.length - 1; i >= 0; i--) {
+  const e = log[i];
+  const msg = e.message || "";
+  let entryLoc = null;
+  if (e.outcome === "explored") {
+   const m = msg.match(/\(([A-J](?:[1-9]|1[0-2])\s+Q[1-4])\)/i);
+   if (m) entryLoc = m[1].trim().toUpperCase();
+  } else if (e.outcome === "move") {
+   const m = msg.match(/\*\*(\S+ \S+)\*\*/);
+   if (m) entryLoc = m[1].trim().toUpperCase();
+  } else if (e.outcome === "secure") {
+   const m = msg.match(/Secured\s+(\S+\s+Q[1-4])/i);
+   if (m) entryLoc = m[1].trim().toUpperCase();
+  }
+  if (entryLoc === loc) return e.outcome;
+ }
+ return null;
+}
 
 function countSpecialEventsInSquare(party, square) {
  if (!party.progressLog || !Array.isArray(party.progressLog)) return 0;
@@ -196,7 +229,7 @@ function countSpecialEventsInSquare(party, square) {
  if (!sq) return 0;
  let count = 0;
  for (const e of party.progressLog) {
-  if (!SPECIAL_OUTCOMES.includes(e.outcome)) continue;
+  if (!DISCOVERY_COUNT_OUTCOMES.includes(e.outcome)) continue;
   const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
   if (m && m[1] && String(m[1]).trim().toUpperCase() === sq) count += 1;
  }
@@ -675,15 +708,28 @@ module.exports = {
       });
      }
 
-    // Apply roll cost to current character so party totals stay correct when recalc'd later (e.g. after monster fight)
-    const currentStamina = typeof character.currentStamina === "number" ? character.currentStamina : (character.maxStamina ?? 0);
-    character.currentStamina = Math.max(0, currentStamina - staminaCost);
-    await character.save();
-    party.characters[characterIndex].currentStamina = character.currentStamina;
+    // Apply roll cost to party stamina pool (current character first, then others) so we always deduct when party has enough
+    let remainingRollCost = staminaCost;
+    const rollCostOrder = [characterIndex, ...party.characters.map((_, idx) => idx).filter((idx) => idx !== characterIndex)];
+    for (const idx of rollCostOrder) {
+     if (remainingRollCost <= 0) break;
+     const slot = party.characters[idx];
+     const charDoc = await Character.findById(slot._id);
+     if (!charDoc) continue;
+     const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
+     const take = Math.min(remainingRollCost, have);
+     if (take > 0) {
+      charDoc.currentStamina = Math.max(0, have - take);
+      await charDoc.save();
+      slot.currentStamina = charDoc.currentStamina;
+      remainingRollCost -= take;
+     }
+    }
     party.markModified("characters");
     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
     party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
     await party.save();
+    character.currentStamina = party.characters[characterIndex].currentStamina;
 
      const location = `${party.square} ${party.quadrant}`;
 
@@ -705,8 +751,17 @@ module.exports = {
      }
      let outcomeType = rollOutcome();
      const specialCount = countSpecialEventsInSquare(party, party.square);
-     while (SPECIAL_OUTCOMES.includes(outcomeType) && specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
-      outcomeType = rollOutcome();
+     for (;;) {
+      if (!SPECIAL_OUTCOMES.includes(outcomeType)) break;
+      if (specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
+       outcomeType = rollOutcome();
+       continue;
+      }
+      if (specialCount >= 1 && Math.random() > DISCOVERY_REDUCE_CHANCE_WHEN_ANY) {
+       outcomeType = rollOutcome();
+       continue;
+      }
+      break;
      }
 
      if (outcomeType === "explored") {
@@ -1047,11 +1102,11 @@ module.exports = {
       if (isYesNoChoice) {
        const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-         .setCustomId(`explore_${outcomeType}_yes|${expeditionId}`)
+         .setCustomId(`explore_${outcomeType}_yes|${expeditionId}|${characterIndex}`)
          .setLabel("Yes")
          .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-         .setCustomId(`explore_${outcomeType}_no|${expeditionId}`)
+         .setCustomId(`explore_${outcomeType}_no|${expeditionId}|${characterIndex}`)
          .setLabel("No")
          .setStyle(ButtonStyle.Secondary)
        );
@@ -1078,12 +1133,12 @@ module.exports = {
         const isYes = i.customId.endsWith("_yes") || i.customId.includes("_yes|");
         const disabledRow = new ActionRowBuilder().addComponents(
          new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_yes|${expeditionId}`)
+          .setCustomId(`explore_${outcomeType}_yes|${expeditionId}|${characterIndex}`)
           .setLabel("Yes")
           .setStyle(ButtonStyle.Success)
           .setDisabled(true),
          new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_no|${expeditionId}`)
+          .setCustomId(`explore_${outcomeType}_no|${expeditionId}|${characterIndex}`)
           .setLabel("No")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
@@ -1099,7 +1154,10 @@ module.exports = {
           await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
           return;
          }
-         const ruinsCharIndex = (freshParty.currentTurn - 1 + freshParty.characters.length) % freshParty.characters.length;
+         const parts = i.customId.split("|");
+         const ruinsCharIndex = parts.length >= 3 && /^\d+$/.test(parts[2])
+          ? Math.max(0, Math.min(parseInt(parts[2], 10), freshParty.characters.length - 1))
+          : (freshParty.currentTurn - 1 + freshParty.characters.length) % freshParty.characters.length;
          const ruinsCharSlot = freshParty.characters[ruinsCharIndex];
          const ruinsCharacter = await Character.findById(ruinsCharSlot._id);
          if (!ruinsCharacter) {
@@ -1490,12 +1548,12 @@ module.exports = {
         if (reason === "time" && collected.size === 0 && msg.editable) {
          const timeoutDisabledRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-           .setCustomId(`explore_${outcomeType}_yes|${expeditionId}`)
+           .setCustomId(`explore_${outcomeType}_yes|${expeditionId}|${characterIndex}`)
            .setLabel("Yes")
            .setStyle(ButtonStyle.Success)
            .setDisabled(true),
           new ButtonBuilder()
-           .setCustomId(`explore_${outcomeType}_no|${expeditionId}`)
+           .setCustomId(`explore_${outcomeType}_no|${expeditionId}|${characterIndex}`)
            .setLabel("No")
            .setStyle(ButtonStyle.Secondary)
            .setDisabled(true)
@@ -2259,6 +2317,55 @@ module.exports = {
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
+    if (party.status !== "started") {
+     return interaction.editReply("This expedition has not been started yet.");
+    }
+
+    // Only allow Move when the expedition has prompted Move: (1) quadrant secured, or (2) quadrant explored AND last action here was "explored" (empty) or "move" (we showed the full menu with Move)
+    const quadrantState = (party.quadrantState || "").toLowerCase();
+    if (quadrantState !== "explored" && quadrantState !== "secured") {
+     const moveBlockedEmbed = new EmbedBuilder()
+      .setTitle("🚫 **Move not available**")
+      .setColor(regionColors[party.region] || "#b91c1c")
+      .setDescription(
+       "You can't use **Move** right now. This quadrant hasn't been explored yet.\n\n" +
+       "Use **/explore roll** to explore the current quadrant first. **Move** only becomes available when the expedition prompts you (e.g. after exploring, or when the quadrant is secured)."
+      )
+      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+     addExplorationStandardFields(moveBlockedEmbed, {
+      party,
+      expeditionId,
+      location: `${party.square} ${party.quadrant}`,
+      nextCharacter: party.characters[party.currentTurn] ?? null,
+      showNextAndCommands: false,
+      showRestSecureMove: false,
+     });
+     return interaction.editReply({ embeds: [moveBlockedEmbed] });
+    }
+    if (quadrantState === "explored") {
+     const lastOutcome = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
+     const moveWasPrompted = lastOutcome === "explored" || lastOutcome === "move";
+     if (!moveWasPrompted) {
+      const moveBlockedEmbed = new EmbedBuilder()
+       .setTitle("🚫 **Move not available**")
+       .setColor(regionColors[party.region] || "#b91c1c")
+       .setDescription(
+        "You can't use **Move** right now. The expedition hasn't prompted you to move.\n\n" +
+        "Use **/explore roll** (or respond to the current prompt) until you see the **Quadrant Explored** menu with Roll, Item, Camp, Secure, and **Move**. Only then can you use **Move**."
+       )
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+      addExplorationStandardFields(moveBlockedEmbed, {
+       party,
+       expeditionId,
+       location: `${party.square} ${party.quadrant}`,
+       nextCharacter: party.characters[party.currentTurn] ?? null,
+       showNextAndCommands: false,
+       showRestSecureMove: false,
+      });
+      return interaction.editReply({ embeds: [moveBlockedEmbed] });
+     }
+    }
+
     const currentSquare = party.square;
     const currentQuadrant = party.quadrant;
     const adjacent = getAdjacentQuadrants(currentSquare, currentQuadrant);
@@ -2363,7 +2470,7 @@ module.exports = {
     const skippedKeys = [];
     if (leavingSquare && party.progressLog && Array.isArray(party.progressLog)) {
      party.progressLog = party.progressLog.filter((e) => {
-      if (!SPECIAL_OUTCOMES.includes(e.outcome)) return true;
+      if (!DISCOVERY_CLEANUP_OUTCOMES.includes(e.outcome)) return true;
       const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
       if (!m || !m[1]) return true;
       const entrySquare = String(m[1]).trim().toUpperCase();

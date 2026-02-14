@@ -126,6 +126,7 @@ export async function GET(request: NextRequest) {
     let dbImage: string | null = null;
     let mapCoordinates: { center: { lat: number; lng: number }; bounds: { north: number; south: number; east: number; west: number } } | null = null;
     const quadrantStatuses: Record<string, QuadrantStatus> = { Q1: "unexplored", Q2: "unexplored", Q3: "unexplored", Q4: "unexplored" };
+    const quadrantRuinRest: Record<string, number | null> = { Q1: null, Q2: null, Q3: null, Q4: null };
     try {
       await connect();
       const Square = (await import("@/models/mapModel.js")).default;
@@ -135,7 +136,6 @@ export async function GET(request: NextRequest) {
         mapCoordinates?: { center?: { lat: number; lng: number }; bounds?: { north: number; south: number; east: number; west: number } };
         quadrants?: Array<{ quadrantId: string; status?: string; ruinRestStamina?: number | null }>;
       } | null;
-      const quadrantRuinRest: Record<string, number | null> = { Q1: null, Q2: null, Q3: null, Q4: null };
       if (doc) {
         dbImage = doc.image ?? null;
         const coords = doc.mapCoordinates;

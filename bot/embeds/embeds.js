@@ -551,7 +551,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
    `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.\n\n` +
    `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
-   `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands.`;
+   `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina. Pick the quadrant to move to via commands. **Only use when the expedition prompts you to move.**`;
   if (isAtStartQuadrant) {
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
