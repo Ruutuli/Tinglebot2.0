@@ -45,12 +45,12 @@ class MapModule {
                 addSquare(colIndex - 1, rowIndex - 1, 'Q4', '↖ North-west');
                 break;
             case 'Q2':
-                // Top-right: same square Q1, Q4, Q3; north = above Q3,Q4; east = right square Q1,Q3; north-east = above-right Q3
+                // Top-right: same square Q1, Q4, Q3; north = above Q4 (bottom-right of square above); north-west = above Q3
                 addSquare(colIndex, rowIndex, 'Q1', '← West (same square)');
                 addSquare(colIndex, rowIndex, 'Q4', '↓ South (same square)');
                 addSquare(colIndex, rowIndex, 'Q3', '↙ South-west (same square)');
-                addSquare(colIndex, rowIndex - 1, 'Q3', '↑ North');
-                addSquare(colIndex, rowIndex - 1, 'Q4', '↗ North-east');
+                addSquare(colIndex, rowIndex - 1, 'Q3', '↖ North-west');
+                addSquare(colIndex, rowIndex - 1, 'Q4', '↑ North');
                 addSquare(colIndex + 1, rowIndex, 'Q1', '→ East');
                 addSquare(colIndex + 1, rowIndex, 'Q3', '↘ South-east');
                 addSquare(colIndex + 1, rowIndex - 1, 'Q3', '↗ North-east');
