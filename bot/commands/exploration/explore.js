@@ -2368,6 +2368,28 @@ module.exports = {
      return interaction.editReply("This expedition has not been started yet.");
     }
 
+    // Sync quadrant state from map (exploringMap / Square model) — secured/explored on map means Move is allowed
+    const moveSquareId = String(party.square || "").trim();
+    const moveSquareIdRegex = moveSquareId ? new RegExp(`^${moveSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") : null;
+    const mapSquareForMove = moveSquareIdRegex ? await Square.findOne({ squareId: moveSquareIdRegex }) : null;
+    if (mapSquareForMove?.quadrants?.length && party.square && party.quadrant) {
+     const qMove = mapSquareForMove.quadrants.find(
+      (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
+     );
+     if (qMove && (qMove.status === "explored" || qMove.status === "secured")) {
+      party.quadrantState = qMove.status;
+      party.markModified("quadrantState");
+     }
+    }
+    // Fallback: if progress log shows we secured this location, treat as secured (map may be out of sync)
+    if (party.quadrantState !== "explored" && party.quadrantState !== "secured") {
+     const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
+     if (lastOutcomeHere === "secure") {
+      party.quadrantState = "secured";
+      party.markModified("quadrantState");
+     }
+    }
+
     // Only allow Move when the expedition has prompted Move: (1) quadrant secured, or (2) quadrant explored AND last action here was "explored" (empty) or "move" (we showed the full menu with Move)
     const quadrantState = (party.quadrantState || "").toLowerCase();
     if (quadrantState !== "explored" && quadrantState !== "secured") {
