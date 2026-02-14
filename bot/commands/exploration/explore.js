@@ -112,7 +112,7 @@ const REGION_TO_VILLAGE = {
 };
 
 // TODO: remove when done testing - treats tier 5+ monsters as regular encounters (no raid)
-const DISABLE_EXPLORATION_RAIDS = true;
+const DISABLE_EXPLORATION_RAIDS = false;
 
 const EXPLORATION_CHEST_RELIC_CHANCE = 0.08;
 
