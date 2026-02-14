@@ -3268,12 +3268,19 @@ async function handleExploreIdAutocomplete(interaction, focusedOption) {
 
   const userId = interaction.user.id;
   const value = (focusedOption.value || '').toString().toLowerCase();
+  const openExpiryCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const parties = await Party.find({
-   status: { $ne: "completed" },
+   status: { $nin: ["completed", "cancelled"] },
    $or: [
     { leaderId: userId },
     { 'characters.userId': userId },
+   ],
+   $and: [
+    { $or: [
+      { status: { $ne: "open" } },
+      { createdAt: { $gte: openExpiryCutoff } },
+    ] },
    ],
   })
    .select('partyId region status square quadrant')
@@ -3320,7 +3327,7 @@ async function handleExploreRollCharacterAutocomplete(
    return await interaction.respond([]);
   }
 
-  const party = await Party.findOne({ partyId: expeditionId }).lean();
+  const party = await Party.findActiveByPartyId(expeditionId).lean();
   if (!party) {
    return await interaction.respond([
     { name: "Expedition not found", value: "none" },
@@ -3385,7 +3392,7 @@ async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
   const characterName = interaction.options.getString("charactername");
   if (!expeditionId || !characterName) return await interaction.respond([]);
 
-  const party = await Party.findOne({ partyId: expeditionId }).lean();
+  const party = await Party.findActiveByPartyId(expeditionId).lean();
   if (!party) return await interaction.respond([]);
 
   const partyChar = party.characters.find(
@@ -3429,7 +3436,7 @@ async function handleExploreMoveQuadrantAutocomplete(interaction, focusedOption)
   const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
   if (!expeditionId) return await interaction.respond([]);
 
-  const party = await Party.findOne({ partyId: expeditionId }).select("square quadrant").lean();
+  const party = await Party.findActiveByPartyId(expeditionId).select("square quadrant").lean();
   if (!party || !party.square || !party.quadrant) {
    return await interaction.respond([{ name: "No expedition location", value: "none" }]);
   }
@@ -3551,7 +3558,7 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
    return await interaction.respond(filtered.slice(0, 25));
   }
 
-  const party = await Party.findOne({ partyId: expeditionId });
+  const party = await Party.findActiveByPartyId(expeditionId);
   if (!party) {
    return await interaction.respond([
     { name: "Expedition not found", value: "none" },

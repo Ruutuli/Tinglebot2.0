@@ -78,6 +78,15 @@ export async function POST(
     }
 
     const p = party as Record<string, unknown>;
+    if (p.status === "cancelled") {
+      return NextResponse.json({ error: "Expedition was cancelled" }, { status: 404 });
+    }
+    if (p.status === "open") {
+      const createdAt = p.createdAt instanceof Date ? p.createdAt.getTime() : typeof p.createdAt === "string" ? new Date(p.createdAt).getTime() : NaN;
+      if (!Number.isNaN(createdAt) && createdAt < Date.now() - 24 * 60 * 60 * 1000) {
+        return NextResponse.json({ error: "Expedition expired" }, { status: 404 });
+      }
+    }
     if (String(p.leaderId) !== currentUserId) {
       return NextResponse.json({ error: "Only the expedition leader can start it" }, { status: 403 });
     }

@@ -38,7 +38,8 @@ const PartySchema = new Schema({
   ],
   messageId: { type: String },
   discordThreadId: { type: String },
-  status: { type: String, default: 'open', enum: ['open', 'started', 'completed'] },
+  status: { type: String, default: 'open', enum: ['open', 'started', 'completed', 'cancelled'] },
+  createdAt: { type: Date, default: Date.now },
   currentTurn: { type: Number, default: 0 },
   totalHearts: { type: Number, default: 0 },
   totalStamina: { type: Number, default: 0 },
@@ -66,5 +67,18 @@ const PartySchema = new Schema({
   /** Quadrants this expedition marked as Explored (so we can reset them to Unexplored on full party KO). */
   exploredQuadrantsThisRun: [{ squareId: { type: String }, quadrantId: { type: String } }],
 });
+
+/** Find party by partyId, excluding cancelled and open parties older than 24h (ghost explores). */
+PartySchema.statics.findActiveByPartyId = function (partyId) {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return this.findOne({
+    partyId,
+    status: { $ne: 'cancelled' },
+    $or: [
+      { status: { $ne: 'open' } },
+      { createdAt: { $gte: cutoff } },
+    ],
+  });
+};
 
 module.exports = mongoose.model('Party', PartySchema);

@@ -110,6 +110,15 @@ export async function POST(
       return NextResponse.json({ error: "Expedition not found." }, { status: 404 });
     }
     const partyObj = party as Record<string, unknown>;
+    if (partyObj.status === "cancelled") {
+      return NextResponse.json({ error: "Expedition was cancelled." }, { status: 404 });
+    }
+    if (partyObj.status === "open") {
+      const createdAt = partyObj.createdAt instanceof Date ? partyObj.createdAt.getTime() : typeof partyObj.createdAt === "string" ? new Date(partyObj.createdAt).getTime() : NaN;
+      if (!Number.isNaN(createdAt) && createdAt < Date.now() - 24 * 60 * 60 * 1000) {
+        return NextResponse.json({ error: "Expedition expired." }, { status: 404 });
+      }
+    }
     if (partyObj.status !== "open") {
       return NextResponse.json({ error: "This expedition has already started." }, { status: 400 });
     }

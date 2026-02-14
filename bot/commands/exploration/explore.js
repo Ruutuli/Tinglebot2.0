@@ -112,7 +112,7 @@ function normalizeExpeditionId(value) {
 }
 
 async function handleExplorationChestOpen(interaction, expeditionId, location) {
- const party = await Party.findOne({ partyId: expeditionId });
+ const party = await Party.findActiveByPartyId(expeditionId);
  if (!party) return null;
  if (party.totalStamina < 1) return { notEnoughStamina: true };
 
@@ -512,7 +512,7 @@ module.exports = {
      const characterName = interaction.options.getString("charactername");
      const userId = interaction.user.id;
 
-     const party = await Party.findOne({ partyId: expeditionId });
+     const party = await Party.findActiveByPartyId(expeditionId);
      if (!party) {
       return interaction.editReply("Expedition ID not found.");
      }
@@ -553,7 +553,8 @@ module.exports = {
       const notYourTurnEmbed = new EmbedBuilder()
         .setTitle("⏳ Not Your Turn")
         .setColor(regionColors[party.region] || "#FF9800")
-        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
+        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -798,7 +799,7 @@ module.exports = {
        party.markModified("characters");
        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
-       pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored.`, undefined, { heartsRecovered: totalHeartsRecovered });
+       pushProgressLog(party, character.name, "fairy", `A fairy appeared in ${location} and healed the party! All hearts restored (+${totalHeartsRecovered} ❤ from 1 fairy).`, undefined, { heartsRecovered: totalHeartsRecovered });
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save();
        const nextChar = party.characters[party.currentTurn];
@@ -1089,7 +1090,7 @@ module.exports = {
          await i.update({ embeds: [embed], components: [disabledRow] }).catch(() => {});
          await msg.edit({ embeds: [embed], components: [disabledRow] }).catch(() => {});
          // Ruins exploration: charge 3 stamina, then roll one of chest/camp/landmark/relic/old_map/star_fragment/blight/goddess_plume
-         const freshParty = await Party.findOne({ partyId: expeditionId });
+         const freshParty = await Party.findActiveByPartyId(expeditionId);
          if (!freshParty) {
           await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
           return;
@@ -1281,7 +1282,7 @@ module.exports = {
           lootForLog = { itemName: "Goddess Plume", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, { staminaLost: ruinsStaminaCost });
          }
-         const finalParty = await Party.findOne({ partyId: expeditionId });
+         const finalParty = await Party.findActiveByPartyId(expeditionId);
          const resultEmbed = new EmbedBuilder()
           .setTitle(resultTitle)
           .setDescription(resultDescription)
@@ -1324,7 +1325,7 @@ module.exports = {
             if (ci.customId.endsWith("_yes")) {
              const result = await handleExplorationChestOpen(ci, expeditionId, location);
              if (result?.notEnoughStamina) {
-              const fp = await Party.findOne({ partyId: expeditionId });
+              const fp = await Party.findActiveByPartyId(expeditionId);
               const noStamEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
                .setColor(regionColors[fp?.region] || "#00ff99")
@@ -1335,7 +1336,7 @@ module.exports = {
               return;
              }
              if (result?.lootEmbed) {
-              const fp = await Party.findOne({ partyId: expeditionId });
+              const fp = await Party.findActiveByPartyId(expeditionId);
               const openedEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
                .setColor(regionColors[fp?.region] || "#00ff99")
@@ -1385,7 +1386,7 @@ module.exports = {
          if (isYes) {
           const result = await handleExplorationChestOpen(i, expeditionId, location);
           if (result?.notEnoughStamina) {
-           const freshParty = await Party.findOne({ partyId: expeditionId });
+           const freshParty = await Party.findActiveByPartyId(expeditionId);
            const noStaminaEmbed = new EmbedBuilder()
             .setTitle(title)
             .setColor(regionColors[freshParty?.region] || "#00ff99")
@@ -1396,7 +1397,7 @@ module.exports = {
           return;
           }
           if (result?.lootEmbed) {
-           const freshParty = await Party.findOne({ partyId: expeditionId });
+           const freshParty = await Party.findActiveByPartyId(expeditionId);
            const openedEmbed = new EmbedBuilder()
             .setTitle(title)
             .setColor(regionColors[freshParty?.region] || "#00ff99")
@@ -1854,7 +1855,7 @@ module.exports = {
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
-    const party = await Party.findOne({ partyId: expeditionId });
+    const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
@@ -1885,7 +1886,8 @@ module.exports = {
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
        .setColor(regionColors[party.region] || "#FF9800")
-       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -1972,7 +1974,7 @@ module.exports = {
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
-    const party = await Party.findOne({ partyId: expeditionId });
+    const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
@@ -1999,7 +2001,8 @@ module.exports = {
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
        .setColor(regionColors[party.region] || "#FF9800")
-       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -2194,7 +2197,7 @@ module.exports = {
     const quadrantInput = interaction.options.getString("quadrant") || "";
     const userId = interaction.user.id;
 
-    const party = await Party.findOne({ partyId: expeditionId });
+    const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
@@ -2221,7 +2224,8 @@ module.exports = {
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
        .setColor(regionColors[party.region] || "#FF9800")
-       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -2448,7 +2452,7 @@ module.exports = {
     const itemName = interaction.options.getString("item");
     const userId = interaction.user.id;
 
-    const party = await Party.findOne({ partyId: expeditionId });
+    const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
@@ -2562,7 +2566,7 @@ module.exports = {
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
-    const party = await Party.findOne({ partyId: expeditionId });
+    const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
@@ -2659,7 +2663,7 @@ module.exports = {
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
-    const party = await Party.findOne({ partyId: expeditionId });
+    const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
@@ -2777,7 +2781,7 @@ module.exports = {
     const characterName = interaction.options.getString("charactername");
     const userId = interaction.user.id;
 
-    const party = await Party.findOne({ partyId: expeditionId });
+    const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
@@ -2804,7 +2808,8 @@ module.exports = {
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
        .setColor(regionColors[party.region] || "#FF9800")
-       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`);
+       .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 

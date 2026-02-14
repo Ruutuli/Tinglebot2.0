@@ -511,7 +511,6 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   }
  }
  embed.addFields(...fields);
- embed.setFooter({ text: "Each unexplored quadrant requires 2 stamina to explore. Quadrants are considered explored when certain conditions are met." });
  return embed;
 };
 

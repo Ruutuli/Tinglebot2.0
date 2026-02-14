@@ -48,8 +48,21 @@ export async function GET(
     }
 
     const p = party as Record<string, unknown>;
-    const characters = (p.characters as Array<Record<string, unknown>>) ?? [];
-    const members: PartyMember[] = characters.map((c) => ({
+    const status = typeof p.status === "string" ? p.status : "open";
+    if (status === "cancelled") {
+      return NextResponse.json({ error: "Expedition was cancelled", code: "cancelled" }, { status: 404 });
+    }
+    // Open parties expire after 24 hours so ghost explores don't linger
+    if (status === "open") {
+      const createdAt = p.createdAt instanceof Date ? p.createdAt.getTime() : typeof p.createdAt === "string" ? new Date(p.createdAt).getTime() : NaN;
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      if (!Number.isNaN(createdAt) && createdAt < cutoff) {
+        return NextResponse.json({ error: "Expedition expired", code: "expired" }, { status: 404 });
+      }
+    }
+
+    const partyCharacters = (p.characters as Array<Record<string, unknown>>) ?? [];
+    const members: PartyMember[] = partyCharacters.map((c) => ({
       characterId: String(c._id),
       userId: String(c.userId),
       name: String(c.name),

@@ -375,6 +375,7 @@ export default function ExplorePartyPage() {
   const [editSuggestionsOpen, setEditSuggestionsOpen] = useState(false);
   const [startingExpedition, setStartingExpedition] = useState(false);
   const [startExpeditionError, setStartExpeditionError] = useState<string | null>(null);
+  const [cancellingExpedition, setCancellingExpedition] = useState(false);
   const [reportedDiscoveryKeys, setReportedDiscoveryKeys] = useState<Set<string>>(new Set());
   const [placingPinForKey, setPlacingPinForKey] = useState<string | null>(null);
   const [placePinError, setPlacePinError] = useState<string | null>(null);
@@ -421,8 +422,16 @@ export default function ExplorePartyPage() {
     try {
       const res = await fetch(`/api/explore/parties/${encodeURIComponent(partyId)}`, { cache: "no-store" });
       if (res.status === 404) {
+        const data = await res.json().catch(() => ({}));
+        const code = (data as { code?: string })?.code;
         setParty(null);
-        setPartyError("Expedition not found.");
+        if (code === "expired") {
+          setPartyError("This expedition has expired. Open expeditions expire after 24 hours.");
+        } else if (code === "cancelled") {
+          setPartyError("This expedition was cancelled.");
+        } else {
+          setPartyError("Expedition not found.");
+        }
         return;
       }
       if (!res.ok) {
@@ -913,6 +922,26 @@ export default function ExplorePartyPage() {
     }
   }, [partyId, fetchParty]);
 
+  const cancelExpedition = useCallback(async () => {
+    if (!window.confirm("Cancel this expedition? No one will be able to join or use it.")) return;
+    setCancellingExpedition(true);
+    try {
+      const res = await fetch(`/api/explore/parties/${encodeURIComponent(partyId)}/cancel`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error("[page.tsx]❌ Failed to cancel expedition:", data.error ?? res.status);
+        setPartyError(data.error ?? "Failed to cancel expedition");
+        return;
+      }
+      router.push("/explore");
+    } catch (e) {
+      console.error("[page.tsx]❌ Cancel expedition failed:", e);
+      setPartyError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setCancellingExpedition(false);
+    }
+  }, [partyId, router]);
+
   const reportableDiscoveries = getReportableDiscoveries(party?.progressLog);
 
   /** Create a pin at the given coordinates (from map click). Saves to DB and shows on /map. */
@@ -1276,23 +1305,38 @@ export default function ExplorePartyPage() {
                 </>
               )}
               {party.isLeader && party.status === "open" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm("Are you sure? Once started you cannot edit it and you are locked in!")) {
-                      startExpedition();
-                    }
-                  }}
-                  disabled={startingExpedition}
-                  className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-[var(--totk-light-green)]/60 bg-[var(--totk-dark-green)]/80 px-3 py-2 text-xs font-bold text-[var(--totk-ivory)] transition-opacity hover:opacity-90 disabled:opacity-60 sm:text-sm sm:px-4 sm:py-2.5"
-                >
-                  {startingExpedition ? (
-                    <i className="fa-solid fa-spinner fa-spin shrink-0 text-xs" aria-hidden />
-                  ) : (
-                    <i className="fa-solid fa-play shrink-0 text-xs opacity-90" aria-hidden />
-                  )}
-                  <span className="truncate">Start expedition</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Are you sure? Once started you cannot edit it and you are locked in!")) {
+                        startExpedition();
+                      }
+                    }}
+                    disabled={startingExpedition || cancellingExpedition}
+                    className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-[var(--totk-light-green)]/60 bg-[var(--totk-dark-green)]/80 px-3 py-2 text-xs font-bold text-[var(--totk-ivory)] transition-opacity hover:opacity-90 disabled:opacity-60 sm:text-sm sm:px-4 sm:py-2.5"
+                  >
+                    {startingExpedition ? (
+                      <i className="fa-solid fa-spinner fa-spin shrink-0 text-xs" aria-hidden />
+                    ) : (
+                      <i className="fa-solid fa-play shrink-0 text-xs opacity-90" aria-hidden />
+                    )}
+                    <span className="truncate">Start expedition</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelExpedition}
+                    disabled={startingExpedition || cancellingExpedition}
+                    className="inline-flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-red-500/60 bg-red-900/50 px-3 py-2 text-xs font-bold text-red-200 transition-opacity hover:opacity-90 disabled:opacity-60 sm:text-sm sm:px-4 sm:py-2.5"
+                  >
+                    {cancellingExpedition ? (
+                      <i className="fa-solid fa-spinner fa-spin shrink-0 text-xs" aria-hidden />
+                    ) : (
+                      <i className="fa-solid fa-times shrink-0 text-xs opacity-90" aria-hidden />
+                    )}
+                    <span className="truncate">Cancel expedition</span>
+                  </button>
+                </>
               )}
             </div>
           </header>
@@ -1389,8 +1433,42 @@ export default function ExplorePartyPage() {
                 );
               })()}
               {party.currentUserJoined && party.currentUserMember && editingItems && (
-                <div className="space-y-3">
-                  <p className="text-sm text-[var(--botw-pale)]">Change items you’re bringing (up to 3, optional). Your character: <strong>{party.currentUserMember.name}</strong></p>
+                <div className="space-y-4">
+                  <p className="text-sm text-[var(--botw-pale)]">Change items you’re bringing (up to 3, optional). Your character: <strong className="text-[var(--totk-ivory)]">{party.currentUserMember.name}</strong></p>
+                  <p className="text-xs font-medium text-[var(--totk-grey-200)]">Selected</p>
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                    {[0, 1, 2].map((slot) => {
+                      const itemName = editItems[slot];
+                      if (!itemName) {
+                        return (
+                          <div
+                            key={`edit-empty-${slot}`}
+                            className="flex min-h-[72px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 py-3 text-center"
+                          >
+                            <span className="text-xs text-[var(--totk-grey-200)]">Slot {slot + 1}</span>
+                            <span className="mt-0.5 text-[10px] text-[var(--totk-grey-200)]/80">Add below</span>
+                          </div>
+                        );
+                      }
+                      const img = exploreItemImages.get(itemName.toLowerCase());
+                      return (
+                        <div key={`edit-${slot}-${itemName}`} className="flex items-center gap-2 rounded-xl border border-[var(--totk-light-green)]/40 bg-[var(--botw-warm-black)]/80 py-2 pl-2 pr-2 shadow-sm">
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+                            {img ? (
+                              <Image src={img} alt={itemName} width={40} height={40} className="h-full w-full object-cover" unoptimized={img.startsWith("http") || img.startsWith("/api/")} />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs font-medium text-[var(--totk-grey-200)]">{itemName.slice(0, 1)}</div>
+                            )}
+                          </div>
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--totk-ivory)]" title={itemName}>{itemName}</span>
+                          <button type="button" onClick={() => removeEditItem(slot)} className="shrink-0 rounded p-1.5 text-[var(--totk-grey-200)] transition-colors hover:bg-red-500/20 hover:text-red-300" aria-label={`Remove ${itemName}`}>
+                            <i className="fa-solid fa-times text-xs" aria-hidden />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs font-medium text-[var(--totk-grey-200)]">Pick from inventory</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <div
                       className="relative flex-1 min-w-[200px]"
@@ -1432,13 +1510,13 @@ export default function ExplorePartyPage() {
                           }
                           if (e.key === "Escape") setEditSuggestionsOpen(false);
                         }}
-                        placeholder="Type to search your inventory…"
-                        className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-ivory)] placeholder-[var(--totk-grey-200)] focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30"
+                        placeholder="Search by name…"
+                        className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-ivory)] placeholder-[var(--totk-grey-200)] focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/20"
                       />
                       {editSuggestionsOpen && editItems.length < 3 && (
-                        <ul className="absolute top-full left-0 right-0 z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] py-1 shadow-xl">
+                        <ul className="absolute top-full left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] py-1 shadow-xl">
                           {editSuggestionsList.length === 0 ? (
-                            <li className="px-3 py-2 text-sm text-[var(--totk-grey-200)]">
+                            <li className="px-3 py-3 text-sm text-[var(--totk-grey-200)]">
                               {editItemSearch.trim() ? "No matching items" : "No items available to add"}
                             </li>
                           ) : (
@@ -1448,6 +1526,7 @@ export default function ExplorePartyPage() {
                               const s = st?.staminaRecovered ?? 0;
                               const statPart = formatItemStat(h, s);
                               const highlighted = idx === editItemHighlightIndex;
+                              const thumb = exploreItemImages.get(it.itemName.toLowerCase());
                               return (
                                 <li key={it.itemName}>
                                   <button
@@ -1457,9 +1536,19 @@ export default function ExplorePartyPage() {
                                       addEditItem(it.itemName);
                                       setEditItemSearch("");
                                     }}
-                                    className={`w-full px-3 py-2 text-left text-sm ${highlighted ? "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]" : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/30"}`}
+                                    className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${highlighted ? "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]" : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/30"}`}
                                   >
-                                    {it.itemName} — {statPart} — Qty: {it.quantity}
+                                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-[var(--botw-warm-black)]">
+                                      {thumb ? (
+                                        <Image src={thumb} alt="" width={36} height={36} className="h-full w-full object-cover" unoptimized={thumb.startsWith("http") || thumb.startsWith("/api/")} />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--totk-grey-200)]">{it.itemName.slice(0, 1)}</div>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <span className="block truncate font-medium">{it.itemName}</span>
+                                      <span className="text-xs text-[var(--totk-grey-200)]">{statPart} · {it.quantity - editCount(it.itemName)} left</span>
+                                    </div>
                                   </button>
                                 </li>
                               );
@@ -1468,34 +1557,50 @@ export default function ExplorePartyPage() {
                         </ul>
                       )}
                     </div>
-                    <span className="text-xs text-[var(--totk-grey-200)]">{editItems.length}/3</span>
+                    <span className="rounded-md bg-[var(--totk-dark-ocher)]/40 px-2 py-1.5 text-xs font-medium tabular-nums text-[var(--totk-grey-200)]">
+                      {editItems.length}/3
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {editItems.map((itemName, idx) => {
-                      const img = exploreItemImages.get(itemName.toLowerCase());
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                    {editSuggestionsList.slice(0, 12).map((it) => {
+                      const st = exploreItemStats.get(it.itemName.toLowerCase());
+                      const h = st?.modifierHearts ?? 0;
+                      const s = st?.staminaRecovered ?? 0;
+                      const statPart = formatItemStat(h, s);
+                      const thumb = exploreItemImages.get(it.itemName.toLowerCase());
+                      const remaining = it.quantity - editCount(it.itemName);
                       return (
-                        <div key={`edit-${idx}-${itemName}`} className="flex items-center gap-1 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 p-1">
-                          <div className="h-10 w-10 overflow-hidden rounded">
-                            {img ? (
-                              <Image src={img} alt={itemName} width={40} height={40} className="h-full w-full object-cover" unoptimized={img.startsWith("http") || img.startsWith("/api/")} />
+                        <button
+                          key={it.itemName}
+                          type="button"
+                          onClick={() => addEditItem(it.itemName)}
+                          className="flex flex-col items-center gap-1.5 rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 py-3 transition-colors hover:border-[var(--totk-light-green)]/40 hover:bg-[var(--totk-dark-ocher)]/30"
+                        >
+                          <div className="h-12 w-12 overflow-hidden rounded-lg bg-[var(--botw-warm-black)]">
+                            {thumb ? (
+                              <Image src={thumb} alt="" width={48} height={48} className="h-full w-full object-cover" unoptimized={thumb.startsWith("http") || thumb.startsWith("/api/")} />
                             ) : (
-                              <div className="flex h-full w-full items-center justify-center text-[var(--totk-grey-200)]">{itemName.slice(0, 1)}</div>
+                              <div className="flex h-full w-full items-center justify-center text-sm font-medium text-[var(--totk-grey-200)]">{it.itemName.slice(0, 1)}</div>
                             )}
                           </div>
-                          <span className="max-w-[100px] truncate text-xs text-[var(--totk-ivory)]">{itemName}</span>
-                          <button type="button" onClick={() => removeEditItem(idx)} className="rounded p-0.5 text-[var(--totk-grey-200)] hover:bg-[var(--totk-dark-ocher)]/40 hover:text-[var(--totk-ivory)]" aria-label="Remove">
-                            <i className="fa-solid fa-times text-xs" aria-hidden />
-                          </button>
-                        </div>
+                          <span className="max-w-full truncate px-1 text-xs font-medium text-[var(--totk-ivory)]" title={it.itemName}>{it.itemName}</span>
+                          <span className="text-[10px] text-[var(--totk-grey-200)]">{statPart}</span>
+                          <span className="text-[10px] text-[var(--totk-grey-200)]/80">×{remaining} left</span>
+                        </button>
                       );
                     })}
                   </div>
-                  {updateItemsError && <p className="text-sm text-red-400">{updateItemsError}</p>}
+                  {updateItemsError && (
+                    <div className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-950/20 px-3 py-2 text-sm text-red-300">
+                      <i className="fa-solid fa-circle-exclamation shrink-0" aria-hidden />
+                      {updateItemsError}
+                    </div>
+                  )}
                   <div className="flex gap-2">
-                    <button type="button" onClick={saveEditItems} disabled={editItems.length > 3 || updatingItems} className="rounded-md border-2 border-[var(--totk-light-green)] bg-[var(--totk-dark-green)] px-3 py-2 text-sm font-bold text-[var(--totk-ivory)] hover:opacity-90 disabled:opacity-50">
+                    <button type="button" onClick={saveEditItems} disabled={editItems.length > 3 || updatingItems} className="rounded-xl border-2 border-[var(--totk-light-green)] bg-[var(--totk-dark-green)] px-4 py-2.5 text-sm font-bold text-[var(--totk-ivory)] hover:opacity-90 disabled:opacity-50">
                       {updatingItems ? "Saving…" : "Save items"}
                     </button>
-                    <button type="button" onClick={cancelEditingItems} disabled={updatingItems} className="rounded-md border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/40">
+                    <button type="button" onClick={cancelEditingItems} disabled={updatingItems} className="rounded-xl border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2.5 text-sm font-medium text-[var(--totk-ivory)] hover:bg-[var(--totk-dark-ocher)]/40">
                       Cancel
                     </button>
                   </div>
@@ -1504,37 +1609,34 @@ export default function ExplorePartyPage() {
               {!party.currentUserJoined && (
                 <>
                   {regionInfo && (
-                    <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
-                      Your character must be in <strong>{regionInfo.village}</strong>. Order below is turn order.
-                    </p>
+                    <div className="mb-4 flex items-start gap-2 rounded-xl border border-[var(--totk-light-green)]/30 bg-[var(--totk-light-green)]/5 px-3 py-2.5">
+                      <i className="fa-solid fa-map-pin mt-0.5 text-sm text-[var(--totk-light-green)]/80" aria-hidden />
+                      <p className="text-xs text-[var(--botw-pale)]">
+                        Your character must be in <strong className="text-[var(--totk-ivory)]">{regionInfo.village}</strong>. Order below is turn order.
+                      </p>
+                    </div>
                   )}
-                  {loadingChars && <p className="text-sm text-[var(--totk-grey-200)]">Loading your characters…</p>}
+                  {loadingChars && (
+                    <div className="flex items-center gap-2 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/40 px-4 py-3">
+                      <i className="fa-solid fa-spinner fa-spin text-[var(--totk-grey-200)]" aria-hidden />
+                      <p className="text-sm text-[var(--totk-grey-200)]">Loading your characters…</p>
+                    </div>
+                  )}
                   {!loadingChars && eligibleCharacters.length === 0 && (
-                    <p className="text-sm text-[var(--totk-grey-200)]">
+                    <p className="rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/40 px-4 py-3 text-sm text-[var(--totk-grey-200)]">
                       No character in {regionInfo?.village ?? party.region}. Move one there to join.
                     </p>
                   )}
                   {!loadingChars && eligibleCharacters.length > 0 && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
+                    <div className="space-y-5">
+                      <div className="rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 p-4 shadow-inner">
+                        <label className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                          <i className="fa-solid fa-user text-[10px] opacity-70" aria-hidden />
                           Your character
                         </label>
-                        <div className="flex flex-wrap items-center gap-4 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 p-3">
-                          <select
-                            value={selectedCharacterId}
-                            onChange={(e) => setSelectedCharacterId(e.target.value)}
-                            className="min-w-[200px] flex-1 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-ivory)] focus:border-[var(--totk-light-green)] focus:outline-none"
-                          >
-                            <option value="">Select character…</option>
-                            {eligibleCharacters.map((c) => (
-                              <option key={String(c._id)} value={String(c._id)}>
-                                {c.name} · ❤️ {c.currentHearts ?? c.maxHearts ?? "?"} · 🟩 {c.currentStamina ?? c.maxStamina ?? "?"}
-                              </option>
-                            ))}
-                          </select>
+                        <div className="flex flex-wrap items-center gap-4">
                           {selectedCharacter && (
-                            <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]">
+                            <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-full border-2 border-[var(--totk-light-green)]/40 bg-[var(--botw-warm-black)] ring-2 ring-[var(--totk-dark-ocher)]/30">
                               {selectedCharacter.icon && String(selectedCharacter.icon).trim() ? (
                                 <img
                                   src={String(selectedCharacter.icon).trim()}
@@ -1548,24 +1650,79 @@ export default function ExplorePartyPage() {
                               )}
                             </div>
                           )}
+                          <select
+                            value={selectedCharacterId}
+                            onChange={(e) => setSelectedCharacterId(e.target.value)}
+                            className="min-w-[220px] flex-1 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2.5 text-sm text-[var(--totk-ivory)] transition-colors placeholder-[var(--totk-grey-200)] focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/20"
+                          >
+                            <option value="">Select character…</option>
+                            {eligibleCharacters.map((c) => (
+                              <option key={String(c._id)} value={String(c._id)}>
+                                {c.name} · ❤️ {c.currentHearts ?? c.maxHearts ?? "?"} · 🟩 {c.currentStamina ?? c.maxStamina ?? "?"}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
-                      <div>
-                        <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
-                          Items to bring (optional, up to 3 — from this character’s inventory)
+                      <div className="rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 p-4 shadow-inner">
+                        <label className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                          <i className="fa-solid fa-backpack text-[10px] opacity-70" aria-hidden />
+                          Items to bring
+                          <span className="rounded bg-[var(--totk-dark-ocher)]/40 px-1.5 py-0.5 text-[10px] font-normal normal-case tracking-normal text-[var(--botw-pale)]">
+                            optional, up to 3
+                          </span>
                         </label>
-                        <p className="mb-2 text-xs text-[var(--totk-grey-200)]">
-                          Type to search or pick from the list. You can join with 0, 1, 2, or 3 items.
+                        <p className="mb-3 text-xs text-[var(--totk-grey-200)]">
+                          From this character’s inventory. Type to search or pick from the list — you can join with 0, 1, 2, or 3 items.
                         </p>
                         {loadingInventory && (
-                          <p className="mb-2 text-xs text-[var(--totk-grey-200)]">Loading inventory…</p>
+                          <p className="flex items-center gap-2 text-xs text-[var(--totk-grey-200)]">
+                            <i className="fa-solid fa-spinner fa-spin" aria-hidden />
+                            Loading inventory…
+                          </p>
                         )}
                         {!loadingInventory && inventoryWithQuantity.length === 0 && selectedCharacterId && (
-                          <p className="mb-2 text-xs text-[var(--totk-grey-200)]">No exploration items in this character’s inventory. You can still join with no items.</p>
+                          <p className="rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/60 px-3 py-2 text-xs text-[var(--totk-grey-200)]">
+                            No exploration items in this character’s inventory. You can still join with no items.
+                          </p>
                         )}
                         {!loadingInventory && inventoryWithQuantity.length > 0 && (
                           <>
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <p className="mb-2 text-xs font-medium text-[var(--totk-grey-200)]">Selected</p>
+                            <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
+                              {[0, 1, 2].map((slot) => {
+                                const itemName = selectedItems[slot];
+                                if (!itemName) {
+                                  return (
+                                    <div
+                                      key={`empty-${slot}`}
+                                      className="flex min-h-[72px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 py-3 text-center"
+                                    >
+                                      <span className="text-xs text-[var(--totk-grey-200)]">Slot {slot + 1}</span>
+                                      <span className="mt-0.5 text-[10px] text-[var(--totk-grey-200)]/80">Add below</span>
+                                    </div>
+                                  );
+                                }
+                                const img = exploreItemImages.get(itemName.toLowerCase());
+                                return (
+                                  <div key={`${slot}-${itemName}`} className="flex items-center gap-2 rounded-xl border border-[var(--totk-light-green)]/40 bg-[var(--botw-warm-black)]/80 py-2 pl-2 pr-2 shadow-sm">
+                                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg">
+                                      {img ? (
+                                        <Image src={img} alt={itemName} width={40} height={40} className="h-full w-full object-cover" unoptimized={img.startsWith("http") || img.startsWith("/api/")} />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-xs font-medium text-[var(--totk-grey-200)]">{itemName.slice(0, 1)}</div>
+                                      )}
+                                    </div>
+                                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--totk-ivory)]" title={itemName}>{itemName}</span>
+                                    <button type="button" onClick={() => removeSelectedItem(slot)} className="shrink-0 rounded p-1.5 text-[var(--totk-grey-200)] transition-colors hover:bg-red-500/20 hover:text-red-300" aria-label={`Remove ${itemName}`}>
+                                      <i className="fa-solid fa-times text-xs" aria-hidden />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="mb-2 text-xs font-medium text-[var(--totk-grey-200)]">Pick from inventory</p>
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
                               <div
                                 className="relative flex-1 min-w-[200px]"
                                 onBlur={() => setTimeout(() => setItemSuggestionsOpen(false), 150)}
@@ -1611,13 +1768,13 @@ export default function ExplorePartyPage() {
                                       setItemSuggestionsOpen(false);
                                     }
                                   }}
-                                  placeholder="Type to search your inventory…"
-                                  className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-ivory)] placeholder-[var(--totk-grey-200)] focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-green)]/30"
+                                  placeholder="Search by name…"
+                                  className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--totk-ivory)] placeholder-[var(--totk-grey-200)] focus:border-[var(--totk-light-green)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]/20"
                                 />
                                 {itemSuggestionsOpen && selectedItems.length < 3 && (
-                                  <ul className="absolute top-full left-0 right-0 z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] py-1 shadow-xl">
+                                  <ul className="absolute top-full left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] py-1 shadow-xl">
                                     {itemSuggestionsList.length === 0 ? (
-                                      <li className="px-3 py-2 text-sm text-[var(--totk-grey-200)]">
+                                      <li className="px-3 py-3 text-sm text-[var(--totk-grey-200)]">
                                         {itemSearch.trim() ? "No matching items" : "No items available to add (max 3 or out of stock)"}
                                       </li>
                                     ) : (
@@ -1627,6 +1784,7 @@ export default function ExplorePartyPage() {
                                         const s = st?.staminaRecovered ?? 0;
                                         const statPart = formatItemStat(h, s);
                                         const highlighted = idx === itemHighlightIndex;
+                                        const thumb = exploreItemImages.get(it.itemName.toLowerCase());
                                         return (
                                           <li key={it.itemName}>
                                             <button
@@ -1636,9 +1794,19 @@ export default function ExplorePartyPage() {
                                                 addSelectedItem(it.itemName);
                                                 setItemSearch("");
                                               }}
-                                              className={`w-full px-3 py-2 text-left text-sm ${highlighted ? "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]" : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/30"}`}
+                                              className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${highlighted ? "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]" : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/30"}`}
                                             >
-                                              {it.itemName} — {statPart} — Qty: {it.quantity}
+                                              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-[var(--botw-warm-black)]">
+                                                {thumb ? (
+                                                  <Image src={thumb} alt="" width={36} height={36} className="h-full w-full object-cover" unoptimized={thumb.startsWith("http") || thumb.startsWith("/api/")} />
+                                                ) : (
+                                                  <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--totk-grey-200)]">{it.itemName.slice(0, 1)}</div>
+                                                )}
+                                              </div>
+                                              <div className="min-w-0 flex-1">
+                                                <span className="block truncate font-medium">{it.itemName}</span>
+                                                <span className="text-xs text-[var(--totk-grey-200)]">{statPart} · {it.quantity - countSelected(it.itemName)} left</span>
+                                              </div>
                                             </button>
                                           </li>
                                         );
@@ -1647,40 +1815,68 @@ export default function ExplorePartyPage() {
                                   </ul>
                                 )}
                               </div>
-                              <span className="text-xs text-[var(--totk-grey-200)]">{selectedItems.length}/3</span>
+                              <span className="rounded-md bg-[var(--totk-dark-ocher)]/40 px-2 py-1.5 text-xs font-medium tabular-nums text-[var(--totk-grey-200)]">
+                                {selectedItems.length}/3
+                              </span>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              {selectedItems.map((itemName, idx) => {
-                                const img = exploreItemImages.get(itemName.toLowerCase());
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                              {itemSuggestionsList.slice(0, 12).map((it) => {
+                                const st = exploreItemStats.get(it.itemName.toLowerCase());
+                                const h = st?.modifierHearts ?? 0;
+                                const s = st?.staminaRecovered ?? 0;
+                                const statPart = formatItemStat(h, s);
+                                const thumb = exploreItemImages.get(it.itemName.toLowerCase());
+                                const remaining = it.quantity - countSelected(it.itemName);
                                 return (
-                                  <div key={`${idx}-${itemName}`} className="flex items-center gap-1 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 p-1">
-                                    <div className="h-10 w-10 overflow-hidden rounded">
-                                      {img ? (
-                                        <Image src={img} alt={itemName} width={40} height={40} className="h-full w-full object-cover" unoptimized={img.startsWith("http") || img.startsWith("/api/")} />
+                                  <button
+                                    key={it.itemName}
+                                    type="button"
+                                    onClick={() => addSelectedItem(it.itemName)}
+                                    className="flex flex-col items-center gap-1.5 rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 py-3 transition-colors hover:border-[var(--totk-light-green)]/40 hover:bg-[var(--totk-dark-ocher)]/30"
+                                  >
+                                    <div className="h-12 w-12 overflow-hidden rounded-lg bg-[var(--botw-warm-black)]">
+                                      {thumb ? (
+                                        <Image src={thumb} alt="" width={48} height={48} className="h-full w-full object-cover" unoptimized={thumb.startsWith("http") || thumb.startsWith("/api/")} />
                                       ) : (
-                                        <div className="flex h-full w-full items-center justify-center text-[var(--totk-grey-200)]">{itemName.slice(0, 1)}</div>
+                                        <div className="flex h-full w-full items-center justify-center text-sm font-medium text-[var(--totk-grey-200)]">{it.itemName.slice(0, 1)}</div>
                                       )}
                                     </div>
-                                    <span className="max-w-[100px] truncate text-xs text-[var(--totk-ivory)]">{itemName}</span>
-                                    <button type="button" onClick={() => removeSelectedItem(idx)} className="rounded p-0.5 text-[var(--totk-grey-200)] hover:bg-[var(--totk-dark-ocher)]/40 hover:text-[var(--totk-ivory)]" aria-label="Remove">
-                                      <i className="fa-solid fa-times text-xs" aria-hidden />
-                                    </button>
-                                  </div>
+                                    <span className="max-w-full truncate px-1 text-xs font-medium text-[var(--totk-ivory)]" title={it.itemName}>{it.itemName}</span>
+                                    <span className="text-[10px] text-[var(--totk-grey-200)]">{statPart}</span>
+                                    <span className="text-[10px] text-[var(--totk-grey-200)]/80">×{remaining} left</span>
+                                  </button>
                                 );
                               })}
                             </div>
                           </>
                         )}
                       </div>
-                      {joinError && <p className="text-sm text-red-400">{joinError}</p>}
-                      <button
-                        type="button"
-                        onClick={joinParty}
-                        disabled={!canJoin || joining}
-                        className="rounded-md border-2 border-[var(--totk-light-green)] bg-[var(--totk-dark-green)] px-4 py-2.5 text-sm font-bold text-[var(--totk-ivory)] shadow-md hover:opacity-90 disabled:opacity-50"
-                      >
-                        {joining ? "Joining…" : "Join expedition"}
-                      </button>
+                      {joinError && (
+                        <div className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-950/20 px-3 py-2 text-sm text-red-300">
+                          <i className="fa-solid fa-circle-exclamation shrink-0" aria-hidden />
+                          {joinError}
+                        </div>
+                      )}
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={joinParty}
+                          disabled={!canJoin || joining}
+                          className="inline-flex items-center gap-2 rounded-xl border-2 border-[var(--totk-light-green)] bg-[var(--totk-dark-green)] px-5 py-3 text-sm font-bold text-[var(--totk-ivory)] shadow-lg shadow-[var(--totk-dark-green)]/30 transition-all hover:opacity-95 hover:shadow-[var(--totk-light-green)]/10 disabled:opacity-50 disabled:shadow-none"
+                        >
+                          {joining ? (
+                            <>
+                              <i className="fa-solid fa-spinner fa-spin" aria-hidden />
+                              Joining…
+                            </>
+                          ) : (
+                            <>
+                              <i className="fa-solid fa-user-plus text-sm opacity-90" aria-hidden />
+                              Join expedition
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>

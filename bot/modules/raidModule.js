@@ -543,7 +543,7 @@ async function joinRaid(character, raidId, options = {}) {
     // If this raid was triggered from an expedition, only expedition members can join
     if (raid.expeditionId) {
       const Party = require('@/models/PartyModel');
-      const party = await Party.findOne({ partyId: raid.expeditionId });
+      const party = await Party.findActiveByPartyId(raid.expeditionId);
       if (!party || !party.characters || !party.characters.length) {
         throw new Error(`Expedition ${raid.expeditionId} not found. Only members of that expedition can join this raid.`);
       }
@@ -764,7 +764,7 @@ async function notifyExpeditionRaidOver(raid, client, result) {
   if (!raid.expeditionId || !client) return;
   try {
     const Party = require('@/models/PartyModel');
-    const party = await Party.findOne({ partyId: raid.expeditionId });
+    const party = await Party.findActiveByPartyId(raid.expeditionId);
     if (!party) return;
     if (!party.progressLog) party.progressLog = [];
     const msg = result === 'defeated'
