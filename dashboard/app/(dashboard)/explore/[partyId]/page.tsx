@@ -2143,6 +2143,21 @@ export default function ExplorePartyPage() {
                                       ? "Path image uploaded and saved to Google Cloud. It will appear on the main Map page. Verify the image:"
                                       : "Path image uploaded! It appears on the main Map page."
                                   );
+                                  // Optimistically hide the "Draw path on map" block by marking this square as uploaded
+                                  const currentSquare = String(party.square ?? "").trim().toUpperCase();
+                                  if (currentSquare) {
+                                    setParty((prev) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            pathImageUploadedSquares: [
+                                              ...(prev.pathImageUploadedSquares ?? []),
+                                              currentSquare,
+                                            ].filter((s, i, a) => a.indexOf(s) === i),
+                                          }
+                                        : prev
+                                    );
+                                  }
                                   fetchParty();
                                 } catch (e) {
                                   console.error("[page.tsx]❌ Path image upload failed:", e);

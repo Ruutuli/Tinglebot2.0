@@ -91,7 +91,10 @@ export async function POST(request: NextRequest) {
     const result = await gcsUploadService.uploadPathImage(buf, safePartyId, squareId);
     console.log("[explore/path-images/upload] GCS upload OK:", result.url);
 
-    await connect();
+    const conn = await connect();
+    const dbName = conn?.connection?.db?.databaseName ?? "unknown";
+    console.log("[explore/path-images/upload] DB:", dbName, "partyId:", safePartyId, "squareId:", squareId);
+
     const MapPathImage =
       mongoose.models.MapPathImage ??
       ((await import("@/models/MapPathImageModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
@@ -112,21 +115,44 @@ export async function POST(request: NextRequest) {
     const Square =
       mongoose.models.Square ??
       ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
-    const squareIdRegex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-    await Square.updateOne(
-      { squareId: squareIdRegex },
-      { $set: { pathImageUrl: result.url, updatedAt: new Date() } }
-    );
+    const squareDoc = await Square.findOne({ squareId }).select("_id").lean();
+    let squareUpdateResult = { matchedCount: 0, modifiedCount: 0 };
+    if (squareDoc) {
+      squareUpdateResult = await Square.updateOne(
+        { _id: (squareDoc as { _id: unknown })._id },
+        { $set: { pathImageUrl: result.url, updatedAt: new Date() } }
+      );
+    }
+    if (squareUpdateResult.matchedCount === 0 && !squareDoc) {
+      const squareIdRegex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const existing = await Square.findOne({ squareId: squareIdRegex }).select("_id").lean();
+      if (existing) {
+        squareUpdateResult = await Square.updateOne(
+          { _id: (existing as { _id: unknown })._id },
+          { $set: { pathImageUrl: result.url, updatedAt: new Date() } }
+        );
+      }
+    }
+    console.log("[explore/path-images/upload] Square update:", { matched: squareUpdateResult.matchedCount, modified: squareUpdateResult.modifiedCount });
+    if (squareUpdateResult.matchedCount === 0) {
+      console.warn("[explore/path-images/upload] Square not found for squareId:", squareId, "- pathImageUrl not saved. Check DB name above matches where you view exploringMap.");
+    }
 
-    // Failsafe: mark on the party that a path image was uploaded for this square so the "draw path" prompt stays hidden
+    // Mark on the party that a path image was uploaded for this square so the "draw path" prompt stays hidden
     const Party =
       mongoose.models.Party ??
       ((await import("@/models/PartyModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
-    await Party.findOneAndUpdate(
+    const updatedParty = await Party.findOneAndUpdate(
       { partyId: safePartyId },
       { $addToSet: { pathImageUploadedSquares: squareId } },
       { new: true }
-    );
+    ).lean();
+    const partyUpdated = !!updatedParty;
+    if (!partyUpdated) {
+      console.warn("[explore/path-images/upload] Party not found for partyId:", safePartyId, "- pathImageUploadedSquares not updated. Check DB name above.");
+    } else {
+      console.log("[explore/path-images/upload] Party update: pathImageUploadedSquares now", (updatedParty as { pathImageUploadedSquares?: string[] }).pathImageUploadedSquares);
+    }
 
     const userLabel =
       (user as { global_name?: string | null }).global_name?.trim() ||
@@ -142,7 +168,18 @@ export async function POST(request: NextRequest) {
       imageUrl: result.url,
     });
 
-    return NextResponse.json({ success: true, url: result.url });
+    const res: { success: boolean; url: string; _debug?: { db: string; square: { matched: number; modified: number }; party: { updated: boolean } } } = {
+      success: true,
+      url: result.url,
+    };
+    if (process.env.NODE_ENV !== "production") {
+      res._debug = {
+        db: dbName,
+        square: { matched: squareUpdateResult.matchedCount, modified: squareUpdateResult.modifiedCount },
+        party: { updated: partyUpdated },
+      };
+    }
+    return NextResponse.json(res);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to upload path image";
     console.error("[explore/path-images/upload] error:", message, err);
