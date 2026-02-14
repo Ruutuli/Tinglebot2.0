@@ -1,5 +1,6 @@
 // exploreModule.js
 const Character = require('@/models/CharacterModel');
+const ModCharacter = require('@/models/ModCharacterModel');
 
 const { handleError } = require('@/utils/globalErrorHandler');
 // Fetch character's items from the party data
@@ -41,8 +42,39 @@ async function calculateTotalHeartsAndStamina(party) {
     return { totalHearts, totalStamina };
 }
 
+/**
+ * Sync party member stats from Character/ModCharacter DB into party.characters,
+ * then recompute party.totalHearts and party.totalStamina and save.
+ * Use when loading party for exploration so totals match members (e.g. after raid damage).
+ */
+async function syncPartyMemberStats(party) {
+    if (!party || !party.characters || party.characters.length === 0) return;
+    try {
+        for (let i = 0; i < party.characters.length; i++) {
+            const slot = party.characters[i];
+            if (!slot || !slot._id) continue;
+            let charDoc = await Character.findById(slot._id).lean();
+            if (!charDoc) {
+                charDoc = await ModCharacter.findById(slot._id).lean();
+            }
+            if (charDoc) {
+                slot.currentHearts = charDoc.currentHearts ?? 0;
+                slot.currentStamina = charDoc.currentStamina ?? 0;
+            }
+        }
+        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+        party.markModified('characters');
+        await party.save();
+    } catch (error) {
+        handleError(error, 'exploreModule.js');
+        console.error(`[exploreModule.js]: syncPartyMemberStats failed: ${error.message}`);
+    }
+}
+
 module.exports = {
     getCharacterItems,
     formatCharacterItems,
-    calculateTotalHeartsAndStamina
+    calculateTotalHeartsAndStamina,
+    syncPartyMemberStats
 };

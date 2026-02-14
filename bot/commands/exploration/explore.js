@@ -46,6 +46,7 @@ const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor } = require("../../data/explorationMessages.js");
+const { syncPartyMemberStats } = require("../../modules/exploreModule.js");
 const logger = require("@/utils/logger.js");
 
 /**
@@ -1354,6 +1355,7 @@ module.exports = {
      if (!party) {
       return interaction.editReply("Expedition ID not found.");
      }
+     await syncPartyMemberStats(party);
 
      const character = await Character.findOne({ name: characterName, userId });
      if (!character) {
