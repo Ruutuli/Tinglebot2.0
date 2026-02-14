@@ -69,10 +69,8 @@ async function main() {
   const squareId = String(args.square).trim().toUpperCase();
   const quadrantId = String(args.quadrant).trim().toUpperCase();
 
-  if (!args.partyId) {
-    console.warn('No --party-id or TEST_EXPEDITION_ID set. Grotto will be created with partyId: null.');
-    console.warn('Exploration looks up grotto by partyId; use a real expedition ID to test /explore grotto continue.');
-  }
+  const partyId = args.partyId || `TEST-${Math.random().toString(36).slice(2, 10)}`;
+  if (!args.partyId) console.log('Using random test expedition ID:', partyId);
 
   const created = [];
   const at = new Date();
@@ -93,7 +91,7 @@ async function main() {
       discoveryKey: key,
       sealed: false,
       trialType: args.count === 1 ? trialType : rollGrottoTrialType(),
-      partyId: args.partyId || null,
+      partyId,
       unsealedAt: at,
       unsealedBy: 'generate-test-grottos.js',
     });
@@ -133,9 +131,7 @@ async function main() {
   const channel = await client.channels.fetch(GROTTO_CHANNEL_ID).catch(() => null);
   if (channel) {
     const lines = created.filter(c => !c.skipped).map(c => `**${c.squareId} ${c.quadrantId}** — ${getTrialLabel(c.trialType)}`);
-    const expeditionNote = args.partyId
-      ? `Use expedition ID \`${args.partyId}\` and move your party to the location(s) above, then </explore grotto continue>.`
-      : 'Set TEST_EXPEDITION_ID or pass --party-id and ensure your party is at the grotto location, then use </explore grotto continue>.';
+    const expeditionNote = `Use expedition ID \`${partyId}\` and move your party to the location(s) above, then </explore grotto continue>.`;
     const embed = new EmbedBuilder()
       .setTitle('Test grottos created')
       .setColor(0x00ff99)
