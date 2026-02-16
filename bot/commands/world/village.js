@@ -21,7 +21,7 @@ const { recoverHearts, recoverStamina } = require('../../modules/characterStatsM
 const ItemModel = require('@/models/ItemModel');
 const { Village, VILLAGE_CONFIG, DEFAULT_TOKEN_REQUIREMENTS } = require('@/models/VillageModel');
 const UserModel = require('@/models/UserModel');
-const { initializeVillages, updateVillageStatus } = require('../../modules/villageModule');
+const { initializeVillages, updateVillageStatus, getEffectiveVendingTier, getEffectiveVendingDiscount, getEffectiveRestLevel } = require('../../modules/villageModule');
 
 // ============================================================================
 // ---- Constants ----
@@ -1223,23 +1223,24 @@ async function validateRestSpotRequirements(character, village, interaction) {
         };
     }
 
-    // Check village level
-    if (village.level < 2) {
+    // Check effective rest level (L2+ required; L3 perks only when village is topped off)
+    const effectiveRestLevel = getEffectiveRestLevel(village);
+    if (effectiveRestLevel < 2) {
         return { 
             valid: false, 
             error: `❌ **Rest spots are only available in Level 2+ villages. ${village.name} is currently Level ${village.level}.**` 
         };
     }
 
-    // Check if character is at full health/stamina
-    if (village.level === 2) {
+    // Check if character is at full health/stamina (based on effective rest level)
+    if (effectiveRestLevel === 2) {
         if (character.currentHearts >= character.maxHearts) {
             return { 
                 valid: false, 
                 error: `❌ **You are already at full hearts (${character.currentHearts}/${character.maxHearts}). The rest spot cannot restore more.**` 
             };
         }
-    } else if (village.level === 3) {
+    } else if (effectiveRestLevel === 3) {
         if (character.currentHearts >= character.maxHearts && character.currentStamina >= character.maxStamina) {
             return { 
                 valid: false, 
@@ -1431,9 +1432,9 @@ module.exports = {
                 const nextLevel = villageToDisplay.level + 1;
                 const materials = villageToDisplay.materials instanceof Map ? Object.fromEntries(villageToDisplay.materials) : villageToDisplay.materials;
 
-                // Get vending tier and discount
-                const vendingTier = villageToDisplay.vendingTier;
-                const vendingDiscount = villageToDisplay.vendingDiscount;
+                // Get effective vending tier and discount (L3 perks only when topped off)
+                const vendingTier = getEffectiveVendingTier(villageToDisplay);
+                const vendingDiscount = getEffectiveVendingDiscount(villageToDisplay);
 
                 // Format vending status
                 let vendingStatus = '';
@@ -1449,6 +1450,9 @@ module.exports = {
                 let statusMessage = '';
                 if (villageToDisplay.status === 'max') {
                     statusMessage = '🌟 **Max level reached**';
+                    if (villageToDisplay.level === 3 && vendingTier === 2) {
+                        statusMessage += '\n> *Level 3 perks inactive until village is fully stocked (HP, tokens, and materials).*';
+                    }
                 } else if (villageToDisplay.status === 'damaged') {
                     statusMessage = '⚠️ **Damaged - Needs repair**';
                 } else {
@@ -1826,9 +1830,10 @@ module.exports = {
                     return interaction.reply({ content: validation.error, ephemeral: true });
                 }
 
-                // Process rest spot based on village level
-                if (village.level === 2) {
-                    // Level 2: Random 1-2 hearts (50/50 chance)
+                // Process rest spot based on effective rest level (L3 perks only when topped off)
+                const effectiveRestLevel = getEffectiveRestLevel(village);
+                if (effectiveRestLevel === 2) {
+                    // Effective tier 2: Random 1-2 hearts (50/50 chance)
                     const heartsToRestore = Math.random() < 0.5 ? 1 : 2;
                     const maxRestore = character.maxHearts - character.currentHearts;
                     const actualRestore = Math.min(heartsToRestore, maxRestore);
@@ -1853,7 +1858,7 @@ module.exports = {
                         .setImage(VILLAGE_IMAGES[village.name]?.banner || BORDER_IMAGE);
 
                     return interaction.reply({ embeds: [embed] });
-                } else if (village.level === 3) {
+                } else if (effectiveRestLevel === 3) {
                     // Level 3: Player chooses between 1 stamina or 2 hearts
                     const theme = getRestSpotTheme(village.name);
                     

@@ -213,6 +213,8 @@ type QuestRecord = {
   requiredRolls?: number;
   participants?: Record<string, { userId?: string; characterName?: string; progress?: string; completedAt?: string; rewardedAt?: string; tokensEarned?: number; rpPostCount?: number }>;
   participantCap?: number | null;
+  createdByUserId?: string | null;
+  createdByUsername?: string | null;
   [key: string]: unknown;
 };
 
@@ -311,6 +313,7 @@ type FormState = {
   posted: boolean;
   postedAt: string;
   botNotes: string;
+  artWritingMode: "both" | "either";
 };
 
 function getDefaultDateYYYYMM(): string {
@@ -349,6 +352,7 @@ const emptyForm: FormState = {
   posted: false,
   postedAt: "",
   botNotes: "",
+  artWritingMode: "both",
 };
 
 type ParsedToken = {
@@ -458,6 +462,7 @@ function questToForm(q: QuestRecord): FormState {
       return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 16);
     })(),
     botNotes: String(q.botNotes ?? ""),
+    artWritingMode: (q as { artWritingMode?: string }).artWritingMode === "either" ? "either" : "both",
   };
 }
 
@@ -511,6 +516,7 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     tableroll: f.tableroll.trim() || null,
     tableRollName: f.tableroll.trim() || null,
     requiredRolls: parseInt(f.requiredRolls, 10) || 1,
+    artWritingMode: f.artWritingMode === "either" ? "either" : "both",
   };
   if (isEdit && f.questID.trim()) body.questID = f.questID.trim();
   if (f.participantCap.trim() !== "") {
@@ -1433,6 +1439,16 @@ export default function AdminQuestsPage() {
                           <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Participation Requirement</label>
                           <textarea rows={3} value={form.minRequirements} onChange={(e) => setField("minRequirements", e.target.value)} placeholder="Optional — e.g. 0, 15, or any text" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)] resize-y min-h-[4rem]" />
                         </div>
+                        {form.questType === "Art / Writing" && (
+                          <div className="sm:col-span-2">
+                            <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Art / Writing mode</label>
+                            <select value={form.artWritingMode} onChange={(e) => setField("artWritingMode", e.target.value === "either" ? "either" : "both")} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
+                              <option value="both">Require both art and writing</option>
+                              <option value="either">Accept either art OR writing</option>
+                            </select>
+                            <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Choose whether participants must submit both, or just one of art or writing.</p>
+                          </div>
+                        )}
                         {form.questType === "RP" && (
                           <>
                             <div>
@@ -1600,6 +1616,7 @@ export default function AdminQuestsPage() {
                     <th className="pb-3 pt-3 pr-3 text-[var(--totk-grey-200)] font-semibold">Type</th>
                     <th className="pb-3 pt-3 pr-3 text-[var(--totk-grey-200)] font-semibold">Status</th>
                     <th className="pb-3 pt-3 pr-3 text-[var(--totk-grey-200)] font-semibold">Posted</th>
+                    <th className="pb-3 pt-3 pr-3 text-[var(--totk-grey-200)] font-semibold">Created by</th>
                     <th className="pb-3 pt-3 pr-4 text-[var(--totk-grey-200)] font-semibold min-w-[280px]">Actions</th>
                   </tr>
                 </thead>
@@ -1620,6 +1637,7 @@ export default function AdminQuestsPage() {
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.questType ?? "—"}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{statusDisplay(q.status)}</td>
                       <td className="py-3 pr-3 text-[var(--botw-pale)]">{isQuestPosted(q) ? "Yes" : "No"}</td>
+                      <td className="py-3 pr-3 text-[var(--botw-pale)]">{q.createdByUsername ?? "—"}</td>
                       <td className="py-3 pr-4 min-w-[280px]">
                         <div className="flex flex-wrap items-center gap-2">
                           <button
@@ -1913,12 +1931,16 @@ export default function AdminQuestsPage() {
         {/* View quest details modal */}
         {viewQuestId && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            className="fixed inset-0 z-50 flex min-h-full items-center justify-center overflow-y-auto bg-black/60 p-4 py-8"
             role="dialog"
             aria-modal="true"
             aria-labelledby="view-quest-title"
+            onClick={closeViewModal}
           >
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl flex flex-col">
+            <div
+              className="my-8 max-h-[85vh] w-full max-w-2xl shrink-0 overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-2xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="border-b border-[var(--totk-dark-ocher)]/60 px-5 py-4 shrink-0">
                 <h2 id="view-quest-title" className="text-xl font-bold text-[var(--totk-ivory)] leading-tight">
                   {viewQuest ? (viewQuest.title ?? "Quest") : "Quest details"}

@@ -253,6 +253,8 @@ export async function POST(req: NextRequest) {
       questType,
       location,
       timeLimit,
+      createdByUserId: user.id,
+      createdByUsername: user.username ?? null,
       signupDeadline:
         typeof body.signupDeadline === "string" ? body.signupDeadline.trim() || null : null,
       participantCap:
@@ -277,6 +279,7 @@ export async function POST(req: NextRequest) {
           : null,
       collabAllowed: Boolean(body.collabAllowed),
       collabRule: typeof body.collabRule === "string" ? body.collabRule.trim() || null : null,
+      artWritingMode: body.artWritingMode === "either" ? "either" : "both",
       questID,
       status,
       posted,

@@ -40,8 +40,9 @@ const tokenRewardValidation = {
         if (typeof value === 'string') {
             if (['N/A', 'No reward', 'No reward specified', 'None'].includes(value)) return true;
             
-            // Check for complex formats
-            if (value.includes('per_unit:') || value.includes('flat:') || value.includes('collab_bonus:')) {
+            // Check for complex formats (unit:, max: used with per_unit)
+            if (value.includes('per_unit:') || value.includes('flat:') || value.includes('collab_bonus:') ||
+                value.includes('unit:') || value.includes('max:')) {
                 return true; // Accept complex reward formats
             }
             
@@ -150,6 +151,10 @@ const additionalFields = {
     rules: { type: String, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
+    createdByUserId: { type: String, default: null },
+    createdByUsername: { type: String, default: null },
+    // Art / Writing: 'both' = require art AND writing; 'either' = require art OR writing
+    artWritingMode: { type: String, enum: ['both', 'either'], default: 'both' },
     // Interactive Quest Table Roll Fields
     tableRollName: { type: String, default: null }, // Name of the table roll to use
     tableRollConfig: { type: Schema.Types.Mixed, default: null }, // Configuration for table roll requirements
@@ -274,7 +279,13 @@ function meetsRequirements(participant, quest) {
     }
     
     if (questType === QUEST_TYPES.ART_WRITING) {
-        // For Art/Writing combined quests, require BOTH art AND writing submissions
+        const artWritingMode = (quest.artWritingMode || 'both').toLowerCase();
+        if (artWritingMode === 'either') {
+            const hasArt = submissions.some(sub => sub.type === 'art' && sub.approved);
+            const hasWriting = submissions.some(sub => sub.type === 'writing' && sub.approved);
+            return hasArt || hasWriting;
+        }
+        // Default 'both': require BOTH art AND writing submissions
         const hasArtSubmission = submissions.some(sub => sub.type === 'art' && sub.approved);
         const hasWritingSubmission = submissions.some(sub => sub.type === 'writing' && sub.approved);
         return hasArtSubmission && hasWritingSubmission;

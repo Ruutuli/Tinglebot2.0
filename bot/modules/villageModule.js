@@ -15,7 +15,8 @@ const { capitalizeVillageName } = require('@/utils/stringUtils');
 // ============================================================================
 const { 
     Village,
-    VILLAGE_CONFIG
+    VILLAGE_CONFIG,
+    DEFAULT_TOKEN_REQUIREMENTS
 } = require('@/models/VillageModel');
 const { VILLAGE_BANNERS } = require('@/database/db');
 const ItemModel = require('@/models/ItemModel');
@@ -170,6 +171,51 @@ function updateVillageStatus(village) {
     return newStatus;
 }
 
+// ------------------- Function: isVillageToppedOffForLevel3 -------------------
+// Returns true only when village is level 3 AND full HP, tokens at L3 cap, and all L3 materials at required amounts.
+function isVillageToppedOffForLevel3(village) {
+    if (village.level !== 3) return false;
+
+    const maxHealth = village.levelHealth instanceof Map
+        ? village.levelHealth.get('3')
+        : village.levelHealth?.['3'];
+    const level3MaxHealth = maxHealth !== undefined && maxHealth !== null ? maxHealth : 300;
+    if (village.health < level3MaxHealth) return false;
+
+    const l3TokenCap = DEFAULT_TOKEN_REQUIREMENTS[3] ?? 50000;
+    if ((village.currentTokens ?? 0) < l3TokenCap) return false;
+
+    const config = VILLAGE_CONFIG[village.name];
+    if (!config?.materials) return true;
+    const materialsMap = village.materials instanceof Map ? village.materials : new Map(Object.entries(village.materials || {}));
+    for (const [key, configMaterial] of Object.entries(config.materials)) {
+        const requiredL3 = configMaterial?.required?.[3];
+        if (requiredL3 === undefined || requiredL3 === null) continue;
+        const entry = materialsMap.get(key);
+        const current = entry && typeof entry === 'object' && 'current' in entry ? (entry.current ?? 0) : 0;
+        if (current < requiredL3) return false;
+    }
+    return true;
+}
+
+// ------------------- Function: getEffectiveVendingTier -------------------
+// Level 3 perks apply only when topped off; otherwise effective tier is 2 at structural L3.
+function getEffectiveVendingTier(village) {
+    if (village.level < 3) return village.level;
+    return isVillageToppedOffForLevel3(village) ? 3 : 2;
+}
+
+// ------------------- Function: getEffectiveVendingDiscount -------------------
+function getEffectiveVendingDiscount(village) {
+    const tier = getEffectiveVendingTier(village);
+    return tier === 3 ? 20 : tier === 2 ? 10 : 0;
+}
+
+// ------------------- Function: getEffectiveRestLevel -------------------
+function getEffectiveRestLevel(village) {
+    return getEffectiveVendingTier(village);
+}
+
 // ------------------- Function: checkVillageStatus -------------------
 // Checks and returns the status of a village by name
 async function checkVillageStatus(villageName) {
@@ -296,11 +342,11 @@ async function damageVillage(villageName, damageAmount, damageCause = null) {
             }
         } else {
             // Resource loss on every damage event (when HP > 0)
-            // Formula: material_loss = max(1, floor(selected_material.current × damage_percentage))
-            // Formula: token_loss = max(1, floor(current_tokens × damage_percentage))
+            // Formula: material_loss = max(1, floor(material.current × damage_percentage)) per material
+            // All materials with stock take proportional damage (not just one random material)
+            // Formula: token_loss = actual_HP_lost × TOKENS_PER_HP (handled above)
             
-            // Material loss: Select one random material with current > 0
-            // First, ensure all materials have a 'current' property initialized
+            // Material loss: Apply proportional damage to ALL materials with current > 0
             for (const key in materials) {
                 if (!materials[key] || typeof materials[key] !== 'object') {
                     materials[key] = { current: 0, required: {} };
@@ -309,31 +355,25 @@ async function damageVillage(villageName, damageAmount, damageCause = null) {
                 }
             }
             
-            const materialKeys = Object.keys(materials).filter(key => {
-                const materialData = materials[key];
-                const current = (materialData && typeof materialData === 'object' && 'current' in materialData) 
+            let anyMaterialLost = false;
+            for (const materialKey of Object.keys(materials)) {
+                const materialData = materials[materialKey];
+                const materialCurrent = (materialData && typeof materialData === 'object' && 'current' in materialData) 
                     ? (materialData.current || 0) 
                     : 0;
-                return current > 0;
-            });
-            
-            if (materialKeys.length > 0) {
-                // Select one random material from materials with current > 0
-                const randomMaterial = materialKeys[Math.floor(Math.random() * materialKeys.length)];
-                const materialData = materials[randomMaterial];
-                const materialCurrent = materialData.current || 0;
+                if (materialCurrent <= 0) continue;
+                
                 // material_loss = max(1, floor(material_current × damage_percentage))
-                // The 25% cap is already applied in damagePercentage
                 const removedAmount = Math.max(1, Math.floor(materialCurrent * damagePercentage));
-                // Create a new object to ensure Mongoose detects the change
-                const updatedMaterialData = { ...materialData, current: Math.max(0, materialCurrent - removedAmount) };
-                village.materials.set(randomMaterial, updatedMaterialData);
-                removedResources.push({ type: 'Material', name: randomMaterial, amount: removedAmount });
-                console.log(`[damageVillage] Removed ${removedAmount} of "${randomMaterial}" from "${villageName}" (had ${materialCurrent}, damagePercentage: ${(damagePercentage * 100).toFixed(2)}%).`);
-                // Mark the materials Map as modified so Mongoose saves it
+                const newCurrent = Math.max(0, materialCurrent - removedAmount);
+                village.materials.set(materialKey, { ...materialData, current: newCurrent });
+                removedResources.push({ type: 'Material', name: materialKey, amount: removedAmount });
+                anyMaterialLost = true;
+                console.log(`[damageVillage] Removed ${removedAmount} of "${materialKey}" from "${villageName}" (had ${materialCurrent}, damagePercentage: ${(damagePercentage * 100).toFixed(2)}%).`);
+            }
+            if (anyMaterialLost) {
                 village.markModified('materials');
             } else {
-                // If no materials have current > 0, no material is lost (but tokens may still be lost)
                 console.log(`[damageVillage] No materials with current > 0 found for "${villageName}". Skipping material loss.`);
             }
 
@@ -615,5 +655,8 @@ module.exports = {
     getVillageInfo,
     calculateVillageStatus,
     updateVillageStatus,
-    checkVillageStatus
+    checkVillageStatus,
+    getEffectiveVendingTier,
+    getEffectiveVendingDiscount,
+    getEffectiveRestLevel
 };

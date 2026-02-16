@@ -51,6 +51,7 @@ const { getGeneralJobsPage, getJobPerk } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { roles } = require('../modules/rolesModule');
 const { recoverHearts, recoverStamina } = require('../modules/characterStatsModule');
+const { getEffectiveVendingTier } = require('../modules/villageModule');
 
 // ------------------- Handler Imports -------------------
 const {
@@ -2115,9 +2116,9 @@ async function handleRestSpotChoice(interaction) {
       });
     }
 
-    if (village.level < 3) {
+    if (getEffectiveVendingTier(village) < 3) {
       return interaction.reply({
-        content: '❌ **This choice is only available in Level 3 villages.**',
+        content: '❌ **This choice is only available in Level 3 villages when fully stocked (HP, tokens, and materials).**',
         flags: 64
       });
     }

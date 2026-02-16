@@ -295,6 +295,7 @@ export async function PUT(
           : null,
       collabAllowed: Boolean(body.collabAllowed),
       collabRule: typeof body.collabRule === "string" ? body.collabRule.trim() || null : null,
+      artWritingMode: body.artWritingMode === "either" ? "either" : "both",
       questID,
       status,
       posted,

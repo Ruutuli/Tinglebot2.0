@@ -476,22 +476,24 @@ const QUEST_TYPE_HANDLERS = {
         getDescription: (characterName) => `**${characterName}** has successfully submitted their writing for the quest!`
     },
     [QUEST_TYPES.ART_WRITING]: {
-        checkRequirements: (participant) => {
-            const hasArtSubmission = participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved);
-            const hasWritingSubmission = participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved);
-            return hasArtSubmission && hasWritingSubmission;
+        checkRequirements: (participant, quest) => {
+            const artWritingMode = (quest?.artWritingMode || 'both').toLowerCase();
+            const hasArt = participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved);
+            const hasWriting = participant.submissions.some(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved);
+            if (artWritingMode === 'either') return hasArt || hasWriting;
+            return hasArt && hasWriting;
         },
-        getProgressField: (participant) => {
-            const artSubmissions = participant.submissions.filter(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved).length;
-            const writingSubmissions = participant.submissions.filter(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved).length;
-            return {
-                name: 'Submissions',
-                value: `🎨 ${artSubmissions} art, ✍️ ${writingSubmissions} writing`,
-                inline: true
-            };
+        getProgressField: (participant, quest) => {
+            const artCount = participant.submissions.filter(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved).length;
+            const writingCount = participant.submissions.filter(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved).length;
+            const mode = (quest?.artWritingMode || 'both').toLowerCase();
+            const value = mode === 'either'
+                ? `🎨 ${artCount} art, ✍️ ${writingCount} writing (either counts)`
+                : `🎨 ${artCount} art, ✍️ ${writingCount} writing`;
+            return { name: 'Submissions', value, inline: true };
         },
         getTitle: () => '🎨✍️ Art & Writing Quest Completed!',
-        getDescription: (characterName) => `**${characterName}** has successfully submitted both art and writing for the quest!`
+        getDescription: (characterName) => `**${characterName}** has successfully submitted for the quest!`
     },
     [QUEST_TYPES.INTERACTIVE]: {
         checkRequirements: () => true, // Interactive quests have different completion logic
@@ -602,7 +604,71 @@ async function syncApprovedSubmissionsToParticipant(quest, participant) {
     }
 }
 
-// ------------------- Token Calculation ------------------
+// ------------------- Token Reward Parsing ------------------
+// Format: flat:N, per_unit:N, unit:submission|unit:"phrase", max:N, collab_bonus:N
+function parseTokenReward(tokenReward) {
+    const result = { flat: 0, perUnit: 0, unit: null, max: null, collabBonus: 0 };
+    if (tokenReward == null) return result;
+    const raw = typeof tokenReward === 'number' ? String(tokenReward) : String(tokenReward);
+    const flatMatch = raw.match(/flat:(\d+)/i);
+    if (flatMatch) result.flat = Math.max(0, parseInt(flatMatch[1], 10));
+    const perUnitMatch = raw.match(/per_unit:(\d+)/i);
+    if (perUnitMatch) result.perUnit = Math.max(0, parseInt(perUnitMatch[1], 10));
+    const unitQuotedMatch = raw.match(/\bunit:"((?:[^"\\]|\\.)*)"/i);
+    const unitUnquotedMatch = !unitQuotedMatch ? raw.match(/\bunit:(\S+)/i) : null;
+    result.unit = unitQuotedMatch ? unitQuotedMatch[1].replace(/\\"/g, '"') : (unitUnquotedMatch ? unitUnquotedMatch[1] : null);
+    const maxMatch = raw.match(/max:(\d+)/i);
+    if (maxMatch) result.max = Math.max(0, parseInt(maxMatch[1], 10));
+    const collabMatch = raw.match(/collab_bonus:(\d+)/i);
+    if (collabMatch) result.collabBonus = Math.max(0, parseInt(collabMatch[1], 10));
+    return result;
+}
+
+// Count participant "units" for per_unit token calculation. unit:submission = count approved submissions (by quest type); cap by max.
+function computeParticipantUnits(quest, participant) {
+    const parsed = parseTokenReward(quest.tokenReward);
+    if (!parsed.perUnit || !parsed.unit) return 0;
+    const unitKind = (parsed.unit || '').toLowerCase().trim();
+    let count = 0;
+    const subs = participant.submissions || [];
+    if (unitKind === 'submission') {
+        const questType = (quest.questType || '').toLowerCase();
+        if (questType === 'art') {
+            count = subs.filter(sub => sub.type === SUBMISSION_TYPES.ART && sub.approved).length;
+        } else if (questType === 'writing') {
+            count = subs.filter(sub => sub.type === SUBMISSION_TYPES.WRITING && sub.approved).length;
+        } else if (questType === 'art / writing' || questType === 'art/writing') {
+            count = subs.filter(sub => (sub.type === SUBMISSION_TYPES.ART || sub.type === SUBMISSION_TYPES.WRITING) && sub.approved).length;
+        } else {
+            count = subs.filter(sub => sub.approved).length;
+        }
+    } else {
+        count = subs.filter(sub => sub.approved).length;
+    }
+    const cap = parsed.max != null && parsed.max > 0 ? parsed.max : Infinity;
+    return Math.min(count, cap);
+}
+
+// Token amount for one participant (flat + per_unit * min(units, max)). Uses parser; fallback to getNormalizedTokenReward for flat-only.
+function computeTokensForParticipant(quest, participant) {
+    try {
+        const parsed = parseTokenReward(quest.tokenReward);
+        let base = parsed.flat || 0;
+        if (parsed.perUnit > 0) {
+            const units = computeParticipantUnits(quest, participant);
+            const cap = parsed.max != null && parsed.max > 0 ? parsed.max : Infinity;
+            base += parsed.perUnit * Math.min(units, cap);
+            if (participant && typeof participant === 'object') participant.units = units;
+        }
+        if (base > 0) return base;
+        return quest.getNormalizedTokenReward ? quest.getNormalizedTokenReward() : 0;
+    } catch (err) {
+        logger.error('QUEST', `computeTokensForParticipant error: ${err.message}`, err);
+        return quest.getNormalizedTokenReward ? quest.getNormalizedTokenReward() : 0;
+    }
+}
+
+// ------------------- Token Calculation (legacy: quest-only, no participant) ------------------
 function computeTokens(quest) {
     return quest.getNormalizedTokenReward();
 }
@@ -882,7 +948,7 @@ async function distributeRewards(quest, participant, rewardContext = {}) {
             }
         };
 
-        const baseTokensToAward = computeTokens(quest);
+        const baseTokensToAward = computeTokensForParticipant(quest, participant);
         results.tokenBreakdown.base = baseTokensToAward;
 
         const entertainerBonusActive = rewardContext?.entertainerBonus?.enabled === true;
