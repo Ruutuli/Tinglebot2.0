@@ -456,9 +456,14 @@ async function startRaid(monster, village, interaction = null, expeditionId = nu
     // Generate unique raid ID with 'R' prefix for Raid
     const raidId = generateUniqueId('R');
     
-    // Calculate raid duration based on monster tier
+    // Calculate raid duration based on monster tier (only used for non-expedition raids)
     const raidDuration = calculateRaidDuration(monster.tier);
-    
+    // Expedition raids have no timer: use far-future expiresAt so raid never auto-expires
+    const isExpeditionRaid = !!expeditionId;
+    const expiresAt = isExpeditionRaid
+      ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000) // 100 years
+      : new Date(Date.now() + raidDuration);
+
     // Create raid document
     const raid = new Raid({
       raidId: raidId,
@@ -473,7 +478,7 @@ async function startRaid(monster, village, interaction = null, expeditionId = nu
       village: village,
       channelId: interaction?.channel?.id || null,
       expeditionId: expeditionId || null,
-      expiresAt: new Date(Date.now() + raidDuration),
+      expiresAt,
       analytics: {
         monsterTier: monster.tier,
         village: village,
@@ -484,17 +489,19 @@ async function startRaid(monster, village, interaction = null, expeditionId = nu
     // Save raid to database
     await raid.save();
 
-    console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village} - Duration: ${Math.floor(raidDuration / (1000 * 60))} minutes`);
+    console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village}${isExpeditionRaid ? ' (expedition — no timer)' : ` - Duration: ${Math.floor(raidDuration / (1000 * 60))} minutes`}`);
     
-    // Schedule raid expiration using Agenda (persists across bot restarts)
-    try {
-      const scheduler = require('@/utils/scheduler');
-      const expirationTime = new Date(Date.now() + raidDuration);
-      await scheduler.scheduleOneTimeJob(RAID_EXPIRATION_JOB_NAME, expirationTime, { raidId });
-      logger.info('RAID', `Scheduled raid expiration for ${raidId} at ${expirationTime.toISOString()}`);
-    } catch (schedulerError) {
-      logger.error('RAID', `Failed to schedule raid expiration job: ${schedulerError.message}`);
-      // Fallback: cleanup task will catch expired raids every 5 minutes
+    // Schedule raid expiration using Agenda (only for normal village raids; expedition raids have no timer)
+    if (!isExpeditionRaid) {
+      try {
+        const scheduler = require('@/utils/scheduler');
+        const expirationTime = new Date(Date.now() + raidDuration);
+        await scheduler.scheduleOneTimeJob(RAID_EXPIRATION_JOB_NAME, expirationTime, { raidId });
+        logger.info('RAID', `Scheduled raid expiration for ${raidId} at ${expirationTime.toISOString()}`);
+      } catch (schedulerError) {
+        logger.error('RAID', `Failed to schedule raid expiration job: ${schedulerError.message}`);
+        // Fallback: cleanup task will catch expired raids every 5 minutes
+      }
     }
     
     return {
@@ -735,11 +742,13 @@ async function joinRaid(character, raidId, options = {}) {
 // Schedules a one-time job in 60s to skip the current turn if they don't roll (skipped for mod characters)
 // Always cancels any existing skip job for this raid first so only one timer is ever active.
 // Stores scheduledAt (ms) so the handler only skips after 60s elapsed (immune to Agenda running early or clock skew).
+// Expedition raids: no turn-skip timer (only during exploring).
 async function scheduleRaidTurnSkip(raidId) {
   const scheduler = require('@/utils/scheduler');
   await cancelRaidTurnSkip(raidId); // Prevent duplicate jobs — only one skip timer per raid
   const raid = await Raid.findOne({ raidId, status: 'active' });
   if (!raid || !raid.participants || raid.participants.length === 0) return;
+  if (raid.expeditionId) return; // No turn timer during expedition raids
   const current = raid.getCurrentTurnParticipant(); // Include KO'd — they get 1 minute to use a fairy or leave
   if (!current) return;
   if (current.isModCharacter) return; // Mod characters are not on the turn timer
@@ -1227,35 +1236,41 @@ async function createRaidEmbed(raid, monsterImage) {
   const villageName = capitalizeVillageName(raid.village);
   const villageEmoji = getVillageEmojiByName(raid.village) || '';
 
-  // Calculate remaining time
+  // Timer: only for normal village raids; expedition raids have no time limit
+  const isExpeditionRaid = !!raid.expeditionId;
   const now = new Date();
   const expiresAt = new Date(raid.expiresAt);
   const timeRemaining = expiresAt.getTime() - now.getTime();
-  
-  // Format remaining time
+
   let timeString = '';
-  if (timeRemaining > 0) {
-    const minutes = Math.floor(timeRemaining / (1000 * 60));
-    const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
-    timeString = `${minutes}m ${seconds}s remaining`;
-  } else {
-    timeString = '⏰ Time expired!';
+  if (!isExpeditionRaid) {
+    if (timeRemaining > 0) {
+      const minutes = Math.floor(timeRemaining / (1000 * 60));
+      const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+      timeString = `${minutes}m ${seconds}s remaining`;
+    } else {
+      timeString = '⏰ Time expired!';
+    }
   }
 
-  // Calculate total duration for this tier
   const totalDuration = calculateRaidDuration(raid.monster.tier);
   const totalMinutes = Math.floor(totalDuration / (1000 * 60));
+  const descriptionLines = [
+    `**${raid.monster.name} has been spotted in ${villageName}!**`,
+    `*It's a Tier ${raid.monster.tier} monster! Protect the village!*`,
+    '',
+    `</raid:1470659276287774734> to join or continue the raid!`,
+    `</item:1379838613067530385> to heal during the raid!`
+  ];
+  if (!isExpeditionRaid) {
+    descriptionLines.push('', `⏰ **You have ${totalMinutes} minutes to complete this raid!**`);
+  }
+  const description = descriptionLines.join('\n');
 
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
     .setTitle('🛡️ Village Raid!')
-    .setDescription(
-      `**${raid.monster.name} has been spotted in ${villageName}!**\n` +
-      `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
-      `</raid:1470659276287774734> to join or continue the raid!\n` +
-      `</item:1379838613067530385> to heal during the raid!\n\n` +
-      `⏰ **You have ${totalMinutes} minutes to complete this raid!**`
-    )
+    .setDescription(description)
     .addFields(
       {
         name: `__${raid.monster.name}__`,
@@ -1267,11 +1282,11 @@ async function createRaidEmbed(raid, monsterImage) {
         value: `${villageEmoji} ${villageName}`,
         inline: false
       },
-      {
+      ...(isExpeditionRaid ? [] : [{
         name: `__⏰ Time Remaining__`,
         value: `**${timeString}**`,
         inline: false
-      },
+      }]),
       {
         name: `__Raid ID__`,
         value: `\u0060\u0060\u0060${raid.raidId}\u0060\u0060\u0060`,

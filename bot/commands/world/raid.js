@@ -754,19 +754,17 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   
   // User mention removed - not working as intended
 
-  // Calculate remaining time
-  const now = new Date();
-  const expiresAt = new Date(raidData.expiresAt);
-  const timeRemaining = expiresAt.getTime() - now.getTime();
-  
-  // Format remaining time
-  let timeString = '';
-  if (timeRemaining > 0) {
-    const minutes = Math.floor(timeRemaining / (1000 * 60));
-    const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
-    timeString = `${minutes}m ${seconds}s remaining`;
-  } else {
-    timeString = '⏰ Time expired!';
+  // Time remaining: only for normal village raids; expedition raids have no timer
+  const isExpeditionRaid = !!raidData.expeditionId;
+  let timeField = null;
+  if (!isExpeditionRaid) {
+    const now = new Date();
+    const expiresAt = new Date(raidData.expiresAt);
+    const timeRemaining = expiresAt.getTime() - now.getTime();
+    const timeString = timeRemaining > 0
+      ? `${Math.floor(timeRemaining / (1000 * 60))}m ${Math.floor((timeRemaining % (1000 * 60)) / 1000)}s remaining`
+      : '⏰ Time expired!';
+    timeField = { name: `__⏰ Time Remaining__`, value: `**${timeString}**`, inline: false };
   }
 
   // Determine embed color based on outcome
@@ -777,53 +775,51 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     color = '#FFFF00'; // Yellow for no damage
   }
 
+  const turnFields = [
+    {
+      name: `__${monster.name} Status__`,
+      value: `💙 **Hearts:** ${monster.currentHearts}/${monster.maxHearts}`,
+      inline: false
+    },
+    {
+      name: `__${character.name} Status__`,
+      value: `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}`,
+      inline: false
+    },
+    {
+      name: `__Damage Dealt__`,
+      value: `⚔️ **${battleResult.hearts}** hearts`,
+      inline: false
+    },
+    {
+      name: `__Roll Details__`,
+      value: `🎲 **Roll:** ${battleResult.originalRoll} → ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **ATK +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `${battleResult.attackSuccess && battleResult.attackStat > 0 ? ' | ' : ''}🛡️ **DEF +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}`,
+      inline: false
+    },
+    {
+      name: `__Turn Order__`,
+      value: turnOrder || 'No participants',
+      inline: false
+    },
+    ...(timeField ? [timeField] : []),
+    {
+      name: 'Raid ID',
+      value: `\`\`\`${raidId}\`\`\``,
+      inline: false
+    },
+    {
+      name: 'Want to join in?',
+      value: 'Use </raid:1470659276287774734> to join (new players are added at the end of turn order).',
+      inline: false
+    }
+  ];
+
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`⚔️ ${character.name}'s Raid Turn`)
     .setAuthor({ name: character.name, iconURL: characterIcon })
     .setDescription(battleResult.outcome || 'Battle completed')
-    .addFields(
-      {
-        name: `__${monster.name} Status__`,
-        value: `💙 **Hearts:** ${monster.currentHearts}/${monster.maxHearts}`,
-        inline: false
-      },
-      {
-        name: `__${character.name} Status__`,
-        value: `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}`,
-        inline: false
-      },
-      {
-        name: `__Damage Dealt__`,
-        value: `⚔️ **${battleResult.hearts}** hearts`,
-        inline: false
-      },
-      {
-        name: `__Roll Details__`,
-        value: `🎲 **Roll:** ${battleResult.originalRoll} → ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **ATK +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `${battleResult.attackSuccess && battleResult.attackStat > 0 ? ' | ' : ''}🛡️ **DEF +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}`,
-        inline: false
-      },
-      {
-        name: `__Turn Order__`,
-        value: turnOrder || 'No participants',
-        inline: false
-      },
-      {
-        name: `__⏰ Time Remaining__`,
-        value: `**${timeString}**`,
-        inline: false
-      },
-      {
-        name: 'Raid ID',
-        value: `\`\`\`${raidId}\`\`\``,
-        inline: false
-      },
-      {
-        name: 'Want to join in?',
-        value: 'Use </raid:1470659276287774734> to join (new players are added at the end of turn order).',
-        inline: false
-      }
-    )
+    .addFields(turnFields)
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ 
