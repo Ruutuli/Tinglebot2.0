@@ -1448,7 +1448,7 @@ export default function OCDetailPage() {
   const borderImages = getVillageBorderImages(character.homeVillage);
 
   return (
-    <div className="min-h-full">
+    <div className="relative overflow-hidden w-full">
       {/* Top Border - Hidden on mobile */}
       <div className="hidden md:block w-full pointer-events-none">
         <img
@@ -1458,7 +1458,7 @@ export default function OCDetailPage() {
           aria-hidden="true"
         />
       </div>
-      <div className="min-h-full p-4 sm:p-6 md:p-8 md:-mt-80 lg:-mt-96 relative z-10">
+      <div className="p-4 sm:p-6 md:p-8 md:-mt-80 lg:-mt-96 relative z-10">
       <div className="mx-auto max-w-[90rem]">
         {/* Header */}
         <div className="mb-6 sm:mb-8 flex flex-col items-center gap-3 sm:gap-4">
@@ -2482,12 +2482,12 @@ export default function OCDetailPage() {
         </div>
       </div>
       </div>
-      {/* Bottom Border - Hidden on mobile */}
-      <div className="hidden md:block w-full pointer-events-none md:-mt-56 lg:-mt-64 relative z-0">
+      {/* Bottom Border - Hidden on mobile; absolute so it does not add scrollable height */}
+      <div className="hidden md:block absolute bottom-0 left-0 right-0 w-full min-w-full pointer-events-none z-0">
         <img
           src={borderImages.bottom}
           alt=""
-          className="w-full h-auto"
+          className="w-full h-auto max-h-[14rem] object-cover object-bottom"
           aria-hidden="true"
         />
       </div>

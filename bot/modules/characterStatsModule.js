@@ -102,7 +102,9 @@ const updateCurrentStamina = async (characterId, stamina, updateUsageDate = fals
       return; // Mod characters don't need stamina updates
     }
     
-    const updateData = { currentStamina: stamina };
+    // Stamina must never go negative; clamp to >= 0 and handle NaN
+    const safeStamina = Math.max(0, Number(stamina) || 0);
+    const updateData = { currentStamina: safeStamina };
     if (updateUsageDate) updateData.lastStaminaUsage = new Date();
     await Character.updateOne({ _id: characterId }, { $set: updateData });
   } catch (error) {
@@ -272,14 +274,17 @@ const useStamina = async (characterId, stamina, context = {}) => {
       return { message: `🟩 Mod character - no stamina lost`, exhausted: false };
     }
 
+    // Normalize current stamina (handles undefined/null/non-numeric) so check and deduction are correct
+    const current = Math.max(0, Number(character.currentStamina) || 0);
+
     // Check if character has enough stamina BEFORE deducting
-    if (character.currentStamina < stamina) {
-      console.log(`[characterStatsModule.js]: ⚠️ ${character.name} doesn't have enough stamina! Required: ${stamina}, Available: ${character.currentStamina}`);
-      return { message: `⚠️ ${character.name} doesn't have enough stamina! Required: ${stamina}, Available: ${character.currentStamina}`, exhausted: true };
+    if (current < stamina) {
+      console.log(`[characterStatsModule.js]: ⚠️ ${character.name} doesn't have enough stamina! Required: ${stamina}, Available: ${current}`);
+      return { message: `⚠️ ${character.name} doesn't have enough stamina! Required: ${stamina}, Available: ${current}`, exhausted: true };
     }
 
-    // Deduct stamina and update database
-    const newStamina = Math.max(character.currentStamina - stamina, 0);
+    // Deduct stamina and update database (clamp so we never write negative)
+    const newStamina = Math.max(0, current - stamina);
     await updateCurrentStamina(characterId, newStamina, true);
 
     // If stamina reaches 0 after use, log it but don't mark as exhausted
@@ -650,6 +655,7 @@ const checkAndUseStamina = async (character, staminaCost) => {
       }
 
       character.currentStamina -= staminaCost;
+      character.currentStamina = Math.max(0, character.currentStamina);
       await character.save();
 
       const updatedCharacter = await Character.findById(character._id);

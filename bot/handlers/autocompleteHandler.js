@@ -4274,8 +4274,8 @@ async function handleVillageTypeAutocomplete(interaction, focusedOption) {
     if (villageName) {
       const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
       if (village) {
-        const DONATION_TOKEN_PERCENT = 0.05;
-        // Limit is always 5% of upgrade requirement (never based on HP/repair)
+        const DONATION_TOKEN_PERCENT = 0.10;
+        // Limit is always 10% of upgrade requirement (never based on HP/repair)
         const requiredTokens = village.level < 3
           ? (DEFAULT_TOKEN_REQUIREMENTS[village.level + 1] ?? 0)
           : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);

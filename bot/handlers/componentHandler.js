@@ -1880,6 +1880,10 @@ async function handleComponentInteraction(interaction) {
           if (!stateDoc || !stateDoc.data) return;
           const state = stateDoc.data;
           if (state.userId !== interaction.user.id) return;
+          // Delay and recheck—if collector claimed it, TempData will be gone
+          await new Promise(r => setTimeout(r, 120));
+          const stillExists = await TempData.findOne({ type: 'travelEncounter', key: encounterKey });
+          if (!stillExists) return; // Collector handled it, do nothing
           try {
             await interaction.deferUpdate();
           } catch (deferErr) {
@@ -1889,13 +1893,13 @@ async function handleComponentInteraction(interaction) {
           await TempData.findOneAndDelete({ type: 'travelEncounter', key: encounterKey });
           const character = await fetchCharacterById(state.characterId);
           if (!character) {
-            await interaction.followUp({ content: '❌ Character no longer found. Use /travel again.', flags: 64 }).catch(() => {});
+            await interaction.followUp({ content: '❌ Character no longer found. Only use /travel again if your journey stopped before you reached your destination.', flags: 64 }).catch(() => {});
             return;
           }
           const monsters = await getMonstersByPath(state.currentPath);
           const monster = monsters.find(m => m.name === state.monsterName);
           if (!monster) {
-            await interaction.followUp({ content: '❌ Could not resolve monster for this encounter. Use /travel again.', flags: 64 }).catch(() => {});
+            await interaction.followUp({ content: '❌ Could not resolve monster for this encounter. Only use /travel again if your journey stopped before you reached your destination.', flags: 64 }).catch(() => {});
             return;
           }
           const travelLog = Array.isArray(state.travelLog) ? state.travelLog : [];
@@ -1913,16 +1917,16 @@ async function handleComponentInteraction(interaction) {
           );
           if (decision && typeof decision === 'string' && !decision.startsWith('❌')) {
             await interaction.followUp({
-              content: `⚠️ **Encounter resolved.** The bot may have restarted—use \`/travel\` again to continue your journey.`,
+              content: `Encounter resolved. **Only use \`/travel\` again if your journey stopped mid-way and you never arrived at your destination**—otherwise you can ignore this.`,
               flags: 64
             }).catch(() => {});
           }
         } catch (err) {
           handleError(err, 'componentHandler.js (travel encounter recovery)');
           if (!interaction.replied && !interaction.deferred) {
-            interaction.reply({ content: '❌ This encounter has expired or could not be resolved. Use /travel again.', flags: 64 }).catch(() => {});
+            interaction.reply({ content: '❌ This encounter has expired or could not be resolved. Only use /travel again if your journey stopped before you reached your destination.', flags: 64 }).catch(() => {});
           } else {
-            interaction.followUp({ content: '❌ Something went wrong resolving this encounter. Use /travel again.', flags: 64 }).catch(() => {});
+            interaction.followUp({ content: '❌ Something went wrong resolving this encounter. Only use /travel again if your journey stopped before you reached your destination.', flags: 64 }).catch(() => {});
           }
         }
       });

@@ -8,9 +8,13 @@ import { connect } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
 function getMongoUri(): string {
-  const uri = process.env.MONGODB_URI;
+  const uri =
+    process.env.MONGODB_TINGLEBOT_URI ||
+    process.env.MONGODB_URI;
   if (!uri) {
-    throw new Error("MONGODB_URI is not defined. Add it to your .env file.");
+    throw new Error(
+      "MONGODB_TINGLEBOT_URI or MONGODB_URI must be defined. Add to your .env file."
+    );
   }
   return uri;
 }

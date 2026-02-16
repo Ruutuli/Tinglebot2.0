@@ -719,8 +719,8 @@ module.exports = {
       const pet = await findPetByIdentifier(petName, character._id, 'active');
 
       if (!pet) {
-        console.error(
-          `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
+        console.warn(
+          `[pet.js]: Pet with identifier "${petName}" not found for character ${characterName}`
         );
         return interaction.editReply({
           content: `❌ **Pet \`${petName}\` not found for character \`${characterName}\`. Please check the pet name and try again.**`,
@@ -730,8 +730,8 @@ module.exports = {
 
       // Verify pet ownership
       if (pet.owner.toString() !== character._id.toString()) {
-        console.error(
-          `[pet.js]: logs - Pet "${petName}" exists but belongs to a different character`
+        console.warn(
+          `[pet.js]: Pet "${petName}" exists but belongs to a different character`
         );
         return interaction.editReply({
           content: `❌ **Pet \`${petName}\` belongs to a different character. Please check the pet name and try again.**`,
@@ -1058,8 +1058,8 @@ module.exports = {
       const pet = await findPetByIdentifier(petName, character._id, 'active');
 
       if (!pet) {
-        console.error(
-          `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
+        console.warn(
+          `[pet.js]: Pet with identifier "${petName}" not found for character ${characterName}`
         );
         return interaction.editReply({
           content: `❌ **Pet \`${petName}\` not found for character \`${characterName}\`. Please check the pet name and try again.**`,
@@ -1069,8 +1069,8 @@ module.exports = {
 
       // Verify pet ownership
       if (pet.owner.toString() !== character._id.toString()) {
-        console.error(
-          `[pet.js]: logs - Pet "${petName}" exists but belongs to a different character`
+        console.warn(
+          `[pet.js]: Pet "${petName}" exists but belongs to a different character`
         );
         return interaction.editReply({
           content: `❌ **Pet \`${petName}\` belongs to a different character. Please check the pet name and try again.**`,

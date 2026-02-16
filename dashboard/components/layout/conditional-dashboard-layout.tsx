@@ -28,8 +28,10 @@ export function ConditionalDashboardLayout({
       <div
         className="flex flex-col"
         style={{
+          height: "100vh",
           minHeight: "100vh",
           paddingTop: TOP_BAR_HEIGHT,
+          overflow: "hidden",
         }}
       >
         <DashboardShell>{children}</DashboardShell>

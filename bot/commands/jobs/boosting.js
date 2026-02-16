@@ -1144,6 +1144,16 @@ async function handleBoostAccept(interaction) {
 
  // Teacher Crafting: both vouchers are manually activated by the booster (no automatic removal at accept)
 
+ // Pre-check: booster must have at least 1 stamina to provide a boost
+ const available = Math.max(0, Number(booster.currentStamina) || 0);
+ if (available < 1) {
+  await interaction.reply({
+   content: `❌ **${booster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
  // Deduct 1 stamina from the booster character
  try {
   const staminaResult = await useStamina(booster._id, 1);

@@ -467,6 +467,10 @@ async function handleSelectMenuInteraction(interaction) {
     }
 
   } catch (error) {
+    if (error.code === 10062) {
+      console.warn(`[selectMenuHandler.js]: ⚠️ Interaction expired (10062) - user took too long. Cannot send error response.`);
+      return;
+    }
     console.error(`[selectMenuHandler.js]: ❌ Error in handleSelectMenuInteraction: ${error.message}`);
     console.error(error.stack);
     
@@ -483,7 +487,11 @@ async function handleSelectMenuInteraction(interaction) {
         });
       }
     } catch (replyError) {
-      console.error(`[selectMenuHandler.js]: ❌ Failed to send select menu error response: ${replyError.message}`);
+      if (replyError.code === 10062) {
+        console.warn(`[selectMenuHandler.js]: ⚠️ Interaction expired - cannot send error response.`);
+      } else {
+        console.error(`[selectMenuHandler.js]: ❌ Failed to send select menu error response: ${replyError.message}`);
+      }
     }
   }
 }

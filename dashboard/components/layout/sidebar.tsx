@@ -25,7 +25,7 @@ const SIDEBAR_WIDTH = 240;
 const SIDEBAR_COLLAPSED_WIDTH = 64;
 
 const linkBaseClass =
-  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]";
+  "flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]";
 const linkActiveStyle = {
   backgroundColor: "var(--totk-dark-green)",
   color: "var(--totk-ivory)",
@@ -156,7 +156,7 @@ export function Sidebar() {
         {isMobile ? (
           <button
             type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]"
+            className="flex h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]"
             style={{ color: "var(--botw-pale)" }}
             aria-label="Close sidebar"
             onClick={() => setIsMobileOpen(false)}
@@ -169,7 +169,7 @@ export function Sidebar() {
         ) : (
           <button
             type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]"
+            className="flex h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]"
             style={{ color: "var(--botw-pale)" }}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!collapsed}
@@ -208,7 +208,7 @@ export function Sidebar() {
                       type="button"
                       suppressHydrationWarning
                       className={clsx(
-                        "flex w-full items-center rounded-lg px-3 py-2 text-sm transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]",
+                        "flex min-h-[44px] w-full items-center rounded-lg px-3 py-2 text-sm transition-all duration-200 hover:bg-[var(--totk-dark-green)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)]",
                         collapsed && "justify-center px-2"
                       )}
                       style={linkInactiveStyle}
@@ -223,7 +223,7 @@ export function Sidebar() {
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content
-                      className="min-w-[200px] rounded-lg pt-3 pb-2 shadow-2xl backdrop-blur-md"
+                      className="z-[100] min-w-[200px] rounded-lg pt-3 pb-2 shadow-2xl backdrop-blur-md"
                       style={{
                         backgroundColor: "rgba(52, 44, 42, 0.98)",
                         boxShadow:
@@ -260,7 +260,7 @@ export function Sidebar() {
                           <DropdownMenu.Item asChild key={child.label}>
                             <Link
                               href={child.href}
-                              className="mx-1.5 flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm outline-none transition-all duration-150 hover:bg-[var(--totk-dark-green)]/30 focus:bg-[var(--totk-dark-green)]/30 focus:ring-1 focus:ring-[var(--totk-light-green)]/50"
+                              className="mx-1.5 flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm outline-none transition-all duration-150 hover:bg-[var(--totk-dark-green)]/30 focus:bg-[var(--totk-dark-green)]/30 focus:ring-1 focus:ring-[var(--totk-light-green)]/50"
                               style={{
                                 color:
                                   pathname === child.href

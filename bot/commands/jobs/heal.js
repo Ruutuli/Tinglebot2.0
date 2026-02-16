@@ -875,7 +875,23 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     // ============================================================================
     // ------------------- Execute Healing -------------------
     // ============================================================================
-    await useStamina(healerCharacter._id, staminaCost);
+    const staminaResult = await useStamina(healerCharacter._id, staminaCost);
+    if (staminaResult.exhausted) {
+      const errorEmbed = createErrorEmbed(
+        'Not Enough Stamina',
+        `**${healerCharacter.name}** doesn't have enough stamina to perform this healing. They need at least **${staminaCost}** stamina.`,
+        [
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Have the healer recover stamina before fulfilling the request\n> • Use items or rest to restore stamina`,
+            inline: false
+          }
+        ],
+        'Healing costs stamina; the healer must have enough before starting.'
+      );
+      await interaction.editReply({ embeds: [errorEmbed] });
+      return;
+    }
     await recoverHearts(characterToHeal._id, heartsToHeal, healerCharacter._id);
     
     // ============================================================================
@@ -1228,7 +1244,23 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
     // ============================================================================
     // ------------------- Execute Healing -------------------
     // ============================================================================
-    await useStamina(healerCharacter._id, staminaCost);
+    const staminaResult = await useStamina(healerCharacter._id, staminaCost);
+    if (staminaResult.exhausted) {
+      const errorEmbed = createErrorEmbed(
+        'Not Enough Stamina',
+        `**${healerCharacter.name}** doesn't have enough stamina to perform this healing. They need at least **${staminaCost}** stamina.`,
+        [
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Have the healer recover stamina before fulfilling the request\n> • Use items or rest to restore stamina`,
+            inline: false
+          }
+        ],
+        'Healing costs stamina; the healer must have enough before starting.'
+      );
+      await interaction.editReply({ embeds: [errorEmbed] });
+      return;
+    }
     await recoverHearts(characterToHeal._id, finalHeartsToHeal, healerCharacter._id);
     
     // ============================================================================

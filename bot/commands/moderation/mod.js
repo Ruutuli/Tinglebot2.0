@@ -2618,7 +2618,11 @@ async function handleApprove(interaction) {
             const mainUserEmbed = createApprovalDMEmbed(submissionId, title, tokensPerPerson, true);
             await interaction.client.users.send(userId, { embeds: [mainUserEmbed] });
           } catch (dmError) {
-            console.error(`[mod.js]: ❌ Error sending DM to main user ${userId}:`, dmError);
+            if (dmError.code === 50007) {
+              console.warn(`[mod.js]: ⚠️ Cannot send DM to main user ${userId} - user has DMs disabled or blocked the bot`);
+            } else {
+              console.error(`[mod.js]: ❌ Error sending DM to main user ${userId}:`, dmError);
+            }
           }
 
           // Send embed DM to each collaborator
@@ -2629,7 +2633,11 @@ async function handleApprove(interaction) {
               const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, tokensPerPerson);
               await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
             } catch (dmError) {
-              console.error(`[mod.js]: ❌ Error sending DM to collaborator ${collaboratorId}:`, dmError);
+              if (dmError.code === 50007) {
+                console.warn(`[mod.js]: ⚠️ Cannot send DM to collaborator ${collaboratorId} - user has DMs disabled or blocked the bot`);
+              } else {
+                console.error(`[mod.js]: ❌ Error sending DM to collaborator ${collaboratorId}:`, dmError);
+              }
             }
           }
         } else {
@@ -2650,7 +2658,11 @@ async function handleApprove(interaction) {
             const userEmbed = createApprovalDMEmbed(submissionId, title, tokensPerPerson, false);
             await interaction.client.users.send(userId, { embeds: [userEmbed] });
           } catch (dmError) {
-            console.error(`[mod.js]: ❌ Error sending DM to user ${userId}:`, dmError);
+            if (dmError.code === 50007) {
+              console.warn(`[mod.js]: ⚠️ Cannot send DM to user ${userId} - user has DMs disabled or blocked the bot`);
+            } else {
+              console.error(`[mod.js]: ❌ Error sending DM to user ${userId}:`, dmError);
+            }
           }
         }
 
@@ -2764,8 +2776,16 @@ async function handleApprove(interaction) {
         await updateApprovalNotificationMessage(interaction, submissionId, 'denied', reason);
   
                 // Send embed DM to user for denial
-        const denialEmbed = createDenialDMEmbed(submissionId, title, reason);
-        await interaction.client.users.send(userId, { embeds: [denialEmbed] });
+        try {
+          const denialEmbed = createDenialDMEmbed(submissionId, title, reason);
+          await interaction.client.users.send(userId, { embeds: [denialEmbed] });
+        } catch (dmError) {
+          if (dmError.code === 50007) {
+            console.warn(`[mod.js]: ⚠️ Cannot send denial DM to user ${userId} - user has DMs disabled or blocked the bot`);
+          } else {
+            console.error(`[mod.js]: ❌ Error sending denial DM to user ${userId}:`, dmError);
+          }
+        }
 
         await deleteSubmissionFromStorage(submissionId);
         

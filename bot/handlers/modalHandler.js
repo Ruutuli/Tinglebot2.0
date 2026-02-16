@@ -261,7 +261,15 @@ async function triggerBaseCountModal(interaction, base) {
   const actionRow = new ActionRowBuilder().addComponents(textInput);
   modal.addComponents(actionRow);
 
-  await interaction.showModal(modal);
+  try {
+    await interaction.showModal(modal);
+  } catch (err) {
+    if (err.code === 10062) {
+      console.warn(`[modalHandler.js]: ⚠️ Interaction expired (10062) - user took too long to select. They can try again.`);
+    } else {
+      throw err;
+    }
+  }
 }
 
 
@@ -281,7 +289,15 @@ async function triggerMultiplierCountModal(interaction, multiplier) {
   const actionRow = new ActionRowBuilder().addComponents(textInput);
   modal.addComponents(actionRow);
 
-  await interaction.showModal(modal);
+  try {
+    await interaction.showModal(modal);
+  } catch (err) {
+    if (err.code === 10062) {
+      console.warn(`[modalHandler.js]: ⚠️ Interaction expired (10062) - user took too long to select. They can try again.`);
+    } else {
+      throw err;
+    }
+  }
 }
 
 
@@ -301,7 +317,15 @@ async function triggerAddOnCountModal(interaction, addOn) {
   const actionRow = new ActionRowBuilder().addComponents(textInput);
   modal.addComponents(actionRow);
 
-  await interaction.showModal(modal);
+  try {
+    await interaction.showModal(modal);
+  } catch (err) {
+    if (err.code === 10062) {
+      console.warn(`[modalHandler.js]: ⚠️ Interaction expired (10062) - user took too long to select. They can try again.`);
+    } else {
+      throw err;
+    }
+  }
 }
 
 
@@ -321,7 +345,15 @@ async function triggerSpecialWorksCountModal(interaction, specialWork) {
   const actionRow = new ActionRowBuilder().addComponents(textInput);
   modal.addComponents(actionRow);
 
-  await interaction.showModal(modal);
+  try {
+    await interaction.showModal(modal);
+  } catch (err) {
+    if (err.code === 10062) {
+      console.warn(`[modalHandler.js]: ⚠️ Interaction expired (10062) - user took too long to select. They can try again.`);
+    } else {
+      throw err;
+    }
+  }
 }
 
 

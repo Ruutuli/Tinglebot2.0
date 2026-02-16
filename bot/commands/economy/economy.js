@@ -1112,8 +1112,15 @@ async function handleShopBuy(interaction) {
     const user = await getOrCreateToken(interaction.user.id);
 
     const characterName = interaction.options.getString("charactername");
-    const itemName = interaction.options.getString("itemname");
+    let itemName = interaction.options.getString("itemname").trim();
     const quantity = interaction.options.getInteger("quantity");
+
+    // ------------------- Normalize item name (strip display suffix from copy-paste or wrong autocomplete) -------------------
+    // Shop display can show "ItemName - 6000 tokens (Stock: 1)" or "ItemName - Stock: 1"; DB stores only itemName
+    itemName = itemName
+      .replace(/\s*-\s*\d+\s*tokens?\s*(\(Stock:\s*\d+\))?\s*$/i, '')
+      .replace(/\s*-\s*Stock:\s*\d+\s*$/i, '')
+      .trim();
 
     // ------------------- Validate Buy Quantity -------------------
     if (quantity <= 0) {

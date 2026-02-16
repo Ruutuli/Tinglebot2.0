@@ -138,6 +138,8 @@ const tempDataSchema = new mongoose.Schema({
       'battle',        // Battle progress
       'encounter',     // Mount encounters
       'blight',        // Blight healing requests
+      'blight_warning',   // Blight expiration warning tracking
+      'healing_warning',  // Blight healing task expiration warning tracking
       'monthly_mount', // Monthly mount encounter tracking
       
       // World & Environment
@@ -216,6 +218,10 @@ tempDataSchema.pre('save', function(next) {
       break;
     case 'travelEncounter':
       this.expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes (match encounter timeout)
+      break;
+    case 'blight_warning':
+    case 'healing_warning':
+      this.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
       break;
     default:
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours

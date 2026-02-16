@@ -216,7 +216,7 @@ export function SearchFilterBar({
                   <div key={group.id} className="relative filter-dropdown">
                     <button
                       onClick={() => toggleDropdown(group.id)}
-                      className={`flex items-center gap-2 rounded-lg border-2 px-3 sm:px-4 py-2.5 text-sm font-medium transition-all min-h-[44px] sm:min-h-0 ${
+                      className={`flex items-center gap-2 rounded-lg border-2 px-3 sm:px-4 py-2.5 text-sm font-medium transition-all min-h-[44px] lg:min-h-0 ${
                         activeCount > 0
                           ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)] shadow-sm shadow-[var(--totk-light-green)]/20"
                           : "border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--botw-pale)] hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/10"
@@ -238,13 +238,13 @@ export function SearchFilterBar({
 
                     {/* Dropdown Menu */}
                     {isOpen && (
-                      <div className="absolute left-0 right-0 sm:right-auto sm:left-0 top-full z-50 mt-2 min-w-[220px] max-w-[calc(100vw-2rem)] sm:max-w-[280px] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] p-2 shadow-xl" style={{ bottom: 'auto', top: '100%' }}>
+                      <div className="absolute left-0 right-0 sm:right-auto sm:left-0 top-full z-[100] mt-2 min-w-[220px] max-w-[calc(100vw-2rem)] sm:max-w-[280px] rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] p-2 shadow-xl" style={{ bottom: 'auto', top: '100%' }}>
                         {group.options.length > 0 ? (
                           <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
                             {group.options.map((option) => (
                               <label
                                 key={option.id}
-                                className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-3 sm:py-2 text-sm transition-colors min-h-[44px] sm:min-h-0 ${
+                                className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-3 sm:py-2 text-sm transition-colors min-h-[44px] lg:min-h-0 ${
                                   option.active
                                     ? "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"
                                     : "text-[var(--botw-pale)] hover:bg-[var(--totk-brown)]/30"

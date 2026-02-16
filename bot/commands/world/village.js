@@ -47,7 +47,7 @@ const VILLAGE_IMAGES = {
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const COOLDOWN_ENABLED = true;
 const DONATION_ITEM_PERCENT = 0.10; // Max 10% of items needed per donation
-const DONATION_TOKEN_PERCENT = 0.05; // Max 5% of tokens needed per donation
+const DONATION_TOKEN_PERCENT = 0.10; // Max 10% of tokens needed per donation (1000 for level 2, 5000 for level 3)
 
 // Donation cooldown resets every Sunday at midnight EST (05:00 UTC)
 // ------------------- Function: getCurrentDonationWeekStart -------------------
@@ -313,7 +313,7 @@ async function processTokenContribution(village, interaction, qty, characterName
         return { success: false, message: `❌ **Cannot contribute more than required. Need ${requiredTokensMax - currentTokens} more tokens.**` };
     }
 
-    // Cap qty at 5% of max required per donation (always use max, not remaining)
+    // Cap qty at 10% of max required per donation (always use max, not remaining)
     const maxPerDonation = Math.max(1, Math.ceil(requiredTokensMax * DONATION_TOKEN_PERCENT));
     const remainingNeeded = requiredTokensMax - currentTokens;
     if (qty > Math.min(maxPerDonation, remainingNeeded)) {
@@ -322,11 +322,11 @@ async function processTokenContribution(village, interaction, qty, characterName
             .setColor('#E74C3C')
             .setTitle('❌ Maximum Donation Exceeded')
             .setDescription(
-                `The maximum donation per contribution is **${allowed} tokens** (5% of required).\n\n` +
+                `The maximum donation per contribution is **${allowed} tokens** (10% of required).\n\n` +
                 `Please donate **${allowed}** tokens or fewer.`
             )
-            .setFooter({ text: 'Token contributions are capped at 5% of required per donation' });
-        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} tokens (5% of required).**`, embed };
+            .setFooter({ text: 'Token contributions are capped at 10% of required per donation' });
+        return { success: false, message: `❌ **Maximum donation per contribution is ${allowed} tokens (10% of required).**`, embed };
     }
 
     // Deduct tokens from user balance
@@ -398,7 +398,7 @@ async function processImprove(village, interaction, type, itemName, qty, charact
             const hpNeeded = maxHealth - village.health;
             const tokensPerHP = getTokensPerHP(village.level);
 
-            // Cap qty at 5% of upgrade requirement only (never limit by HP/repair cost)
+            // Cap qty at 10% of upgrade requirement only (never limit by HP/repair cost)
             const requiredTokensForCap = village.level < 3
                 ? (DEFAULT_TOKEN_REQUIREMENTS[village.level + 1] ?? 0)
                 : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);
@@ -408,11 +408,11 @@ async function processImprove(village, interaction, type, itemName, qty, charact
                     .setColor('#E74C3C')
                     .setTitle('❌ Maximum Donation Exceeded')
                     .setDescription(
-                        `The maximum donation per contribution is **${maxPerDonation} tokens** (5% of required).\n\n` +
+                        `The maximum donation per contribution is **${maxPerDonation} tokens** (10% of required).\n\n` +
                         `Please donate **${maxPerDonation}** tokens or fewer.`
                     )
-                    .setFooter({ text: 'Token contributions are capped at 5% of required per donation' });
-                return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**`, embed };
+                    .setFooter({ text: 'Token contributions are capped at 10% of required per donation' });
+                return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (10% of required).**`, embed };
             }
 
             // Calculate how much HP can be restored
@@ -657,7 +657,7 @@ async function processRepair(village, interaction, qty, characterName) {
             return { success: false, message: '❌ **This village is already at full health.**' };
         }
 
-        // Cap qty at 5% of upgrade requirement only (never limit by HP/repair cost)
+        // Cap qty at 10% of upgrade requirement only (never limit by HP/repair cost)
         const requiredTokensForCap = village.level < 3
             ? (DEFAULT_TOKEN_REQUIREMENTS[village.level + 1] ?? 0)
             : (DEFAULT_TOKEN_REQUIREMENTS[3] ?? 0);
@@ -667,11 +667,11 @@ async function processRepair(village, interaction, qty, characterName) {
                 .setColor('#E74C3C')
                 .setTitle('❌ Maximum Donation Exceeded')
                 .setDescription(
-                    `The maximum donation per contribution is **${maxPerDonation} tokens** (5% of required).\n\n` +
+                    `The maximum donation per contribution is **${maxPerDonation} tokens** (10% of required).\n\n` +
                     `Please donate **${maxPerDonation}** tokens or fewer.`
                 )
-                .setFooter({ text: 'Token contributions are capped at 5% of required per donation' });
-            return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (5% of required).**`, embed };
+                .setFooter({ text: 'Token contributions are capped at 10% of required per donation' });
+            return { success: false, message: `❌ **Maximum donation per contribution is ${maxPerDonation} tokens (10% of required).**`, embed };
         }
 
         const tokensPerHP = getTokensPerHP(village.level);

@@ -1482,7 +1482,7 @@ function calculateWeatherDamage(weather) {
     const specialLabel = weather.special.label;
     switch (specialLabel) {
       case "Blight Rain":
-        specialDamage = 50;
+        specialDamage = 25;
         break;
       case "Avalanche":
         specialDamage = 15;

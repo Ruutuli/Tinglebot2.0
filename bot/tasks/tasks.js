@@ -237,6 +237,27 @@ async function weatherFallbackCheck(client, _data = {}) {
       const { embed, files } = await generateWeatherEmbed(village, weather);
       await channel.send({ embeds: [embed], files });
       await markWeatherAsPosted(village, weather);
+
+      // Apply weather damage if not already applied (same logic as daily-weather)
+      // When fallback posts weather, damage must also be applied or villages get no "damaged" message
+      if (!weather.weatherDamageApplied) {
+        try {
+          const damageBreakdown = calculateWeatherDamage(weather);
+          const damageAmount = damageBreakdown.total;
+          if (damageAmount > 0) {
+            const weatherCause = buildWeatherDamageCause(weather, damageBreakdown);
+            await damageVillage(village, damageAmount, weatherCause);
+            logger.success('SCHEDULED', `weather-fallback-check: Applied weather damage to ${village}: ${damageAmount} HP (Wind: ${damageBreakdown.wind}, Precipitation: ${damageBreakdown.precipitation}, Special: ${damageBreakdown.special})`);
+          } else {
+            logger.info('SCHEDULED', `weather-fallback-check: ${village} - no damage conditions met`);
+          }
+          const Weather = require('@/models/WeatherModel');
+          await Weather.findByIdAndUpdate(weather._id, { $set: { weatherDamageApplied: true } });
+        } catch (damageErr) {
+          logger.error('SCHEDULED', `weather-fallback-check: Weather damage application failed for ${village}: ${damageErr.message}`);
+        }
+      }
+
       logger.success('SCHEDULED', `weather-fallback-check: Posted missing weather for ${village}`);
     } catch (err) {
       logger.error('SCHEDULED', `weather-fallback-check: ${village} failed: ${err.message}`);

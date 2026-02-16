@@ -296,9 +296,8 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
 
     if (character.currentStamina >= 1 || hasPerk(character, 'DELIVERING')) {
       if (!hasPerk(character, 'DELIVERING')) {
-        await useStamina(character._id, 1);
-        // Update character object to reflect the stamina change
-        character.currentStamina -= 1;
+        const staminaResult = await useStamina(character._id, 1);
+        if (!staminaResult.exhausted) character.currentStamina = Math.max(0, (character.currentStamina ?? 0) - 1);
       }
 
       const heartsMissing = Math.max(0, character.maxHearts - character.currentHearts);
