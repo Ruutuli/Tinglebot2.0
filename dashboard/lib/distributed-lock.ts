@@ -4,10 +4,16 @@
  */
 
 import mongoose from "mongoose";
+import type { Collection } from "mongodb";
 import { logger } from "@/utils/logger";
 
 const LOCKS_COLLECTION = "agendaInitLocks";
 const LOCK_TTL_MS = 120_000; // 2 minutes - enough for init + job scheduling
+
+interface LockDocument {
+  _id: string;
+  lockedUntil: Date;
+}
 
 /**
  * Try to acquire a distributed lock. Returns true if we got it, false if another process holds it.
@@ -18,12 +24,12 @@ export async function tryAcquireLock(
   ttlMs: number = LOCK_TTL_MS
 ): Promise<boolean> {
   const conn = mongoose.connection;
-  if (conn.readyState !== 1) {
+  if (conn.readyState !== 1 || !conn.db) {
     logger.warn("distributed-lock", `DB not connected, cannot acquire lock "${key}"`);
     return false;
   }
 
-  const collection = conn.db.collection(LOCKS_COLLECTION);
+  const collection = conn.db.collection(LOCKS_COLLECTION) as Collection<LockDocument>;
   const lockedUntil = new Date(Date.now() + ttlMs);
 
   try {
@@ -63,9 +69,10 @@ export async function tryAcquireLock(
 export async function releaseLock(key: string): Promise<void> {
   try {
     const conn = mongoose.connection;
-    if (conn.readyState !== 1) return;
+    if (conn.readyState !== 1 || !conn.db) return;
 
-    const result = await conn.db.collection(LOCKS_COLLECTION).deleteOne({ _id: key });
+    const collection = conn.db.collection(LOCKS_COLLECTION) as Collection<LockDocument>;
+    const result = await collection.deleteOne({ _id: key });
     if (result.deletedCount > 0) {
       logger.info("distributed-lock", `Released lock "${key}"`);
     }
