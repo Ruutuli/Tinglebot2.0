@@ -271,16 +271,15 @@ module.exports = {
         // Send the final turn embed first
         await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
         
-        // Send immediate victory embed before loot processing
-        const { createWaveVictoryEmbed } = require('../../embeds/embeds.js');
-        const victoryEmbed = createWaveVictoryEmbed(turnResult.waveData);
+        // Monster camp expeditions: skip generic "Wave Complete!" — handleWaveVictory sends "Monster camp defeated!" + @mention
+        const isMonsterCampExpedition = turnResult.waveData.source === 'monster_camp' && turnResult.waveData.expeditionId;
+        if (!isMonsterCampExpedition) {
+          const { createWaveVictoryEmbed } = require('../../embeds/embeds.js');
+          const victoryEmbed = createWaveVictoryEmbed(turnResult.waveData);
+          await interaction.followUp({ embeds: [victoryEmbed], ephemeral: false });
+        }
         
-        const immediateVictoryMessage = await interaction.followUp({
-          embeds: [victoryEmbed],
-          ephemeral: false
-        });
-        
-        // Then handle wave victory (which will send a follow-up with loot)
+        // Handle wave victory (sends loot embed; for monster camp: "Monster camp defeated!" + @mention of next player)
         await handleWaveVictory(interaction, turnResult.waveData);
         return;
       }
@@ -291,8 +290,14 @@ module.exports = {
         return;
       }
       
-      // Send the turn result embed (content ensures commands are clickable)
-      await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
+      // Next turn participant (wave already advanced in processWaveTurn) — mention them so they get notified
+      const participants = turnResult.waveData.participants || [];
+      const nextTurnIndex = turnResult.waveData.currentTurn ?? 0;
+      const nextTurnParticipant = participants[nextTurnIndex];
+      const yourTurnMention = nextTurnParticipant?.userId ? `<@${nextTurnParticipant.userId}> it's your turn! ` : '';
+
+      // Send the turn result embed (content ensures commands are clickable; mention next player)
+      await interaction.editReply({ content: `${yourTurnMention}${waveCommandContent}`.trim() || waveCommandContent, embeds: [embed] });
       
       // Check if a monster was defeated in this turn (but wave continues)
       // The monster is defeated if battleResult shows 0 hearts AND wave is still active
@@ -388,7 +393,7 @@ module.exports = {
               .setTimestamp();
             
             console.log(`[wave.js]: ✅ Defeat embed created for ${defeatedMonster.name} (defeated by ${defeatedByName}), sending follow-up message`);
-            await interaction.followUp({ content: waveCommandContent, embeds: [monsterDefeatedEmbed] });
+            await interaction.followUp({ content: `${yourTurnMention}${waveCommandContent}`.trim() || waveCommandContent, embeds: [monsterDefeatedEmbed] });
             console.log(`[wave.js]: ✅ Defeat embed sent successfully`);
           } else {
             console.log(`[wave.js]: ⚠️ Defeat embed - Monster at index ${defeatedMonsterIndex} has no name, skipping embed`);
@@ -1127,6 +1132,7 @@ async function handleWaveVictory(interaction, waveData) {
     
     // Create victory embed with loot
     let victoryEmbed;
+    let monsterCampContent = null; // For monster camp: message content with @mention of next player
     const isMonsterCampExpedition = waveData.source === 'monster_camp' && waveData.expeditionId;
     if (isMonsterCampExpedition) {
       // Monster camp in exploration: "OK defeated! Here who is next. Keep exploring."
@@ -1158,6 +1164,10 @@ async function handleWaveVictory(interaction, waveData) {
           showNextAndCommands: true,
           showRestSecureMove: false
         });
+        // Store for sending: content with @mention so next player gets notified
+        monsterCampContent = nextCharacter?.userId
+          ? `<@${nextCharacter.userId}> 🗺️ **Monster camp defeated!** It's your turn — keep exploring.`
+          : null;
       } else {
         // Party not found, fall back to standard embed
         victoryEmbed = new EmbedBuilder()
@@ -1194,29 +1204,26 @@ async function handleWaveVictory(interaction, waveData) {
         .setTimestamp();
     }
     
-    // Send victory embed to the wave thread (if it exists)
+    // Send victory embed to the wave thread (if it exists) or followUp
+    const sendPayload = monsterCampContent ? { content: monsterCampContent, embeds: [victoryEmbed] } : { embeds: [victoryEmbed] };
     if (waveData.threadId) {
       try {
         // Validate thread exists and is accessible
         const thread = await interaction.client.channels.fetch(waveData.threadId);
         if (thread && thread.isThread && !thread.archived) {
-          await thread.send({ embeds: [victoryEmbed] });
+          await thread.send(sendPayload);
           console.log(`[wave.js]: ✅ Victory embed sent to wave thread ${waveData.threadId}`);
         } else {
           console.warn(`[wave.js]: ⚠️ Thread ${waveData.threadId} is not accessible or is archived`);
-          // Fallback to followUp
-          await interaction.followUp({ embeds: [victoryEmbed] });
+          await interaction.followUp(sendPayload);
         }
       } catch (error) {
         console.error(`[wave.js]: ❌ Error sending victory embed to thread ${waveData.threadId}:`, error);
-        console.log(`[wave.js]: ⚠️ Thread may not exist or be accessible - using fallback`);
-        // Fallback to followUp
-        await interaction.followUp({ embeds: [victoryEmbed] });
+        await interaction.followUp(sendPayload);
       }
     } else {
       console.log(`[wave.js]: ⚠️ No thread ID found for wave ${waveData.waveId} - victory embed will only be sent to the original interaction`);
-      // Only send to original interaction if no thread exists
-      await interaction.followUp({ embeds: [victoryEmbed] });
+      await interaction.followUp(sendPayload);
     }
     
     // Notify mods if there were any failed loot processing
