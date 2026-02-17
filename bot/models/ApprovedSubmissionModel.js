@@ -165,6 +165,20 @@ const approvedSubmissionSchema = new mongoose.Schema({
   taggedCharacters: {
     type: [String], // Array of character names
     default: []
+  },
+
+  // ------------------- Group Art Meme -------------------
+  isGroupMeme: {
+    type: Boolean,
+    default: false
+  },
+  memeMode: {
+    type: String,
+    default: null
+  },
+  memeTemplate: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

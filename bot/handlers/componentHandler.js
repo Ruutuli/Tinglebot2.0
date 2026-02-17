@@ -428,6 +428,15 @@ async function handleConfirmation(interaction, userId, submissionData) {
           });
         }
 
+        // Add Group Art Meme (Hard) note so mods know 1 quest completion will be recorded on approval
+        if (submissionData.isGroupMeme === true && submissionData.memeMode === 'hard') {
+          notificationFields.push({
+            name: '🎨 Group Art Meme (Hard)',
+            value: '1 quest completion will be recorded for the submitter on approval (counts toward 10-quest turn-in). Eligible for 1 slot point if requirements met (Full Color + Waist Up or Full Body).',
+            inline: false
+          });
+        }
+
         const notificationEmbed = new EmbedBuilder()
           .setColor(typeColor)
           .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)

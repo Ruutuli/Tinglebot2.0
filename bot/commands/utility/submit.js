@@ -234,6 +234,23 @@ module.exports = {
             .setRequired(false)
             .setAutocomplete(true)
         )
+        .addStringOption(option =>
+          option
+            .setName('group_meme')
+            .setDescription('Is this a Group Art Meme? (1.5x tokens; Hard = +1 quest on approval)')
+            .setRequired(false)
+            .addChoices(
+              { name: 'No', value: 'none' },
+              { name: 'Yes (Easy – 1.5x tokens)', value: 'easy' },
+              { name: 'Yes (Hard – 1.5x tokens + 1 quest on approval)', value: 'hard' }
+            )
+        )
+        .addStringOption(option =>
+          option
+            .setName('meme_template')
+            .setDescription('Meme template name (e.g. Kissing Meme, Daily Routine) – optional')
+            .setRequired(false)
+        )
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -359,7 +376,10 @@ module.exports = {
         const user = interaction.user;
         const attachedFile = interaction.options.getAttachment('file');
         const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
-        const questId = interaction.options.getString('questid') || 'N/A';
+        const groupMeme = interaction.options.getString('group_meme') || 'none';
+        const memeTemplate = interaction.options.getString('meme_template')?.trim() || null;
+        const isGroupMeme = groupMeme === 'easy' || groupMeme === 'hard';
+        const questId = isGroupMeme ? 'N/A' : (interaction.options.getString('questid') || 'N/A');
         const collabInput = interaction.options.getString('collab');
         const blightId = interaction.options.getString('blightid') || null;
         const taggedCharactersInput = interaction.options.getString('tagged_characters');
@@ -441,6 +461,9 @@ module.exports = {
           collab: collab.length > 0 ? collab : [],
           blightId: blightId,
           taggedCharacters: taggedCharacters.length > 0 ? taggedCharacters : [],
+          isGroupMeme: isGroupMeme,
+          memeMode: isGroupMeme ? groupMeme : null,
+          memeTemplate: memeTemplate,
         };
 
         // Save to database using the helper

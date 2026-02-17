@@ -704,10 +704,6 @@ export async function PUT(
       // Check gear fields if provided
       if (typeof equippedGearRaw === "string" && equippedGearRaw.trim()) {
         try {
-          logger.info(
-            "api/characters/[id] PUT gear check",
-            `characterId=${slugOrId} status=${characterStatus ?? "null"} equippedGearRaw length=${equippedGearRaw.length}`
-          );
           const equippedGearData = JSON.parse(equippedGearRaw) as {
             gearWeapon?: { name: string; stats: Record<string, number> } | null;
             gearShield?: { name: string; stats: Record<string, number> } | null;
@@ -732,18 +728,13 @@ export async function PUT(
 
           const hasGearChanges = weaponChanged || shieldChanged || armorChanged;
 
-          logger.info(
-            "api/characters/[id] PUT gear compare",
-            `weaponChanged=${weaponChanged} shieldChanged=${shieldChanged} armorChanged=${armorChanged} hasGearChanges=${hasGearChanges}`
-          );
-
           if (hasGearChanges) {
             const gearEditable = isFieldEditable("gearWeapon", characterStatus as CharacterStatus) &&
               isFieldEditable("gearShield", characterStatus as CharacterStatus) &&
               isFieldEditable("gearArmor", characterStatus as CharacterStatus);
             logger.info(
-              "api/characters/[id] PUT gear editability",
-              `status=${characterStatus} gearEditable=${gearEditable}`
+              "api/characters/[id] PUT gear",
+              `id=${slugOrId} status=${characterStatus ?? "null"} weapon=${weaponChanged} shield=${shieldChanged} armor=${armorChanged} editable=${gearEditable}`
             );
             if (!gearEditable) {
               logger.warn(

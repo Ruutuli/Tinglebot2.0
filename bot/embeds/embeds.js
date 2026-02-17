@@ -1362,6 +1362,19 @@ const createArtSubmissionEmbed = (submissionData) => {
     fields.push({ name: 'Tagged Characters', value: taggedDisplay, inline: true });
   }
 
+  // Add Group Art Meme field if applicable
+  if (submissionData.isGroupMeme === true && submissionData.memeMode) {
+    const modeLabel = submissionData.memeMode === 'hard' ? 'Hard' : 'Easy';
+    let memeValue = `Yes (${modeLabel})`;
+    if (submissionData.memeTemplate) {
+      memeValue += ` – ${submissionData.memeTemplate}`;
+    }
+    if (submissionData.memeMode === 'hard') {
+      memeValue += '\n_Eligible for 1 slot point if requirements met (Full Color + Waist Up or Full Body)._';
+    }
+    fields.push({ name: 'Group Art Meme', value: memeValue, inline: false });
+  }
+
   if (submissionData.boostEffects && submissionData.boostEffects.length > 0) {
     fields.push({
       name: '🎭 Boost Effects',

@@ -200,7 +200,7 @@ function ProfileTabbedLayout({
 
         {tab === "levels" && (
           <div className="space-y-6">
-            <LevelingSection user={userProfile} />
+            <LevelingSection user={userProfile} activity={activityData} />
             <div className="grid gap-6 lg:grid-cols-2">
               <BoostRewardsSection user={userProfile} />
               <BlupeeHuntSection user={userProfile} />
@@ -790,7 +790,7 @@ function StatCard({
   );
 }
 
-function LevelingSection({ user }: { user: UserProfile }) {
+function LevelingSection({ user, activity }: { user: UserProfile; activity?: ActivityData | null }) {
   const progress = calculateLevelProgress(user.leveling);
   const exchangeable = user.leveling.level - user.leveling.lastExchangedLevel;
   const potentialTokens = exchangeable * 100;
@@ -834,27 +834,18 @@ function LevelingSection({ user }: { user: UserProfile }) {
     });
   }, [user.leveling.exchangeHistory]);
 
-  // Calculate message activity (simplified - would need message history for real data)
+  // Message activity from MessageTracking (actual daily counts)
   const messageActivityData = useMemo(() => {
-    // Since we don't have daily message data, we'll create a placeholder
-    // In a real implementation, this would come from message history
-    const days: Array<{ date: string; messages: number }> = [];
-    const now = new Date();
-    const avgMessagesPerDay = user.leveling.totalMessages > 0 
-      ? Math.round(user.leveling.totalMessages / 30) 
-      : 0;
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      days.push({
+    if (!activity?.messages || activity.messages.length === 0) return [];
+    return activity.messages.map((msg) => {
+      const [y, m, d] = msg.dayKey.split("-");
+      const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+      return {
         date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        messages: Math.floor(avgMessagesPerDay * (0.5 + Math.random())), // Simulated data
-      });
-    }
-    
-    return days;
-  }, [user.leveling.totalMessages]);
+        messages: msg.count,
+      };
+    });
+  }, [activity?.messages]);
 
   return (
     <div className="space-y-6">
@@ -999,7 +990,7 @@ function LevelingSection({ user }: { user: UserProfile }) {
 
       {/* Message Activity Chart */}
       {messageActivityData.length > 0 && user.leveling.totalMessages > 0 && (
-        <SectionCard title="Message Activity (Estimated)" icon="fa-comments">
+        <SectionCard title="Message Activity" icon="fa-comments">
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={messageActivityData}>
@@ -1031,9 +1022,6 @@ function LevelingSection({ user }: { user: UserProfile }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-xs text-center text-[var(--totk-grey-200)]">
-            Note: This is estimated data. Actual daily message counts require message history.
-          </p>
         </SectionCard>
       )}
     </div>

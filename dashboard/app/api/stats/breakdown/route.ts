@@ -234,8 +234,6 @@ export async function GET(request: Request) {
     const CharacterModule = await import("@/models/CharacterModel.js");
     const Character = CharacterModule.default || CharacterModule;
 
-    logger.info("api/stats/breakdown", `Request: type=${type}, value="${value}"`);
-
     const characterFilter: Record<string, unknown> = {
       status: "accepted",
     };
@@ -263,13 +261,11 @@ export async function GET(request: Request) {
       characterFilter[type] = { $regex: new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") };
     }
 
-    logger.info("api/stats/breakdown", `Filter: ${JSON.stringify(characterFilter)}`);
-
     const characters = await Character.find(characterFilter)
       .select("_id name homeVillage currentVillage job race gender")
       .lean();
 
-    logger.info("api/stats/breakdown", `Found ${characters.length} characters matching filter`);
+    logger.info("api/stats/breakdown", `${type}="${value}" → ${characters.length} characters`);
 
     const byHomeVillage = characters.reduce((acc, char) => {
       const village = normalizeVillageName(char.homeVillage || "Unknown");

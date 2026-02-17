@@ -170,10 +170,11 @@ async function handleSubmissionCompletion(interaction) {
       addOnsApplied
     });
     
-    // Get quest bonus and collab bonus if quest is linked
+    // Get quest bonus and collab bonus if quest is linked (not for group memes)
     let questBonus = 0;
     let collabBonus = 0;
-    if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+    const isGroupMeme = submissionData.isGroupMeme === true;
+    if (!isGroupMeme && submissionData.questEvent && submissionData.questEvent !== 'N/A') {
       const { getQuestBonus, getCollabBonus } = require('@/utils/tokenUtils');
       const userId = submissionData.userId || interaction.user.id;
       questBonus = await getQuestBonus(submissionData.questEvent, userId);
@@ -195,7 +196,8 @@ async function handleSubmissionCompletion(interaction) {
       specialWorksApplied: submissionData.specialWorksApplied || [],
       collab: submissionData.collab,
       questBonus,
-      collabBonus
+      collabBonus,
+      groupMemeBonus: isGroupMeme
     });
     console.log(`[submissionHandler.js]: 💰 Calculated tokens per person: ${tokensPerPerson}`);
     console.log(`[submissionHandler.js]: 📊 Token breakdown:`, breakdown);

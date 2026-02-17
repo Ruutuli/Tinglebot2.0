@@ -829,9 +829,10 @@ export async function PUT(req: NextRequest) {
     const nameField = modelConfig.nameField;
     const recordName = (record as Record<string, unknown>)[nameField] || itemId;
 
+    const fieldCount = Object.keys(updateData).length;
     logger.info(
       "api/admin/database/items PUT",
-      `Updated ${model} ${itemId} (${recordName}): ${Object.keys(updateData).join(", ")}`
+      `Updated ${model} ${itemId} (${recordName}): ${fieldCount} field${fieldCount === 1 ? "" : "s"}`
     );
 
     // ------------------- Return Updated Record -------------------

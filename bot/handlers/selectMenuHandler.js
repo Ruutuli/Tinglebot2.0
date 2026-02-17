@@ -236,10 +236,11 @@ async function handleSelectMenuInteraction(interaction) {
       // Get the updated submission data
       const updatedSubmissionData = await retrieveSubmissionFromStorage(submissionId);
       
-      // Get quest bonus and collab bonus if quest is linked
+      // Get quest bonus and collab bonus if quest is linked (not for group memes)
       let questBonus = 0;
       let collabBonus = 0;
-      if (updatedSubmissionData.questEvent && updatedSubmissionData.questEvent !== 'N/A') {
+      const isGroupMemeStep = updatedSubmissionData.isGroupMeme === true;
+      if (!isGroupMemeStep && updatedSubmissionData.questEvent && updatedSubmissionData.questEvent !== 'N/A') {
         const { getQuestBonus, getCollabBonus } = require('@/utils/tokenUtils');
         const userId = updatedSubmissionData.userId || interaction.user.id;
         questBonus = await getQuestBonus(updatedSubmissionData.questEvent, userId);
@@ -257,7 +258,8 @@ async function handleSelectMenuInteraction(interaction) {
       const { totalTokens, breakdown } = calculateTokens({
         ...updatedSubmissionData,
         questBonus,
-        collabBonus
+        collabBonus,
+        groupMemeBonus: isGroupMemeStep
       });
       let finalTokenAmount = totalTokens;
       const boostEffects = [];
@@ -426,7 +428,8 @@ async function handleSelectMenuInteraction(interaction) {
         typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
         finalTokenAmount,
         collab: updatedSubmissionData.collab,
-        questBonus
+        questBonus,
+        groupMemeBonus: isGroupMemeStep
       });
 
       // Update with final calculations
@@ -529,10 +532,11 @@ async function confirmSubmission(interaction) {
       });
       return;
     }
-    // Get quest bonus and collab bonus if quest is linked
+    // Get quest bonus and collab bonus if quest is linked (not for group memes)
     let questBonus = 0;
     let collabBonus = 0;
-    if (submissionData.questEvent && submissionData.questEvent !== 'N/A') {
+    const isGroupMeme = submissionData.isGroupMeme === true;
+    if (!isGroupMeme && submissionData.questEvent && submissionData.questEvent !== 'N/A') {
       const { getQuestBonus, getCollabBonus } = require('@/utils/tokenUtils');
       const userId = submissionData.userId || interaction.user.id;
       questBonus = await getQuestBonus(submissionData.questEvent, userId);
@@ -555,7 +559,8 @@ async function confirmSubmission(interaction) {
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
       collab: submissionData.collab,
       questBonus,
-      collabBonus
+      collabBonus,
+      groupMemeBonus: isGroupMeme
     });
     // Update submission data with final calculations
     submissionData.finalTokenAmount = tokensPerPerson;
@@ -574,7 +579,8 @@ async function confirmSubmission(interaction) {
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
       finalTokenAmount: tokensPerPerson,
       collab: submissionData.collab,
-      questBonus
+      questBonus,
+      groupMemeBonus: isGroupMeme
     });
     // ------------------- Display Confirmation -------------------
     await interaction.update({

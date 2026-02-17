@@ -89,6 +89,7 @@ function calculateTokens({
   collab = null, // Add collab as a parameter
   questBonus = 0, // Add quest bonus parameter
   collabBonus = 0, // Add collab bonus parameter
+  groupMemeBonus = false,
 }) {
   // Base Token Calculation with individual counts
   const baseTotal = baseSelections.reduce((total, base) => {
@@ -141,14 +142,20 @@ function calculateTokens({
   // Regular Total Calculation (base tokens only - no bonuses)
   const regularTotal = Math.ceil(baseTotal * typeMultiplierTotal * productMultiplier + addOnTotal);
   
+  // Art total before split; apply Group Meme 1.5x if applicable
+  let artTotal = regularTotal + specialWorksTotal;
+  if (groupMemeBonus) {
+    artTotal = Math.ceil(artTotal * 1.5);
+  }
+  
   // Calculate base tokens per person (split only base tokens, not bonuses)
-  let baseTokensPerPerson = regularTotal + specialWorksTotal;
+  let baseTokensPerPerson = artTotal;
   let tokensPerPerson = baseTokensPerPerson;
   const hasCollab = collab && ((Array.isArray(collab) && collab.length > 0) || typeof collab === 'string');
   const totalParticipants = hasCollab ? (Array.isArray(collab) ? 1 + collab.length : 2) : 1;
   
   if (hasCollab) {
-    baseTokensPerPerson = Math.floor((regularTotal + specialWorksTotal) / totalParticipants);
+    baseTokensPerPerson = Math.floor(artTotal / totalParticipants);
     tokensPerPerson = baseTokensPerPerson + questBonus + collabBonus;
   } else {
     // No collab - single person gets everything
@@ -191,6 +198,7 @@ function generateTokenBreakdown({
   finalTokenAmount,
   collab = null, // Add collab parameter
   questBonus = 0, // Add quest bonus parameter
+  groupMemeBonus = false,
 }) {
   const baseSection = baseSelections
     .map(base => {
@@ -311,6 +319,11 @@ function generateTokenBreakdown({
         return `${getDisplayName(work)} (${workValue}×${count})`;
       });
     breakdown += `+ ${specialLines.join(' + ')}\n`;
+  }
+  
+  // Group Meme bonus
+  if (groupMemeBonus) {
+    breakdown += `× Group Meme Bonus (1.5)\n`;
   }
   
   // Quest bonus

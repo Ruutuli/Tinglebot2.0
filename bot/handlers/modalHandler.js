@@ -181,8 +181,11 @@ async function handleModalSubmission(interaction) {
       // Get updated submission data
       const updatedSubmissionData = await retrieveSubmissionFromStorage(submissionId);
       
-      // Calculate tokens and generate breakdown
-      const { totalTokens, breakdown } = calculateTokens(updatedSubmissionData);
+      // Calculate tokens and generate breakdown (pass groupMemeBonus for group memes)
+      const { totalTokens, breakdown } = calculateTokens({
+        ...updatedSubmissionData,
+        groupMemeBonus: updatedSubmissionData.isGroupMeme === true
+      });
       
       // Generate the breakdown string
       const breakdownString = generateTokenBreakdown({
@@ -194,7 +197,8 @@ async function handleModalSubmission(interaction) {
         specialWorksApplied: updatedSubmissionData.specialWorksApplied,
         typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
         finalTokenAmount: totalTokens,
-        collab: updatedSubmissionData.collab
+        collab: updatedSubmissionData.collab,
+        groupMemeBonus: updatedSubmissionData.isGroupMeme === true
       });
       
       // Update with final calculations

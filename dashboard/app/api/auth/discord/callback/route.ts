@@ -133,11 +133,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  console.log("[Dashboard login]", {
-    discordId: user.id,
-    username: user.username,
-    globalName: user.global_name ?? undefined,
-  });
+  console.log("[Dashboard login]", `discordId=${user.id} username=${user.username} globalName=${user.global_name ?? ""}`);
 
   const isValidPath =
     redirectPath &&

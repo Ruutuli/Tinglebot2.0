@@ -2558,6 +2558,9 @@ async function handleApprove(interaction) {
           taggedCharacters: submission.taggedCharacters || [],
           questEvent: submission.questEvent || 'N/A',
           questBonus: submission.questBonus || 'N/A',
+          isGroupMeme: submission.isGroupMeme === true,
+          memeMode: submission.memeMode || null,
+          memeTemplate: submission.memeTemplate || null,
           approvedBy: interaction.user.tag,
           approvedAt: new Date(),
           approvalMessageId: interaction.id,
@@ -2745,6 +2748,23 @@ async function handleApprove(interaction) {
           } catch (questError) {
             console.error(`[mod.js]: ❌ Error processing quest completion for submission ${submissionId}:`, questError);
             // Continue with approval even if quest completion fails
+          }
+        }
+
+        // Record 1 quest completion for Hard Mode Group Art Meme (counts toward 10-quest turn-in)
+        if (submission.category === 'art' && submission.isGroupMeme === true && submission.memeMode === 'hard') {
+          try {
+            const memeUser = await User.getOrCreateUser(submission.userId);
+            await memeUser.recordQuestCompletion({
+              questId: 'GROUP_MEME_HARD_' + submission.submissionId,
+              questType: 'art',
+              questTitle: submission.memeTemplate ? 'Group Art Meme (Hard): ' + submission.memeTemplate : 'Group Art Meme (Hard)',
+              rewardSource: 'immediate'
+            });
+            console.log(`[mod.js]: ✅ Recorded 1 quest completion for Hard Mode Group Meme (submission ${submissionId}, user ${submission.userId})`);
+          } catch (memeQuestError) {
+            console.error(`[mod.js]: ❌ Error recording quest completion for Hard Mode Group Meme (submission ${submissionId}):`, memeQuestError);
+            // Continue with approval even if this fails
           }
         }
 

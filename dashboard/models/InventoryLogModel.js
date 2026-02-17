@@ -145,10 +145,8 @@ inventoryLogSchema.statics.getCharacterLogs = async function(characterName, filt
     const escapedItemName = escapeRegExp(trimmedItemName);
     const regexPattern = `^${escapedItemName}$`;
     query.itemName = { $regex: new RegExp(regexPattern, 'i') };
-    // Debug: Log the query being built
-    console.log(`[InventoryLog] Filtering by itemName: "${trimmedItemName}", regex: /${regexPattern}/i`);
   } else if (itemName !== undefined && itemName !== null) {
-    console.log(`[InventoryLog] itemName filter was provided but invalid:`, itemName, typeof itemName);
+    console.warn("[InventoryLog] itemName filter invalid:", itemName, typeof itemName);
   }
   if (obtain != null) {
     const s = String(obtain).trim();

@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const User = require('@/models/UserModel');
+const MessageTracking = require('@/models/MessageTrackingModel');
 const { EmbedBuilder } = require('discord.js');
 const { handleError } = require('@/utils/globalErrorHandler');
 const logger = require('@/utils/logger');
@@ -56,7 +57,24 @@ async function handleXP(message) {
     
     // Add XP to user and update message tracking in a single save operation
     const result = await user.addXP(finalXP, xpSource, true);
-    
+
+    // Record message for profile activity chart (non-blocking)
+    try {
+      const dayKey = new Date().toISOString().split('T')[0];
+      await MessageTracking.create({
+        guildId: message.guild.id,
+        userId: message.author.id,
+        channelId: message.channel.id,
+        messageId: message.id,
+        content: (message.content || '').slice(0, 100),
+        dayKey,
+      });
+    } catch (trackErr) {
+      if (trackErr.code !== 11000) {
+        logger.warn('LEVEL', `MessageTracking insert failed for ${message.id}: ${trackErr.message}`);
+      }
+    }
+
     // Log XP gain
     logger.info('LEVEL', `${message.author.tag} gained ${finalXP} XP${result.newLevel ? ` (Level ${result.newLevel})` : ''}`);
     
