@@ -2608,7 +2608,7 @@ module.exports = {
            followUp: async (opts) => i.channel.send(opts),
           };
           const { startWave, joinWave } = require("../../modules/waveModule");
-          const { createWaveEmbed } = require("../../embeds/embeds.js");
+          const { createWaveEmbed, getWaveCommandId, getItemCommandId } = require("../../embeds/embeds.js");
           let waveResult;
           try {
            waveResult = await startWave(village, monsterCount, difficultyGroup, modifiedInteraction);
@@ -2647,7 +2647,7 @@ module.exports = {
            ? `**All party members** (${joinedNames.join(", ")}) must fight. `
            : "";
           await i.channel.send({
-           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:1456463356515979308> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</item:1379838613067530385> to heal during the wave!`,
+           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</item:${getItemCommandId()}> to heal during the wave!`,
            embeds: [waveEmbed],
           });
           if (failedJoins.length > 0) {
@@ -2660,7 +2660,7 @@ module.exports = {
            .setColor(regionColors[freshParty.region] || "#00ff99")
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
-            `✅ **Marked on map and fighting now!** All party members must fight. Use </wave:1456463356515979308> to take turns (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**`
+            `✅ **Marked on map and fighting now!** All party members must fight. Use </wave:${getWaveCommandId()}> to take turns (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**`
            )
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(monsterCampEmbed, { party: freshParty, expeditionId, location, nextCharacter: null, showNextAndCommands: false, showRestSecureMove: false, ruinRestRecovered });

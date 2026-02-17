@@ -472,21 +472,23 @@ async function initializeClient() {
         logger.section('Command Registration');
         logger.divider();
         await registerCommands(client);
-        // Fetch explore command ID for clickable slash mentions (IDs can change on re-register)
+        // Fetch command IDs for clickable slash mentions (IDs can change on re-register)
         try {
           const guildId = process.env.GUILD_ID;
           if (guildId) {
             const guild = await client.guilds.fetch(guildId);
             const commands = await guild.commands.fetch();
-            const exploreCmd = commands.find((c) => c.name === "explore");
-            if (exploreCmd) {
-              const { setExploreCommandId } = require("./embeds/embeds");
-              setExploreCommandId(exploreCmd.id);
-              logger.info("COMMANDS", `Explore command ID updated to ${exploreCmd.id} (clickable mentions)`);
+            const { setExploreCommandId, setWaveCommandId, setItemCommandId, setHealCommandId } = require("./embeds/embeds");
+            for (const cmd of commands.values()) {
+              if (cmd.name === "explore") setExploreCommandId(cmd.id);
+              else if (cmd.name === "wave") setWaveCommandId(cmd.id);
+              else if (cmd.name === "item") setItemCommandId(cmd.id);
+              else if (cmd.name === "heal") setHealCommandId(cmd.id);
             }
+            logger.info("COMMANDS", "Command IDs updated for clickable mentions (explore, wave, item, heal)");
           }
         } catch (err) {
-          logger.warn("COMMANDS", `Could not fetch explore command ID: ${err?.message || err}`);
+          logger.warn("COMMANDS", `Could not fetch command IDs: ${err?.message || err}`);
         }
         logger.divider();
         

@@ -43,16 +43,37 @@ const regionColors = {
  hebra: "#800080",
 };
 
-// ------------------- Explore command ID (for clickable slash command mentions) ------------------
-// Fetched dynamically on bot ready; fallback used until then or if fetch fails
+// ------------------- Command IDs (for clickable slash command mentions) ------------------
+// Fetched dynamically on bot ready; fallbacks used until then or if fetch fails
 let _exploreCmdId = "1471454947089580107";
+let _waveCmdId = "1456463356515979308";
+let _itemCmdId = "1379838613067530385";
+let _healCmdId = "1390420428840894557";
 
 function getExploreCommandId() {
   return _exploreCmdId;
 }
+function getWaveCommandId() {
+  return _waveCmdId;
+}
+function getItemCommandId() {
+  return _itemCmdId;
+}
+function getHealCommandId() {
+  return _healCmdId;
+}
 
 function setExploreCommandId(id) {
   if (id && typeof id === "string") _exploreCmdId = id;
+}
+function setWaveCommandId(id) {
+  if (id && typeof id === "string") _waveCmdId = id;
+}
+function setItemCommandId(id) {
+  if (id && typeof id === "string") _itemCmdId = id;
+}
+function setHealCommandId(id) {
+  if (id && typeof id === "string") _healCmdId = id;
 }
 
 // Legacy export for backwards compatibility (returns fallback; prefer getExploreCommandId())
@@ -2134,7 +2155,7 @@ const createKOEmbed = (character, customDescription = null) => {
     customDescription ||
     (
       `> KO status can only be healed by fairies or Healers.\n` +
-      `> Use </item:1379838613067530385> or </heal:1390420428840894557> to heal your character.`
+      `> Use </item:${getItemCommandId()}> or </heal:${getHealCommandId()}> to heal your character.`
     )
    )
   .setImage("https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png");
@@ -2209,8 +2230,8 @@ const createRaidKOEmbed = (character) => {
   .setDescription(
    `> **${character.name} is KO'd and cannot participate in raids.**\n\n` +
    `> **To heal your character and join raids:**\n` +
-   `> • Use </item:1379838613067530385> with a healing item\n` +
-   `> • Use </heal:1390420428840894557> to request healing from a Healer\n` +
+   `> • Use </item:${getItemCommandId()}> with a healing item\n` +
+   `> • Use </heal:${getHealCommandId()}> to request healing from a Healer\n` +
    `> **Current Status:** ${character.currentHearts}/${character.maxHearts} hearts`
   )
   .addFields(
@@ -2226,7 +2247,7 @@ const createRaidKOEmbed = (character) => {
    },
    {
     name: "__💊 Healing Options__",
-         value: `> • Item healing (</item:1379838613067530385>)\n> • Healer request (</heal:1390420428840894557>)\n>`,
+         value: `> • Item healing (</item:${getItemCommandId()}>)\n> • Healer request (</heal:${getHealCommandId()}>)\n>`,
     inline: false,
    }
   )
@@ -3247,8 +3268,8 @@ const createWaveEmbed = (wave) => {
       `• Fight through all ${wave.analytics.totalMonsters} monsters to win\n` +
       `• Loot is distributed at the end (only for those who joined at the start)\n` +
       `• You must be in ${villageName} to participate\n\n` +
-      `</wave:1456463356515979308> to join the fight!\n` +
-      `</item:1379838613067530385> to heal during the wave!`
+      `</wave:${getWaveCommandId()}> to join the fight!\n` +
+      `</item:${getItemCommandId()}> to heal during the wave!`
     )
     .addFields(
       {
@@ -3436,6 +3457,12 @@ module.exports = {
  EXPLORE_CMD_ID,
  getExploreCommandId,
  setExploreCommandId,
+ getWaveCommandId,
+ setWaveCommandId,
+ getItemCommandId,
+ setItemCommandId,
+ getHealCommandId,
+ setHealCommandId,
  PATH_IMAGES,
  villageEmojis,
  pathEmojis,

@@ -290,7 +290,7 @@ async function createWaveThread(message, wave) {
     const threadMessage = [
       `🌊 A wave of **${wave.analytics.totalMonsters} monsters** approaches ${villageName}!`,
       `\n⭐ **Difficulty:** ${difficultyName}`,
-      `\nUse </wave:1456463356515979308> to join the fight!`,
+      `\nUse </wave:${require('../embeds/embeds.js').getWaveCommandId()}> to join the fight!`,
       `\n\n**Wave ID:** \`\`\`${wave.waveId}\`\`\``,
       `\n\n🌊 **Fight through all ${wave.analytics.totalMonsters} monsters to claim victory!**`
     ].join('');

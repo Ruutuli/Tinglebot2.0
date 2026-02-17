@@ -206,10 +206,13 @@ module.exports = {
       // Create embed for the turn result
       const { embed, koCharacters } = await createWaveTurnEmbed(character, waveId, turnResult, turnResult.waveData);
 
+      const { getWaveCommandId, getItemCommandId } = require('../../embeds/embeds.js');
+      const waveCommandContent = `</wave:${getWaveCommandId()}> to join • </item:${getItemCommandId()}> to heal`;
+
       // Check if wave was completed in this turn
       if (turnResult.waveData.status === 'completed') {
         // Send the final turn embed first
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
         
         // Send immediate victory embed before loot processing
         const { createWaveVictoryEmbed } = require('../../embeds/embeds.js');
@@ -227,12 +230,12 @@ module.exports = {
       
       // Check if wave failed (all participants KO'd)
       if (turnResult.waveData.status === 'failed') {
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
         return;
       }
       
-      // Send the turn result embed
-      await interaction.editReply({ embeds: [embed] });
+      // Send the turn result embed (content ensures commands are clickable)
+      await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
       
       // Check if a monster was defeated in this turn (but wave continues)
       // The monster is defeated if battleResult shows 0 hearts AND wave is still active
@@ -318,17 +321,17 @@ module.exports = {
                 },
                 {
                   name: 'Want to join in?',
-                  value: `Use </wave:1456463356515979308> to join!`,
+                  value: `Use </wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join!`,
                   inline: false
                 }
               )
               .setThumbnail(monsterImage)
               .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setFooter({ text: `Wave ID: ${waveId} • Use </wave:1456463356515979308> to continue the fight!` })
+              .setFooter({ text: `Wave ID: ${waveId}` })
               .setTimestamp();
             
             console.log(`[wave.js]: ✅ Defeat embed created for ${defeatedMonster.name} (defeated by ${defeatedByName}), sending follow-up message`);
-            await interaction.followUp({ embeds: [monsterDefeatedEmbed] });
+            await interaction.followUp({ content: waveCommandContent, embeds: [monsterDefeatedEmbed] });
             console.log(`[wave.js]: ✅ Defeat embed sent successfully`);
           } else {
             console.log(`[wave.js]: ⚠️ Defeat embed - Monster at index ${defeatedMonsterIndex} has no name, skipping embed`);
@@ -543,15 +546,13 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
       },
       {
         name: 'Want to join in?',
-        value: `Use </wave:1456463356515979308> to join!`,
+        value: `Use </wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join!`,
         inline: false
       },
     )
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-    .setFooter({ 
-      text: `Wave ID: ${waveId} • Use </wave:1456463356515979308> to take your turn! • Use </item:1379838613067530385> to heal characters!` 
-    })
+    .setFooter({ text: `Wave ID: ${waveId}` })
     .setTimestamp();
 
   // Add KO warning if character is down

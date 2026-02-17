@@ -81,6 +81,8 @@ const {
  createBlightStage3NoEncounterEmbed,
  createKOEmbed,
   updateBoostRequestEmbed,
+ getItemCommandId,
+ getHealCommandId,
 } = require("../../embeds/embeds.js");
 
 // Models
@@ -308,7 +310,7 @@ module.exports = {
     const embed = createKOEmbed(
       character,
       '> **KO\'d characters cannot loot! Please heal your character.**\n' +
-      '> Use </item:1379838613067530385> or </heal:1390420428840894557>.'
+      `> Use </item:${getItemCommandId()}> or </heal:${getHealCommandId()}>.`
     );
     await interaction.editReply({ embeds: [embed] });
     return;

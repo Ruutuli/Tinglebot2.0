@@ -1260,7 +1260,7 @@ async function createRaidEmbed(raid, monsterImage) {
     `*It's a Tier ${raid.monster.tier} monster! Protect the village!*`,
     '',
     `</raid:1470659276287774734> to join or continue the raid!`,
-    `</item:1379838613067530385> to heal during the raid!`
+    `</item:${require('../embeds/embeds.js').getItemCommandId()}> to heal during the raid!`
   ];
   if (!isExpeditionRaid) {
     descriptionLines.push('', `⏰ **You have ${totalMinutes} minutes to complete this raid!**`);
