@@ -14,7 +14,7 @@ const {
 } = require('@/database/db.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
 const { getCharacterOldMapsWithDetails } = require('@/utils/oldMapUtils.js');
-const { getOldMapByNumber, OLD_MAPS_LINK } = require('@/data/oldMaps.js');
+const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL } = require('@/data/oldMaps.js');
 const { sendDiscordDM } = require('@/utils/notificationService.js');
 const OldMapFound = require('@/models/OldMapFoundModel.js');
 const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
@@ -108,6 +108,7 @@ module.exports = {
         const embed = new EmbedBuilder()
           .setTitle(`🗺️ Old maps — ${characterName}`)
           .setDescription(lines.join('\n') + '\n\nUse **map_id** from an unappraised line in `/map appraisal-request`.')
+          .setThumbnail(OLD_MAP_ICON_URL)
           .setURL(OLD_MAPS_LINK)
           .setColor('#2ecc71');
         return interaction.editReply({ embeds: [embed] });
@@ -195,6 +196,7 @@ module.exports = {
             title: '🗺️ Map appraised — your coordinates',
             description: dmDesc,
             color: 0x2ecc71,
+            thumbnail: { url: OLD_MAP_ICON_URL },
             footer: { text: 'Roots of the Wild • Old Maps' },
             url: OLD_MAPS_LINK,
           };
@@ -293,6 +295,7 @@ module.exports = {
           title: '🗺️ Map appraised — your coordinates',
           description: dmDesc,
           color: 0x2ecc71,
+          thumbnail: { url: OLD_MAP_ICON_URL },
           footer: { text: 'Roots of the Wild • Old Maps' },
           url: OLD_MAPS_LINK,
         };

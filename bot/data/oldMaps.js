@@ -54,6 +54,8 @@ const OLD_MAPS = [
 ];
 
 const OLD_MAPS_LINK = "https://www.rootsofthewild.com/oldmaps";
+/** TotK-style old map icon for embeds (Zelda Wiki). */
+const OLD_MAP_ICON_URL = "https://cdn.wikimg.net/en/zeldawiki/images/8/85/TotK_Old_Map_Icon.png";
 
 function getRandomOldMap() {
   return OLD_MAPS[Math.floor(Math.random() * OLD_MAPS.length)];
@@ -66,6 +68,7 @@ function getOldMapByNumber(number) {
 module.exports = {
   OLD_MAPS,
   OLD_MAPS_LINK,
+  OLD_MAP_ICON_URL,
   getRandomOldMap,
   getOldMapByNumber,
 };

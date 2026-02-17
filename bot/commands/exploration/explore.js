@@ -50,7 +50,7 @@ const UNAPPRAISED_RELIC_IMAGE_URL = "https://static.wikia.nocookie.net/zelda_gam
 /** Border image for relic embeds (matches other bot embeds). */
 const RELIC_EMBED_BORDER_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
-const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
+const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 const { syncPartyMemberStats, pushProgressLog } = require("../../modules/exploreModule.js");
 const logger = require("@/utils/logger.js");
@@ -1907,6 +1907,7 @@ module.exports = {
        const dmEmbed = new EmbedBuilder()
         .setTitle("🗺️ Expedition map found")
         .setDescription(`**Map #${chosenMapOldMap.number}** found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
+        .setThumbnail(OLD_MAP_ICON_URL)
         .addFields(
           { name: "Map", value: `**Map #${chosenMapOldMap.number}**`, inline: true },
           { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
@@ -2341,6 +2342,7 @@ module.exports = {
           const dmEmbed = new EmbedBuilder()
            .setTitle("🗺️ Expedition map found")
            .setDescription(`**Map #${chosenMap.number}** found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
+           .setThumbnail(OLD_MAP_ICON_URL)
            .addFields(
              { name: "Map", value: `**Map #${chosenMap.number}**`, inline: true },
              { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
