@@ -15,6 +15,9 @@ const {
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
 const { getCharacterOldMapsWithDetails, findOldMapByIdOrMapId } = require('@/utils/oldMapUtils.js');
 const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL } = require('@/data/oldMaps.js');
+
+/** Border image for map embeds (matches other bot embeds). */
+const MAP_EMBED_BORDER_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const { sendDiscordDM } = require('@/utils/notificationService.js');
 const OldMapFound = require('@/models/OldMapFoundModel.js');
 const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
@@ -81,7 +84,8 @@ module.exports = {
 
       const deferSubs = ['list', 'appraisal-request', 'appraisal-accept'];
       if (deferSubs.includes(sub)) {
-        await interaction.deferReply({ ephemeral: true });
+        const ephemeral = sub === 'list';
+        await interaction.deferReply({ ephemeral });
       }
 
       // ------------------- /map list -------------------
@@ -95,23 +99,40 @@ module.exports = {
         }
         const maps = await getCharacterOldMapsWithDetails(characterName);
         if (maps.length === 0) {
-          return interaction.editReply({
-            content: `**${characterName}** has no old maps. Find maps during exploration or in ruins.\n\nMore info: ${OLD_MAPS_LINK}`,
-          });
+          const emptyEmbed = new EmbedBuilder()
+            .setTitle(`🗺️ Old maps — ${characterName}`)
+            .setDescription(`**${characterName}** has no old maps. Find maps during exploration or in ruins.`)
+            .setThumbnail(OLD_MAP_ICON_URL)
+            .setImage(MAP_EMBED_BORDER_URL)
+            .setURL(OLD_MAPS_LINK)
+            .setColor(0x2ecc71)
+            .setFooter({ text: 'More info' });
+          return interaction.editReply({ embeds: [emptyEmbed] });
         }
-        const lines = maps.map((m) => {
-          const displayId = (m.mapId || m._id).toString();
-          const label = m.appraised
-            ? `Map #${m.mapNumber} — appraised`
-            : `Unidentified map (found ${m.locationFound || 'exploration'}, ${m.foundAt ? new Date(m.foundAt).toLocaleDateString() : '—'})`;
-          return m.appraised ? `• ${label}` : `• \`${displayId}\` — ${label}`;
-        });
+        const appraised = maps.filter((m) => m.appraised);
+        const unappraised = maps.filter((m) => !m.appraised);
+        const appraisedLines = appraised.length
+          ? appraised.map((m) => `• **Map #${m.mapNumber}** — deciphered`).join('\n')
+          : '—';
+        const unappraisedLines = unappraised.length
+          ? unappraised.map((m) => {
+              const id = (m.mapId || m._id).toString();
+              const where = m.locationFound || 'exploration';
+              const date = m.foundAt ? new Date(m.foundAt).toLocaleDateString() : '—';
+              return `• \`${id}\` — Map #? (${where}, ${date})`;
+            }).join('\n')
+          : '—';
         const embed = new EmbedBuilder()
           .setTitle(`🗺️ Old maps — ${characterName}`)
-          .setDescription(lines.join('\n') + '\n\nUse **map_id** (e.g. M12345) from an unappraised line in `/map appraisal-request`.')
           .setThumbnail(OLD_MAP_ICON_URL)
+          .setImage(MAP_EMBED_BORDER_URL)
           .setURL(OLD_MAPS_LINK)
-          .setColor('#2ecc71');
+          .setColor(0x2ecc71)
+          .addFields(
+            { name: 'Deciphered', value: appraisedLines, inline: false },
+            { name: 'Unidentified (need appraisal)', value: unappraisedLines, inline: false }
+          )
+          .setFooter({ text: unappraised.length ? 'Use map_id from an unidentified line in /map appraisal-request' : 'All maps deciphered' });
         return interaction.editReply({ embeds: [embed] });
       }
 
@@ -204,9 +225,22 @@ module.exports = {
           request.updatedAt = new Date();
           await request.save();
 
-          return interaction.editReply({
-            content: `📜 **Map appraised by NPC!** **500 tokens** have been deducted.\n> **${mapLabel}** — Coordinates: **${coordinates}**\n\nYou have ${dmSent ? 'been DMed' : 'not been DMed (you may have DMs disabled)'} with the coordinates.`,
-          });
+          const leadsTo = mapInfo?.leadsTo ? `\n**Leads to:** ${mapInfo.leadsTo}` : '';
+          const successEmbed = new EmbedBuilder()
+            .setTitle('🗺️ Map appraised by NPC!')
+            .setDescription(`Your old map has been deciphered. **500 tokens** have been deducted.`)
+            .setThumbnail(OLD_MAP_ICON_URL)
+            .setImage(MAP_EMBED_BORDER_URL)
+            .setColor(0x2ecc71)
+            .setURL(OLD_MAPS_LINK)
+            .addFields(
+              { name: 'Map', value: mapLabel, inline: true },
+              { name: 'Coordinates', value: coordinates, inline: true },
+              { name: 'DM', value: dmSent ? 'You have been DMed with the coordinates.' : 'Could not DM you (you may have DMs disabled).', inline: false }
+            )
+            .setFooter({ text: 'Roots of the Wild • Old Maps' });
+          if (leadsTo) successEmbed.setDescription(successEmbed.data.description + leadsTo);
+          return interaction.editReply({ embeds: [successEmbed] });
         }
 
         return interaction.editReply({
@@ -303,9 +337,21 @@ module.exports = {
         request.updatedAt = new Date();
         await request.save();
 
-        return interaction.editReply({
-          content: `📜 **Map appraised by ${appraiserName}!**\n> **${mapLabel}** — Coordinates: **${coordinates}**\n\nThe map owner has ${dmSent ? 'been DMed' : 'not been DMed (they may have DMs disabled)'} with the coordinates.`,
-        });
+        const leadsToLine = mapInfo?.leadsTo ? `\n**Leads to:** ${mapInfo.leadsTo}` : '';
+        const pcSuccessEmbed = new EmbedBuilder()
+          .setTitle(`🗺️ Map appraised by ${appraiserName}!`)
+          .setDescription(`${mapLabel} has been deciphered.${leadsToLine}`)
+          .setThumbnail(OLD_MAP_ICON_URL)
+          .setImage(MAP_EMBED_BORDER_URL)
+          .setColor(0x2ecc71)
+          .setURL(OLD_MAPS_LINK)
+          .addFields(
+            { name: 'Map', value: mapLabel, inline: true },
+            { name: 'Coordinates', value: coordinates, inline: true },
+            { name: 'Map owner', value: dmSent ? 'DMed with coordinates.' : 'Could not DM (may have DMs disabled).', inline: false }
+          )
+          .setFooter({ text: 'Roots of the Wild • Old Maps' });
+        return interaction.editReply({ embeds: [pcSuccessEmbed] });
       }
 
       return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });

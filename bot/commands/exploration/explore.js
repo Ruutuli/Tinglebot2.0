@@ -154,7 +154,7 @@ const EXPLORATION_OUTCOME_CHANCES = {
   relic: 0.005,
   camp: 0.06,
   monster_camp: 0.08,
-  grotto: 0.02,
+  grotto: 0.35, // raised for testing (normal: 0.02)
 };
 
 /** Base chance that a retreat attempt succeeds (tier 5+ exploration raids only). Each failed attempt adds 5% to the next, cap 95% (same as travel flee). */
