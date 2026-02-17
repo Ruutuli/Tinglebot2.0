@@ -13,7 +13,7 @@ const {
   updateTokenBalance,
 } = require('@/database/db.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
-const { getCharacterOldMapsWithDetails } = require('@/utils/oldMapUtils.js');
+const { getCharacterOldMapsWithDetails, findOldMapByIdOrMapId } = require('@/utils/oldMapUtils.js');
 const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL } = require('@/data/oldMaps.js');
 const { sendDiscordDM } = require('@/utils/notificationService.js');
 const OldMapFound = require('@/models/OldMapFoundModel.js');
@@ -100,14 +100,15 @@ module.exports = {
           });
         }
         const lines = maps.map((m) => {
+          const displayId = (m.mapId || m._id).toString();
           const label = m.appraised
             ? `Map #${m.mapNumber} — appraised`
             : `Unidentified map (found ${m.locationFound || 'exploration'}, ${m.foundAt ? new Date(m.foundAt).toLocaleDateString() : '—'})`;
-          return m.appraised ? `• ${label}` : `• \`${m._id}\` — ${label}`;
+          return m.appraised ? `• ${label}` : `• \`${displayId}\` — ${label}`;
         });
         const embed = new EmbedBuilder()
           .setTitle(`🗺️ Old maps — ${characterName}`)
-          .setDescription(lines.join('\n') + '\n\nUse **map_id** from an unappraised line in `/map appraisal-request`.')
+          .setDescription(lines.join('\n') + '\n\nUse **map_id** (e.g. M12345) from an unappraised line in `/map appraisal-request`.')
           .setThumbnail(OLD_MAP_ICON_URL)
           .setURL(OLD_MAPS_LINK)
           .setColor('#2ecc71');
@@ -128,20 +129,18 @@ module.exports = {
           return interaction.editReply({ content: '❌ You must own the character who owns the map.' });
         }
 
-        let mapDoc;
-        try {
-          mapDoc = await OldMapFound.findById(mapIdStr);
-        } catch (_) {
-          mapDoc = null;
-        }
+        const mapDoc = await findOldMapByIdOrMapId(mapIdStr);
         if (!mapDoc) {
-          return interaction.editReply({ content: '❌ Map not found. Use an ID from `/map list`.' });
+          return interaction.editReply({ content: '❌ Map not found. Use a map ID (e.g. M12345) from `/map list`.' });
         }
         if (String(mapDoc.characterName).toLowerCase() !== characterName.toLowerCase()) {
           return interaction.editReply({ content: '❌ That map does not belong to this character.' });
         }
         if (mapDoc.appraised) {
           return interaction.editReply({ content: '❌ This map has already been appraised.' });
+        }
+        if (appraiser.trim().toLowerCase() !== 'npc' && (appraiser || '').trim().toLowerCase() === characterName.toLowerCase()) {
+          return interaction.editReply({ content: '❌ You cannot assign the same character who owns the map as the appraiser.' });
         }
 
         const existing = await MapAppraisalRequest.findOne({

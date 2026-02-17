@@ -1896,13 +1896,15 @@ module.exports = {
       }
 
       let chosenMapOldMap = null;
+      let savedOldMapDoc = null;
       if (outcomeType === "old_map") {
        chosenMapOldMap = getRandomOldMap();
        try {
-        await addOldMapToCharacter(character.name, chosenMapOldMap.number, location);
+        savedOldMapDoc = await addOldMapToCharacter(character.name, chosenMapOldMap.number, location);
        } catch (err) {
         handleInteractionError(err, interaction, { source: "explore.js old_map" });
        }
+       const mapIdStr = savedOldMapDoc?.mapId ? `\`${savedOldMapDoc.mapId}\`` : "—";
        const userIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
        const dmEmbed = new EmbedBuilder()
         .setTitle("🗺️ Expedition map found")
@@ -1910,6 +1912,7 @@ module.exports = {
         .setThumbnail(OLD_MAP_ICON_URL)
         .addFields(
           { name: "Map", value: `**Map #${chosenMapOldMap.number}**`, inline: true },
+          { name: "Map ID", value: mapIdStr, inline: true },
           { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
         )
         .setURL(OLD_MAPS_LINK)
@@ -2328,23 +2331,27 @@ module.exports = {
          } else if (ruinsOutcome === "old_map") {
           const chosenMap = getRandomOldMap();
           logger.info("EXPLORE", `Ruins item: outcome=old_map, character=${ruinsCharacter.name}`);
+          let ruinsSavedMapDoc = null;
           try {
-           await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
+           ruinsSavedMapDoc = await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          const ruinsMapIdStr = ruinsSavedMapDoc?.mapId ? ` Map ID: \`${ruinsSavedMapDoc.mapId}\`.` : "";
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.**${ruinsMapIdStr} Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += `Found Map #${chosenMap.number}; saved to map collection. Take to Inariko Library to decipher.`;
           lootForLog = { itemName: `Map #${chosenMap.number}`, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
           // DM all expedition members (no coordinates until appraised)
           const userIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
+          const ruinsMapIdField = ruinsSavedMapDoc?.mapId ? { name: "Map ID", value: `\`${ruinsSavedMapDoc.mapId}\``, inline: true } : null;
           const dmEmbed = new EmbedBuilder()
            .setTitle("🗺️ Expedition map found")
            .setDescription(`**Map #${chosenMap.number}** found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
            .setThumbnail(OLD_MAP_ICON_URL)
            .addFields(
              { name: "Map", value: `**Map #${chosenMap.number}**`, inline: true },
+             ...(ruinsMapIdField ? [ruinsMapIdField] : []),
              { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
            )
            .setURL(OLD_MAPS_LINK)

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const OldMapFoundSchema = new Schema({
+  mapId: { type: String, default: '' },                   // Short display ID (e.g. M12345).
   characterName: { type: String, required: true, index: true },
   mapNumber: { type: Number, required: true, min: 1, max: 46 },
   foundAt: { type: Date, default: Date.now },

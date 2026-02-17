@@ -934,35 +934,37 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 const unappraised = maps.filter(m => !m.appraised);
                 const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
                 const choices = unappraised
-                  .map(m => ({
-                    name: `Unidentified – ${(m.locationFound || "exploration").slice(0, 40)}${(m.locationFound || "").length > 40 ? "…" : ""}`,
-                    value: String(m._id),
-                  }))
-                  .filter(c => c.value.includes(focusedValue) || c.name.toLowerCase().includes(focusedValue));
+                  .map(m => {
+                    const displayId = m.mapId || String(m._id);
+                    const loc = (m.locationFound || "exploration").slice(0, 35);
+                    return {
+                      name: `${displayId} – Unidentified – ${loc}${(m.locationFound || "").length > 35 ? "…" : ""}`,
+                      value: displayId,
+                    };
+                  })
+                  .filter(c => c.value.toLowerCase().includes(focusedValue) || c.name.toLowerCase().includes(focusedValue));
                 await interaction.respond(choices.slice(0, 25));
               } else if (focusedOption.name === "appraiser") {
                 if (mapSub === "appraisal-request") {
                   const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
                   const npcChoice = { name: "NPC (500 tokens)", value: "NPC" };
-                  const chars = await fetchCharactersByUserId(interaction.user.id);
-                  const modChars = await fetchModCharactersByUserId(interaction.user.id) || [];
-                  const scholarsInariko = [...chars, ...modChars]
-                    .filter(c => c && c.job === "Scholar" && (c.currentVillage || "").toLowerCase() === "inariko")
-                    .map(c => ({ name: `${c.name} | Scholar | Inariko`, value: c.name }));
-                  let choices = scholarsInariko.filter(c => c.name.toLowerCase().includes(focusedValue));
+                  let ownerName = (interaction.options.get("character")?.value || "").toString().trim();
+                  if (ownerName.includes("|")) ownerName = ownerName.split("|")[0].trim();
+                  ownerName = ownerName.toLowerCase();
+                  const chars = await fetchAllCharacters() || [];
+                  const modChars = await fetchAllModCharacters() || [];
+                  const isScholar = (c) => (c.job || "").toString().toLowerCase() === "scholar";
+                  const notOwner = (c) => (c.name || "").toString().toLowerCase() !== ownerName;
+                  const scholars = [...chars, ...modChars]
+                    .filter(c => c && isScholar(c) && notOwner(c) && c.status !== "pending" && c.status !== "needs_changes")
+                    .map(c => ({ name: `${c.name} | Scholar | ${(c.currentVillage || "").charAt(0).toUpperCase() + (c.currentVillage || "").slice(1)}`, value: c.name }));
+                  let choices = scholars.filter(c => c.name.toLowerCase().includes(focusedValue));
                   if (!focusedValue || "npc".includes(focusedValue)) {
                     choices = [npcChoice, ...choices];
                   }
                   await interaction.respond(choices.slice(0, 25));
                 } else if (mapSub === "appraisal-accept") {
-                  const chars = await fetchCharactersByUserId(interaction.user.id);
-                  const modChars = await fetchModCharactersByUserId(interaction.user.id) || [];
-                  const scholars = [...chars, ...modChars]
-                    .filter(c => c && c.job === "Scholar")
-                    .map(c => ({ name: `${c.name} | Scholar | ${(c.currentVillage || "").charAt(0).toUpperCase() + (c.currentVillage || "").slice(1)}`, value: c.name }));
-                  const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
-                  const filtered = scholars.filter(c => c.name.toLowerCase().includes(focusedValue));
-                  await interaction.respond(filtered.slice(0, 25));
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "map");
                 }
               }
             }

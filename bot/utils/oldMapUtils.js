@@ -3,9 +3,11 @@
 // ============================================================================
 
 const OldMapFound = require('../models/OldMapFoundModel.js');
+const { generateUniqueId } = require('./uniqueIdUtils.js');
 
 /**
  * Add an old map to a character's collection.
+ * Assigns a short mapId (e.g. M12345).
  * @param {string} characterName - Character who found the map
  * @param {number} mapNumber - Map number (1-46)
  * @param {string} [locationFound] - Optional location string (e.g. "H8 Q2")
@@ -14,12 +16,28 @@ async function addOldMapToCharacter(characterName, mapNumber, locationFound = ''
   if (!characterName || typeof mapNumber !== 'number' || mapNumber < 1 || mapNumber > 46) {
     return null;
   }
+  const mapId = generateUniqueId('M');
   const doc = await OldMapFound.create({
+    mapId,
     characterName: String(characterName).trim(),
     mapNumber,
     locationFound: String(locationFound || '').trim(),
   });
   return doc;
+}
+
+/**
+ * Find an OldMapFound by MongoDB _id or short mapId (e.g. M12345).
+ * @param {string} idOrMapId - MongoDB _id (24 hex) or mapId (e.g. M12345)
+ * @returns {Promise<import('mongoose').Document|null>}
+ */
+async function findOldMapByIdOrMapId(idOrMapId) {
+  if (!idOrMapId || typeof idOrMapId !== 'string') return null;
+  const str = idOrMapId.trim();
+  if (/^[0-9a-fA-F]{24}$/.test(str)) {
+    return await OldMapFound.findById(str);
+  }
+  return await OldMapFound.findOne({ mapId: str });
 }
 
 const charNameRegex = (name) =>
@@ -75,7 +93,7 @@ async function getCharacterOldMaps(characterName) {
 /**
  * Get all old maps for a character with full details (for /map list and appraisal-request).
  * @param {string} characterName - Character to check
- * @returns {Promise<Array<{_id: import('mongoose').Types.ObjectId, mapNumber: number, appraised: boolean, foundAt: Date, locationFound: string}>>}
+ * @returns {Promise<Array<{_id: import('mongoose').Types.ObjectId, mapId: string, mapNumber: number, appraised: boolean, foundAt: Date, locationFound: string}>>}
  */
 async function getCharacterOldMapsWithDetails(characterName) {
   if (!characterName) return [];
@@ -84,6 +102,7 @@ async function getCharacterOldMapsWithDetails(characterName) {
     .lean();
   return docs.map((d) => ({
     _id: d._id,
+    mapId: d.mapId || '',
     mapNumber: d.mapNumber,
     appraised: !!d.appraised,
     foundAt: d.foundAt,
@@ -93,6 +112,7 @@ async function getCharacterOldMapsWithDetails(characterName) {
 
 module.exports = {
   addOldMapToCharacter,
+  findOldMapByIdOrMapId,
   hasOldMap,
   hasAppraisedOldMap,
   getCharacterOldMaps,
