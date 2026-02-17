@@ -200,6 +200,63 @@ module.exports = {
         // Same character - they're already participating, just continue to process their turn
       }
 
+      // Re-fetch wave to get latest turn order (other players may have taken turns)
+      updatedWaveData = await Wave.findOne({ waveId: waveId });
+      if (!updatedWaveData) {
+        return interaction.editReply({ content: `❌ Wave \`${waveId}\` no longer found.`, ephemeral: true });
+      }
+
+      // ------------------- Strict turn order (like raids): only current turn may roll; mod characters can roll anytime. KO'd stay in order and get a turn to use a fairy. -------------------
+      const myParticipant = updatedWaveData.participants?.find(p => p.characterId && p.characterId.toString() === character._id.toString());
+      const isModInWave = myParticipant?.isModCharacter || character.isModCharacter;
+      const currentTurnParticipant = updatedWaveData.getCurrentTurnParticipant();
+      const Character = require('@/models/CharacterModel');
+      let currentTurnIsKO = false;
+      if (currentTurnParticipant) {
+        const currentTurnChar = await Character.findById(currentTurnParticipant.characterId);
+        currentTurnIsKO = currentTurnChar?.ko ?? false;
+      }
+      const isMyTurn = currentTurnParticipant && currentTurnParticipant.characterId.toString() === character._id.toString();
+
+      // KO'd member's turn: prompt to use a fairy (don't process a roll)
+      if (!isModInWave && isMyTurn && character.ko) {
+        const { getItemCommandId, getWaveCommandId } = require('../../embeds/embeds.js');
+        const koTurnEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('💀 KO\'d — it\'s your turn')
+          .setDescription('You\'re knocked out and cannot attack.')
+          .addFields(
+            { name: 'What to do', value: `Use </item:${getItemCommandId()}> with a fairy to revive, then use </wave:${getWaveCommandId()}> to take your turn.`, inline: false },
+            { name: 'Wave ID', value: `\`\`\`${waveId}\`\`\``, inline: false }
+          )
+          .setFooter({ text: `Wave ID: ${waveId}` })
+          .setTimestamp();
+        return interaction.editReply({ embeds: [koTurnEmbed], ephemeral: false });
+      }
+
+      // Not this player's turn
+      if (!isModInWave && (!currentTurnParticipant || !isMyTurn)) {
+        const { getWaveCommandId, getItemCommandId } = require('../../embeds/embeds.js');
+        const whoseTurnBody = currentTurnParticipant
+          ? currentTurnIsKO
+            ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with </item:${getItemCommandId()}> first).`
+            : `It's **${currentTurnParticipant.name}**'s turn. Use </wave:${getWaveCommandId()}> to take your turn.`
+          : 'No valid turn order.';
+        const intro = !existingParticipant
+          ? `We've added you to the turn order! It's not your turn yet — you'll roll when it's your turn.\n\n${whoseTurnBody}`
+          : `It's not your turn yet. Wait for your turn, then use </wave:${getWaveCommandId()}> to roll.\n\n${whoseTurnBody}`;
+        const notYourTurnEmbed = new EmbedBuilder()
+          .setColor('#FFA500')
+          .setTitle('⏳ Not your turn')
+          .setDescription(intro)
+          .addFields({ name: 'Wave ID', value: `\`\`\`${waveId}\`\`\``, inline: false })
+          .setFooter({ text: `Wave ID: ${waveId}` })
+          .setTimestamp();
+        const replyPayload = { embeds: [notYourTurnEmbed], ephemeral: true };
+        if (currentTurnParticipant) replyPayload.content = `<@${currentTurnParticipant.userId}>`;
+        return interaction.editReply(replyPayload);
+      }
+
       // Process the wave turn
       const turnResult = await processWaveTurn(character, waveId, interaction, updatedWaveData);
       
@@ -358,9 +415,12 @@ module.exports = {
 // ============================================================================
 // ---- Import Loot Functions ----
 // ============================================================================
-const { fetchItemsByMonster } = require('@/database/db');
+const { fetchItemsByMonster, fetchAllItems } = require('@/database/db');
 const { createWeightedItemList } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const Party = require('@/models/PartyModel');
+const { addExplorationStandardFields, regionColors, regionImages } = require('../../embeds/embeds.js');
+const { syncPartyMemberStats } = require('../../modules/exploreModule');
 // Google Sheets functionality removed
 
 // ============================================================================
@@ -786,6 +846,31 @@ async function handleWaveVictory(interaction, waveData) {
       }
     }
     
+    // Participant chest reward: each participant gets to open a chest and receive 1 random item (like exploration chests)
+    const allItems = await fetchAllItems();
+    if (allItems && allItems.length > 0 && waveData.participants && waveData.participants.length > 0) {
+      const ModCharacter = require('@/models/ModCharacterModel');
+      const seenCharacterIds = new Set();
+      for (const participant of waveData.participants) {
+        const charIdStr = participant.characterId.toString();
+        if (seenCharacterIds.has(charIdStr)) continue;
+        seenCharacterIds.add(charIdStr);
+        try {
+          let char = await Character.findById(participant.characterId);
+          if (!char) char = await ModCharacter.findById(participant.characterId);
+          if (!char || !char.inventory) continue;
+          const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+          await addItemInventoryDatabase(char._id, randomItem.itemName, 1, interaction, "Wave Victory Chest");
+          const emoji = randomItem.emoji || '📦';
+          lootResults.push(`**${participant.name}** 📦 opened a chest and found ${emoji} **${randomItem.itemName}**!`);
+          participantsWhoGotLoot.add(participant.name);
+        } catch (chestErr) {
+          console.error(`[wave.js]: ⚠️ Chest reward failed for ${participant.name}:`, chestErr?.message || chestErr);
+          lootResults.push(`**${participant.name}** 📦 opened a chest but something went wrong.`);
+        }
+      }
+    }
+    
     // Log summary
     console.log(`[wave.js]: 📊 Loot distribution complete for wave ${waveData.waveId}`);
     console.log(`[wave.js]: 📊 Summary - Items distributed: ${lootResults.length}, Participants with loot: ${participantsWhoGotLoot.size}, Failed: ${failedCharacters.length}`);
@@ -1041,23 +1126,73 @@ async function handleWaveVictory(interaction, waveData) {
     }
     
     // Create victory embed with loot
-    const victoryEmbed = new EmbedBuilder()
-      .setColor('#FFD700') // Gold color for victory
-      .setTitle(`🎉 **Wave Complete!**`)
-      .setDescription(`All **${waveData.analytics.totalMonsters} monsters** have been defeated! Here's what everyone got:`)
-      .addFields(
-        {
-          name: '__Wave Summary__',
-          value: `🎯 **Total Damage:** ${waveData.analytics.totalDamage} hearts\n👥 **Participants:** ${waveData.participants.length}\n🎁 **Items Distributed:** ${lootResults.length}\n⏱️ **Duration:** ${Math.floor((waveData.analytics.duration || 0) / 1000 / 60)}m`,
-          inline: false
-        },
-        ...participantFields,
-        ...killsFields,
-        ...lootFields
-      )
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setFooter({ text: `Wave ID: ${waveData.waveId}` })
-      .setTimestamp();
+    let victoryEmbed;
+    const isMonsterCampExpedition = waveData.source === 'monster_camp' && waveData.expeditionId;
+    if (isMonsterCampExpedition) {
+      // Monster camp in exploration: "OK defeated! Here who is next. Keep exploring."
+      const party = await Party.findActiveByPartyId(waveData.expeditionId);
+      if (party) {
+        await syncPartyMemberStats(party);
+        const location = party.square && party.quadrant ? `${party.square} ${party.quadrant}` : 'Unknown';
+        const nextCharacter = party.characters?.[party.currentTurn] ?? null;
+        victoryEmbed = new EmbedBuilder()
+          .setColor(regionColors[party.region] || '#00ff99')
+          .setTitle('🗺️ **Monster camp defeated!**')
+          .setDescription(`All monsters cleared! Here's who is next. **Keep exploring.**`)
+          .addFields(
+            {
+              name: '__Wave Summary__',
+              value: `🎯 **Total Damage:** ${waveData.analytics.totalDamage} hearts\n👥 **Participants:** ${waveData.participants.length}\n🎁 **Items:** ${lootResults.length}`,
+              inline: false
+            },
+            ...participantFields,
+            ...lootFields
+          )
+          .setImage(regionImages[party.region] || 'https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setTimestamp();
+        addExplorationStandardFields(victoryEmbed, {
+          party,
+          expeditionId: waveData.expeditionId,
+          location,
+          nextCharacter,
+          showNextAndCommands: true,
+          showRestSecureMove: false
+        });
+      } else {
+        // Party not found, fall back to standard embed
+        victoryEmbed = new EmbedBuilder()
+          .setColor('#FFD700')
+          .setTitle('🎉 **Wave Complete!**')
+          .setDescription(`All **${waveData.analytics.totalMonsters} monsters** have been defeated! Here's what everyone got:`)
+          .addFields(
+            { name: '__Wave Summary__', value: `🎯 **Total Damage:** ${waveData.analytics.totalDamage} hearts\n👥 **Participants:** ${waveData.participants.length}\n🎁 **Items Distributed:** ${lootResults.length}\n⏱️ **Duration:** ${Math.floor((waveData.analytics.duration || 0) / 1000 / 60)}m`, inline: false },
+            ...participantFields,
+            ...killsFields,
+            ...lootFields
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setFooter({ text: `Wave ID: ${waveData.waveId}` })
+          .setTimestamp();
+      }
+    } else {
+      victoryEmbed = new EmbedBuilder()
+        .setColor('#FFD700') // Gold color for victory
+        .setTitle(`🎉 **Wave Complete!**`)
+        .setDescription(`All **${waveData.analytics.totalMonsters} monsters** have been defeated! Here's what everyone got:`)
+        .addFields(
+          {
+            name: '__Wave Summary__',
+            value: `🎯 **Total Damage:** ${waveData.analytics.totalDamage} hearts\n👥 **Participants:** ${waveData.participants.length}\n🎁 **Items Distributed:** ${lootResults.length}\n⏱️ **Duration:** ${Math.floor((waveData.analytics.duration || 0) / 1000 / 60)}m`,
+            inline: false
+          },
+          ...participantFields,
+          ...killsFields,
+          ...lootFields
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+        .setFooter({ text: `Wave ID: ${waveData.waveId}` })
+        .setTimestamp();
+    }
     
     // Send victory embed to the wave thread (if it exists)
     if (waveData.threadId) {

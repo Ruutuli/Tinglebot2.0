@@ -204,6 +204,10 @@ const waveSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  expeditionId: {
+    type: String,
+    default: null
+  },
   
   // Thread information
   threadId: String,

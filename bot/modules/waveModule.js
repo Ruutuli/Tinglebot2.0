@@ -936,7 +936,7 @@ async function joinWave(character, waveId) {
     // Determine if joined at start (before first monster is defeated)
     const joinedAtStart = (!wave.defeatedMonsters || wave.defeatedMonsters.length === 0) && wave.currentMonsterIndex === 0;
 
-    // Create participant data
+    // Create participant data (isModCharacter: mod characters don't participate in turn order, can roll anytime)
     const participant = {
       userId: character.userId,
       characterId: character._id,
@@ -944,6 +944,7 @@ async function joinWave(character, waveId) {
       damage: 0,
       joinedAtStart: joinedAtStart,
       joinedAt: new Date(),
+      isModCharacter: !!character.isModCharacter,
       characterState: {
         currentHearts: character.currentHearts,
         maxHearts: character.maxHearts,

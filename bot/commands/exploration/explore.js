@@ -2621,6 +2621,7 @@ module.exports = {
           waveData.source = "monster_camp";
           waveData.monsterCampId = camp.campId;
           waveData.channelId = i.channel.id;
+          waveData.expeditionId = expeditionId;
           await waveData.save();
           const joinedNames = [];
           const failedJoins = [];
