@@ -894,12 +894,13 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
                 if (relicSub === "appraisal-request") {
                   const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
                   const npcChoice = { name: "NPC (500 tokens)", value: "NPC" };
-                  const requiredFields = ["name", "job", "currentVillage", "status"];
-                  const chars = await fetchCharactersByUserId(interaction.user.id, requiredFields) || [];
-                  const modChars = await fetchModCharactersByUserId(interaction.user.id, requiredFields) || [];
+                  const chars = await fetchCharactersByUserId(interaction.user.id) || [];
+                  const modChars = await fetchModCharactersByUserId(interaction.user.id) || [];
+                  const jobLower = (j) => (j || "").toString().toLowerCase();
+                  const isArtistOrResearcher = (c) => jobLower(c.job) === "artist" || jobLower(c.job) === "researcher";
                   const artistResearchers = [...chars, ...modChars]
-                    .filter(c => c && c.status === "accepted" && ["Artist", "Researcher"].includes(c.job))
-                    .map(c => ({ name: `${c.name} | ${c.job} | ${(c.currentVillage || "").charAt(0).toUpperCase() + (c.currentVillage || "").slice(1)}`, value: c.name }));
+                    .filter(c => c && isArtistOrResearcher(c) && (c.status !== "pending" && c.status !== "needs_changes"))
+                    .map(c => ({ name: `${c.name} | ${(c.job && capitalize(c.job)) || "—"} | ${(c.currentVillage || "").charAt(0).toUpperCase() + (c.currentVillage || "").slice(1)}`, value: c.name }));
                   let choices = artistResearchers.filter(c => c.name.toLowerCase().includes(focusedValue));
                   if (!focusedValue || "npc".includes(focusedValue)) {
                     choices = [npcChoice, ...choices];

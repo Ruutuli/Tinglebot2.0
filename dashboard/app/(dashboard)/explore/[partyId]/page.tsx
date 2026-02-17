@@ -2413,7 +2413,7 @@ export default function ExplorePartyPage() {
                       if (e.outcome === "item") fallbackCount += 1;
                       else if (e.outcome === "relic") fallbackCount += 1;
                       else if (e.outcome === "monster" && (e as { loot?: { itemName?: string } }).loot?.itemName) fallbackCount += 1;
-                      else if (e.outcome === "chest_open") fallbackCount += (party.members?.length ?? party.characters?.length ?? 1);
+                      else if (e.outcome === "chest_open") fallbackCount += (party.members?.length ?? 1);
                     }
                     return fallbackCount > 0;
                   })()) && (
@@ -2429,7 +2429,7 @@ export default function ExplorePartyPage() {
                             if (e.outcome === "item") return sum + 1;
                             if (e.outcome === "relic") return sum + 1;
                             if (e.outcome === "monster" && (e as { loot?: { itemName?: string } }).loot?.itemName) return sum + 1;
-                            if (e.outcome === "chest_open") return sum + (party.members?.length ?? party.characters?.length ?? 1);
+                            if (e.outcome === "chest_open") return sum + (party.members?.length ?? 1);
                             return sum;
                           }, 0)} item(s) (from expedition log)
                         </p>

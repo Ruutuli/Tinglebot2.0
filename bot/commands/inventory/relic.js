@@ -23,6 +23,8 @@ const RelicAppraisalRequest = require('@/models/RelicAppraisalRequestModel.js');
 const Character = require('@/models/CharacterModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
 
+const RELIC_APPROVAL_CHANNEL_ID = '1381479893090566144';
+
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
 }
@@ -316,10 +318,44 @@ module.exports = {
         });
         await request.save();
 
-        const modNote = npcAppraisal ? '\n*(NPC appraisal: 500 tokens will be deducted when a mod approves on the dashboard.)*' : '\n*(An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise.)*';
-        return interaction.editReply({
-          content: `📜 **Appraisal request created!**\n> **Request ID:** \`${request._id}\`\n> Owner: **${characterName}**\n> Appraiser: **${appraiser}**\n> Payment: ${payment || 'None'}${modNote}`,
-        });
+        const userEmbed = new EmbedBuilder()
+          .setColor(0x8B7355)
+          .setTitle('📜 Appraisal request created!')
+          .setDescription(
+            npcAppraisal
+              ? 'An NPC appraisal has been requested. **500 tokens** will be deducted when a mod approves on the dashboard.'
+              : 'An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise.'
+          )
+          .addFields(
+            { name: 'Request ID', value: `\`${request._id}\``, inline: true },
+            { name: 'Owner', value: characterName, inline: true },
+            { name: 'Appraiser', value: appraiser, inline: true },
+            { name: 'Payment', value: payment || 'None', inline: false }
+          )
+          .setFooter({ text: npcAppraisal ? 'Approve on dashboard to deduct 500 tokens' : 'Use /relic appraisal-accept in Inariko' })
+          .setTimestamp();
+
+        if (npcAppraisal) {
+          const approvalChannel = interaction.client.channels.cache.get(RELIC_APPROVAL_CHANNEL_ID);
+          if (approvalChannel?.isTextBased()) {
+            const approvalEmbed = new EmbedBuilder()
+              .setColor(0xB8860B)
+              .setTitle('📜 Relic appraisal – NPC (needs approval)')
+              .setDescription('Approve this request on the **dashboard** to complete the NPC appraisal. **500 tokens** will be deducted from the owner.')
+              .addFields(
+                { name: 'Request ID', value: `\`${request._id}\``, inline: true },
+                { name: 'Owner', value: characterName, inline: true },
+                { name: 'Appraiser', value: appraiser, inline: true },
+                { name: 'Payment', value: payment || 'None', inline: true },
+                { name: 'Requested by', value: `<@${interaction.user.id}>`, inline: false }
+              )
+              .setFooter({ text: 'Relic NPC Appraisal • Approve on dashboard' })
+              .setTimestamp();
+            await approvalChannel.send({ embeds: [approvalEmbed] }).catch(() => {});
+          }
+        }
+
+        return interaction.editReply({ embeds: [userEmbed] });
       }
 
       // ------------------- /relic appraisal-accept -------------------
