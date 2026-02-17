@@ -23,10 +23,24 @@ const RelicAppraisalRequest = require('@/models/RelicAppraisalRequestModel.js');
 const Character = require('@/models/CharacterModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
 
-const RELIC_APPROVAL_CHANNEL_ID = '1381479893090566144';
+/** Image used for unappraised / unknown relics (HW Sealed Weapon Icon). */
+const UNAPPRAISED_RELIC_IMAGE_URL = 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232';
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
+}
+
+/** Resolve relic appraisal request by MongoDB _id or short ID (e.g. A12345). */
+async function findRelicAppraisalRequestById(id) {
+  if (!id) return null;
+  const str = String(id).trim();
+  if (/^A\d+$/.test(str)) {
+    return await RelicAppraisalRequest.findOne({ appraisalRequestId: str });
+  }
+  if (/^[a-fA-F0-9]{24}$/.test(str)) {
+    return await RelicAppraisalRequest.findById(str);
+  }
+  return null;
 }
 
 // ============================================================================
@@ -103,7 +117,7 @@ module.exports = {
           opt.setName('appraiser').setDescription('Your character (appraiser)').setRequired(true).setAutocomplete(true)
         )
         .addStringOption(opt =>
-          opt.setName('request_id').setDescription('Appraisal request ID (MongoDB _id)').setRequired(true)
+          opt.setName('request_id').setDescription('Appraisal request ID (e.g. A12345)').setRequired(true)
         )
         .addStringOption(opt =>
           opt.setName('description').setDescription('Appraisal description of the relic').setRequired(true)
@@ -138,7 +152,8 @@ module.exports = {
         const embed = new EmbedBuilder()
           .setTitle(`📜 Relics: ${characterName}`)
           .setDescription(lines.join('\n'))
-          .setColor(0xe67e22);
+          .setColor(0xe67e22)
+          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL);
         return interaction.editReply({ embeds: [embed] });
       }
 
@@ -298,7 +313,7 @@ module.exports = {
           const user = await getOrCreateToken(interaction.user.id);
           const balance = user?.tokens ?? 0;
           if (balance < 500) {
-            return interaction.editReply({ content: '❌ NPC appraisal costs 500 tokens. You do not have enough. Mod will deduct when approving on dashboard.' });
+            return interaction.editReply({ content: '❌ NPC appraisal costs 500 tokens. You do not have enough.' });
           }
         }
 
@@ -307,10 +322,16 @@ module.exports = {
           status: 'pending',
         });
         if (existing) {
-          return interaction.editReply({ content: '❌ An appraisal request for this relic is already pending.' });
+          const existingId = existing.appraisalRequestId || existing._id;
+          return interaction.editReply({
+            content: `❌ An appraisal request for this relic is already pending.\n> **Request ID:** \`${existingId}\`\n> **Appraiser:** ${existing.appraiserName || '—'}\nWait for it to be processed, or check the dashboard.`,
+          });
         }
 
+        const count = await RelicAppraisalRequest.countDocuments({});
+        const appraisalRequestId = `A${count + 1}`;
         const request = new RelicAppraisalRequest({
+          appraisalRequestId,
           relicId: relic.relicId || String(relic._id),
           relicMongoId: relic._id,
           characterName,
@@ -318,46 +339,50 @@ module.exports = {
           appraiserName: appraiser,
           npcAppraisal,
           payment,
-          status: 'pending',
+          status: npcAppraisal ? 'approved' : 'pending',
         });
         await request.save();
 
+        if (npcAppraisal) {
+          await updateTokenBalance(interaction.user.id, -500, {
+            category: 'relic_npc_appraisal',
+            description: 'NPC relic appraisal',
+          });
+          const npcDescription = 'Appraised by an NPC.';
+          await appraiseRelic(relic._id, 'NPC', npcDescription, null, { npcAppraisal: true });
+          request.appraisalDescription = npcDescription;
+          request.updatedAt = new Date();
+          await request.save();
+
+          const displayRelicId = relic.relicId || relic._id;
+          const userEmbed = new EmbedBuilder()
+            .setColor(0x8B7355)
+            .setTitle('📜 Relic appraised by NPC!')
+            .setDescription(`Your relic has been appraised by an NPC. **500 tokens** have been deducted.\n\nUse \`/relic reveal relic_id:${displayRelicId}\` to reveal what relic it is.`)
+            .addFields(
+              { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
+              { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
+              { name: 'Payment', value: '500 tokens', inline: false }
+            )
+            .setFooter({ text: 'Use /relic reveal to see the relic' })
+            .setTimestamp();
+          return interaction.editReply({ embeds: [userEmbed] });
+        }
+
+        const displayRequestId = request.appraisalRequestId || request._id;
+        const displayPayment = payment || 'None';
         const userEmbed = new EmbedBuilder()
           .setColor(0x8B7355)
           .setTitle('📜 Appraisal request created!')
-          .setDescription(
-            npcAppraisal
-              ? 'An NPC appraisal has been requested. **500 tokens** will be deducted when a mod approves on the dashboard.'
-              : 'An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise.'
-          )
+          .setDescription('An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise.')
           .addFields(
-            { name: 'Request ID', value: `\`${request._id}\``, inline: true },
+            { name: 'Request ID', value: `\`${displayRequestId}\``, inline: true },
             { name: 'Owner', value: characterName, inline: true },
             { name: 'Appraiser', value: appraiser, inline: true },
-            { name: 'Payment', value: payment || 'None', inline: false }
+            { name: 'Payment', value: displayPayment, inline: false }
           )
-          .setFooter({ text: npcAppraisal ? 'Approve on dashboard to deduct 500 tokens' : 'Use /relic appraisal-accept in Inariko' })
+          .setFooter({ text: 'Use /relic appraisal-accept in Inariko' })
           .setTimestamp();
-
-        if (npcAppraisal) {
-          const approvalChannel = interaction.client.channels.cache.get(RELIC_APPROVAL_CHANNEL_ID);
-          if (approvalChannel?.isTextBased()) {
-            const approvalEmbed = new EmbedBuilder()
-              .setColor(0xB8860B)
-              .setTitle('📜 Relic appraisal – NPC (needs approval)')
-              .setDescription('Approve this request on the **dashboard** to complete the NPC appraisal. **500 tokens** will be deducted from the owner.')
-              .addFields(
-                { name: 'Request ID', value: `\`${request._id}\``, inline: true },
-                { name: 'Owner', value: characterName, inline: true },
-                { name: 'Appraiser', value: appraiser, inline: true },
-                { name: 'Payment', value: payment || 'None', inline: true },
-                { name: 'Requested by', value: `<@${interaction.user.id}>`, inline: false }
-              )
-              .setFooter({ text: 'Relic NPC Appraisal • Approve on dashboard' })
-              .setTimestamp();
-            await approvalChannel.send({ embeds: [approvalEmbed] }).catch(() => {});
-          }
-        }
 
         return interaction.editReply({ embeds: [userEmbed] });
       }
@@ -368,9 +393,9 @@ module.exports = {
         const requestId = interaction.options.getString('request_id');
         const description = interaction.options.getString('description');
 
-        const request = await RelicAppraisalRequest.findById(requestId);
+        const request = await findRelicAppraisalRequestById(requestId);
         if (!request) {
-          return interaction.editReply({ content: '❌ Appraisal request not found.' });
+          return interaction.editReply({ content: '❌ Appraisal request not found. Use the Request ID (e.g. A12345) from the request.' });
         }
         if (request.status !== 'pending') {
           return interaction.editReply({ content: '❌ This request has already been processed.' });

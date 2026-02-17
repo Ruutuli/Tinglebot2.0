@@ -45,6 +45,8 @@ const {
 } = require("../../embeds/embeds.js");
 
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
+/** Image for unappraised/unknown relics (HW Sealed Weapon Icon). */
+const UNAPPRAISED_RELIC_IMAGE_URL = "https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
@@ -1951,6 +1953,7 @@ module.exports = {
         .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
         .setURL("https://www.rootsofthewild.com/relics")
         .setColor("#e67e22")
+        .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
         .setFooter({ text: "More info" });
        const relicClient = interaction.client;
        if (relicClient) {
@@ -2294,6 +2297,7 @@ module.exports = {
            .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
            .setURL("https://www.rootsofthewild.com/relics")
            .setColor("#e67e22")
+           .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
            .setFooter({ text: "More info" });
           const relicClient = i.client;
           if (relicClient) {
