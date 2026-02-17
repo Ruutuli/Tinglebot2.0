@@ -15,6 +15,9 @@ const RelicArchiveRequestSchema = new Schema(
     square: { type: String, default: "" },
     quadrant: { type: String, default: "" },
     info: { type: String, required: true },
+    libraryPositionX: { type: Number, default: null },
+    libraryPositionY: { type: Number, default: null },
+    libraryDisplaySize: { type: Number, default: 8 },
     imageUrl: { type: String, default: "" },
     status: {
       type: String,

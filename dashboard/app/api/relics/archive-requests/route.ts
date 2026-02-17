@@ -10,6 +10,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   MAX_FILE_BYTES,
 } from "@/lib/character-validation";
+import { notifyRelicArchiveRequest } from "@/lib/relicArchiveNotify";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +51,15 @@ export async function POST(request: NextRequest) {
   const square = getStr(formData, "square");
   const quadrant = getStr(formData, "quadrant");
   const info = getStr(formData, "info");
+  const libraryPositionXRaw = formData.get("libraryPositionX");
+  const libraryPositionYRaw = formData.get("libraryPositionY");
+  const libraryDisplaySizeRaw = formData.get("libraryDisplaySize");
+  const libraryPositionX = typeof libraryPositionXRaw === "string" ? parseFloat(libraryPositionXRaw) : NaN;
+  const libraryPositionY = typeof libraryPositionYRaw === "string" ? parseFloat(libraryPositionYRaw) : NaN;
+  const libraryDisplaySize = typeof libraryDisplaySizeRaw === "string" ? parseFloat(libraryDisplaySizeRaw) : 8;
 
   if (!relicId) {
-    return NextResponse.json({ error: "Relic ID is required (e.g. R12345)" }, { status: 400 });
+    return NextResponse.json({ error: "Relic ID is required (e.g. R473582)" }, { status: 400 });
   }
   if (!file || typeof file !== "object" || !("arrayBuffer" in file)) {
     return NextResponse.json({ error: "Image file is required" }, { status: 400 });
@@ -69,6 +76,29 @@ export async function POST(request: NextRequest) {
   if (!info) {
     return NextResponse.json({ error: "Info (description) is required" }, { status: 400 });
   }
+  if (
+    typeof libraryPositionX !== "number" ||
+    Number.isNaN(libraryPositionX) ||
+    libraryPositionX < 0 ||
+    libraryPositionX > 100
+  ) {
+    return NextResponse.json(
+      { error: "Map position is required. Click the library map to choose where your relic will appear." },
+      { status: 400 }
+    );
+  }
+  if (
+    typeof libraryPositionY !== "number" ||
+    Number.isNaN(libraryPositionY) ||
+    libraryPositionY < 0 ||
+    libraryPositionY > 100
+  ) {
+    return NextResponse.json(
+      { error: "Map position is required. Click the library map to choose where your relic will appear." },
+      { status: 400 }
+    );
+  }
+  const size = Number.isNaN(libraryDisplaySize) ? 8 : Math.max(2, Math.min(25, libraryDisplaySize));
 
   const fileValidation = validateFileTypes([file as File], [...ALLOWED_IMAGE_TYPES]);
   if (!fileValidation.ok) {
@@ -174,6 +204,20 @@ export async function POST(request: NextRequest) {
       info,
       imageUrl: result.url,
       status: "pending",
+      libraryPositionX,
+      libraryPositionY,
+      libraryDisplaySize: size,
+    });
+
+    notifyRelicArchiveRequest({
+      title,
+      relicId: relic.relicId || relicId,
+      discoveredBy,
+      appraisedBy,
+      region: region || undefined,
+      square: square || undefined,
+      quadrant: quadrant || undefined,
+      infoSnippet: info || undefined,
     });
 
     return NextResponse.json({

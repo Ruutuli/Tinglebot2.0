@@ -47,6 +47,8 @@ const {
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 /** Image for unappraised/unknown relics (HW Sealed Weapon Icon). */
 const UNAPPRAISED_RELIC_IMAGE_URL = "https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232";
+/** Border image for relic embeds (matches other bot embeds). */
+const RELIC_EMBED_BORDER_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
@@ -1946,15 +1948,19 @@ module.exports = {
        if (!party.gatheredItems) party.gatheredItems = [];
        party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
        const relicUserIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
-       const relicIdStr = savedRelic?.relicId ? ` (ID: \`${savedRelic.relicId}\`)` : '';
+       const relicIdStr = savedRelic?.relicId ? `\`${savedRelic.relicId}\`` : '—';
        const relicDmEmbed = new EmbedBuilder()
         .setTitle("🔸 Expedition relic found")
-        .setDescription(`**Unknown Relic** discovered by **${character.name}** in ${location}.${relicIdStr}\n\nTake it to an Inarikian Artist or Researcher to get it appraised.`)
-        .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
-        .setURL("https://www.rootsofthewild.com/relics")
-        .setColor("#e67e22")
+        .setDescription(`**Unknown Relic** discovered by **${character.name}** in ${location}.\n\nTake it to an Inarikian Artist or Researcher to get it appraised.`)
+        .setColor(0xe67e22)
         .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-        .setFooter({ text: "More info" });
+        .setImage(RELIC_EMBED_BORDER_URL)
+        .addFields(
+          { name: "Relic ID", value: relicIdStr, inline: true },
+          { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
+        )
+        .setURL("https://www.rootsofthewild.com/relics")
+        .setFooter({ text: "Use /relic appraisal-request to get it appraised" });
        const relicClient = interaction.client;
        if (relicClient) {
         failedNotifyEmbed = relicDmEmbed;
@@ -2285,20 +2291,24 @@ module.exports = {
           }
           if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
           freshParty.gatheredItems.push({ characterId: ruinsCharacter._id, characterName: ruinsCharacter.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
-          const ruinsRelicIdStr = ruinsSavedRelic?.relicId ? ` (ID: \`${ruinsSavedRelic.relicId}\`)` : '';
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins!${ruinsRelicIdStr} Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          const ruinsRelicIdStr = ruinsSavedRelic?.relicId ? `\`${ruinsSavedRelic.relicId}\`` : '—';
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins! (ID: ${ruinsRelicIdStr}) Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
           pushProgressLog(freshParty, ruinsCharacter.name, "relic", `Found a relic in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
           const relicUserIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
           const relicDmEmbed = new EmbedBuilder()
            .setTitle("🔸 Expedition relic found")
-           .setDescription(`**Unknown Relic** discovered by **${ruinsCharacter.name}** in ${location}.${ruinsRelicIdStr}\n\nTake it to an Inarikian Artist or Researcher to get it appraised.`)
-           .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
-           .setURL("https://www.rootsofthewild.com/relics")
-           .setColor("#e67e22")
+           .setDescription(`**Unknown Relic** discovered by **${ruinsCharacter.name}** in ${location}.\n\nTake it to an Inarikian Artist or Researcher to get it appraised.`)
+           .setColor(0xe67e22)
            .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-           .setFooter({ text: "More info" });
+           .setImage(RELIC_EMBED_BORDER_URL)
+           .addFields(
+             { name: "Relic ID", value: ruinsRelicIdStr, inline: true },
+             { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
+           )
+           .setURL("https://www.rootsofthewild.com/relics")
+           .setFooter({ text: "Use /relic appraisal-request to get it appraised" });
           const relicClient = i.client;
           if (relicClient) {
            ruinsFailedNotifyEmbed = relicDmEmbed;

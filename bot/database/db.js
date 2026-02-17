@@ -16,6 +16,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 // ------------------- Project Utilities -------------------
 const { handleError, resetErrorCounter } = require("../utils/globalErrorHandler");
 const { characterQueryDetector, modCharacterQueryDetector } = require("../utils/throttleDetector");
+const { generateUniqueId } = require("../utils/uniqueIdUtils");
 const dbConfig = require('../config/database');
 const logger = require('../utils/logger');
 const DatabaseConnectionManager = require('./connectionManager');
@@ -1569,14 +1570,13 @@ async function completeQuest(userId, questId) {
 // ============================================================================
 
 // ------------------- createRelic -------------------
-// Sets relicId in R12345 format, appraisalDeadline (7 days from discoveredDate).
+// Sets relicId in R473582 format (6-digit unique ID), appraisalDeadline (7 days from discoveredDate).
 const createRelic = async (relicData) => {
  try {
   await connectToTinglebot();
   const discoveredDate = relicData.discoveredDate || new Date();
   const appraisalDeadline = new Date(discoveredDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const count = await RelicModel.countDocuments({});
-  const relicId = `R${count + 1}`;
+  const relicId = generateUniqueId('R');
   const data = {
    ...relicData,
    relicId,
@@ -1593,7 +1593,7 @@ const createRelic = async (relicData) => {
 };
 
 // ------------------- findRelicByIdOrRelicId -------------------
-// Resolves by MongoDB _id (24 hex) or relicId string (e.g. R12345).
+// Resolves by MongoDB _id (24 hex) or relicId string (e.g. R473582).
 const findRelicByIdOrRelicId = async (id) => {
  if (!id) return null;
  const str = String(id).trim();
@@ -1622,7 +1622,7 @@ const fetchRelicsByCharacter = async (characterName) => {
 };
 
 // ------------------- appraiseRelic -------------------
-// Sets artDeadline to 2 months from appraisalDate. relicIdOrMongoId can be MongoDB _id or relicId string (R12345).
+// Sets artDeadline to 2 months from appraisalDate. relicIdOrMongoId can be MongoDB _id or relicId string (R473582).
 const appraiseRelic = async (
  relicIdOrMongoId,
  appraiserName,
@@ -1656,7 +1656,7 @@ const appraiseRelic = async (
 };
 
 // ------------------- archiveRelic -------------------
-// relicIdOrMongoId can be MongoDB _id or relicId string (R12345).
+// relicIdOrMongoId can be MongoDB _id or relicId string (R473582).
 // Grants 1,000 tokens to finder's owner if first archived relic; sets firstCompletionRewardGiven.
 const archiveRelic = async (relicIdOrMongoId, imageUrl) => {
  try {
@@ -1717,7 +1717,7 @@ const fetchArchivedRelics = async () => {
 };
 
 // ------------------- fetchRelicById -------------------
-// Accepts MongoDB _id or relicId string (R12345).
+// Accepts MongoDB _id or relicId string (R473582).
 const fetchRelicById = async (relicIdOrMongoId) => {
  try {
   await connectToTinglebot();

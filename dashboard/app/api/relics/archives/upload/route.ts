@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const info = getStr("info");
 
   if (!relicId) {
-    return NextResponse.json({ error: "Relic ID is required (e.g. R12345)" }, { status: 400 });
+    return NextResponse.json({ error: "Relic ID is required (e.g. R473582)" }, { status: 400 });
   }
   if (!file || typeof file !== "object" || !("arrayBuffer" in file)) {
     return NextResponse.json({ error: "Image file is required" }, { status: 400 });

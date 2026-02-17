@@ -74,6 +74,17 @@ export async function POST(
       quadrant: archiveRequest.quadrant,
       ...(wasFirstArchived && { firstCompletionRewardGiven: true }),
     };
+    if (
+      archiveRequest.libraryPositionX != null &&
+      archiveRequest.libraryPositionY != null
+    ) {
+      updateData.libraryPositionX = archiveRequest.libraryPositionX;
+      updateData.libraryPositionY = archiveRequest.libraryPositionY;
+      updateData.libraryDisplaySize =
+        archiveRequest.libraryDisplaySize != null
+          ? Math.max(2, Math.min(25, archiveRequest.libraryDisplaySize))
+          : 8;
+    }
 
     await Relic.findByIdAndUpdate(relic._id, updateData);
 

@@ -16,9 +16,14 @@ type ArchiveRequest = {
   quadrant: string;
   info: string;
   imageUrl: string;
+  libraryPositionX?: number | null;
+  libraryPositionY?: number | null;
+  libraryDisplaySize?: number | null;
   status: string;
   createdAt: string;
 };
+
+const LIBRARY_IMAGE = "/assets/library.png";
 
 function normalizeImageUrl(imageUrl: string | undefined): string {
   if (!imageUrl) return "";
@@ -141,7 +146,7 @@ export default function AdminRelicArchivesPage() {
         </div>
 
         <p className="mb-6 text-center text-sm text-[var(--botw-pale)]">
-          Users submit relics from the Library Archives page. Approve or reject requests here to add them to the archives.
+          Users submit relics from the Library Archives page with image and map position. Approve to add the relic to the archives at the chosen location, or reject the request.
         </p>
 
         {error && (
@@ -188,8 +193,32 @@ export default function AdminRelicArchivesPage() {
                       {[req.region, req.square, req.quadrant].filter(Boolean).join(" • ")}
                     </p>
                   )}
+                  {req.libraryPositionX != null && req.libraryPositionY != null && (
+                    <p className="mt-1 text-xs text-[var(--totk-light-ocher)]">
+                      Map position: {Math.round(req.libraryPositionX)}%, {Math.round(req.libraryPositionY)}%
+                      {(req.libraryDisplaySize ?? 8) !== 8 && ` • Size: ${req.libraryDisplaySize}%`}
+                    </p>
+                  )}
                   <p className="mt-2 line-clamp-3 text-sm text-[var(--botw-pale)]">{req.info}</p>
                 </div>
+                {req.libraryPositionX != null && req.libraryPositionY != null && (
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] sm:h-24 sm:w-24">
+                    <img
+                      src={LIBRARY_IMAGE}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover object-center opacity-60"
+                    />
+                    <div
+                      className="absolute h-2 w-2 rounded-full border-2 border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/60"
+                      style={{
+                        left: `${req.libraryPositionX}%`,
+                        top: `${req.libraryPositionY}%`,
+                        transform: "translate(-50%, -50%)",
+                      }}
+                      title={`${Math.round(req.libraryPositionX)}%, ${Math.round(req.libraryPositionY)}%`}
+                    />
+                  </div>
+                )}
                 <div className="flex shrink-0 flex-row gap-2 sm:flex-col">
                   <button
                     onClick={() => handleApprove(req._id)}

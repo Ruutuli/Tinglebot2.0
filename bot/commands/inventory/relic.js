@@ -21,20 +21,26 @@ const RelicModel = require('@/models/RelicModel.js');
 const RelicAppraisalRequest = require('@/models/RelicAppraisalRequestModel.js');
 const Character = require('@/models/CharacterModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
+const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
 
 /** Image used for unappraised / unknown relics (HW Sealed Weapon Icon). */
 const UNAPPRAISED_RELIC_IMAGE_URL = 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232';
 /** Border image used on relic embeds (matches other bot embeds). */
 const RELIC_EMBED_BORDER_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+/** Token reward for turning in a duplicate relic (already discovered by another player). */
+const DUPLICATE_RELIC_REWARD_TOKENS = 500;
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
 }
 
-/** Resolve relic appraisal request by MongoDB _id or short ID (e.g. A12345). */
+/** Resolve relic appraisal request by MongoDB _id or short ID (e.g. A473582). */
 async function findRelicAppraisalRequestById(id) {
   if (!id) return null;
   const str = String(id).trim();
+  if (/^A\d{6}$/.test(str)) {
+    return await RelicAppraisalRequest.findOne({ appraisalRequestId: str });
+  }
   if (/^A\d+$/.test(str)) {
     return await RelicAppraisalRequest.findOne({ appraisalRequestId: str });
   }
@@ -67,7 +73,7 @@ module.exports = {
         .setName('info')
         .setDescription('View info on an appraised relic')
         .addStringOption(opt =>
-          opt.setName('relic_id').setDescription('Relic ID (e.g. R12345 or MongoDB _id)').setRequired(true)
+          opt.setName('relic_id').setDescription('Relic ID (e.g. R473582 or MongoDB _id)').setRequired(true)
         )
     )
 
@@ -88,7 +94,7 @@ module.exports = {
           opt.setName('character').setDescription('Character who found the relic').setRequired(true).setAutocomplete(true)
         )
         .addStringOption(opt =>
-          opt.setName('relic_id').setDescription('Relic ID (e.g. R12345)').setRequired(true).setAutocomplete(true)
+          opt.setName('relic_id').setDescription('Relic ID (e.g. R473582)').setRequired(true).setAutocomplete(true)
         )
         .addStringOption(opt =>
           opt.setName('appraiser').setDescription('PC Artist/Researcher or NPC').setRequired(true).setAutocomplete(true)
@@ -106,7 +112,7 @@ module.exports = {
           opt.setName('appraiser').setDescription('Your character (appraiser)').setRequired(true).setAutocomplete(true)
         )
         .addStringOption(opt =>
-          opt.setName('request_id').setDescription('Appraisal request ID (e.g. A12345)').setRequired(true)
+          opt.setName('request_id').setDescription('Appraisal request ID (e.g. A473582)').setRequired(true)
         )
         .addStringOption(opt =>
           opt.setName('description').setDescription('Appraisal description of the relic').setRequired(true)
@@ -142,7 +148,8 @@ module.exports = {
           .setTitle(`📜 Relics: ${characterName}`)
           .setDescription(lines.join('\n'))
           .setColor(0xe67e22)
-          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL);
+          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
+          .setImage(RELIC_EMBED_BORDER_URL);
         return interaction.editReply({ embeds: [embed] });
       }
 
@@ -156,10 +163,12 @@ module.exports = {
         if (!relic.appraised) {
           return interaction.reply({ content: '❌ This relic has not been appraised yet.', ephemeral: true });
         }
+        const displayRelicId = relic.relicId || relic._id;
         const embed = new EmbedBuilder()
-          .setTitle(`${relic.rollOutcome || relic.name} (\`${relic.relicId || relic._id}\`)`)
+          .setTitle(`📜 ${relic.rollOutcome || relic.name}`)
           .setDescription(relic.appraisalDescription || 'No description.')
           .addFields(
+            { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
             { name: 'Discovered By', value: relic.discoveredBy || '—', inline: true },
             { name: 'Location', value: relic.locationFound || 'Unknown', inline: true },
             { name: 'Appraised By', value: relic.appraisedBy || '—', inline: true },
@@ -167,7 +176,9 @@ module.exports = {
             { name: 'Archived', value: relic.archived ? '✅' : '❌', inline: true },
             { name: 'Deteriorated', value: relic.deteriorated ? '⚠️ Yes' : 'No', inline: true }
           )
-          .setColor(0xe67e22);
+          .setColor(0xe67e22)
+          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
+          .setImage(RELIC_EMBED_BORDER_URL);
         return (interaction.deferred ? interaction.editReply : interaction.reply).call(interaction, { embeds: [embed] });
       }
 
@@ -221,9 +232,25 @@ module.exports = {
 
         await RelicModel.findByIdAndUpdate(relic._id, updateData);
 
+        // Grant token reward for turning in a duplicate (once per relic)
+        let duplicateRewardGiven = false;
+        if (isDuplicate && updateData.archived) {
+          const updatedRelic = await RelicModel.findById(relic._id);
+          if (updatedRelic && !updatedRelic.duplicateRewardGiven) {
+            await updateTokenBalance(interaction.user.id, DUPLICATE_RELIC_REWARD_TOKENS, {
+              category: 'relic_duplicate_turn_in',
+              description: 'Duplicate relic turn-in',
+            });
+            await RelicModel.findByIdAndUpdate(relic._id, { duplicateRewardGiven: true });
+            duplicateRewardGiven = true;
+          }
+        }
+
         const displayRelicId = relic.relicId || relic._id;
         const submitInstructions = isDuplicate
-          ? 'This relic is a duplicate. It has been submitted to the archives—no art needed.'
+          ? (duplicateRewardGiven
+            ? `This relic is a duplicate. It has been submitted to the archives—no art needed. You received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
+            : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
           : `Submit your art on the **dashboard** (Library) to archive this relic. Use Relic ID \`${displayRelicId}\` when submitting. Once submitted, the relic is archived and the finder may be eligible for token rewards.`;
 
         const embed = new EmbedBuilder()
@@ -294,8 +321,7 @@ module.exports = {
           });
         }
 
-        const count = await RelicAppraisalRequest.countDocuments({});
-        const appraisalRequestId = `A${count + 1}`;
+        const appraisalRequestId = generateUniqueId('A');
         const request = new RelicAppraisalRequest({
           appraisalRequestId,
           relicId: relic.relicId || String(relic._id),
@@ -322,14 +348,16 @@ module.exports = {
 
           const displayRelicId = relic.relicId || relic._id;
           const userEmbed = new EmbedBuilder()
-            .setColor(0x8B7355)
             .setTitle('📜 Relic appraised by NPC!')
-            .setDescription(`Your relic has been appraised. **500 tokens** have been deducted.\n\n**Reveal it:** \`/relic reveal relic_id:${displayRelicId}\``)
+            .setDescription('Your relic has been appraised. **500 tokens** have been deducted.')
+            .setColor(0xe67e22)
             .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
+            .setImage(RELIC_EMBED_BORDER_URL)
             .addFields(
               { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
               { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
-              { name: 'Payment', value: '500 tokens', inline: true }
+              { name: 'Payment', value: '500 tokens', inline: true },
+              { name: 'Reveal', value: `Use \`/relic reveal relic_id:${displayRelicId}\` to see what relic it is.`, inline: false }
             )
             .setFooter({ text: 'Use /relic reveal to see what relic it is' })
             .setTimestamp();
@@ -339,14 +367,18 @@ module.exports = {
         const displayRequestId = request.appraisalRequestId || request._id;
         const displayPayment = payment || 'None';
         const userEmbed = new EmbedBuilder()
-          .setColor(0x8B7355)
           .setTitle('📜 Appraisal request created!')
           .setDescription('An Artist or Researcher in Inariko can use `/relic appraisal-accept` to appraise.')
+          .setColor(0xe67e22)
+          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
+          .setImage(RELIC_EMBED_BORDER_URL)
           .addFields(
             { name: 'Request ID', value: `\`${displayRequestId}\``, inline: true },
+            { name: 'Relic ID', value: `\`${relic.relicId || relic._id}\``, inline: true },
             { name: 'Owner', value: characterName, inline: true },
             { name: 'Appraiser', value: appraiser, inline: true },
-            { name: 'Payment', value: displayPayment, inline: false }
+            { name: 'Payment', value: displayPayment, inline: true },
+            { name: 'Next step', value: 'Use `/relic appraisal-accept` in Inariko with the Request ID above.', inline: false }
           )
           .setFooter({ text: 'Use /relic appraisal-accept in Inariko' })
           .setTimestamp();
@@ -362,7 +394,7 @@ module.exports = {
 
         const request = await findRelicAppraisalRequestById(requestId);
         if (!request) {
-          return interaction.editReply({ content: '❌ Appraisal request not found. Use the Request ID (e.g. A12345) from the request.' });
+          return interaction.editReply({ content: '❌ Appraisal request not found. Use the Request ID (e.g. A473582) from the request.' });
         }
         if (request.status !== 'pending') {
           return interaction.editReply({ content: '❌ This request has already been processed.' });

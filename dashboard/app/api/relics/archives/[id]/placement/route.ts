@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
+import { isModeratorUser } from "@/lib/moderator";
 
 export const dynamic = "force-dynamic";
 
@@ -75,25 +76,29 @@ export async function PATCH(
       return NextResponse.json({ error: "Only archived relics can be placed on the library map" }, { status: 400 });
     }
 
-    const discovererName = (relic.discoveredBy as string)?.trim();
-    if (discovererName) {
-      const nameRegex = new RegExp(`^${discovererName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      const discovererChar =
-        (await Character.findOne({ name: nameRegex }).select("userId").lean()) ||
-        (await ModCharacter.findOne({ name: nameRegex }).select("userId").lean());
-      const discovererUserId = discovererChar?.userId;
-      const isAdmin = await isAdminUser(user.id);
-      if (discovererUserId !== user.id && !isAdmin) {
-        return NextResponse.json(
-          { error: "Only the discoverer or an admin can update placement" },
-          { status: 403 }
-        );
-      }
+    const [isAdmin, isMod] = await Promise.all([
+      isAdminUser(user.id),
+      isModeratorUser(user.id),
+    ]);
+    if (isAdmin || isMod) {
+      // Mods and admins can move any relic.
     } else {
-      const isAdmin = await isAdminUser(user.id);
-      if (!isAdmin) {
+      const discovererName = (relic.discoveredBy as string)?.trim();
+      if (discovererName) {
+        const nameRegex = new RegExp(`^${discovererName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+        const discovererChar =
+          (await Character.findOne({ name: nameRegex }).select("userId").lean()) ||
+          (await ModCharacter.findOne({ name: nameRegex }).select("userId").lean());
+        const discovererUserId = discovererChar && !Array.isArray(discovererChar) ? (discovererChar as { userId?: string }).userId : undefined;
+        if (discovererUserId !== user.id) {
+          return NextResponse.json(
+            { error: "Only the discoverer or a mod can update placement" },
+            { status: 403 }
+          );
+        }
+      } else {
         return NextResponse.json(
-          { error: "Only an admin can update placement for this relic" },
+          { error: "Only a mod can update placement for this relic" },
           { status: 403 }
         );
       }

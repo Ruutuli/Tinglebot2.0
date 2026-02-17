@@ -6,7 +6,7 @@ const { Schema } = mongoose;
 // This schema defines the structure for relic documents stored in MongoDB.
 const RelicSchema = new Schema({
   // ------------------- Identification Fields -------------------
-  relicId: { type: String, default: '' },               // Short display ID in R12345 format.
+  relicId: { type: String, default: '' },               // Short display ID (e.g. R473582).
   name: { type: String, required: true },            // Internal relic name.
   emoji: { type: String, default: '🔸' },              // Optional emoji for visual representation.
   unique: { type: Boolean, default: false },           // Indicates if the relic is one-of-a-kind.
