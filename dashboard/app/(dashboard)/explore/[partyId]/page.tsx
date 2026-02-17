@@ -36,11 +36,11 @@ const SQUARE_H = 1666;
 /** Parse "H8 Q3" from messages like "Found a monster camp in H8 Q3...", "Found ruins in H8 Q3...", "Found a grotto in H8 Q3..." */
 const REPORTABLE_LOC_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])(?:\s|;|,|\.|$)/i;
 
+/** Discoveries that can be placed on the map (Report to town hall). Relics are not placed on the map. */
 const REPORTABLE_OUTCOMES: Record<string, string> = {
   monster_camp: "Monster Camp",
   ruins: "Ruins",
   grotto: "Grotto",
-  relic: "Relic",
 };
 
 type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string; characterName?: string };
