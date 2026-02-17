@@ -494,6 +494,11 @@ export default function AdminDatabasePage() {
     async (item: Record<string, unknown>) => {
       const itemId = getItemId(item._id);
       if (!itemId) return;
+      const nameField = modelConfig?.nameField ?? "itemName";
+      const itemName = String(item[nameField] || "this entry");
+      if (!window.confirm(`Are you sure you want to delete "${itemName}"?`)) {
+        return;
+      }
       setDeletingItemId(itemId);
       setError(null);
       try {
@@ -523,7 +528,7 @@ export default function AdminDatabasePage() {
         setDeletingItemId(null);
       }
     },
-    [selectedModel, inventoryCharacterId, fetchItems]
+    [selectedModel, inventoryCharacterId, fetchItems, modelConfig]
   );
 
   // ------------------- Load button: trigger first fetch; effect refetches when model changes after first load -------------------
