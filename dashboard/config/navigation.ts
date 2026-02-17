@@ -6,17 +6,42 @@ export const navItems: NavItem[] = [
     label: "Characters",
     icon: "fa-user",
     children: [
-      { href: "/models/characters", label: "Characters", icon: "fa-users" },
-      { href: "/characters/create", label: "Create Character", icon: "fa-user-plus" },
       { href: "/characters/my-ocs", label: "My OCs", icon: "fa-id-card" },
+      { href: "/characters/create", label: "Create Character", icon: "fa-user-plus" },
+      { href: "/models/characters", label: "All Characters", icon: "fa-users" },
       { href: "/characters/my-companions", label: "My Companions", icon: "fa-handshake" },
       { href: "/characters/inventories", label: "Inventories", icon: "fa-box" },
       { href: "/characters/relationships", label: "Relationships", icon: "fa-heart" },
     ],
   },
   {
-    label: "Models",
-    icon: "fa-database",
+    label: "World",
+    icon: "fa-globe",
+    children: [
+      { href: "/map", label: "ROTW Map", icon: "fa-map" },
+      { href: "/library/archives", label: "Library Archives", icon: "fa-book" },
+      { href: "/calendar", label: "Calendar", icon: "fa-calendar" },
+    ],
+  },
+  {
+    label: "Progress",
+    icon: "fa-chart-line",
+    children: [
+      { href: "/levels", label: "Levels & Progression", icon: "fa-chart-line" },
+      { href: "/stats", label: "Statistics", icon: "fa-chart-bar" },
+    ],
+  },
+  {
+    label: "Community",
+    icon: "fa-comments",
+    children: [
+      { href: "/suggestion-box", label: "Suggestion Box", icon: "fa-lightbulb" },
+      { href: "/member-lore", label: "Member Submitted Lore", icon: "fa-scroll" },
+    ],
+  },
+  {
+    label: "Reference",
+    icon: "fa-book-open",
     children: [
       { href: "/models/items", label: "Items", icon: "fa-cube" },
       { href: "/models/pets", label: "Pets", icon: "fa-paw" },
@@ -26,11 +51,6 @@ export const navItems: NavItem[] = [
       { href: "/models/village-shops", label: "Village Shops", icon: "fa-store" },
     ],
   },
-  { href: "/levels", label: "Levels & Progression", icon: "fa-chart-line" },
-  { href: "/stats", label: "Statistics", icon: "fa-chart-bar" },
-  { href: "/calendar", label: "Calendar", icon: "fa-calendar" },
-  { href: "/map", label: "ROTW Map", icon: "fa-map" },
-  { href: "/library/archives", label: "Library Archives", icon: "fa-book" },
   { href: "/profile", label: "Profile", icon: "fa-user-circle" },
   {
     label: "Admin",
