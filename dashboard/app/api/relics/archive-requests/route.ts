@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     });
     if (!relic) {
       return NextResponse.json(
-        { error: "Relic not found. Check the Relic ID from /relic reveal in Discord." },
+        { error: "Relic not found. Check the Relic ID from /relic list in Discord." },
         { status: 404 }
       );
     }

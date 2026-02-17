@@ -9,9 +9,7 @@ const {
   fetchRelicById,
   fetchRelicsByCharacter,
   appraiseRelic,
-  fetchCharacterByName,
   fetchCharacterByNameAndUserId,
-  fetchAnyCharacterByNameAndUserId,
   getOrCreateToken,
   updateTokenBalance,
 } = require('@/database/db.js');
@@ -19,7 +17,6 @@ const { updateCurrentStamina } = require('../../modules/characterStatsModule.js'
 const { rollRelicOutcome } = require('@/utils/relicUtils.js');
 const RelicModel = require('@/models/RelicModel.js');
 const RelicAppraisalRequest = require('@/models/RelicAppraisalRequestModel.js');
-const Character = require('@/models/CharacterModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils.js');
 
@@ -29,6 +26,8 @@ const UNAPPRAISED_RELIC_IMAGE_URL = 'https://static.wikia.nocookie.net/zelda_gam
 const RELIC_EMBED_BORDER_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 /** Token reward for turning in a duplicate relic (already discovered by another player). */
 const DUPLICATE_RELIC_REWARD_TOKENS = 500;
+/** Instructions for finder after appraisal: provide art to archive in Library. */
+const ART_INSTRUCTIONS = 'The owner of the character who found this relic should provide their **artistic rendition** of the item based on the appraisal description above. Once this art is submitted, it will go on display in the **Library Archives**.';
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
@@ -217,93 +216,6 @@ module.exports = {
         return (interaction.deferred ? interaction.editReply : interaction.reply).call(interaction, { embeds: [embed] });
       }
 
-      // ------------------- /relic reveal -------------------
-      if (sub === 'reveal') {
-        const relicId = interaction.options.getString('relic_id');
-        const relic = await fetchRelicById(relicId);
-        if (!relic) {
-          return interaction.editReply({ content: '❌ No relic found by that ID.' });
-        }
-        if (!relic.appraised) {
-          return interaction.editReply({ content: '❌ This relic must be appraised before you can reveal it.' });
-        }
-        if (relic.rollOutcome) {
-          return interaction.editReply({ content: `❌ This relic has already been revealed: **${relic.rollOutcome}**` });
-        }
-        if (relic.archived || relic.deteriorated) {
-          return interaction.editReply({ content: '❌ This relic cannot be revealed (archived or deteriorated).' });
-        }
-
-        const char = await fetchCharacterByNameAndUserId(relic.discoveredBy, interaction.user.id) ||
-          await (async () => {
-            const mod = await ModCharacter.findOne({ name: new RegExp(`^${relic.discoveredBy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
-            return mod && String(mod.userId) === interaction.user.id ? mod : null;
-          })();
-        if (!char) {
-          return interaction.editReply({ content: '❌ Only the owner of the character who found this relic can reveal it.' });
-        }
-
-        const isAlreadyDiscovered = async (relicName) => {
-          const existing = await RelicModel.findOne({ rollOutcome: relicName });
-          return !!existing;
-        };
-
-        const result = await rollRelicOutcome({ isArchived: isAlreadyDiscovered });
-        const { outcome, isDuplicate } = result;
-
-        const updateData = {
-          name: outcome.name,
-          rollOutcome: outcome.name,
-          appraisalDescription: relic.appraisalDescription || outcome.description,
-        };
-        if (isDuplicate) {
-          const existingArchived = await RelicModel.findOne({ rollOutcome: outcome.name, archived: true });
-          if (existingArchived) {
-            updateData.duplicateOf = existingArchived._id;
-            updateData.artSubmitted = true;
-            updateData.archived = true;
-          }
-        }
-
-        await RelicModel.findByIdAndUpdate(relic._id, updateData);
-
-        // Grant token reward for turning in a duplicate (once per relic)
-        let duplicateRewardGiven = false;
-        if (isDuplicate && updateData.archived) {
-          const updatedRelic = await RelicModel.findById(relic._id);
-          if (updatedRelic && !updatedRelic.duplicateRewardGiven) {
-            await updateTokenBalance(interaction.user.id, DUPLICATE_RELIC_REWARD_TOKENS, {
-              category: 'relic_duplicate_turn_in',
-              description: 'Duplicate relic turn-in',
-            });
-            await RelicModel.findByIdAndUpdate(relic._id, { duplicateRewardGiven: true });
-            duplicateRewardGiven = true;
-          }
-        }
-
-        const displayRelicId = relic.relicId || relic._id;
-        const submitInstructions = isDuplicate
-          ? (duplicateRewardGiven
-            ? `This relic is a duplicate. It has been submitted to the archives—no art needed. You received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
-            : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
-          : `Submit your art on the **dashboard** (Library) to archive this relic. Use Relic ID \`${displayRelicId}\` when submitting. Once submitted, the relic is archived and the finder may be eligible for token rewards.`;
-
-        const embed = new EmbedBuilder()
-          .setTitle(`🔸 Relic Revealed: ${outcome.name}`)
-          .setDescription(outcome.description)
-          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
-          .setImage(RELIC_EMBED_BORDER_URL)
-          .addFields(
-            { name: 'Relic', value: outcome.name, inline: true },
-            { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
-            { name: 'Duplicate?', value: isDuplicate ? 'Yes (no art required)' : 'No', inline: true },
-            { name: 'Next step: archive', value: submitInstructions, inline: false }
-          )
-          .setColor(0xe67e22)
-          .setFooter({ text: isDuplicate ? 'Duplicate — already in archives' : 'Submit your art on the dashboard (Library) to archive' });
-        return interaction.editReply({ embeds: [embed] });
-      }
-
       // ------------------- /relic appraisal-request -------------------
       if (sub === 'appraisal-request') {
         const characterNameRaw = interaction.options.getString('character');
@@ -381,20 +293,40 @@ module.exports = {
           request.updatedAt = new Date();
           await request.save();
 
-          const displayRelicId = relic.relicId || relic._id;
+          const revealResult = await revealRelicImmediately(relic._id, { finderOwnerUserId: interaction.user.id });
+          if (!revealResult) {
+            const displayRelicId = relic.relicId || relic._id;
+            const userEmbed = new EmbedBuilder()
+              .setTitle('📜 Relic appraised by NPC!')
+              .setDescription('Your relic has been appraised. **500 tokens** have been deducted.')
+              .setColor(0xe67e22)
+              .addFields(
+                { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
+                { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
+                { name: 'Payment', value: '500 tokens', inline: true }
+              )
+              .setTimestamp();
+            return interaction.editReply({ embeds: [userEmbed] });
+          }
+          const { outcome, isDuplicate, duplicateRewardGiven, displayRelicId } = revealResult;
+          const submitInstructions = isDuplicate
+            ? (duplicateRewardGiven
+              ? `This relic is a duplicate. It has been submitted to the archives—no art needed. You received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
+              : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
+            : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the dashboard (Library).`;
           const userEmbed = new EmbedBuilder()
-            .setTitle('📜 Relic appraised by NPC!')
-            .setDescription('Your relic has been appraised. **500 tokens** have been deducted.')
+            .setTitle(`📜 Relic appraised by NPC — ${outcome.name}`)
+            .setDescription(outcome.description)
             .setColor(0xe67e22)
             .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
             .setImage(RELIC_EMBED_BORDER_URL)
             .addFields(
+              { name: 'Relic', value: outcome.name, inline: true },
               { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
-              { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
-              { name: 'Payment', value: '500 tokens', inline: true },
-              { name: 'Reveal', value: `Use \`/relic reveal relic_id:${displayRelicId}\` to see what relic it is.`, inline: false }
+              { name: 'Duplicate?', value: isDuplicate ? 'Yes (no art required)' : 'No', inline: true },
+              { name: 'Next step', value: submitInstructions, inline: false }
             )
-            .setFooter({ text: 'Use /relic reveal to see what relic it is' })
+            .setFooter({ text: isDuplicate ? 'Duplicate — already in archives' : 'Submit your art on the dashboard (Library) to archive' })
             .setTimestamp();
           return interaction.editReply({ embeds: [userEmbed] });
         }
@@ -470,9 +402,34 @@ module.exports = {
         request.updatedAt = new Date();
         await request.save();
 
-        return interaction.editReply({
-          content: `📜 **Relic appraised by ${appraiserName}!**\n> ${description}\n> **Relic ID:** \`${request.relicId}\`\n\nThe finder can now use \`/relic reveal relic_id:${request.relicId}\` to reveal what relic it is.`,
+        const revealResult = await revealRelicImmediately(request.relicMongoId || request.relicId, {
+          finderOwnerUserId: request.finderOwnerUserId,
         });
+        if (!revealResult) {
+          return interaction.editReply({
+            content: `📜 **Relic appraised by ${appraiserName}!**\n> ${description}\n> **Relic ID:** \`${request.relicId}\``,
+          });
+        }
+        const { outcome, isDuplicate, duplicateRewardGiven, displayRelicId } = revealResult;
+        const submitInstructions = isDuplicate
+          ? (duplicateRewardGiven
+            ? `This relic is a duplicate. It has been submitted to the archives—no art needed. The finder received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
+            : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
+          : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the dashboard (Library).`;
+        const embed = new EmbedBuilder()
+          .setTitle(`📜 Relic appraised by ${appraiserName} — ${outcome.name}`)
+          .setDescription(outcome.description)
+          .setColor(0xe67e22)
+          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
+          .setImage(RELIC_EMBED_BORDER_URL)
+          .addFields(
+            { name: 'Relic', value: outcome.name, inline: true },
+            { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
+            { name: 'Duplicate?', value: isDuplicate ? 'Yes (no art required)' : 'No', inline: true },
+            { name: 'Next step', value: submitInstructions, inline: false }
+          )
+          .setFooter({ text: isDuplicate ? 'Duplicate — already in archives' : 'Finder: submit your art on the dashboard (Library) to archive' });
+        return interaction.editReply({ embeds: [embed] });
       }
 
       return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });

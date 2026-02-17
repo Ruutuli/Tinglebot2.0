@@ -340,27 +340,35 @@ export default function LibraryArchivesPage() {
   }
 
   return (
-    <div className="min-h-full p-4 sm:p-6 md:p-8">
+    <div className="min-h-full px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10">
       <div className="mx-auto max-w-[1400px]">
-        <div className="mb-6 flex items-center justify-center gap-2 sm:gap-4">
-          <img src="/Side=Left.svg" alt="" className="h-4 w-auto sm:h-6" aria-hidden />
-          <h1 className="text-center text-xl font-bold text-[var(--totk-light-ocher)] sm:text-2xl md:text-3xl">
-            Library Archives
-          </h1>
-          <img src="/Side=Right.svg" alt="" className="h-4 w-auto sm:h-6" aria-hidden />
-        </div>
-
-        <p className="mb-6 text-center text-sm text-[var(--botw-pale)]">
-          Appraised relics donated to the Library. Place them on the map below. Discovered during expeditions across Hyrule.
-        </p>
-
-        <p className="mb-6 text-center text-sm text-[var(--totk-light-ocher)]">
-          The first person to find and successfully appraise a relic in full, including artwork, will receive a reward of 1,000 tokens.
-        </p>
+        {/* Hero header */}
+        <header className="mb-8 sm:mb-10">
+          <div className="flex items-center justify-center gap-3 sm:gap-4">
+            <img src="/Side=Left.svg" alt="" className="h-5 w-auto sm:h-6" aria-hidden />
+            <h1 className="text-center text-2xl font-bold tracking-tight text-[var(--totk-light-ocher)] drop-shadow-sm sm:text-3xl md:text-4xl">
+              Library Archives
+            </h1>
+            <img src="/Side=Right.svg" alt="" className="h-5 w-auto sm:h-6" aria-hidden />
+          </div>
+          <p className="mt-4 max-w-2xl mx-auto text-center text-[15px] leading-relaxed text-[var(--botw-pale)]/95 sm:text-base">
+            Appraised relics donated to the Library. Place them on the map below. Discovered during expeditions across Hyrule.
+          </p>
+          <div className="mt-5 mx-auto max-w-md rounded-xl border border-[var(--totk-light-ocher)]/40 bg-[var(--totk-light-ocher)]/10 px-4 py-3 text-center">
+            <p className="text-sm font-medium text-[var(--totk-light-ocher)]">
+              <i className="fa-solid fa-coins mr-1.5 opacity-80" aria-hidden />
+              First full appraisal (including artwork) rewards 1,000 tokens
+            </p>
+          </div>
+        </header>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-center text-red-400">
-            {error}
+          <div
+            role="alert"
+            className="mb-6 flex items-center gap-3 rounded-xl border border-red-500/50 bg-red-500/15 px-4 py-3 sm:px-5 sm:py-4"
+          >
+            <i className="fa-solid fa-circle-exclamation text-red-400 shrink-0" aria-hidden />
+            <p className="text-sm font-medium text-red-300 sm:text-base">{error}</p>
           </div>
         )}
 
@@ -372,9 +380,9 @@ export default function LibraryArchivesPage() {
                 setSubmitModalOpen(true);
                 setUploadMessage(null);
               }}
-              className="rounded bg-[var(--totk-light-ocher)] px-5 py-2.5 font-medium text-[var(--botw-warm-black)] hover:opacity-90"
+              className="group flex items-center gap-2.5 rounded-xl bg-[var(--totk-light-ocher)] px-6 py-3 font-semibold text-[var(--botw-warm-black)] shadow-lg shadow-black/20 transition-all hover:opacity-95 hover:shadow-xl hover:shadow-black/25 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-ocher)] focus:ring-offset-2 focus:ring-offset-[var(--totk-brown)]"
             >
-              <i className="fa-solid fa-upload mr-2" aria-hidden />
+              <i className="fa-solid fa-cloud-arrow-up text-lg group-hover:scale-110 transition-transform" aria-hidden />
               Submit relic to archives
             </button>
           </div>
@@ -382,13 +390,18 @@ export default function LibraryArchivesPage() {
 
         {uploadMessage && (
           <div
-            className={`mb-6 rounded-lg p-4 text-center ${
+            role="alert"
+            className={`mb-6 flex items-center gap-3 rounded-xl px-4 py-3 sm:px-5 sm:py-4 ${
               uploadMessage.type === "ok"
-                ? "border border-[var(--totk-light-green)]/50 bg-[var(--totk-light-green)]/10 text-[var(--totk-light-green)]"
-                : "border border-red-500/50 bg-red-500/10 text-red-400"
+                ? "border border-[var(--totk-light-green)]/50 bg-[var(--totk-light-green)]/15 text-[var(--totk-light-green)]"
+                : "border border-red-500/50 bg-red-500/15 text-red-300"
             }`}
           >
-            <p>{uploadMessage.text}</p>
+            <i
+              className={`shrink-0 ${uploadMessage.type === "ok" ? "fa-solid fa-circle-check text-[var(--totk-light-green)]" : "fa-solid fa-circle-exclamation text-red-400"}`}
+              aria-hidden
+            />
+            <p className="text-sm font-medium sm:text-base">{uploadMessage.text}</p>
           </div>
         )}
 
@@ -840,8 +853,7 @@ export default function LibraryArchivesPage() {
           <div className="mt-6 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-12 text-center">
             <p className="text-[var(--botw-pale)]">No relics have been archived yet.</p>
             <p className="mt-2 text-sm text-[var(--totk-grey-200)]">
-              Relics are found during exploration and appraised by Artists or Researchers in Inariko. After revealing with{" "}
-              <code className="rounded bg-[var(--totk-grey-800)] px-1">/relic reveal</code>, submit your art above to archive.
+              Relics are found during exploration and appraised by Artists or Researchers in Inariko. Once appraised, the owner of the character who found the relic should provide their artistic rendition based on the appraisal description; submit your art above to archive it in the Library.
             </p>
           </div>
         )}

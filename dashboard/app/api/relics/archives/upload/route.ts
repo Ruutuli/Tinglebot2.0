@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       $or: [{ relicId }, { relicId: relicIdRaw.trim() }],
     });
     if (!relic) {
-      return NextResponse.json({ error: "Relic not found. Check the Relic ID from /relic reveal in Discord." }, { status: 404 });
+      return NextResponse.json({ error: "Relic not found. Check the Relic ID from /relic list in Discord." }, { status: 404 });
     }
     if (!relic.appraised) {
       return NextResponse.json({ error: "This relic has not been appraised yet. Get it appraised in Inariko first." }, { status: 400 });
