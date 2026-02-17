@@ -861,6 +861,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleExploreUseItemAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "quadrant" && interaction.options.getSubcommand() === "move") {
               await handleExploreMoveQuadrantAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "discovery" && interaction.options.getSubcommand() === "discovery") {
+              await handleExploreDiscoveryAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -3532,6 +3534,74 @@ async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("Error during explore use-item autocomplete:", error);
+  await interaction.respond([]);
+ }
+}
+
+// ------------------- Explore: Discovery Autocomplete -------------------
+// Lists monster camps and grottos in the party's current quadrant (for /explore discovery).
+async function handleExploreDiscoveryAutocomplete(interaction, focusedOption) {
+ try {
+  await DatabaseConnectionManager.connectToTinglebot();
+  const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
+  if (!expeditionId) return await interaction.respond([]);
+
+  const party = await Party.findActiveByPartyId(expeditionId).select("square quadrant").lean();
+  if (!party || !party.square || !party.quadrant) {
+   return await interaction.respond([{ name: "No expedition location", value: "none" }]);
+  }
+
+  const Square = require("../models/mapModel.js");
+  const squareId = String(party.square || "").trim();
+  const quadrantId = String(party.quadrant || "").trim().toUpperCase();
+  if (!squareId || !quadrantId) return await interaction.respond([]);
+
+  const squareDoc = await Square.findOne({
+   squareId: new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+  })
+   .select("quadrants")
+   .lean();
+  if (!squareDoc || !squareDoc.quadrants) return await interaction.respond([]);
+
+  const quadrant = squareDoc.quadrants.find(
+   (q) => String(q.quadrantId).toUpperCase() === quadrantId
+  );
+  if (!quadrant || !quadrant.discoveries || quadrant.discoveries.length === 0) {
+   return await interaction.respond([
+    { name: "No monster camps or grottos in this quadrant", value: "none" },
+   ]);
+  }
+
+  const revisitTypes = ["monster_camp", "grotto"];
+  const filteredDiscoveries = quadrant.discoveries.filter((d) =>
+   revisitTypes.includes(String(d.type || "").toLowerCase())
+  );
+  const choices = filteredDiscoveries.map((d) => {
+   const type = String(d.type || "").toLowerCase();
+   const label = type === "monster_camp" ? "Monster Camp" : "Grotto";
+   const totalOfType = filteredDiscoveries.filter((x) => String(x.type || "").toLowerCase() === type).length;
+   const suffix = filteredDiscoveries.filter((x) => String(x.type || "").toLowerCase() === type).indexOf(d) + 1;
+   const name =
+    totalOfType > 1 ? `${label} · ${squareId} ${quadrantId} (${suffix})` : `${label} · ${squareId} ${quadrantId}`;
+   return { name: name.length > 100 ? name.slice(0, 97) + "..." : name, value: d.discoveryKey || name };
+  });
+
+  const value = (focusedOption.value || "").toLowerCase();
+  const filtered = value
+   ? choices.filter(
+      (c) =>
+       c.value.toLowerCase().includes(value) ||
+       c.name.toLowerCase().includes(value)
+     )
+   : choices;
+
+  return await safeRespondWithValidation(
+   interaction,
+   filtered.length > 0 ? filtered.slice(0, 25) : choices.slice(0, 25)
+  );
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore discovery autocomplete:", error);
   await interaction.respond([]);
  }
 }

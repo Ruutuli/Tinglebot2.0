@@ -1,8 +1,25 @@
 // exploreModule.js
 const Character = require('@/models/CharacterModel');
 const ModCharacter = require('@/models/ModCharacterModel');
+const Square = require('../models/mapModel');
 
 const { handleError } = require('@/utils/globalErrorHandler');
+
+/**
+ * True if quadrant has monster_camp or grotto discoveries (for revisiting).
+ */
+async function hasDiscoveriesInQuadrant(squareId, quadrantId) {
+    if (!squareId || !quadrantId) return false;
+    try {
+        const square = await Square.findOne({ squareId: new RegExp(`^${String(squareId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+        if (!square?.quadrants) return false;
+        const q = square.quadrants.find((qu) => String(qu.quadrantId || "").toUpperCase() === String(quadrantId).toUpperCase());
+        if (!q?.discoveries?.length) return false;
+        return q.discoveries.some((d) => (d.type || "").toLowerCase() === "monster_camp" || (d.type || "").toLowerCase() === "grotto");
+    } catch {
+        return false;
+    }
+}
 // Fetch character's items from the party data
 async function getCharacterItems(party, characterName) {
     const character = party.characters.find(char => char.name === characterName);
@@ -109,5 +126,6 @@ module.exports = {
     formatCharacterItems,
     calculateTotalHeartsAndStamina,
     syncPartyMemberStats,
-    pushProgressLog
+    pushProgressLog,
+    hasDiscoveriesInQuadrant
 };

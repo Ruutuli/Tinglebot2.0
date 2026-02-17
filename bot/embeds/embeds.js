@@ -504,7 +504,7 @@ function createVendingSetupInstructionsEmbed(character = null) {
 // showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
 const EXPLORE_DASHBOARD_BASE = "https://tinglebot.xyz/explore";
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0 }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const fields = [
@@ -520,8 +520,9 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   const cmdId = getExploreCommandId();
   const cmdRoll = `</explore roll:${cmdId}>`;
   let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
-  // Only add rest/secure/move options when explicitly requested (Quadrant Explored! embed only).
-  if (showRestSecureMove === true) {
+  if (hasActiveGrotto) {
+   commandsValue += `**Grotto trial in progress.** Roll, move, and discovery are blocked until the trial is complete.\n\nUse ${activeGrottoCommand || `</explore grotto continue:${cmdId}>`} for your turn.`;
+  } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
    const cmdSecure = `</explore secure:${cmdId}>`;
    const cmdMove = `</explore move:${cmdId}>`;
@@ -533,12 +534,19 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
     `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.\n\n` +
     `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
     `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands.`;
+   if (hasDiscoveriesInQuadrant) {
+    commandsValue += `\n\n• **Revisit discoveries** — </explore discovery:${cmdId}>\n> Visit a monster camp or grotto marked on the map in this quadrant.`;
+   }
    if (isAtStartQuadrant) {
     commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
    }
   } else {
    const cmdItem = `</explore item:${cmdId}>`;
    commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+   if (hasDiscoveriesInQuadrant) {
+    const cmdDiscovery = `</explore discovery:${cmdId}>`;
+    commandsValue += `\n\nYou can also revisit monster camps or grottos in this quadrant with ${cmdDiscovery} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+   }
   }
   if (!commandsLast) {
    fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
@@ -552,7 +560,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
 // showSecuredQuadrantOnly: true = quadrant is secured, no Roll/Secure — show only Move, Item, Camp (and End if at start)
 // showFairyRollOnly: true = fairy just appeared — only instruct to use /explore roll
 // showMoveToUnexploredOnly: true = just moved to unexplored quadrant — only "use /explore roll"
-const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showSecuredQuadrantOnly = false, showFairyRollOnly = false, showMoveToUnexploredOnly = false, isAtStartQuadrant = false }) => {
+const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showSecuredQuadrantOnly = false, showFairyRollOnly = false, showMoveToUnexploredOnly = false, isAtStartQuadrant = false, hasDiscoveriesInQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (!showNextAndCommands || !nextCharacter?.userId || !nextCharacter?.name) return embed;
  const nextName = nextCharacter.name;
@@ -589,12 +597,19 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.\n\n` +
    `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
    `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands. **Only use when the expedition prompts you to move.**`;
+  if (hasDiscoveriesInQuadrant) {
+   commandsValue += `\n\n• **Revisit discoveries** — </explore discovery:${cmdId}>\n> Visit a monster camp or grotto marked on the map in this quadrant.`;
+  }
   if (isAtStartQuadrant) {
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
  } else {
   const cmdItem = `</explore item:${cmdId}>`;
   commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+  if (hasDiscoveriesInQuadrant) {
+   const cmdDiscovery = `</explore discovery:${cmdId}>`;
+   commandsValue += `\n\nYou can also revisit monster camps or grottos in this quadrant with ${cmdDiscovery} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+  }
  }
  embed.addFields({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
  return embed;
@@ -612,7 +627,8 @@ const createExplorationItemEmbed = (
  totalStamina,
  nextCharacter = null,
  showNextAndCommands = true,
- ruinRestRecovered = 0
+ ruinRestRecovered = 0,
+ hasDiscoveriesInQuadrant = false
 ) => {
  const embed = new EmbedBuilder()
   .setTitle(`🗺️ **Expedition: ${character.name} Found an Item!**`)
@@ -633,6 +649,7 @@ const createExplorationItemEmbed = (
   showRestSecureMove: false,
   extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
   ruinRestRecovered,
+  hasDiscoveriesInQuadrant,
  });
  const rarity = item.itemRarity ?? 1;
  embed.setFooter({ text: `Rarity: ${rarity}` });
@@ -651,7 +668,8 @@ const createExplorationMonsterEmbed = (
  totalStamina,
  nextCharacter = null,
  showNextAndCommands = true,
- ruinRestRecovered = 0
+ ruinRestRecovered = 0,
+ hasDiscoveriesInQuadrant = false
 ) => {
  const monsterImage =
   monster.image ||
@@ -678,6 +696,7 @@ const createExplorationMonsterEmbed = (
   commandsLast: true,
   extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
   ruinRestRecovered,
+  hasDiscoveriesInQuadrant,
  });
  const tier = monster.tier ?? 1;
  embed.setFooter({ text: `Tier: ${tier}` });

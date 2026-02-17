@@ -228,19 +228,24 @@ export async function POST(
     }
 
     const explorationItemFilter = {
-      $and: [
+      $or: [
         {
-          $or: [
-            { modifierHearts: { $gt: 0 } },
-            { staminaRecovered: { $gt: 0 } },
+          $and: [
+            {
+              $or: [
+                { modifierHearts: { $gt: 0 } },
+                { staminaRecovered: { $gt: 0 } },
+              ],
+            },
+            {
+              $or: [
+                { crafting: true },
+                { itemName: /Fairy/i },
+              ],
+            },
           ],
         },
-        {
-          $or: [
-            { crafting: true },
-            { itemName: /Fairy/i },
-          ],
-        },
+        { itemName: /Goddess Plume/i },
       ],
     };
     const foundItems: Array<{ itemName: string; modifierHearts?: number; staminaRecovered?: number; emoji?: string }> = [];

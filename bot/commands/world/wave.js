@@ -425,7 +425,7 @@ const { createWeightedItemList } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const Party = require('@/models/PartyModel');
 const { addExplorationStandardFields, regionColors, regionImages } = require('../../embeds/embeds.js');
-const { syncPartyMemberStats, pushProgressLog } = require('../../modules/exploreModule');
+const { syncPartyMemberStats, pushProgressLog, hasDiscoveriesInQuadrant } = require('../../modules/exploreModule');
 // Google Sheets functionality removed
 
 // ============================================================================
@@ -1162,7 +1162,8 @@ async function handleWaveVictory(interaction, waveData) {
           location,
           nextCharacter,
           showNextAndCommands: true,
-          showRestSecureMove: false
+          showRestSecureMove: false,
+          hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant)
         });
         // Store for sending: content with @mention so next player gets notified
         monsterCampContent = nextCharacter?.userId

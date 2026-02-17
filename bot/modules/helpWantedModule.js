@@ -87,6 +87,17 @@ const QUEST_PARAMS = {
   writing: { minAmount: 1, maxAmount: 1 }
 };
 
+// Relative weight when choosing quest type (lower = less likely). Art and writing are rarer.
+const QUEST_TYPE_WEIGHTS = {
+  item: 1,
+  monster: 1,
+  escort: 1,
+  crafting: 1,
+  'character-guess': 1,
+  art: 0.35,
+  writing: 0.35
+};
+
 // ============================================================================
 // ------------------- Utility Functions -------------------
 // ============================================================================
@@ -521,6 +532,24 @@ function shuffleArray(array) {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+}
+
+// ------------------- Function: getWeightedRandomQuestType -------------------
+// Picks one quest type from availableTypes using QUEST_TYPE_WEIGHTS (lower weight = less likely).
+function getWeightedRandomQuestType(availableTypes) {
+  if (!availableTypes || availableTypes.length === 0) return null;
+  if (availableTypes.length === 1) return availableTypes[0];
+  let total = 0;
+  for (const t of availableTypes) {
+    total += (QUEST_TYPE_WEIGHTS[t] ?? 1);
+  }
+  let r = Math.random() * total;
+  for (const t of availableTypes) {
+    const w = QUEST_TYPE_WEIGHTS[t] ?? 1;
+    if (r < w) return t;
+    r -= w;
+  }
+  return availableTypes[availableTypes.length - 1];
 }
 
 
@@ -1736,14 +1765,16 @@ async function generateQuestForVillage(village, date, pools, availableNPCs = nul
     throw new Error(`No available quest types for ${village} quest generation`);
   }
   
-  // Try to generate quest with fallback to other types if one fails
+  // Try to generate quest with fallback to other types if one fails.
+  // Pick first type by weight (art/writing have lower weight so they appear less often).
+  const firstType = getWeightedRandomQuestType(availableTypes);
+  const restTypes = availableTypes.filter(t => t !== firstType);
+  const typesToTry = [firstType, ...shuffleArray(restTypes)];
+  
   let lastError = null;
   const triedTypes = [];
   
-  // Shuffle available types to try different ones first
-  const shuffledTypes = shuffleArray([...availableTypes]);
-  
-  for (const type of shuffledTypes) {
+  for (const type of typesToTry) {
     triedTypes.push(type);
     try {
       const requirements = await generateQuestRequirements(type, pools, village, questId);

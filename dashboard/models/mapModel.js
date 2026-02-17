@@ -6,6 +6,7 @@ const { Schema } = mongoose;
 const DiscoverySchema = new Schema({
   type: { type: String, required: true },
   number: { type: String, required: false },
+  name: { type: String, default: '' }, // Grotto name (e.g. "Mayak Grotto") when type is grotto
   discoveredBy: { type: String, default: '' }, // Discord ID of discoverer
   discoveredAt: { type: Date, default: Date.now },
   discoveryKey: { type: String, default: null }, // outcome|square|quadrant|at ISO — matches party progressLog for "Report to town hall"

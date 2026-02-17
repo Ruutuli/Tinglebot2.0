@@ -1296,16 +1296,41 @@ export default function ExplorePartyPage() {
                   Map · {party.square} {party.quadrant}
                 </p>
                 <div className="relative mx-auto max-w-[18rem] overflow-hidden rounded border border-[var(--totk-dark-ocher)]/50 shadow-lg sm:max-w-[22rem]" style={{ aspectRatio: "2400/1666" }}>
-                  {squarePreview.layers.map((layer) => (
-                    <img
-                      key={layer.name}
-                      src={layer.name === "MAP_0002_Map-Base" && pathImageForSquare ? pathImageForSquare : layer.url}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                      style={{ zIndex: getExploreLayerZIndex(layer.name) }}
-                      onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    />
-                  ))}
+                  {squarePreview.layers
+                    .filter((layer) => layer.name !== "MAP_0001_hidden-areas")
+                    .map((layer) => (
+                      <img
+                        key={layer.name}
+                        src={layer.name === "MAP_0002_Map-Base" && pathImageForSquare ? pathImageForSquare : layer.url}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        style={{ zIndex: getExploreLayerZIndex(layer.name) }}
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    ))}
+                  {(() => {
+                    const fogLayer = squarePreview.layers.find((l) => l.name === "MAP_0001_hidden-areas");
+                    if (!fogLayer) return null;
+                    const statuses = squarePreview.quadrantStatuses ?? party.quadrantStatuses ?? {};
+                    const fogQuadrants: number[] = [];
+                    (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
+                      const s = (statuses[qId] ?? "unexplored").toLowerCase();
+                      if (s === "unexplored" || s === "inaccessible") fogQuadrants.push(i + 1);
+                    });
+                    if (fogQuadrants.length === 0) return null;
+                    const clipPath = fogClipPathForQuadrants(fogQuadrants);
+                    return (
+                      <div className="pointer-events-none absolute inset-0 z-10" aria-hidden>
+                        <img
+                          src={fogLayer.url}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                          style={clipPath ? { clipPath, WebkitClipPath: clipPath } : undefined}
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                      </div>
+                    );
+                  })()}
                   {squarePreview.quadrantBounds && (
                     <div
                       className="pointer-events-none absolute border-2 border-[var(--totk-light-green)]/90 bg-[var(--totk-light-green)]/10"
@@ -2406,36 +2431,6 @@ export default function ExplorePartyPage() {
                     <i className="fa-solid fa-list text-[10px] opacity-80" aria-hidden />
                     Progress log
                   </h3>
-                  {((party.gatheredItems && party.gatheredItems.length > 0) || (() => {
-                    const log = party.progressLog ?? [];
-                    let fallbackCount = 0;
-                    for (const e of log) {
-                      if (e.outcome === "item") fallbackCount += 1;
-                      else if (e.outcome === "relic") fallbackCount += 1;
-                      else if (e.outcome === "monster" && (e as { loot?: { itemName?: string } }).loot?.itemName) fallbackCount += 1;
-                      else if (e.outcome === "chest_open") fallbackCount += (party.members?.length ?? 1);
-                    }
-                    return fallbackCount > 0;
-                  })()) && (
-                    <div className="mb-2 flex-shrink-0 rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-2 py-1.5">
-                      <span className="text-[10px] uppercase text-[var(--totk-grey-200)]">Items gathered</span>
-                      {party.gatheredItems && party.gatheredItems.length > 0 ? (
-                        <p className="truncate text-xs text-[var(--botw-pale)]" title={party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName} x${g.quantity} (${g.characterName})`.trim()).join(" · ")}>
-                          {party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName}×${g.quantity}`).join(" · ")}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-[var(--botw-pale)]">
-                          {(party.progressLog ?? []).reduce((sum, e) => {
-                            if (e.outcome === "item") return sum + 1;
-                            if (e.outcome === "relic") return sum + 1;
-                            if (e.outcome === "monster" && (e as { loot?: { itemName?: string } }).loot?.itemName) return sum + 1;
-                            if (e.outcome === "chest_open") return sum + (party.members?.length ?? 1);
-                            return sum;
-                          }, 0)} item(s) (from expedition log)
-                        </p>
-                      )}
-                    </div>
-                  )}
                   {(party.progressLog?.length ?? 0) === 0 ? (
                     <p className="rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-2 py-3 text-xs text-[var(--totk-grey-200)]">
                       No rolls yet. Use <code className="rounded bg-[var(--totk-dark-ocher)]/40 px-1">/explore roll</code> in Discord.
