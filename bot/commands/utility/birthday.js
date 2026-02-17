@@ -1,5 +1,5 @@
 // ------------------- Import necessary modules -------------------
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const User = require('@/models/UserModel');
 const { connectToTinglebot } = require('@/database/db');
 
@@ -86,12 +86,13 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    const subcommand = interaction.options.getSubcommand();
+    // Defer immediately so the interaction token doesn't expire during DB work (3s limit)
+    await interaction.deferReply();
+
     try {
-      const subcommand = interaction.options.getSubcommand();
-      
-      // Connect to database
       await connectToTinglebot();
-      
+
       if (subcommand === 'set') {
         await handleSetBirthday(interaction);
       } else if (subcommand === 'view') {
@@ -101,13 +102,16 @@ module.exports = {
       } else if (subcommand === 'list') {
         await handleListBirthdays(interaction);
       }
-      
     } catch (error) {
       console.error('[birthday.js]: Error executing birthday command:', error);
-      await interaction.reply({
-        content: '❌ There was an error processing your request. Please try again later.',
-        ephemeral: true
-      });
+      try {
+        await interaction.editReply({
+          content: '❌ There was an error processing your request. Please try again later.',
+          flags: MessageFlags.Ephemeral
+        });
+      } catch (replyError) {
+        if (replyError.code !== 10062) throw replyError;
+      }
     }
   }
 };
@@ -123,14 +127,14 @@ async function handleSetBirthday(interaction) {
     
     // Set birthday
     const result = await user.setBirthday(month, day);
-    
+
     if (!result.success) {
-      return await interaction.reply({
+      return await interaction.editReply({
         content: `❌ **${result.message}**`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
-    
+
     // Create success embed
     const embed = new EmbedBuilder()
       .setColor(0xff69b4)
@@ -166,14 +170,17 @@ async function handleSetBirthday(interaction) {
       })
       .setTimestamp();
     
-    await interaction.reply({ embeds: [embed] });
-    
+    await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error('[birthday.js]: Error in handleSetBirthday:', error);
-    await interaction.reply({
-      content: '❌ There was an error setting your birthday. Please try again later.',
-      ephemeral: true
-    });
+    try {
+      await interaction.editReply({
+        content: '❌ There was an error setting your birthday. Please try again later.',
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (replyError) {
+      if (replyError.code !== 10062) throw replyError;
+    }
   }
 }
 
@@ -188,12 +195,12 @@ async function handleViewBirthday(interaction) {
         ? 'You haven\'t set your birthday yet. Use `/birthday set` to set it!'
         : `${targetUser.displayName} hasn't set their birthday yet.`;
       
-      return await interaction.reply({
+      return await interaction.editReply({
         content: `❌ **${message}**`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
-    
+
     const birthday = user.formatBirthday();
     const isToday = user.isBirthdayToday();
     const hasClaimedThisYear = user.birthday.lastBirthdayReward === new Date().getFullYear().toString();
@@ -238,14 +245,17 @@ async function handleViewBirthday(interaction) {
       });
     }
     
-    await interaction.reply({ embeds: [embed] });
-    
+    await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error('[birthday.js]: Error in handleViewBirthday:', error);
-    await interaction.reply({
-      content: '❌ There was an error viewing birthday information. Please try again later.',
-      ephemeral: true
-    });
+    try {
+      await interaction.editReply({
+        content: '❌ There was an error viewing birthday information. Please try again later.',
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (replyError) {
+      if (replyError.code !== 10062) throw replyError;
+    }
   }
 }
 
@@ -256,16 +266,16 @@ async function handleClaimRewards(interaction) {
     const rewardChoice = interaction.options.getString('reward');
     
     if (!user || !user.birthday || !user.birthday.month || !user.birthday.day) {
-      return await interaction.reply({
+      return await interaction.editReply({
         content: '❌ **You haven\'t set your birthday yet. Use `/birthday set` to set it!**',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
-    
+
     if (!user.isBirthdayToday()) {
-      return await interaction.reply({
+      return await interaction.editReply({
         content: '❌ **It\'s not your birthday today! Check back on your birthday to claim rewards.**',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
     
@@ -273,12 +283,12 @@ async function handleClaimRewards(interaction) {
     const result = await user.giveBirthdayRewards(rewardChoice);
     
     if (!result.success) {
-      return await interaction.reply({
+      return await interaction.editReply({
         content: `❌ **${result.message}**`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
-    
+
     // Create success embed
     const embed = new EmbedBuilder()
       .setColor(0xff69b4)
@@ -309,14 +319,17 @@ async function handleClaimRewards(interaction) {
       })
       .setTimestamp();
     
-    await interaction.reply({ embeds: [embed] });
-    
+    await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error('[birthday.js]: Error in handleClaimRewards:', error);
-    await interaction.reply({
-      content: '❌ There was an error claiming your birthday rewards. Please try again later.',
-      ephemeral: true
-    });
+    try {
+      await interaction.editReply({
+        content: '❌ There was an error claiming your birthday rewards. Please try again later.',
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (replyError) {
+      if (replyError.code !== 10062) throw replyError;
+    }
   }
 }
 
@@ -353,9 +366,9 @@ async function handleListBirthdays(interaction) {
     }
     
     if (upcomingBirthdays.length === 0) {
-      return await interaction.reply({
+      return await interaction.editReply({
         content: `❌ **No upcoming birthdays in the next ${daysAhead} days.**`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
     
@@ -384,14 +397,17 @@ async function handleListBirthdays(interaction) {
     });
     
     embed.setDescription(description);
-    
-    await interaction.reply({ embeds: [embed] });
-    
+
+    await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error('[birthday.js]: Error in handleListBirthdays:', error);
-    await interaction.reply({
-      content: '❌ There was an error listing upcoming birthdays. Please try again later.',
-      ephemeral: true
-    });
+    try {
+      await interaction.editReply({
+        content: '❌ There was an error listing upcoming birthdays. Please try again later.',
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (replyError) {
+      if (replyError.code !== 10062) throw replyError;
+    }
   }
 }
