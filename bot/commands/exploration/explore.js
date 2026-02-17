@@ -1988,8 +1988,8 @@ module.exports = {
        description =
         `**${character.name}** found something unsettling in **${location}**.\n\n` +
         "Um....You found a Monster Camp of some kind....!!! What do you want to do?\n\n" +
-        "**Mark it** — Add to map for later (counts toward this square's 3 discovery limit).\n" +
-        "**Fight it** — Engage in a wave battle here (uses wave mechanic; refightable after Blood Moon).\n" +
+        "**Mark it** — Add to map and fight later (counts toward this square's 3 discovery limit).\n" +
+        "**Fight it** — Add to map and fight now (same as Mark, but you fight the wave here; refightable after Blood Moon).\n" +
         `**Leave it** — Don't mark. Won't be recorded as a discovery. Continue with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
@@ -2525,7 +2525,7 @@ module.exports = {
              : "leave";
          if (monsterCampChoice === "mark") {
           await pushDiscoveryToMap(party, "monster_camp", at, i.user?.id);
-          pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map for later.`, undefined, monsterCampCosts, at);
+          pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map (fight later).`, undefined, monsterCampCosts, at);
           logger.info("EXPLORE", `Counted monster_camp at ${location}: user marked on map (counts toward 3-per-square discovery limit).`);
           await party.save();
           const monsterCampEmbed = new EmbedBuilder()
@@ -2533,7 +2533,7 @@ module.exports = {
            .setColor(regionColors[party.region] || "#00ff99")
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
-            `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`
+            `✅ **Marked on map.** You can fight it when you return (or after the next Blood Moon if already cleared). Continue with </explore roll:${getExploreCommandId()}>.`
            )
            .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
@@ -2546,6 +2546,9 @@ module.exports = {
            await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
            return;
           }
+          await pushDiscoveryToMap(freshParty, "monster_camp", at, i.user?.id);
+          pushProgressLog(freshParty, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map and fighting now.`, undefined, monsterCampCosts, at);
+          logger.info("EXPLORE", `Counted monster_camp at ${location}: user chose Fight (marked on map, counts toward 3-per-square discovery limit).`);
           const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
           const quadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
           const regionKey = (freshParty.region && String(freshParty.region).trim()) || "Eldin";
@@ -2632,14 +2635,14 @@ module.exports = {
           if (failedJoins.length > 0) {
            logger.warn("EXPLORE", `Some party members could not auto-join monster camp wave: ${failedJoins.join("; ")}`);
           }
-          pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location}; started wave ${waveId}. All party members must fight.`, undefined, monsterCampCosts, at);
+          pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location}; marked on map and started wave ${waveId}. All party members must fight.`, undefined, monsterCampCosts, at);
           await freshParty.save();
           const monsterCampEmbed = new EmbedBuilder()
            .setTitle("🗺️ **Expedition: Monster Camp found!**")
            .setColor(regionColors[freshParty.region] || "#00ff99")
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
-            `⚔️ **Wave started!** All party members must fight. Use \`/wave id:${waveId}\` to take turns. **Do not use /explore roll until the wave is complete.**`
+            `✅ **Marked on map and fighting now!** All party members must fight. Use \`/wave id:${waveId}\` to take turns. **Do not use /explore roll until the wave is complete.**`
            )
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(monsterCampEmbed, { party: freshParty, expeditionId, location, nextCharacter: null, showNextAndCommands: false, showRestSecureMove: false, ruinRestRecovered });
