@@ -263,7 +263,8 @@ module.exports = {
 
       // ------------------- /relic appraisal-request -------------------
       if (sub === 'appraisal-request') {
-        const characterName = interaction.options.getString('character');
+        const characterNameRaw = interaction.options.getString('character');
+        const characterName = characterNameRaw && characterNameRaw.includes('|') ? characterNameRaw.split('|')[0].trim() : (characterNameRaw || '').trim();
         const relicId = interaction.options.getString('relic_id');
         const appraiser = interaction.options.getString('appraiser');
         const payment = interaction.options.getString('payment') || '';
@@ -278,7 +279,7 @@ module.exports = {
         if (relic.deteriorated) {
           return interaction.editReply({ content: '❌ This relic has deteriorated and cannot be appraised.' });
         }
-        if (relic.discoveredBy !== characterName) {
+        if ((relic.discoveredBy || '').toLowerCase() !== characterName.toLowerCase()) {
           return interaction.editReply({ content: `❌ This relic was discovered by **${relic.discoveredBy}**, not ${characterName}.` });
         }
 
@@ -290,6 +291,9 @@ module.exports = {
         }
 
         const npcAppraisal = appraiser.trim().toLowerCase() === 'npc';
+        if (!npcAppraisal && (appraiser || '').trim().toLowerCase() === characterName.toLowerCase()) {
+          return interaction.editReply({ content: '❌ You cannot assign the same character who found the relic as the appraiser.' });
+        }
         if (npcAppraisal) {
           const user = await getOrCreateToken(interaction.user.id);
           const balance = user?.tokens ?? 0;
