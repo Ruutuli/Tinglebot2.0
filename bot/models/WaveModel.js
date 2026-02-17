@@ -582,6 +582,8 @@ waveSchema.methods.completeWave = function(endTime = new Date()) {
 
 // ---- Method: failWave ----
 // Mark the wave as failed and KO all participants
+// IMPORTANT: Waves activated in expeditions (source === 'monster_camp') must NEVER cause village damage.
+// Do not add village damage logic for monster_camp waves; expeditions are outside the village.
 waveSchema.methods.failWave = async function() {
   this.status = 'failed';
   this.result = 'defeated';

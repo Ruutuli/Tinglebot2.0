@@ -4148,7 +4148,7 @@ async function handleWaveStart(interaction) {
     // Send the wave announcement
     console.log(`[mod.js]: 📤 Sending wave announcement message to channel ${targetChannel.id}...`);
     const waveMessage = await targetChannel.send({
-      content: `🌊 **MONSTER WAVE TRIGGERED!** 🌊`,
+      content: `🌊 **MONSTER WAVE TRIGGERED!** 🌊\n\n</wave:1456463356515979308> to join the fight!\n</item:1379838613067530385> to heal during the wave!`,
       embeds: [embed]
     });
     console.log(`[mod.js]: ✅ Wave announcement message sent - Message ID: ${waveMessage.id}`);

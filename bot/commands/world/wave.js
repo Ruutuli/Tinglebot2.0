@@ -324,7 +324,7 @@ module.exports = {
               )
               .setThumbnail(monsterImage)
               .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setFooter({ text: `Wave ID: ${waveId} • Use /wave to continue the fight!` })
+              .setFooter({ text: `Wave ID: ${waveId} • Use </wave:1456463356515979308> to continue the fight!` })
               .setTimestamp();
             
             console.log(`[wave.js]: ✅ Defeat embed created for ${defeatedMonster.name} (defeated by ${defeatedByName}), sending follow-up message`);
@@ -550,7 +550,7 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
     .setFooter({ 
-      text: `Wave ID: ${waveId} • Use /wave to take your turn! • Use /item to heal characters!` 
+      text: `Wave ID: ${waveId} • Use </wave:1456463356515979308> to take your turn! • Use </item:1379838613067530385> to heal characters!` 
     })
     .setTimestamp();
 
