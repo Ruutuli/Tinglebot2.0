@@ -570,6 +570,21 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
 // Handles wave victory with loot distribution for eligible participants
 async function handleWaveVictory(interaction, waveData) {
   try {
+    // Monster camp completion hook: mark camp as defeated so it's not fightable until next Blood Moon
+    if (waveData.source === 'monster_camp' && waveData.monsterCampId) {
+      try {
+        const MonsterCamp = require('@/models/MonsterCampModel');
+        const camp = await MonsterCamp.findOne({ campId: waveData.monsterCampId });
+        if (camp) {
+          camp.lastDefeatedAt = new Date();
+          await camp.save();
+          console.log(`[wave.js]: 🏕️ Monster camp ${waveData.monsterCampId} marked as defeated (refightable after next Blood Moon)`);
+        }
+      } catch (monsterCampErr) {
+        console.error(`[wave.js]: ⚠️ Failed to update MonsterCamp ${waveData.monsterCampId}:`, monsterCampErr?.message || monsterCampErr);
+      }
+    }
+
     // Process loot: one item per defeated monster, given to the character who defeated it
     const defeatedMonsters = waveData.defeatedMonsters || [];
     const lootResults = [];

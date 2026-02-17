@@ -53,6 +53,25 @@ function isBloodmoon(date) {
     return bloodmoonDates.some(bloodmoon => bloodmoon.realDate === formattedDate);
 }
 
+// ------------------- Get most recent past Blood Moon date -------------------
+// Returns the real-world date of the last Blood Moon that has passed, or null if none
+function getMostRecentPastBloodMoonDate() {
+    const now = moment();
+    for (let i = bloodmoonDates.length - 1; i >= 0; i--) {
+        const { realDate } = bloodmoonDates[i];
+        const [month, day] = realDate.split('-').map(Number);
+        const bloodMoonDate = moment().year(now.year()).month(month - 1).date(day);
+        if (bloodMoonDate.isSameOrBefore(now)) {
+            return bloodMoonDate.toDate();
+        }
+    }
+    // No blood moon this year yet - use last year's final blood moon
+    const lastYear = moment().year(now.year() - 1);
+    const lastEntry = bloodmoonDates[bloodmoonDates.length - 1];
+    const [month, day] = lastEntry.realDate.split('-').map(Number);
+    return lastYear.month(month - 1).date(day).toDate();
+}
+
 // ------------------- Convert real-world date to Hyrulean calendar date -------------------
 function convertToHyruleanDate(date) {
     const hyruleanMonth = getHyruleanMonth(date);
@@ -109,4 +128,5 @@ module.exports = {
     isBloodmoon,
     convertToHyruleanDate,
     getBloodMoonCycleDay,
+    getMostRecentPastBloodMoonDate,
 };

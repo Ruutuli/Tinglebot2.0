@@ -33,6 +33,7 @@ try { require("../models/MemberLoreModel"); } catch (e) { if (e.name !== 'Overwr
 try { require("../models/MessageTrackingModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MessageTrackingModel:", e.message); }
 try { require("../models/MinigameModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MinigameModel:", e.message); }
 try { require("../models/ModCharacterModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] ModCharacterModel:", e.message); }
+try { require("../models/MonsterCampModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MonsterCampModel:", e.message); }
 try { require("../models/OldMapFoundModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] OldMapFoundModel:", e.message); }
 try { require("../models/MonsterModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MonsterModel:", e.message); }
 try { require("../models/MountModel"); } catch (e) { if (e.name !== 'OverwriteModelError' && !e.message?.includes('Cannot overwrite')) console.warn("[models-index] MountModel:", e.message); }

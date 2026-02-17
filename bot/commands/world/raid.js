@@ -512,6 +512,7 @@ module.exports = {
 
       const myParticipant = updatedRaidData.participants?.find(p => p.characterId && p.characterId.toString() === character._id.toString());
       const isModInRaid = myParticipant && (myParticipant.isModCharacter || character.isModCharacter);
+      const isExpeditionRaid = !!updatedRaidData?.expeditionId; // Exploring party: no turn timer
 
       // ------------------- Strict turn order: only the current turn may roll (mod characters can roll anytime). KO'd stay in order and get a turn to use a fairy or leave. -------------------
       const currentTurnParticipant = updatedRaidData.getCurrentTurnParticipant();
@@ -526,32 +527,31 @@ module.exports = {
       // KO'd member's turn: prompt to use a fairy or leave (don't process a roll)
       if (!isModInRaid && isMyTurn && character.ko) {
         await scheduleRaidTurnSkip(raidId);
+        const koFields = [
+          {
+            name: 'What to do',
+            value: 'Please use a fairy with </item:1463789335626125378>.',
+            inline: false
+          },
+          {
+            name: 'Leave the raid',
+            value: 'Use </raid:1470659276287774734> (raidid, charactername, action: Leave raid).',
+            inline: false
+          },
+          {
+            name: 'New joiners',
+            value: '**New characters can join the raid now** (added at the end of turn order).',
+            inline: false
+          }
+        ];
+        if (!isExpeditionRaid) {
+          koFields.splice(2, 0, { name: '⏰ Time', value: 'You have 1 minute.', inline: false });
+        }
         const koTurnEmbed = new EmbedBuilder()
           .setColor('#FF0000')
           .setTitle('💀 KO\'d — it\'s your turn')
           .setDescription('You\'re knocked out.')
-          .addFields(
-            {
-              name: 'What to do',
-              value: 'Please use a fairy with </item:1463789335626125378>.',
-              inline: false
-            },
-            {
-              name: 'Leave the raid',
-              value: 'Use </raid:1470659276287774734> (raidid, charactername, action: Leave raid).',
-              inline: false
-            },
-            {
-              name: '⏰ Time',
-              value: 'You have 1 minute.',
-              inline: false
-            },
-            {
-              name: 'New joiners',
-              value: '**New characters can join the raid now** (added at the end of turn order).',
-              inline: false
-            }
-          )
+          .addFields(...koFields)
           .setFooter({ text: 'Raid System' })
           .setTimestamp();
         return interaction.editReply({
@@ -561,10 +561,11 @@ module.exports = {
       }
 
       if (!isModInRaid && (!currentTurnParticipant || !isMyTurn)) {
+        const timerSuffix = isExpeditionRaid ? '' : (currentTurnIsKO ? ' You have 1 minute.' : ' You have 1 minute to roll.');
         const whoseTurnBody = currentTurnParticipant
           ? currentTurnIsKO
-            ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with </item:1463789335626125378> or leave with </raid:1470659276287774734> raidid, charactername, action: Leave raid). You have 1 minute.`
-            : `It's **${currentTurnParticipant.name}**'s turn. You have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`
+            ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with </item:1463789335626125378> or leave with </raid:1470659276287774734> raidid, charactername, action: Leave raid).${timerSuffix}`
+            : `It's **${currentTurnParticipant.name}**'s turn.${timerSuffix} Use </raid:1470659276287774734> to take your turn.`
           : 'No valid turn order.';
         const intro = !existingParticipant
           ? `We've added you to the turn order! It's not your turn yet — you'll roll when it's your turn. Use </raid:1470659276287774734> when it's your turn.\n\n${whoseTurnBody}`
@@ -622,14 +623,14 @@ module.exports = {
       if (nextParticipant) {
         const nextChar = await Character.findById(nextParticipant.characterId);
         const nextIsKO = nextChar?.ko ?? false;
+        const nextIsExpedition = !!turnResult.raidData?.expeditionId;
+        const nextTurnDesc = nextIsKO
+          ? `**${nextParticipant.name}** — you're knocked out.\n\nPlease use a fairy with </item:1463789335626125378>.\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).${nextIsExpedition ? '\n\n' : '\n\nYou have 1 minute.\n\n'}**New characters can join the raid now** (added at the end of turn order).`
+          : (nextIsExpedition ? `**${nextParticipant.name}** — use </raid:1470659276287774734> to take your turn.` : `**${nextParticipant.name}** — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`);
         const nextTurnEmbed = new EmbedBuilder()
           .setColor(nextIsKO ? '#FF0000' : '#00FF00')
           .setTitle(nextIsKO ? '💀 KO\'d — it\'s your turn' : '⚔️ It\'s your turn')
-          .setDescription(
-            nextIsKO
-              ? `**${nextParticipant.name}** — you're knocked out.\n\nPlease use a fairy with </item:1463789335626125378>.\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).\n\nYou have 1 minute.\n\n**New characters can join the raid now** (added at the end of turn order).`
-              : `**${nextParticipant.name}** — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`
-          )
+          .setDescription(nextTurnDesc)
           .setFooter({ text: 'Raid System' })
           .setTimestamp();
         await interaction.followUp({

@@ -194,6 +194,17 @@ const waveSchema = new mongoose.Schema({
     }
   },
   
+  // Monster camp source (when wave is created from exploration monster camp)
+  source: {
+    type: String,
+    enum: ['mod', 'monster_camp'],
+    default: 'mod'
+  },
+  monsterCampId: {
+    type: String,
+    default: null
+  },
+  
   // Thread information
   threadId: String,
   messageId: String

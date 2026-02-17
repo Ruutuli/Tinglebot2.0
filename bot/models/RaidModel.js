@@ -50,6 +50,8 @@ const raidSchema = new mongoose.Schema({
 
   // Optional: only set when raid was triggered from /explore roll (exploration). Most raids are village raids and have this null.
   expeditionId: { type: String, default: null },
+  // Exploration raids only: number of failed retreat attempts this raid. Each failure adds 5% to next attempt (like travel flee).
+  failedRetreatAttempts: { type: Number, default: 0, min: 0 },
 
   // Timing information
   createdAt: {

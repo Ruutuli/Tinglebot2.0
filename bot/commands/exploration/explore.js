@@ -28,6 +28,7 @@ const Character = require('@/models/CharacterModel.js');
 const ItemModel = require('@/models/ItemModel.js');
 const Square = require('@/models/mapModel.js');
 const Grotto = require('@/models/GrottoModel.js');
+const MonsterCamp = require('@/models/MonsterCampModel.js');
 const MapModule = require('@/modules/mapModule.js');
 const { rollGrottoTrialType, getTrialLabel } = require('@/data/grottoTrials.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
@@ -131,8 +132,25 @@ const DISABLE_EXPLORATION_RAIDS = false;
 
 const EXPLORATION_CHEST_RELIC_CHANCE = 0.08;
 
-/** Chance that a retreat attempt succeeds (tier 5+ exploration raids only). */
-const RETREAT_SUCCESS_CHANCE = 0.5;
+/** Static chance per exploration roll outcome (must sum to 1). */
+const EXPLORATION_OUTCOME_CHANCES = {
+  monster: 0.18,
+  item: 0.32,
+  explored: 0.17,
+  fairy: 0.05,
+  chest: 0.03,
+  old_map: 0.03,
+  ruins: 0.04,
+  relic: 0.02,
+  camp: 0.06,
+  monster_camp: 0.08,
+  grotto: 0.02,
+};
+
+/** Base chance that a retreat attempt succeeds (tier 5+ exploration raids only). Each failed attempt adds 5% to the next, cap 95% (same as travel flee). */
+const RETREAT_BASE_CHANCE = 0.5;
+const RETREAT_BONUS_PER_FAIL = 0.05;
+const RETREAT_CHANCE_CAP = 0.95;
 
 /**
  * Builds an embed for when the party is out of stamina and stuck in the wild.
@@ -1624,23 +1642,17 @@ module.exports = {
 
      const location = `${party.square} ${party.quadrant}`;
 
-     // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto
-     // Nominal probabilities: monster 45%, item 22%, explored 16%, fairy 3%, chest 1%, old_map 1%, ruins 2%, relic 0.5%, camp 4%, monster_camp 5%, grotto 0.5%
+     // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto (chances in EXPLORATION_OUTCOME_CHANCES)
      // Reroll if: explored twice in a row; or special (ruins/relic/camp/monster_camp/grotto) and square has 3 discoveries; or grotto and square already has grotto; or special and discovery-reduce roll fails
      function rollOutcome() {
       const r = Math.random();
+      let cum = 0;
       let outcome;
-      if (r < 0.45) outcome = "monster";
-      else if (r < 0.67) outcome = "item";
-      else if (r < 0.83) outcome = "explored";
-      else if (r < 0.86) outcome = "fairy";
-      else if (r < 0.87) outcome = "chest";
-      else if (r < 0.88) outcome = "old_map";
-      else if (r < 0.90) outcome = "ruins";
-      else if (r < 0.905) outcome = "relic";
-      else if (r < 0.945) outcome = "camp";
-      else if (r < 0.995) outcome = "monster_camp";
-      else outcome = "grotto";
+      for (const [name, chance] of Object.entries(EXPLORATION_OUTCOME_CHANCES)) {
+       cum += chance;
+       if (r < cum) { outcome = name; break; }
+      }
+      if (!outcome) outcome = Object.keys(EXPLORATION_OUTCOME_CHANCES).pop();
       logger.info("EXPLORE", `Roll outcome: r=${r.toFixed(4)} -> ${outcome} (location=${location})`);
       appendExploreStat(`${new Date().toISOString()}\troll\tr=${r.toFixed(4)}\t${outcome}\t${location}`);
       return outcome;
@@ -1975,9 +1987,10 @@ module.exports = {
        title = `🗺️ **Expedition: Monster Camp found!**`;
        description =
         `**${character.name}** found something unsettling in **${location}**.\n\n` +
-        "Um....You found a Monster Camp of some kind....!!! But you aren't ready to face what's there.\n\n" +
-        "**Yes** — Mark it on the map for later (counts toward this square's 3 discovery limit).\n" +
-        `**No** — Don't mark it. Won't be recorded as a discovery. Continue with </explore roll:${getExploreCommandId()}>.`;
+        "Um....You found a Monster Camp of some kind....!!! What do you want to do?\n\n" +
+        "**Mark it** — Add to map for later (counts toward this square's 3 discovery limit).\n" +
+        "**Fight it** — Engage in a wave battle here (uses wave mechanic; refightable after Blood Moon).\n" +
+        `**Leave it** — Don't mark. Won't be recorded as a discovery. Continue with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
        description =
@@ -2031,7 +2044,8 @@ module.exports = {
         ruinRestRecovered,
       });
 
-      const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest" || outcomeType === "monster_camp";
+      const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest";
+      const isMonsterCampChoice = outcomeType === "monster_camp";
       let components = [];
       if (isYesNoChoice) {
        const row = new ActionRowBuilder().addComponents(
@@ -2042,6 +2056,22 @@ module.exports = {
         new ButtonBuilder()
          .setCustomId(`explore_${outcomeType}_no|${expeditionId}|${characterIndex}`)
          .setLabel("No")
+         .setStyle(ButtonStyle.Secondary)
+       );
+       components = [row];
+      } else if (isMonsterCampChoice) {
+       const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+         .setCustomId(`explore_monster_camp_mark|${expeditionId}|${characterIndex}`)
+         .setLabel("Mark it")
+         .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+         .setCustomId(`explore_monster_camp_fight|${expeditionId}|${characterIndex}`)
+         .setLabel("Fight it")
+         .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+         .setCustomId(`explore_monster_camp_leave|${expeditionId}|${characterIndex}`)
+         .setLabel("Leave it")
          .setStyle(ButtonStyle.Secondary)
        );
        components = [row];
@@ -2056,7 +2086,7 @@ module.exports = {
       }
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
 
-      if (isYesNoChoice) {
+      if (isYesNoChoice || isMonsterCampChoice) {
        const collector = msg.createMessageComponentCollector({
         filter: (i) => i.user.id === interaction.user.id,
         time: 5 * 60 * 1000,
@@ -2065,18 +2095,39 @@ module.exports = {
        collector.on("collect", async (i) => {
         await i.deferUpdate();
         const isYes = i.customId.endsWith("_yes") || i.customId.includes("_yes|");
-        const disabledRow = new ActionRowBuilder().addComponents(
-         new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_yes|${expeditionId}|${characterIndex}`)
-          .setLabel("Yes")
-          .setStyle(ButtonStyle.Success)
-          .setDisabled(true),
-         new ButtonBuilder()
-          .setCustomId(`explore_${outcomeType}_no|${expeditionId}|${characterIndex}`)
-          .setLabel("No")
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(true)
-        );
+        let disabledRow;
+        if (isMonsterCampChoice) {
+         disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+           .setCustomId(`explore_monster_camp_mark|${expeditionId}|${characterIndex}`)
+           .setLabel("Mark it")
+           .setStyle(ButtonStyle.Primary)
+           .setDisabled(true),
+          new ButtonBuilder()
+           .setCustomId(`explore_monster_camp_fight|${expeditionId}|${characterIndex}`)
+           .setLabel("Fight it")
+           .setStyle(ButtonStyle.Success)
+           .setDisabled(true),
+          new ButtonBuilder()
+           .setCustomId(`explore_monster_camp_leave|${expeditionId}|${characterIndex}`)
+           .setLabel("Leave it")
+           .setStyle(ButtonStyle.Secondary)
+           .setDisabled(true)
+         );
+        } else {
+         disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+           .setCustomId(`explore_${outcomeType}_yes|${expeditionId}|${characterIndex}`)
+           .setLabel("Yes")
+           .setStyle(ButtonStyle.Success)
+           .setDisabled(true),
+          new ButtonBuilder()
+           .setCustomId(`explore_${outcomeType}_no|${expeditionId}|${characterIndex}`)
+           .setLabel("No")
+           .setStyle(ButtonStyle.Secondary)
+           .setDisabled(true)
+         );
+        }
         await msg.edit({ components: [disabledRow] }).catch(() => {});
 
         if (outcomeType === "ruins" && isYes) {
@@ -2467,28 +2518,150 @@ module.exports = {
         if (outcomeType === "monster_camp") {
          const at = new Date();
          const monsterCampCosts = Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined;
-         if (isYes) {
+         const monsterCampChoice = i.customId.includes("_mark")
+           ? "mark"
+           : i.customId.includes("_fight")
+             ? "fight"
+             : "leave";
+         if (monsterCampChoice === "mark") {
           await pushDiscoveryToMap(party, "monster_camp", at, i.user?.id);
           pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map for later.`, undefined, monsterCampCosts, at);
           logger.info("EXPLORE", `Counted monster_camp at ${location}: user marked on map (counts toward 3-per-square discovery limit).`);
-         } else {
-          pushProgressLog(party, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, monsterCampCosts, at);
-          logger.info("EXPLORE", `Skipped counting monster_camp at ${location}: user chose No (not marked on map; does not count toward 3-per-square discovery limit).`);
+          await party.save();
+          const monsterCampEmbed = new EmbedBuilder()
+           .setTitle("🗺️ **Expedition: Monster Camp found!**")
+           .setColor(regionColors[party.region] || "#00ff99")
+           .setDescription(
+            description.split("\n\n")[0] + "\n\n" +
+            `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`
+           )
+           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+          addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+          await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
+          return;
          }
-         await party.save();
-         const monsterCampEmbed = new EmbedBuilder()
-          .setTitle("🗺️ **Expedition: Monster Camp found!**")
-          .setColor(regionColors[party.region] || "#00ff99")
-          .setDescription(
-           description.split("\n\n")[0] + "\n\n" +
-           (isYes
-             ? `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`
-             : `✅ **You didn't mark it.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${getExploreCommandId()}>.`)
-          )
-          .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-         addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
-         await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
-         return;
+         if (monsterCampChoice === "fight") {
+          const freshParty = await Party.findActiveByPartyId(expeditionId);
+          if (!freshParty) {
+           await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
+           return;
+          }
+          const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
+          const quadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
+          const regionKey = (freshParty.region && String(freshParty.region).trim()) || "Eldin";
+          const regionCapitalized = regionKey.charAt(0).toUpperCase() + regionKey.slice(1).toLowerCase();
+          let camp;
+          try {
+           camp = await MonsterCamp.findOrCreate(squareId, quadrantId, regionCapitalized);
+          } catch (err) {
+           logger.error("EXPLORE", `MonsterCamp findOrCreate failed: ${err?.message || err}`);
+           await i.followUp({ content: "❌ Failed to find or create monster camp.", ephemeral: true }).catch(() => {});
+           return;
+          }
+          const isFightable = await MonsterCamp.isFightable(camp);
+          if (!isFightable) {
+           pushProgressLog(freshParty, character.name, "monster_camp_fight_blocked", `Found a monster camp in ${location}; camp recently cleared (wait for Blood Moon).`, undefined, monsterCampCosts, at);
+           await freshParty.save();
+           const blockedEmbed = new EmbedBuilder()
+            .setTitle("🗺️ **Expedition: Monster Camp found!**")
+            .setColor(regionColors[freshParty.region] || "#00ff99")
+            .setDescription(
+             description.split("\n\n")[0] + "\n\n" +
+             `🔴 **This camp was recently cleared.** Wait for the next Blood Moon to fight it again. Continue with </explore roll:${getExploreCommandId()}>.`
+            )
+            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
+          addExplorationStandardFields(blockedEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+          await msg.edit({ embeds: [blockedEmbed], components: [disabledRow] }).catch(() => {});
+          return;
+          }
+          const village = REGION_TO_VILLAGE[regionKey?.toLowerCase()] || "Inariko";
+          const MONSTER_CAMP_DIFFICULTIES = ["beginner", "beginner+", "easy", "easy+", "mixed-low", "mixed-medium", "intermediate", "intermediate+"];
+          const difficultyGroup = MONSTER_CAMP_DIFFICULTIES[Math.floor(Math.random() * MONSTER_CAMP_DIFFICULTIES.length)];
+          const monsterCount = 2 + Math.floor(Math.random() * 4);
+          const modifiedInteraction = {
+           channel: i.channel,
+           client: i.client,
+           guild: i.guild,
+           user: i.user,
+           editReply: async () => {},
+           followUp: async (opts) => i.channel.send(opts),
+          };
+          const { startWave, joinWave } = require("../../modules/waveModule");
+          const { createWaveEmbed } = require("../../embeds/embeds.js");
+          let waveResult;
+          try {
+           waveResult = await startWave(village, monsterCount, difficultyGroup, modifiedInteraction);
+          } catch (waveErr) {
+           logger.error("EXPLORE", `startWave failed for monster camp: ${waveErr?.message || waveErr}`);
+           await i.followUp({ content: `❌ Failed to start wave: ${waveErr?.message || "Unknown error"}`, ephemeral: true }).catch(() => {});
+           return;
+          }
+          const { waveId, waveData } = waveResult;
+          waveData.source = "monster_camp";
+          waveData.monsterCampId = camp.campId;
+          waveData.channelId = i.channel.id;
+          await waveData.save();
+          const joinedNames = [];
+          const failedJoins = [];
+          for (const slot of freshParty.characters || []) {
+           try {
+            const charDoc = await Character.findById(slot._id);
+            if (!charDoc) continue;
+            if (charDoc.blighted && charDoc.blightStage >= 3) {
+             failedJoins.push(`${charDoc.name} (Blight Stage ${charDoc.blightStage})`);
+             continue;
+            }
+            if (String(charDoc.currentVillage || "").toLowerCase() !== String(village).toLowerCase()) {
+             failedJoins.push(`${charDoc.name} (wrong village)`);
+             continue;
+            }
+            await joinWave(charDoc, waveId);
+            joinedNames.push(charDoc.name);
+           } catch (joinErr) {
+            failedJoins.push(`${slot.name || "Unknown"} (${joinErr?.message || joinErr})`);
+           }
+          }
+          const waveEmbed = createWaveEmbed(waveData);
+          const joinNote = joinedNames.length > 0
+           ? `**All party members** (${joinedNames.join(", ")}) must fight. `
+           : "";
+          await i.channel.send({
+           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use \`/wave id:${waveId}\` to take your turn. **The expedition pauses until the wave is complete.**`,
+           embeds: [waveEmbed],
+          });
+          if (failedJoins.length > 0) {
+           logger.warn("EXPLORE", `Some party members could not auto-join monster camp wave: ${failedJoins.join("; ")}`);
+          }
+          pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location}; started wave ${waveId}. All party members must fight.`, undefined, monsterCampCosts, at);
+          await freshParty.save();
+          const monsterCampEmbed = new EmbedBuilder()
+           .setTitle("🗺️ **Expedition: Monster Camp found!**")
+           .setColor(regionColors[freshParty.region] || "#00ff99")
+           .setDescription(
+            description.split("\n\n")[0] + "\n\n" +
+            `⚔️ **Wave started!** All party members must fight. Use \`/wave id:${waveId}\` to take turns. **Do not use /explore roll until the wave is complete.**`
+           )
+           .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
+          addExplorationStandardFields(monsterCampEmbed, { party: freshParty, expeditionId, location, nextCharacter: null, showNextAndCommands: false, showRestSecureMove: false, ruinRestRecovered });
+          await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
+          return;
+         }
+         if (monsterCampChoice === "leave") {
+          pushProgressLog(party, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, monsterCampCosts, at);
+          logger.info("EXPLORE", `Skipped counting monster_camp at ${location}: user chose Leave (not marked on map; does not count toward 3-per-square discovery limit).`);
+          await party.save();
+          const monsterCampEmbed = new EmbedBuilder()
+           .setTitle("🗺️ **Expedition: Monster Camp found!**")
+           .setColor(regionColors[party.region] || "#00ff99")
+           .setDescription(
+            description.split("\n\n")[0] + "\n\n" +
+            `✅ **You didn't mark it.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${getExploreCommandId()}>.`
+           )
+           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+          addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered });
+          await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
+          return;
+         }
         }
 
         if (outcomeType === "grotto") {
@@ -2567,6 +2740,24 @@ module.exports = {
           if (outcomeType === "monster_camp") {
            pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined, new Date());
            logger.info("EXPLORE", `Skipped counting monster_camp at ${location}: choice timed out (not marked; does not count toward discovery limit).`);
+           const timeoutDisabledRowMonsterCamp = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+             .setCustomId(`explore_monster_camp_mark|${expeditionId}|${characterIndex}`)
+             .setLabel("Mark it")
+             .setStyle(ButtonStyle.Primary)
+             .setDisabled(true),
+            new ButtonBuilder()
+             .setCustomId(`explore_monster_camp_fight|${expeditionId}|${characterIndex}`)
+             .setLabel("Fight it")
+             .setStyle(ButtonStyle.Success)
+             .setDisabled(true),
+            new ButtonBuilder()
+             .setCustomId(`explore_monster_camp_leave|${expeditionId}|${characterIndex}`)
+             .setLabel("Leave it")
+             .setStyle(ButtonStyle.Secondary)
+             .setDisabled(true)
+           );
+           msg.edit({ components: [timeoutDisabledRowMonsterCamp] }).catch(() => {});
           } else if (outcomeType === "ruins") {
            pushProgressLog(fp, character.name, "ruins_skipped", `Found ruins in ${location}; choice timed out (left for later).`, undefined, undefined, new Date());
            logger.info("EXPLORE", `Skipped counting ruins at ${location}: choice timed out (not marked; does not count toward discovery limit).`);
@@ -2578,6 +2769,9 @@ module.exports = {
            await fp.save();
           }
          }
+         if (outcomeType === "monster_camp") {
+          // Already edited in monster_camp block above
+         } else {
          const timeoutDisabledRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
            .setCustomId(`explore_${outcomeType}_yes|${expeditionId}|${characterIndex}`)
@@ -2591,6 +2785,7 @@ module.exports = {
            .setDisabled(true)
          );
          msg.edit({ components: [timeoutDisabledRow] }).catch(() => {});
+         }
         }
        });
       }
@@ -3904,7 +4099,9 @@ module.exports = {
     }
     const retreatCostsForLog = { ...(retreatPayResult.staminaPaid > 0 && { staminaLost: retreatPayResult.staminaPaid }), ...(retreatPayResult.heartsPaid > 0 && { heartsLost: retreatPayResult.heartsPaid }) };
 
-    const success = Math.random() < RETREAT_SUCCESS_CHANCE;
+    const failedAttempts = raid.failedRetreatAttempts ?? 0;
+    const retreatChance = Math.min(RETREAT_BASE_CHANCE + failedAttempts * RETREAT_BONUS_PER_FAIL, RETREAT_CHANCE_CAP);
+    const success = Math.random() < retreatChance;
     if (success) {
      await endExplorationRaidAsRetreat(raid, interaction.client);
      pushProgressLog(party, character.name, "retreat", "Party attempted to retreat and escaped.", undefined, retreatCostsForLog);
@@ -3927,6 +4124,9 @@ module.exports = {
      });
      return interaction.editReply({ embeds: [embed] });
     }
+
+    raid.failedRetreatAttempts = (raid.failedRetreatAttempts ?? 0) + 1;
+    await raid.save();
 
     pushProgressLog(party, character.name, "retreat_failed", "Party attempted to retreat but could not get away.", undefined, retreatCostsForLog);
     await party.save();
