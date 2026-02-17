@@ -28,6 +28,8 @@ const RELIC_EMBED_BORDER_URL = 'https://storage.googleapis.com/tinglebot/Graphic
 const DUPLICATE_RELIC_REWARD_TOKENS = 500;
 /** Instructions for finder after appraisal: provide art to archive in Library. */
 const ART_INSTRUCTIONS = 'The owner of the character who found this relic should provide their **artistic rendition** of the item based on the appraisal description above. Once this art is submitted, it will go on display in the **Library Archives**.';
+/** Dashboard URL for Library Archives (submit relic art). */
+const LIBRARY_ARCHIVES_URL = `${(process.env.DASHBOARD_URL || process.env.APP_URL || 'https://tinglebot.xyz').replace(/\/$/, '')}/library/archives`;
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
@@ -313,7 +315,7 @@ module.exports = {
             ? (duplicateRewardGiven
               ? `This relic is a duplicate. It has been submitted to the archives—no art needed. You received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
               : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
-            : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the dashboard (Library).`;
+            : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the [Library Archives](${LIBRARY_ARCHIVES_URL}) dashboard.`;
           const userEmbed = new EmbedBuilder()
             .setTitle(`📜 Relic appraised by NPC — ${outcome.name}`)
             .setDescription(outcome.description)
@@ -415,7 +417,7 @@ module.exports = {
           ? (duplicateRewardGiven
             ? `This relic is a duplicate. It has been submitted to the archives—no art needed. The finder received **${DUPLICATE_RELIC_REWARD_TOKENS} tokens** for turning it in.`
             : 'This relic is a duplicate. It has been submitted to the archives—no art needed.')
-          : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the dashboard (Library).`;
+          : ART_INSTRUCTIONS + ` Use Relic ID \`${displayRelicId}\` when submitting on the [Library Archives](${LIBRARY_ARCHIVES_URL}) dashboard.`;
         const embed = new EmbedBuilder()
           .setTitle(`📜 Relic appraised by ${appraiserName} — ${outcome.name}`)
           .setDescription(outcome.description)

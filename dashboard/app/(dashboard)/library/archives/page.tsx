@@ -5,6 +5,8 @@ import { Loading, Modal } from "@/components/ui";
 import { useSession } from "@/hooks/use-session";
 
 const LIBRARY_IMAGE = "/assets/library.png";
+/** Fixed size for all relic pins on the library map (percent of map width). */
+const MAP_PIN_SIZE = 3;
 
 type ArchivedRelic = {
   _id: string;
@@ -50,19 +52,22 @@ export default function LibraryArchivesPage() {
   const [uploadInfo, setUploadInfo] = useState("");
   const [uploadLibraryPositionX, setUploadLibraryPositionX] = useState<number | null>(null);
   const [uploadLibraryPositionY, setUploadLibraryPositionY] = useState<number | null>(null);
-  const [uploadLibraryDisplaySize, setUploadLibraryDisplaySize] = useState(8);
+  const [uploadLibraryDisplaySize, setUploadLibraryDisplaySize] = useState(MAP_PIN_SIZE);
   const [uploading, setUploading] = useState(false);
   const [loadRelicLoading, setLoadRelicLoading] = useState(false);
   const [loadRelicError, setLoadRelicError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
-  const [editPlacement, setEditPlacement] = useState(false);
   const [placingRelicId, setPlacingRelicId] = useState<string | null>(null);
-  const [placementSize, setPlacementSize] = useState(8);
+  /** Mod-only: size when placing a relic (percent). Used in Mod: All relics when placing. */
+  const [placementSize, setPlacementSize] = useState(MAP_PIN_SIZE);
+  /** When placing, keyboard nudge position (percent). Used when not hovering over map. */
+  const [nudgePosition, setNudgePosition] = useState<{ x: number; y: number } | null>(null);
   const [mapHoverPercent, setMapHoverPercent] = useState<{ x: number; y: number } | null>(null);
   const [savingPlacement, setSavingPlacement] = useState<string | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const modSectionRef = useRef<HTMLElement>(null);
   const submitMapRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +97,31 @@ export default function LibraryArchivesPage() {
   useEffect(() => {
     fetchArchives();
   }, [fetchArchives]);
+
+  useEffect(() => {
+    if (!placingRelicId || !relics.length) {
+      setNudgePosition(null);
+      return;
+    }
+    const relic = relics.find((r) => r._id === placingRelicId);
+    if (!relic) {
+      setNudgePosition({ x: 50, y: 50 });
+      return;
+    }
+    const x = relic.libraryPositionX != null ? Number(relic.libraryPositionX) : NaN;
+    const y = relic.libraryPositionY != null ? Number(relic.libraryPositionY) : NaN;
+    if (!Number.isNaN(x) && !Number.isNaN(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+      setNudgePosition({ x, y });
+    } else {
+      setNudgePosition({ x: 50, y: 50 });
+    }
+  }, [placingRelicId, relics]);
+
+  useEffect(() => {
+    if (placingRelicId && modSectionRef.current) {
+      modSectionRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [placingRelicId]);
 
   const handleLoadRelic = useCallback(async () => {
     const id = uploadRelicId.trim().toUpperCase();
@@ -172,7 +202,7 @@ export default function LibraryArchivesPage() {
       setUploadInfo("");
       setUploadLibraryPositionX(null);
       setUploadLibraryPositionY(null);
-      setUploadLibraryDisplaySize(8);
+      setUploadLibraryDisplaySize(MAP_PIN_SIZE);
       setSubmitModalOpen(false);
       fetchArchives();
     } catch (e) {
@@ -216,18 +246,22 @@ export default function LibraryArchivesPage() {
   const updatePlacement = useCallback(
     async (relicId: string, libraryPositionX: number, libraryPositionY: number, libraryDisplaySize?: number) => {
       const idStr = normalizeRelicId(relicId) || String(relicId);
+      const payload = {
+        libraryPositionX,
+        libraryPositionY,
+        ...(libraryDisplaySize != null && { libraryDisplaySize }),
+      };
+      const url = `/api/relics/archives/${encodeURIComponent(idStr)}/placement`;
+      console.log("[placement] Saving", { relicId: idStr, payload, url });
       setSavingPlacement(idStr);
       try {
-        const res = await fetch(`/api/relics/archives/${encodeURIComponent(idStr)}/placement`, {
+        const res = await fetch(url, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            libraryPositionX,
-            libraryPositionY,
-            ...(libraryDisplaySize != null && { libraryDisplaySize }),
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => ({}));
+        console.log("[placement] Response", { status: res.status, ok: res.ok, data });
         if (!res.ok) {
           setUploadMessage({ type: "err", text: data.error || "Failed to save position" });
           return;
@@ -235,6 +269,7 @@ export default function LibraryArchivesPage() {
         setUploadMessage({ type: "ok", text: "Position saved." });
         const placement = data.placement && typeof data.placement === "object" ? data.placement as { libraryPositionX?: number; libraryPositionY?: number; libraryDisplaySize?: number } : null;
         if (placement) {
+          console.log("[placement] Updating local state with", { relicId: idStr, placement });
           setRelics((prev) =>
             prev.map((r) =>
               normalizeRelicId(r._id) === idStr
@@ -242,24 +277,18 @@ export default function LibraryArchivesPage() {
                 : r
             )
           );
+        } else {
+          console.warn("[placement] No placement in response, local state not updated", data);
         }
-        const fresh = await fetchArchives();
-        if (fresh?.length && placement) {
-          setRelics(
-            fresh.map((r) =>
-              normalizeRelicId(r._id) === idStr
-                ? { ...r, libraryPositionX: placement.libraryPositionX, libraryPositionY: placement.libraryPositionY, libraryDisplaySize: placement.libraryDisplaySize ?? r.libraryDisplaySize }
-                : r
-            )
-          );
-        }
+        // Do not refetch after placement: it can overwrite with stale data and make the pin disappear
       } catch (e) {
+        console.error("[placement] Request failed", e);
         setUploadMessage({ type: "err", text: e instanceof Error ? e.message : "Failed to save" });
       } finally {
         setSavingPlacement(null);
       }
     },
-    [fetchArchives, normalizeRelicId]
+    [normalizeRelicId]
   );
 
   const getMapPercent = useCallback((clientX: number, clientY: number) => {
@@ -304,32 +333,77 @@ export default function LibraryArchivesPage() {
   const handleMapDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      if (!mapContainerRef.current || !editPlacement) return;
+      if (!mapContainerRef.current || !isMod) return;
       const relicId = e.dataTransfer.getData("text/plain");
       if (!relicId) return;
       const percent = getMapPercent(e.clientX, e.clientY);
       if (!percent) return;
       const relic = relics.find((r) => r._id === relicId);
-      const isUnplaced = relic && (relic.libraryPositionX == null || relic.libraryPositionY == null);
-      const size = isUnplaced ? placementSize : (relic?.libraryDisplaySize ?? 8);
-      updatePlacement(relicId, percent.x, percent.y, size);
+      const size = relic && (relic.libraryPositionX != null && relic.libraryPositionY != null) ? (relic.libraryDisplaySize ?? MAP_PIN_SIZE) : placementSize;
+      updatePlacement(relicId, percent.x, percent.y, typeof size === "number" ? size : placementSize);
       if (placingRelicId === relicId) {
         setPlacingRelicId(null);
         setMapHoverPercent(null);
       }
     },
-    [editPlacement, relics, updatePlacement, getMapPercent, placementSize, placingRelicId]
+    [isMod, relics, updatePlacement, getMapPercent, placementSize, placingRelicId]
   );
 
-  const placedRelics = relics.filter(
-    (r) =>
-      r.imageUrl &&
-      r.libraryPositionX != null &&
-    r.libraryPositionY != null
-  );
-  const unplacedRelics = relics.filter(
-    (r) => r.imageUrl && (r.libraryPositionX == null || r.libraryPositionY == null)
-  );
+  const NUDGE_STEP = 0.25;
+  const handlePlaceAtPreview = useCallback(() => {
+    if (!placingRelicId) return;
+    const preview = mapHoverPercent ?? nudgePosition;
+    if (!preview) return;
+    updatePlacement(placingRelicId, preview.x, preview.y, placementSize);
+    setPlacingRelicId(null);
+    setMapHoverPercent(null);
+    setNudgePosition(null);
+  }, [placingRelicId, mapHoverPercent, nudgePosition, placementSize, updatePlacement]);
+
+  useEffect(() => {
+    if (!placingRelicId || !isMod) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPlacingRelicId(null);
+        setMapHoverPercent(null);
+        setNudgePosition(null);
+        e.preventDefault();
+        return;
+      }
+      if (e.key === "Enter") {
+        const preview = mapHoverPercent ?? nudgePosition;
+        if (preview) {
+          updatePlacement(placingRelicId, preview.x, preview.y, placementSize);
+          setPlacingRelicId(null);
+          setMapHoverPercent(null);
+          setNudgePosition(null);
+          e.preventDefault();
+        }
+        return;
+      }
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        setNudgePosition((prev) => {
+          const p = prev ?? { x: 50, y: 50 };
+          const next = { ...p };
+          if (e.key === "ArrowLeft") next.x = Math.max(0, p.x - NUDGE_STEP);
+          if (e.key === "ArrowRight") next.x = Math.min(100, p.x + NUDGE_STEP);
+          if (e.key === "ArrowUp") next.y = Math.max(0, p.y - NUDGE_STEP);
+          if (e.key === "ArrowDown") next.y = Math.min(100, p.y + NUDGE_STEP);
+          return next;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [placingRelicId, isMod, mapHoverPercent, nudgePosition, placementSize, updatePlacement]);
+
+  const hasValidPosition = (r: ArchivedRelic) => {
+    const x = r.libraryPositionX != null ? Number(r.libraryPositionX) : NaN;
+    const y = r.libraryPositionY != null ? Number(r.libraryPositionY) : NaN;
+    return !Number.isNaN(x) && !Number.isNaN(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100;
+  };
+  const placedRelics = relics.filter((r) => r.imageUrl && hasValidPosition(r));
 
   if (loading) {
     return (
@@ -351,15 +425,6 @@ export default function LibraryArchivesPage() {
             </h1>
             <img src="/Side=Right.svg" alt="" className="h-5 w-auto sm:h-6" aria-hidden />
           </div>
-          <p className="mt-4 max-w-2xl mx-auto text-center text-[15px] leading-relaxed text-[var(--botw-pale)]/95 sm:text-base">
-            Appraised relics donated to the Library. Place them on the map below. Discovered during expeditions across Hyrule.
-          </p>
-          <div className="mt-5 mx-auto max-w-md rounded-xl border border-[var(--totk-light-ocher)]/40 bg-[var(--totk-light-ocher)]/10 px-4 py-3 text-center">
-            <p className="text-sm font-medium text-[var(--totk-light-ocher)]">
-              <i className="fa-solid fa-coins mr-1.5 opacity-80" aria-hidden />
-              First full appraisal (including artwork) rewards 1,000 tokens
-            </p>
-          </div>
         </header>
 
         {error && (
@@ -369,22 +434,6 @@ export default function LibraryArchivesPage() {
           >
             <i className="fa-solid fa-circle-exclamation text-red-400 shrink-0" aria-hidden />
             <p className="text-sm font-medium text-red-300 sm:text-base">{error}</p>
-          </div>
-        )}
-
-        {user && !sessionLoading && (
-          <div className="mb-6 flex justify-center">
-            <button
-              type="button"
-              onClick={() => {
-                setSubmitModalOpen(true);
-                setUploadMessage(null);
-              }}
-              className="group flex items-center gap-2.5 rounded-xl bg-[var(--totk-light-ocher)] px-6 py-3 font-semibold text-[var(--botw-warm-black)] shadow-lg shadow-black/20 transition-all hover:opacity-95 hover:shadow-xl hover:shadow-black/25 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-ocher)] focus:ring-offset-2 focus:ring-offset-[var(--totk-brown)]"
-            >
-              <i className="fa-solid fa-cloud-arrow-up text-lg group-hover:scale-110 transition-transform" aria-hidden />
-              Submit relic to archives
-            </button>
           </div>
         )}
 
@@ -415,7 +464,7 @@ export default function LibraryArchivesPage() {
                 setLoadRelicError(null);
                 setUploadLibraryPositionX(null);
                 setUploadLibraryPositionY(null);
-                setUploadLibraryDisplaySize(8);
+                setUploadLibraryDisplaySize(MAP_PIN_SIZE);
                 if (uploadPreviewUrl) {
                   URL.revokeObjectURL(uploadPreviewUrl);
                   setUploadPreviewUrl(null);
@@ -426,115 +475,140 @@ export default function LibraryArchivesPage() {
             description="Enter Relic ID and click Load to auto-fill details. You only need to add the image and info (description). Submissions go to mods for approval. Images: 1:1, at least 500×500px, PNG, transparent background."
             size="xl"
           >
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-1 min-w-[120px] flex-col gap-1">
-                  <span className="text-xs text-[var(--totk-grey-200)]">Relic ID <span className="text-red-400">*</span></span>
-                  <input
-                    type="text"
-                    value={uploadRelicId}
-                    onChange={(e) => setUploadRelicId(e.target.value)}
-                    placeholder="e.g. R473582"
-                    className="rounded border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-900)] px-3 py-2 text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-500)]"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={handleLoadRelic}
-                  disabled={loadRelicLoading}
-                  className="rounded border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-900)] px-4 py-2 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-grey-800)] disabled:opacity-50"
-                >
-                  {loadRelicLoading ? "Loading…" : "Load"}
-                </button>
-              </div>
-              {loadRelicError && (
-                <p className="text-sm text-red-400">{loadRelicError}</p>
-              )}
-
-              {(uploadTitle || uploadDiscoveredBy || uploadAppraisedBy) && (
-                <div className="rounded border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-grey-900)]/50 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-400)]">Auto-filled from relic</p>
-                  <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-                    <div><dt className="text-[var(--totk-grey-400)]">Title</dt><dd className="text-[var(--botw-pale)]">{uploadTitle || "—"}</dd></div>
-                    <div><dt className="text-[var(--totk-grey-400)]">Discovered By</dt><dd className="text-[var(--botw-pale)]">{uploadDiscoveredBy || "—"}</dd></div>
-                    <div><dt className="text-[var(--totk-grey-400)]">Appraised By</dt><dd className="text-[var(--botw-pale)]">{uploadAppraisedBy || "—"}</dd></div>
-                    {(uploadRegion || uploadSquare || uploadQuadrant) && (
-                      <div className="sm:col-span-2"><dt className="text-[var(--totk-grey-400)]">Region / Square / Quadrant</dt><dd className="text-[var(--botw-pale)]">{[uploadRegion, uploadSquare, uploadQuadrant].filter(Boolean).join(" • ") || "—"}</dd></div>
-                    )}
-                  </dl>
-                </div>
-              )}
-
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-[var(--totk-grey-200)]">Info (description) <span className="text-red-400">*</span></span>
-                <textarea
-                  value={uploadInfo}
-                  onChange={(e) => setUploadInfo(e.target.value)}
-                  placeholder="Appraisal description / lore (e.g. A sliver of agatized coral...)"
-                  rows={4}
-                  className="rounded border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-900)] px-3 py-2 text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-500)]"
-                />
-              </label>
-              <div className="flex flex-col gap-2">
-                <span className="text-xs text-[var(--totk-grey-200)]">Image <span className="text-red-400">*</span></span>
-                <p className="text-xs text-[var(--totk-grey-400)]">
-                  1:1 ratio, at least 500×500px, PNG, transparent background.
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    setUploadFile(file);
-                    if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
-                    setUploadPreviewUrl(file ? URL.createObjectURL(file) : null);
-                  }}
-                />
-                <div className="flex flex-wrap items-center gap-3">
+            <div className="space-y-6">
+              {/* Step 1: Relic ID + Load */}
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--totk-light-ocher)]/90">
+                  Step 1 — Load relic
+                </h3>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex flex-1 min-w-[140px] flex-col gap-1.5">
+                    <span className="text-xs font-medium text-[var(--botw-pale)]/90">Relic ID <span className="text-red-400">*</span></span>
+                    <input
+                      type="text"
+                      value={uploadRelicId}
+                      onChange={(e) => setUploadRelicId(e.target.value)}
+                      placeholder="e.g. R473582"
+                      className="rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2.5 text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/60 focus:border-[var(--totk-light-ocher)]/60 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-ocher)]/40"
+                    />
+                  </label>
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded border-2 border-dashed border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-900)] px-4 py-3 text-sm font-medium text-[var(--botw-pale)] hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-grey-800)]"
+                    onClick={handleLoadRelic}
+                    disabled={loadRelicLoading}
+                    className="rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2.5 text-sm font-medium text-[var(--botw-pale)] transition-colors hover:border-[var(--totk-light-ocher)]/60 hover:bg-[var(--totk-brown)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <i className="fa-solid fa-image mr-2" aria-hidden />
-                    {uploadFile ? "Change image" : "Choose image"}
+                    {loadRelicLoading ? (
+                      <>
+                        <i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden />
+                        Loading…
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-arrow-down-to-bracket mr-2" aria-hidden />
+                        Load
+                      </>
+                    )}
                   </button>
-                  {uploadFile && (
-                    <span className="text-sm text-[var(--totk-grey-300)]">
-                      {uploadFile.name}
-                    </span>
-                  )}
                 </div>
-                {uploadPreviewUrl && (
-                  <div className="mt-1 flex items-start gap-3">
-                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-900)]">
-                      <img
-                        src={uploadPreviewUrl}
-                        alt="Preview"
-                        className="h-full w-full object-contain"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUploadFile(null);
-                        if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
-                        setUploadPreviewUrl(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                      className="text-sm text-red-400 hover:underline"
-                    >
-                      Remove
-                    </button>
+                {loadRelicError && (
+                  <p className="flex items-center gap-2 text-sm text-red-400">
+                    <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden />
+                    {loadRelicError}
+                  </p>
+                )}
+
+                {(uploadTitle || uploadDiscoveredBy || uploadAppraisedBy) && (
+                  <div className="rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/80 p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">Auto-filled from relic</p>
+                    <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+                      <div><dt className="text-[var(--totk-grey-200)]">Title</dt><dd className="font-medium text-[var(--botw-pale)]">{uploadTitle || "—"}</dd></div>
+                      <div><dt className="text-[var(--totk-grey-200)]">Discovered By</dt><dd className="font-medium text-[var(--botw-pale)]">{uploadDiscoveredBy || "—"}</dd></div>
+                      <div><dt className="text-[var(--totk-grey-200)]">Appraised By</dt><dd className="font-medium text-[var(--botw-pale)]">{uploadAppraisedBy || "—"}</dd></div>
+                      {(uploadRegion || uploadSquare || uploadQuadrant) && (
+                        <div className="sm:col-span-2"><dt className="text-[var(--totk-grey-200)]">Region / Square / Quadrant</dt><dd className="font-medium text-[var(--botw-pale)]">{[uploadRegion, uploadSquare, uploadQuadrant].filter(Boolean).join(" • ") || "—"}</dd></div>
+                      )}
+                    </dl>
                   </div>
                 )}
-              </div>
+              </section>
 
-              <div className="flex flex-col gap-2">
-                <span className="text-xs text-[var(--totk-grey-200)]">Map position <span className="text-red-400">*</span></span>
-                <p className="text-xs text-[var(--totk-grey-400)]">
+              {/* Step 2: Info + Image */}
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--totk-light-ocher)]/90">
+                  Step 2 — Description & image
+                </h3>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-[var(--botw-pale)]/90">Info (description) <span className="text-red-400">*</span></span>
+                  <textarea
+                    value={uploadInfo}
+                    onChange={(e) => setUploadInfo(e.target.value)}
+                    placeholder="Appraisal description / lore (e.g. A sliver of agatized coral...)"
+                    rows={4}
+                    className="w-full rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2.5 text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-200)]/60 focus:border-[var(--totk-light-ocher)]/60 focus:outline-none focus:ring-1 focus:ring-[var(--totk-light-ocher)]/40"
+                  />
+                </label>
+
+                <div className="space-y-2">
+                  <span className="block text-xs font-medium text-[var(--botw-pale)]/90">Image <span className="text-red-400">*</span></span>
+                  <p className="text-xs text-[var(--totk-grey-200)]">
+                    1:1 ratio, at least 500×500px, PNG, transparent background.
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setUploadFile(file);
+                      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+                      setUploadPreviewUrl(file ? URL.createObjectURL(file) : null);
+                    }}
+                  />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 rounded-xl border-2 border-dashed border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 px-4 py-3 text-sm font-medium text-[var(--botw-pale)] transition-colors hover:border-[var(--totk-light-ocher)]/60 hover:bg-[var(--totk-brown)]/50"
+                    >
+                      <i className="fa-solid fa-image text-[var(--totk-light-ocher)]" aria-hidden />
+                      {uploadFile ? "Change image" : "Choose image"}
+                    </button>
+                    {uploadFile && (
+                      <span className="truncate max-w-[200px] text-sm text-[var(--totk-grey-200)]">
+                        {uploadFile.name}
+                      </span>
+                    )}
+                  </div>
+                  {uploadPreviewUrl && (
+                    <div className="mt-2 flex flex-wrap items-start gap-3">
+                      <div className="h-28 w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] ring-1 ring-black/20">
+                        <img src={uploadPreviewUrl} alt="Preview" className="h-full w-full object-contain" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadFile(null);
+                          if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+                          setUploadPreviewUrl(null);
+                          if (fileInputRef.current) fileInputRef.current.value = "";
+                        }}
+                        className="text-sm font-medium text-red-400 transition-colors hover:text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Step 3: Map position */}
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--totk-light-ocher)]/90">
+                  Step 3 — Map position
+                </h3>
+                <p className="text-xs text-[var(--totk-grey-200)]">
                   Click on the library map below to choose where your relic will appear. Mods will approve or deny your submission including this placement.
                 </p>
                 <div
@@ -542,91 +616,69 @@ export default function LibraryArchivesPage() {
                   role="button"
                   tabIndex={0}
                   onClick={handleSubmitMapClick}
-                  className="relative mx-auto w-full max-w-xs cursor-crosshair overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] transition hover:border-[var(--totk-light-ocher)]"
+                  className="relative mx-auto w-full max-w-[280px] cursor-crosshair overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-inner transition hover:border-[var(--totk-light-ocher)]/70 focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-ocher)]/50"
                   style={{ aspectRatio: "1" }}
                 >
                   <img
                     src={LIBRARY_IMAGE}
                     alt="Library map — click to place"
-                    className="absolute inset-0 h-full w-full object-contain object-center pointer-events-none"
+                    className="pointer-events-none absolute inset-0 h-full w-full object-contain object-center"
                   />
                   {uploadLibraryPositionX != null && uploadLibraryPositionY != null && (
                     <div
-                      className="absolute z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/40"
-                      style={{
-                        left: `${uploadLibraryPositionX}%`,
-                        top: `${uploadLibraryPositionY}%`,
-                      }}
+                      className="absolute z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/50 shadow-lg"
+                      style={{ left: `${uploadLibraryPositionX}%`, top: `${uploadLibraryPositionY}%` }}
                     />
                   )}
                 </div>
                 {uploadLibraryPositionX != null && uploadLibraryPositionY != null && (
-                  <p className="text-xs text-[var(--totk-grey-300)]">
+                  <p className="text-xs text-[var(--totk-grey-200)]">
                     Position: {Math.round(uploadLibraryPositionX)}%, {Math.round(uploadLibraryPositionY)}%
-                    {uploadLibraryDisplaySize !== 8 && ` • Size: ${uploadLibraryDisplaySize}%`}
                   </p>
                 )}
-                <label className="flex items-center gap-2 text-xs text-[var(--totk-grey-300)]">
-                  <span>Display size on map:</span>
-                  <select
-                    value={uploadLibraryDisplaySize}
-                    onChange={(e) => setUploadLibraryDisplaySize(Number(e.target.value))}
-                    className="rounded border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-900)] px-2 py-1 text-[var(--botw-pale)]"
-                  >
-                    {[6, 8, 10, 12, 15, 20].map((n) => (
-                      <option key={n} value={n}>{n}%</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              </section>
             </div>
-            <div className="mt-4 flex items-center gap-3">
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={handleUpload}
                 disabled={uploading}
-                className="rounded bg-[var(--totk-light-ocher)] px-4 py-2 font-medium text-[var(--botw-warm-black)] hover:opacity-90 disabled:opacity-50"
+                className="rounded-xl bg-[var(--totk-light-ocher)] px-5 py-2.5 font-semibold text-[var(--botw-warm-black)] shadow-md transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {uploading ? "Submitting…" : "Submit for approval"}
+                {uploading ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden />
+                    Submitting…
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-paper-plane mr-2" aria-hidden />
+                    Submit for approval
+                  </>
+                )}
               </button>
+              {uploadMessage && (
+                <p className={`text-sm font-medium ${uploadMessage.type === "ok" ? "text-[var(--totk-light-green)]" : "text-red-400"}`}>
+                  {uploadMessage.text}
+                </p>
+              )}
             </div>
-            {uploadMessage && (
-              <p
-                className={`mt-3 text-sm ${uploadMessage.type === "ok" ? "text-[var(--totk-light-green)]" : "text-red-400"}`}
-              >
-                {uploadMessage.text}
-              </p>
-            )}
           </Modal>
         )}
 
-        <div className="mb-6 flex flex-wrap items-center justify-center gap-4">
-          {user && !sessionLoading && relics.length > 0 && (
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={editPlacement}
-                onChange={(e) => {
-                  setEditPlacement(e.target.checked);
-                  setPlacingRelicId(null);
-                }}
-                className="rounded border-[var(--totk-dark-ocher)]"
-              />
-              <span className="text-sm text-[var(--botw-pale)]">Edit placement on map</span>
-            </label>
-          )}
-        </div>
-
-        <div
-          ref={mapContainerRef}
-          className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]"
+        {/* Map section */}
+        <section className="mb-8" aria-label="Library floor plan">
+          <div
+            ref={mapContainerRef}
+            className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-xl shadow-black/30"
           style={{ aspectRatio: "1" }}
           onClick={placingRelicId ? handleMapClick : undefined}
           role={placingRelicId ? "button" : undefined}
           tabIndex={placingRelicId ? 0 : undefined}
           onDragOver={(e) => {
             e.preventDefault();
-            if (editPlacement) e.dataTransfer.dropEffect = "move";
+            if (isMod) e.dataTransfer.dropEffect = "move";
           }}
           onDrop={handleMapDrop}
           onKeyDown={
@@ -643,16 +695,16 @@ export default function LibraryArchivesPage() {
             className="absolute inset-0 h-full w-full object-contain object-center"
           />
           {placedRelics.map((relic) => {
-            const x = relic.libraryPositionX ?? 0;
-            const y = relic.libraryPositionY ?? 0;
-            const size = relic.libraryDisplaySize ?? 8;
+            const x = Number(relic.libraryPositionX);
+            const y = Number(relic.libraryPositionY);
+            const size = Math.max(2, Math.min(25, Number(relic.libraryDisplaySize) || MAP_PIN_SIZE));
             const url = normalizeImageUrl(relic.imageUrl);
-            const isDraggable = editPlacement && user;
+            const isDraggable = isMod;
             const isSaving = savingPlacement === relic._id;
             return (
               <div
                 key={relic._id}
-                className="absolute z-10 cursor-move rounded border-2 border-[var(--totk-light-ocher)]/50 bg-[var(--totk-grey-900)]/80 shadow-lg transition hover:border-[var(--totk-light-ocher)]"
+                className="absolute z-10 cursor-move transition-all"
                 style={{
                   left: `${x}%`,
                   top: `${y}%`,
@@ -675,35 +727,40 @@ export default function LibraryArchivesPage() {
                   <img
                     src={url}
                     alt={relic.rollOutcome || relic.name}
-                    className="h-full w-full object-contain"
+                    className="h-full w-full object-contain opacity-75"
                     draggable={false}
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--totk-grey-600)]">
+                  <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--totk-grey-600)] opacity-75">
                     🔸
                   </div>
                 )}
                 {isSaving && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-[var(--totk-light-ocher)]">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-[var(--totk-light-ocher)]">
                     <i className="fa-solid fa-spinner fa-spin" aria-hidden />
                   </div>
                 )}
               </div>
             );
           })}
-          {placingRelicId && (
-            <>
-              {mapHoverPercent && (() => {
-                const relic = relics.find((r) => r._id === placingRelicId);
-                const url = relic?.imageUrl ? normalizeImageUrl(relic.imageUrl) : "";
-                const size = placementSize;
-                return (
+          {placingRelicId && isMod && (
+            <div className="absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[var(--botw-warm-black)]/95 px-3 py-2 text-center text-xs font-medium text-[var(--totk-light-ocher)] shadow-lg">
+              Click map to place · Arrow keys to nudge · Enter to save · Esc to cancel
+            </div>
+          )}
+          {placingRelicId && (() => {
+            const placementPreview = mapHoverPercent ?? nudgePosition;
+            const relic = relics.find((r) => r._id === placingRelicId);
+            const url = relic?.imageUrl ? normalizeImageUrl(relic.imageUrl) : "";
+            return (
+              <>
+                {placementPreview && (
                   <div
-                    className="pointer-events-none absolute z-20 rounded border-2 border-[var(--totk-light-ocher)] bg-[var(--totk-grey-900)]/90 shadow-lg"
+                    className="pointer-events-none absolute z-20 rounded-lg border-2 border-[var(--totk-light-ocher)] bg-[var(--totk-brown)]/95 shadow-xl"
                     style={{
-                      left: `${mapHoverPercent.x}%`,
-                      top: `${mapHoverPercent.y}%`,
-                      width: `${size}%`,
+                      left: `${placementPreview.x}%`,
+                      top: `${placementPreview.y}%`,
+                      width: `${placementSize}%`,
                       transform: "translate(-50%, -50%)",
                       aspectRatio: "1",
                     }}
@@ -721,102 +778,90 @@ export default function LibraryArchivesPage() {
                       </div>
                     )}
                   </div>
-                );
-              })()}
-              <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/30 text-[var(--totk-light-ocher)]">
-                <span className="rounded bg-[var(--botw-warm-black)] px-4 py-2 text-center">
-                  Click on the map to place this relic
-                </span>
-                <span className="text-xs opacity-90">or drag from the list below · Esc to cancel</span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {editPlacement && user && unplacedRelics.length > 0 && (
-          <div className="mx-auto mt-6 max-w-4xl rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4">
-            <h3 className="mb-2 font-semibold text-[var(--totk-light-ocher)]">
-              Unplaced relics — click Place then click on the map, or drag a relic onto the map
-            </h3>
-            {placingRelicId && (
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-[var(--totk-grey-400)]">Display size on map:</span>
-                {[6, 8, 10, 12].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setPlacementSize(s)}
-                    className={`rounded border px-2 py-1 text-xs ${
-                      placementSize === s
-                        ? "border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/20 text-[var(--totk-light-ocher)]"
-                        : "border-[var(--totk-dark-ocher)] text-[var(--botw-pale)] hover:bg-[var(--totk-grey-900)]"
-                    }`}
-                  >
-                    {s}%
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {unplacedRelics.map((relic) => (
-                <button
-                  key={relic._id}
-                  type="button"
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("text/plain", relic._id);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onClick={() => setPlacingRelicId(placingRelicId === relic._id ? null : relic._id)}
-                  className={`flex cursor-grab active:cursor-grabbing items-center gap-2 rounded border px-3 py-2 text-sm ${
-                    placingRelicId === relic._id
-                      ? "border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/20 text-[var(--totk-light-ocher)]"
-                      : "border-[var(--totk-dark-ocher)] text-[var(--botw-pale)] hover:bg-[var(--totk-grey-900)]"
-                  }`}
-                >
-                  {relic.imageUrl && (
-                    <img
-                      src={normalizeImageUrl(relic.imageUrl)}
-                      alt=""
-                      className="h-8 w-8 rounded object-cover"
-                      draggable={false}
-                    />
-                  )}
-                  <span>{relic.rollOutcome || relic.relicId || relic.name}</span>
-                  <span className="text-xs opacity-80">{placingRelicId === relic._id ? " (click map)" : "Place"}</span>
-                </button>
-              ))}
-            </div>
+                )}
+              </>
+            );
+          })()}
           </div>
-        )}
+          {user && !sessionLoading && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitModalOpen(true);
+                  setUploadMessage(null);
+                }}
+                className="group flex items-center gap-2.5 rounded-xl bg-[var(--totk-light-ocher)] px-6 py-3 font-semibold text-[var(--botw-warm-black)] shadow-lg shadow-black/20 transition-all hover:opacity-95 hover:shadow-xl hover:shadow-black/25 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-ocher)] focus:ring-offset-2 focus:ring-offset-[var(--totk-brown)]"
+              >
+                <i className="fa-solid fa-cloud-arrow-up text-lg group-hover:scale-110 transition-transform" aria-hidden />
+                Submit relic to archives
+              </button>
+            </div>
+          )}
+        </section>
 
         {isMod && !sessionLoading && relics.length > 0 && (
-          <div className="mx-auto mt-6 max-w-4xl overflow-hidden rounded-xl border-2 border-[var(--totk-light-ocher)] bg-[var(--botw-warm-black)] shadow-lg shadow-[var(--totk-light-ocher)]/10">
-            <div className="border-b-2 border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/15 px-4 py-3">
+          <section ref={modSectionRef} className="mx-auto mt-8 max-w-4xl overflow-hidden rounded-2xl border-2 border-[var(--totk-light-ocher)]/50 bg-[var(--botw-warm-black)] shadow-xl shadow-black/30" aria-label="Moderator panel">
+            <div className="border-b-2 border-[var(--totk-light-ocher)]/40 bg-[var(--totk-light-ocher)]/10 px-5 py-4">
               <h3 className="flex items-center gap-2 text-base font-bold text-[var(--totk-light-ocher)] sm:text-lg">
                 <i className="fa-solid fa-shield-halved" aria-hidden />
                 Mod: All relics
               </h3>
-              <p className="mt-1 text-sm text-[var(--botw-pale)]">
-                Only visible to moderators. Toggle &quot;Edit placement on map&quot; to place or move any relic.
+              <p className="mt-1 text-sm text-[var(--botw-pale)]/90">
+                Only visible to moderators. Click or drag relics on the map above to place or move them.
               </p>
             </div>
+            {placingRelicId && (
+              <div className="border-b border-[var(--totk-dark-ocher)]/40 px-4 py-4 space-y-3">
+                <p className="text-sm font-medium text-[var(--totk-light-ocher)]">
+                  Click the map above to place, or use arrow keys to nudge and press Enter to save.
+                </p>
+                <p className="text-xs text-[var(--botw-pale)]/90">
+                  Arrow keys = nudge position · Enter = save · Esc = cancel · Or drag a relic onto the map.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-[var(--totk-grey-400)]">Size on map:</span>
+                  {[3, 4, 5, 6, 8, 10].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setPlacementSize(s)}
+                      className={`rounded border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                        placementSize === s
+                          ? "border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/20 text-[var(--totk-light-ocher)]"
+                          : "border-[var(--totk-dark-ocher)] text-[var(--botw-pale)] hover:bg-[var(--totk-grey-900)]"
+                      }`}
+                    >
+                      {s}%
+                    </button>
+                  ))}
+                  <span className="mx-1 text-xs text-[var(--totk-grey-500)]">·</span>
+                  <button
+                    type="button"
+                    onClick={handlePlaceAtPreview}
+                    className="rounded border border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/20 px-3 py-1.5 text-sm font-medium text-[var(--totk-light-ocher)] hover:bg-[var(--totk-light-ocher)]/30"
+                  >
+                    Place here
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 p-4">
               {relics.map((relic) => {
-                const placed = relic.libraryPositionX != null && relic.libraryPositionY != null;
+                const placed = hasValidPosition(relic);
                 return (
                   <button
                     key={relic._id}
                     type="button"
-                    draggable={editPlacement}
+                    draggable={isMod}
                     onDragStart={(e) => {
-                      if (!editPlacement) return;
+                      if (!isMod) return;
                       e.dataTransfer.setData("text/plain", relic._id);
                       e.dataTransfer.effectAllowed = "move";
                     }}
-                    onClick={() => editPlacement && setPlacingRelicId(placingRelicId === relic._id ? null : relic._id)}
+                    onClick={() => isMod && setPlacingRelicId(placingRelicId === relic._id ? null : relic._id)}
                     className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm transition-colors ${
-                      editPlacement ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+                      isMod ? "cursor-grab active:cursor-grabbing" : "cursor-default"
                     } ${
                       placingRelicId === relic._id
                         ? "border-[var(--totk-light-ocher)] bg-[var(--totk-light-ocher)]/25 text-[var(--totk-light-ocher)]"
@@ -839,35 +884,54 @@ export default function LibraryArchivesPage() {
                     ) : (
                       <span className="shrink-0 rounded bg-[var(--totk-grey-700)] px-2 py-0.5 text-xs font-medium text-[var(--totk-grey-300)]">Unplaced</span>
                     )}
-                    {editPlacement && placingRelicId === relic._id && (
+                    {placingRelicId === relic._id && (
                       <span className="text-xs opacity-90">(click map)</span>
                     )}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </section>
         )}
 
         {relics.length === 0 && !error && (
-          <div className="mt-6 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-12 text-center">
-            <p className="text-[var(--botw-pale)]">No relics have been archived yet.</p>
-            <p className="mt-2 text-sm text-[var(--totk-grey-200)]">
+          <section
+            className="mx-auto mt-8 max-w-xl rounded-2xl border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)]/90 p-10 sm:p-12 text-center shadow-lg"
+            aria-label="No relics yet"
+          >
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--totk-light-ocher)]/15 text-3xl text-[var(--totk-light-ocher)]">
+              <i className="fa-solid fa-book-open" aria-hidden />
+            </div>
+            <h2 className="text-lg font-semibold text-[var(--botw-pale)] sm:text-xl">No relics have been archived yet</h2>
+            <p className="mt-3 text-sm leading-relaxed text-[var(--totk-grey-200)]">
               Relics are found during exploration and appraised by Artists or Researchers in Inariko. Once appraised, the owner of the character who found the relic should provide their artistic rendition based on the appraisal description; submit your art above to archive it in the Library.
             </p>
-          </div>
+            {user && !sessionLoading && (
+              <button
+                type="button"
+                onClick={() => setSubmitModalOpen(true)}
+                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[var(--totk-light-ocher)]/20 px-4 py-2.5 text-sm font-medium text-[var(--totk-light-ocher)] transition-colors hover:bg-[var(--totk-light-ocher)]/30"
+              >
+                <i className="fa-solid fa-cloud-arrow-up" aria-hidden />
+                Submit your first relic
+              </button>
+            )}
+          </section>
         )}
 
         {relics.length > 0 && (
-          <div className="mt-8">
-            <h2 className="mb-4 text-lg font-bold text-[var(--totk-light-ocher)]">Archived relics</h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <section className="mt-10" aria-label="Archived relics list">
+            <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--totk-light-ocher)]">
+              <i className="fa-solid fa-scroll" aria-hidden />
+              Archived relics
+            </h2>
+            <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2">
               {relics.map((relic) => (
                 <article
                   key={relic._id}
-                  className="flex overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg"
+                  className="flex overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-lg transition-shadow hover:shadow-xl hover:shadow-black/20"
                 >
-                  <div className="relative w-36 shrink-0 bg-[var(--totk-grey-900)] sm:w-40">
+                  <div className="relative w-36 shrink-0 bg-[var(--totk-brown)] sm:w-40">
                     {relic.imageUrl ? (
                       <img
                         src={normalizeImageUrl(relic.imageUrl)}
@@ -875,30 +939,30 @@ export default function LibraryArchivesPage() {
                         className="h-full w-full object-contain"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-5xl text-[var(--totk-grey-600)]">
-                        🔸
+                      <div className="flex h-full w-full items-center justify-center text-4xl text-[var(--totk-grey-300)]">
+                        <i className="fa-solid fa-gem" aria-hidden />
                       </div>
                     )}
                   </div>
-                  <div className="flex min-w-0 flex-1 flex-col p-4">
-                    <h3 className="text-lg font-bold text-[var(--totk-light-ocher)]">
+                  <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
+                    <h3 className="text-base font-bold text-[var(--totk-light-ocher)] sm:text-lg">
                       {relic.rollOutcome || relic.name}
                     </h3>
-                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-                      <dt className="text-[var(--totk-grey-400)]">Discovered By:</dt>
-                      <dd className="text-[var(--botw-pale)]">{relic.discoveredBy || "—"}</dd>
-                      <dt className="text-[var(--totk-grey-400)]">Appraised By:</dt>
-                      <dd className="text-[var(--botw-pale)]">{relic.appraisedBy ?? "—"}</dd>
-                      <dt className="text-[var(--totk-grey-400)]">Region:</dt>
-                      <dd className="text-[var(--botw-pale)]">{relic.region || "—"}</dd>
-                      <dt className="text-[var(--totk-grey-400)]">Square:</dt>
-                      <dd className="text-[var(--botw-pale)]">{relic.square || "—"}</dd>
-                      <dt className="text-[var(--totk-grey-400)]">Quadrant:</dt>
-                      <dd className="text-[var(--botw-pale)]">{relic.quadrant || "—"}</dd>
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                      <dt className="text-[var(--totk-grey-200)]">Discovered By</dt>
+                      <dd className="font-medium text-[var(--botw-pale)]">{relic.discoveredBy || "—"}</dd>
+                      <dt className="text-[var(--totk-grey-200)]">Appraised By</dt>
+                      <dd className="font-medium text-[var(--botw-pale)]">{relic.appraisedBy ?? "—"}</dd>
+                      <dt className="text-[var(--totk-grey-200)]">Region</dt>
+                      <dd className="font-medium text-[var(--botw-pale)]">{relic.region || "—"}</dd>
+                      <dt className="text-[var(--totk-grey-200)]">Square</dt>
+                      <dd className="font-medium text-[var(--botw-pale)]">{relic.square || "—"}</dd>
+                      <dt className="text-[var(--totk-grey-200)]">Quadrant</dt>
+                      <dd className="font-medium text-[var(--botw-pale)]">{relic.quadrant || "—"}</dd>
                     </dl>
-                    <div className="mt-3 border-t border-[var(--totk-dark-ocher)]/50 pt-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-400)]">Info</p>
-                      <p className="mt-1 text-sm text-[var(--botw-pale)]">
+                    <div className="mt-3 border-t border-[var(--totk-dark-ocher)]/40 pt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">Info</p>
+                      <p className="mt-1.5 line-clamp-3 text-sm leading-relaxed text-[var(--botw-pale)]/95">
                         {relic.appraisalDescription || "—"}
                       </p>
                     </div>
@@ -906,7 +970,7 @@ export default function LibraryArchivesPage() {
                 </article>
               ))}
             </div>
-          </div>
+          </section>
         )}
       </div>
     </div>

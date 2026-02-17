@@ -5,6 +5,19 @@ import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+/** Lean relic shape for prefill (matches RelicModel fields we use). */
+interface RelicPrefillDoc {
+  appraised?: boolean;
+  archived?: boolean;
+  rollOutcome?: string;
+  name?: string;
+  discoveredBy?: string;
+  appraisedBy?: string;
+  region?: string;
+  square?: string;
+  quadrant?: string;
+}
+
 /** GET /api/relics/prefill?relicId=R473582 — get relic fields for form prefill (title, discoveredBy, appraisedBy, region, square, quadrant). Auth required. Only returns data for appraised, non-archived relics. */
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -23,10 +36,11 @@ export async function GET(request: NextRequest) {
     const RelicModule = await import("@/models/RelicModel.js");
     const Relic = RelicModule.default || RelicModule;
 
-    const relic = await Relic.findOne({ relicId }).lean();
-    if (!relic) {
+    const raw = await Relic.findOne({ relicId }).lean();
+    if (!raw) {
       return NextResponse.json({ error: "Relic not found" }, { status: 404 });
     }
+    const relic = raw as RelicPrefillDoc;
     if (!relic.appraised) {
       return NextResponse.json({ error: "Relic has not been appraised yet" }, { status: 400 });
     }

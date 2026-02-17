@@ -61,6 +61,11 @@ export async function POST(
     const wasFirstArchived = (await Relic.countDocuments({ archived: true })) === 0;
     const discovererUserId = archiveRequest.submitterUserId; // submitter is the discoverer's owner
 
+    const req = archiveRequest.toObject?.() ?? archiveRequest;
+    const posX = req.libraryPositionX != null ? Number(req.libraryPositionX) : NaN;
+    const posY = req.libraryPositionY != null ? Number(req.libraryPositionY) : NaN;
+    const displaySize = req.libraryDisplaySize != null ? Number(req.libraryDisplaySize) : 8;
+
     const updateData: Record<string, unknown> = {
       artSubmitted: true,
       imageUrl: archiveRequest.imageUrl,
@@ -74,16 +79,10 @@ export async function POST(
       quadrant: archiveRequest.quadrant,
       ...(wasFirstArchived && { firstCompletionRewardGiven: true }),
     };
-    if (
-      archiveRequest.libraryPositionX != null &&
-      archiveRequest.libraryPositionY != null
-    ) {
-      updateData.libraryPositionX = archiveRequest.libraryPositionX;
-      updateData.libraryPositionY = archiveRequest.libraryPositionY;
-      updateData.libraryDisplaySize =
-        archiveRequest.libraryDisplaySize != null
-          ? Math.max(2, Math.min(25, archiveRequest.libraryDisplaySize))
-          : 8;
+    if (!Number.isNaN(posX) && !Number.isNaN(posY) && posX >= 0 && posX <= 100 && posY >= 0 && posY <= 100) {
+      updateData.libraryPositionX = posX;
+      updateData.libraryPositionY = posY;
+      updateData.libraryDisplaySize = Math.max(2, Math.min(25, Number.isNaN(displaySize) ? 8 : displaySize));
     }
 
     await Relic.findByIdAndUpdate(relic._id, updateData);

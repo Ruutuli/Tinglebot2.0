@@ -218,6 +218,9 @@ export async function POST(request: NextRequest) {
       square: square || undefined,
       quadrant: quadrant || undefined,
       infoSnippet: info || undefined,
+      libraryPositionX,
+      libraryPositionY,
+      libraryDisplaySize: size,
     });
 
     return NextResponse.json({

@@ -34,6 +34,11 @@ export async function PATCH(
   const libraryPositionY = body.libraryPositionY;
   const libraryDisplaySize = body.libraryDisplaySize;
 
+  console.log("[placement] PATCH request", {
+    relicId: id,
+    body: { libraryPositionX, libraryPositionY, libraryDisplaySize },
+  });
+
   if (
     libraryPositionX !== undefined &&
     (typeof libraryPositionX !== "number" || libraryPositionX < 0 || libraryPositionX > 100)
@@ -70,11 +75,19 @@ export async function PATCH(
 
     const relic = await Relic.findById(relicIdObj);
     if (!relic) {
+      console.log("[placement] Relic not found for id:", id);
       return NextResponse.json({ error: "Relic not found" }, { status: 404 });
     }
     if (!relic.archived) {
+      console.log("[placement] Relic not archived, skipping", { relicId: id, archived: relic.archived });
       return NextResponse.json({ error: "Only archived relics can be placed on the library map" }, { status: 400 });
     }
+    console.log("[placement] Found relic", {
+      _id: String(relic._id),
+      relicId: relic.relicId,
+      archived: relic.archived,
+      currentPosition: { x: relic.libraryPositionX, y: relic.libraryPositionY, size: relic.libraryDisplaySize },
+    });
 
     const [isAdmin, isMod] = await Promise.all([
       isAdminUser(user.id),
@@ -110,22 +123,41 @@ export async function PATCH(
     if (libraryDisplaySize !== undefined) update.libraryDisplaySize = libraryDisplaySize;
 
     if (Object.keys(update).length === 0) {
+      console.log("[placement] No fields to update");
       return NextResponse.json({ error: "Provide at least one of libraryPositionX, libraryPositionY, libraryDisplaySize" }, { status: 400 });
     }
 
-    const updated = await Relic.findByIdAndUpdate(relic._id, { $set: update }, { new: true })
-      .select("libraryPositionX libraryPositionY libraryDisplaySize")
-      .lean();
+    console.log("[placement] Updating relic in DB", { relicId: String(relic._id), update });
 
-    if (!updated) {
+    await connect();
+    const db = mongoose.connection.db;
+    if (!db) {
+      console.error("[placement] No database on connection");
+      return NextResponse.json({ error: "Database connection missing" }, { status: 500 });
+    }
+    const collection = db.collection("relics");
+    const result = await collection.updateOne(
+      { _id: relic._id },
+      { $set: update }
+    );
+    if (result.matchedCount === 0) {
+      console.log("[placement] updateOne matched 0 documents");
       return NextResponse.json({ error: "Update failed" }, { status: 500 });
+    }
+    if (result.modifiedCount === 0 && result.matchedCount > 0) {
+      console.log("[placement] updateOne matched but modifiedCount 0 (values may be unchanged)");
     }
 
     const placement = {
-      libraryPositionX: libraryPositionX ?? (updated as { libraryPositionX?: number }).libraryPositionX ?? null,
-      libraryPositionY: libraryPositionY ?? (updated as { libraryPositionY?: number }).libraryPositionY ?? null,
-      libraryDisplaySize: libraryDisplaySize ?? (updated as { libraryDisplaySize?: number }).libraryDisplaySize ?? 8,
+      libraryPositionX: libraryPositionX ?? null,
+      libraryPositionY: libraryPositionY ?? null,
+      libraryDisplaySize: libraryDisplaySize ?? 8,
     };
+    console.log("[placement] Persisted via native driver", { relicId: String(relic._id), placement, modifiedCount: result.modifiedCount });
+
+    const verify = await collection.findOne({ _id: relic._id }, { projection: { libraryPositionX: 1, libraryPositionY: 1, libraryDisplaySize: 1 } });
+    console.log("[placement] Verify read back", { relicId: String(relic._id), verify });
+
     return NextResponse.json({ success: true, placement });
   } catch (err) {
     console.error("[api/relics/archives/placement]", err);
