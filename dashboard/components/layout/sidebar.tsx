@@ -248,15 +248,7 @@ export function Sidebar() {
                           height: "1px",
                         }}
                       />
-                      {item.children
-                        .filter((child) => {
-                          // Hide moderation link if user is not a moderator (unless it's in Admin section)
-                          if (child.href === "/characters/moderation" && item.label !== "Admin" && !isModerator) {
-                            return false;
-                          }
-                          return true;
-                        })
-                        .map((child) => (
+                      {item.children.map((child) => (
                           <DropdownMenu.Item asChild key={child.label}>
                             <Link
                               href={child.href}
@@ -330,15 +322,7 @@ export function Sidebar() {
                       : {}
                   }
                 >
-                  {item.children
-                    .filter((child) => {
-                      // Hide moderation link if user is not a moderator (unless it's in Admin section)
-                      if (child.href === "/characters/moderation" && item.label !== "Admin" && !isModerator) {
-                        return false;
-                      }
-                      return true;
-                    })
-                    .map((child) => {
+                  {item.children.map((child) => {
                       const isActive = pathname === child.href;
                       return (
                         <Link

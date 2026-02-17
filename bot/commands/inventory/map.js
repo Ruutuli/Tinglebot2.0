@@ -1,7 +1,8 @@
 // ============================================================================
 // ------------------- Map Command -------------------
 // Old map appraisal: list, request (Scholar or NPC), accept (Scholar, 3 stamina).
-// After approval, map owner is DM'd with coordinates (or by scheduled task for NPC).
+// NPC: 500 tokens deducted immediately, map appraised and owner DM'd — no mod approval.
+// PC: Scholar uses /map appraisal-accept in Inariko (3 stamina), then owner is DM'd.
 // ============================================================================
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
@@ -9,6 +10,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const {
   fetchCharacterByNameAndUserId,
   getOrCreateToken,
+  updateTokenBalance,
 } = require('@/database/db.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
 const { getCharacterOldMapsWithDetails } = require('@/utils/oldMapUtils.js');
@@ -155,7 +157,7 @@ module.exports = {
           const balance = user?.tokens ?? 0;
           if (balance < 500) {
             return interaction.editReply({
-              content: '❌ NPC appraisal costs 500 tokens. You do not have enough. Mod will deduct when approving on dashboard.',
+              content: '❌ NPC appraisal costs 500 tokens. You do not have enough.',
             });
           }
         }
@@ -167,15 +169,47 @@ module.exports = {
           appraiserName: appraiser,
           npcAppraisal,
           payment,
-          status: 'pending',
+          status: npcAppraisal ? 'approved' : 'pending',
         });
         await request.save();
 
-        const modNote = npcAppraisal
-          ? '\n*(NPC appraisal: 500 tokens will be deducted when a mod approves on the dashboard.)*'
-          : '\n*(A Scholar in Inariko can use `/map appraisal-accept` to appraise.)*';
+        if (npcAppraisal) {
+          await updateTokenBalance(interaction.user.id, -500, {
+            category: 'map_npc_appraisal',
+            description: 'NPC map appraisal',
+          });
+          mapDoc.appraised = true;
+          mapDoc.appraisedAt = new Date();
+          mapDoc.appraisedBy = 'NPC';
+          await mapDoc.save();
+
+          request.updatedAt = new Date();
+          await request.save();
+
+          const mapInfo = getOldMapByNumber(mapDoc.mapNumber);
+          const coordinates = mapInfo ? mapInfo.coordinates : '—';
+          const mapLabel = `Map #${mapDoc.mapNumber}`;
+          let dmDesc = `Your old map has been deciphered by an NPC.\n\n**${mapLabel}**\n**Coordinates:** ${coordinates}`;
+          if (mapInfo && mapInfo.leadsTo) dmDesc += `\n**Leads to:** ${mapInfo.leadsTo}`;
+          const dmEmbed = {
+            title: '🗺️ Map appraised — your coordinates',
+            description: dmDesc,
+            color: 0x2ecc71,
+            footer: { text: 'Roots of the Wild • Old Maps' },
+            url: OLD_MAPS_LINK,
+          };
+          const dmSent = await sendDiscordDM(interaction.user.id, dmEmbed);
+          request.coordinatesDmSentAt = dmSent ? new Date() : null;
+          request.updatedAt = new Date();
+          await request.save();
+
+          return interaction.editReply({
+            content: `📜 **Map appraised by NPC!** **500 tokens** have been deducted.\n> **${mapLabel}** — Coordinates: **${coordinates}**\n\nYou have ${dmSent ? 'been DMed' : 'not been DMed (you may have DMs disabled)'} with the coordinates.`,
+          });
+        }
+
         return interaction.editReply({
-          content: `📜 **Map appraisal request created!**\n> **Request ID:** \`${request._id}\`\n> Owner: **${characterName}**\n> Appraiser: **${appraiser}**\n> Payment: ${payment || 'None'}${modNote}`,
+          content: `📜 **Map appraisal request created!**\n> **Request ID:** \`${request._id}\`\n> Owner: **${characterName}**\n> Appraiser: **${appraiser}**\n> Payment: ${payment || 'None'}\n*(A Scholar in Inariko can use \`/map appraisal-accept\` to appraise.)*`,
         });
       }
 

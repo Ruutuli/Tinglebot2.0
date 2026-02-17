@@ -111,7 +111,7 @@ export default function AdminMapsPage() {
         </div>
 
         <p className="mb-6 text-center text-sm text-[var(--botw-pale)]">
-          Approve NPC map appraisals here (500 tokens). PC appraisals are completed via /map appraisal-accept in Discord. The map owner will be DMed with coordinates by the bot after approval.
+          NPC map appraisals are completed in Discord (500 tokens deducted there; no mod approval). This page lists pending <strong>PC</strong> requests only — completed when a Scholar uses /map appraisal-accept in Discord.
         </p>
 
         {error && (
@@ -133,7 +133,7 @@ export default function AdminMapsPage() {
             {npcRequests.length > 0 && (
               <section>
                 <h2 className="mb-4 text-lg font-semibold text-[var(--totk-light-ocher)]">
-                  NPC Appraisals (Mod approval required)
+                  NPC Appraisals (completed in Discord — legacy pending only)
                 </h2>
                 <div className="space-y-4">
                   {npcRequests.map((req) => (

@@ -97,8 +97,8 @@ export function buildApplicationEmbed(
     ? `${APP_URL}/characters/${character.publicSlug}`
     : `${APP_URL}/characters/${characterId}`;
   
-  // Build moderation panel URL
-  const moderationUrl = `${APP_URL}/characters/moderation`;
+  // Review link (approva.ls)
+  const approvalUrl = process.env.APPROVA_LS_URL || "https://approva.ls";
 
   // Format village with emoji
   const villageEmoji = getVillageEmoji(character.homeVillage);
@@ -184,7 +184,7 @@ export function buildApplicationEmbed(
         name: "🔗 Links",
         value: [
           `📋 [View Application](${ocPageUrl})`,
-          `⚖️ [Review in Moderation Panel](${moderationUrl})`,
+          `⚖️ [Review on approva.ls](${approvalUrl})`,
         ]
           .filter(Boolean)
           .join("\n"),

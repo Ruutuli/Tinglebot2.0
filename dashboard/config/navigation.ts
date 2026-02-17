@@ -12,7 +12,6 @@ export const navItems: NavItem[] = [
       { href: "/characters/my-companions", label: "My Companions", icon: "fa-handshake" },
       { href: "/characters/inventories", label: "Inventories", icon: "fa-box" },
       { href: "/characters/relationships", label: "Relationships", icon: "fa-heart" },
-      { href: "/characters/moderation", label: "Character Moderation", icon: "fa-shield-halved" },
     ],
   },
   {
@@ -37,7 +36,6 @@ export const navItems: NavItem[] = [
     label: "Admin",
     icon: "fa-shield-halved",
     children: [
-      { href: "/characters/moderation", label: "Approvals", icon: "fa-check-circle" },
       { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
       { href: "/admin/quests", label: "Quests", icon: "fa-scroll" },
       { href: "/admin/relic-archives", label: "Relic Archive Requests", icon: "fa-book" },

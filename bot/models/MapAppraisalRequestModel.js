@@ -1,7 +1,7 @@
 // ------------------- Map Appraisal Request Schema -------------------
-// Mirrors RelicAppraisalRequest pattern: owner requests appraisal (PC Scholar or NPC);
-// PC Scholar uses /map appraisal-accept (3 stamina, Inariko); NPC approved on dashboard (500 tokens).
-// After approval, bot task DMs map owner with coordinates and sets coordinatesDmSentAt.
+// Mirrors RelicAppraisalRequest pattern: owner requests appraisal (PC Scholar or NPC).
+// PC Scholar uses /map appraisal-accept (3 stamina, Inariko); NPC: 500 tokens deducted in bot, no mod approval.
+// When status is approved, bot (or task) DMs map owner with coordinates and sets coordinatesDmSentAt.
 // -------------------
 
 const mongoose = require('mongoose');
