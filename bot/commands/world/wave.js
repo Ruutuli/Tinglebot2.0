@@ -425,7 +425,7 @@ const { createWeightedItemList } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const Party = require('@/models/PartyModel');
 const { addExplorationStandardFields, regionColors, regionImages } = require('../../embeds/embeds.js');
-const { syncPartyMemberStats } = require('../../modules/exploreModule');
+const { syncPartyMemberStats, pushProgressLog } = require('../../modules/exploreModule');
 // Google Sheets functionality removed
 
 // ============================================================================
@@ -1168,6 +1168,10 @@ async function handleWaveVictory(interaction, waveData) {
         monsterCampContent = nextCharacter?.userId
           ? `<@${nextCharacter.userId}> 🗺️ **Monster camp defeated!** It's your turn — keep exploring.`
           : null;
+        // Push to progress log so it shows on the exploration dashboard
+        const characterName = waveData.participants?.[0]?.name || 'Party';
+        pushProgressLog(party, characterName, 'monster_camp_defeated', `Monster camp wave defeated! All ${waveData.analytics?.totalMonsters ?? 0} monsters cleared in ${location}.`, undefined, undefined, new Date());
+        await party.save();
       } else {
         // Party not found, fall back to standard embed
         victoryEmbed = new EmbedBuilder()

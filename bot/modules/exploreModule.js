@@ -72,9 +72,42 @@ async function syncPartyMemberStats(party) {
     }
 }
 
+/**
+ * Push an entry to the party progress log (shown on exploration dashboard).
+ * @param {Object} party - Party document
+ * @param {string} characterName - Name of character who performed the action
+ * @param {string} outcome - Outcome type (e.g. 'monster_camp_defeated', 'chest_open', 'raid')
+ * @param {string} message - Human-readable message
+ * @param {{ itemName?: string, emoji?: string }} loot - Optional loot info
+ * @param {{ heartsLost?: number, staminaLost?: number, heartsRecovered?: number, staminaRecovered?: number }} costs - Optional cost/recovery info
+ * @param {Date} at - Timestamp for the entry
+ */
+function pushProgressLog(party, characterName, outcome, message, loot, costs, at) {
+    if (!party) return;
+    if (!party.progressLog) party.progressLog = [];
+    const entry = {
+        at: at instanceof Date ? at : new Date(),
+        characterName: characterName || 'Unknown',
+        outcome,
+        message: message || '',
+    };
+    if (loot && (loot.itemName || loot.emoji)) {
+        entry.loot = { itemName: loot.itemName || '', emoji: loot.emoji || '' };
+    }
+    if (costs) {
+        if (typeof costs.heartsLost === 'number' && costs.heartsLost > 0) entry.heartsLost = costs.heartsLost;
+        if (typeof costs.staminaLost === 'number' && costs.staminaLost > 0) entry.staminaLost = costs.staminaLost;
+        if (typeof costs.heartsRecovered === 'number' && costs.heartsRecovered > 0) entry.heartsRecovered = costs.heartsRecovered;
+        if (typeof costs.staminaRecovered === 'number' && costs.staminaRecovered > 0) entry.staminaRecovered = costs.staminaRecovered;
+    }
+    party.progressLog.push(entry);
+    party.markModified('progressLog');
+}
+
 module.exports = {
     getCharacterItems,
     formatCharacterItems,
     calculateTotalHeartsAndStamina,
-    syncPartyMemberStats
+    syncPartyMemberStats,
+    pushProgressLog
 };

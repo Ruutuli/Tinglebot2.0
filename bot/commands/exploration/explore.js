@@ -48,7 +48,7 @@ const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 const { getRandomOldMap, OLD_MAPS_LINK } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
-const { syncPartyMemberStats } = require("../../modules/exploreModule.js");
+const { syncPartyMemberStats, pushProgressLog } = require("../../modules/exploreModule.js");
 const logger = require("@/utils/logger.js");
 const fs = require("fs");
 const path = require("path");
@@ -127,21 +127,27 @@ const REGION_TO_VILLAGE = {
  faron: "Vhintl",
 };
 
+/** Paving bundles: virtual loadout slots. 1 slot = 5 base items. No DB items named "Eldin Ore Bundle" or "Wood Bundle". */
+const PAVING_BUNDLES = {
+ "Eldin Ore Bundle": { baseItemName: "Eldin Ore", quantityPerSlot: 5 },
+ "Wood Bundle": { baseItemName: "Wood", quantityPerSlot: 5 },
+};
+
 // TODO: remove when done testing - treats tier 5+ monsters as regular encounters (no raid)
 const DISABLE_EXPLORATION_RAIDS = false;
 
-const EXPLORATION_CHEST_RELIC_CHANCE = 0.08;
+const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 
 /** Static chance per exploration roll outcome (must sum to 1). */
 const EXPLORATION_OUTCOME_CHANCES = {
   monster: 0.18,
   item: 0.32,
-  explored: 0.17,
+  explored: 0.185,
   fairy: 0.05,
   chest: 0.03,
   old_map: 0.03,
   ruins: 0.04,
-  relic: 0.02,
+  relic: 0.005,
   camp: 0.06,
   monster_camp: 0.08,
   grotto: 0.02,
@@ -299,7 +305,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
   const char = await Character.findById(pc._id);
   if (!char) continue;
   let isRelic = Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
-  if (isRelic && characterAlreadyFoundRelicThisExpedition(party, char.name)) isRelic = false;
+  if (isRelic && (await characterAlreadyFoundRelicThisExpedition(party, char.name, char._id))) isRelic = false;
   if (isRelic) {
    try {
     const savedRelic = await createRelic({
@@ -371,6 +377,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
   : "Nothing found.";
  const chestCostsForLog = { ...(chestPayResult.staminaPaid > 0 && { staminaLost: chestPayResult.staminaPaid }), ...(chestPayResult.heartsPaid > 0 && { heartsLost: chestPayResult.heartsPaid }) };
  pushProgressLog(party, character.name, "chest_open", `Opened chest in **${location}**. **Found:** ${lootSummary}`, undefined, Object.keys(chestCostsForLog).length ? chestCostsForLog : undefined);
+ await party.save();
  return { lootEmbed, party, nextCharacter };
 }
 
@@ -475,30 +482,28 @@ function hasGrottoInSquare(party, square, squareDoc) {
 }
 
 /** True if this character has already found a relic this expedition (one relic per character per run to prevent stacking). */
-function characterAlreadyFoundRelicThisExpedition(party, characterName) {
- if (!party.progressLog || !Array.isArray(party.progressLog)) return false;
- return party.progressLog.some((e) => e.outcome === "relic" && (e.characterName || "") === (characterName || ""));
+async function characterAlreadyFoundRelicThisExpedition(party, characterName, characterId = null) {
+ const norm = (s) => (s || "").toString().trim().toLowerCase();
+ if (party.progressLog && Array.isArray(party.progressLog)) {
+  const foundInLog = party.progressLog.some((e) => e.outcome === "relic" && norm(e.characterName) === norm(characterName));
+  if (foundInLog) return true;
+ }
+ // Fallback: check Relic collection — relics discovered during this expedition have discoveredDate >= party.createdAt
+ if (characterId && party.createdAt) {
+  try {
+   const Relic = require("@/models/RelicModel.js");
+   const count = await Relic.countDocuments({
+    characterId,
+    discoveredDate: { $gte: party.createdAt },
+   });
+   if (count >= 1) return true;
+  } catch (err) {
+   logger.warn("EXPLORE", `characterAlreadyFoundRelicThisExpedition Relic check failed: ${err?.message || err}`);
+  }
+ }
+ return false;
 }
 
-function pushProgressLog(party, characterName, outcome, message, loot, costs, at) {
- if (!party.progressLog) party.progressLog = [];
- const entry = {
-  at: at instanceof Date ? at : new Date(),
-  characterName: characterName || "Unknown",
-  outcome,
-  message: message || "",
- };
- if (loot && (loot.itemName || loot.emoji)) {
-  entry.loot = { itemName: loot.itemName || "", emoji: loot.emoji || "" };
- }
- if (costs) {
-  if (typeof costs.heartsLost === "number" && costs.heartsLost > 0) entry.heartsLost = costs.heartsLost;
-  if (typeof costs.staminaLost === "number" && costs.staminaLost > 0) entry.staminaLost = costs.staminaLost;
-  if (typeof costs.heartsRecovered === "number" && costs.heartsRecovered > 0) entry.heartsRecovered = costs.heartsRecovered;
-  if (typeof costs.staminaRecovered === "number" && costs.staminaRecovered > 0) entry.staminaRecovered = costs.staminaRecovered;
- }
- party.progressLog.push(entry);
-}
 
 /** Reportable outcomes that get logged to the map path (Square.quadrants[].discoveries). */
 /** Discoveries that get pinned on the map. Relic is excluded — relics are not placed on the map. */
@@ -1700,7 +1705,7 @@ module.exports = {
         continue;
        }
       }
-      if (outcomeType === "relic" && characterAlreadyFoundRelicThisExpedition(party, character.name)) {
+      if (outcomeType === "relic" && (await characterAlreadyFoundRelicThisExpedition(party, character.name, character._id))) {
        const reason = "this character already found a relic this expedition (one per character)";
        logger.info("EXPLORE", `Skipped ${outcomeType} at ${location}: ${reason}`);
        outcomeType = rollOutcome();
@@ -1891,8 +1896,11 @@ module.exports = {
        const userIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
        const dmEmbed = new EmbedBuilder()
         .setTitle("🗺️ Expedition map found")
-        .setDescription(`An old map found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
-        .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
+        .setDescription(`**Map #${chosenMapOldMap.number}** found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
+        .addFields(
+          { name: "Map", value: `**Map #${chosenMapOldMap.number}**`, inline: true },
+          { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
+        )
         .setURL(OLD_MAPS_LINK)
         .setColor("#2ecc71")
         .setFooter({ text: "More info" });
@@ -1955,7 +1963,7 @@ module.exports = {
 
       const progressMessages = {
        chest: `Found a chest in ${location} (open for 1 stamina).`,
-       old_map: `Found an old map in ${location}; take to Inariko Library to decipher.`,
+       old_map: chosenMapOldMap ? `Found Map #${chosenMapOldMap.number} in ${location}; take to Inariko Library to decipher.` : `Found an old map in ${location}; take to Inariko Library to decipher.`,
        ruins: `Found ruins in ${location} (explore for 3 stamina or skip).`,
        relic: `Found a relic in ${location}; take to Artist/Researcher to appraise.`,
        camp: `Found a safe space in ${location} and rested. Recovered ${campHeartsRecovered} heart(s), ${campStaminaRecovered} stamina.`,
@@ -1971,7 +1979,7 @@ module.exports = {
         : undefined;
       const lootForProgressLog =
        outcomeType === "old_map"
-        ? { itemName: "An old map", emoji: "" }
+        ? { itemName: chosenMapOldMap ? `Map #${chosenMapOldMap.number}` : "An old map", emoji: "" }
         : outcomeType === "relic"
           ? { itemName: "Unknown Relic", emoji: "🔸" }
           : undefined;
@@ -2014,7 +2022,9 @@ module.exports = {
         "**Yes** — Open the chest (1 item per party member, relics possible).\n" +
         `**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "old_map") {
-       const mapInfo = `**${character.name}** found an old map in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`;
+       const mapInfo = chosenMapOldMap
+        ? `**${character.name}** found **Map #${chosenMapOldMap.number}** in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`
+        : `**${character.name}** found an old map in **${location}**!\n\nThe script is faded and hard to read—you'll need to take it to the Inariko Library to get it deciphered.\n\n**Saved to ${character.name}'s map collection.**`;
        title = `🗺️ **Expedition: Old map found!**`;
        description =
         mapInfo + `\n\nFind out more [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ See **Commands** below to take your turn.`;
@@ -2191,12 +2201,12 @@ module.exports = {
          await pushDiscoveryToMap(freshParty, "ruins", ruinsAt, i.user?.id);
          pushProgressLog(freshParty, ruinsCharacter.name, "ruins", `Explored ruins in ${location}.`, undefined, ruinsCostsForLog, ruinsAt);
 
-         // Weighted roll: chest 7, camp 3, landmark 2, relic 2, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20)
+         // Weighted roll: chest 7, camp 3, landmark 3, relic 1, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20)
          const roll = Math.random() * 20;
          let ruinsOutcome;
          if (roll < 7) ruinsOutcome = "chest";
          else if (roll < 10) ruinsOutcome = "camp";
-         else if (roll < 12) ruinsOutcome = "landmark";
+         else if (roll < 13) ruinsOutcome = "landmark";
          else if (roll < 14) ruinsOutcome = "relic";
          else if (roll < 16) ruinsOutcome = "old_map";
          else if (roll < 18) ruinsOutcome = "star_fragment";
@@ -2211,7 +2221,7 @@ module.exports = {
          let ruinsFailedNotifyUserIds = [];
          let ruinsFailedNotifyEmbed = null;
 
-         if (ruinsOutcome === "relic" && characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name)) {
+         if (ruinsOutcome === "relic" && (await characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name, ruinsCharacter._id))) {
           ruinsOutcome = "landmark";
          }
          if (ruinsOutcome === "chest") {
@@ -2298,16 +2308,19 @@ module.exports = {
           } catch (err) {
            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
           }
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found an old map in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
-          progressMsg += "Found an old map; saved to map collection. Take to Inariko Library to decipher.";
-          lootForLog = { itemName: "An old map", emoji: "" };
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.** Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += `Found Map #${chosenMap.number}; saved to map collection. Take to Inariko Library to decipher.`;
+          lootForLog = { itemName: `Map #${chosenMap.number}`, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
           // DM all expedition members (no coordinates until appraised)
           const userIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
           const dmEmbed = new EmbedBuilder()
            .setTitle("🗺️ Expedition map found")
-           .setDescription(`An old map found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
-           .addFields({ name: "Expedition", value: `\`${expeditionId}\``, inline: true })
+           .setDescription(`**Map #${chosenMap.number}** found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
+           .addFields(
+             { name: "Map", value: `**Map #${chosenMap.number}**`, inline: true },
+             { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
+           )
            .setURL(OLD_MAPS_LINK)
            .setColor("#2ecc71")
            .setFooter({ text: "More info" });
@@ -2361,6 +2374,8 @@ module.exports = {
           lootForLog = { itemName: "Goddess Plume", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          }
+         // Persist progress log (incl. "ruins" entry for Report to town hall) before showing embed/buttons
+         await freshParty.save();
          const finalParty = await Party.findActiveByPartyId(expeditionId);
          const resultEmbed = new EmbedBuilder()
           .setTitle(resultTitle)
@@ -4003,10 +4018,21 @@ module.exports = {
     }
 
     // Return any remaining loadout items to each character's inventory
+    // Bundles (Eldin Ore Bundle, Wood Bundle) are virtual slots: return as base item with quantity per slot
     for (const partyCharacter of party.characters || []) {
      const items = partyCharacter.items || [];
      for (const item of items) {
-      if (item && item.itemName) {
+      if (!item || !item.itemName) continue;
+      const bundle = PAVING_BUNDLES[item.itemName];
+      if (bundle) {
+       await addItemInventoryDatabase(
+        partyCharacter._id,
+        bundle.baseItemName,
+        bundle.quantityPerSlot,
+        interaction,
+        "Expedition ended — returned from party (bundle)"
+       ).catch((err) => logger.error("EXPLORE", `Return bundle to owner: ${err.message}`));
+      } else {
        await addItemInventoryDatabase(
         partyCharacter._id,
         item.itemName,
