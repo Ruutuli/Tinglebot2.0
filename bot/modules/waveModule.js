@@ -1258,11 +1258,52 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
       if (failedWave) {
         wave = failedWave;
       }
+      // When monster camp wave fails, sync ALL party members (failWave KO'd everyone in Character DB)
+      if (wave.expeditionId) {
+        try {
+          const Party = require('@/models/PartyModel');
+          const { syncPartyMemberStats } = require('./exploreModule');
+          const party = await Party.findActiveByPartyId(wave.expeditionId);
+          if (party) {
+            await syncPartyMemberStats(party);
+            console.log(`[waveModule.js]: 🗺️ Synced expedition party after wave failure (all KO'd)`);
+          }
+        } catch (syncErr) {
+          logger.warn('WAVE', `Failed to sync expedition party after wave failure: ${syncErr?.message || syncErr}`);
+        }
+      }
     }
 
     // Save updated wave data (if not already saved by failWave)
     if (wave.status === 'active') {
       await wave.save();
+    }
+
+    // When wave is from monster camp (expedition), sync party member hearts/stamina so expedition tracking is correct
+    if (wave.expeditionId && character?._id) {
+      try {
+        const Party = require('@/models/PartyModel');
+        const { fetchCharacterById } = require('@/database/db');
+        const party = await Party.findActiveByPartyId(wave.expeditionId);
+        if (party && party.characters && party.characters.length) {
+          const updatedChar = await fetchCharacterById(character._id, character.isModCharacter);
+          const charToSync = updatedChar || character;
+          const idx = party.characters.findIndex(
+            (c) => c._id && charToSync._id && c._id.toString() === charToSync._id.toString()
+          );
+          if (idx !== -1) {
+            party.characters[idx].currentHearts = charToSync.currentHearts ?? party.characters[idx].currentHearts;
+            party.characters[idx].currentStamina = charToSync.currentStamina ?? party.characters[idx].currentStamina;
+            party.markModified('characters');
+            party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
+            party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
+            await party.save();
+            console.log(`[waveModule.js]: 🗺️ Synced expedition party hearts/stamina for ${charToSync.name} (wave ${waveId})`);
+          }
+        }
+      } catch (syncErr) {
+        logger.warn('WAVE', `Failed to sync expedition party hearts after wave turn: ${syncErr?.message || syncErr}`);
+      }
     }
 
     return {
