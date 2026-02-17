@@ -374,12 +374,12 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  return { lootEmbed, party, nextCharacter };
 }
 
-/** Roll outcomes that are "discoveries" (reportable on map); reroll when square at cap or applying reduced chance. */
-const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic"];
-/** Outcomes to count toward the 3-per-square limit. Only when user chooses Yes: monster_camp, grotto, relic, ruins. monster_camp_skipped is NOT included so "No" does not count. */
-const DISCOVERY_COUNT_OUTCOMES = ["monster_camp", "grotto", "relic", "ruins", "ruins_found"];
-/** When leaving a square, clear these from progressLog if not reported (include ruins_found). */
-const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "relic", "ruins_found"];
+/** Roll outcomes that are "discoveries" (reportable on map); reroll when square at cap or applying reduced chance. Relic is not included: we don't place relics on the map and they don't count toward the 3-per-square limit. */
+const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto"];
+/** Outcomes to count toward the 3-per-square limit. Only when user chooses Yes: monster_camp, grotto, ruins. Relic is excluded (one per character, not map-pinnable). monster_camp_skipped is NOT included so "No" does not count. */
+const DISCOVERY_COUNT_OUTCOMES = ["monster_camp", "grotto", "ruins", "ruins_found"];
+/** When leaving a square, clear these from progressLog if not reported (include ruins_found). Relic is excluded so we keep relic entries for one-per-character tracking. */
+const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "ruins_found"];
 const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
 /** When square already has 1+ discovery, keep a discovery outcome only this fraction of the time (75% less chance). */
 const DISCOVERY_REDUCE_CHANCE_WHEN_ANY = 0.25;
@@ -501,7 +501,8 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs, at
 }
 
 /** Reportable outcomes that get logged to the map path (Square.quadrants[].discoveries). */
-const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto", "relic"]);
+/** Discoveries that get pinned on the map. Relic is excluded — relics are not placed on the map. */
+const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto"]);
 
 /** Push a discovery to the Square document so it appears on the map path and can be pinned. */
 async function pushDiscoveryToMap(party, outcomeType, at, userId) {
