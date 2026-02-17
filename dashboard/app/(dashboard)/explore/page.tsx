@@ -145,50 +145,6 @@ export default function ExplorePage() {
           </div>
         </div>
 
-        {myExpeditions.length > 0 && (
-          <section className="mb-8 rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/20 to-[var(--botw-warm-black)]/60 p-4 shadow-lg md:p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="text-[var(--totk-light-green)]">
-                <i className="fa-solid fa-list text-lg" aria-hidden />
-              </span>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
-                Your expeditions
-              </h2>
-            </div>
-            {myExpeditionsLoading ? (
-              <p className="text-sm text-[var(--totk-grey-200)]">
-                <i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden />
-                Loading…
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {myExpeditions.map((exp) => {
-                  const regionLabel = REGIONS.find((r) => r.value === exp.region)?.label ?? exp.region;
-                  const statusLabel = exp.status === "open" ? "Open" : exp.status === "started" ? "In progress" : exp.status === "completed" ? "Ended" : exp.status;
-                  return (
-                    <li key={exp.partyId}>
-                      <Link
-                        href={`/explore/${exp.partyId}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 px-3 py-2.5 text-sm transition hover:border-[var(--totk-light-green)]/50 hover:bg-[var(--botw-warm-black)]/70"
-                      >
-                        <span className="font-mono font-semibold text-[var(--totk-ivory)]">{exp.partyId}</span>
-                        <span className="text-[var(--totk-grey-200)]">{regionLabel}</span>
-                        <span className="rounded bg-[var(--totk-dark-ocher)]/40 px-2 py-0.5 text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">
-                          {statusLabel}
-                        </span>
-                        <span className="text-xs text-[var(--totk-grey-200)]">
-                          {exp.square} {exp.quadrant}
-                        </span>
-                        <i className="fa-solid fa-arrow-right text-xs text-[var(--totk-light-green)]" aria-hidden />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        )}
-
         <section className="mb-8 rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/20 to-[var(--botw-warm-black)]/60 p-4 shadow-lg md:p-6">
           <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
             Create expedition
@@ -280,6 +236,50 @@ export default function ExplorePage() {
             </button>
           </div>
         </section>
+
+        {myExpeditions.length > 0 && (
+          <section className="mb-8 rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--totk-brown)]/20 to-[var(--botw-warm-black)]/60 p-4 shadow-lg md:p-6">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-[var(--totk-light-green)]">
+                <i className="fa-solid fa-list text-lg" aria-hidden />
+              </span>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
+                Your expeditions
+              </h2>
+            </div>
+            {myExpeditionsLoading ? (
+              <p className="text-sm text-[var(--totk-grey-200)]">
+                <i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden />
+                Loading…
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {myExpeditions.map((exp) => {
+                  const regionLabel = REGIONS.find((r) => r.value === exp.region)?.label ?? exp.region;
+                  const statusLabel = exp.status === "open" ? "Open" : exp.status === "started" ? "In progress" : exp.status === "completed" ? "Ended" : exp.status;
+                  return (
+                    <li key={exp.partyId}>
+                      <Link
+                        href={`/explore/${exp.partyId}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 px-3 py-2.5 text-sm transition hover:border-[var(--totk-light-green)]/50 hover:bg-[var(--botw-warm-black)]/70"
+                      >
+                        <span className="font-mono font-semibold text-[var(--totk-ivory)]">{exp.partyId}</span>
+                        <span className="text-[var(--totk-grey-200)]">{regionLabel}</span>
+                        <span className="rounded bg-[var(--totk-dark-ocher)]/40 px-2 py-0.5 text-xs uppercase tracking-wider text-[var(--totk-grey-200)]">
+                          {statusLabel}
+                        </span>
+                        <span className="text-xs text-[var(--totk-grey-200)]">
+                          {exp.square} {exp.quadrant}
+                        </span>
+                        <i className="fa-solid fa-arrow-right text-xs text-[var(--totk-light-green)]" aria-hidden />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

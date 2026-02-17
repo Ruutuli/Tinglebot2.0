@@ -2019,7 +2019,7 @@ async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
   try {
     const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
     const OldMapFound = require('@/models/OldMapFoundModel.js');
-    const { getOldMapByNumber, OLD_MAP_ICON_URL, OLD_MAPS_LINK } = require('@/data/oldMaps.js');
+    const { getOldMapByNumber, OLD_MAP_ICON_URL, OLD_MAPS_LINK, MAP_EMBED_BORDER_URL } = require('@/data/oldMaps.js');
     const { sendDiscordDM } = require('@/utils/notificationService.js');
 
     const requests = await MapAppraisalRequest.find({
@@ -2040,6 +2040,7 @@ async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
           description: desc,
           color: 0x2ecc71,
           thumbnail: { url: OLD_MAP_ICON_URL },
+          image: { url: MAP_EMBED_BORDER_URL },
           footer: { text: 'Roots of the Wild • Old Maps' },
           url: OLD_MAPS_LINK,
         };

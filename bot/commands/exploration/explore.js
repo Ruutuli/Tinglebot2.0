@@ -50,7 +50,7 @@ const UNAPPRAISED_RELIC_IMAGE_URL = "https://static.wikia.nocookie.net/zelda_gam
 /** Border image for relic embeds (matches other bot embeds). */
 const RELIC_EMBED_BORDER_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
-const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL } = require("../../data/oldMaps.js");
+const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 const { syncPartyMemberStats, pushProgressLog } = require("../../modules/exploreModule.js");
 const logger = require("@/utils/logger.js");
@@ -1910,14 +1910,15 @@ module.exports = {
         .setTitle("🗺️ Expedition map found")
         .setDescription(`**Map #${chosenMapOldMap.number}** found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
         .setThumbnail(OLD_MAP_ICON_URL)
+        .setImage(MAP_EMBED_BORDER_URL)
         .addFields(
           { name: "Map", value: `**Map #${chosenMapOldMap.number}**`, inline: true },
           { name: "Map ID", value: mapIdStr, inline: true },
           { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
         )
         .setURL(OLD_MAPS_LINK)
-        .setColor("#2ecc71")
-        .setFooter({ text: "More info" });
+        .setColor(0x2ecc71)
+        .setFooter({ text: "Roots of the Wild • Old Maps" });
        const client = interaction.client;
        if (client) {
         failedNotifyEmbed = dmEmbed;
@@ -2349,14 +2350,15 @@ module.exports = {
            .setTitle("🗺️ Expedition map found")
            .setDescription(`**Map #${chosenMap.number}** found and saved to **${ruinsCharacter.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
            .setThumbnail(OLD_MAP_ICON_URL)
+           .setImage(MAP_EMBED_BORDER_URL)
            .addFields(
              { name: "Map", value: `**Map #${chosenMap.number}**`, inline: true },
              ...(ruinsMapIdField ? [ruinsMapIdField] : []),
              { name: "Expedition", value: `\`${expeditionId}\``, inline: true }
            )
            .setURL(OLD_MAPS_LINK)
-           .setColor("#2ecc71")
-           .setFooter({ text: "More info" });
+           .setColor(0x2ecc71)
+           .setFooter({ text: "Roots of the Wild • Old Maps" });
           const client = i.client;
           if (client) {
            ruinsFailedNotifyEmbed = dmEmbed;
@@ -4198,6 +4200,8 @@ module.exports = {
     const success = Math.random() < retreatChance;
     if (success) {
      await endExplorationRaidAsRetreat(raid, interaction.client);
+     character.failedFleeAttempts = 0;
+     await character.save();
      pushProgressLog(party, character.name, "retreat", "Party attempted to retreat and escaped.", undefined, retreatCostsForLog);
      await party.save();
      const monsterName = raid.monster?.name || "the monster";
@@ -4221,6 +4225,9 @@ module.exports = {
 
     raid.failedRetreatAttempts = (raid.failedRetreatAttempts ?? 0) + 1;
     await raid.save();
+
+    character.failedFleeAttempts = (character.failedFleeAttempts ?? 0) + 1;
+    await character.save();
 
     pushProgressLog(party, character.name, "retreat_failed", "Party attempted to retreat but could not get away.", undefined, retreatCostsForLog);
     await party.save();

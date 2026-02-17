@@ -14,10 +14,7 @@ const {
 } = require('@/database/db.js');
 const { updateCurrentStamina } = require('../../modules/characterStatsModule.js');
 const { getCharacterOldMapsWithDetails, findOldMapByIdOrMapId } = require('@/utils/oldMapUtils.js');
-const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL } = require('@/data/oldMaps.js');
-
-/** Border image for map embeds (matches other bot embeds). */
-const MAP_EMBED_BORDER_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+const { getOldMapByNumber, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require('@/data/oldMaps.js');
 const { sendDiscordDM } = require('@/utils/notificationService.js');
 const OldMapFound = require('@/models/OldMapFoundModel.js');
 const MapAppraisalRequest = require('@/models/MapAppraisalRequestModel.js');
@@ -217,6 +214,7 @@ module.exports = {
             description: dmDesc,
             color: 0x2ecc71,
             thumbnail: { url: OLD_MAP_ICON_URL },
+            image: { url: MAP_EMBED_BORDER_URL },
             footer: { text: 'Roots of the Wild • Old Maps' },
             url: OLD_MAPS_LINK,
           };
@@ -243,9 +241,21 @@ module.exports = {
           return interaction.editReply({ embeds: [successEmbed] });
         }
 
-        return interaction.editReply({
-          content: `📜 **Map appraisal request created!**\n> **Request ID:** \`${request._id}\`\n> Owner: **${characterName}**\n> Appraiser: **${appraiser}**\n> Payment: ${payment || 'None'}\n*(A Scholar in Inariko can use \`/map appraisal-accept\` to appraise.)*`,
-        });
+        const requestCreatedEmbed = new EmbedBuilder()
+          .setTitle('🗺️ Map appraisal request created')
+          .setDescription('A Scholar in Inariko can use `/map appraisal-accept` to decipher this map.')
+          .setThumbnail(OLD_MAP_ICON_URL)
+          .setImage(MAP_EMBED_BORDER_URL)
+          .setColor(0x2ecc71)
+          .setURL(OLD_MAPS_LINK)
+          .addFields(
+            { name: 'Request ID', value: `\`${request._id}\``, inline: true },
+            { name: 'Owner', value: characterName, inline: true },
+            { name: 'Appraiser', value: appraiser, inline: true },
+            { name: 'Payment', value: payment || 'None', inline: false }
+          )
+          .setFooter({ text: 'Roots of the Wild • Old Maps' });
+        return interaction.editReply({ embeds: [requestCreatedEmbed] });
       }
 
       // ------------------- /map appraisal-accept -------------------
@@ -329,6 +339,7 @@ module.exports = {
           description: dmDesc,
           color: 0x2ecc71,
           thumbnail: { url: OLD_MAP_ICON_URL },
+          image: { url: MAP_EMBED_BORDER_URL },
           footer: { text: 'Roots of the Wild • Old Maps' },
           url: OLD_MAPS_LINK,
         };
