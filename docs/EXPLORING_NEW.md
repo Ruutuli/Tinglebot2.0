@@ -17,34 +17,28 @@ Players spend stamina to explore map quadrants via the bot (`/explore`) and the 
 * Model: `Square` in `bot/models/mapModel.js`
 * Collection: `exploringMap`
 * Key fields
-  * `squareId`
-  * `region`
-  * `status` (inaccessible | explorable)
+  * `squareId`, `region`, `status` (inaccessible | explorable)
   * `quadrants[]` (QuadrantSchema)
-    * `quadrantId` (Q1 to Q4)
-    * `status` (inaccessible | unexplored | explored | secured)
-    * `blighted`
-    * `discoveries[]`
-    * `exploredBy`
-    * `exploredAt`
+    * `quadrantId` (Q1 to Q4), `status`, `blighted`
+    * `discoveries[]` (DiscoverySchema: type, discoveredBy, discoveredAt, discoveryKey, pinned, pinId)
+    * `exploredBy`, `exploredAt`
+    * `oldMapNumber`, `oldMapLeadsTo` (chest | ruins | relic | shrine)
+    * `ruinRestStamina` (stamina recovered when rolling in a quadrant where ruins camp was found)
+  * `image`, `pathImageUrl` (user-drawn path image per square, from expeditions)
+  * `mapCoordinates`, `displayProperties`
 
 Dashboard mirrors the same schema in `dashboard/models/mapModel.js`.
 
 ## Expedition Party
 * Model: `Party` in `bot/models/PartyModel.js`
 * Key fields
-  * `partyId`
-  * `leaderId`
-  * `region`
-  * `square`
-  * `quadrant`
-  * `status` (open | started) and code uses completed for retreat, make sure enum supports it
+  * `partyId`, `leaderId`, `region`, `square`, `quadrant`
+  * `status` (open | started | completed | cancelled)
   * `quadrantState` (unexplored | explored | secured)
-  * `currentTurn`
-  * `totalHearts`
-  * `totalStamina`
-  * `characters[]` (includes `items[]`)
-  * `gatheredItems[]`
+  * `currentTurn`, `totalHearts`, `totalStamina`
+  * `characters[]` (includes `items[]`), `gatheredItems[]`
+  * `blightExposure` (incremented when revealing or traveling through blighted quadrants)
+  * `progressLog[]`, `reportedDiscoveryKeys[]`, `exploredQuadrantsThisRun[]`, `pathImageUploadedSquares[]`
 
 Dashboard mirrors in `dashboard/models/PartyModel.js`.
 
@@ -110,21 +104,27 @@ File: `bot/commands/exploration/explore.js`
 
 Subcommands and parameters:
 * `roll` (id, charactername)
-* `rest` (id, charactername)
 * `secure` (id, charactername)
-* `move` (id, charactername, direction)
-* `retreat` (id, charactername)
-* `camp` (id, charactername, duration)
-* `item` (id, charactername) (uses a healing item from loadout)
+* `move` (id, charactername, quadrant)
+* `item` (id, charactername, item) — use a healing item from loadout
+* `camp` (id, charactername) — rest in place (cost depends on quadrant state; see Stamina and action costs)
+* `end` (id, charactername) — end expedition and return home (only at starting quadrant)
+* `retreat` (id, charactername) — attempt to retreat from a tier 5+ monster battle (1 stamina per attempt)
+* `grotto` (subcommand group):
+  * `continue` — enter or continue the grotto trial after cleansing
+  * `targetpractice` — take your turn in a Target Practice grotto trial
+  * `puzzle` — submit an offering for a Puzzle grotto (mod approves or denies)
+  * `maze` — maze direction or wall roll (left/right/straight/back, or “wall” for Song of Scrying)
+  * `travel` — return to a known grotto (costs 2 stamina per party member)
 
-Creation, join, and start are dashboard only. There is no bot setup, join, start.
+There is no separate `rest` subcommand; “Rest (3 stamina)” in the post-explore menu is done via `/explore camp` when in an explored quadrant (3 stamina, 25% max hearts per member). Creation, join, and start are dashboard only.
 
 ## Region storage and starting squares
 * Regions stored lowercase: `eldin`, `lanayru`, `faron`
-* Start squares per region
-  * Eldin: D3 Q3
-  * Lanayru: G4 Q2
-  * Faron: H6 Q4
+* Start squares per region (party returns here on full party KO; used for “end expedition” check)
+  * Eldin: **H5 Q3**
+  * Lanayru: **H8 Q2**
+  * Faron: **F10 Q4**
 
 ---
 
@@ -137,22 +137,24 @@ Cost is determined by `Party.quadrantState` and deducted from `Party.totalStamin
 * `secured`: 0
 
 ## Roll outcomes and odds
-Each `/explore roll` produces exactly one outcome.
+Each `/explore roll` produces exactly one outcome. Rerolls apply when: (1) “explored” would occur twice in a row at the same location; (2) a special outcome (ruins/relic/grotto/monster_camp) is rolled but the square already has 3 special discoveries (only Yes choices count); (3) grotto is rolled but the square already has a grotto; (4) the square has ≥1 special discovery and a discovery-reduce roll fails (special is then skipped and rerolled).
 
+Nominal probabilities (after any reroll):
 * Monster: 45%
   * Tier 4 and below: simple encounter
   * Tier 5 and above: raid path exists but is currently disabled by `DISABLE_EXPLORATION_RAIDS`
-* Item: 25% (gather a region item)
-* Explored: 15% (quadrant cleared, prompt choice menu)
-* Ruins: 6% (Yes or No buttons, Yes costs 3 stamina when implemented)
-* Camp: 5% (camp site found)
-* Chest: 1% (open chest flow, costs 1 stamina when implemented)
+* Item: 22% (gather a region item; rarity-weighted)
+* Explored: 16% (quadrant cleared, prompt choice menu)
+* Fairy: 3% (fairy encounter)
+* Chest: 1% (Yes/No; Yes costs 1 stamina, opens chest — implemented)
 * Old map: 1% (take to Inariko Library to decipher)
-* Monster camp: 1% (report to town hall to mark on map)
-* Relic: 0.5% (rare, appraisal flow)
-* Grotto: 0.5% (rare, Yes or No buttons, Yes costs 1 stamina plus 1 goddess plume when implemented)
+* Ruins: 2% (Yes/No; Yes costs 3 stamina and runs ruins exploration — implemented)
+* Relic: 0.5%
+* Camp: 4% (camp site found; immediate hearts + stamina recovery for current character)
+* Monster camp: 5% (report to town hall to mark on map)
+* Grotto: 0.5% (Yes/No; Yes costs 1 Goddess Plume + 1 stamina, then grotto trial — implemented)
 
-Ruins and Grotto show Yes or No buttons. Other outcomes continue with next turn messaging. It repeats a bit by design.
+Ruins, Grotto, Chest, and Monster camp show Yes or No buttons where applicable. Other outcomes continue with next turn messaging.
 
 ## What happens on each outcome (current behavior plus planned hooks)
 
@@ -177,18 +179,16 @@ When the system prints “Quadrant Explored” and “What to do next”, it is 
 * Move to next quadrant (2 stamina via `/explore move`)
 
 ### Ruins
-* Shows Yes or No buttons
-* Yes should deduct 3 stamina and run ruins flow (not implemented yet)
-* No continues to next turn
+* Yes: deducts 3 stamina (or struggle), then weighted roll: chest 7, camp 3, landmark 2, relic 2, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20). Outcomes include ruin-rest spot (stored on map `ruinRestStamina` for future visits), relic, old map, Star Fragment, blight, Goddess Plume, landmark (marked on map), or nested chest (Yes/No, 1 stamina to open). Implemented.
+* No: continue to next turn; does not count toward special-discovery cap.
 
 ### Grotto
-* Shows Yes or No buttons
-* Yes should consume 1 goddess plume plus 1 stamina and run grotto cleanse flow (not implemented yet)
-* No marks for later (and still should be reportable for map marking)
+* Yes: consumes 1 Goddess Plume (from loadout) + 1 stamina; creates Grotto doc; rolls trial type (blessing / maze / target practice / puzzle). Blessing = Spirit Orbs for all; maze/target/puzzle run via `/explore grotto continue`, `maze`, `targetpractice`, `puzzle`. Implemented.
+* No: mark for later; reportable for map marking.
 
 ### Chest
-* Costs 1 stamina when implemented
-* Runs chest flow when implemented
+* Yes: costs 1 stamina (or struggle); opens chest — each party member gets loot (item or relic; relic chance 8%). Implemented.
+* No: continue with `/explore roll`.
 
 ### Old map
 * Take to Inariko Library to decipher (follow up system TBD)
@@ -200,8 +200,8 @@ When the system prints “Quadrant Explored” and “What to do next”, it is 
 * Adds relic discovery context, then goes into relic flow later (see Relics section)
 
 ### Camp (found)
-* This is “camp site found” as an outcome.
-* Separately, `/explore camp` is the action used to camp for a duration in secured quadrants.
+* Roll outcome “camp”: safe space found; current character recovers 1–3 hearts and 1–3 stamina immediately.
+* Separately, `/explore camp` is the action: in **secured** quadrant costs 0 stamina and recovers 50% max hearts per member; in **explored** quadrant costs 3 stamina and recovers 25% max hearts per member. When the party is stuck (not enough stamina for 3), camp costs 0 and recovers 25% hearts plus 1–3 stamina per member. Camp is allowed in both explored and secured quadrants.
 
 ---
 
@@ -240,14 +240,12 @@ Status lives on `Square.quadrants[].status` and is mirrored by `Party.quadrantSt
 Explored but not secured is intentional. Backtracking can be risky but rewarding.
 
 ## Movement rule
-* Complete exploration required: all four quadrants of a square must be explored before moving on to the next square.
-* You cannot explore A2 until all of A1 has been explored and marked at least Explored.
-
-Implementation note: this needs enforcement (see checklist).
+* Complete exploration required: all four quadrants of a square must be explored or secured before moving to an adjacent square (except when moving back to the **starting square** to end the expedition, which is allowed even if the current square is not fully explored).
+* Enforcement: move logic blocks leaving the square until every non-inaccessible quadrant in the current square is explored or secured.
 
 ## Party location vs canonical map
 * Party tracks `region`, `square`, `quadrant`, and `quadrantState` during expedition.
-* Canonical map is `exploringMap` Square documents. Post expedition, update Square quadrant statuses based on party activity so the public map stays in sync. This sync is not done yet.
+* Canonical map is `exploringMap` (Square model). Map sync is implemented: when a quadrant is marked explored (roll outcome “explored” or move into unexplored), or secured (secure action), the bot updates the corresponding Square document. On full party KO, quadrants this expedition had marked explored are reset to unexplored.
 
 ---
 
@@ -267,32 +265,25 @@ Costs enforced in `explore.js` where implemented:
   * 5 stamina
   * Explored quadrant only
 * `/explore move`
-  * 2 stamina
-  * Moves to adjacent quadrant, new quadrant becomes unexplored
+  * Cost depends on **destination** quadrant state: 2 stamina (unexplored), 1 stamina (explored), 0 (secured). Moving into a new quadrant marks it explored on the map if it was unexplored.
 * `/explore camp`
-  * 0 stamina cost, cost is time
-  * 1 to 8 hours, recovers hearts and stamina over time
-  * Currently secured quadrants only
+  * Secured: 0 stamina; recovers 50% max hearts per member.
+  * Explored: 3 stamina; recovers 25% max hearts per member.
+  * Stuck in wild (party cannot pay 3): 0 cost; recovers 25% max hearts and 1–3 stamina per member.
 
-Planned action costs for special flows:
-* Chest open: 1 stamina
-* Ruins explore: 3 stamina
-* Grotto cleanse: 1 stamina plus 1 goddess plume
+Special flows (implemented):
+* Chest open: 1 stamina (or hearts if struggling).
+* Ruins explore: 3 stamina (or struggle).
+* Grotto cleanse: 1 Goddess Plume + 1 stamina.
 
 ---
 
 # 6) Blight and exposure
 
 ## Blighted quadrants
-When a quadrant is revealed and has 25% or more blight coverage:
-* The party that explored it must run exposure logic (exposure command or database flag).
-* This should trigger when the quadrant is revealed and threshold is met.
-
-When a party travels through a previously explored or secured quadrant that has blight:
-* They must also run exposure every time they enter or pass through.
-* Exposure can stack across repeated travel. Yeah, it can get nasty.
-
-Implementation note: Quadrant has `blighted` in schema, exposure wiring is still to do.
+* Quadrant has `blighted` (boolean) in schema. When a quadrant is **revealed** (roll outcome “explored” or first entry) and the map quadrant is blighted, the party runs `applyBlightExposure`: `Party.blightExposure` is incremented and a progress log entry is added.
+* When a party **moves** into a quadrant that is blighted (e.g. previously explored or secured but blighted), exposure is applied again. Exposure stacks on repeated travel.
+* Exposure is logged as outcome `blight_exposure` with reason “reveal” or “travel” and total exposure count.
 
 ---
 
@@ -316,11 +307,8 @@ Implementation note: Quadrant has `blighted` in schema, exposure wiring is still
 ## Expedition start
 * At start, post each character’s hearts, stamina, and items once. The app computes combined totals.
 
-## End of expedition split (design rule)
-* Remaining hearts and stamina are evenly divided among members.
-* If remainder exists, a tiebreaker decides who gets it.
-* If there is “too much”, extra is discarded.
-Implementation note: not yet in code.
+## End of expedition split
+* On **end** (return home from starting quadrant): remaining hearts and stamina are divided evenly among members (integer division); remainder is assigned in order (first members get +1). Each character is capped at their max hearts and max stamina; excess is effectively discarded. Party status set to `completed`; characters’ `currentVillage` set to region village. Loadout items are returned to each character’s inventory. Implemented.
 
 ---
 
@@ -332,29 +320,12 @@ Implementation note: not yet in code.
 * KO’d characters are skipped in turn order during monster encounters until revived.
 
 ## Full party KO (all collective hearts lost)
-Design consequences:
-* All items collected and brought are lost.
-* Any quadrants marked Explored revert to Unexplored.
-* Characters wake in their starting village with 0 hearts and 0 stamina.
-* Week long debuff
-  * No healing or stamina items
-  * No healer services
-  * Cannot explore
-  * Stamina recovers 1 per day during this period
-* After week, the character can use healing and stamina items to return to full.
-
-Current code:
-* `handleExpeditionFailed` exists and returns party to region start with 0 hearts and 0 stamina, items lost.
-* Week debuff and 1 per day recovery are not implemented.
+* `handleExpeditionFailed`: party returns to region start square with 0 hearts and 0 stamina; all items brought and gathered are lost; any quadrants this expedition had marked Explored are reset to Unexplored on the map.
+* **Recovery debuff:** 7 days (`EXPLORATION_KO_DEBUFF_DAYS`). During this time characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. Debuff is stored on character (`debuff.active`, `debuff.endDate`); character timers and join/explore checks enforce it. (Stamina “1 per day” passive recovery during debuff is not implemented.)
 
 ## Running out of stamina (cannot get home)
-Design:
-* Party is stuck until they recover enough stamina.
-* Use `/explore camp` in the wild to recover hearts and stamina, then continue.
-
-Current code:
-* `/explore camp` exists but is secured quadrant only.
-* Decide whether to allow camp in explored quadrants for “stuck” recovery or keep secured only and document it.
+* Party can continue actions by **struggling** (pay cost in hearts: 1 heart = 1 stamina) when stamina is insufficient, or use `/explore camp` to recover.
+* Camp is allowed in both explored and secured quadrants. When the party cannot afford the 3-stamina camp cost (“stuck in wild”), camp costs 0 and still grants 25% hearts and 1–3 stamina per member so the party can recover and continue or move home.
 
 ---
 
@@ -368,15 +339,8 @@ Current code:
 * 10 wood equals 1 bundle equals 1 item slot
 
 ## Secure quadrant (paving)
-Design requirement:
-* 5 stamina plus 500 tokens plus 10 wood plus 5 Eldin Ore
-* Materials must be brought on expedition
-* Track who paid the 500 tokens
-
-Current code:
-* Checks for Wood and Eldin Ore presence in party items
-* No quantity checks, no token check, no consumption yet
-* Sets `Party.quadrantState = secured`
+* Cost: 5 stamina (or struggle) plus **Wood** and **Eldin Ore** in party loadout (or “Wood Bundle” and “Eldin Ore Bundle”). Code consumes **one** of each from whichever party member has it (one Wood or Wood Bundle, one Eldin Ore or Eldin Ore Bundle removed from loadout).
+* Not implemented: 500 tokens, exact quantities (10 wood, 5 Eldin Ore), or tracking who paid tokens. Map and party quadrant are set to `secured` and canonical map is updated.
 
 ---
 
@@ -389,7 +353,7 @@ Current code:
   * During tier 5 and above monster encounters, healing is allowed.
   * Otherwise healing happens only when prompted (after “explored this area” type prompts), using the healing item action.
 
-Implementation note: Rest is already full party heal and revive in code as of your implemented checklist.
+Rest (3 stamina in explored quadrant) is done via `/explore camp`: 3 stamina, 25% max hearts per member; it does not explicitly “revive” KO’d in a separate step but adding hearts raises current hearts. Fairies and tonics revive KO’d; `/explore item` uses healing items from loadout when the expedition prompts.
 
 ---
 
@@ -551,40 +515,34 @@ Command: Use /explore roll with Expedition ID E593661 and Character Tingle to ta
 # 16) Implementation status (as of current codebase)
 
 ## Implemented
-☑ Map and quadrant schema in Square (exploringMap), QuadrantSchema includes status, blighted, discoveries. Bot and dashboard models.
-☑ Party schema includes region, square, quadrant, quadrantState, currentTurn, totalHearts, totalStamina, characters, gatheredItems, progressLog.
-☑ Relic schema exists with appraisal and art fields (appraised, rollOutcome, artSubmitted, etc.).
-☑ Bot `/explore` subcommands exist: roll, rest, item, secure, move, retreat, camp. Setup, join, start are dashboard only.
-☑ Roll stamina costs use Party.quadrantState: 2 unexplored, 1 explored, 0 secured.
-☑ Roll outcomes exist in code: Monster, Item, Explored, Chest, Old map, Ruins, Relic, Camp, Monster camp, Grotto. Odds match your list (45, 25, 15, 6, 5, 1, 1, 1, 0.5, 0.5).
-☑ Monster encounters use `getMonstersByRegion(region)`. Tier 5 plus raid path exists but disabled by `DISABLE_EXPLORATION_RAIDS`.
-☑ Item gather uses region filtered items and records in inventory and gatheredItems.
-☑ Rest costs 3 stamina, heals all party hearts and revives KO’d.
-☑ Secure costs 5 stamina and checks for Wood and Eldin Ore presence, then sets quadrantState secured (no full consumption yet).
-☑ Move costs 2 stamina and sets new quadrantState unexplored.
-☑ Camp is secured quadrant only, duration 1 to 8 hours, recovers hearts and stamina per member.
-☑ Retreat sets party status completed and returns party to village.
-☑ Full party KO handler exists: return to region start, 0 hearts and 0 stamina, items lost.
-☑ Ruins and Grotto have Yes or No buttons with messaging and progress log, but their Yes flows are TBD.
-☑ Dashboard party page supports create, join, start expedition, add characters and items, view party state and progress log, square preview.
-☑ Dashboard API endpoint exists for party data.
+☑ Map and quadrant schema in Square (exploringMap): status, blighted, discoveries, exploredBy, exploredAt, oldMapNumber, oldMapLeadsTo, ruinRestStamina, pathImageUrl. Bot and dashboard models.
+☑ Party schema: region, square, quadrant, quadrantState, currentTurn, totalHearts, totalStamina, characters, gatheredItems, progressLog, blightExposure, reportedDiscoveryKeys, exploredQuadrantsThisRun, pathImageUploadedSquares.
+☑ Relic schema with appraisal and art fields; discovery and creation from explore (roll, ruins, chest).
+☑ Bot `/explore` subcommands: roll, secure, move, item, camp, end, retreat; grotto (continue, targetpractice, puzzle, maze, travel). Setup, join, start are dashboard only.
+☑ Roll stamina costs: 2 unexplored, 1 explored, 0 secured. Struggle (hearts when stamina short) for roll, secure, move, ruins, chest, grotto.
+☑ Roll outcomes: Monster, Item, Explored, Fairy, Chest, Old map, Ruins, Relic, Camp, Monster camp, Grotto — with reroll rules (explored twice, special cap per square, one grotto per square, discovery-reduce).
+☑ Monster encounters via `getMonstersByRegion(region)`; tier 5+ raid path disabled by `DISABLE_EXPLORATION_RAIDS`.
+☑ Item gather: region-filtered, rarity-weighted; inventory and gatheredItems updated.
+☑ (Rest in menu = camp in explored: 3 stamina, 25% max hearts per member.)’d.
+☑ Secure: 5 stamina; consumes one Wood (or Wood Bundle) and one Eldin Ore (or Eldin Ore Bundle) from party loadout; updates map and party to secured.
+☑ Move: cost by destination (2 / 1 / 0 for unexplored / explored / secured); movement rule enforced (all 4 quadrants explored or secured before leaving square, except to start to end). Map sync on explore/secure/move; full party KO resets explored quadrants this run.
+☑ Camp: secured 0 stamina / 50% hearts; explored 3 stamina / 25% hearts; stuck-in-wild 0 cost / 25% hearts + 1–3 stamina per member. Allowed in explored and secured.
+☑ Blight exposure: applyBlightExposure on reveal and on move through blighted quadrant; stacks.
+☑ Full party KO: handleExpeditionFailed — return to start, 0 hearts/stamina, items lost, map reset, 7-day debuff (no items, no healer, no explore).
+☑ End-of-expedition split: on end, hearts and stamina divided evenly with remainder, capped at max; loadout items returned to inventory.
+☑ Ruins Yes: 3 stamina, weighted roll (chest, camp, landmark, relic, old_map, star_fragment, blight, goddess_plume); ruin-rest stored on map.
+☑ Grotto Yes: 1 Goddess Plume + 1 stamina; Grotto doc, trial (blessing/maze/target/puzzle); grotto subcommands for continue, targetpractice, puzzle, maze, travel.
+☑ Chest Yes: 1 stamina, open flow with loot (relic chance 8%); can nest from ruins chest outcome.
+☑ Dashboard: party create/join/start, characters and items, progress log, square preview, reportable discoveries and pins, path image upload; quadrant status colors; API for party, map quadrant statuses, path images.
 
 ## Partial or not implemented
-☐ Map sync: Party actions should update exploringMap Square quadrant statuses and blight so public map matches canonical state.
-☐ Movement rule enforcement: all 4 quadrants before moving to adjacent square should be enforced in move logic where square transitions happen.
-☐ Secure full cost: enforce 500 tokens plus exact quantities 10 wood and 5 Eldin Ore, consume items, track token payer.
-☐ Blight exposure: trigger exposure when quadrant revealed with 25% plus blight and when traveling through blighted quadrants, exposure stacks.
-☐ Week debuff after expedition failure: no healing items, no healer, no exploring, stamina recovers 1 per day for a week.
-☐ End of expedition split: evenly divide remaining hearts and stamina, tiebreak remainder, discard excess.
-☐ Relic full flow wiring: lock participation, appraisal request, appraiser stamina and payments, mod approval, outcome reveal, deadlines, archive display.
-☐ Map UI: quadrant colors, clouded vs resolved squares, mod tools to update and mark findings.
-☐ User map updates: drawing layer and pins workflow for exploring map UI (Pin model exists).
-☐ 24 hour rules enforcement in app for expedition completion and for map marking fallback.
-☐ Ruins Yes flow: deduct 3 stamina and run ruins exploration system.
-☐ Grotto Yes flow: consume 1 goddess plume plus 1 stamina and run cleanse flow.
-☐ Tier 5 plus retreat attempts inside encounter loop: retreat is a subcommand, confirm the in encounter retreat attempt flow and its 1 stamina cost per attempt.
-☐ Optional: explore specific monster pool using `Monster.exploreEldin` and friends.
-☐ Future: mount exploring (basic, mid, high stamina) remains out of scope.
+☐ Secure: 500 tokens and exact quantities (10 wood, 5 Eldin Ore) not enforced; no token-payer tracking.
+☐ Week debuff: 7-day debuff implemented; passive "1 stamina per day" during debuff not implemented.
+☐ Relic full flow: discovery and creation in explore; appraisal request, appraiser stamina/payments, mod approval, outcome reveal, deadlines, archive display — partially wired.
+☐ Map UI: quadrant statuses API and explore party page quadrant colors; full map page drawing layer and mod tools TBD as needed.
+☐ 24-hour rules for expedition completion and map marking fallback not enforced in app.
+☐ Optional: explore-specific monster pool (`Monster.exploreEldin` etc.).
+☐ Future: mount exploring (basic, mid, high stamina) out of scope.
 
 ---
 

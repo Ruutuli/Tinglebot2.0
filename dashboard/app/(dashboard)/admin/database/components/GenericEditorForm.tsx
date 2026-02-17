@@ -312,6 +312,7 @@ export function GenericEditorForm({
 
   // Get item name for display
   const itemName = String(item[modelConfig.nameField] || "Item");
+  const isInventory = modelConfig.name === "Inventory";
 
   // Convert modelConfig.tabs to Tabs component format
   const tabsArray = modelConfig.tabs.map((tab) => ({
@@ -375,9 +376,29 @@ export function GenericEditorForm({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
+      {/* Optional header bar for Inventory and other models - reinforces context */}
+      {isInventory && (
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--totk-dark-ocher)]/50">
+          <span className="text-sm font-medium text-[var(--totk-light-ocher)]">
+            <i className="fa-solid fa-box-open mr-1.5" aria-hidden="true" />
+            Inventory entry
+          </span>
+          <span className="text-[var(--totk-grey-200)]">·</span>
+          <span className="text-sm text-[var(--botw-pale)] truncate" title={itemName}>
+            {itemName}
+          </span>
+          {item.quantity != null && (
+            <>
+              <span className="text-[var(--totk-grey-200)]">·</span>
+              <span className="text-sm text-[var(--totk-grey-200)]">Qty: {String(item.quantity)}</span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Tabs */}
-      <div className="mb-4">
+      <div className="mb-4 flex-shrink-0">
         <Tabs
           tabs={tabsArray}
           activeTab={activeTab}
@@ -385,13 +406,13 @@ export function GenericEditorForm({
         />
       </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="pb-4 pt-6 min-w-0">{renderTabContent()}</div>
+      {/* Tab Content - scrollable */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+        <div className="pb-4 pt-2 min-w-0">{renderTabContent()}</div>
       </div>
 
-      {/* Footer Actions */}
-      <div className="flex items-center justify-between gap-4 pt-4 mt-4 border-t-2 border-[var(--totk-dark-ocher)]">
+      {/* Footer Actions - always visible at bottom */}
+      <div className="flex-shrink-0 flex items-center justify-between gap-4 pt-4 mt-4 border-t-2 border-[var(--totk-dark-ocher)]">
         <div className="text-sm text-[var(--totk-grey-200)]">
           {hasChanges && (
             <span className="text-[var(--totk-light-green)]">

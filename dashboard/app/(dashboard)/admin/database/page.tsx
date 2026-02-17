@@ -56,6 +56,7 @@ export default function AdminDatabasePage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<DatabaseRecord | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const modelConfig = useMemo(() => getModelConfig(selectedModel), [selectedModel]);
@@ -77,6 +78,10 @@ export default function AdminDatabasePage() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   /** When save fails, store payload so user can click Try again without re-editing. */
   const lastSavePayloadRef = useRef<{ itemId: string; updates: Record<string, unknown> } | null>(null);
+  /** Character Inventories: list of characters (when no character selected). */
+  const [inventoryCharacters, setInventoryCharacters] = useState<DatabaseRecord[]>([]);
+  /** Character Inventories: selected character id; when set, items are that character's inventory. */
+  const [inventoryCharacterId, setInventoryCharacterId] = useState<string | null>(null);
 
   // ------------------- Build Filter Groups -------------------
   const filterGroups = useMemo((): FilterGroup[] => {
@@ -118,6 +123,14 @@ export default function AdminDatabasePage() {
         job: "Job",
         craftable: "Craftable",
         stackable: "Stackable",
+        characterId: "Character ID",
+        region: "Region",
+        species: "Species",
+        petType: "Pet Type",
+        status: "Status",
+        tier: "Tier",
+        village: "Village",
+        race: "Race",
       };
       
       groups.push({
@@ -248,6 +261,20 @@ export default function AdminDatabasePage() {
             return field && item[field] === true;
           });
         }
+        if (selectedModel === "Inventory") {
+          if (key === "category") {
+            const cat = item.category;
+            return typeof cat === "string" && selectedValues.includes(cat);
+          }
+          if (key === "type") {
+            const t = item.type;
+            return typeof t === "string" && selectedValues.includes(t);
+          }
+          if (key === "characterId") {
+            const id = item.characterId;
+            return id != null && selectedValues.includes(String(id));
+          }
+        }
         return true;
       });
     });
@@ -263,6 +290,22 @@ export default function AdminDatabasePage() {
     const endIndex = startIndex + itemsPerPage;
     return filteredItems.slice(startIndex, endIndex);
   }, [filteredItems, currentPage, itemsPerPage]);
+
+  // ------------------- Inventory: filtered and paginated character list -------------------
+  const isInventoryCharacterList = selectedModel === "Inventory" && !inventoryCharacterId;
+  const filteredInventoryCharacters = useMemo(() => {
+    if (!isInventoryCharacterList || !inventoryCharacters.length) return [];
+    if (!searchQuery.trim()) return inventoryCharacters;
+    const q = searchQuery.toLowerCase().trim();
+    return inventoryCharacters.filter((c) => {
+      const name = c.name;
+      return name && String(name).toLowerCase().includes(q);
+    });
+  }, [isInventoryCharacterList, inventoryCharacters, searchQuery]);
+  const paginatedInventoryCharacters = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredInventoryCharacters.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredInventoryCharacters, currentPage, itemsPerPage]);
 
   // ------------------- Scroll to Top Function -------------------
   const scrollToTop = useCallback(() => {
@@ -324,7 +367,11 @@ export default function AdminDatabasePage() {
       fetchAbortControllerRef.current = new AbortController();
       const signal = fetchAbortControllerRef.current.signal;
 
-      const res = await fetch(`/api/admin/database/items?model=${selectedModel}`, { signal });
+      const url =
+        selectedModel === "Inventory" && inventoryCharacterId
+          ? `/api/admin/database/items?model=Inventory&characterId=${encodeURIComponent(inventoryCharacterId)}`
+          : `/api/admin/database/items?model=${selectedModel}`;
+      const res = await fetch(url, { signal });
       if (signal.aborted) return;
 
       if (!res.ok) {
@@ -338,15 +385,21 @@ export default function AdminDatabasePage() {
 
       const response = (await res.json()) as { 
         items?: DatabaseRecord[];
+        characters?: DatabaseRecord[];
         filterOptions?: Record<string, (string | number)[]>;
       };
       if (signal.aborted) return;
 
-      if (!response.items) {
-        throw new Error("No items found");
+      // Inventory without characterId returns characters list
+      if (selectedModel === "Inventory" && response.characters) {
+        setInventoryCharacters(response.characters);
+        setItems(response.items ?? []);
+      } else {
+        if (!response.items && !response.characters) {
+          throw new Error("No items found");
+        }
+        setItems(response.items ?? []);
       }
-
-      setItems(response.items);
       
       // Use filterOptions from API if available
       if (response.filterOptions) {
@@ -373,7 +426,7 @@ export default function AdminDatabasePage() {
         setLoading(false);
       }
     }
-  }, [selectedModel]);
+  }, [selectedModel, inventoryCharacterId]);
 
   // ------------------- Save Item -------------------
   // JSON.stringify preserves all special characters (<, :, etc.) correctly
@@ -389,7 +442,12 @@ export default function AdminDatabasePage() {
       const res = await fetch("/api/admin/database/items", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId, updates, model: selectedModel }),
+        body: JSON.stringify({
+          itemId,
+          updates,
+          model: selectedModel,
+          ...(selectedModel === "Inventory" && inventoryCharacterId ? { characterId: inventoryCharacterId } : {}),
+        }),
       });
 
       const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
@@ -424,19 +482,92 @@ export default function AdminDatabasePage() {
     } finally {
       setSavingItemId(null);
     }
-  }, [items, fetchItems, selectedModel, modelConfig]);
+  }, [items, fetchItems, selectedModel, modelConfig, inventoryCharacterId]);
 
   const handleRetrySave = useCallback(() => {
     const payload = lastSavePayloadRef.current;
     if (payload) handleSaveItem(payload.itemId, payload.updates);
   }, [handleSaveItem]);
 
+  // ------------------- Delete Item (used for Inventory entries) -------------------
+  const handleDeleteItem = useCallback(
+    async (item: Record<string, unknown>) => {
+      const itemId = getItemId(item._id);
+      if (!itemId) return;
+      setDeletingItemId(itemId);
+      setError(null);
+      try {
+        const res = await fetch("/api/admin/database/items", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itemId,
+            model: selectedModel,
+            ...(selectedModel === "Inventory" && inventoryCharacterId ? { characterId: inventoryCharacterId } : {}),
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        if (!res.ok) {
+          throw new Error(data.message || data.error || "Failed to delete");
+        }
+        setSuccessMessage("✓ Entry deleted.");
+        if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = setTimeout(() => {
+          setSuccessMessage(null);
+          successTimeoutRef.current = null;
+        }, 3000);
+        await fetchItems();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDeletingItemId(null);
+      }
+    },
+    [selectedModel, inventoryCharacterId, fetchItems]
+  );
+
   // ------------------- Load button: trigger first fetch; effect refetches when model changes after first load -------------------
   const handleLoadClick = useCallback(() => {
     setHasLoadedOnce(true);
     lastLoadedModelRef.current = selectedModel;
+    if (selectedModel === "Inventory") {
+      setInventoryCharacterId(null);
+    }
     fetchItems();
   }, [selectedModel, fetchItems]);
+
+  // ------------------- When Inventory and a character is selected, fetch that character's inventory items -------------------
+  useEffect(() => {
+    if (selectedModel !== "Inventory" || !inventoryCharacterId) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/admin/database/items?model=Inventory&characterId=${encodeURIComponent(inventoryCharacterId)}`)
+      .then((res) => {
+        if (!res.ok) return res.json().then((d) => { throw new Error((d as { message?: string }).message || "Failed to load inventory"); });
+        return res.json();
+      })
+      .then((data: { items?: DatabaseRecord[]; filterOptions?: Record<string, (string | number)[]> }) => {
+        if (cancelled) return;
+        setItems(data.items ?? []);
+        if (data.filterOptions) setFilterOptions(data.filterOptions);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedModel, inventoryCharacterId]);
+
+  // ------------------- Clear Inventory state when switching away from Inventory -------------------
+  useEffect(() => {
+    if (selectedModel !== "Inventory") {
+      setInventoryCharacterId(null);
+      setInventoryCharacters([]);
+    }
+  }, [selectedModel]);
 
   useEffect(() => {
     if (!isAdmin || sessionLoading) return;
@@ -561,27 +692,37 @@ export default function AdminDatabasePage() {
                 </button>
 
                 {/* Item Count Badge */}
-                {items.length > 0 && (
+                {(items.length > 0 || (selectedModel === "Inventory" && inventoryCharacters.length > 0)) && (
                   <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--totk-light-green)]/10 border border-[var(--totk-light-green)]/30">
                     <i className="fa-solid fa-database text-sm text-[var(--totk-light-green)]" aria-hidden="true" />
                     <span className="text-sm font-semibold text-[var(--totk-light-green)]">
-                      {filteredItems.length > 0 
-                        ? `Showing ${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, filteredItems.length)} of ${filteredItems.length}`
-                        : '0'
-                      } {filteredItems.length === 1 ? (modelConfig?.displayName.toLowerCase().slice(0, -1) || 'item') : (modelConfig?.displayName.toLowerCase() || 'items')}
-                      {filteredItems.length !== items.length && ` (${items.length} total)`}
+                      {selectedModel === "Inventory" && !inventoryCharacterId ? (
+                        filteredInventoryCharacters.length > 0
+                          ? `Showing ${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, filteredInventoryCharacters.length)} of ${filteredInventoryCharacters.length} characters`
+                          : "0 characters"
+                      ) : filteredItems.length > 0 ? (
+                        `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, filteredItems.length)} of ${filteredItems.length} ${filteredItems.length === 1 ? "item" : "items"}${filteredItems.length !== items.length ? ` (${items.length} total)` : ""}`
+                      ) : (
+                        "0"
+                      )}
                     </span>
                   </div>
                 )}
               </div>
 
               {/* Search and Filters */}
-              {items.length > 0 && (
+              {(items.length > 0 || (selectedModel === "Inventory" && inventoryCharacters.length > 0)) && (
                 <SearchFilterBar
                   searchValue={searchQuery}
                   onSearchChange={setSearchQuery}
-                  searchPlaceholder={modelConfig ? `Search ${modelConfig.displayName.toLowerCase()} by name...` : "Search..."}
-                  filterGroups={filterGroups}
+                  searchPlaceholder={
+                    selectedModel === "Inventory" && !inventoryCharacterId
+                      ? "Search characters by name..."
+                      : modelConfig
+                        ? `Search ${modelConfig.displayName.toLowerCase()} by name...`
+                        : "Search..."
+                  }
+                  filterGroups={selectedModel === "Inventory" && !inventoryCharacterId ? [] : filterGroups}
                   onFilterChange={handleFilterChange}
                   onClearAll={handleClearAll}
                 />
@@ -630,18 +771,153 @@ export default function AdminDatabasePage() {
         )}
 
         {/* Items List */}
-        {items.length === 0 ? (
+        {selectedModel === "Inventory" && inventoryCharacterId ? (
+          /* Inventory: viewing a character's items — Back button + table */
+          <>
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setInventoryCharacterId(null);
+                  setItems([]);
+                  setCurrentPage(1);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] hover:bg-[var(--totk-mid-ocher)] text-[var(--botw-pale)] font-medium transition-colors"
+              >
+                <i className="fa-solid fa-arrow-left" aria-hidden="true" />
+                Back to characters
+              </button>
+            </div>
+            {items.length === 0 && !loading ? (
+              <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-12 shadow-lg">
+                <div className="text-center">
+                  <p className="text-[var(--botw-pale)] text-xl font-semibold">No inventory items for this character</p>
+                </div>
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-12 shadow-lg">
+                <div className="text-center">
+                  <p className="text-[var(--botw-pale)] text-xl font-semibold mb-2">No items match your search</p>
+                  <button onClick={() => setSearchQuery("")} className="px-4 py-2 rounded-lg bg-[var(--totk-dark-ocher)] hover:bg-[var(--totk-mid-ocher)] text-[var(--botw-pale)] font-medium">
+                    Clear Search
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] shadow-lg overflow-hidden">
+                  {modelConfig && (
+                    <ModelItemList
+                      items={paginatedItems}
+                      modelConfig={modelConfig}
+                      onEdit={(item) => {
+                        setEditingItem(item as DatabaseRecord);
+                        setShowEditModal(true);
+                      }}
+                      onDelete={handleDeleteItem}
+                    />
+                  )}
+                </div>
+                {filteredItems.length > itemsPerPage && (
+                  <div className="mt-6 flex justify-center">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalItems={filteredItems.length}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={setCurrentPage}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        ) : isInventoryCharacterList && inventoryCharacters.length > 0 ? (
+          /* Inventory: character list — click a character to see their inventory */
+          filteredInventoryCharacters.length === 0 ? (
+            <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-12 shadow-lg">
+              <div className="text-center">
+                <p className="text-[var(--botw-pale)] text-xl font-semibold mb-2">No characters match your search</p>
+                <button onClick={() => setSearchQuery("")} className="px-4 py-2 rounded-lg bg-[var(--totk-dark-ocher)] hover:bg-[var(--totk-mid-ocher)] text-[var(--botw-pale)] font-medium">
+                  Clear Search
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
+            <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] shadow-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-dark-ocher)]/10">
+                      <th className="px-4 py-3 text-[var(--totk-light-ocher)] font-semibold">Name</th>
+                      <th className="px-4 py-3 text-[var(--totk-light-ocher)] font-semibold">Race</th>
+                      <th className="px-4 py-3 text-[var(--totk-light-ocher)] font-semibold">Village</th>
+                      <th className="px-4 py-3 text-[var(--totk-light-ocher)] font-semibold">Job</th>
+                      <th className="px-4 py-3 text-[var(--totk-light-ocher)] font-semibold w-24">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedInventoryCharacters.map((char, idx) => {
+                      const id = getItemId(char._id);
+                      return (
+                        <tr
+                          key={id || `char-${idx}`}
+                          className="border-b border-[var(--totk-grey-200)]/20 hover:bg-[var(--totk-dark-ocher)]/10 transition-colors"
+                        >
+                          <td className="px-4 py-3 text-[var(--botw-pale)]">{String(char.name ?? "")}</td>
+                          <td className="px-4 py-3 text-[var(--totk-grey-200)]">{String(char.race ?? "")}</td>
+                          <td className="px-4 py-3 text-[var(--totk-grey-200)]">{String(char.homeVillage ?? "")}</td>
+                          <td className="px-4 py-3 text-[var(--totk-grey-200)]">{String(char.job ?? "")}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInventoryCharacterId(id);
+                                setCurrentPage(1);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-[var(--totk-mid-ocher)] hover:bg-[var(--totk-light-ocher)] text-[var(--botw-pale)] text-sm font-medium"
+                            >
+                              View inventory
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {filteredInventoryCharacters.length > itemsPerPage && (
+              <div className="mt-6 flex justify-center">
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={filteredInventoryCharacters.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
+          </>
+          )
+        ) : !isInventoryCharacterList && items.length === 0 ? (
           <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-12 shadow-lg">
             <div className="text-center">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[var(--totk-dark-ocher)]/20 mb-4">
                 <i className="fa-solid fa-inbox text-4xl text-[var(--totk-grey-200)]" aria-hidden="true" />
               </div>
               <p className="text-[var(--botw-pale)] text-xl font-semibold mb-2">
-                {error ? "Failed to load items" : hasLoadedOnce ? "No items found" : "Select a model and click Load to fetch data"}
+                {error ? "Failed to load items" : selectedModel === "Inventory" && hasLoadedOnce ? "No characters found" : hasLoadedOnce ? "No items found" : "Select a model and click Load to fetch data"}
               </p>
               <p className="text-sm text-[var(--totk-grey-200)]">
-                {error ? "Please try refreshing the page." : hasLoadedOnce ? "Items will appear here once loaded." : "Choose a model type above and click the Load button to load records."}
+                {error ? "Please try refreshing the page." : hasLoadedOnce ? (selectedModel === "Inventory" ? "Characters will appear here once loaded." : "Items will appear here once loaded.") : "Choose a model type above and click the Load button to load records."}
               </p>
+            </div>
+          </div>
+        ) : isInventoryCharacterList && inventoryCharacters.length === 0 && hasLoadedOnce ? (
+          <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--botw-black)] p-12 shadow-lg">
+            <div className="text-center">
+              <p className="text-[var(--botw-pale)] text-xl font-semibold">No characters found</p>
+              <p className="text-sm text-[var(--totk-grey-200)] mt-2">Load again to refresh.</p>
             </div>
           </div>
         ) : filteredItems.length === 0 ? (
@@ -710,8 +986,12 @@ export default function AdminDatabasePage() {
               }
             }}
             title={`Edit: ${String(editingItem[modelConfig.nameField] || "Item")}`}
-            description={`Edit ${modelConfig.displayName.toLowerCase()} properties`}
-            hideTitle={true}
+            description={
+              selectedModel === "Inventory"
+                ? "Edit this character inventory entry. Changes save to the character's inventory collection."
+                : `Edit ${modelConfig.displayName.toLowerCase()} properties`
+            }
+            hideTitle={false}
             size="full"
           >
             {selectedModel === "Item" ? (

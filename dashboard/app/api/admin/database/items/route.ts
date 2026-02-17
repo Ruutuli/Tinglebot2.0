@@ -2,12 +2,12 @@
 // ------------------- Admin Database API -------------------
 // GET /api/admin/database/items?model=Item - Fetch all items
 // PUT /api/admin/database/items - Update an item by ID
+// DELETE /api/admin/database/items - Delete an item by ID (body: { itemId, model })
 // Admin-only access required
-// Supports multiple models, currently: Item
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, getInventoriesConnection } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
@@ -93,6 +93,92 @@ export async function GET(req: NextRequest) {
         { error: "Invalid model", message: `Model "${modelName}" is not supported` },
         { status: 400 }
       );
+    }
+
+    // ------------------- Inventory: two-level (characters list, then character's items) -------------------
+    if (modelName === "Inventory") {
+      const characterIdParam = params.get("characterId")?.trim() || null;
+      const convert = (obj: unknown): unknown => {
+        if (obj instanceof Map) return Object.fromEntries(obj);
+        if (Array.isArray(obj)) return obj.map(convert);
+        if (obj !== null && typeof obj === "object" && typeof (obj as { toString?: () => string }).toString === "function") {
+          const str = (obj as { toString: () => string }).toString();
+          if (str && /^[a-fA-F0-9]{24}$/.test(str)) return str;
+        }
+        if (obj !== null && typeof obj === "object") {
+          const out: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(obj)) out[k] = convert(v);
+          return out;
+        }
+        return obj;
+      };
+
+      if (!characterIdParam) {
+        // Return list of characters (from main DB) so user can pick one
+        let CharacterModel: Model<unknown>;
+        if (mongoose.models.Character) {
+          CharacterModel = mongoose.models.Character;
+        } else {
+          const { default: CharModel } = await import("@/models/CharacterModel.js");
+          CharacterModel = CharModel as unknown as Model<unknown>;
+        }
+        const characters = (await CharacterModel.find({})
+          .sort({ name: 1 })
+          .select("_id name userId race homeVillage job")
+          .lean()) as unknown as ItemLean[];
+        const convertedChars = characters.map(convert) as unknown as ItemLean[];
+        logger.info("api/admin/database/items GET", `Fetched ${convertedChars.length} characters for Inventory picker`);
+        return NextResponse.json({
+          characters: convertedChars,
+          items: [],
+          filterOptions: {},
+          meta: { model: "Inventory", mode: "characters", totalFetched: convertedChars.length },
+        });
+      }
+
+      // Return inventory items for the selected character (inventories DB)
+      // Bot uses one collection per character: collection name = character.name.toLowerCase()
+      let CharacterModel: Model<unknown>;
+      if (mongoose.models.Character) {
+        CharacterModel = mongoose.models.Character;
+      } else {
+        const { default: CharModel } = await import("@/models/CharacterModel.js");
+        CharacterModel = CharModel as unknown as Model<unknown>;
+      }
+      const character = await CharacterModel.findById(characterIdParam).select("name").lean();
+      const characterName = character && typeof character === "object" ? (character as unknown as { name?: string }).name : null;
+      if (!characterName) {
+        return NextResponse.json(
+          { error: "Character not found", message: "No character found with that ID" },
+          { status: 404 }
+        );
+      }
+      const collectionName = characterName.toLowerCase();
+
+      const conn = await getInventoriesConnection();
+      const db = conn.useDb("inventories");
+      const collection = db.collection(collectionName);
+      const rawRecords = await collection.find({}).sort({ itemName: 1 }).toArray();
+      const records = rawRecords as unknown as ItemLean[];
+      const convertedRecords = records.map(convert) as unknown as ItemLean[];
+
+      const filterOptionsInv: Record<string, (string | number)[]> = {};
+      const categorySet = new Set<string>();
+      const typeSet = new Set<string>();
+      convertedRecords.forEach((record) => {
+        const r = record as { category?: string; type?: string };
+        if (r.category) categorySet.add(r.category);
+        if (r.type) typeSet.add(r.type);
+      });
+      filterOptionsInv.category = Array.from(categorySet).sort();
+      filterOptionsInv.type = Array.from(typeSet).sort();
+
+      logger.info("api/admin/database/items GET", `Fetched ${convertedRecords.length} inventory items for character ${characterIdParam} (collection: ${collectionName})`);
+      return NextResponse.json({
+        items: convertedRecords,
+        filterOptions: filterOptionsInv,
+        meta: { model: "Inventory", characterId: characterIdParam, totalFetched: convertedRecords.length },
+      });
     }
 
     // ------------------- Get Model -------------------
@@ -386,10 +472,11 @@ export async function PUT(req: NextRequest) {
 
     // ------------------- Parse Request Body -------------------
     const body = await req.json().catch(() => ({}));
-    const { itemId: rawItemId, updates, model: modelName } = body as {
+    const { itemId: rawItemId, updates, model: modelName, characterId: bodyCharacterId } = body as {
       itemId?: string | { $oid?: string; oid?: string };
       updates?: Record<string, unknown>;
       model?: string;
+      characterId?: string;
     };
 
     // Normalize itemId: accept string or ObjectId-like object; reject "[object Object]"
@@ -429,6 +516,85 @@ export async function PUT(req: NextRequest) {
         { error: "Invalid model", message: `Model "${model}" is not supported` },
         { status: 400 }
       );
+    }
+
+    // ------------------- Inventory: update in per-character collection -------------------
+    if (model === "Inventory") {
+      const invCharacterId = bodyCharacterId && typeof bodyCharacterId === "string" ? bodyCharacterId : "";
+      if (!invCharacterId) {
+        return NextResponse.json(
+          { error: "characterId is required for Inventory updates" },
+          { status: 400 }
+        );
+      }
+      let CharModel: Model<unknown> = mongoose.models.Character as Model<unknown>;
+      if (!CharModel) {
+        const { default: C } = await import("@/models/CharacterModel.js");
+        CharModel = C as unknown as Model<unknown>;
+      }
+      const char = await CharModel.findById(invCharacterId).select("name").lean();
+      const charName = char && typeof char === "object" ? (char as unknown as { name?: string }).name : null;
+      if (!charName) {
+        return NextResponse.json(
+          { error: "Character not found", message: "No character found with that ID" },
+          { status: 404 }
+        );
+      }
+      const collectionName = charName.toLowerCase();
+      const conn = await getInventoriesConnection();
+      const db = conn.useDb("inventories");
+      const collection = db.collection(collectionName);
+      const allowedFields = [
+        "characterId", "itemName", "itemId", "quantity", "category", "type", "subtype",
+        "job", "perk", "location", "date", "craftedAt", "gatheredAt", "obtain", "synced", "fortuneTellerBoost",
+      ];
+      const updateData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(updates)) {
+        if (!allowedFields.includes(key)) continue;
+        if (key === "characterId" || key === "itemId") {
+          updateData[key] = value && typeof value === "string" && mongoose.Types.ObjectId.isValid(value) ? new mongoose.Types.ObjectId(value) : value;
+        } else if (key === "date" || key === "craftedAt" || key === "gatheredAt") {
+          updateData[key] = value instanceof Date ? value : value ? new Date(value as string | number) : value;
+        } else {
+          updateData[key] = value;
+        }
+      }
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json(
+          { error: "No valid fields to update", message: "No valid fields to update" },
+          { status: 400 }
+        );
+      }
+      const convertObj = (obj: unknown): unknown => {
+        if (obj instanceof Map) return Object.fromEntries(obj);
+        if (Array.isArray(obj)) return obj.map(convertObj);
+        if (obj !== null && typeof obj === "object" && typeof (obj as { toString?: () => string }).toString === "function") {
+          const s = (obj as { toString: () => string }).toString();
+          if (s && /^[a-fA-F0-9]{24}$/.test(s)) return s;
+        }
+        if (obj !== null && typeof obj === "object") {
+          const out: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(obj)) out[k] = convertObj(v);
+          return out;
+        }
+        return obj;
+      };
+      const result = await collection.findOneAndUpdate(
+        { _id: new mongoose.Types.ObjectId(itemId) },
+        { $set: updateData },
+        { returnDocument: "after" }
+      );
+      if (!result) {
+        return NextResponse.json(
+          { error: "Record not found", message: "No inventory entry found with that ID" },
+          { status: 404 }
+        );
+      }
+      logger.info("api/admin/database/items PUT", `Updated Inventory ${itemId} in collection ${collectionName}`);
+      return NextResponse.json({
+        item: convertObj(result) as Record<string, unknown>,
+        message: "Inventory updated successfully",
+      });
     }
 
     // ------------------- Get Model -------------------
@@ -695,6 +861,144 @@ export async function PUT(req: NextRequest) {
           stack: errorStack
         } : undefined
       },
+      { status: 500 }
+    );
+  }
+}
+
+// ============================================================================
+// ------------------- DELETE Handler -------------------
+// ============================================================================
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getSession();
+    const user = session.user ?? null;
+    if (!user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const isAdmin = await isAdminUser(user.id);
+    if (!isAdmin) {
+      logger.warn("api/admin/database/items DELETE", `Access denied for user ${user.id}: not admin`);
+      return NextResponse.json(
+        { error: "Forbidden", message: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { itemId: rawItemId, model: modelName, characterId: bodyCharacterId } = body as {
+      itemId?: string | { $oid?: string; oid?: string };
+      model?: string;
+      characterId?: string;
+    };
+
+    let itemId: string;
+    if (typeof rawItemId === "string" && rawItemId) {
+      itemId = rawItemId;
+    } else if (rawItemId && typeof rawItemId === "object") {
+      const oid = (rawItemId as { $oid?: string; oid?: string }).$oid ?? (rawItemId as { $oid?: string; oid?: string }).oid;
+      itemId = typeof oid === "string" && oid ? oid : "";
+    } else {
+      itemId = "";
+    }
+    if (!itemId || itemId === "[object Object]") {
+      return NextResponse.json(
+        { error: "Item ID is required and must be a valid ID string" },
+        { status: 400 }
+      );
+    }
+
+    const model = modelName || "Item";
+    const modelConfig = getModelConfig(model);
+    if (!modelConfig) {
+      return NextResponse.json(
+        { error: "Invalid model", message: `Model "${model}" is not supported` },
+        { status: 400 }
+      );
+    }
+
+    // ------------------- Inventory: delete from per-character collection -------------------
+    if (model === "Inventory") {
+      const invCharacterId = bodyCharacterId && typeof bodyCharacterId === "string" ? bodyCharacterId : "";
+      if (!invCharacterId) {
+        return NextResponse.json(
+          { error: "characterId is required for Inventory delete" },
+          { status: 400 }
+        );
+      }
+      await connect();
+      let CharModel: Model<unknown> = mongoose.models.Character as Model<unknown>;
+      if (!CharModel) {
+        const { default: C } = await import("@/models/CharacterModel.js");
+        CharModel = C as unknown as Model<unknown>;
+      }
+      const char = await CharModel.findById(invCharacterId).select("name").lean();
+      const charName = char && typeof char === "object" ? (char as unknown as { name?: string }).name : null;
+      if (!charName) {
+        return NextResponse.json(
+          { error: "Character not found", message: "No character found with that ID" },
+          { status: 404 }
+        );
+      }
+      const collectionName = charName.toLowerCase();
+      const conn = await getInventoriesConnection();
+      const db = conn.useDb("inventories");
+      const collection = db.collection(collectionName);
+      const deleteResult = await collection.deleteOne({ _id: new mongoose.Types.ObjectId(itemId) });
+      if (deleteResult.deletedCount === 0) {
+        return NextResponse.json(
+          { error: "Record not found", message: "No inventory entry found with that ID" },
+          { status: 404 }
+        );
+      }
+      logger.info("api/admin/database/items DELETE", `Deleted Inventory ${itemId} from collection ${collectionName}`);
+      return NextResponse.json({
+        message: "Inventory entry deleted successfully",
+        deletedId: itemId,
+      });
+    }
+
+    await connect();
+
+    let Model: Model<unknown>;
+    if (model === "Item") {
+      Model = (mongoose.models.Item ?? (await import("@/models/ItemModel.js")).default) as unknown as Model<unknown>;
+    } else if (model === "Monster") {
+      Model = (mongoose.models.Monster ?? (await import("@/models/MonsterModel.js")).default) as unknown as Model<unknown>;
+    } else if (model === "Pet") {
+      Model = (mongoose.models.Pet ?? (await import("@/models/PetModel.js")).default) as unknown as Model<unknown>;
+    } else if (model === "Character") {
+      Model = (mongoose.models.Character ?? (await import("@/models/CharacterModel.js")).default) as unknown as Model<unknown>;
+    } else if (model === "Village") {
+      const { Village } = await import("@/models/VillageModel.js");
+      Model = Village as unknown as Model<unknown>;
+    } else {
+      return NextResponse.json(
+        { error: "Invalid model", message: `Model "${model}" is not supported` },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await Model.findByIdAndDelete(itemId);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Record not found", message: "No record found with that ID" },
+        { status: 404 }
+      );
+    }
+
+    logger.info("api/admin/database/items DELETE", `Deleted ${model} ${itemId}`);
+    return NextResponse.json({
+      message: `${model} deleted successfully`,
+      deletedId: itemId,
+    });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    logger.error("api/admin/database/items DELETE", `Error: ${errorMessage}`);
+    return NextResponse.json(
+      { error: "Failed to delete record", message: errorMessage },
       { status: 500 }
     );
   }

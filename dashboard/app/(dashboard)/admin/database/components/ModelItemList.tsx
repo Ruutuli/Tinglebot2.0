@@ -7,11 +7,13 @@ type ModelItemListProps = {
   items: Array<Record<string, unknown>>;
   modelConfig: ModelConfig;
   onEdit: (item: Record<string, unknown>) => void;
+  /** When provided, each row shows a Delete button (e.g. for Inventory entries). */
+  onDelete?: (item: Record<string, unknown>) => void | Promise<void>;
 };
 
 type ViewMode = "table" | "cards";
 
-export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps) {
+export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelItemListProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [sortField, setSortField] = useState<string>(modelConfig.sortField);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -110,6 +112,13 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
         { key: "region", label: "Region", type: "string" },
         { key: "level", label: "Level", type: "number" },
         { key: "health", label: "Health", type: "number" },
+      ];
+    } else if (modelConfig.name === "Inventory") {
+      return [
+        { key: "quantity", label: "Qty", type: "number" },
+        { key: "category", label: "Category", type: "string" },
+        { key: "type", label: "Type", type: "string" },
+        { key: "obtain", label: "Obtain", type: "string" },
       ];
     }
     return [];
@@ -268,13 +277,25 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
                       </td>
                     ))}
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => onEdit(item)}
-                        className="rounded-md bg-[var(--totk-mid-ocher)] px-3 py-1.5 text-xs font-bold text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)]"
-                      >
-                        <i className="fa-solid fa-pencil mr-1.5" aria-hidden="true" />
-                        Edit
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => onEdit(item)}
+                          className="rounded-md bg-[var(--totk-mid-ocher)] px-3 py-1.5 text-xs font-bold text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)]"
+                        >
+                          <i className="fa-solid fa-pencil mr-1.5" aria-hidden="true" />
+                          Edit
+                        </button>
+                        {onDelete && (
+                          <button
+                            onClick={() => onDelete(item)}
+                            className="rounded-md bg-red-900/80 px-3 py-1.5 text-xs font-bold text-red-100 transition-colors hover:bg-red-800"
+                            title="Delete this entry"
+                          >
+                            <i className="fa-solid fa-trash mr-1.5" aria-hidden="true" />
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -326,13 +347,24 @@ export function ModelItemList({ items, modelConfig, onEdit }: ModelItemListProps
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => onEdit(item)}
-                    className="w-full rounded-md bg-[var(--totk-mid-ocher)] px-4 py-2 text-sm font-bold text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)]"
-                  >
-                    <i className="fa-solid fa-pencil mr-2" aria-hidden="true" />
-                    Edit
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onEdit(item)}
+                      className="flex-1 rounded-md bg-[var(--totk-mid-ocher)] px-4 py-2 text-sm font-bold text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)]"
+                    >
+                      <i className="fa-solid fa-pencil mr-2" aria-hidden="true" />
+                      Edit
+                    </button>
+                    {onDelete && (
+                      <button
+                        onClick={() => onDelete(item)}
+                        className="rounded-md bg-red-900/80 px-4 py-2 text-sm font-bold text-red-100 transition-colors hover:bg-red-800"
+                        title="Delete this entry"
+                      >
+                        <i className="fa-solid fa-trash" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

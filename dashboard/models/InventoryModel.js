@@ -50,13 +50,11 @@ const initializeInventoryModel = async (inventoriesConnection = null) => {
       throw new Error('Failed to connect to the inventories database');
     }
 
-    // Ensure we're using the 'inventories' database
-    if (connection.useDb) {
-      connection.useDb('inventories');
-    }
+    // Ensure we're using the 'inventories' database (useDb returns a new connection; use it for the model)
+    const dbConnection = connection.useDb ? connection.useDb('inventories') : connection;
 
-    // Create and return both the model and connection
-    const model = connection.model('Inventory', inventorySchema);
+    // Reuse existing model if already compiled to avoid OverwriteModelError
+    const model = dbConnection.models['Inventory'] || dbConnection.model('Inventory', inventorySchema);
     return {
       model,
       connection: connection
