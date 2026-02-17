@@ -83,7 +83,7 @@ module.exports = {
           opt.setName('character').setDescription('Character who found the relic').setRequired(true).setAutocomplete(true)
         )
         .addStringOption(opt =>
-          opt.setName('relic_id').setDescription('Relic ID (e.g. R12345)').setRequired(true)
+          opt.setName('relic_id').setDescription('Relic ID (e.g. R12345)').setRequired(true).setAutocomplete(true)
         )
         .addStringOption(opt =>
           opt.setName('appraiser').setDescription('PC Artist/Researcher or NPC').setRequired(true).setAutocomplete(true)

@@ -2406,12 +2406,34 @@ export default function ExplorePartyPage() {
                     <i className="fa-solid fa-list text-[10px] opacity-80" aria-hidden />
                     Progress log
                   </h3>
-                  {party.gatheredItems && party.gatheredItems.length > 0 && (
+                  {((party.gatheredItems && party.gatheredItems.length > 0) || (() => {
+                    const log = party.progressLog ?? [];
+                    let fallbackCount = 0;
+                    for (const e of log) {
+                      if (e.outcome === "item") fallbackCount += 1;
+                      else if (e.outcome === "relic") fallbackCount += 1;
+                      else if (e.outcome === "monster" && (e as { loot?: { itemName?: string } }).loot?.itemName) fallbackCount += 1;
+                      else if (e.outcome === "chest_open") fallbackCount += (party.members?.length ?? party.characters?.length ?? 1);
+                    }
+                    return fallbackCount > 0;
+                  })()) && (
                     <div className="mb-2 flex-shrink-0 rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-2 py-1.5">
                       <span className="text-[10px] uppercase text-[var(--totk-grey-200)]">Items gathered</span>
-                      <p className="truncate text-xs text-[var(--botw-pale)]" title={party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName} x${g.quantity} (${g.characterName})`.trim()).join(" · ")}>
-                        {party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName}×${g.quantity}`).join(" · ")}
-                      </p>
+                      {party.gatheredItems && party.gatheredItems.length > 0 ? (
+                        <p className="truncate text-xs text-[var(--botw-pale)]" title={party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName} x${g.quantity} (${g.characterName})`.trim()).join(" · ")}>
+                          {party.gatheredItems.map((g) => `${g.emoji ?? ""} ${g.itemName}×${g.quantity}`).join(" · ")}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-[var(--botw-pale)]">
+                          {(party.progressLog ?? []).reduce((sum, e) => {
+                            if (e.outcome === "item") return sum + 1;
+                            if (e.outcome === "relic") return sum + 1;
+                            if (e.outcome === "monster" && (e as { loot?: { itemName?: string } }).loot?.itemName) return sum + 1;
+                            if (e.outcome === "chest_open") return sum + (party.members?.length ?? party.characters?.length ?? 1);
+                            return sum;
+                          }, 0)} item(s) (from expedition log)
+                        </p>
+                      )}
                     </div>
                   )}
                   {(party.progressLog?.length ?? 0) === 0 ? (
@@ -2431,9 +2453,9 @@ export default function ExplorePartyPage() {
                             {(entry.heartsLost != null && entry.heartsLost > 0) || (entry.staminaLost != null && entry.staminaLost > 0) || (entry.heartsRecovered != null && entry.heartsRecovered > 0) || (entry.staminaRecovered != null && entry.staminaRecovered > 0) ? (
                               <span className="ml-auto flex min-w-0 flex-wrap items-center gap-1.5 text-[var(--totk-grey-200)]">
                                 {entry.heartsLost != null && entry.heartsLost > 0 && <span className="text-red-400/90">−{entry.heartsLost} ❤</span>}
-                                {entry.staminaLost != null && entry.staminaLost > 0 && <span className="text-amber-400/90" title="Stamina">−{entry.staminaLost} <i className="fa-solid fa-bolt text-[10px] opacity-90" aria-hidden /></span>}
+                                {entry.staminaLost != null && entry.staminaLost > 0 && <span className="text-amber-400/90" title="Stamina lost">−{entry.staminaLost} stam</span>}
                                 {entry.heartsRecovered != null && entry.heartsRecovered > 0 && <span className="text-red-400/90">+{entry.heartsRecovered} ❤</span>}
-                                {entry.staminaRecovered != null && entry.staminaRecovered > 0 && <span className="text-[var(--totk-light-green)]/90" title="Stamina">+{entry.staminaRecovered} <i className="fa-solid fa-bolt text-[10px] opacity-90" aria-hidden /></span>}
+                                {entry.staminaRecovered != null && entry.staminaRecovered > 0 && <span className="text-[var(--totk-light-green)]/90" title="Stamina recovered">+{entry.staminaRecovered} stam</span>}
                               </span>
                             ) : null}
                           </div>

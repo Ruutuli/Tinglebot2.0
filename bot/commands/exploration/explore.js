@@ -318,12 +318,16 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
     });
     logger.info("EXPLORE", `Chest item (relic): character=${char.name}, relicId=${savedRelic?.relicId || '?'}, item=Unknown Relic`);
     lootLines.push(`${char.name}: 🔸 Unknown Relic (${savedRelic?.relicId || '—'})`);
+    if (!party.gatheredItems) party.gatheredItems = [];
+    party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
     pushProgressLog(party, char.name, "relic", `Found a relic in chest in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
    } catch (err) {
     logger.error("EXPLORE", `createRelic error (chest): ${err?.message || err}`);
     if (allItems && allItems.length > 0) {
      const fallback = allItems[Math.floor(Math.random() * allItems.length)];
      logger.info("EXPLORE", `Chest item (relic fallback): character=${char.name}, item=${fallback.itemName}`);
+     if (!party.gatheredItems) party.gatheredItems = [];
+     party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: fallback.itemName, quantity: 1, emoji: fallback.emoji || "" });
      try {
       await addItemInventoryDatabase(char._id, fallback.itemName, 1, interaction, "Exploration Chest");
       lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName}`);
@@ -338,6 +342,8 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
    }
    const item = allItems[Math.floor(Math.random() * allItems.length)];
    logger.info("EXPLORE", `Chest item: character=${char.name}, item=${item.itemName}`);
+   if (!party.gatheredItems) party.gatheredItems = [];
+   party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: item.itemName, quantity: 1, emoji: item.emoji || "" });
    try {
     await addItemInventoryDatabase(char._id, item.itemName, 1, interaction, "Exploration Chest");
     lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName}`);
@@ -1935,6 +1941,8 @@ module.exports = {
        } catch (err) {
         logger.error("EXPLORE", `createRelic error (roll outcome): ${err?.message || err}`);
        }
+       if (!party.gatheredItems) party.gatheredItems = [];
+       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
        const relicUserIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
        const relicIdStr = savedRelic?.relicId ? ` (ID: \`${savedRelic.relicId}\`)` : '';
        const relicDmEmbed = new EmbedBuilder()
@@ -2272,6 +2280,8 @@ module.exports = {
           } catch (err) {
            logger.error("EXPLORE", `createRelic error (ruins): ${err?.message || err}`);
           }
+          if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+          freshParty.gatheredItems.push({ characterId: ruinsCharacter._id, characterName: ruinsCharacter.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
           const ruinsRelicIdStr = ruinsSavedRelic?.relicId ? ` (ID: \`${ruinsSavedRelic.relicId}\`)` : '';
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a relic in the ruins!${ruinsRelicIdStr} Take it to an Inarikian Artist or Researcher to get it appraised. More info [here](https://www.rootsofthewild.com/relics).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
@@ -2881,6 +2891,7 @@ module.exports = {
        quantity: 1,
        emoji: selectedItem.emoji || "",
       });
+      await party.save();
 
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
@@ -4055,9 +4066,18 @@ module.exports = {
     // Stats and highlights from progressLog and gatheredItems (use saved party with "end" entry)
     const log = party.progressLog || [];
     const turnsOrActions = log.filter((e) => e.outcome !== "end").length;
-    const itemsGathered = Array.isArray(party.gatheredItems)
+    let itemsGathered = Array.isArray(party.gatheredItems) && party.gatheredItems.length > 0
       ? party.gatheredItems.reduce((sum, g) => sum + (typeof g.quantity === "number" ? g.quantity : 1), 0)
       : 0;
+    // Fallback: count from progressLog when gatheredItems wasn't persisted (legacy bug)
+    if (itemsGathered === 0 && log.length > 0) {
+      for (const e of log) {
+        if (e.outcome === "item") itemsGathered += 1;
+        else if (e.outcome === "relic") itemsGathered += 1;
+        else if (e.outcome === "monster" && e.loot?.itemName) itemsGathered += 1;
+        else if (e.outcome === "chest_open") itemsGathered += party.characters?.length ?? 1;
+      }
+    }
     const highlightOutcomes = new Set();
     for (const e of log) {
       const o = e.outcome;
@@ -4070,8 +4090,11 @@ module.exports = {
       else if (o === "secure") highlightOutcomes.add("Secured quadrant");
       else if (o === "monster") highlightOutcomes.add("Defeated monster");
       else if (o === "retreat") highlightOutcomes.add("Escaped raid");
+      else if (o === "relic") highlightOutcomes.add("Relic found");
     }
     const highlightsList = [...highlightOutcomes];
+    if (itemsGathered > 0) highlightsList.unshift(`**${itemsGathered}** item(s) gathered`);
+    const highlightsValue = highlightsList.length > 0 ? highlightsList.map((h) => `• ${h}`).join("\n") : "";
 
     const reportBaseUrl = process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz";
     const reportUrl = `${reportBaseUrl.replace(/\/$/, "")}/explore/${expeditionId}`;
@@ -4094,10 +4117,10 @@ module.exports = {
      value: `**${turnsOrActions}** actions · **${itemsGathered}** item(s) gathered`,
      inline: false
     });
-    if (highlightsList.length > 0) {
+    if (highlightsValue) {
      embed.addFields({
       name: "✨ **Highlights**",
-      value: highlightsList.join(" · "),
+      value: highlightsValue,
       inline: false
      });
     }

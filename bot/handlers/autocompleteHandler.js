@@ -21,6 +21,7 @@ const {
  fetchCharactersByUserId,
  fetchCraftableItemsAndCheckMaterials,
  fetchModCharactersByUserId,
+ fetchRelicsByCharacter,
  getCurrentVendingStockList,
  getVendingModel
 } = require('@/database/db');
@@ -869,14 +870,35 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               const relicSub = interaction.options.getSubcommand();
               if (focusedOption.name === "character" && (relicSub === "list" || relicSub === "appraisal-request")) {
                 await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "relic");
+              } else if (focusedOption.name === "relic_id" && relicSub === "appraisal-request") {
+                let characterName = (interaction.options.get("character")?.value || "").toString().trim();
+                if (characterName.includes("|")) {
+                  characterName = characterName.split("|")[0].trim();
+                }
+                if (!characterName) {
+                  await interaction.respond([]);
+                } else {
+                  const relics = await fetchRelicsByCharacter(characterName);
+                  const unappraised = (relics || []).filter(r => !r.appraised && !r.deteriorated);
+                  const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
+                  const choices = unappraised
+                    .map(r => {
+                      const id = r.relicId || String(r._id);
+                      const loc = (r.locationFound || "exploration").slice(0, 30);
+                      return { name: `Unappraised – ${id} (${loc}${(r.locationFound || "").length > 30 ? "…" : ""})`, value: id };
+                    })
+                    .filter(c => c.value.toLowerCase().includes(focusedValue) || c.name.toLowerCase().includes(focusedValue));
+                  await interaction.respond(choices.slice(0, 25));
+                }
               } else if (focusedOption.name === "appraiser") {
                 if (relicSub === "appraisal-request") {
                   const focusedValue = (focusedOption?.value || "").toString().toLowerCase();
                   const npcChoice = { name: "NPC (500 tokens)", value: "NPC" };
-                  const chars = await fetchCharactersByUserId(interaction.user.id);
-                  const modChars = await fetchModCharactersByUserId(interaction.user.id) || [];
+                  const requiredFields = ["name", "job", "currentVillage", "status"];
+                  const chars = await fetchCharactersByUserId(interaction.user.id, requiredFields) || [];
+                  const modChars = await fetchModCharactersByUserId(interaction.user.id, requiredFields) || [];
                   const artistResearchers = [...chars, ...modChars]
-                    .filter(c => c && ["Artist", "Researcher"].includes(c.job))
+                    .filter(c => c && c.status === "accepted" && ["Artist", "Researcher"].includes(c.job))
                     .map(c => ({ name: `${c.name} | ${c.job} | ${(c.currentVillage || "").charAt(0).toUpperCase() + (c.currentVillage || "").slice(1)}`, value: c.name }));
                   let choices = artistResearchers.filter(c => c.name.toLowerCase().includes(focusedValue));
                   if (!focusedValue || "npc".includes(focusedValue)) {
