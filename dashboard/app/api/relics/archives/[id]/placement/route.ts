@@ -113,13 +113,20 @@ export async function PATCH(
       return NextResponse.json({ error: "Provide at least one of libraryPositionX, libraryPositionY, libraryDisplaySize" }, { status: 400 });
     }
 
-    await Relic.findByIdAndUpdate(relic._id, { $set: update });
-
-    const updated = await Relic.findById(relic._id)
+    const updated = await Relic.findByIdAndUpdate(relic._id, { $set: update }, { new: true })
       .select("libraryPositionX libraryPositionY libraryDisplaySize")
       .lean();
 
-    return NextResponse.json({ success: true, placement: updated });
+    if (!updated) {
+      return NextResponse.json({ error: "Update failed" }, { status: 500 });
+    }
+
+    const placement = {
+      libraryPositionX: libraryPositionX ?? (updated as { libraryPositionX?: number }).libraryPositionX ?? null,
+      libraryPositionY: libraryPositionY ?? (updated as { libraryPositionY?: number }).libraryPositionY ?? null,
+      libraryDisplaySize: libraryDisplaySize ?? (updated as { libraryDisplaySize?: number }).libraryDisplaySize ?? 8,
+    };
+    return NextResponse.json({ success: true, placement });
   } catch (err) {
     console.error("[api/relics/archives/placement]", err);
     return NextResponse.json(

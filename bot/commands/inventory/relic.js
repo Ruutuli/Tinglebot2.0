@@ -1,6 +1,6 @@
 // ============================================================================
 // ------------------- Relic Command -------------------
-// Manages relic appraisals, reveal (replaces /tableroll relic), and archival.
+// Manages relic appraisals and archival. When a relic is appraised it is immediately revealed.
 // ============================================================================
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
@@ -34,6 +34,50 @@ function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
 }
 
+/** Immediately reveal an appraised relic (roll outcome, update DB, handle duplicates). Returns { outcome, isDuplicate, duplicateRewardGiven, displayRelicId } or null. */
+async function revealRelicImmediately(relicId, { finderOwnerUserId }) {
+  const relic = await fetchRelicById(relicId);
+  if (!relic || !relic.appraised) return null;
+  if (relic.rollOutcome || relic.archived || relic.deteriorated) return null;
+
+  const isAlreadyDiscovered = async (relicName) => {
+    const existing = await RelicModel.findOne({ rollOutcome: relicName });
+    return !!existing;
+  };
+  const result = await rollRelicOutcome({ isArchived: isAlreadyDiscovered });
+  const { outcome, isDuplicate } = result;
+
+  const updateData = {
+    name: outcome.name,
+    rollOutcome: outcome.name,
+    appraisalDescription: relic.appraisalDescription || outcome.description,
+  };
+  if (isDuplicate) {
+    const existingArchived = await RelicModel.findOne({ rollOutcome: outcome.name, archived: true });
+    if (existingArchived) {
+      updateData.duplicateOf = existingArchived._id;
+      updateData.artSubmitted = true;
+      updateData.archived = true;
+    }
+  }
+  await RelicModel.findByIdAndUpdate(relic._id, updateData);
+
+  let duplicateRewardGiven = false;
+  if (isDuplicate && updateData.archived && finderOwnerUserId) {
+    const updatedRelic = await RelicModel.findById(relic._id);
+    if (updatedRelic && !updatedRelic.duplicateRewardGiven) {
+      await updateTokenBalance(finderOwnerUserId, DUPLICATE_RELIC_REWARD_TOKENS, {
+        category: 'relic_duplicate_turn_in',
+        description: 'Duplicate relic turn-in',
+      });
+      await RelicModel.findByIdAndUpdate(relic._id, { duplicateRewardGiven: true });
+      duplicateRewardGiven = true;
+    }
+  }
+  const displayRelicId = relic.relicId || relic._id;
+  return { outcome, isDuplicate, duplicateRewardGiven, displayRelicId };
+}
+
 /** Resolve relic appraisal request by MongoDB _id or short ID (e.g. A473582). */
 async function findRelicAppraisalRequestById(id) {
   if (!id) return null;
@@ -57,7 +101,7 @@ async function findRelicAppraisalRequestById(id) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('relic')
-    .setDescription('Manage relic appraisals, reveal outcomes, and archival')
+    .setDescription('Manage relic appraisals and archival')
 
     .addSubcommand(sub =>
       sub
@@ -74,15 +118,6 @@ module.exports = {
         .setDescription('View info on an appraised relic')
         .addStringOption(opt =>
           opt.setName('relic_id').setDescription('Relic ID (e.g. R473582 or MongoDB _id)').setRequired(true)
-        )
-    )
-
-    .addSubcommand(sub =>
-      sub
-        .setName('reveal')
-        .setDescription('Reveal what relic was found (after mod-approved appraisal)')
-        .addStringOption(opt =>
-          opt.setName('relic_id').setDescription('Relic ID to reveal').setRequired(true)
         )
     )
 
@@ -127,7 +162,7 @@ module.exports = {
         return interaction.reply({ content: '❌ Interaction expired. Please try again.', ephemeral: true });
       }
 
-      const deferSubs = ['list', 'reveal', 'appraisal-request', 'appraisal-accept'];
+      const deferSubs = ['list', 'appraisal-request', 'appraisal-accept'];
       if (deferSubs.includes(sub)) {
         await interaction.deferReply();
       }
@@ -141,7 +176,7 @@ module.exports = {
         }
         const lines = relics.map(r => {
           const id = r.relicId || r._id;
-          const status = r.deteriorated ? '⚠️ Deteriorated' : r.archived ? '✅ Archived' : r.appraised ? (r.rollOutcome ? '🎲 Revealed' : '⏳ Awaiting reveal') : '🔸 Unappraised';
+          const status = r.deteriorated ? '⚠️ Deteriorated' : r.archived ? '✅ Archived' : r.appraised ? '🎲 Revealed' : '🔸 Unappraised';
           return `• \`${id}\` — ${status}${r.rollOutcome ? ` — **${r.rollOutcome}**` : ''}`;
         });
         const embed = new EmbedBuilder()

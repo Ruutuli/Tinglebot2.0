@@ -66,7 +66,7 @@ export default function LibraryArchivesPage() {
   const submitMapRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchArchives = useCallback(async () => {
+  const fetchArchives = useCallback(async (): Promise<ArchivedRelic[] | undefined> => {
     setLoading(true);
     setError(null);
     try {
@@ -74,13 +74,16 @@ export default function LibraryArchivesPage() {
       if (!res.ok) {
         setError("Failed to load archived relics");
         setRelics([]);
-        return;
+        return undefined;
       }
       const data = await res.json();
-      setRelics(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setRelics(list);
+      return list;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
       setRelics([]);
+      return undefined;
     } finally {
       setLoading(false);
     }
@@ -202,11 +205,20 @@ export default function LibraryArchivesPage() {
     setUploadLibraryPositionY(Math.max(0, Math.min(100, y)));
   }, []);
 
+  const normalizeRelicId = useCallback((id: unknown): string => {
+    if (id == null) return "";
+    if (typeof id === "string") return id;
+    if (typeof id === "object" && id !== null && "toString" in id) return String(id);
+    const o = id as { $oid?: string };
+    return typeof o.$oid === "string" ? o.$oid : String(id);
+  }, []);
+
   const updatePlacement = useCallback(
     async (relicId: string, libraryPositionX: number, libraryPositionY: number, libraryDisplaySize?: number) => {
-      setSavingPlacement(relicId);
+      const idStr = normalizeRelicId(relicId) || String(relicId);
+      setSavingPlacement(idStr);
       try {
-        const res = await fetch(`/api/relics/archives/${relicId}/placement`, {
+        const res = await fetch(`/api/relics/archives/${encodeURIComponent(idStr)}/placement`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -221,14 +233,33 @@ export default function LibraryArchivesPage() {
           return;
         }
         setUploadMessage({ type: "ok", text: "Position saved." });
-        fetchArchives();
+        const placement = data.placement && typeof data.placement === "object" ? data.placement as { libraryPositionX?: number; libraryPositionY?: number; libraryDisplaySize?: number } : null;
+        if (placement) {
+          setRelics((prev) =>
+            prev.map((r) =>
+              normalizeRelicId(r._id) === idStr
+                ? { ...r, libraryPositionX: placement.libraryPositionX, libraryPositionY: placement.libraryPositionY, libraryDisplaySize: placement.libraryDisplaySize ?? r.libraryDisplaySize }
+                : r
+            )
+          );
+        }
+        const fresh = await fetchArchives();
+        if (fresh?.length && placement) {
+          setRelics(
+            fresh.map((r) =>
+              normalizeRelicId(r._id) === idStr
+                ? { ...r, libraryPositionX: placement.libraryPositionX, libraryPositionY: placement.libraryPositionY, libraryDisplaySize: placement.libraryDisplaySize ?? r.libraryDisplaySize }
+                : r
+            )
+          );
+        }
       } catch (e) {
         setUploadMessage({ type: "err", text: e instanceof Error ? e.message : "Failed to save" });
       } finally {
         setSavingPlacement(null);
       }
     },
-    [fetchArchives]
+    [fetchArchives, normalizeRelicId]
   );
 
   const getMapPercent = useCallback((clientX: number, clientY: number) => {
