@@ -18,6 +18,9 @@ const RelicSchema = new Schema({
   characterId: { type: Schema.Types.ObjectId, ref: 'Character', default: null }, // Optional link to Character who found it.
   discoveredDate: { type: Date, default: null },         // Date when the relic was discovered.
   locationFound: { type: String, default: '' },        // Location details (e.g., quadrant, ruin).
+  region: { type: String, default: '' },               // Region for library card (e.g. Eldin).
+  square: { type: String, default: '' },               // Map square for library card (e.g. D2).
+  quadrant: { type: String, default: '' },             // Quadrant for library card (e.g. Q3).
 
   // ------------------- Appraisal Information -------------------
   appraised: { type: Boolean, default: false },        // Indicates if the relic has been appraised.
@@ -32,6 +35,11 @@ const RelicSchema = new Schema({
   // ------------------- Art and Visual Information -------------------
   artSubmitted: { type: Boolean, default: false },     // Indicates if the art has been submitted.
   imageUrl: { type: String, default: '' },             // URL of the submitted 1:1 PNG image.
+
+  // ------------------- Library display (dashboard archives page) -------------------
+  libraryPositionX: { type: Number, default: null },
+  libraryPositionY: { type: Number, default: null },
+  libraryDisplaySize: { type: Number, default: 8 },
 
   // ------------------- Status Flags -------------------
   archived: { type: Boolean, default: false },         // Flag indicating if the relic is archived in the Library.

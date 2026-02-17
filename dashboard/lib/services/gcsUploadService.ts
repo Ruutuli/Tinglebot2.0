@@ -319,6 +319,63 @@ class GCSUploadService {
   }
 
   /**
+   * Upload relic art image for Library Archives. Path: relics/{relicId}.png
+   * relicId is the MongoDB _id (string) to avoid collisions.
+   */
+  async uploadRelicImage(
+    file: globalThis.File | Buffer,
+    relicId: string,
+    options: UploadOptions = {}
+  ): Promise<UploadResult> {
+    try {
+      this.initialize();
+      if (!this.bucket) throw new Error("GCS bucket not initialized");
+
+      const safeId = String(relicId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "relic";
+      const filePath = `relics/${safeId}.png`;
+
+      let buffer: Buffer;
+      let contentType: string;
+      if (file instanceof File) {
+        buffer = Buffer.from(await file.arrayBuffer());
+        contentType = file.type || options.contentType || "image/png";
+      } else {
+        buffer = file;
+        contentType = options.contentType || "image/png";
+      }
+
+      const gcsFile = this.bucket.file(filePath);
+      await gcsFile.save(buffer, {
+        metadata: {
+          contentType,
+          ...(options.metadata && { metadata: options.metadata }),
+        },
+        resumable: false,
+      });
+
+      if (options.makePublic !== false) {
+        try {
+          await gcsFile.makePublic();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes("uniform bucket-level access")) {
+            logger.warn("gcsUploadService", `Failed to make relic image public: ${msg}`);
+          }
+        }
+      }
+
+      const url = `${this.publicUrlBase}/${filePath}`;
+      return { url, path: filePath, size: buffer.length };
+    } catch (error) {
+      logger.error(
+        "gcsUploadService",
+        `Failed to upload relic image: ${error instanceof Error ? error.message : String(error)}`
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Delete a file from GCS
    */
   async deleteFile(filePath: string): Promise<void> {

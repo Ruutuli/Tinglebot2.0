@@ -41,6 +41,7 @@ export const navItems: NavItem[] = [
       { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
       { href: "/admin/quests", label: "Quests", icon: "fa-scroll" },
       { href: "/admin/relics", label: "Relic Appraisals", icon: "fa-gem" },
+      { href: "/admin/relic-archives", label: "Relic Archive Requests", icon: "fa-book" },
       { href: "/admin/maps", label: "Map Appraisals", icon: "fa-map" },
     ],
   },

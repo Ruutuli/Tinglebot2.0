@@ -9,7 +9,6 @@ const {
   fetchRelicById,
   fetchRelicsByCharacter,
   appraiseRelic,
-  archiveRelic,
   fetchCharacterByName,
   fetchCharacterByNameAndUserId,
   fetchAnyCharacterByNameAndUserId,
@@ -25,6 +24,8 @@ const ModCharacter = require('@/models/ModCharacterModel.js');
 
 /** Image used for unappraised / unknown relics (HW Sealed Weapon Icon). */
 const UNAPPRAISED_RELIC_IMAGE_URL = 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232';
+/** Border image used on relic embeds (matches other bot embeds). */
+const RELIC_EMBED_BORDER_URL = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 
 function normalizeVillage(v) {
   return (v || '').trim().toLowerCase();
@@ -81,18 +82,6 @@ module.exports = {
 
     .addSubcommand(sub =>
       sub
-        .setName('submit')
-        .setDescription('Submit art for an appraised relic to the archives')
-        .addStringOption(opt =>
-          opt.setName('relic_id').setDescription('Appraised Relic ID').setRequired(true)
-        )
-        .addStringOption(opt =>
-          opt.setName('image_url').setDescription('PNG image URL (1:1, min 500x500, transparent bg)').setRequired(true)
-        )
-    )
-
-    .addSubcommand(sub =>
-      sub
         .setName('appraisal-request')
         .setDescription('Request appraisal for a found relic')
         .addStringOption(opt =>
@@ -132,7 +121,7 @@ module.exports = {
         return interaction.reply({ content: '❌ Interaction expired. Please try again.', ephemeral: true });
       }
 
-      const deferSubs = ['list', 'reveal', 'submit', 'appraisal-request', 'appraisal-accept'];
+      const deferSubs = ['list', 'reveal', 'appraisal-request', 'appraisal-accept'];
       if (deferSubs.includes(sub)) {
         await interaction.deferReply();
       }
@@ -232,48 +221,25 @@ module.exports = {
 
         await RelicModel.findByIdAndUpdate(relic._id, updateData);
 
+        const displayRelicId = relic.relicId || relic._id;
+        const submitInstructions = isDuplicate
+          ? 'This relic is a duplicate. It has been submitted to the archives—no art needed.'
+          : `Submit your art on the **dashboard** (Library) to archive this relic. Use Relic ID \`${displayRelicId}\` when submitting. Once submitted, the relic is archived and the finder may be eligible for token rewards.`;
+
         const embed = new EmbedBuilder()
           .setTitle(`🔸 Relic Revealed: ${outcome.name}`)
           .setDescription(outcome.description)
+          .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
+          .setImage(RELIC_EMBED_BORDER_URL)
           .addFields(
             { name: 'Relic', value: outcome.name, inline: true },
+            { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
             { name: 'Duplicate?', value: isDuplicate ? 'Yes (no art required)' : 'No', inline: true },
-            { name: 'Next Step', value: isDuplicate ? 'Relic submitted as duplicate.' : 'Provide art and use `/relic submit` to archive.', inline: false }
+            { name: 'Next step: archive', value: submitInstructions, inline: false }
           )
-          .setColor(0xe67e22);
+          .setColor(0xe67e22)
+          .setFooter({ text: isDuplicate ? 'Duplicate — already in archives' : 'Submit your art on the dashboard (Library) to archive' });
         return interaction.editReply({ embeds: [embed] });
-      }
-
-      // ------------------- /relic submit -------------------
-      if (sub === 'submit') {
-        const relicId = interaction.options.getString('relic_id');
-        const imageUrl = interaction.options.getString('image_url');
-        const relic = await fetchRelicById(relicId);
-        if (!relic) {
-          return interaction.editReply({ content: '❌ Relic not found.' });
-        }
-        if (!relic.appraised) {
-          return interaction.editReply({ content: '❌ Only appraised relics can be submitted.' });
-        }
-        if (!relic.rollOutcome) {
-          return interaction.editReply({ content: '❌ Reveal the relic first with `/relic reveal`.' });
-        }
-        if (relic.archived) {
-          return interaction.editReply({ content: '❌ This relic has already been submitted to the archives.' });
-        }
-
-        const char = await fetchCharacterByNameAndUserId(relic.discoveredBy, interaction.user.id) ||
-          await ModCharacter.findOne({ name: new RegExp(`^${relic.discoveredBy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
-            .then(m => m && String(m.userId) === interaction.user.id ? m : null);
-        if (!char) {
-          return interaction.editReply({ content: '❌ Only the owner of the character who found this relic can submit it.' });
-        }
-
-        const updated = await archiveRelic(relicId, imageUrl);
-        if (!updated) {
-          return interaction.editReply({ content: '❌ Failed to archive the relic.' });
-        }
-        return interaction.editReply({ content: `🖼️ **Relic submitted to the archives!** [View image](${imageUrl})` });
       }
 
       // ------------------- /relic appraisal-request -------------------
@@ -358,13 +324,14 @@ module.exports = {
           const userEmbed = new EmbedBuilder()
             .setColor(0x8B7355)
             .setTitle('📜 Relic appraised by NPC!')
-            .setDescription(`Your relic has been appraised by an NPC. **500 tokens** have been deducted.\n\nUse \`/relic reveal relic_id:${displayRelicId}\` to reveal what relic it is.`)
+            .setDescription(`Your relic has been appraised. **500 tokens** have been deducted.\n\n**Reveal it:** \`/relic reveal relic_id:${displayRelicId}\``)
+            .setThumbnail(UNAPPRAISED_RELIC_IMAGE_URL)
             .addFields(
-              { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
               { name: 'Relic ID', value: `\`${displayRelicId}\``, inline: true },
-              { name: 'Payment', value: '500 tokens', inline: false }
+              { name: 'Request ID', value: `\`${appraisalRequestId}\``, inline: true },
+              { name: 'Payment', value: '500 tokens', inline: true }
             )
-            .setFooter({ text: 'Use /relic reveal to see the relic' })
+            .setFooter({ text: 'Use /relic reveal to see what relic it is' })
             .setTimestamp();
           return interaction.editReply({ embeds: [userEmbed] });
         }
