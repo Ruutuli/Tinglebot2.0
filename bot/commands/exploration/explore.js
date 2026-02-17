@@ -298,7 +298,8 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  for (const pc of party.characters) {
   const char = await Character.findById(pc._id);
   if (!char) continue;
-  const isRelic = Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
+  let isRelic = Math.random() < EXPLORATION_CHEST_RELIC_CHANCE;
+  if (isRelic && characterAlreadyFoundRelicThisExpedition(party, char.name)) isRelic = false;
   if (isRelic) {
    try {
     const savedRelic = await createRelic({
@@ -311,6 +312,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
     });
     logger.info("EXPLORE", `Chest item (relic): character=${char.name}, relicId=${savedRelic?.relicId || '?'}, item=Unknown Relic`);
     lootLines.push(`${char.name}: 🔸 Unknown Relic (${savedRelic?.relicId || '—'})`);
+    pushProgressLog(party, char.name, "relic", `Found a relic in chest in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
    } catch (err) {
     logger.error("EXPLORE", `createRelic error (chest): ${err?.message || err}`);
     if (allItems && allItems.length > 0) {
@@ -470,6 +472,12 @@ function hasGrottoInSquare(party, square, squareDoc) {
   }
  }
  return false;
+}
+
+/** True if this character has already found a relic this expedition (one relic per character per run to prevent stacking). */
+function characterAlreadyFoundRelicThisExpedition(party, characterName) {
+ if (!party.progressLog || !Array.isArray(party.progressLog)) return false;
+ return party.progressLog.some((e) => e.outcome === "relic" && (e.characterName || "") === (characterName || ""));
 }
 
 function pushProgressLog(party, characterName, outcome, message, loot, costs, at) {
@@ -1691,6 +1699,12 @@ module.exports = {
         continue;
        }
       }
+      if (outcomeType === "relic" && characterAlreadyFoundRelicThisExpedition(party, character.name)) {
+       const reason = "this character already found a relic this expedition (one per character)";
+       logger.info("EXPLORE", `Skipped ${outcomeType} at ${location}: ${reason}`);
+       outcomeType = rollOutcome();
+       continue;
+      }
       if (specialCount >= 1 && Math.random() > DISCOVERY_REDUCE_CHANCE_WHEN_ANY) {
        const reason = `square already has ${specialCount} special discovery/discoveries; roll failed discovery-reduce (${(DISCOVERY_REDUCE_CHANCE_WHEN_ANY * 100).toFixed(0)}% keep chance)`;
        logger.info("EXPLORE", `Skipped ${outcomeType} at ${location}: ${reason}`);
@@ -2196,6 +2210,9 @@ module.exports = {
          let ruinsFailedNotifyUserIds = [];
          let ruinsFailedNotifyEmbed = null;
 
+         if (ruinsOutcome === "relic" && characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name)) {
+          ruinsOutcome = "landmark";
+         }
          if (ruinsOutcome === "chest") {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
           progressMsg += "Found a chest (open for 1 stamina).";
