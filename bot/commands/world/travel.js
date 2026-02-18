@@ -22,6 +22,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  MessageFlags,
   SlashCommandBuilder
 } = require('discord.js');
 
@@ -764,10 +765,18 @@ module.exports = {
           guildId: interaction.guildId
         }
       });
-      await interaction.followUp({
-        content: `❌ **Error during travel command execution:** ${error.message}`,
-        ephemeral: true
-      });
+      // Safely send error response - use editReply if we deferred, reply if not, and ignore if interaction expired
+      try {
+        const errorContent = `❌ **Error during travel command execution:** ${error.message}`;
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({ content: errorContent, flags: [MessageFlags.Ephemeral] });
+        } else if (interaction.isRepliable()) {
+          await interaction.reply({ content: errorContent, flags: [MessageFlags.Ephemeral] });
+        }
+      } catch (replyError) {
+        // Interaction may have expired (Unknown interaction) - don't rethrow
+        console.error(`[travel.js]: Could not send error response to user:`, replyError?.message || replyError);
+      }
     }
   }
 };

@@ -52,6 +52,7 @@ const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grott
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
 const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome } = require('@/data/grottoMazeOutcomes.js');
 const { rollTestOfPowerMonster } = require('@/data/grottoTestOfPowerMonsters.js');
+const { getRandomBlessingFlavor } = require('@/data/grottoBlessingOutcomes.js');
 const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 
@@ -757,12 +758,13 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await grottoDoc.save();
   pushProgressLog(freshParty, cleanseCharacter.name, "grotto_blessing", `Blessing trial: each party member received a Spirit Orb.`, undefined, undefined, new Date());
   await freshParty.save();
+  const blessingFlavor = getRandomBlessingFlavor();
   const blessingEmbed = new EmbedBuilder()
    .setTitle("🗺️ **Expedition: Grotto cleansed — Blessing!**")
    .setColor(regionColors[freshParty.region] || "#00ff99")
    .setDescription(
     `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n` +
-    "The grotto held a **simple blessing**. Everyone received a **Spirit Orb**!\n\nThe blessing is complete. Use the commands below to continue exploring."
+    blessingFlavor + "\n\nThe blessing is complete. Use the commands below to continue exploring."
    )
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(blessingEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
@@ -771,7 +773,8 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    .setTitle("✨ **A bright light spills from the stump!** ✨")
    .setColor(0xfbbf24)
    .setDescription(
-    "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is cleansed — and within, a **simple blessing** awaits. Everyone received a **Spirit Orb**!\n\nThe blessing is complete. Use the commands below to continue exploring."
+    "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is cleansed — and within, a simple blessing awaits.\n\n" +
+    blessingFlavor + "\n\nThe blessing is complete. Use the commands below to continue exploring."
    )
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(blessingAnnounce, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
@@ -2169,11 +2172,13 @@ module.exports = {
        }
       }
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
+      const blessingFlavorRevisit = getRandomBlessingFlavor();
       const blessingEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
        .setColor(regionColors[party.region] || "#00ff99")
        .setDescription(
-        `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\nThe grotto held a **simple blessing**. Everyone received a **Spirit Orb**!\n\nThe blessing is complete. Use the commands below to continue exploring.`
+        `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n` +
+        blessingFlavorRevisit + "\n\nThe blessing is complete. Use the commands below to continue exploring."
        )
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(blessingEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
