@@ -177,20 +177,49 @@ type MarkdownComponentProps = {
 
 /**
  * Convert plain URLs in text to markdown links and fix malformed links.
- * Fixes "Label](URL)" (missing opening bracket) -> "[Label](URL)"
  */
 function convertUrlsToMarkdown(text: string): string {
   let result = text;
-  // Fix malformed links: "Link Text](URL)" -> "[Link Text](URL)" (missing opening [)
-  // Use negative lookbehind to avoid doubling already-correct links
+  const sanitizeLabel = (s: string) => s.replace(/[\[\]]/g, "").trim();
+
+  // Fix label + URL on consecutive lines (no ]( ) - e.g. "[OC Playlist\nhttps://..."]
   result = result.replace(
-    /(?<!\[)([^\n\[]+)\]\((https?:\/\/[^\s\)]+)\)/g,
-    (_, label, url) => `[${label}](${url})`
+    /(^|\n)([^\n]+?)\s*\n\s*(https?:\/\/[^\s\n\)]+)(?=\s*\n|$)/gm,
+    (_, before, label, url) => before + `[${sanitizeLabel(label)}](${url})`
   );
-  // Convert plain bare URLs to markdown links (skip URLs already inside ](url) )
-  const urlRegex = /(?<!\]\()(https?:\/\/[^\s\]\)]+)/g;
-  result = result.replace(urlRegex, (url) => `[${url}](${url})`);
+  // Fix links with newline between label and ](url)
+  result = result.replace(
+    /\[([^\]]*?)\s*\]\((https?:\/\/[^\s\)]+)\)/g,
+    (_, label, url) => `[${sanitizeLabel(label)}](${url})`
+  );
+  // Fix malformed links: "Link Text](URL)" (no opening [)
+  result = result.replace(
+    /([^\[]+?)\s*\]\((https?:\/\/[^\s\)]+)\)/g,
+    (match, label, url, offset, fullStr) =>
+      offset > 0 && fullStr[offset - 1] === "[" ? match : `[${sanitizeLabel(label)}](${url})`
+  );
+  // Convert plain bare URLs to markdown links (skip those already inside ](url))
+  result = result.replace(
+    /(https?:\/\/[^\s\]\)]+)/g,
+    (url, offset, fullStr) =>
+      offset >= 2 && fullStr.slice(offset - 2, offset) === "](" ? url : `[${url}](${url})`
+  );
   return result;
+}
+
+/**
+ * Preprocess extras for ReactMarkdown. Converts "- [text](url)" list items to
+ * "• [text](url)" paragraphs - the "• " before [ fixes the parsing bug so
+ * links display correctly (text as clickable link).
+ */
+function preprocessExtrasForMarkdown(extras: string): string {
+  const lines = extras.split(/\r?\n/).filter((line) => line.trim());
+  return lines
+    .map((line) => {
+      const m = line.match(/^(\s*[-*+])\s+(.*)$/);
+      return m ? `• ${m[2]}` : line;
+    })
+    .join("\n\n");
 }
 
 const MARKDOWN_COMPONENTS: Components = {
@@ -864,7 +893,7 @@ function BiographySection({
             </h3>
             <div className={PROSE_BASE_CLASSES}>
               <ReactMarkdown {...markdownOpts}>
-                {convertUrlsToMarkdown(extras)}
+                {convertUrlsToMarkdown(preprocessExtrasForMarkdown(extras))}
               </ReactMarkdown>
             </div>
           </div>
