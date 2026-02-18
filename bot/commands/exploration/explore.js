@@ -21,6 +21,7 @@ const Character = require('@/models/CharacterModel.js');
 const ModCharacter = require('@/models/ModCharacterModel.js');
 const ItemModel = require('@/models/ItemModel.js');
 const Square = require('@/models/mapModel.js');
+const Pin = require('@/models/PinModel.js');
 const Grotto = require('@/models/GrottoModel.js');
 const MonsterCamp = require('@/models/MonsterCampModel.js');
 const Relic = require('@/models/RelicModel.js');
@@ -3501,7 +3502,9 @@ module.exports = {
         }
        }
        const mapIdStr = savedOldMapDoc?.mapId ? `\`${savedOldMapDoc.mapId}\`` : "—";
-       const userIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
+       // DM only the party member who found the map, not the whole party
+       const finderUserId = party.characters[characterIndex]?.userId || interaction.user?.id;
+       const mapDmUserIds = finderUserId ? [finderUserId] : [];
        const dmEmbed = new EmbedBuilder()
         .setTitle("🗺️ Expedition map found")
         .setDescription(`**Map #${chosenMapOldMap.number}** found and saved to **${character.name}**'s map collection. Take it to the Inariko Library to get it deciphered.`)
@@ -3518,7 +3521,7 @@ module.exports = {
        const client = interaction.client;
        if (client) {
         failedNotifyEmbed = dmEmbed;
-        for (const uid of userIds) {
+        for (const uid of mapDmUserIds) {
          try {
           const user = await client.users.fetch(uid).catch(() => null);
           if (user) {
@@ -3898,8 +3901,9 @@ module.exports = {
           progressMsg += `Found Map #${chosenMap.number}; saved to map collection. Take to Inariko Library to decipher.`;
           lootForLog = { itemName: `Map #${chosenMap.number}`, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
-          // DM all expedition members (no coordinates until appraised)
-          const userIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
+          // DM only the party member who found the map, not the whole party
+          const ruinsFinderUserId = freshParty.characters[ruinsCharIndex]?.userId || i.user?.id;
+          const ruinsMapDmUserIds = ruinsFinderUserId ? [ruinsFinderUserId] : [];
           const ruinsMapIdField = ruinsSavedMapDoc?.mapId ? { name: "Map ID", value: `\`${ruinsSavedMapDoc.mapId}\``, inline: true } : null;
           const dmEmbed = new EmbedBuilder()
            .setTitle("🗺️ Expedition map found")
@@ -3917,7 +3921,7 @@ module.exports = {
           const client = i.client;
           if (client) {
            ruinsFailedNotifyEmbed = dmEmbed;
-           for (const uid of userIds) {
+           for (const uid of ruinsMapDmUserIds) {
             try {
              const user = await client.users.fetch(uid).catch(() => null);
              if (user) {
@@ -5701,6 +5705,29 @@ module.exports = {
         ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end: reset quadrant to unexplored: ${err?.message}`));
        }
       }
+     }
+     // Remove pins placed during this expedition (testing: do not persist discovery pins)
+     const expeditionPins = await Pin.find({ partyId: String(expeditionId).trim() }).lean().catch(() => []);
+     for (const pin of expeditionPins || []) {
+      const key = pin.sourceDiscoveryKey;
+      if (key && typeof key === "string") {
+       const parts = key.split("|");
+       const squareIdRaw = (parts[1] ?? "").trim();
+       const quadrantId = (parts[2] ?? "").trim().toUpperCase();
+       if (squareIdRaw && (quadrantId === "Q1" || quadrantId === "Q2" || quadrantId === "Q3" || quadrantId === "Q4")) {
+        const squareIdRegex = new RegExp(`^${String(squareIdRaw).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+        await Square.updateOne(
+         { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId, "quadrants.discoveries.discoveryKey": key },
+         { $set: { "quadrants.$[q].discoveries.$[d].pinned": false, "quadrants.$[q].discoveries.$[d].pinnedAt": null, "quadrants.$[q].discoveries.$[d].pinId": null } },
+         { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.discoveryKey": key }] }
+        ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end: unpin discovery: ${err?.message}`));
+       }
+      }
+      await Pin.findByIdAndDelete(pin._id).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end: delete pin: ${err?.message}`));
+     }
+     if (Array.isArray(party.reportedDiscoveryKeys) && party.reportedDiscoveryKeys.length > 0) {
+      party.reportedDiscoveryKeys = [];
+      party.markModified("reportedDiscoveryKeys");
      }
     }
 
