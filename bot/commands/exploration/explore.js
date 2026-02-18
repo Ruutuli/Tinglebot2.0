@@ -4038,11 +4038,16 @@ module.exports = {
            .setColor(regionColors[party.region] || "#00ff99")
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
-            `✅ **You didn't mark it.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${getExploreCommandId()}>.`
+            `✅ **${character.name} chose to ignore the monster camp.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${getExploreCommandId()}>.`
            )
            .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
+          if (nextCharacter?.userId) {
+           await i.followUp({
+            content: `**${character.name}** chose to ignore the monster camp. <@${nextCharacter.userId}> take your turn.`,
+           }).catch(() => {});
+          }
           return;
          }
         }
