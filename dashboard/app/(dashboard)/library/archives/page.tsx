@@ -70,6 +70,8 @@ export default function LibraryArchivesPage() {
   const [mapHoverPercent, setMapHoverPercent] = useState<{ x: number; y: number } | null>(null);
   const [savingPlacement, setSavingPlacement] = useState<string | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
+  /** On mobile, mod section starts collapsed and can be toggled. On desktop, always expanded. */
+  const [modSectionCollapsed, setModSectionCollapsed] = useState(true);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const modSectionRef = useRef<HTMLElement>(null);
   const submitMapRef = useRef<HTMLDivElement>(null);
@@ -90,6 +92,14 @@ export default function LibraryArchivesPage() {
       if (infoShowTimeoutRef.current) clearTimeout(infoShowTimeoutRef.current);
     };
   }, [clearInfoHideTimeout]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const handler = () => setModSectionCollapsed(!mq.matches);
+    handler();
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const scheduleInfoHide = useCallback(() => {
     clearInfoHideTimeout();
@@ -488,7 +498,7 @@ export default function LibraryArchivesPage() {
   }
 
   return (
-    <div className="min-h-full overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10">
+    <div className="min-h-full overflow-x-hidden px-3 py-5 sm:px-6 sm:py-8 md:px-8 md:py-10">
       <div className="mx-auto max-w-[1400px]">
         {/* Hero header */}
         <header className="mb-8 sm:mb-10">
@@ -747,10 +757,10 @@ export default function LibraryArchivesPage() {
         )}
 
         {/* Map section */}
-        <section className="mb-8" aria-label="Library floor plan">
+        <section className="mb-8 -mx-2 px-2 sm:mx-0 sm:px-0" aria-label="Library floor plan">
           <div
             ref={mapContainerRef}
-            className={`relative mx-auto w-full max-w-6xl touch-manipulation rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-xl shadow-black/30 ${infoRelicId ? "overflow-visible" : "overflow-hidden"}`}
+            className={`relative mx-auto w-full max-w-6xl touch-manipulation rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-xl shadow-black/30 sm:rounded-xl ${infoRelicId ? "overflow-visible" : "overflow-hidden"}`}
             style={{ aspectRatio: "1" }}
             onClick={
               placingRelicId
@@ -879,7 +889,8 @@ export default function LibraryArchivesPage() {
           })}
           {placingRelicId && editMode && isMod && (
             <div className="absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-[var(--botw-warm-black)]/95 px-3 py-2 text-center text-xs font-medium text-[var(--totk-light-ocher)] shadow-lg max-w-[calc(100%-1rem)]">
-              Tap or click map to place · Arrow keys to nudge · Enter to save · Esc to cancel
+              <span className="sm:hidden">Tap map to place · Tap again to save</span>
+              <span className="hidden sm:inline">Tap or click map to place · Arrow keys to nudge · Enter to save · Esc to cancel</span>
             </div>
           )}
           {placingRelicId && (() => {
@@ -927,32 +938,11 @@ export default function LibraryArchivesPage() {
             const popoverStyle = isPinLow
               ? { left: `${popoverLeft}%`, bottom: `${100 - pinY + 4}%`, transform: "translate(-50%, 0)" }
               : { left: `${popoverLeft}%`, top: `${Math.max(pinY - 5, 2)}%`, transform: "translate(-50%, 0)" };
-            return (
-              <>
-                <div
-                  className="absolute inset-0 z-30 cursor-default bg-black/40"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearInfoHideTimeout();
-                    setInfoRelicId(null);
-                  }}
-                  onMouseEnter={clearInfoHideTimeout}
-                  onMouseLeave={scheduleInfoHide}
-                  aria-hidden
-                />
-                <div
-                  className="absolute z-40 max-h-[min(80vh,90%)] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-xl border-2 border-[var(--totk-light-ocher)]/50 bg-[var(--botw-warm-black)] p-4 shadow-2xl sm:p-5"
-                  style={popoverStyle}
-                  role="dialog"
-                  aria-label="Relic details"
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseEnter={clearInfoHideTimeout}
-                  onMouseLeave={scheduleInfoHide}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 flex-1 flex-wrap gap-4 sm:flex-nowrap">
+            const PopoverContent = () => (
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:flex-wrap sm:gap-4 sm:flex-nowrap">
                       {relic.imageUrl && (
-                        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--totk-brown)]/30">
+                        <div className="mx-auto h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--totk-brown)]/30 sm:mx-0">
                           <img
                             src={normalizeImageUrl(relic.imageUrl)}
                             alt=""
@@ -961,7 +951,7 @@ export default function LibraryArchivesPage() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-bold text-[var(--totk-light-ocher)] sm:text-lg">
+                        <h3 className="text-center text-base font-bold text-[var(--totk-light-ocher)] sm:text-left sm:text-lg">
                           {relic.rollOutcome || relic.name}
                         </h3>
                         <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
@@ -992,13 +982,54 @@ export default function LibraryArchivesPage() {
                         clearInfoHideTimeout();
                         setInfoRelicId(null);
                       }}
-                      className="flex shrink-0 items-center gap-2 rounded-xl border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-800)] px-3 py-2 text-sm font-medium text-[var(--botw-pale)] transition-colors hover:bg-[var(--totk-grey-700)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-ocher)]"
+                      className="order-first flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--totk-dark-ocher)] bg-[var(--totk-grey-800)] px-4 py-3 text-sm font-medium text-[var(--botw-pale)] transition-colors hover:bg-[var(--totk-grey-700)] focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-ocher)] touch-manipulation sm:order-none sm:px-3 sm:py-2"
                       aria-label="Close"
                     >
                       <i className="fa-solid fa-times" aria-hidden />
                       Close
                     </button>
                   </div>
+                );
+            return (
+              <>
+                <div
+                  className="absolute inset-0 z-30 cursor-default bg-black/40"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearInfoHideTimeout();
+                    setInfoRelicId(null);
+                  }}
+                  onMouseEnter={clearInfoHideTimeout}
+                  onMouseLeave={scheduleInfoHide}
+                  aria-hidden
+                />
+                {/* Mobile: bottom sheet (full width, fixed to bottom) */}
+                <div
+                  className="fixed bottom-0 left-0 right-0 z-40 flex max-h-[70vh] flex-col overflow-y-auto rounded-t-2xl border-2 border-b-0 border-[var(--totk-light-ocher)]/50 bg-[var(--botw-warm-black)] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:hidden"
+                  role="dialog"
+                  aria-label="Relic details"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseEnter={clearInfoHideTimeout}
+                  onMouseLeave={scheduleInfoHide}
+                >
+                  <div className="flex shrink-0 justify-center py-2" aria-hidden>
+                    <div className="h-1 w-10 rounded-full bg-[var(--totk-grey-600)]" />
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-4">
+                    <PopoverContent />
+                  </div>
+                </div>
+                {/* Desktop: positioned popover */}
+                <div
+                  className="absolute z-40 hidden max-h-[min(80vh,90%)] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-xl border-2 border-[var(--totk-light-ocher)]/50 bg-[var(--botw-warm-black)] p-5 shadow-2xl sm:block"
+                  style={popoverStyle}
+                  role="dialog"
+                  aria-label="Relic details"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseEnter={clearInfoHideTimeout}
+                  onMouseLeave={scheduleInfoHide}
+                >
+                  <PopoverContent />
                 </div>
               </>
             );
@@ -1025,11 +1056,26 @@ export default function LibraryArchivesPage() {
           <section ref={modSectionRef} className="mx-auto mt-8 max-w-4xl overflow-hidden rounded-2xl border-2 border-[var(--totk-light-ocher)]/50 bg-[var(--botw-warm-black)] shadow-xl shadow-black/30" aria-label="Moderator panel">
             <div className="border-b-2 border-[var(--totk-light-ocher)]/40 bg-[var(--totk-light-ocher)]/10 px-4 py-4 sm:px-5">
               <div className="flex flex-wrap items-center gap-3">
-                <h3 className="flex items-center gap-2 text-base font-bold text-[var(--totk-light-ocher)] sm:text-lg">
-                  <i className="fa-solid fa-shield-halved" aria-hidden />
-                  Mod: All relics
-                </h3>
-                <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/60 px-3 py-2 text-sm font-medium text-[var(--botw-pale)] transition-colors hover:bg-[var(--totk-brown)]/30 has-[:checked]:border-[var(--totk-light-ocher)] has-[:checked]:bg-[var(--totk-light-ocher)]/20 has-[:checked]:text-[var(--totk-light-ocher)]">
+                <button
+                  type="button"
+                  onClick={() => setModSectionCollapsed((c) => !c)}
+                  className="flex flex-1 items-center gap-2 text-left sm:flex-initial sm:cursor-default sm:pointer-events-none"
+                  aria-expanded={!modSectionCollapsed}
+                  aria-label={modSectionCollapsed ? "Expand Mod panel" : "Collapse Mod panel"}
+                >
+                  <h3 className="flex items-center gap-2 text-base font-bold text-[var(--totk-light-ocher)] sm:text-lg">
+                    <i className="fa-solid fa-shield-halved" aria-hidden />
+                    Mod: All relics
+                  </h3>
+                  <i
+                    className={`fa-solid fa-chevron-down shrink-0 text-[var(--totk-light-ocher)] transition-transform sm:hidden ${modSectionCollapsed ? "" : "rotate-180"}`}
+                    aria-hidden
+                  />
+                </button>
+                <label
+                  className={`flex cursor-pointer select-none items-center gap-2 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/60 px-3 py-2 text-sm font-medium text-[var(--botw-pale)] transition-colors hover:bg-[var(--totk-brown)]/30 has-[:checked]:border-[var(--totk-light-ocher)] has-[:checked]:bg-[var(--totk-light-ocher)]/20 has-[:checked]:text-[var(--totk-light-ocher)] ${modSectionCollapsed ? "hidden sm:flex" : "flex"}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <input
                     type="checkbox"
                     checked={editMode}
@@ -1039,18 +1085,20 @@ export default function LibraryArchivesPage() {
                   Edit map
                 </label>
               </div>
-              <p className="mt-2 text-sm text-[var(--botw-pale)]/90">
+              <p className={`mt-2 text-sm text-[var(--botw-pale)]/90 ${modSectionCollapsed ? "hidden sm:block" : ""}`}>
                 {editMode
                   ? "Click or drag relics on the map to place or move them. Arrow keys to nudge, Enter to save."
                   : "Check Edit map to rearrange pins. Otherwise, clicking a relic on the map shows its details."}
               </p>
             </div>
+            <div className={modSectionCollapsed ? "hidden sm:block" : "block"}>
             {editMode && placingRelicId && (
               <div className="space-y-3 border-b border-[var(--totk-dark-ocher)]/40 px-3 py-4 sm:px-4">
                 <p className="text-sm font-medium text-[var(--totk-light-ocher)]">
-                  Click the map above to place, or use arrow keys to nudge and press Enter to save.
+                  <span className="sm:hidden">Tap the map above to place.</span>
+                  <span className="hidden sm:inline">Click the map above to place, or use arrow keys to nudge and press Enter to save.</span>
                 </p>
-                <p className="text-xs text-[var(--botw-pale)]/90">
+                <p className="hidden text-xs text-[var(--botw-pale)]/90 sm:block">
                   Arrow keys = nudge position · Enter = save · Esc = cancel · Or drag a relic onto the map.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1080,7 +1128,7 @@ export default function LibraryArchivesPage() {
                 </div>
               </div>
             )}
-            <div className="flex flex-wrap gap-2 p-3 sm:p-4">
+            <div className="grid grid-cols-2 gap-2 p-3 sm:flex sm:flex-wrap sm:p-4">
               {sortedRelics.map((relic) => {
                 const placed = hasValidPosition(relic);
                 return (
@@ -1094,7 +1142,7 @@ export default function LibraryArchivesPage() {
                       e.dataTransfer.effectAllowed = "move";
                     }}
                     onClick={() => editMode && setPlacingRelicId(placingRelicId === relic._id ? null : relic._id)}
-                    className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-sm transition-colors touch-manipulation ${
+                    className={`flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-sm transition-colors touch-manipulation ${
                       editMode ? "cursor-grab active:cursor-grabbing" : "cursor-default"
                     } ${
                       placingRelicId === relic._id
@@ -1112,7 +1160,7 @@ export default function LibraryArchivesPage() {
                     ) : (
                       <span className="flex h-8 w-8 items-center justify-center rounded bg-[var(--totk-grey-800)] text-lg text-[var(--totk-grey-400)]">🔸</span>
                     )}
-                    <span className="min-w-0 truncate max-w-[140px] font-medium">{relic.rollOutcome || relic.relicId || relic.name}</span>
+                    <span className="min-w-0 max-w-full truncate font-medium sm:max-w-[140px]">{relic.rollOutcome || relic.relicId || relic.name}</span>
                     {placed ? (
                       <span className="shrink-0 rounded bg-[var(--totk-light-green)]/30 px-2 py-0.5 text-xs font-medium text-[var(--totk-light-green)]">Placed</span>
                     ) : (
@@ -1124,6 +1172,7 @@ export default function LibraryArchivesPage() {
                   </button>
                 );
               })}
+            </div>
             </div>
           </section>
         )}
@@ -1154,23 +1203,39 @@ export default function LibraryArchivesPage() {
         )}
 
         {relics.length > 0 && (
-          <section className="mt-10" aria-label="Archived relics list">
-            <h2 className="mb-5 flex items-center gap-2 text-xl font-bold text-[var(--totk-light-ocher)]">
+          <section className="mt-6 sm:mt-10" aria-label="Archived relics list">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[var(--totk-light-ocher)] sm:mb-5 sm:text-xl">
               <i className="fa-solid fa-scroll" aria-hidden />
               Archived relics
             </h2>
-            <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               {sortedRelics.map((relic) => (
                 <article
                   key={relic._id}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)] shadow-lg shadow-black/25 ring-1 ring-[var(--totk-dark-ocher)]/20 transition-all duration-200 hover:border-[var(--totk-light-ocher)]/40 hover:shadow-xl hover:shadow-black/30 hover:ring-[var(--totk-light-ocher)]/20"
+                  className="flex flex-col overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)] shadow-lg shadow-black/25 ring-1 ring-[var(--totk-dark-ocher)]/20 transition-all duration-200 hover:border-[var(--totk-light-ocher)]/40 hover:shadow-xl hover:shadow-black/30 hover:ring-[var(--totk-light-ocher)]/20 sm:rounded-2xl"
                 >
-                  <div className="flex flex-row items-start gap-4 p-4 sm:p-5">
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <h3 className="text-base font-bold tracking-tight text-[var(--totk-light-ocher)] sm:text-lg">
+                  <div className="flex flex-row items-start gap-3 p-3 sm:flex-row sm:gap-4 sm:p-5">
+                    <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/90 to-[var(--totk-brown)]/60 sm:h-28 sm:w-28">
+                      {relic.imageUrl ? (
+                        <img
+                          src={normalizeImageUrl(relic.imageUrl)}
+                          alt={relic.rollOutcome || relic.name}
+                          className="h-full w-full object-contain drop-shadow-md"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--totk-grey-400)]/80 sm:text-3xl">
+                          <i className="fa-solid fa-gem" aria-hidden />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-bold leading-tight tracking-tight text-[var(--totk-light-ocher)] line-clamp-2 sm:text-lg sm:line-clamp-none">
                         {relic.rollOutcome || relic.name}
                       </h3>
-                      <dl className="mt-2.5 grid grid-cols-1 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
+                      <p className="mt-1 text-xs text-[var(--totk-grey-200)] sm:hidden">
+                        {relic.discoveredBy || "—"} · {relic.appraisedBy ?? "—"}
+                      </p>
+                      <dl className="mt-2 hidden gap-x-3 gap-y-1 text-sm sm:grid sm:grid-cols-[auto_1fr]">
                         <dt className="text-[var(--totk-grey-100)]">Discovered By</dt>
                         <dd className="font-semibold text-[var(--botw-pale)]">{relic.discoveredBy || "—"}</dd>
                         <dt className="text-[var(--totk-grey-100)]">Appraised By</dt>
@@ -1183,23 +1248,10 @@ export default function LibraryArchivesPage() {
                         <dd className="font-semibold text-[var(--botw-pale)]">{relic.quadrant || "—"}</dd>
                       </dl>
                     </div>
-                    <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/90 to-[var(--totk-brown)]/60 sm:h-28 sm:w-28">
-                      {relic.imageUrl ? (
-                        <img
-                          src={normalizeImageUrl(relic.imageUrl)}
-                          alt={relic.rollOutcome || relic.name}
-                          className="h-full w-full object-contain drop-shadow-md"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-3xl text-[var(--totk-grey-400)]/80">
-                          <i className="fa-solid fa-gem" aria-hidden />
-                        </div>
-                      )}
-                    </div>
                   </div>
-                  <div className="border-t border-[var(--totk-dark-ocher)]/50 px-4 pb-4 sm:px-5 sm:pb-5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-100)]">Info</p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[var(--botw-pale)]/90">
+                  <div className="border-t border-[var(--totk-dark-ocher)]/50 px-3 py-3 sm:px-5 sm:pb-5 sm:pt-3">
+                    <p className="hidden text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-100)] sm:block">Info</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--botw-pale)]/90 sm:mt-1.5 sm:text-sm">
                       {relic.appraisalDescription || "—"}
                     </p>
                   </div>
