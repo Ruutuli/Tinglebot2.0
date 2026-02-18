@@ -142,6 +142,8 @@ export async function POST(
     const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
     if (!isTestingMode) {
       const rawItems = (me.items as Array<Record<string, unknown>> | undefined) ?? [];
+      const loadoutItemNamesForLog = rawItems.map((s) => String((s.itemName ?? s.item_name ?? "") ?? "").trim()).filter(Boolean);
+      console.log(`[EXPLORE LEAVE] Returning loadout items to inventory: ${loadoutItemNamesForLog.join(", ") || "none"}`);
       const loadoutItemNames = rawItems
         .map((slot) => String((slot.itemName ?? slot.item_name ?? "") ?? "").trim())
         .filter(Boolean);
@@ -179,6 +181,12 @@ export async function POST(
             }
           }
         }
+      }
+    } else {
+      const rawItems = (me.items as Array<Record<string, unknown>> | undefined) ?? [];
+      const loadoutForLog = rawItems.map((s) => String((s.itemName ?? s.item_name ?? "") ?? "").trim()).filter(Boolean);
+      if (loadoutForLog.length > 0) {
+        console.log(`[EXPLORE LEAVE] SKIPPED return items (testing mode) — would have returned: ${loadoutForLog.join(", ")}`);
       }
     }
 

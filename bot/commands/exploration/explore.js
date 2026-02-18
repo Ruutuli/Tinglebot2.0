@@ -779,6 +779,22 @@ async function partyHasLensOfTruth(party) {
 // Plume + 1 stamina; create Grotto, roll trial; blessing = immediate Spirit Orbs
 async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextCharacter, ruinRestRecovered) {
  logger.info("EXPLORE", `[explore.js] handleGrottoCleanse ENTER expeditionId=${expeditionId} characterIndex=${characterIndex}`);
+ if (EXPLORATION_TESTING_MODE) {
+  const freshParty = await Party.findActiveByPartyId(expeditionId);
+  if (freshParty) {
+   pushProgressLog(freshParty, freshParty.characters[characterIndex]?.name || "Party", "grotto", `Found a grotto in ${location} (testing mode — skipped).`, undefined, undefined, new Date());
+   freshParty.currentTurn = (freshParty.currentTurn + 1) % (freshParty.characters?.length || 1);
+   await freshParty.save();
+  }
+  const skipEmbed = new EmbedBuilder()
+   .setTitle("🗺️ **Expedition: Grotto found (testing — skipped)**")
+   .setColor(regionColors[party.region] || "#00ff99")
+   .setDescription(`Found a grotto in **${location}**.\n\n⚠️ **Testing mode:** Grottos are not created or persisted. Continue with </explore roll>.`)
+   .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+  addExplorationStandardFields(skipEmbed, { party: freshParty || party, expeditionId, location, nextCharacter: (freshParty ? freshParty.characters[freshParty.currentTurn] : null) ?? nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+  await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
+  return;
+ }
  const freshParty = await Party.findActiveByPartyId(expeditionId);
  if (!freshParty) {
   logger.warn("EXPLORE", `[explore.js] handleGrottoCleanse: expedition not found expeditionId=${expeditionId}`);
@@ -824,8 +840,11 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  const cleanseCharacter = plumeHolder.character;
  const idx = (freshParty.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
  if (idx !== -1 && !EXPLORATION_TESTING_MODE) {
+  logger.info("EXPLORE", `[REMOVE] Grotto cleanse: removing Goddess Plume from loadout (${freshParty.characters[plumeHolder.characterIndex]?.name}) expeditionId=${expeditionId}`);
   freshParty.characters[plumeHolder.characterIndex].items.splice(idx, 1);
   freshParty.markModified("characters");
+ } else if (idx !== -1 && EXPLORATION_TESTING_MODE) {
+  logger.info("EXPLORE", `[REMOVE] Grotto cleanse: would remove Goddess Plume — SKIPPED (testing mode) expeditionId=${expeditionId}`);
  }
  // Cost already applied by payStaminaOrStruggle
 
@@ -1826,11 +1845,12 @@ module.exports = {
        }
       }
      }
-     if (!EXPLORATION_TESTING_MODE) {
-      try {
-       for (const { characterId, itemName, quantity } of toRemove) {
-        await removeItemInventoryDatabase(characterId, itemName, quantity, interaction, "Grotto puzzle offering");
-       }
+      if (!EXPLORATION_TESTING_MODE) {
+       try {
+        for (const { characterId, itemName, quantity } of toRemove) {
+         logger.info("EXPLORE", `[REMOVE] Grotto puzzle: removing ${quantity} ${itemName} from character ${characterId}`);
+         await removeItemInventoryDatabase(characterId, itemName, quantity, interaction, "Grotto puzzle offering");
+        }
       } catch (err) {
        handleInteractionError(err, interaction, { source: "explore.js grotto puzzle removeItem" });
        return interaction.editReply(
@@ -2626,6 +2646,18 @@ module.exports = {
     const nextCharacter = party.characters[party.currentTurn] ?? null;
 
     if (discoveryType === "monster_camp") {
+     if (EXPLORATION_TESTING_MODE) {
+      pushProgressLog(party, character.name, "monster_camp_revisit", `Revisited monster camp at ${location} (testing mode — skipped).`, undefined, undefined, new Date());
+      party.currentTurn = (party.currentTurn + 1) % (party.characters?.length || 1);
+      await party.save();
+      const skipEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Expedition: Monster camp (testing — skipped)**")
+       .setColor(regionColors[party.region] || "#00ff99")
+       .setDescription(`Revisiting monster camp at **${location}**.\n\n⚠️ **Testing mode:** Waves are not created or persisted. Continue with </explore roll>.`)
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+      addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false });
+      return interaction.editReply({ embeds: [skipEmbed] });
+     }
      const regionKey = (party.region && String(party.region).trim()) || "Eldin";
      const regionCapitalized = regionKey.charAt(0).toUpperCase() + regionKey.slice(1).toLowerCase();
      let camp;
@@ -2709,6 +2741,18 @@ module.exports = {
     }
 
     if (discoveryType === "grotto") {
+     if (EXPLORATION_TESTING_MODE) {
+      pushProgressLog(party, character.name, "grotto_revisit", `Revisited grotto at ${location} (testing mode — skipped).`, undefined, undefined, new Date());
+      party.currentTurn = (party.currentTurn + 1) % (party.characters?.length || 1);
+      await party.save();
+      const skipEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Expedition: Grotto revisit (testing — skipped)**")
+       .setColor(regionColors[party.region] || "#00ff99")
+       .setDescription(`Revisiting grotto at **${location}**.\n\n⚠️ **Testing mode:** Grottos are not created or persisted. Continue with </explore roll>.`)
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+      addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false });
+      return interaction.editReply({ embeds: [skipEmbed] });
+     }
      const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
      if (grotto) {
       const trialLabel = getTrialLabel(grotto.trialType);
@@ -2765,10 +2809,12 @@ module.exports = {
      }
      const plumeIdx = (party.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
      if (plumeIdx !== -1 && !EXPLORATION_TESTING_MODE) {
+      logger.info("EXPLORE", `[REMOVE] Grotto revisit cleanse: removing Goddess Plume from loadout (${party.characters[plumeHolder.characterIndex]?.name})`);
       party.characters[plumeHolder.characterIndex].items.splice(plumeIdx, 1);
       party.markModified("characters");
       await party.save();
-     } else if (plumeIdx !== -1) {
+     } else if (plumeIdx !== -1 && EXPLORATION_TESTING_MODE) {
+      logger.info("EXPLORE", `[REMOVE] Grotto revisit cleanse: would remove Goddess Plume — SKIPPED (testing mode)`);
       await party.save();
      }
      const at = new Date();
@@ -4047,6 +4093,19 @@ module.exports = {
            await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
            return;
           }
+          if (EXPLORATION_TESTING_MODE) {
+           pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location} (testing mode — skipped).`, undefined, monsterCampCosts, at);
+           freshParty.currentTurn = (freshParty.currentTurn + 1) % (freshParty.characters?.length || 1);
+           await freshParty.save();
+           const skipEmbed = new EmbedBuilder()
+            .setTitle("🗺️ **Expedition: Monster camp (testing — skipped)**")
+            .setColor(regionColors[freshParty.region] || "#00ff99")
+            .setDescription(`Found a monster camp in **${location}**.\n\n⚠️ **Testing mode:** Waves are not created or persisted. Continue with </explore roll:${getExploreCommandId()}>.`)
+            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
+           addExplorationStandardFields(skipEmbed, { party: freshParty, expeditionId, location, nextCharacter: freshParty.characters[freshParty.currentTurn] ?? nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
+           await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
+           return;
+          }
           await pushDiscoveryToMap(freshParty, "monster_camp", at, i.user?.id);
           pushProgressLog(freshParty, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map and fighting now.`, undefined, monsterCampCosts, at);
           const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
@@ -4832,6 +4891,7 @@ module.exports = {
         (item) => item.itemName === resource || item.itemName === `${resource} Bundle`
        );
        if (idx !== -1) {
+        logger.info("EXPLORE", `[REMOVE] Secure resource: removing ${resource} from loadout (${party.characters[ci]?.name})`);
         party.characters[ci].items.splice(idx, 1);
         break;
        }
@@ -5380,7 +5440,10 @@ module.exports = {
     partyChar.currentStamina = character.currentStamina;
 
     if (!EXPLORATION_TESTING_MODE) {
+     logger.info("EXPLORE", `[REMOVE] Item use: removing ${partyChar.items[itemIndex]?.itemName} from loadout (${partyChar.name})`);
      partyChar.items.splice(itemIndex, 1);
+    } else {
+     logger.info("EXPLORE", `[REMOVE] Item use: would remove ${partyChar.items[itemIndex]?.itemName} from loadout — SKIPPED (testing mode)`);
     }
     party.totalHearts = party.characters.reduce(
      (sum, c) => sum + (c.currentHearts ?? 0),
@@ -5542,6 +5605,8 @@ module.exports = {
        for (const item of items) {
         if (!item || !item.itemName) continue;
         const bundle = PAVING_BUNDLES[item.itemName];
+        const addDesc = bundle ? `${bundle.quantityPerSlot} ${bundle.baseItemName} (from ${item.itemName})` : item.itemName;
+        logger.info("EXPLORE", `[ADD] Expedition end: returning ${addDesc} to ${partyCharacter.name} (from loadout)`);
         if (bundle) {
          await addItemInventoryDatabase(
           partyCharacter._id,
@@ -5562,6 +5627,10 @@ module.exports = {
        }
       }
     } else {
+     const wouldReturn = (party.characters || []).flatMap((c) => (c.items || []).map((i) => `${i.itemName}→${c.name}`).filter(Boolean));
+     if (wouldReturn.length > 0) {
+      logger.info("EXPLORE", `[ADD] Expedition end: would return loadout items — SKIPPED (testing mode) ${wouldReturn.join(", ")}`);
+     }
      if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
       const heartsPerMember = Math.floor(remainingHearts / memberCount);
       const heartsRemainder = remainingHearts % memberCount;

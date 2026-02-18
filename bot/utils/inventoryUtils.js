@@ -320,7 +320,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     if (inventoryItem) {
       // Item exists with same name AND same obtain method - increment quantity
       logger.info('INVENTORY', `📊 Found ${inventoryItem.quantity} ${itemName} (obtain: "${obtainValue}") in ${character.name}'s inventory`);
-      logger.info('INVENTORY', `➕ Adding ${quantity} ${itemName}`);
+      logger.info('INVENTORY', `➕ [ADD] ${character.name}: +${quantity} ${itemName} (source: ${obtain})`);
       await inventoryCollection.updateOne(
         { characterId, itemName: inventoryItem.itemName, obtain: obtainValue },
         { $inc: { quantity: quantity } }
@@ -339,7 +339,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     } else {
       // Item doesn't exist with this obtain method - create new entry
       // This allows items with different obtain methods (crafting, trading, etc.) to be tracked separately
-      logger.info('INVENTORY', `➕ Adding new item ${itemName} (${quantity}) with obtain method "${obtainValue}" to ${character.name}'s inventory`);
+      logger.info('INVENTORY', `➕ [ADD] ${character.name}: +${quantity} ${itemName} (source: ${obtain}, new entry)`);
       const newItem = {
         characterId,
         itemName: item.itemName,
@@ -477,7 +477,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     }
 
     logger.info('INVENTORY', `📊 Found ${totalQuantity} ${itemName} across ${inventoryEntries.length} entry/entries in ${character.name}'s inventory`);
-    logger.info('INVENTORY', `➖ Removing ${quantity} ${itemName}`);
+    logger.info('INVENTORY', `➖ [REMOVE] ${character.name}: -${quantity} ${itemName} (source: ${obtain})`);
     
     const canonicalItemName = inventoryEntries[0].itemName; // Use canonical name from first entry
 

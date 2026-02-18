@@ -270,6 +270,7 @@ export async function PATCH(
     // Refund old + deduct new items (skip in EXPLORATION_TESTING_MODE — loadout is reference-only)
     const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
     if (!isTestingMode) {
+      console.log(`[EXPLORE ITEMS] Refunding old loadout + deducting new (charId=${charId})`);
       if (oldEldinBundles > 0) {
         await addMaterialToInventory(
           collection,
@@ -306,6 +307,8 @@ export async function PATCH(
         const count = names.filter((n) => (n || "").trim() === itemName).length;
         await deductMaterialFromInventory(collection, charId, itemName, count);
       }
+    } else if (oldNames.length > 0 || names.length > 0) {
+      console.log(`[EXPLORE ITEMS] SKIPPED refund/deduct (testing mode) — old: ${oldNames.join(", ") || "none"}, new: ${names.join(", ") || "none"}`);
     }
 
     await Party.updateOne(

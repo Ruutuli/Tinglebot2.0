@@ -283,6 +283,7 @@ export async function POST(
     // Deduct brought items from inventory (skip in EXPLORATION_TESTING_MODE — loadout is reference-only)
     const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
     if (!isTestingMode) {
+      console.log(`[EXPLORE JOIN] Deducting loadout items from ${charId} (items: ${names.join(", ")})`);
       const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
       const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
       if (eldinBundles > 0) {
@@ -296,6 +297,8 @@ export async function POST(
         const count = names.filter((n) => (n || "").trim() === itemName).length;
         await deductMaterialFromInventory(collection, charId, itemName, count);
       }
+    } else if (names.length > 0) {
+      console.log(`[EXPLORE JOIN] SKIPPED deduct (testing mode) — would have deducted: ${names.join(", ")}`);
     }
 
     const maxHearts = Number.isFinite(Number(character.maxHearts)) ? Number(character.maxHearts) : 0;
