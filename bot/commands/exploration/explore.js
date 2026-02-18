@@ -700,6 +700,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await i.followUp({ embeds: [noPlumeEmbed], ephemeral: true }).catch(() => {});
   return;
  }
+ const cleanseCharacter = plumeHolder.character;
  const idx = (freshParty.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
  if (idx !== -1) {
   freshParty.characters[plumeHolder.characterIndex].items.splice(idx, 1);
@@ -2273,6 +2274,9 @@ module.exports = {
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
+     // Compute roll stamina cost from quadrant state BEFORE sync (rolling in unexplored costs 2)
+     const rollStaminaCost = party.quadrantState === "unexplored" ? 2 : party.quadrantState === "explored" ? 1 : 0;
+
      // Sync quadrant state from map so stamina cost matches canonical explored/secured status
      const mapSquare = await Square.findOne({ squareId: party.square });
      let ruinRestRecovered = 0;
@@ -2373,17 +2377,7 @@ module.exports = {
       return interaction.editReply({ embeds: [securedNoRollEmbed] });
      }
 
-     let staminaCost = 0;
-
-     if (party.quadrantState === "unexplored") {
-      staminaCost = 2;
-     } else if (party.quadrantState === "explored") {
-      staminaCost = 1;
-     } else if (party.quadrantState === "secured") {
-      staminaCost = 0;
-     }
-
-     const payResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst" });
+     const payResult = await payStaminaOrStruggle(party, characterIndex, rollStaminaCost, { order: "currentFirst" });
      if (!payResult.ok) {
       const location = `${party.square} ${party.quadrant}`;
       return interaction.editReply({
