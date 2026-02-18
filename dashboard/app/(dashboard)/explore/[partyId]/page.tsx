@@ -41,6 +41,7 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
   monster_camp: "Monster Camp",
   ruins: "Ruins",
   grotto: "Grotto",
+  grotto_cleansed: "Grotto", // cleansed grottos (Yes) — same as grotto for placement
 };
 
 type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string; characterName?: string };

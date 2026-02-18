@@ -768,6 +768,12 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    )
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(blessingEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
+  const explorePageUrlGrotto = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+  blessingEmbed.addFields({
+   name: "📍 **__Set pin on webpage__**",
+   value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlGrotto}`,
+   inline: false,
+  });
   await msg.edit({ embeds: [blessingEmbed], components: [disabledRow] }).catch(() => {});
   const blessingAnnounce = new EmbedBuilder()
    .setTitle("✨ **A bright light spills from the stump!** ✨")
@@ -778,6 +784,11 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    )
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(blessingAnnounce, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
+  blessingAnnounce.addFields({
+   name: "📍 **__Set pin on webpage__**",
+   value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlGrotto}`,
+   inline: false,
+  });
   await i.followUp({ embeds: [blessingAnnounce] }).catch(() => {});
   return;
  }
@@ -808,6 +819,12 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   hasActiveGrotto: true,
   activeGrottoCommand: grottoCmdHint,
  });
+ const explorePageUrlTrial = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+ continueEmbed.addFields({
+  name: "📍 **__Set pin on webpage__**",
+  value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlTrial}`,
+  inline: false,
+ });
  await msg.edit({ embeds: [continueEmbed], components: [disabledRow] }).catch(() => {});
  const cleanseAnnounce = new EmbedBuilder()
   .setTitle("✨ **A bright light spills from the stump!** ✨")
@@ -827,6 +844,11 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   ruinRestRecovered,
   hasActiveGrotto: true,
   activeGrottoCommand: grottoCmdHint,
+ });
+ cleanseAnnounce.addFields({
+  name: "📍 **__Set pin on webpage__**",
+  value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlTrial}`,
+  inline: false,
  });
  await i.followUp({ embeds: [cleanseAnnounce] }).catch(() => {});
 }
@@ -2182,6 +2204,12 @@ module.exports = {
        )
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(blessingEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+      const explorePageUrlRevisit = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+      blessingEmbed.addFields({
+       name: "📍 **__Set pin on webpage__**",
+       value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlRevisit}`,
+       inline: false,
+      });
       return interaction.editReply({ embeds: [blessingEmbed] });
      }
      const trialLabelRevisit = getTrialLabel(grottoDoc.trialType);
@@ -2208,6 +2236,12 @@ module.exports = {
       showRestSecureMove: false,
       hasActiveGrotto: true,
       activeGrottoCommand: grottoCmdRevisit,
+     });
+     const explorePageUrlRevisitTrial = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+     continueEmbed.addFields({
+      name: "📍 **__Set pin on webpage__**",
+      value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlRevisitTrial}`,
+      inline: false,
      });
      return interaction.editReply({ embeds: [continueEmbed] });
     }
@@ -3489,6 +3523,12 @@ module.exports = {
           )
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
          addExplorationStandardFields(grottoEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+         const explorePageUrlNo = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore/${encodeURIComponent(expeditionId)}`;
+         grottoEmbed.addFields({
+          name: "📍 **__Set pin on webpage__**",
+          value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlNo}`,
+          inline: false,
+         });
          await msg.edit({ embeds: [grottoEmbed], components: [disabledRow] }).catch(() => {});
          return;
         }
