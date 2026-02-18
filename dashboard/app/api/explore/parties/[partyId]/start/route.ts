@@ -287,9 +287,38 @@ export async function POST(
       );
     }
 
+    // One-time sync: seed each slot's currentHearts/currentStamina from Character/ModCharacter so "start" is the canonical snapshot
+    const charactersToSet = (p.characters as PartyMemberDoc[]) ?? [];
+    const updatedCharacters: PartyMemberDoc[] = [];
+    let totalHeartsSum = 0;
+    let totalStaminaSum = 0;
+    for (const c of charactersToSet) {
+      const charId = c._id instanceof mongoose.Types.ObjectId ? c._id : new mongoose.Types.ObjectId(String(c._id));
+      let charDoc = await Character.findById(charId).select("currentHearts maxHearts currentStamina maxStamina").lean();
+      if (!charDoc) {
+        charDoc = await ModCharacter.findById(charId).select("currentHearts maxHearts currentStamina maxStamina").lean();
+      }
+      const ch = charDoc as Record<string, unknown> | null;
+      const h = typeof ch?.currentHearts === "number" ? (ch.currentHearts as number) : (typeof ch?.maxHearts === "number" ? (ch.maxHearts as number) : 0);
+      const s = typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : (typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0);
+      const updated = { ...c, currentHearts: h, currentStamina: s };
+      updatedCharacters.push(updated);
+      totalHeartsSum += h;
+      totalStaminaSum += s;
+    }
+
     await Party.updateOne(
       { partyId },
-      { $set: { status: "started", discordThreadId: threadId, exploredQuadrantsThisRun: [] } }
+      {
+        $set: {
+          status: "started",
+          discordThreadId: threadId,
+          exploredQuadrantsThisRun: [],
+          characters: updatedCharacters,
+          totalHearts: totalHeartsSum,
+          totalStamina: totalStaminaSum,
+        },
+      }
     );
 
     const threadUrl = `https://discord.com/channels/${process.env.GUILD_ID ?? ""}/${threadId}`;

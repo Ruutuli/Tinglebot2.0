@@ -537,11 +537,11 @@ module.exports = {
             value: 'Please use a fairy with </item:1463789335626125378>.',
             inline: false
           },
-          {
+          ...(isExpeditionRaid ? [] : [{
             name: 'Leave the raid',
             value: 'Use </raid:1470659276287774734> (raidid, charactername, action: Leave raid).',
             inline: false
-          },
+          }]),
           {
             name: 'New joiners',
             value: '**New characters can join the raid now** (added at the end of turn order).',
@@ -566,9 +566,15 @@ module.exports = {
 
       if (!isModInRaid && (!currentTurnParticipant || !isMyTurn)) {
         const timerSuffix = isExpeditionRaid ? '' : (currentTurnIsKO ? ' You have 1 minute.' : ' You have 1 minute to roll.');
+        const cmdRetreat = isExpeditionRaid && getExploreCommandId()
+          ? chatInputApplicationCommandMention('explore', 'retreat', getExploreCommandId())
+          : null;
+        const koInstruction = isExpeditionRaid
+          ? `KO'd — please use a fairy with </item:1463789335626125378>. To escape, the party retreats together with ${cmdRetreat || '`/explore retreat`'}.`
+          : `KO'd — please use a fairy with </item:1463789335626125378> or leave with </raid:1470659276287774734> raidid, charactername, action: Leave raid.`;
         const whoseTurnBody = currentTurnParticipant
           ? currentTurnIsKO
-            ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with </item:1463789335626125378> or leave with </raid:1470659276287774734> raidid, charactername, action: Leave raid).${timerSuffix}`
+            ? `It's **${currentTurnParticipant.name}**'s turn (${koInstruction}).${timerSuffix}`
             : `It's **${currentTurnParticipant.name}**'s turn.${timerSuffix} Use </raid:1470659276287774734> to take your turn.`
           : 'No valid turn order.';
         const intro = !existingParticipant
@@ -628,8 +634,11 @@ module.exports = {
         const nextChar = await Character.findById(nextParticipant.characterId);
         const nextIsKO = nextChar?.ko ?? false;
         const nextIsExpedition = !!turnResult.raidData?.expeditionId;
+        const nextCmdRetreat = nextIsExpedition && getExploreCommandId()
+          ? chatInputApplicationCommandMention('explore', 'retreat', getExploreCommandId())
+          : null;
         const nextTurnDesc = nextIsKO
-          ? `**${nextParticipant.name}** — you're knocked out.\n\nPlease use a fairy with </item:1463789335626125378>.\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).${nextIsExpedition ? '\n\n' : '\n\nYou have 1 minute.\n\n'}**New characters can join the raid now** (added at the end of turn order).`
+          ? `**${nextParticipant.name}** — you're knocked out.\n\nPlease use a fairy with </item:1463789335626125378>.${nextIsExpedition ? `\n\nTo escape, the party retreats together with ${nextCmdRetreat || '`/explore retreat`'} (id, character).` : '\n\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).'}${nextIsExpedition ? '\n\n' : '\n\nYou have 1 minute.\n\n'}**New characters can join the raid now** (added at the end of turn order).`
           : (nextIsExpedition ? `**${nextParticipant.name}** — use </raid:1470659276287774734> to take your turn.` : `**${nextParticipant.name}** — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`);
         const nextTurnEmbed = new EmbedBuilder()
           .setColor(nextIsKO ? '#FF0000' : '#00FF00')
@@ -780,17 +789,37 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     color = '#FFFF00'; // Yellow for no damage
   }
 
+  // For expedition raids, fetch party for hearts; we'll build status fields after
+  let expeditionPartyHearts = null;
+  let expeditionPartyStamina = null;
+  if (raidData.expeditionId) {
+    try {
+      const party = await Party.findActiveByPartyId(raidData.expeditionId);
+      if (party) {
+        expeditionPartyHearts = typeof party.totalHearts === 'number' ? party.totalHearts : party.characters?.reduce((s, c) => s + (c.currentHearts ?? 0), 0) ?? 0;
+        expeditionPartyStamina = typeof party.totalStamina === 'number' ? party.totalStamina : party.characters?.reduce((s, c) => s + (c.currentStamina ?? 0), 0) ?? 0;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   const turnFields = [
     {
       name: `__${monster.name} Status__`,
       value: `💙 **Hearts:** ${monster.currentHearts}/${monster.maxHearts}`,
       inline: false
     },
-    {
-      name: `__${character.name} Status__`,
-      value: `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}`,
-      inline: false
-    },
+    ...(raidData.expeditionId && expeditionPartyHearts != null
+      ? [{
+          name: '❤️ __Party hearts__',
+          value: `**${expeditionPartyHearts}** ❤ · **${expeditionPartyStamina ?? 0}** 🟩 stamina\n_${character.name}: ${battleResult.playerHearts.current}/${battleResult.playerHearts.max} ${battleResult.playerHearts.current <= 0 ? '(KO\'d)' : ''}_`,
+          inline: false
+        }]
+      : [{
+          name: `__${character.name} Status__`,
+          value: `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}`,
+          inline: false
+        }]
+    ),
     {
       name: `__Damage Dealt__`,
       value: `⚔️ **${battleResult.hearts}** hearts`,
@@ -832,22 +861,8 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     })
     .setTimestamp();
 
-  // For exploration raids: add party hearts/stamina and escape info
+  // For exploration raids: add escape info (party hearts already in main status above)
   if (raidData.expeditionId) {
-    try {
-      const party = await Party.findActiveByPartyId(raidData.expeditionId);
-      if (party && (typeof party.totalHearts === 'number' || typeof party.totalStamina === 'number')) {
-        const hearts = typeof party.totalHearts === 'number' ? party.totalHearts : 0;
-        const stamina = typeof party.totalStamina === 'number' ? party.totalStamina : 0;
-        embed.addFields({
-          name: '❤️ __Party hearts__',
-          value: `**${hearts}** ❤ · **${stamina}** 🟩 stamina`,
-          inline: true
-        });
-      }
-    } catch (e) {
-      // ignore
-    }
     const exploreCmdId = getExploreCommandId();
     const isGrottoRaid = !!raidData.grottoId;
     const cmdRetreat = typeof exploreCmdId === 'string' && exploreCmdId

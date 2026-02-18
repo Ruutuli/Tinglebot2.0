@@ -519,7 +519,8 @@ function getExplorationPartyCharacterFields(party) {
 // ------------------- Function: addExplorationStandardFields -------------------
 // Appends standard exploration embed fields (Expedition ID, Location, Party Hearts/Stamina, optional Next up + Commands).
 // showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
-const EXPLORE_DASHBOARD_BASE = "https://tinglebot.xyz/explore";
+// Base URL matches explore.js and dashboard: use DASHBOARD_URL/APP_URL so test and production both resolve correctly.
+const EXPLORE_DASHBOARD_BASE = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore`;
 
 const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
@@ -529,7 +530,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
   { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
   ...extraFields,
-  ...(ruinRestRecovered > 0 ? [{ name: "📋 **__Ruin rest__**", value: `Known ruin-rest spot: +${ruinRestRecovered} stamina.`, inline: false }] : []),
+  ...(ruinRestRecovered > 0 ? [{ name: "🟩 **__Ruin rest__**", value: `Recognized a safe spot from your earlier ruins exploration here — **+${ruinRestRecovered} stamina** recovered this roll.`, inline: false }] : []),
   { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
  ];
@@ -558,6 +559,9 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    if (isAtStartQuadrant) {
     commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
    }
+   if ((party?.totalStamina ?? 0) === 0) {
+    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
+   }
   } else {
    const cmdItem = `</explore item:${cmdId}>`;
    commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem}`;
@@ -566,6 +570,9 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
     commandsValue += `\n\n**Revisit discoveries** (monster camps, grottos): ${cmdDiscovery}`;
    }
    commandsValue += `\n\n_Use id: \`${expId || "—"}\` and charactername: **${nextName}** for all commands._`;
+   if ((party?.totalStamina ?? 0) === 0) {
+    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
+   }
   }
   if (!commandsLast) {
    fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
@@ -601,6 +608,9 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   if (isAtStartQuadrant) {
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
+  if ((party?.totalStamina ?? 0) === 0) {
+   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (move, etc.), actions will **cost hearts** instead. Use **Camp** or **Item** to recover.`;
+  }
  } else if (showFairyRollOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
   commandsValue += `**A fairy appeared — use ${cmdRoll} or ${cmdItem} to continue exploring.**`;
@@ -622,12 +632,18 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   if (isAtStartQuadrant) {
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
+  if ((party?.totalStamina ?? 0) === 0) {
+   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
+  }
  } else {
   const cmdItem = `</explore item:${cmdId}>`;
   commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
   if (hasDiscoveriesInQuadrant) {
    const cmdDiscovery = `</explore discovery:${cmdId}>`;
    commandsValue += `\n\nYou can also revisit monster camps or grottos in this quadrant with ${cmdDiscovery} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+  }
+  if ((party?.totalStamina ?? 0) === 0) {
+   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
   }
  }
  embed.addFields({ name: "📋 **__Commands__**", value: commandsValue, inline: false });

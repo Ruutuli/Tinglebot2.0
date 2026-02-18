@@ -1602,13 +1602,15 @@ async function raidTurnSkip(client, data = {}) {
       }
     }
     const nextParticipant = raidAfter ? raidAfter.getCurrentTurnParticipant() : null;
+    const isExpeditionRaid = !!raidAfter?.expeditionId;
     let nextTurnLine = '';
     if (nextParticipant) {
       const nextChar = await Character.findById(nextParticipant.characterId);
       const nextIsKO = nextChar?.ko ?? false;
-      nextTurnLine = nextIsKO
-        ? `\n\n💀 **KO'd — it's your turn (**${nextParticipant.name}**).**\n\nPlease use a fairy with </item:1463789335626125378>.\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).\n\nYou have 1 minute.\n\n**New characters can join the raid now** (added at the end of turn order).`
-        : `\n\nIt's your turn (**${nextParticipant.name}**) — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`;
+      const koMsg = isExpeditionRaid
+        ? `\n\n💀 **KO'd — it's your turn (**${nextParticipant.name}**).**\n\nPlease use a fairy with </item:1463789335626125378>. To escape, the party retreats together with \`/explore retreat\`.\n\n**New characters can join the raid now** (added at the end of turn order).`
+        : `\n\n💀 **KO'd — it's your turn (**${nextParticipant.name}**).**\n\nPlease use a fairy with </item:1463789335626125378>.\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).\n\nYou have 1 minute.\n\n**New characters can join the raid now** (added at the end of turn order).`;
+      nextTurnLine = nextIsKO ? koMsg : `\n\nIt's your turn (**${nextParticipant.name}**) — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`;
     } else {
       nextTurnLine = '\n\nNext up: No one else in the turn order (raid may be empty or everyone else is KO\'d).';
     }

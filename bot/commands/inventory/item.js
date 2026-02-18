@@ -25,6 +25,7 @@ const { getJobPerk } = require('../../modules/jobsModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { createDebuffEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
+const { advanceRaidTurnOnItemUse } = require('../../modules/raidModule');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
 const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = require('../../modules/elixirModule');
@@ -1283,6 +1284,14 @@ module.exports = {
         }
         await removeItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Used for healing');
 
+        // Using an item in a raid counts as a turn — advance raid turn if this character is current
+        try {
+          await advanceRaidTurnOnItemUse(character._id);
+        } catch (raidErr) {
+          // Non-fatal: log and continue; healing succeeded
+          console.warn('[item.js] advanceRaidTurnOnItemUse:', raidErr?.message || raidErr);
+        }
+
         const successEmbed = new EmbedBuilder()
           .setColor('#59A914')
           .setTitle('💫 Revival Successful!')
@@ -1358,6 +1367,14 @@ module.exports = {
         });
       }
       await removeItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Used for healing');
+
+      // Using an item in a raid counts as a turn — advance raid turn if this character is current
+      try {
+        await advanceRaidTurnOnItemUse(character._id);
+      } catch (raidErr) {
+        // Non-fatal: log and continue; healing succeeded
+        console.warn('[item.js] advanceRaidTurnOnItemUse:', raidErr?.message || raidErr);
+      }
 
       // Build description with actual recovered amounts
       const heartsDisplay = healAmount > 0 ? `❤️ +${healAmount}` : '';

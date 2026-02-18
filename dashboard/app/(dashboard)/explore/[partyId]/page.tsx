@@ -1453,6 +1453,34 @@ export default function ExplorePartyPage() {
             </div>
           </header>
 
+          {party.status === "started" && party.members.length > 0 && (
+            <section className="mb-4 rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 px-4 py-3 shadow-inner" aria-label="Current turn order">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                Current turn order
+              </p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {party.members.map((m, index) => {
+                  const isCurrent = (party.currentTurn ?? 0) === index;
+                  return (
+                    <span key={m.characterId ?? index} className="inline-flex items-center gap-1.5">
+                      {index > 0 && <span className="text-[var(--totk-dark-ocher)]/70" aria-hidden>→</span>}
+                      <span
+                        className={
+                          isCurrent
+                            ? "rounded-md border border-[var(--totk-light-green)]/60 bg-[var(--totk-light-green)]/20 px-2 py-0.5 text-sm font-semibold text-[var(--totk-ivory)]"
+                            : "text-sm text-[var(--totk-grey-200)]"
+                        }
+                      >
+                        {m.name ?? "—"}
+                        {isCurrent && <span className="ml-1 text-[10px] font-normal text-[var(--totk-light-green)]">(current)</span>}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {party.status === "completed" && (
             <section className="mb-6 rounded-2xl border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-dark-ocher)]/20 px-5 py-4 shadow-lg sm:px-6 sm:py-5" role="status" aria-live="polite">
               <div className="flex flex-wrap items-center justify-center gap-3 text-center">
@@ -2494,7 +2522,7 @@ export default function ExplorePartyPage() {
                   <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
                     <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Quadrant" : "Current quadrant"}</span>
                     <span className="mt-0.5 block truncate font-semibold text-[var(--totk-ivory)] text-sm">
-                      {party.quadrant ?? "—"} · {party.square ?? "—"}
+                      {party.square ?? "—"} {party.quadrant ?? "—"}
                     </span>
                   </div>
                   <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
@@ -2504,14 +2532,14 @@ export default function ExplorePartyPage() {
                     </span>
                   </div>
                   <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party hearts</span>
+                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party Hearts</span>
                     <span className="mt-0.5 flex items-center gap-1 font-semibold text-[var(--totk-ivory)] text-sm">
                       <i className="fa-solid fa-heart shrink-0 text-[10px] text-red-400/90" aria-hidden />
                       {party.totalHearts}
                     </span>
                   </div>
                   <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party stamina</span>
+                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party Stamina</span>
                     <span className="mt-0.5 flex items-center gap-1 font-semibold text-[var(--totk-ivory)] text-sm">
                       <i className="fa-solid fa-bolt shrink-0 text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />
                       {party.totalStamina}

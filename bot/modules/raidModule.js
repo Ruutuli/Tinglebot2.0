@@ -784,25 +784,30 @@ async function scheduleRaidTurnSkip(raidId) {
 
 // ---- Function: notifyExpeditionRaidOver ----
 // When a raid was triggered from an expedition: update party progressLog and send "continue expedition" to thread
+// For result === 'fled' (retreat): do NOT fetch/save party — explore retreat handler owns that save to avoid double-dip on stamina.
 async function notifyExpeditionRaidOver(raid, client, result) {
   if (!raid.expeditionId || !client) return;
   try {
-    const Party = require('@/models/PartyModel');
-    const party = await Party.findActiveByPartyId(raid.expeditionId);
-    if (!party) return;
-    if (!party.progressLog) party.progressLog = [];
-    const msg = result === 'defeated'
-      ? `Raid defeated ${raid.monster?.name || 'monster'}! Continue the expedition.`
-      : result === 'fled'
-        ? `The party escaped from ${raid.monster?.name || 'the monster'}! Continue the expedition.`
+    if (result !== 'fled') {
+      const Party = require('@/models/PartyModel');
+      const party = await Party.findActiveByPartyId(raid.expeditionId);
+      if (!party) return;
+      if (!party.progressLog) party.progressLog = [];
+      const msg = result === 'defeated'
+        ? `Raid defeated ${raid.monster?.name || 'monster'}! Continue the expedition.`
         : `Raid timed out. Continue the expedition.`;
-    party.progressLog.push({
-      at: new Date(),
-      characterName: 'Raid',
-      outcome: 'raid_over',
-      message: msg,
-    });
-    await party.save();
+      party.progressLog.push({
+        at: new Date(),
+        characterName: 'Raid',
+        outcome: 'raid_over',
+        message: msg,
+      });
+      // Advance turn so the next party member can /explore roll (we didn't advance when raid started)
+      if (party.characters?.length > 0) {
+        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      }
+      await party.save();
+    }
 
     const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
     const desc = result === 'defeated'
@@ -835,6 +840,26 @@ async function cancelRaidTurnSkip(raidId) {
   const scheduler = require('@/utils/scheduler');
   const n = await scheduler.cancelJob(RAID_TURN_SKIP_JOB_NAME, { raidId });
   if (n > 0) logger.info('RAID', `Cancelled ${n} turn-skip job(s) for raid ${raidId}`);
+}
+
+// ---- Function: advanceRaidTurnOnItemUse ----
+// When a character uses a healing item (e.g. Fairy) during their raid turn, advance the raid turn.
+// Called from /item command after successful healing so items count as a turn.
+async function advanceRaidTurnOnItemUse(characterId) {
+  if (!characterId) return;
+  const charIdStr = characterId.toString();
+  const raids = await Raid.find({ status: 'active', 'participants.characterId': characterId });
+  for (const raid of raids) {
+    const current = raid.getCurrentTurnParticipant();
+    if (current && current.characterId && current.characterId.toString() === charIdStr) {
+      if (current.isModCharacter) return; // Mod characters don't affect turn order
+      await cancelRaidTurnSkip(raid.raidId);
+      await raid.advanceTurn();
+      await scheduleRaidTurnSkip(raid.raidId);
+      logger.info('RAID', `Item use by ${current.name} advanced raid ${raid.raidId} turn`);
+      break;
+    }
+  }
 }
 
 // ---- Function: endExplorationRaidAsRetreat ----
@@ -883,10 +908,15 @@ async function closeRaidsForExpedition(expeditionId) {
 
 // ---- Function: leaveRaid ----
 // Player voluntarily leaves; monster HP is unchanged (no revert). Eligible for loot if 1+ damage or 3+ rounds.
+// Expedition raids: leaving is not allowed; the whole party must retreat together via /explore retreat.
 async function leaveRaid(character, raidId, options = {}) {
   const raid = await Raid.findOne({ raidId });
   if (!raid) throw new Error('Raid not found');
   if (raid.status !== 'active') throw new Error('Raid is not active');
+  if (raid.expeditionId) {
+    const cmdRetreat = `</explore retreat:${getExploreCommandId()}>`;
+    throw new Error(`You cannot leave an expedition raid individually. The whole party retreats together — use ${cmdRetreat} with id \`${raid.expeditionId}\` and your character (costs 1 stamina per attempt, not guaranteed).`);
+  }
   const participants = raid.participants || [];
   const participant = participants.find(p => p.characterId.toString() === character._id.toString());
   if (!participant) throw new Error('Character is not in this raid');
@@ -1093,8 +1123,13 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
             (c) => c._id && character._id && c._id.toString() === character._id.toString()
           );
           if (idx !== -1) {
-            party.characters[idx].currentHearts = character.currentHearts ?? party.characters[idx].currentHearts;
-            party.characters[idx].currentStamina = character.currentStamina ?? party.characters[idx].currentStamina;
+            // Use battleResult as source of truth (character object may be stale)
+            const heartsAfter = typeof battleResult?.playerHearts?.current === 'number'
+              ? battleResult.playerHearts.current
+              : (character.currentHearts ?? party.characters[idx].currentHearts);
+            const staminaAfter = character.currentStamina ?? party.characters[idx].currentStamina;
+            party.characters[idx].currentHearts = heartsAfter;
+            party.characters[idx].currentStamina = staminaAfter;
             party.markModified('characters');
             party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
             party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
@@ -1255,12 +1290,13 @@ async function createRaidThread(interaction, raid) {
       })
     );
 
-    // Create the initial thread message - use universal raid role for all villages; @ in content, rest in embed
-    const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
+    // Create the initial thread message - use universal raid role for village raids; skip @ for expedition raids (party-only)
+    const isExpeditionRaid = !!raid.expeditionId;
+    const roleMention = isExpeditionRaid ? null : `<@&${UNIVERSAL_RAID_ROLE}>`;
     const raidAnnounceEmbed = await createRaidEmbed(raid, raid.monster?.image);
 
-    // Send embed to the thread (mention in content so it pings)
-    await thread.send({ content: roleMention, embeds: [raidAnnounceEmbed] });
+    // Send embed to the thread (mention in content so it pings — only for village raids)
+    await thread.send({ content: roleMention || undefined, embeds: [raidAnnounceEmbed] });
 
     // Update raid with thread information
     raid.threadId = thread.id;
@@ -1477,6 +1513,31 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
           guild: interaction.guild
         });
         console.log(`[raidModule.js]: ✅ Successfully auto-added ${character.name} to raid ${raidId}`);
+
+        // For expedition raids: auto-add all other party members to turn order so "it's your turn" mentions work
+        if (expeditionId && raidData.expeditionId) {
+          const Party = require('@/models/PartyModel');
+          const Character = require('@/models/CharacterModel');
+          const party = await Party.findActiveByPartyId(expeditionId);
+          if (party?.characters?.length > 1) {
+            const triggerIdx = party.characters.findIndex(c => c._id && character._id && c._id.toString() === character._id.toString());
+            if (triggerIdx >= 0) {
+              const n = party.characters.length;
+              for (let i = 1; i < n; i++) {
+                const slot = party.characters[(triggerIdx + i) % n];
+                if (!slot?._id) continue;
+                try {
+                  const charDoc = await Character.findById(slot._id);
+                  if (!charDoc) continue;
+                  await joinRaid(charDoc, raidId, { client: interaction.client, guild: interaction.guild });
+                  console.log(`[raidModule.js]: ✅ Auto-added expedition member ${charDoc.name} to raid ${raidId}`);
+                } catch (err) {
+                  console.warn(`[raidModule.js]: ⚠️ Could not auto-add ${slot.name} to expedition raid: ${err.message}`);
+                }
+              }
+            }
+          }
+        }
       } catch (joinError) {
         console.warn(`[raidModule.js]: ⚠️ Failed to auto-add character ${character.name} to raid: ${joinError.message}`);
         // Don't fail the raid creation if auto-join fails
@@ -1545,10 +1606,11 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       console.log(`[raidModule.js]: 🧵 Thread created with ID: ${thread.id}`);
       console.log(`[raidModule.js]: 📝 Thread name: ${thread.name}`);
       
-      // Send initial thread message: @ in content, nice embed with clickable raid
-      const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
+      // Send initial thread message: @ raid role for village raids only; expedition raids = party-only, no @
+      const isExpeditionRaid = !!raidData.expeditionId;
+      const roleMention = isExpeditionRaid ? null : `<@&${UNIVERSAL_RAID_ROLE}>`;
       const threadRaidEmbed = await createRaidEmbed(raidData, raidData.monster?.image);
-      await thread.send({ content: roleMention, embeds: [threadRaidEmbed] });
+      await thread.send({ content: roleMention || undefined, embeds: [threadRaidEmbed] });
       console.log(`[raidModule.js]: 💬 Thread message sent`);
 
       // Update raid data with thread information
@@ -1562,15 +1624,16 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       console.warn(`[raidModule.js]: ⚠️ This may be because the channel doesn't support threads (DM, etc.)`);
       console.warn(`[raidModule.js]: ⚠️ Raid will continue without a thread - participants can use the raid ID directly`);
       
-      // Send the raid information as a follow-up: @ in content, embed for raid info (nice embed + clickable raid)
-      const roleMention = `<@&${UNIVERSAL_RAID_ROLE}>`;
+      // Send the raid information as a follow-up: @ raid role for village raids only; expedition = no @
+      const isExpeditionRaidFallback = !!raidData.expeditionId;
+      const roleMentionFallback = isExpeditionRaidFallback ? null : `<@&${UNIVERSAL_RAID_ROLE}>`;
       const raidAnnounceEmbed = await createRaidEmbed(raidData, raidData.monster?.image);
       raidAnnounceEmbed.addFields({
         name: '📌 Note',
         value: '*No thread was created in this channel. Use the Raid ID above with </raid:1470659276287774734> to participate!*',
         inline: false
       });
-      const payload = { content: roleMention, embeds: [raidAnnounceEmbed] };
+      const payload = { content: roleMentionFallback || undefined, embeds: [raidAnnounceEmbed] };
 
       if (interaction && typeof interaction.followUp === 'function') {
         await interaction.followUp(payload);
@@ -1637,6 +1700,7 @@ module.exports = {
   calculateRaidDuration,
   scheduleRaidTurnSkip,
   cancelRaidTurnSkip,
+  advanceRaidTurnOnItemUse,
   applyPartySizeScalingToRaid,
   RAID_EXPIRATION_JOB_NAME,
   RAID_TURN_SKIP_JOB_NAME
