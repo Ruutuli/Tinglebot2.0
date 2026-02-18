@@ -520,8 +520,9 @@ async function initializeClient() {
         await postUnpostedQuestsOnStartup(client);
         
         // Check for expired raids on startup
-        const { checkRaidExpiration } = require('./modules/raidModule');
+        const { checkRaidExpiration, closeRaidsForExpedition } = require('./modules/raidModule');
         const Raid = require('./models/RaidModel');
+        const Party = require('./models/PartyModel');
         try {
           const activeRaids = await Raid.find({ status: 'active' });
           let expiredCount = 0;
@@ -544,6 +545,31 @@ async function initializeClient() {
           }
         } catch (err) {
           logger.error('SYSTEM', `Error checking expired raids on startup: ${err.message}`);
+        }
+
+        // Clean up orphaned expedition raids (expedition ended but raid never closed)
+        try {
+          const expeditionRaids = await Raid.find({ status: 'active', expeditionId: { $ne: null, $exists: true } });
+          const expeditionIdsToClose = new Set();
+          for (const raid of expeditionRaids) {
+            const party = await Party.findOne({ partyId: raid.expeditionId });
+            if (!party || party.status === 'completed' || party.status === 'cancelled') {
+              expeditionIdsToClose.add(raid.expeditionId);
+            }
+          }
+          for (const expeditionId of expeditionIdsToClose) {
+            try {
+              await closeRaidsForExpedition(expeditionId);
+              logger.info('SYSTEM', `Closed orphaned expedition raids for ${expeditionId}`);
+            } catch (err) {
+              logger.error('SYSTEM', `Failed to close orphaned raids for expedition ${expeditionId}: ${err.message}`);
+            }
+          }
+          if (expeditionIdsToClose.size > 0) {
+            logger.info('SYSTEM', `Cleaned up ${expeditionIdsToClose.size} orphaned expedition(s) on startup`);
+          }
+        } catch (err) {
+          logger.error('SYSTEM', `Error cleaning up orphaned expedition raids on startup: ${err.message}`);
         }
         
         // Check blood moon status

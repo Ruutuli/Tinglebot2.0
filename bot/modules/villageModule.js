@@ -342,7 +342,7 @@ async function damageVillage(villageName, damageAmount, damageCause = null) {
             }
         } else {
             // Resource loss on every damage event (when HP > 0)
-            // Formula: material_loss = max(1, floor(material.current × damage_percentage)) per material
+            // Formula: material_loss = floor(material.current × damage_percentage) per material (proportional, no minimum)
             // All materials with stock take proportional damage (not just one random material)
             // Formula: token_loss = actual_HP_lost × TOKENS_PER_HP (handled above)
             
@@ -363,13 +363,15 @@ async function damageVillage(villageName, damageAmount, damageCause = null) {
                     : 0;
                 if (materialCurrent <= 0) continue;
                 
-                // material_loss = max(1, floor(material_current × damage_percentage))
-                const removedAmount = Math.max(1, Math.floor(materialCurrent * damagePercentage));
-                const newCurrent = Math.max(0, materialCurrent - removedAmount);
-                village.materials.set(materialKey, { ...materialData, current: newCurrent });
-                removedResources.push({ type: 'Material', name: materialKey, amount: removedAmount });
-                anyMaterialLost = true;
-                console.log(`[damageVillage] Removed ${removedAmount} of "${materialKey}" from "${villageName}" (had ${materialCurrent}, damagePercentage: ${(damagePercentage * 100).toFixed(2)}%).`);
+                // material_loss = floor(material_current × damage_percentage) — proportional only, no minimum
+                const removedAmount = Math.floor(materialCurrent * damagePercentage);
+                if (removedAmount > 0) {
+                    const newCurrent = Math.max(0, materialCurrent - removedAmount);
+                    village.materials.set(materialKey, { ...materialData, current: newCurrent });
+                    removedResources.push({ type: 'Material', name: materialKey, amount: removedAmount });
+                    anyMaterialLost = true;
+                    console.log(`[damageVillage] Removed ${removedAmount} of "${materialKey}" from "${villageName}" (had ${materialCurrent}, damagePercentage: ${(damagePercentage * 100).toFixed(2)}%).`);
+                }
             }
             if (anyMaterialLost) {
                 village.markModified('materials');

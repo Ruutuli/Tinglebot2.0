@@ -29,7 +29,7 @@ const { calculateFinalValue, getMonstersByRegion, getExplorationMonsterFromList,
 const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const { generateVictoryMessage, generateDamageMessage, generateDefenseBuffMessage, generateAttackBuffMessage, generateFinalOutcomeMessage, generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
 const { handleKO, healKoCharacter, useHearts } = require("../../modules/characterStatsModule.js");
-const { triggerRaid, endExplorationRaidAsRetreat } = require("../../modules/raidModule.js");
+const { triggerRaid, endExplorationRaidAsRetreat, closeRaidsForExpedition } = require("../../modules/raidModule.js");
 const { startWave, joinWave } = require("../../modules/waveModule.js");
 const MapModule = require('@/modules/mapModule.js');
 const { syncPartyMemberStats, pushProgressLog, hasDiscoveriesInQuadrant, updateDiscoveryGrottoStatus, markGrottoCleared } = require("../../modules/exploreModule.js");
@@ -1047,6 +1047,8 @@ async function handleExpeditionFailed(party, interaction) {
  if (EXPLORATION_TESTING_MODE) {
   await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[explore.js] Grotto delete on fail: ${err?.message}`));
  }
+
+ await closeRaidsForExpedition(party.partyId);
 
  party.square = start.square;
  party.quadrant = start.quadrant;
@@ -5473,6 +5475,8 @@ module.exports = {
     if (EXPLORATION_TESTING_MODE) {
      pushProgressLog(party, character.name, "end_test_reset", "Testing mode: No changes were saved.", undefined, undefined);
     }
+
+    await closeRaidsForExpedition(expeditionId);
 
     party.status = "completed";
     await party.save();

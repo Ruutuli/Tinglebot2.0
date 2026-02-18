@@ -853,6 +853,34 @@ async function endExplorationRaidAsRetreat(raid, client) {
   }
 }
 
+// ---- Function: closeRaidsForExpedition ----
+// Closes any active raids linked to an expedition when the expedition ends (party KO or return home).
+// Uses direct update (no KO). Does not notify expedition—caller handles that.
+async function closeRaidsForExpedition(expeditionId) {
+  if (!expeditionId) return;
+  try {
+    const raids = await Raid.find({ expeditionId, status: 'active' });
+    for (const raid of raids) {
+      try {
+        await cancelRaidTurnSkip(raid.raidId);
+        try {
+          const scheduler = require('@/utils/scheduler');
+          await scheduler.cancelJob(RAID_EXPIRATION_JOB_NAME, { raidId: raid.raidId });
+        } catch (cancelErr) {
+          // Ignore—expedition raids typically have no expiration job
+        }
+        await raid.completeRaid('fled');
+        logger.info('RAID', `Closed expedition raid ${raid.raidId} for expedition ${expeditionId}`);
+      } catch (raidErr) {
+        logger.error('RAID', `Failed to close raid ${raid.raidId} for expedition ${expeditionId}: ${raidErr.message}`);
+      }
+    }
+  } catch (err) {
+    logger.error('RAID', `closeRaidsForExpedition: ${err.message}`);
+    throw err;
+  }
+}
+
 // ---- Function: leaveRaid ----
 // Player voluntarily leaves; monster HP is unchanged (no revert). Eligible for loot if 1+ damage or 3+ rounds.
 async function leaveRaid(character, raidId, options = {}) {
@@ -1605,6 +1633,7 @@ module.exports = {
   createRaidThread,
   triggerRaid,
   endExplorationRaidAsRetreat,
+  closeRaidsForExpedition,
   calculateRaidDuration,
   scheduleRaidTurnSkip,
   cancelRaidTurnSkip,

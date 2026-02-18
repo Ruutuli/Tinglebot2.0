@@ -1,7 +1,191 @@
 "use client";
 
+// ============================================================================
+// ------------------- Imports -------------------
+// ============================================================================
+
+import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+
+// ============================================================================
+// ------------------- Constants -------------------
+// ============================================================================
+
+const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const LEAFLET_JS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+const MAP_BACKGROUND = "#1a1a1a";
+
+const MAP_PAGE_WRAPPER_STYLE: CSSProperties = {
+  position: "relative",
+  height: "100vh",
+  minHeight: "100vh",
+  width: "100%",
+  overflow: "hidden",
+};
+
+const QUADRANT_LEGEND_ITEMS: ReadonlyArray<{ color: string; label: string; title: string }> = [
+  { color: MAP_BACKGROUND, label: "Inaccessible", title: "Blocked; cannot be explored" },
+  { color: "#b91c1c", label: "Unexplored", title: "Not yet visited; 2 stamina to enter" },
+  { color: "#ca8a04", label: "Explored", title: "Visited; 1 stamina to continue" },
+  { color: "#15803d", label: "Secured", title: "Secured path; 0 stamina" },
+] as const;
+
+const VILLAGE_BUTTONS: ReadonlyArray<{ grid: string; name: string; emoji: string; className: string }> = [
+  { grid: "H5", name: "Rudania", emoji: "🔥", className: "fire-village" },
+  { grid: "H8", name: "Inariko", emoji: "💧", className: "water-village" },
+  { grid: "F10", name: "Vhintl", emoji: "🍃", className: "leaf-village" },
+] as const;
+
+const PIN_CATEGORIES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "my-pins", label: "My Pins" },
+  { value: "homes", label: "Homes" },
+  { value: "farms", label: "Farms" },
+  { value: "shops", label: "Shops" },
+  { value: "points-of-interest", label: "Points of Interest" },
+] as const;
+
+const LOADING_STEPS: ReadonlyArray<{ id: string; icon: string; iconClass?: string; label: string }> = [
+  { id: "step-1", icon: "fa-cog", iconClass: "fa-spin", label: "Initializing system..." },
+  { id: "step-2", icon: "fa-map", label: "Loading map data..." },
+  { id: "step-3", icon: "fa-layer-group", label: "Preparing layers..." },
+  { id: "step-4", icon: "fa-check", label: "Ready to explore!" },
+] as const;
+
+// ============================================================================
+// ------------------- Types -------------------
+// ============================================================================
+
+interface MapWindow extends Window {
+  initializeMap?: () => Promise<void>;
+  mapEngine?: { cleanup?: () => void };
+  toggleSection?: (sectionId: string) => void;
+  zoomIn?: () => void;
+  zoomOut?: () => void;
+  resetZoom?: () => void;
+  jumpToVillage?: (grid: string, name: string) => void;
+  toggleAddPinMode?: () => void;
+  toggleSidebar?: () => void;
+  toggleExplorationMode?: () => void;
+  setExplorationId?: () => void;
+  togglePathDrawing?: () => void;
+  finishPathDrawing?: () => void;
+}
+
+// ============================================================================
+// ------------------- Pure helpers -------------------
+// ============================================================================
+
+// ------------------- getMapWindow ------------------
+function getMapWindow(): MapWindow {
+  return window as unknown as MapWindow;
+}
+
+// ------------------- cx ------------------
+function cx(...parts: (string | boolean | undefined | null)[]): string {
+  return parts.filter((p): p is string => typeof p === "string").join(" ");
+}
+
+// ------------------- mapOnClick ------------------
+function mapOnClick(method: keyof MapWindow, ...args: unknown[]): () => void {
+  return () => {
+    const fn = getMapWindow()[method];
+    if (typeof fn === "function") (fn as (...a: unknown[]) => void)(...args);
+  };
+}
+
+// ------------------- cleanupMapEngine ------------------
+function cleanupMapEngine(): void {
+  getMapWindow().mapEngine?.cleanup?.();
+}
+
+// ------------------- getMapScriptUrls ------------------
+function getMapScriptUrls(): string[] {
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+  return [
+    LEAFLET_JS_URL,
+    `${base}/js/map-constants.js`,
+    `${base}/js/map-metadata.js`,
+    `${base}/js/map-geometry.js`,
+    `${base}/js/map-manifest.js`,
+    `${base}/js/map-layers.js`,
+    `${base}/js/map-loader.js`,
+    `${base}/js/map-toggles.js`,
+    `${base}/js/map-engine.js`,
+    `${base}/js/map-metrics.js`,
+    `${base}/js/map.js`,
+  ];
+}
+
+// ------------------- setupMapScripts ------------------
+// Loads map scripts in order, then initializes the map. Returns cleanup fn.
+function setupMapScripts(onScriptError: (src: string) => void): () => void {
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
+  const linkLeaflet = document.createElement("link");
+  linkLeaflet.rel = "stylesheet";
+  linkLeaflet.href = LEAFLET_CSS_URL;
+  document.head.appendChild(linkLeaflet);
+
+  const linkMapCss = document.createElement("link");
+  linkMapCss.rel = "stylesheet";
+  linkMapCss.href = `${base}/css/map.css`;
+  document.head.appendChild(linkMapCss);
+
+  const scriptUrls = getMapScriptUrls();
+  let index = 0;
+
+  function loadNext(): void {
+    if (index >= scriptUrls.length) {
+      getMapWindow().initializeMap?.();
+      return;
+    }
+
+    const src = scriptUrls[index++];
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = false;
+    script.onload = loadNext;
+    script.onerror = () => {
+      onScriptError(src);
+      loadNext();
+    };
+    document.body.appendChild(script);
+  }
+
+  loadNext();
+
+  return cleanupMapEngine;
+}
+
+// ============================================================================
+// ------------------- Components -------------------
+// ============================================================================
+
+interface CollapsibleSectionProps {
+  sectionId: string;
+  icon: string;
+  title: string;
+  children: React.ReactNode;
+}
+
+function CollapsibleSection({ sectionId, icon, title, children }: CollapsibleSectionProps) {
+  return (
+    <div className={cx(sectionId, "collapsible-section")}>
+      <h3 className="section-header" onClick={mapOnClick("toggleSection", sectionId)}>
+        <i className={cx("fas", icon)} />
+        {title}
+        <i className="fas fa-chevron-down section-arrow" />
+      </h3>
+      <div className="section-content">{children}</div>
+    </div>
+  );
+}
+
+// ============================================================================
+// ------------------- Page -------------------
+// ============================================================================
 
 export default function MapPage() {
   const scriptsLoadedRef = useRef(false);
@@ -14,77 +198,23 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
-    if (scriptsLoadedRef.current) return;
+    const w = getMapWindow();
+
+    if (scriptsLoadedRef.current) {
+      w.initializeMap?.();
+      return cleanupMapEngine;
+    }
     scriptsLoadedRef.current = true;
 
-    const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+    const cleanup = setupMapScripts((src) => {
+      console.error("[map.tsx] ❌ Failed to load script:", src);
+    });
 
-    const linkLeaflet = document.createElement("link");
-    linkLeaflet.rel = "stylesheet";
-    linkLeaflet.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    document.head.appendChild(linkLeaflet);
-
-    const linkMapCss = document.createElement("link");
-    linkMapCss.rel = "stylesheet";
-    linkMapCss.href = `${base}/css/map.css`;
-    document.head.appendChild(linkMapCss);
-
-    const scriptOrder = [
-      "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
-      `${base}/js/map-constants.js`,
-      `${base}/js/map-metadata.js`,
-      `${base}/js/map-geometry.js`,
-      `${base}/js/map-manifest.js`,
-      `${base}/js/map-layers.js`,
-      `${base}/js/map-loader.js`,
-      `${base}/js/map-toggles.js`,
-      `${base}/js/map-engine.js`,
-      `${base}/js/map-metrics.js`,
-      `${base}/js/map.js`,
-    ];
-
-    let index = 0;
-
-    function loadNext() {
-      if (index >= scriptOrder.length) {
-        if (typeof (window as unknown as { initializeMap?: () => Promise<void> }).initializeMap === "function") {
-          (window as unknown as { initializeMap: () => Promise<void> }).initializeMap();
-        }
-        return;
-      }
-
-      const src = scriptOrder[index++];
-      const script = document.createElement("script");
-      script.src = src;
-      script.async = false;
-      script.onload = loadNext;
-      script.onerror = () => {
-        console.error("[map] Failed to load script:", src);
-        loadNext();
-      };
-      document.body.appendChild(script);
-    }
-
-    loadNext();
-
-    return () => {
-      if (typeof (window as unknown as { mapEngine?: { cleanup?: () => void } }).mapEngine?.cleanup === "function") {
-        (window as unknown as { mapEngine: { cleanup: () => void } }).mapEngine.cleanup();
-      }
-    };
+    return cleanup;
   }, []);
 
   return (
-    <div
-      className="map-page-wrapper"
-      style={{
-        position: "relative",
-        height: "100vh",
-        minHeight: "100vh",
-        width: "100%",
-        overflow: "hidden",
-      }}
-    >
+    <div className="map-page-wrapper" style={MAP_PAGE_WRAPPER_STYLE}>
       <div className="map-loading-overlay" id="map-loading-overlay">
         <div className="loading-container">
           <div className="loading-content">
@@ -102,28 +232,18 @@ export default function MapPage() {
               </div>
             </div>
             <div className="loading-steps" id="loading-steps">
-              <div className="loading-step active" id="step-1">
-                <i className="fas fa-cog fa-spin" />
-                <span>Initializing system...</span>
-              </div>
-              <div className="loading-step" id="step-2">
-                <i className="fas fa-map" />
-                <span>Loading map data...</span>
-              </div>
-              <div className="loading-step" id="step-3">
-                <i className="fas fa-layer-group" />
-                <span>Preparing layers...</span>
-              </div>
-              <div className="loading-step" id="step-4">
-                <i className="fas fa-check" />
-                <span>Ready to explore!</span>
-              </div>
+              {LOADING_STEPS.map((step, i) => (
+                <div key={step.id} className={cx("loading-step", i === 0 && "active")} id={step.id}>
+                  <i className={cx("fas", step.icon, step.iconClass)} />
+                  <span>{step.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      <div id="map" style={{ width: "100%", height: "100%", background: "#1a1a1a" }} />
+      <div id="map" style={{ width: "100%", height: "100%", background: MAP_BACKGROUND }} />
 
       <div className="side-ui">
         <div className="ui-content">
@@ -144,87 +264,50 @@ export default function MapPage() {
             </div>
           </div>
 
-          <div className="zoom-section collapsible-section">
-            <h3 className="section-header" onClick={() => (window as unknown as { toggleSection?: (s: string) => void }).toggleSection?.("zoom-section")}>
-              <i className="fas fa-search-plus" /> Zoom Controls
-              <i className="fas fa-chevron-down section-arrow" />
-            </h3>
-            <div className="section-content">
-              <div className="zoom-buttons">
-                <button type="button" className="zoom-btn zoom-in" onClick={() => (window as unknown as { zoomIn?: () => void }).zoomIn?.()} title="Zoom In">
-                  <i className="fas fa-plus" />
-                </button>
-                <button type="button" className="zoom-btn zoom-out" onClick={() => (window as unknown as { zoomOut?: () => void }).zoomOut?.()} title="Zoom Out">
-                  <i className="fas fa-minus" />
-                </button>
-                <button type="button" className="zoom-btn zoom-reset" onClick={() => (window as unknown as { resetZoom?: () => void }).resetZoom?.()} title="Reset Zoom">
-                  <i className="fas fa-home" />
-                </button>
-              </div>
-              <div className="village-nav">
-                <h4><i className="fas fa-map-marker-alt" /> Quick Village Access</h4>
-                <div className="village-buttons-horizontal">
-                  <button type="button" className="village-btn-compact fire-village" onClick={() => (window as unknown as { jumpToVillage?: (s: string, n: string) => void }).jumpToVillage?.("H5", "Rudania")} title="Jump to Rudania (H5)">
-                    <span className="village-emoji">🔥</span>
+          <CollapsibleSection sectionId="zoom-section" icon="fa-search-plus" title="Zoom Controls">
+            <div className="zoom-buttons">
+              <button type="button" className="zoom-btn zoom-in" onClick={mapOnClick("zoomIn")} title="Zoom In">
+                <i className="fas fa-plus" />
+              </button>
+              <button type="button" className="zoom-btn zoom-out" onClick={mapOnClick("zoomOut")} title="Zoom Out">
+                <i className="fas fa-minus" />
+              </button>
+              <button type="button" className="zoom-btn zoom-reset" onClick={mapOnClick("resetZoom")} title="Reset Zoom">
+                <i className="fas fa-home" />
+              </button>
+            </div>
+            <div className="village-nav">
+              <h4><i className="fas fa-map-marker-alt" /> Quick Village Access</h4>
+              <div className="village-buttons-horizontal">
+                {VILLAGE_BUTTONS.map((v) => (
+                  <button key={v.grid} type="button" className={cx("village-btn-compact", v.className)} onClick={mapOnClick("jumpToVillage", v.grid, v.name)} title={`Jump to ${v.name} (${v.grid})`}>
+                    <span className="village-emoji">{v.emoji}</span>
                   </button>
-                  <button type="button" className="village-btn-compact water-village" onClick={() => (window as unknown as { jumpToVillage?: (s: string, n: string) => void }).jumpToVillage?.("H8", "Inariko")} title="Jump to Inariko (H8)">
-                    <span className="village-emoji">💧</span>
-                  </button>
-                  <button type="button" className="village-btn-compact leaf-village" onClick={() => (window as unknown as { jumpToVillage?: (s: string, n: string) => void }).jumpToVillage?.("F10", "Vhintl")} title="Jump to Vhintl (F10)">
-                    <span className="village-emoji">🍃</span>
-                  </button>
-                </div>
+                ))}
               </div>
             </div>
-          </div>
+          </CollapsibleSection>
 
-          <div className="layer-controls-section collapsible-section">
-            <h3 className="section-header" onClick={() => (window as unknown as { toggleSection?: (s: string) => void }).toggleSection?.("layer-controls-section")}>
-              <i className="fas fa-layer-group" /> Map Layers
-              <i className="fas fa-chevron-down section-arrow" />
-            </h3>
-            <div className="section-content">
-              <div id="map-layer-toggles" />
-            </div>
-          </div>
+          <CollapsibleSection sectionId="layer-controls-section" icon="fa-layer-group" title="Map Layers">
+            <div id="map-layer-toggles" />
+          </CollapsibleSection>
 
-          <div className="quadrant-legend-section collapsible-section">
-            <h3 className="section-header" onClick={() => (window as unknown as { toggleSection?: (s: string) => void }).toggleSection?.("quadrant-legend-section")}>
-              <i className="fas fa-palette" /> Quadrant status
-              <i className="fas fa-chevron-down section-arrow" />
-            </h3>
-            <div className="section-content">
+          <CollapsibleSection sectionId="quadrant-legend-section" icon="fa-palette" title="Quadrant status">
               <div className="quadrant-legend">
-                <div className="quadrant-legend-item" title="Blocked; cannot be explored">
-                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#1a1a1a" }} />
-                  <span className="quadrant-legend-label">Inaccessible</span>
-                </div>
-                <div className="quadrant-legend-item" title="Not yet visited; 2 stamina to enter">
-                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#b91c1c" }} />
-                  <span className="quadrant-legend-label">Unexplored</span>
-                </div>
-                <div className="quadrant-legend-item" title="Visited; 1 stamina to continue">
-                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#ca8a04" }} />
-                  <span className="quadrant-legend-label">Explored</span>
-                </div>
-                <div className="quadrant-legend-item" title="Secured path; 0 stamina">
-                  <span className="quadrant-legend-swatch" style={{ backgroundColor: "#15803d" }} />
-                  <span className="quadrant-legend-label">Secured</span>
-                </div>
+                {QUADRANT_LEGEND_ITEMS.map((item) => (
+                  <div key={item.label} className="quadrant-legend-item" title={item.title}>
+                    <span className="quadrant-legend-swatch" style={{ backgroundColor: item.color }} />
+                    <span className="quadrant-legend-label">{item.label}</span>
+                  </div>
+                ))}
               </div>
               <p className="quadrant-legend-note">Q1–Q4 label color on the map shows each quadrant’s status.</p>
-            </div>
-          </div>
+          </CollapsibleSection>
 
-          <div className="pins-section collapsible-section">
-            <h3 className="section-header" onClick={() => (window as unknown as { toggleSection?: (s: string) => void }).toggleSection?.("pins-section")}>
-              <i className="fas fa-map-pin" /> Pins
-              <i className="fas fa-chevron-down section-arrow" />
-            </h3>
-            <div className="section-content">
-              <div className="pins-controls">
+          <CollapsibleSection sectionId="pins-section" icon="fa-map-pin" title="Pins">
+            <div className="pins-controls">
                 <div className="pin-actions">
-                  <button type="button" className="pin-btn add-pin-btn" onClick={() => (window as unknown as { toggleAddPinMode?: () => void }).toggleAddPinMode?.()} title="Add New Pin">
+                  <button type="button" className="pin-btn add-pin-btn" onClick={mapOnClick("toggleAddPinMode")} title="Add New Pin">
                     <i className="fas fa-plus" />
                     <span>Add Pin</span>
                   </button>
@@ -242,21 +325,19 @@ export default function MapPage() {
                 <div className="pin-categories">
                   <h4><i className="fas fa-tags" /> Pin Categories</h4>
                   <div className="category-filters">
-                    <button type="button" className="category-filter active" data-category="all">All</button>
-                    <button type="button" className="category-filter" data-category="my-pins">My Pins</button>
-                    <button type="button" className="category-filter" data-category="homes">Homes</button>
-                    <button type="button" className="category-filter" data-category="farms">Farms</button>
-                    <button type="button" className="category-filter" data-category="shops">Shops</button>
-                    <button type="button" className="category-filter" data-category="points-of-interest">Points of Interest</button>
+                    {PIN_CATEGORIES.map((cat) => (
+                      <button key={cat.value} type="button" className={cx("category-filter", cat.value === "all" && "active")} data-category={cat.value}>
+                        {cat.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+          </CollapsibleSection>
         </div>
       </div>
 
-      <button type="button" className="ui-toggle" onClick={() => (window as unknown as { toggleSidebar?: () => void }).toggleSidebar?.()}>
+      <button type="button" className="ui-toggle" onClick={mapOnClick("toggleSidebar")}>
         <i className="fas fa-chevron-right" />
       </button>
 
@@ -264,7 +345,7 @@ export default function MapPage() {
       <div id="exploration-panel" className="exploration-panel" style={{ display: "none" }}>
         <div className="exploration-header">
           <h3>Draw secured path</h3>
-          <button type="button" className="close-btn" onClick={() => (window as unknown as { toggleExplorationMode?: () => void }).toggleExplorationMode?.()} title="Close" aria-label="Close">
+          <button type="button" className="close-btn" onClick={mapOnClick("toggleExplorationMode")} title="Close" aria-label="Close">
             <i className="fas fa-times" />
           </button>
         </div>
@@ -273,7 +354,7 @@ export default function MapPage() {
             <h4>Expedition ID</h4>
             <label htmlFor="exploration-id">Enter expedition ID (e.g. E123456) to draw a path for that expedition</label>
             <input type="text" id="exploration-id" placeholder="E123456" />
-            <button type="button" className="action-btn" onClick={() => (window as unknown as { setExplorationId?: () => void }).setExplorationId?.()}>
+            <button type="button" className="action-btn" onClick={mapOnClick("setExplorationId")}>
               Set ID
             </button>
             <p id="current-id-display" className="exploration-status" style={{ marginTop: 8 }} />
@@ -282,11 +363,11 @@ export default function MapPage() {
             <h4>Draw path</h4>
             <p className="exploration-status" id="exploration-mode-status">Set an expedition ID, then click &quot;Draw path&quot;. Click on the map to add points, then &quot;Finish path&quot; to save.</p>
             <div className="marker-buttons" style={{ marginTop: 8 }}>
-              <button type="button" className="marker-btn path-btn" onClick={() => (window as unknown as { togglePathDrawing?: () => void }).togglePathDrawing?.()} title="Draw a path (secured path)">
+              <button type="button" className="marker-btn path-btn" onClick={mapOnClick("togglePathDrawing")} title="Draw a path (secured path)">
                 <i className="fas fa-route" />
                 <span>Draw path</span>
               </button>
-              <button type="button" className="marker-btn finish-path-btn" onClick={() => (window as unknown as { finishPathDrawing?: () => void }).finishPathDrawing?.()} title="Save the path you drew">
+              <button type="button" className="marker-btn finish-path-btn" onClick={mapOnClick("finishPathDrawing")} title="Save the path you drew">
                 <i className="fas fa-check" />
                 <span>Finish path</span>
               </button>
