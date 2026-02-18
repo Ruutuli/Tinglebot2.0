@@ -1488,3 +1488,21 @@ textarea::placeholder {
     transition: transform 0.1s ease;
   }
 }
+
+/* ============================================================================ */
+/* Grotto pin overlays (explore page & map): blight = not cleared, gold = cleared */
+/* ============================================================================ */
+.grotto-pin-wrap {
+  display: inline-block;
+  position: relative;
+  line-height: 0;
+}
+.grotto-pin-wrap.grotto-blight .exploration-pin-icon,
+.grotto-pin-wrap.grotto-blight img.h-8 {
+  filter: brightness(0.7) sepia(0.4) hue-rotate(-30deg) saturate(1.2);
+  opacity: 0.9;
+}
+.grotto-pin-wrap.grotto-gold .exploration-pin-icon,
+.grotto-pin-wrap.grotto-gold img.h-8 {
+  filter: drop-shadow(0 0 6px rgba(245, 200, 80, 0.9)) drop-shadow(0 0 12px rgba(255, 215, 0, 0.6));
+}

@@ -429,7 +429,14 @@ async function handleGather(interaction, character, currentPath, encounterMessag
 
     const items = await fetchAllItems();
     const dbPathField = currentPath.replace(/-/g, '');
-    const available = items.filter(i => i[dbPathField] === true);
+    const pathEligible = items.filter(i => i[dbPathField] === true);
+    // Exclude maps and relics from road gathering (exploration-only finds)
+    const available = pathEligible.filter(i => {
+      const name = (i?.itemName || '').trim();
+      if (/^Map #\d+$/.test(name)) return false;
+      if (/ Relic$/i.test(name)) return false;
+      return true;
+    });
     
     let decision, outcomeMessage;
 
@@ -437,7 +444,8 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       decision = `❌ No resources to gather.`;
       outcomeMessage = 'No resources found';
     } else {
-      const weighted = createWeightedItemList(available);
+      const jobForWeighting = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+      const weighted = createWeightedItemList(available, 50, jobForWeighting);
       const rollRandomItem = () => {
         const baseItem = weighted[Math.floor(Math.random() * weighted.length)];
         return {
@@ -1038,8 +1046,16 @@ async function handleOpenChest(interaction, character, encounterMessage, travelL
     
     // Fetch all items and select random one (100% random, like ruugame)
     const allItems = await fetchAllItems();
-    
-    if (!allItems || allItems.length === 0) {
+    // Exclude maps and relics from road chests (exploration-only finds)
+    const roadChestExcludes = (items) => items.filter(i => {
+      const name = (i?.itemName || '').trim();
+      if (/^Map #\d+$/.test(name)) return false;
+      if (/ Relic$/i.test(name)) return false;
+      return true;
+    });
+    const eligibleChestItems = roadChestExcludes(allItems || []);
+
+    if (!eligibleChestItems.length) {
       const decision = `❌ **No items found in database.**`;
       
       const description = 
@@ -1061,8 +1077,8 @@ async function handleOpenChest(interaction, character, encounterMessage, travelL
       return decision;
     }
     
-    // Select completely random item (no weighting, no filtering)
-    const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
+    // Select completely random item (no weighting; maps/relics already excluded)
+    const randomItem = eligibleChestItems[Math.floor(Math.random() * eligibleChestItems.length)];
     
     // Add item to inventory
     try {

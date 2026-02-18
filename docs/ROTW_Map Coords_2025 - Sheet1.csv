@@ -1,0 +1,481 @@
+Square,Square Letter,Square Number,Quadrant,Blight?,Region,Status
+A1,A,1,1,N,Hebra,Inaccessible
+A1,A,1,2,N,Hebra,Inaccessible
+A1,A,1,3,N,Hebra,Inaccessible
+A1,A,1,4,N,Hebra,Inaccessible
+A10,A,10,1,Yes,Gerudo,Inaccessible
+A10,A,10,2,Yes,Gerudo,Explorable
+A10,A,10,3,No,Gerudo,Inaccessible
+A10,A,10,4,No,Gerudo,Explorable
+A11,A,11,1,No,Gerudo,Inaccessible
+A11,A,11,2,No,Gerudo,Explorable
+A11,A,11,3,No,Gerudo,Inaccessible
+A11,A,11,4,No,Gerudo,Explorable
+A12,A,12,1,No,Gerudo,Inaccessible
+A12,A,12,2,No,Gerudo,Inaccessible
+A12,A,12,3,No,Gerudo,Inaccessible
+A12,A,12,4,No,Gerudo,Inaccessible
+A2,A,2,1,No,Hebra,Inaccessible
+A2,A,2,2,No,Hebra,Explorable
+A2,A,2,3,No,Hebra,Inaccessible
+A2,A,2,4,No,Hebra,Explorable
+A3,A,3,1,No,Hebra,Inaccessible
+A3,A,3,2,No,Hebra,Explorable
+A3,A,3,3,No,Hebra,Inaccessible
+A3,A,3,4,No,Hebra,Explorable
+A4,A,4,1,No,Hebra,Inaccessible
+A4,A,4,2,No,Hebra,Inaccessible
+A4,A,4,3,No,Hebra,Inaccessible
+A4,A,4,4,No,Hebra,Inaccessible
+A5,A,5,1,No,Hebra,Inaccessible
+A5,A,5,2,No,Hebra,Inaccessible
+A5,A,5,3,No,Hebra,Inaccessible
+A5,A,5,4,No,Hebra,Inaccessible
+A6,A,6,1,No,Hebra,Inaccessible
+A6,A,6,2,No,Hebra,Inaccessible
+A6,A,6,3,No,Hebra,Inaccessible
+A6,A,6,4,No,Hebra,Explorable
+A7,A,7,1,No,Hebra,Inaccessible
+A7,A,7,2,No,Gerudo,Explorable
+A7,A,7,3,No,Hebra,Inaccessible
+A7,A,7,4,No,Gerudo,Explorable
+A8,A,8,1,No,Hebra,Inaccessible
+A8,A,8,2,No,Gerudo,Explorable
+A8,A,8,3,No,Gerudo,Inaccessible
+A8,A,8,4,No,Gerudo,Explorable
+A9,A,9,1,Yes,Gerudo,Inaccessible
+A9,A,9,2,Yes,Gerudo,Explorable
+A9,A,9,3,Yes,Gerudo,Inaccessible
+A9,A,9,4,Yes,Gerudo,Explorable
+B1,B,1,1,No,Hebra,Inaccessible
+B1,B,1,2,No,Hebra,Inaccessible
+B1,B,1,3,No,Hebra,Explorable
+B1,B,1,4,No,Hebra,Explorable
+B10,B,10,1,Yes,Gerudo,Explorable
+B10,B,10,2,Yes,Gerudo,Explorable
+B10,B,10,3,Yes,Gerudo,Explorable
+B10,B,10,4,Yes,Gerudo,Explorable
+B11,B,11,1,No,Gerudo,Explorable
+B11,B,11,2,Yes,Gerudo,Explorable
+B11,B,11,3,No,Gerudo,Explorable
+B11,B,11,4,Yes,Gerudo,Explorable
+B12,B,12,1,No,Gerudo,Explorable
+B12,B,12,2,Yes,Gerudo,Explorable
+B12,B,12,3,Yes,Gerudo,Inaccessible
+B12,B,12,4,Yes,Gerudo,Inaccessible
+B2,B,2,1,No,Hebra,Explorable
+B2,B,2,2,No,Hebra,Explorable
+B2,B,2,3,No,Hebra,Explorable
+B2,B,2,4,No,Hebra,Explorable
+B3,B,3,1,No,Hebra,Explorable
+B3,B,3,2,No,Hebra,Explorable
+B3,B,3,3,No,Hebra,Explorable
+B3,B,3,4,No,Hebra,Explorable
+B4,B,4,1,No,Hebra,Explorable
+B4,B,4,2,No,Hebra,Explorable
+B4,B,4,3,No,Hebra,Explorable
+B4,B,4,4,No,Hebra,Explorable
+B5,B,5,1,No,Hebra,Explorable
+B5,B,5,2,No,Hebra,Explorable
+B5,B,5,3,No,Hebra,Explorable
+B5,B,5,4,No,Hebra,Explorable
+B6,B,6,1,No,Hebra,Explorable
+B6,B,6,2,No,Hebra,Explorable
+B6,B,6,3,No,Hebra,Explorable
+B6,B,6,4,Yes,Hebra,Explorable
+B7,B,7,1,No,Gerudo,Explorable
+B7,B,7,2,No,Gerudo,Explorable
+B7,B,7,3,No,Gerudo,Explorable
+B7,B,7,4,No,Gerudo,Explorable
+B8,B,8,1,No,Gerudo,Explorable
+B8,B,8,2,No,Gerudo,Explorable
+B8,B,8,3,Yes,Gerudo,Explorable
+B8,B,8,4,No,Gerudo,Explorable
+B9,B,9,1,Yes,Gerudo,Explorable
+B9,B,9,2,Yes,Gerudo,Explorable
+B9,B,9,3,Yes,Gerudo,Explorable
+B9,B,9,4,Yes,Gerudo,Explorable
+C1,C,1,1,No,Hebra,Inaccessible
+C1,C,1,2,No,Hebra,Inaccessible
+C1,C,1,3,No,Hebra,Inaccessible
+C1,C,1,4,No,Hebra,Inaccessible
+C10,C,10,1,Yes,Gerudo,Explorable
+C10,C,10,2,No,Gerudo,Explorable
+C10,C,10,3,Yes,Gerudo,Explorable
+C10,C,10,4,Yes,Gerudo,Explorable
+C11,C,11,1,Yes,Gerudo,Explorable
+C11,C,11,2,Yes,Gerudo,Explorable
+C11,C,11,3,Yes,Gerudo,Explorable
+C11,C,11,4,Yes,Gerudo,Explorable
+C12,C,12,1,Yes,Gerudo,Explorable
+C12,C,12,2,Yes,Gerudo,Explorable
+C12,C,12,3,Yes,Gerudo,Inaccessible
+C12,C,12,4,Yes,Gerudo,Inaccessible
+C2,C,2,1,No,Hebra,Explorable
+C2,C,2,2,No,Hebra,Inaccessible
+C2,C,2,3,No,Hebra,Explorable
+C2,C,2,4,No,Hebra,Explorable
+C3,C,3,1,No,Hebra,Explorable
+C3,C,3,2,No,Hebra,Explorable
+C3,C,3,3,No,Hebra,Explorable
+C3,C,3,4,No,Hebra,Explorable
+C4,C,4,1,No,Hebra,Explorable
+C4,C,4,2,No,Hebra,Explorable
+C4,C,4,3,No,Hebra,Explorable
+C4,C,4,4,No,Hebra,Explorable
+C5,C,5,1,No,Hebra,Explorable
+C5,C,5,2,Yes,Hebra,Explorable
+C5,C,5,3,Yes,Hebra,Explorable
+C5,C,5,4,Yes,Hebra,Explorable
+C6,C,6,1,Yes,Central Hyrule,Explorable
+C6,C,6,2,No,Central Hyrule,Explorable
+C6,C,6,3,Yes,Central Hyrule,Explorable
+C6,C,6,4,Yes,Central Hyrule,Explorable
+C7,C,7,1,No,Central Hyrule,Explorable
+C7,C,7,2,Yes,Central Hyrule,Explorable
+C7,C,7,3,No,Central Hyrule,Explorable
+C7,C,7,4,Yes,Central Hyrule,Explorable
+C8,C,8,1,No,Gerudo,Explorable
+C8,C,8,2,No,Gerudo,Explorable
+C8,C,8,3,No,Gerudo,Explorable
+C8,C,8,4,No,Gerudo,Explorable
+C9,C,9,1,No,Gerudo,Explorable
+C9,C,9,2,No,Gerudo,Explorable
+C9,C,9,3,Yes,Gerudo,Explorable
+C9,C,9,4,No,Gerudo,Explorable
+D1,D,1,1,No,Hebra,Inaccessible
+D1,D,1,2,No,Hebra,Inaccessible
+D1,D,1,3,No,Hebra,Inaccessible
+D1,D,1,4,No,Hebra,Inaccessible
+D10,D,10,1,No,Gerudo,Explorable
+D10,D,10,2,No,Gerudo,Explorable
+D10,D,10,3,Yes,Gerudo,Explorable
+D10,D,10,4,No,Gerudo,Explorable
+D11,D,11,1,Yes,Gerudo,Explorable
+D11,D,11,2,No,Gerudo,Explorable
+D11,D,11,3,Yes,Gerudo,Explorable
+D11,D,11,4,No,Gerudo,Explorable
+D12,D,12,1,Yes,Gerudo,Explorable
+D12,D,12,2,No,Gerudo,Explorable
+D12,D,12,3,Yes,Gerudo,Inaccessible
+D12,D,12,4,No,Gerudo,Inaccessible
+D2,D,2,1,No,Hebra,Explorable
+D2,D,2,2,No,Hebra,Explorable
+D2,D,2,3,No,Hebra,Explorable
+D2,D,2,4,No,Hebra,Explorable
+D3,D,3,1,No,Hebra,Explorable
+D3,D,3,2,No,Hebra,Explorable
+D3,D,3,3,No,Hebra,Explorable
+D3,D,3,4,No,Hebra,Explorable
+D4,D,4,1,No,Hebra,Explorable
+D4,D,4,2,Yes,Hebra,Explorable
+D4,D,4,3,Yes,Hebra,Explorable
+D4,D,4,4,Yes,Hebra,Explorable
+D5,D,5,1,Yes,Central Hyrule,Explorable
+D5,D,5,2,No,Central Hyrule,Explorable
+D5,D,5,3,No,Central Hyrule,Explorable
+D5,D,5,4,No,Central Hyrule,Explorable
+D6,D,6,1,No,Central Hyrule,Explorable
+D6,D,6,2,No,Central Hyrule,Explorable
+D6,D,6,3,No,Central Hyrule,Explorable
+D6,D,6,4,No,Central Hyrule,Explorable
+D7,D,7,1,Yes,Central Hyrule,Explorable
+D7,D,7,2,No,Central Hyrule,Explorable
+D7,D,7,3,No,Central Hyrule,Explorable
+D7,D,7,4,No,Central Hyrule,Explorable
+D8,D,8,1,No,Central Hyrule,Explorable
+D8,D,8,2,No,Central Hyrule,Explorable
+D8,D,8,3,No,Central Hyrule,Explorable
+D8,D,8,4,No,Central Hyrule,Explorable
+D9,D,9,1,No,Gerudo,Explorable
+D9,D,9,2,No,Gerudo,Explorable
+D9,D,9,3,No,Gerudo,Explorable
+D9,D,9,4,No,Gerudo,Explorable
+E1,E,1,1,No,Hebra,Inaccessible
+E1,E,1,2,No,Hebra,Inaccessible
+E1,E,1,3,No,Hebra,Inaccessible
+E1,E,1,4,No,Hebra,Inaccessible
+E10,E,10,1,Yes,Faron,Explorable
+E10,E,10,2,Yes,Faron,Explorable
+E10,E,10,3,No,Faron,Explorable
+E10,E,10,4,Yes,Faron,Explorable
+E11,E,11,1,Yes,Gerudo,Explorable
+E11,E,11,2,Yes,Gerudo,Explorable
+E11,E,11,3,Yes,Gerudo,Explorable
+E11,E,11,4,Yes,Gerudo,Explorable
+E12,E,12,1,No,Faron,Inaccessible
+E12,E,12,2,No,Faron,Inaccessible
+E12,E,12,3,No,Faron,Inaccessible
+E12,E,12,4,No,Faron,Inaccessible
+E2,E,2,1,No,Hebra,Inaccessible
+E2,E,2,2,No,Hebra,Inaccessible
+E2,E,2,3,Yes,Hebra,Explorable
+E2,E,2,4,Yes,Hebra,Explorable
+E3,E,3,1,Yes,Central Hyrule,Explorable
+E3,E,3,2,Yes,Central Hyrule,Explorable
+E3,E,3,3,No,Central Hyrule,Explorable
+E3,E,3,4,Yes,Central Hyrule,Explorable
+E4,E,4,1,Yes,Central Hyrule,Explorable
+E4,E,4,2,No,Central Hyrule,Explorable
+E4,E,4,3,No,Central Hyrule,Explorable
+E4,E,4,4,No,Central Hyrule,Explorable
+E5,E,5,1,No,Central Hyrule,Explorable
+E5,E,5,2,Yes,Central Hyrule,Explorable
+E5,E,5,3,Yes,Central Hyrule,Explorable
+E5,E,5,4,Yes,Central Hyrule,Explorable
+E6,E,6,1,Yes,Central Hyrule,Explorable
+E6,E,6,2,Yes,Central Hyrule,Explorable
+E6,E,6,3,Yes,Central Hyrule,Explorable
+E6,E,6,4,No,Central Hyrule,Explorable
+E7,E,7,1,Yes,Central Hyrule,Explorable
+E7,E,7,2,Yes,Central Hyrule,Explorable
+E7,E,7,3,Yes,Central Hyrule,Explorable
+E7,E,7,4,Yes,Central Hyrule,Explorable
+E8,E,8,1,Yes,Central Hyrule,Explorable
+E8,E,8,2,Yes,Central Hyrule,Explorable
+E8,E,8,3,Yes,Central Hyrule,Explorable
+E8,E,8,4,Yes,Central Hyrule,Explorable
+E9,E,9,1,No,Central Hyrule,Explorable
+E9,E,9,2,Yes,Central Hyrule,Explorable
+E9,E,9,3,No,Central Hyrule,Explorable
+E9,E,9,4,Yes,Central Hyrule,Explorable
+F1,F,1,1,No,Eldin,Inaccessible
+F1,F,1,2,No,Eldin,Inaccessible
+F1,F,1,3,Yes,Eldin,Inaccessible
+F1,F,1,4,Yes,Eldin,Inaccessible
+F10,F,10,1,Yes,Faron,Explorable
+F10,F,10,2,No,Faron,Explorable
+F10,F,10,3,Yes,Faron,Explorable
+F10,F,10,4,No,Faron,Explorable
+F11,F,11,1,Yes,Faron,Explorable
+F11,F,11,2,Yes,Faron,Explorable
+F11,F,11,3,Yes,Faron,Explorable
+F11,F,11,4,Yes,Faron,Explorable
+F12,F,12,1,No,Faron,Inaccessible
+F12,F,12,2,No,Faron,Inaccessible
+F12,F,12,3,No,Faron,Inaccessible
+F12,F,12,4,No,Faron,Inaccessible
+F2,F,2,1,Yes,Central Hyrule,Explorable
+F2,F,2,2,Yes,Central Hyrule,Explorable
+F2,F,2,3,Yes,Central Hyrule,Explorable
+F2,F,2,4,Yes,Central Hyrule,Explorable
+F3,F,3,1,No,Central Hyrule,Explorable
+F3,F,3,2,No,Central Hyrule,Explorable
+F3,F,3,3,No,Central Hyrule,Explorable
+F3,F,3,4,No,Central Hyrule,Explorable
+F4,F,4,1,No,Central Hyrule,Explorable
+F4,F,4,2,No,Central Hyrule,Explorable
+F4,F,4,3,No,Central Hyrule,Explorable
+F4,F,4,4,No,Central Hyrule,Explorable
+F5,F,5,1,No,Central Hyrule,Explorable
+F5,F,5,2,No,Central Hyrule,Explorable
+F5,F,5,3,No,Central Hyrule,Explorable
+F5,F,5,4,No,Central Hyrule,Explorable
+F6,F,6,1,No,Central Hyrule,Explorable
+F6,F,6,2,No,Central Hyrule,Explorable
+F6,F,6,3,Yes,Central Hyrule,Explorable
+F6,F,6,4,No,Central Hyrule,Explorable
+F7,F,7,1,Yes,Central Hyrule,Explorable
+F7,F,7,2,No,Central Hyrule,Explorable
+F7,F,7,3,Yes,Central Hyrule,Explorable
+F7,F,7,4,No,Central Hyrule,Explorable
+F8,F,8,1,Yes,Lanayru,Explorable
+F8,F,8,2,No,Lanayru,Explorable
+F8,F,8,3,Yes,Lanayru,Explorable
+F8,F,8,4,No,Lanayru,Explorable
+F9,F,9,1,Yes,Faron,Explorable
+F9,F,9,2,Yes,Faron,Explorable
+F9,F,9,3,Yes,Faron,Explorable
+F9,F,9,4,No,Faron,Explorable
+G1,G,1,1,No,Eldin,Inaccessible
+G1,G,1,2,No,Eldin,Inaccessible
+G1,G,1,3,No,Eldin,Inaccessible
+G1,G,1,4,No,Eldin,Inaccessible
+G10,G,10,1,No,Faron,Explorable
+G10,G,10,2,No,Faron,Explorable
+G10,G,10,3,No,Faron,Explorable
+G10,G,10,4,No,Faron,Explorable
+G11,G,11,1,Yes,Faron,Explorable
+G11,G,11,2,Yes,Faron,Explorable
+G11,G,11,3,Yes,Faron,Explorable
+G11,G,11,4,Yes,Faron,Explorable
+G12,G,12,1,No,Faron,Inaccessible
+G12,G,12,2,No,Faron,Inaccessible
+G12,G,12,3,No,Faron,Inaccessible
+G12,G,12,4,No,Faron,Inaccessible
+G2,G,2,1,Yes,Eldin,Explorable
+G2,G,2,2,Yes,Eldin,Explorable
+G2,G,2,3,Yes,Eldin,Explorable
+G2,G,2,4,Yes,Eldin,Explorable
+G3,G,3,1,Yes,Eldin,Explorable
+G3,G,3,2,Yes,Eldin,Explorable
+G3,G,3,3,No,Eldin,Explorable
+G3,G,3,4,No,Eldin,Explorable
+G4,G,4,1,No,Eldin,Explorable
+G4,G,4,2,No,Eldin,Explorable
+G4,G,4,3,No,Eldin,Explorable
+G4,G,4,4,No,Eldin,Explorable
+G5,G,5,1,No,Eldin,Explorable
+G5,G,5,2,No,Eldin,Explorable
+G5,G,5,3,No,Eldin,Explorable
+G5,G,5,4,No,Eldin,Explorable
+G6,G,6,1,No,Eldin,Explorable
+G6,G,6,2,No,Eldin,Explorable
+G6,G,6,3,Yes,Lanayru,Explorable
+G6,G,6,4,Yes,Lanayru,Explorable
+G7,G,7,1,Yes,Lanayru,Explorable
+G7,G,7,2,Yes,Lanayru,Explorable
+G7,G,7,3,Yes,Lanayru,Explorable
+G7,G,7,4,Yes,Lanayru,Explorable
+G8,G,8,1,No,Lanayru,Explorable
+G8,G,8,2,No,Lanayru,Explorable
+G8,G,8,3,No,Lanayru,Explorable
+G8,G,8,4,No,Lanayru,Explorable
+G9,G,9,1,No,Lanayru,Explorable
+G9,G,9,2,No,Lanayru,Explorable
+G9,G,9,3,No,Faron,Explorable
+G9,G,9,4,No,Faron,Explorable
+H1,H,1,1,No,Eldin,Inaccessible
+H1,H,1,2,No,Eldin,Inaccessible
+H1,H,1,3,No,Eldin,Inaccessible
+H1,H,1,4,No,Eldin,Inaccessible
+H10,H,10,1,No,Faron,Explorable
+H10,H,10,2,No,Faron,Explorable
+H10,H,10,3,No,Faron,Explorable
+H10,H,10,4,No,Faron,Explorable
+H11,H,11,1,No,Faron,Explorable
+H11,H,11,2,No,Faron,Explorable
+H11,H,11,3,No,Faron,Explorable
+H11,H,11,4,Yes,Faron,Explorable
+H12,H,12,1,No,Faron,Inaccessible
+H12,H,12,2,No,Faron,Inaccessible
+H12,H,12,3,No,Faron,Inaccessible
+H12,H,12,4,No,Faron,Inaccessible
+H2,H,2,1,Yes,Eldin,Explorable
+H2,H,2,2,Yes,Eldin,Explorable
+H2,H,2,3,Yes,Eldin,Explorable
+H2,H,2,4,Yes,Eldin,Explorable
+H3,H,3,1,Yes,Eldin,Explorable
+H3,H,3,2,Yes,Eldin,Explorable
+H3,H,3,3,No,Eldin,Explorable
+H3,H,3,4,No,Eldin,Explorable
+H4,H,4,1,No,Eldin,Explorable
+H4,H,4,2,No,Eldin,Explorable
+H4,H,4,3,No,Eldin,Explorable
+H4,H,4,4,No,Eldin,Explorable
+H5,H,5,1,No,Eldin,Explorable
+H5,H,5,2,No,Eldin,Explorable
+H5,H,5,3,No,Eldin,Explorable
+H5,H,5,4,No,Eldin,Explorable
+H6,H,6,1,No,Eldin,Explorable
+H6,H,6,2,Yes,Lanayru,Explorable
+H6,H,6,3,No,Lanayru,Explorable
+H6,H,6,4,No,Lanayru,Explorable
+H7,H,7,1,No,Lanayru,Explorable
+H7,H,7,2,No,Lanayru,Explorable
+H7,H,7,3,No,Lanayru,Explorable
+H7,H,7,4,No,Lanayru,Explorable
+H8,H,8,1,No,Lanayru,Explorable
+H8,H,8,2,No,Lanayru,Explorable
+H8,H,8,3,No,Lanayru,Explorable
+H8,H,8,4,No,Lanayru,Explorable
+H9,H,9,1,No,Faron,Explorable
+H9,H,9,2,No,Lanayru,Explorable
+H9,H,9,3,No,Faron,Explorable
+H9,H,9,4,No,Lanayru,Explorable
+I1,I,1,1,No,Eldin,Inaccessible
+I1,I,1,2,No,Eldin,Inaccessible
+I1,I,1,3,No,Eldin,Inaccessible
+I1,I,1,4,No,Eldin,Inaccessible
+I10,I,10,1,Yes,Faron,Explorable
+I10,I,10,2,Yes,Faron,Explorable
+I10,I,10,3,No,Faron,Explorable
+I10,I,10,4,No,Faron,Inaccessible
+I11,I,11,1,Yes,Faron,Explorable
+I11,I,11,2,No,Faron,Explorable
+I11,I,11,3,Yes,Faron,Inaccessible
+I11,I,11,4,No,Faron,Explorable
+I12,I,12,1,No,Faron,Inaccessible
+I12,I,12,2,No,Faron,Inaccessible
+I12,I,12,3,No,Faron,Inaccessible
+I12,I,12,4,No,Faron,Inaccessible
+I2,I,2,1,Yes,Eldin,Inaccessible
+I2,I,2,2,No,Eldin,Inaccessible
+I2,I,2,3,No,Eldin,Inaccessible
+I2,I,2,4,Yes,Eldin,Explorable
+I3,I,3,1,No,Eldin,Explorable
+I3,I,3,2,Yes,Eldin,Explorable
+I3,I,3,3,No,Eldin,Explorable
+I3,I,3,4,Yes,Eldin,Explorable
+I4,I,4,1,No,Eldin,Explorable
+I4,I,4,2,Yes,Eldin,Explorable
+I4,I,4,3,No,Eldin,Explorable
+I4,I,4,4,Yes,Eldin,Explorable
+I5,I,5,1,No,Eldin,Explorable
+I5,I,5,2,No,Eldin,Explorable
+I5,I,5,3,No,Eldin,Explorable
+I5,I,5,4,No,Eldin,Explorable
+I6,I,6,1,No,Lanayru,Explorable
+I6,I,6,2,No,Lanayru,Explorable
+I6,I,6,3,No,Lanayru,Explorable
+I6,I,6,4,No,Lanayru,Explorable
+I7,I,7,1,No,Lanayru,Explorable
+I7,I,7,2,No,Lanayru,Explorable
+I7,I,7,3,No,Lanayru,Explorable
+I7,I,7,4,No,Lanayru,Explorable
+I8,I,8,1,No,Lanayru,Explorable
+I8,I,8,2,No,Lanayru,Explorable
+I8,I,8,3,No,Lanayru,Explorable
+I8,I,8,4,No,Lanayru,Explorable
+I9,I,9,1,No,Lanayru,Explorable
+I9,I,9,2,No,Lanayru,Explorable
+I9,I,9,3,No,Lanayru,Explorable
+I9,I,9,4,Yes,Lanayru,Explorable
+J1,J,1,1,No,Eldin,Inaccessible
+J1,J,1,2,No,Eldin,Inaccessible
+J1,J,1,3,No,Eldin,Inaccessible
+J1,J,1,4,No,Eldin,Inaccessible
+J10,J,10,1,Yes,Faron,Inaccessible
+J10,J,10,2,No,Faron,Inaccessible
+J10,J,10,3,No,Faron,Inaccessible
+J10,J,10,4,No,Faron,Inaccessible
+J11,J,11,1,No,Faron,Inaccessible
+J11,J,11,2,No,Faron,Inaccessible
+J11,J,11,3,No,Faron,Inaccessible
+J11,J,11,4,No,Faron,Inaccessible
+J12,J,12,1,No,Faron,Inaccessible
+J12,J,12,2,No,Faron,Inaccessible
+J12,J,12,3,No,Faron,Inaccessible
+J12,J,12,4,No,Faron,Inaccessible
+J2,J,2,1,No,Eldin,Inaccessible
+J2,J,2,2,No,Eldin,Inaccessible
+J2,J,2,3,No,Eldin,Inaccessible
+J2,J,2,4,No,Eldin,Inaccessible
+J3,J,3,1,Yes,Eldin,Inaccessible
+J3,J,3,2,No,Eldin,Inaccessible
+J3,J,3,3,Yes,Eldin,Inaccessible
+J3,J,3,4,No,Eldin,Inaccessible
+J4,J,4,1,Yes,Eldin,Inaccessible
+J4,J,4,2,No,Eldin,Inaccessible
+J4,J,4,3,No,Eldin,Inaccessible
+J4,J,4,4,No,Eldin,Inaccessible
+J5,J,5,1,No,Eldin,Inaccessible
+J5,J,5,2,No,Eldin,Inaccessible
+J5,J,5,3,No,Eldin,Inaccessible
+J5,J,5,4,No,Eldin,Inaccessible
+J6,J,6,1,No,Lanayru,Inaccessible
+J6,J,6,2,No,Lanayru,Inaccessible
+J6,J,6,3,No,Lanayru,Inaccessible
+J6,J,6,4,No,Lanayru,Inaccessible
+J7,J,7,1,No,Lanayru,Inaccessible
+J7,J,7,2,No,Lanayru,Inaccessible
+J7,J,7,3,No,Lanayru,Inaccessible
+J7,J,7,4,No,Lanayru,Inaccessible
+J8,J,8,1,No,Lanayru,Inaccessible
+J8,J,8,2,No,Lanayru,Inaccessible
+J8,J,8,3,No,Lanayru,Inaccessible
+J8,J,8,4,No,Lanayru,Inaccessible
+J9,J,9,1,No,Lanayru,Inaccessible
+J9,J,9,2,No,Lanayru,Inaccessible
+J9,J,9,3,Yes,Lanayru,Inaccessible
+J9,J,9,4,No,Lanayru,Inaccessible

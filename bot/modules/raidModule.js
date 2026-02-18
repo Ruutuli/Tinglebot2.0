@@ -1257,13 +1257,21 @@ async function createRaidEmbed(raid, monsterImage) {
 
   const totalDuration = calculateRaidDuration(raid.monster.tier);
   const totalMinutes = Math.floor(totalDuration / (1000 * 60));
-  const descriptionLines = [
-    `**${raid.monster.name} has been spotted in ${villageName}!**`,
-    `*It's a Tier ${raid.monster.tier} monster! Protect the village!*`,
-    '',
+  const descriptionLines = isExpeditionRaid
+    ? [
+      `**${raid.monster.name} has been spotted!**`,
+      `*It's a Tier ${raid.monster.tier} monster! Defeat it to continue your expedition.*`,
+      '',
+    ]
+    : [
+      `**${raid.monster.name} has been spotted in ${villageName}!**`,
+      `*It's a Tier ${raid.monster.tier} monster! Protect the village!*`,
+      '',
+    ];
+  descriptionLines.push(
     `</raid:1470659276287774734> to join or continue the raid!`,
     `</item:${require('../embeds/embeds.js').getItemCommandId()}> to heal during the raid!`
-  ];
+  );
   if (!isExpeditionRaid) {
     descriptionLines.push('', `⏰ **You have ${totalMinutes} minutes to complete this raid!**`);
   }
@@ -1271,7 +1279,7 @@ async function createRaidEmbed(raid, monsterImage) {
 
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
-    .setTitle('🛡️ Village Raid!')
+    .setTitle(isExpeditionRaid ? '🛡️ Expedition Raid!' : '🛡️ Village Raid!')
     .setDescription(description)
     .addFields(
       {
@@ -1303,10 +1311,14 @@ async function createRaidEmbed(raid, monsterImage) {
     const cmdRoll = typeof exploreCmdId === 'string' && exploreCmdId
       ? chatInputApplicationCommandMention('explore', 'roll', exploreCmdId)
       : '`/explore roll`';
+    const isGrottoRaid = !!raid.grottoId;
     const cmdRetreat = typeof exploreCmdId === 'string' && exploreCmdId
       ? chatInputApplicationCommandMention('explore', 'retreat', exploreCmdId)
       : '`/explore retreat`';
-    let expeditionValue = `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.\n\n**Escape:** You can try to escape with ${cmdRetreat} (id: \`${raid.expeditionId}\`, your character) — costs 1 stamina per attempt, not guaranteed.`;
+    let expeditionValue = `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.`;
+    if (!isGrottoRaid) {
+      expeditionValue += `\n\n**Escape:** You can try to escape with ${cmdRetreat} (id: \`${raid.expeditionId}\`, your character) — costs 1 stamina per attempt, not guaranteed.`;
+    }
     embed.addFields({
       name: '🗺️ __Expedition raid__',
       value: expeditionValue,
@@ -1446,7 +1458,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     console.log(`[raidModule.js]: 📤 Embed description: ${embed.data?.description || 'No description'}`);
     
     const raidMessage = await interaction.channel.send({
-      content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
+      content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
       embeds: [embed]
     });
 

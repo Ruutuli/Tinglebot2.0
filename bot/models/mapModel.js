@@ -12,7 +12,9 @@ const DiscoverySchema = new Schema({
   discoveryKey: { type: String, default: null }, // outcome|square|quadrant|at ISO — matches party progressLog for "Report to town hall"
   pinned: { type: Boolean, default: false },
   pinnedAt: { type: Date, default: null },
-  pinId: { type: String, default: null } // Pin _id when discovery was pinned on the map
+  pinId: { type: String, default: null }, // Pin _id when discovery was pinned on the map
+  // Grotto lifecycle: found (marked, not cleansed), cleansed (opened, trial in progress/failed), cleared (trial done)
+  grottoStatus: { type: String, enum: ['found', 'cleansed', 'cleared'], default: null },
 });
 
 // Define Quadrant Schema with an array of discoveries

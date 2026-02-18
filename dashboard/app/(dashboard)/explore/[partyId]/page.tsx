@@ -10,7 +10,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/hooks/use-session";
 import { formatItemImageUrl } from "@/lib/item-utils";
-import { explorationIconValue, getExplorationIconUrl, isExplorationIcon } from "@/lib/explorationIcons";
+import { explorationIconValue, getExplorationIconUrl, getGrottoPinClass, isExplorationIcon } from "@/lib/explorationIcons";
 
 // ============================================================================
 // ------------------- Constants & types -------------------
@@ -35,6 +35,9 @@ const SQUARE_H = 1666;
 
 /** Parse "H8 Q3" from messages like "Found a monster camp in H8 Q3...", "Found ruins in H8 Q3...", "Found a grotto in H8 Q3..." */
 const REPORTABLE_LOC_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])(?:\s|;|,|\.|$)/i;
+
+/** Extract grotto name from messages like "Cleansed grotto **Taunhiy Grotto** in H8 Q2..." */
+const GROTTO_NAME_RE = /\*\*([^*]+)\*\*/;
 
 /** Discoveries that can be placed on the map (Report to town hall). Relics are not placed on the map. */
 const REPORTABLE_OUTCOMES: Record<string, string> = {
@@ -65,7 +68,19 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
     const locKey = `${e.outcome}|${square}|${quadrant}`;
     const occurrenceIndex = (countByKey.get(locKey) ?? 0) + 1;
     countByKey.set(locKey, occurrenceIndex);
-    const label = occurrenceIndex > 1 ? `${baseLabel} #${occurrenceIndex}` : baseLabel;
+    let label: string;
+    if (baseLabel === "Grotto") {
+      const nameMatch = GROTTO_NAME_RE.exec(e.message);
+      const grottoName = nameMatch?.[1]?.trim();
+      // Named grottos (cleansed) never get numbers. Unnamed grottos (found, not cleansed) use #1, #2 when multiple.
+      if (grottoName) {
+        label = grottoName;
+      } else {
+        label = occurrenceIndex > 1 ? `${baseLabel} #${occurrenceIndex}` : baseLabel;
+      }
+    } else {
+      label = occurrenceIndex > 1 ? `${baseLabel} #${occurrenceIndex}` : baseLabel;
+    }
     const at = typeof e.at === "string" ? e.at : "";
     out.push({ square, quadrant, outcome: e.outcome, label, occurrenceIndex, at, characterName: e.characterName ?? "" });
   }
@@ -2350,12 +2365,15 @@ export default function ExplorePartyPage() {
                                   const pctX = (pin.coordinates.lng - b.lngMin) / (b.lngMax - b.lngMin);
                                   const pctY = (pin.coordinates.lat - b.latMin) / (b.latMax - b.latMin);
                                   const isExploration = isExplorationIcon(pin.icon) && getExplorationIconUrl(pin.icon);
+                                  const grottoClass = getGrottoPinClass(pin.icon);
                                   return (
                                     <div
                                       key={pin._id}
                                       className={
                                         isExploration
-                                          ? "absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+                                          ? grottoClass
+                                            ? `absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center grotto-pin-wrap ${grottoClass}`
+                                            : "absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
                                           : "absolute flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 shadow-md"
                                       }
                                       style={{

@@ -1474,8 +1474,8 @@ async function processTravelDay(day, context) {
       }
     } else {
       // ------------------- Safe Day of Travel -------------------
-      // Check for chest discovery (20% chance)
-      const chestFound = Math.random() < 0.2;
+      // Check for chest discovery (8% chance on roads)
+      const chestFound = Math.random() < 0.08;
       context.chestFound = chestFound;
       
       // Generate Do Nothing flavor ONCE for this day

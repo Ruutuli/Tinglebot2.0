@@ -188,6 +188,28 @@ Tinglebot 2.0/
 └── README.md            # This file
 ```
 
+### Exploration Testing Mode (Remove After Testing)
+
+When `EXPLORATION_TESTING_MODE=true` is set in the bot's environment, exploration runs in a non-persistent sandbox: **nothing persists, everything resets**. No hearts/stamina changes, no items used or found, no KO/debuff, no map changes, no grottos kept. Monster camp waves also skip loot and KO. **Remove all of the following when testing is complete:**
+
+**Environment:**
+- Remove `EXPLORATION_TESTING_MODE=true` from `.env` / Railway env vars
+
+**Files to revert:**
+
+| File | What to remove |
+|------|----------------|
+| `bot/commands/exploration/explore.js` | `EXPLORATION_TESTING_MODE` constant; all testing-mode branches: `payStaminaOrStruggle` DB writes; monster combat `handleKO`/`character.save`; ruin rest, camp (roll), ruins camp/blight `character.save`; grotto maze trap `useHearts`/`charDoc.save`; `handleExpeditionFailed` skip; expedition end heart/stamina split, currentVillage, **return-items loop** (skip entirely); item subcommand splice/save; secure Wood/Eldin Ore splice; Goddess Plume splice; grotto puzzle `removeItemInventoryDatabase`; all `addItemInventoryDatabase`/`createRelic`/`addOldMapToCharacter` wrappers; `applyBlightExposure` skip; map `pushDiscoveryToMap`/`Square.updateOne` skips; grotto `Grotto.deleteMany({ partyId })`; retreat `character.save` |
+| `bot/modules/raidModule.js` | `EXPLORATION_TESTING_MODE` import/check; skip `useHearts`/`character.save` when expedition context (raid or wave via options) + testing mode |
+| `bot/commands/world/raid.js` | `EXPLORATION_TESTING_MODE` import/check; skip `addItemInventoryDatabase` for grotto Spirit Orbs when expedition raid + testing mode |
+| `bot/commands/world/wave.js` | `EXPLORATION_TESTING_MODE` import/check; skip `addItemInventoryDatabase` for wave loot and chest when `waveData.expeditionId` + testing mode |
+| `bot/modules/waveModule.js` | Pass `expeditionId`/`skipPersist` to `processRaidBattle` for expedition waves |
+| `bot/models/WaveModel.js` | In `failWave`, skip KO loop when `this.expeditionId` + testing mode |
+| `bot/modules/encounterModule.js` | (Only if used) `skipPersist` param on `getEncounterOutcome` |
+| `bot/modules/exploreModule.js` | (Optional) `syncPartyMemberStats` testing-mode skip, if added |
+
+**Quick removal:** Search the repo for `EXPLORATION_TESTING_MODE` and remove/revert each occurrence and its conditional branches.
+
 ### Notes
 
 - Both services use the same MongoDB databases but may have different connection requirements

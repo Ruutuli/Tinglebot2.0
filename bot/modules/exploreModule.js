@@ -121,11 +121,42 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs, at
     party.markModified('progressLog');
 }
 
+/**
+ * Update grottoStatus on a map discovery (found | cleansed | cleared).
+ */
+async function updateDiscoveryGrottoStatus(squareId, quadrantId, discoveryKey, grottoStatus) {
+    if (!squareId || !quadrantId || !discoveryKey || !grottoStatus) return;
+    const sq = String(squareId).trim();
+    const qd = String(quadrantId).trim().toUpperCase();
+    await Square.updateOne(
+        { squareId: new RegExp(`^${sq.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+        { $set: { "quadrants.$[q].discoveries.$[d].grottoStatus": grottoStatus } },
+        { arrayFilters: [{ "q.quadrantId": qd }, { "d.discoveryKey": discoveryKey }] }
+    );
+}
+
+/**
+ * Mark grotto as cleared (status + completedAt) and update map discovery.
+ */
+async function markGrottoCleared(grotto) {
+    if (!grotto) return;
+    grotto.status = "cleared";
+    grotto.completedAt = new Date();
+    grotto.markModified?.("status");
+    await grotto.save();
+    const dk = grotto.discoveryKey;
+    if (dk && grotto.squareId && grotto.quadrantId) {
+        await updateDiscoveryGrottoStatus(grotto.squareId, grotto.quadrantId, dk, "cleared");
+    }
+}
+
 module.exports = {
     getCharacterItems,
     formatCharacterItems,
     calculateTotalHeartsAndStamina,
     syncPartyMemberStats,
     pushProgressLog,
-    hasDiscoveriesInQuadrant
+    hasDiscoveriesInQuadrant,
+    updateDiscoveryGrottoStatus,
+    markGrottoCleared
 };

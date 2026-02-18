@@ -499,6 +499,23 @@ function createVendingSetupInstructionsEmbed(character = null) {
     .setFooter({ text: 'Note: The shop sheet should not be edited after initial setup' });
 }
 
+// ------------------- Function: getExplorationPartyCharacterFields -------------------
+// Returns embed fields for each party member's hearts and stamina (for grotto maze / trial embeds).
+function getExplorationPartyCharacterFields(party) {
+ if (!party?.characters?.length) return [];
+ return party.characters.map((c) => {
+  const h = c.currentHearts ?? 0;
+  const s = c.currentStamina ?? 0;
+  const heartsStr = c.maxHearts ? `${h}/${c.maxHearts}` : String(h);
+  const staminaStr = c.maxStamina ? `${s}/${c.maxStamina}` : String(s);
+  return {
+   name: `❤️🟩 __${c.name}__`,
+   value: `❤️ ${heartsStr}  🟩 ${staminaStr}`,
+   inline: true,
+  };
+ });
+}
+
 // ------------------- Function: addExplorationStandardFields -------------------
 // Appends standard exploration embed fields (Expedition ID, Location, Party Hearts/Stamina, optional Next up + Commands).
 // showRestSecureMove: only true for "Quadrant Explored!" embeds; do not set for monster/item/rest/secure/move/camp.
@@ -507,10 +524,11 @@ const EXPLORE_DASHBOARD_BASE = "https://tinglebot.xyz/explore";
 const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
+ const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
  const fields = [
   { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
   { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
-  ...(Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []),
+  ...extraFields,
   ...(ruinRestRecovered > 0 ? [{ name: "📋 **__Ruin rest__**", value: `Known ruin-rest spot: +${ruinRestRecovered} stamina.`, inline: false }] : []),
   { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
@@ -521,7 +539,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   const cmdRoll = `</explore roll:${cmdId}>`;
   let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
   if (hasActiveGrotto) {
-   commandsValue += `**Grotto trial in progress.** Roll, move, and discovery are blocked until the trial is complete.\n\nUse ${activeGrottoCommand || `</explore grotto continue:${cmdId}>`} for your turn.`;
+   commandsValue += `**Trial in progress** — take your turn:\n${activeGrottoCommand || `</explore grotto continue:${cmdId}>`}\n\n_Other explore actions are blocked until the trial ends._`;
   } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
    const cmdSecure = `</explore secure:${cmdId}>`;
@@ -542,11 +560,12 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    }
   } else {
    const cmdItem = `</explore item:${cmdId}>`;
-   commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+   commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem}`;
    if (hasDiscoveriesInQuadrant) {
     const cmdDiscovery = `</explore discovery:${cmdId}>`;
-    commandsValue += `\n\nYou can also revisit monster camps or grottos in this quadrant with ${cmdDiscovery} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+    commandsValue += `\n\n**Revisit discoveries** (monster camps, grottos): ${cmdDiscovery}`;
    }
+   commandsValue += `\n\n_Use id: \`${expId || "—"}\` and charactername: **${nextName}** for all commands._`;
   }
   if (!commandsLast) {
    fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
@@ -3509,6 +3528,7 @@ module.exports = {
  createVendorEmbed,
  createVendingSetupInstructionsEmbed,
  addExplorationStandardFields,
+ getExplorationPartyCharacterFields,
  addExplorationCommandsField,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,

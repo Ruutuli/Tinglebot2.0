@@ -221,7 +221,7 @@ If you chose **No** when you found the grotto (or ran out of stamina/plume):
 | See grotto instructions | `</explore grotto continue id:... grotto:...>` |
 | Shoot blimp (Target Practice) | `</explore grotto targetpractice id:... charactername:... grotto:...>` |
 | Submit puzzle offering | `</explore grotto puzzle id:... grotto:... items:... description:...>` |
-| Navigate maze | `</explore grotto maze id:... charactername:... grotto:... action:left/right/straight/back/wall>` |
+| Navigate maze | `</explore grotto maze id:... charactername:... grotto:... action:north/east/south/west` or Song of Scrying |
 | Fight construct / Gloom Hands | `</raid>` (with Raid ID from grotto embed when applicable) |
 | Continue expedition after trial | `</explore roll>` or `</explore move>` |
 

@@ -382,15 +382,29 @@ async function handleConfirmation(interaction, userId, submissionData) {
         const typeEmoji = isWriting ? '📝' : '🎨';
         const typeColor = isWriting ? '#FF6B35' : '#FF0000'; // Orange for writing, red for art
         
-        // Calculate token display based on collaboration
+        // Calculate token display based on collaboration and boost
+        const boostTokenIncrease = submissionData.boostTokenIncrease ?? 0;
+        const baseTokens = totalTokens - boostTokenIncrease;
         let tokenDisplay = `${totalTokens} tokens`;
         const hasCollaborators = submissionData.collab && ((Array.isArray(submissionData.collab) && submissionData.collab.length > 0) || (typeof submissionData.collab === 'string' && submissionData.collab !== 'N/A'));
-        
+
+        // Add quest bonus breakdown if present (mainly for writing)
+        if (submissionData.questBonus && submissionData.questBonus !== 'N/A' && submissionData.questBonus > 0) {
+          const tokensBeforeQuest = baseTokens - submissionData.questBonus;
+          if (boostTokenIncrease > 0) {
+            tokenDisplay = `${tokensBeforeQuest} + ${submissionData.questBonus} quest bonus + ${boostTokenIncrease} boost = ${totalTokens} tokens`;
+          } else {
+            tokenDisplay = `${tokensBeforeQuest} + ${submissionData.questBonus} quest bonus = ${totalTokens} tokens`;
+          }
+        } else if (boostTokenIncrease > 0) {
+          tokenDisplay = `${baseTokens} + ${boostTokenIncrease} boost = ${totalTokens} tokens`;
+        }
+
         if (hasCollaborators) {
           const collaborators = Array.isArray(submissionData.collab) ? submissionData.collab : [submissionData.collab];
           const totalParticipants = 1 + collaborators.length;
           const splitTokens = Math.floor(totalTokens / totalParticipants);
-          tokenDisplay = `${totalTokens} tokens (${splitTokens} each)`;
+          tokenDisplay += ` (${splitTokens} each)`;
         }
 
         // Build notification fields dynamically

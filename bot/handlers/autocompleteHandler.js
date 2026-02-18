@@ -865,6 +865,10 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleExploreDiscoveryAutocomplete(interaction, focusedOption);
           } else if (focusedOption.name === "grotto" && interaction.options.getSubcommandGroup() === "grotto") {
               await handleExploreGrottoNameAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "items" && interaction.options.getSubcommandGroup() === "grotto" && interaction.options.getSubcommand() === "puzzle") {
+              await handleExploreGrottoPuzzleItemsAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "action" && interaction.options.getSubcommandGroup() === "grotto" && interaction.options.getSubcommand() === "maze") {
+              await handleExploreGrottoMazeActionAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -3493,6 +3497,51 @@ async function handleExploreRollCharacterAutocomplete(
  }
 }
 
+// ------------------- Explore: Grotto Puzzle Items Autocomplete -------------------
+// Lists items from the character's inventory for grotto puzzle offerings.
+async function handleExploreGrottoPuzzleItemsAutocomplete(interaction, focusedOption) {
+ try {
+  let characterName = (interaction.options.getString("charactername") || "").trim();
+  if (characterName.includes("|")) characterName = characterName.split("|")[0].trim();
+  if (!characterName) return await interaction.respond([]);
+
+  const userId = interaction.user.id;
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) return await interaction.respond([]);
+
+  const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(character.name);
+  const inventoryItems = await inventoryCollection.find().toArray();
+
+  const itemMap = new Map();
+  for (const item of inventoryItems) {
+   if (!item.itemName || item.itemName.toLowerCase() === "initial item") continue;
+   if ((item.quantity || 0) <= 0) continue;
+   const key = (item.itemName || "").trim().toLowerCase();
+   if (!itemMap.has(key)) {
+    itemMap.set(key, { name: item.itemName, quantity: item.quantity || 0 });
+   } else {
+    itemMap.get(key).quantity += item.quantity || 0;
+   }
+  }
+
+  const searchQuery = (focusedOption.value || "").toLowerCase();
+  const choices = Array.from(itemMap.values())
+   .filter((item) => item.name.toLowerCase().includes(searchQuery))
+   .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+   .map((item) => {
+    const displayName = `${capitalizeWords(item.name)} (Qty: ${item.quantity})`;
+    const value = item.quantity > 1 ? `${item.name} x${item.quantity}` : item.name;
+    return { name: displayName, value };
+   });
+
+  return await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore grotto puzzle items autocomplete:", error);
+  await interaction.respond([]);
+ }
+}
+
 // ------------------- Explore: Use Item Autocomplete -------------------
 // Lists healing items from the character's expedition loadout (party.characters[].items).
 async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
@@ -3581,10 +3630,12 @@ async function handleExploreDiscoveryAutocomplete(interaction, focusedOption) {
   const choices = filteredDiscoveries.map((d) => {
    const type = String(d.type || "").toLowerCase();
    const label = type === "monster_camp" ? "Monster Camp" : "Grotto";
+   const grottoName = (type === "grotto" && d.name && String(d.name).trim()) || null;
+   const displayLabel = grottoName || label;
    const totalOfType = filteredDiscoveries.filter((x) => String(x.type || "").toLowerCase() === type).length;
    const suffix = filteredDiscoveries.filter((x) => String(x.type || "").toLowerCase() === type).indexOf(d) + 1;
    const name =
-    totalOfType > 1 ? `${label} · ${squareId} ${quadrantId} (${suffix})` : `${label} · ${squareId} ${quadrantId}`;
+    totalOfType > 1 ? `${displayLabel} · ${squareId} ${quadrantId} (${suffix})` : `${displayLabel} · ${squareId} ${quadrantId}`;
    return { name: name.length > 100 ? name.slice(0, 97) + "..." : name, value: d.discoveryKey || name };
   });
 
@@ -3662,6 +3713,109 @@ async function handleExploreGrottoNameAutocomplete(interaction, focusedOption) {
   handleError(error, "autocompleteHandler.js");
   console.error("Error during explore grotto name autocomplete:", error);
   await interaction.respond([]);
+ }
+}
+
+// ------------------- Explore: Grotto Maze Action Autocomplete -------------------
+// Only shows "Song of Scrying" when the grotto is an active maze with a layout.
+async function handleExploreGrottoMazeActionAutocomplete(interaction, focusedOption) {
+ try {
+  await DatabaseConnectionManager.connectToTinglebot();
+  const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
+  let grottoOption = (interaction.options.getString("grotto") || "").trim();
+  if (grottoOption.includes("(")) grottoOption = grottoOption.split("(")[0].trim();
+  if (!expeditionId || !grottoOption) {
+   return await interaction.respond([
+    { name: "North", value: "north" },
+    { name: "East", value: "east" },
+    { name: "South", value: "south" },
+    { name: "West", value: "west" },
+   ]);
+  }
+
+  const party = await Party.findActiveByPartyId(expeditionId).select("square quadrant").lean();
+  if (!party || !party.square || !party.quadrant) {
+   return await interaction.respond([
+    { name: "North", value: "north" },
+    { name: "East", value: "east" },
+    { name: "South", value: "south" },
+    { name: "West", value: "west" },
+   ]);
+  }
+
+  const Grotto = require("../models/GrottoModel.js");
+  const { getNeighbourCoords, getPathCellAt } = require("../utils/grottoMazeGenerator.js");
+  const squareId = String(party.square || "").trim();
+  const quadrantId = String(party.quadrant || "").trim().toUpperCase();
+  const orConditions = [
+   { name: new RegExp(`^${(grottoOption || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+  ];
+  if (/^[a-fA-F0-9]{24}$/.test(grottoOption)) orConditions.push({ _id: grottoOption });
+  const grotto = await Grotto.findOne({
+   squareId: new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+   quadrantId: new RegExp(`^${quadrantId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+   partyId: expeditionId,
+   sealed: false,
+   completedAt: null,
+   $or: orConditions,
+  })
+   .select("trialType mazeState")
+   .lean();
+
+  const movementChoices = [
+   { name: "North", value: "north" },
+   { name: "East", value: "east" },
+   { name: "South", value: "south" },
+   { name: "West", value: "west" },
+  ];
+  const allChoices = [
+   ...movementChoices,
+   { name: "Song of Scrying (roll at wall)", value: "wall" },
+  ];
+
+  const hasMazeLayout = grotto &&
+   grotto.trialType === "maze" &&
+   grotto.mazeState?.layout?.matrix?.length > 0 &&
+   grotto.mazeState?.layout?.pathCells?.length > 0;
+  let canUseScrying = false;
+  let atScryingWall = false;
+  if (hasMazeLayout) {
+   const matrix = grotto.mazeState.layout.matrix;
+   const pathCells = grotto.mazeState.layout.pathCells;
+   const currentNode = grotto.mazeState.currentNode || "";
+   const facing = grotto.mazeState.facing || "s";
+   const [cx, cy] = currentNode.split(",").map((n) => parseInt(n, 10));
+   if (!isNaN(cx) && !isNaN(cy)) {
+    const currentCell = getPathCellAt(pathCells, cx, cy);
+    const isScryingWallCell = currentCell && (currentCell.type === "mazep" || currentCell.type === "mazen");
+    const usedScryingWalls = new Set(grotto.mazeState?.usedScryingWalls || []);
+    const scryingWallAlreadyUsed = isScryingWallCell && usedScryingWalls.has(currentNode);
+    atScryingWall = isScryingWallCell && !scryingWallAlreadyUsed;
+    canUseScrying = atScryingWall;
+   }
+  }
+  const scryingChoice = { name: "Song of Scrying (at wall)", value: "wall" };
+  const choices = canUseScrying
+   ? atScryingWall
+     ? [scryingChoice, ...movementChoices]
+     : [...movementChoices, scryingChoice]
+   : movementChoices;
+
+  const value = (focusedOption.value || "").toLowerCase();
+  const filtered = value
+   ? choices.filter((c) => c.name.toLowerCase().includes(value) || c.value.toLowerCase().includes(value))
+   : choices;
+
+  return await safeRespondWithValidation(interaction, (filtered.length ? filtered : choices).slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore grotto maze action autocomplete:", error);
+  await interaction.respond([
+   { name: "North", value: "north" },
+   { name: "East", value: "east" },
+   { name: "South", value: "south" },
+   { name: "West", value: "west" },
+  ]);
  }
 }
 

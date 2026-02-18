@@ -87,7 +87,7 @@ const GROTTO_MAZE_OUTCOMES = [
   {
     roll: 1,
     flavor:
-      "You sing the sequence on the wall and... the entire passageway rumbles. Your group is forced to flee as it collapses in on itself — your group is back in an earlier part of the maze.",
+      "You sing the sequence on the wall and... the entire passageway rumbles. Your group flees through the crumbling passage—you tumble out on the other side of the wall!",
     type: 'collapse',
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
@@ -119,7 +119,7 @@ const GROTTO_MAZE_OUTCOMES = [
   {
     roll: 3,
     flavor:
-      "You sing the sequence on the wall and... the entire passageway rumbles. Your group is forced to flee as it collapses in on itself — your group is back in an earlier part of the maze.",
+      "You sing the sequence on the wall and... the entire passageway rumbles. Your group flees through the crumbling passage—you tumble out on the other side of the wall!",
     type: 'collapse',
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
@@ -127,7 +127,7 @@ const GROTTO_MAZE_OUTCOMES = [
   {
     roll: 3,
     flavor:
-      "You sing the sequence on the wall and... the walls tremble. A cascade of roots and stone forces you to retreat—you're back at an earlier junction.",
+      "You sing the sequence on the wall and... the walls tremble. A cascade of roots and stone collapses the passage—you scramble through and emerge on the other side!",
     type: 'collapse',
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
@@ -256,6 +256,41 @@ const GROTTO_MAZE_TRAP_OUTCOMES = [
       "Your foot lands on a suspicious stone—it shifts, then... nothing. The mechanism must be rusted shut. Lucky break!",
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
+  // Roll 1 — Nothing (alternate)
+  {
+    roll: 1,
+    flavor:
+      "A pressure plate depresses with a hollow clunk. You hold your breath... silence. The springs have long since given out.",
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 1 — Nothing (alternate)
+  {
+    roll: 1,
+    flavor:
+      "Something groans in the walls—dust puffs from a crack. You brace yourself, but no darts, no spikes. Whatever it was, it's long since emptied.",
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 1 — Nothing (alternate)
+  {
+    roll: 1,
+    flavor:
+      "Your hand brushes a cold metal lever. It clicks. A grinding sound echoes, then fades. The machinery has seized. You move on unscathed.",
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 1 — Nothing (alternate)
+  {
+    roll: 1,
+    flavor:
+      "The floor tile tilts—you hear gears turning somewhere below. They grind to a halt. Century-old clockwork, no longer wound.",
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 1 — Nothing (alternate)
+  {
+    roll: 1,
+    flavor:
+      "A tripwire catches your ankle. You freeze. A click. Then... nothing. The counterweight must have rotted away long ago.",
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
 ];
 
 /**
@@ -297,9 +332,60 @@ function getGrottoMazeOutcome(roll) {
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
+// ============================================================================
+// Grotto Maze — Scrying Wall (cell types mazep/mazen) — Song of Scrying
+// 2 outcomes only: pass or fail. Entertainer in party = 50% higher success chance.
+// ============================================================================
+
+const MAZEP_WALL_FLAVOR =
+  "You encounter a **wall covered in ancient musical notes!** The runes pulse faintly, awaiting a melody. What secrets does this wall hold?";
+
+const MAZEP_PASS_OUTCOMES = [
+  "You sing the sequence on the wall and... the ancient runes glow in approval. The wall grinds downward—a **faster path to the exit** opens!",
+  "You sing the sequence on the wall and... you did it! The wall slides down into the ground, revealing a **FASTER path** to the end, hurray!",
+  "You sing the sequence on the wall and... the runes flare with recognition. The wall descends smoothly—a shortcut appears before you!",
+  "You sing the sequence on the wall and... dear Hylia, that was terrible! The wall still slides downward into the ground, opening up a **FASTER path** to the end of the maze, hurray!",
+  "You sing the sequence on the wall and... somehow it works anyway! The wall slides aside, revealing a faster route. Beginner's luck?",
+];
+
+const MAZEP_FAIL_OUTCOMES = [
+  { flavor: "You sing the sequence on the wall and... wrong note! The floor gives way beneath you.\n\nYou lose 3❤️ hearts in the fall!\nYou spend 3🟩 stamina to climb out!", type: 'pit_trap', heartsLost: 3, staminaCost: 3 },
+  { flavor: "You sing the sequence on the wall and... you sing something loose—the ground crumbles around you and you've fallen into a pit trap!\n\nYou lose 3❤️ hearts in the fall!\nYou spend 3🟩 stamina to climb out!", type: 'pit_trap', heartsLost: 3, staminaCost: 3 },
+  { flavor: "You sing the sequence on the wall and... the entire passageway rumbles. Your group flees through the crumbling passage—you tumble out on the other side of the wall!", type: 'collapse' },
+  { flavor: "You sing the sequence on the wall and... the walls tremble. A cascade of roots and stone collapses the passage—you scramble through and emerge on the other side!", type: 'collapse' },
+  { flavor: "You sing the sequence on the wall and... nothing changes, it's just as still as it was to begin with. Maybe there's another way?", type: 'nothing' },
+  { flavor: "You sing the sequence on the wall and... the runes flicker once, then go dark. A cloud of ancient dust puffs into your face.\n\nYou spend 1🟩 stamina coughing and clearing your throat.", type: 'nothing', staminaCost: 1 },
+  { flavor: "You sing the sequence on the wall and... nothing. Discouraged, you take a step back to regroup.", type: 'step_back' },
+  { flavor: "You sing the sequence on the wall and... there is a rumbling above you. You look up to find loose rocks shaking and coming loose from the ceiling.\n\nYou dive out of the way as rows of stalagmites fall around you—you narrowly avoided death, but you're a little scraped up. But alive!\n\nYou spend 3🟩 stamina avoiding the rocks!", type: 'stalagmites', staminaCost: 3 },
+];
+
+const CTA_HINT = 'Continue exploring. Use </explore grotto maze>.';
+
+/**
+ * Get pass or fail outcome for Scrying Wall Song of Scrying.
+ * @param {boolean} success - Whether the party succeeded
+ * @returns {{ flavor: string, type: string, heartsLost?: number, staminaCost?: number, ctaHint: string }}
+ */
+function getGazepScryingOutcome(success) {
+  if (success) {
+    const flavor = MAZEP_PASS_OUTCOMES[Math.floor(Math.random() * MAZEP_PASS_OUTCOMES.length)];
+    return { flavor, type: 'faster_path_open', ctaHint: CTA_HINT };
+  }
+  const outcome = MAZEP_FAIL_OUTCOMES[Math.floor(Math.random() * MAZEP_FAIL_OUTCOMES.length)];
+  return {
+    flavor: outcome.flavor,
+    type: outcome.type,
+    heartsLost: outcome.heartsLost,
+    staminaCost: outcome.staminaCost,
+    ctaHint: CTA_HINT,
+  };
+}
+
 module.exports = {
   GROTTO_MAZE_OUTCOMES,
   GROTTO_MAZE_TRAP_OUTCOMES,
   getGrottoMazeOutcome,
   getGrottoMazeTrapOutcome,
+  MAZEP_WALL_FLAVOR,
+  getGazepScryingOutcome,
 };

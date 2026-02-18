@@ -2,8 +2,11 @@
  * Canonical exploration discovery icon URLs (custom PNGs only, no FA icons).
  * Used for grotto, monster camp, ruins/camp; relic uses ruins icon as fallback.
  */
+const GROTTO_ICON_URL = "https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png";
+
 export const EXPLORATION_ICON_URLS: Record<string, string> = {
-  grotto: "https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png",
+  grotto: GROTTO_ICON_URL,
+  grotto_cleansed: GROTTO_ICON_URL,
   monster_camp: "https://storage.googleapis.com/tinglebot/maps/monstercamproots2024.png",
   ruins: "https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png",
   relic: "https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png",
@@ -26,4 +29,12 @@ export function getExplorationIconUrl(icon: string | undefined): string | null {
   if (typeof icon !== "string" || !icon.startsWith(PREFIX)) return null;
   const type = icon.slice(PREFIX.length);
   return EXPLORATION_ICON_URLS[type] ?? EXPLORATION_ICON_URLS.ruins ?? null;
+}
+
+/** Grotto pin overlay: gold glow for cleansed only; non-cleared grottos have no special styling. */
+export function getGrottoPinClass(icon: string | undefined): "grotto-gold" | null {
+  if (typeof icon !== "string" || !icon.startsWith(PREFIX)) return null;
+  const type = icon.slice(PREFIX.length);
+  if (type === "grotto_cleansed") return "grotto-gold";
+  return null;
 }

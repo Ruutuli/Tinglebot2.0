@@ -18,6 +18,8 @@ const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 const { fetchItemsByMonster } = require('@/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { markGrottoCleared } = require('../../modules/exploreModule');
+const { GROTTO_CLEARED_FLAVOR } = require('../../data/grottoTrials.js');
 // Google Sheets validation removed
 // Google Sheets functionality removed
 const { v4: uuidv4 } = require('uuid');
@@ -846,12 +848,17 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       // ignore
     }
     const exploreCmdId = getExploreCommandId();
+    const isGrottoRaid = !!raidData.grottoId;
     const cmdRetreat = typeof exploreCmdId === 'string' && exploreCmdId
       ? chatInputApplicationCommandMention('explore', 'retreat', exploreCmdId)
       : '`/explore retreat`';
+    let expeditionValue = `Only members of expedition **${raidData.expeditionId}** can join.`;
+    if (!isGrottoRaid) {
+      expeditionValue += ` **Escape:** ${cmdRetreat} with id \`${raidData.expeditionId}\` and your character (1 stamina per attempt, not guaranteed).`;
+    }
     embed.addFields({
       name: '🗺️ __Expedition raid__',
-      value: `Only members of expedition **${raidData.expeditionId}** can join. **Escape:** ${cmdRetreat} with id \`${raidData.expeditionId}\` and your character (1 stamina per attempt, not guaranteed).`,
+      value: expeditionValue,
       inline: false
     });
   }
@@ -878,8 +885,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
       try {
         const grotto = await Grotto.findById(raidData.grottoId);
         if (grotto && grotto.trialType === 'test_of_power' && !grotto.completedAt && raidData.expeditionId) {
-          grotto.completedAt = new Date();
-          await grotto.save();
+          await markGrottoCleared(grotto);
           const party = await Party.findActiveByPartyId(raidData.expeditionId);
           if (party && party.characters && party.characters.length > 0) {
             for (const slot of party.characters) {
@@ -899,16 +905,17 @@ async function handleRaidVictory(interaction, raidData, monster) {
       }
     }
 
+    const isGrottoRaid = !!raidData.grottoId;
     const participants = raidData.participants || [];
     const lootEligibleRemoved = raidData.lootEligibleRemoved || [];
     const eligibleParticipants = participants.filter(
       p => (p.damage >= 1) || ((p.roundsParticipated || 0) >= 3)
     );
     const lootRecipients = [...eligibleParticipants, ...lootEligibleRemoved];
-    console.log(`[raid.js]: 🎉 Raid victory! Processing loot for ${lootRecipients.length} eligible recipients (${eligibleParticipants.length} in raid, ${lootEligibleRemoved.length} left/removed)`);
+    console.log(`[raid.js]: 🎉 Raid victory! Processing loot for ${lootRecipients.length} eligible recipients${isGrottoRaid ? ' (grotto — Spirit Orbs only, no monster loot)' : ` (${eligibleParticipants.length} in raid, ${lootEligibleRemoved.length} left/removed)`}`);
     
-    // Fetch items for the monster
-    const items = await fetchItemsByMonster(monster.name);
+    // Fetch items for the monster (grotto Test of Power has no monster loot)
+    const items = isGrottoRaid ? [] : await fetchItemsByMonster(monster.name);
     
     // Process loot for each eligible recipient only
     const lootResults = [];
@@ -936,50 +943,38 @@ async function handleRaidVictory(interaction, raidData, monster) {
           continue;
         }
         
-        // Create weighted items based on this participant's damage performance
-        // Higher damage = better final value = better item pool
-        // This ensures high damage dealers get access to higher rarity items
-        const finalValue = Math.min(100, Math.max(1, participant.damage * 10)); // Scale damage to 1-100 range
-        const weightedItems = createWeightedItemList(items, finalValue);
-        
-        // Generate loot for this participant based on damage dealt
-        const lootedItem = await generateLootedItem(monster, weightedItems, participant.damage);
-        
-        if (!lootedItem) {
-          console.log(`[raid.js]: ⚠️ No lootable items found for ${participant.name}, skipping loot`);
-          failedCharacters.push({
-            name: participant.name,
-            reason: 'No lootable items found'
-          });
-          continue;
-        }
+        // Grotto Test of Power: no monster loot (Spirit Orbs already granted above)
+        if (!isGrottoRaid) {
+          // Create weighted items based on this participant's damage performance
+          const finalValue = Math.min(100, Math.max(1, participant.damage * 10));
+          const weightedItems = createWeightedItemList(items, finalValue);
+          const lootedItem = await generateLootedItem(monster, weightedItems, participant.damage);
 
-        // Add to inventory if character has inventory link (Google Sheets validation removed)
-        if (character.inventory) {
-          try {
-            await addItemInventoryDatabase(
-              character._id,
-              lootedItem.itemName,
-              lootedItem.quantity,
-              interaction,
-              "Raid Loot"
-            );
-            
-            // Note: Google Sheets sync is handled by addItemInventoryDatabase
-            
-            // Determine loot quality indicator based on damage
-            let qualityIndicator = '';
-            if (participant.damage >= 10) {
-              qualityIndicator = ' 🔥'; // High damage = fire emoji
-            } else if (participant.damage >= 5) {
-              qualityIndicator = ' ⚡'; // Medium damage = lightning emoji
-            } else if (participant.damage >= 2) {
-              qualityIndicator = ' ✨'; // Low damage = sparkle emoji
-            }
-            
-            lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
-            
-          } catch (error) {
+          if (!lootedItem) {
+            console.log(`[raid.js]: ⚠️ No lootable items found for ${participant.name}, skipping loot`);
+            failedCharacters.push({
+              name: participant.name,
+              reason: 'No lootable items found'
+            });
+            continue;
+          }
+
+          // Add to inventory if character has inventory link
+          if (character.inventory) {
+            try {
+              await addItemInventoryDatabase(
+                character._id,
+                lootedItem.itemName,
+                lootedItem.quantity,
+                interaction,
+                "Raid Loot"
+              );
+              let qualityIndicator = '';
+              if (participant.damage >= 10) qualityIndicator = ' 🔥';
+              else if (participant.damage >= 5) qualityIndicator = ' ⚡';
+              else if (participant.damage >= 2) qualityIndicator = ' ✨';
+              lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
+            } catch (error) {
             console.error(`[raid.js]: ❌ Error processing loot for ${character.name}:`, error);
             console.error(`[raid.js]: 📊 Character details:`, {
               name: character.name,
@@ -1022,6 +1017,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
           }
           
           lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
+        }
         }
         
         // ------------------- Gloom Hands Blight Effect -------------------
@@ -1080,7 +1076,9 @@ async function handleRaidVictory(interaction, raidData, monster) {
     const monsterImage = monsterDetails.image || monster.image || 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
     
     // Build embed fields (split long content to avoid Discord 1024-char limit)
-    const lootText = lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.';
+    const lootText = isGrottoRaid
+      ? 'Spirit Orbs awarded to each party member. No monster loot.'
+      : (lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.');
     const victoryFields = [
       {
         name: '__Raid Summary__',
@@ -1102,11 +1100,11 @@ async function handleRaidVictory(interaction, raidData, monster) {
       victoryEmbed.addFields(splitIntoEmbedFields(blightValue, '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**'));
     }
 
-    // Grotto Test of Power: note that Spirit Orbs were granted to the party
+    // Grotto Test of Power: Spirit Orbs, grotto cleared, flavor text
     if (raidData.grottoId) {
       victoryEmbed.addFields({
         name: '🗺️ **Grotto Trial**',
-        value: 'Test of Power complete — each party member received a Spirit Orb. Use </explore roll> or </explore move> to continue your expedition.',
+        value: `${GROTTO_CLEARED_FLAVOR}\n\nUse </explore roll> or </explore move> to continue your expedition.`,
         inline: false
       });
     }
@@ -1165,8 +1163,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
       await interaction.followUp({ embeds: [victoryEmbed] });
     }
     
-    // Notify mods if there were any failed loot processing
-    if (failedCharacters.length > 0) {
+    // Notify mods if there were any failed loot processing (grotto raids have no monster loot, so skip)
+    if (failedCharacters.length > 0 && !isGrottoRaid) {
       try {
         // Get mod channel or use the current channel
         const modChannel = interaction.client.channels.cache.find(channel => 

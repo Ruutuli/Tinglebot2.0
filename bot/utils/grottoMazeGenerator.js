@@ -286,9 +286,9 @@ function assignGrottoCellTypes(pathCells, options = {}) {
   const pathOnly = pathCells.filter((c) => c.type === 'path');
   if (pathOnly.length === 0) return pathCells;
 
-  const numTraps = Math.min(options.numTraps ?? 3, pathOnly.length);
-  const numChests = Math.min(options.numChests ?? 2, pathOnly.length);
-  const numRed = Math.min(options.numRed ?? 2, pathOnly.length);
+  const numTraps = Math.min(options.numTraps ?? (2 + Math.floor(Math.random() * 3)), pathOnly.length);
+  const numChests = Math.min(options.numChests ?? (2 + Math.floor(Math.random() * 3)), pathOnly.length);
+  const numRed = Math.min(options.numRed ?? 1, pathOnly.length);
 
   shuffleArray(pathOnly);
 
@@ -300,7 +300,7 @@ function assignGrottoCellTypes(pathCells, options = {}) {
     pathOnly[idx].type = 'chest';
   }
   for (let i = 0; i < numRed && idx < pathOnly.length; i++, idx++) {
-    pathOnly[idx].type = i % 2 === 0 ? 'mazep' : 'mazen';
+    pathOnly[idx].type = Math.random() < 0.5 ? 'mazep' : 'mazen';
   }
 
   return pathCells;
@@ -314,9 +314,9 @@ function assignGrottoCellTypes(pathCells, options = {}) {
  * @param {string} [config.entryType='diagonal'] - 'diagonal' | 'horizontal' | 'vertical'
  * @param {string} [config.bias=''] - '' | 'horizontal' | 'vertical'
  * @param {number} [config.removeWalls=0] - extra walls to remove
- * @param {number} [config.numTraps=3]
- * @param {number} [config.numChests=2]
- * @param {number} [config.numRed=2]
+ * @param {number} [config.numTraps] - 2–4 random if omitted
+ * @param {number} [config.numChests] - 2–4 random if omitted
+ * @param {number} [config.numRed=1] - one mazep or mazen if omitted
  * @returns {Object} { matrix, width, height, entryNodes, pathCells }
  */
 function generateGrottoMaze(config = {}) {
@@ -360,13 +360,13 @@ function getPathCellAt(pathCells, x, y) {
   return pathCells.find((c) => c.x === x && c.y === y) || pathCells.find((c) => c.key === key);
 }
 
-// Facing: n/s/e/w. In matrix, n = y-2, s = y+2, e = x+2, w = x-2.
+// Facing: n/s/e/w. One step = ±1 in matrix (one adjacent cell per move).
 function moveInFacing(x, y, facing) {
   switch (facing) {
-    case 'n': return { x, y: y - 2 };
-    case 's': return { x, y: y + 2 };
-    case 'e': return { x: x + 2, y };
-    case 'w': return { x: x - 2, y };
+    case 'n': return { x, y: y - 1 };
+    case 's': return { x, y: y + 1 };
+    case 'e': return { x: x + 1, y };
+    case 'w': return { x: x - 1, y };
     default: return { x, y };
   }
 }
@@ -378,26 +378,65 @@ const OPPOSITE_FACING = { n: 's', s: 'n', e: 'w', w: 'e' };
 /**
  * Resolve movement from (x,y) with current facing. Action: left | right | straight | back.
  * Returns { nextX, nextY, newFacing } or null if blocked or invalid.
+ * One step = one adjacent cell.
  */
 function getNeighbourCoordsWithFacing(matrix, x, y, facing, action) {
   let newFacing = facing;
   if (action === 'left') newFacing = ROTATE_LEFT[facing] || 'n';
   else if (action === 'right') newFacing = ROTATE_RIGHT[facing] || 'n';
   else if (action === 'back') newFacing = OPPOSITE_FACING[facing] || 's';
-  // straight keeps facing
 
   const next = moveInFacing(x, y, newFacing);
-  const row = matrix[next.y];
-  if (next.y < 0 || next.y >= matrix.length || !row) return null;
-  if (next.x < 0 || next.x >= row.length) return null;
-  if (stringVal(row, next.x) !== 0) return null;
+  if (!isWalkable(matrix, next.x, next.y)) return null;
   return { x: next.x, y: next.y, facing: newFacing };
 }
 
+const CARDINAL_MOVE = {
+  north: { dx: 0, dy: -1, facing: 'n' },
+  n: { dx: 0, dy: -1, facing: 'n' },
+  south: { dx: 0, dy: 1, facing: 's' },
+  s: { dx: 0, dy: 1, facing: 's' },
+  east: { dx: 1, dy: 0, facing: 'e' },
+  e: { dx: 1, dy: 0, facing: 'e' },
+  west: { dx: -1, dy: 0, facing: 'w' },
+  w: { dx: -1, dy: 0, facing: 'w' },
+};
+
+/** Check if (x,y) is in bounds and walkable (0). Walls (1) or out-of-bounds return false. */
+function isWalkable(matrix, x, y) {
+  if (!matrix || y < 0 || y >= matrix.length) return false;
+  const row = matrix[y];
+  if (!row || x < 0 || x >= row.length) return false;
+  return stringVal(row, x) === 0;
+}
+
 /**
- * Get neighbouring path cell by direction (left/right/straight/back) using current facing.
+ * Get the walkable cell on the "other side" of a wall when standing at (x,y) facing a direction.
+ * Tries adjacent cell first; if it's a wall, tries one more step. Returns { x, y } or null.
+ */
+function getCellBeyondWall(matrix, x, y, facing) {
+  if (!matrix || isNaN(x) || isNaN(y)) return null;
+  const step1 = moveInFacing(x, y, facing);
+  if (isWalkable(matrix, step1.x, step1.y)) return { x: step1.x, y: step1.y };
+  const step2 = moveInFacing(step1.x, step1.y, facing);
+  if (isWalkable(matrix, step2.x, step2.y)) return { x: step2.x, y: step2.y };
+  return null;
+}
+
+/**
+ * Get neighbouring path cell. Direction can be:
+ * - Cardinal: north, south, east, west (or n, s, e, w) — absolute direction
+ * - Relative: left, right, straight, back — uses current facing
+ *
+ * One move = one adjacent cell (±1). Destination must be walkable (path, not wall).
  */
 function getNeighbourCoords(matrix, x, y, direction, facing) {
+  const card = CARDINAL_MOVE[direction?.toLowerCase()];
+  if (card) {
+    const next = { x: x + card.dx, y: y + card.dy };
+    if (!isWalkable(matrix, next.x, next.y)) return null;
+    return { x: next.x, y: next.y, facing: card.facing };
+  }
   const defFacing = facing || 's';
   const result = getNeighbourCoordsWithFacing(matrix, x, y, defFacing, direction);
   return result ? { x: result.x, y: result.y, facing: result.facing } : null;
@@ -410,5 +449,6 @@ module.exports = {
   getNeighbourCoordsWithFacing,
   getEntryNode,
   moveInFacing,
+  getCellBeyondWall,
   CELL_TYPES,
 };

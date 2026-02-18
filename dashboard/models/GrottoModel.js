@@ -6,6 +6,8 @@ const GrottoSchema = new Schema({
   squareId: { type: String, required: true },
   quadrantId: { type: String, required: true },
   discoveryKey: { type: String, default: "" },
+  // cleansed = opened, trial in progress or failed; cleared = trial done, cannot be redone
+  status: { type: String, enum: ["cleansed", "cleared"], default: "cleansed" },
   sealed: { type: Boolean, default: true },
   trialType: {
     type: String,
@@ -48,6 +50,8 @@ const GrottoSchema = new Schema({
       }],
     },
     openedChests: [{ type: String }],
+    triggeredTraps: [{ type: String }],
+    usedScryingWalls: [{ type: String }],
   },
 }, { collection: "grottos" });
 

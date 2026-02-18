@@ -9,7 +9,8 @@ const GrottoSchema = new Schema({
   quadrantId: { type: String, required: true },
   discoveryKey: { type: String, default: '' },
 
-  // State
+  // State: cleansed = opened, trial in progress or failed; cleared = trial done, cannot be redone
+  status: { type: String, enum: ['cleansed', 'cleared'], default: 'cleansed' },
   sealed: { type: Boolean, default: true },
   trialType: {
     type: String,
@@ -45,6 +46,7 @@ const GrottoSchema = new Schema({
   mazeState: {
     currentNode: { type: String, default: '' }, // 'x,y' matrix coords or legacy id
     steps: [{ direction: String, at: Date }],
+    visitedCells: [{ type: String }], // 'x,y' keys of cells the party has been to (stays revealed)
     facing: { type: String, enum: ['n', 's', 'e', 'w'], default: 's' },
     layout: {
       matrix: [String],
@@ -59,6 +61,8 @@ const GrottoSchema = new Schema({
       }],
     },
     openedChests: [{ type: String }], // cell keys e.g. '3,5' to avoid double-open
+    triggeredTraps: [{ type: String }], // cell keys e.g. '5,7' to avoid re-triggering
+    usedScryingWalls: [{ type: String }], // cell keys where Song of Scrying was used
   },
   testOfPowerState: {
     raidStarted: { type: Boolean, default: false },

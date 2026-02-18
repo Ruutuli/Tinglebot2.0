@@ -5,6 +5,8 @@
 // Used by: index.js (via registerScheduledTasks), utils/scheduler.js
 // ============================================================================
 
+const path = require('path');
+const fs = require('fs');
 const logger = require('@/utils/logger');
 const {
   getCurrentWeather,
@@ -2059,6 +2061,41 @@ async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
   }
 }
 
+// ------------------- maze-images-cleanup (Daily: delete maze PNGs older than 1 week) -------------------
+const MAZE_IMAGES_DIR = path.join(__dirname, '..', 'scripts', 'example-mazes');
+const MAZE_IMAGES_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+
+async function mazeImagesCleanup(_client, _data = {}) {
+  try {
+    logger.info('SCHEDULED', 'maze-images-cleanup: starting');
+    if (!fs.existsSync(MAZE_IMAGES_DIR)) {
+      logger.debug('SCHEDULED', 'maze-images-cleanup: directory does not exist, skip');
+      return;
+    }
+    const now = Date.now();
+    const entries = fs.readdirSync(MAZE_IMAGES_DIR, { withFileTypes: true });
+    let deleted = 0;
+    for (const ent of entries) {
+      if (!ent.isFile()) continue;
+      if (!/\.(png|jpg|jpeg|webp)$/i.test(ent.name)) continue;
+      const fullPath = path.join(MAZE_IMAGES_DIR, ent.name);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (now - stat.mtimeMs > MAZE_IMAGES_MAX_AGE_MS) {
+          fs.unlinkSync(fullPath);
+          deleted++;
+        }
+      } catch (e) {
+        logger.warn('SCHEDULED', `maze-images-cleanup: failed to process ${ent.name}: ${e?.message || e}`);
+      }
+    }
+    if (deleted > 0) logger.info('SCHEDULED', `maze-images-cleanup: deleted ${deleted} file(s) older than 1 week`);
+    logger.success('SCHEDULED', 'maze-images-cleanup: done');
+  } catch (err) {
+    logger.error('SCHEDULED', `maze-images-cleanup: ${err?.message || err}`);
+  }
+}
+
 // ============================================================================
 // ------------------- Task Registry -------------------
 // ============================================================================
@@ -2125,6 +2162,9 @@ const TASKS = [
   // Relic Deadline Tasks
   { name: 'relic-appraisal-deadline', cron: '0 6 * * *', handler: relicAppraisalDeadline }, // Daily 6am UTC: deteriorate unappraised relics past 7 days
   { name: 'relic-art-deadline', cron: '0 6 * * *', handler: relicArtDeadline }, // Daily 6am UTC: mark relics lost if art not submitted within 2 months
+
+  // Maze images: delete PNGs older than 1 week (bot/scripts/example-mazes/)
+  { name: 'maze-images-cleanup', cron: '0 6 * * *', handler: mazeImagesCleanup }, // Daily 6am UTC
 
   // Map Appraisal: send coordinates DM for approved requests (e.g. NPC on dashboard)
   { name: 'map-appraisal-send-coordinates-dm', cron: '*/10 * * * *', handler: mapAppraisalSendCoordinatesDm } // Every 10 minutes

@@ -121,14 +121,100 @@ function getPuzzleFlavor(grotto) {
 
   if (subType === ODDS_STRUCTURE) {
     const v = ODD_STRUCTURE_VARIANTS[state.puzzleVariant ?? 0];
-    return v ? `${v.flavor}\n\n↳ ${v.hint}` : null;
+    return v ? `${v.flavor}\n\n↳ ${v.hint} Only the required amount will be taken from your inventory.` : null;
   }
   if (subType === OFFERING_STATUE) {
     const idx = state.puzzleClueIndex ?? 0;
     const c = OFFERING_STATUE_CLUES[idx];
-    return c ? `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n↳ Try offering something ➾ \`</explore grotto puzzle items:... description:...>\`` : null;
+    if (!c) return null;
+    const itemList = c.expectedItems.length > 1
+      ? `one of: ${c.expectedItems.join(', ')}`
+      : c.expectedItems[0];
+    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n↳ Offer **1** × ${itemList}. Only that amount will be taken. ➾ \`</explore grotto puzzle items:...>\``;
   }
   return null;
+}
+
+/**
+ * Returns items to consume for a puzzle. Caps at required amount so we only take what's needed.
+ * @param {Object} grotto
+ * @param {Array} parsedItems - [{ itemName, quantity }] from the user's offering
+ * @returns {Array} [{ itemName, quantity }] to actually remove from inventory
+ */
+function getPuzzleConsumeItems(grotto, parsedItems) {
+  if (!grotto || !parsedItems?.length) return [];
+
+  const state = grotto?.puzzleState || {};
+  const subType = state.puzzleSubType;
+
+  if (subType === OFFERING_STATUE) {
+    const idx = state.puzzleClueIndex ?? 0;
+    const c = OFFERING_STATUE_CLUES[idx];
+    if (!c?.expectedItems) return [];
+    const expectedLower = c.expectedItems.map((s) => s.toLowerCase());
+    const match = parsedItems.find((p) => {
+      const k = (p.itemName || '').trim().toLowerCase();
+      return expectedLower.includes(k);
+    });
+    if (!match) return [];
+    return [{ itemName: match.itemName.trim(), quantity: 1 }];
+  }
+
+  if (subType === ODDS_STRUCTURE) {
+    const v = ODD_STRUCTURE_VARIANTS[state.puzzleVariant ?? 0];
+    if (!v) return [];
+
+    const requiredList = [];
+    if (v.required && !v.flexible) {
+      requiredList.push(...v.required.map((r) => ({ itemName: r.itemName, minQuantity: r.minQuantity || 0 })));
+    } else if (v.flexible) {
+      for (const r of v.flexible.required || []) {
+        requiredList.push({ itemName: r.itemName, minQuantity: r.minQuantity || 0 });
+      }
+      if (v.flexible.anyOf) {
+        const firstMatch = v.flexible.anyOf.find((a) => {
+          const offered = parsedItems.find((p) => (p.itemName || '').trim().toLowerCase() === (a.itemName || '').toLowerCase());
+          return offered && (offered.quantity || 1) >= (a.minQuantity || 0);
+        });
+        if (firstMatch) requiredList.push({ itemName: firstMatch.itemName, minQuantity: firstMatch.minQuantity || 0 });
+      }
+      if (v.flexible.atLeastTwoOf) {
+        const matches = v.flexible.atLeastTwoOf.filter((a) => {
+          const offered = parsedItems.find((p) => (p.itemName || '').trim().toLowerCase() === (a.itemName || '').toLowerCase());
+          return offered && (offered.quantity || 1) >= (a.minQuantity || 0);
+        });
+        for (let i = 0; i < Math.min(2, matches.length); i++) {
+          requiredList.push({ itemName: matches[i].itemName, minQuantity: matches[i].minQuantity || 0 });
+        }
+      }
+    }
+
+    const toConsume = [];
+    const offeredMap = new Map();
+    for (const p of parsedItems) {
+      const k = (p.itemName || '').trim().toLowerCase();
+      if (!k) continue;
+      const prev = offeredMap.get(k) || 0;
+      offeredMap.set(k, prev + (p.quantity || 1));
+    }
+    const nameByLower = new Map();
+    for (const p of parsedItems) {
+      const k = (p.itemName || '').trim().toLowerCase();
+      if (!nameByLower.has(k)) nameByLower.set(k, (p.itemName || '').trim());
+    }
+    for (const r of requiredList) {
+      const k = (r.itemName || '').toLowerCase();
+      const need = r.minQuantity || 0;
+      const have = offeredMap.get(k) || 0;
+      const take = Math.min(need, have);
+      if (take > 0) {
+        toConsume.push({ itemName: nameByLower.get(k) || r.itemName, quantity: take });
+      }
+    }
+    return toConsume;
+  }
+
+  return [];
 }
 
 function ensurePuzzleConfig(grotto) {
@@ -210,6 +296,21 @@ function checkPuzzleOffer(grotto, parsedItems) {
   return { approved: false };
 }
 
+// ---------------------------------------------------------------------------
+// Puzzle Success — Flavor text when offering is correct
+// ---------------------------------------------------------------------------
+const PUZZLE_SUCCESS_FLAVORS = [
+  "The roots accept your offering. A warm light suffuses the grotto as spirit orbs materialize before each party member.",
+  "The statue hums with approval. The offering pit glows, and one by one, spirit orbs emerge—one for each of you.",
+  "Something in the grotto stirs. The ancient structure recognizes your gift. Spirit orbs coalesce in the air and drift into your hands.",
+  "The runes flare briefly, then settle. Your offering has satisfied whatever watches over this place. Spirit orbs appear for everyone.",
+  "A soft chime echoes through the chamber. The grotto rewards your wisdom. Each party member receives a Spirit Orb.",
+];
+
+function getRandomPuzzleSuccessFlavor() {
+  return PUZZLE_SUCCESS_FLAVORS[Math.floor(Math.random() * PUZZLE_SUCCESS_FLAVORS.length)];
+}
+
 module.exports = {
   ODDS_STRUCTURE,
   OFFERING_STATUE,
@@ -220,4 +321,6 @@ module.exports = {
   getPuzzleFlavor,
   ensurePuzzleConfig,
   checkPuzzleOffer,
+  getPuzzleConsumeItems,
+  getRandomPuzzleSuccessFlavor,
 };

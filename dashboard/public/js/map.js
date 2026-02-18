@@ -1272,6 +1272,7 @@ function getPinTextShadow(category) {
 // Exploration discovery icons (custom PNGs only); pin.icon may be "exploration:grotto" etc.
 var EXPLORATION_ICON_URLS = {
     grotto: 'https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png',
+    grotto_cleansed: 'https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png',
     monster_camp: 'https://storage.googleapis.com/tinglebot/maps/monstercamproots2024.png',
     ruins: 'https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png',
     relic: 'https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png'
@@ -1281,7 +1282,12 @@ function getPinIconHtml(pin) {
     if (typeof icon === 'string' && icon.indexOf('exploration:') === 0) {
         var type = icon.slice(12);
         var url = EXPLORATION_ICON_URLS[type] || EXPLORATION_ICON_URLS.ruins;
-        if (url) return '<img src="' + url + '" alt="" class="exploration-pin-icon" style="width:28px;height:28px;object-fit:contain;display:block;">';
+        if (url) {
+            var grottoClass = type === 'grotto_cleansed' ? 'grotto-gold' : '';
+            var wrap = grottoClass ? '<div class="grotto-pin-wrap ' + grottoClass + '">' : '';
+            var wrapEnd = grottoClass ? '</div>' : '';
+            return wrap + '<img src="' + url + '" alt="" class="exploration-pin-icon" style="width:28px;height:28px;object-fit:contain;display:block;">' + wrapEnd;
+        }
     }
     return '<i class="' + (icon || 'fas fa-map-marker-alt') + '"></i>';
 }

@@ -5,7 +5,7 @@
 //          ROTW_Map Coords_2025 - Sheet1.csv, using map geometry from mapold.
 //
 // Usage: node scripts/seed-map-data.js
-//        (run from dashboard directory, or with path to csv)
+//        node scripts/seed-map-data.js h8   (seed only square h8)
 // ============================================================================
 
 const fs = require('fs');
@@ -227,8 +227,10 @@ function buildSquares(squaresMap) {
 }
 
 async function main() {
+  const onlySquareId = process.argv[2]?.trim().toUpperCase(); // e.g. H8
+
   const projectRoot = path.resolve(__dirname, '..', '..');
-  const csvPath = path.join(projectRoot, 'ROTW_Map Coords_2025 - Sheet1.csv');
+  const csvPath = path.join(projectRoot, 'docs', 'ROTW_Map Coords_2025 - Sheet1.csv');
 
   if (!fs.existsSync(csvPath)) {
     console.error(`❌ CSV not found: ${csvPath}`);
@@ -237,7 +239,16 @@ async function main() {
 
   console.log('Parsing CSV...');
   const squaresMap = parseCsv(csvPath);
-  const squares = buildSquares(squaresMap);
+  let squares = buildSquares(squaresMap);
+
+  if (onlySquareId) {
+    squares = squares.filter((s) => s.squareId.toUpperCase() === onlySquareId);
+    if (squares.length === 0) {
+      console.error(`❌ Square ${onlySquareId} not found in CSV data.`);
+      process.exit(1);
+    }
+    console.log(`Seeding only square ${onlySquareId}.`);
+  }
 
   console.log(`Found ${squares.length} squares to seed.`);
 
