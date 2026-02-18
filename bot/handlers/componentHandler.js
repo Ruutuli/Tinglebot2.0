@@ -1945,6 +1945,7 @@ async function handleComponentInteraction(interaction) {
 
     // Explore buttons (ruins/chest/grotto) are handled by message collectors in explore.js
     if (interaction.customId.startsWith('explore_')) {
+      logger.info("EXPLORE", `[componentHandler] explore_ button ignored (handled by collector): customId=${interaction.customId} userId=${interaction.user?.id}`);
       return;
     }
 

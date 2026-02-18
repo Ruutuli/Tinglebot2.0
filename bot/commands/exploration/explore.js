@@ -661,13 +661,16 @@ async function partyHasLensOfTruth(party) {
 // ------------------- handleGrottoCleanse ------------------
 // Plume + 1 stamina; create Grotto, roll trial; blessing = immediate Spirit Orbs
 async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextCharacter, ruinRestRecovered) {
+ logger.info("EXPLORE", `[explore.js] handleGrottoCleanse ENTER expeditionId=${expeditionId} characterIndex=${characterIndex}`);
  const freshParty = await Party.findActiveByPartyId(expeditionId);
  if (!freshParty) {
+  logger.warn("EXPLORE", `[explore.js] handleGrottoCleanse: expedition not found expeditionId=${expeditionId}`);
   await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
   return;
  }
  const grottoPayResult = await payStaminaOrStruggle(freshParty, characterIndex, 1, { order: "currentFirst" });
  if (!grottoPayResult.ok) {
+  logger.info("EXPLORE", `[explore.js] handleGrottoCleanse: not enough stamina/hearts expeditionId=${expeditionId}`);
   const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
   const partyTotalHearts = Math.max(0, freshParty.totalHearts ?? 0);
   const charName = freshParty.characters[characterIndex]?.name || "Party";
@@ -686,6 +689,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  }
  const plumeHolder = await findGoddessPlumeHolder(freshParty);
  if (!plumeHolder) {
+  logger.info("EXPLORE", `[explore.js] handleGrottoCleanse: no Goddess Plume holder in party expeditionId=${expeditionId}`);
   const charName = freshParty.characters[characterIndex]?.name || "Party";
   const at = new Date();
   pushProgressLog(freshParty, charName, "grotto", `Found a grotto in ${location}; mark on map for later (no Goddess Plume to cleanse).`, undefined, undefined, at);
@@ -735,6 +739,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   ...(puzzleState && { puzzleState: puzzleState }),
  });
  await grottoDoc.save();
+ logger.info("EXPLORE", `[explore.js] handleGrottoCleanse: grotto created ${grottoName} trialType=${trialType} expeditionId=${expeditionId}`);
  await pushDiscoveryToMap(freshParty, "grotto", at, i.user?.id, { discoveryKey, name: grottoName });
  const grottoCostsForLog = buildCostsForLog(grottoPayResult);
  pushProgressLog(freshParty, cleanseCharacter.name, "grotto_cleansed", `Cleansed grotto **${grottoName}** in ${location} (1 Goddess Plume + 1 stamina).`, undefined, Object.keys(grottoCostsForLog).length ? grottoCostsForLog : { staminaLost: 1 }, at);
@@ -2853,12 +2858,21 @@ module.exports = {
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
 
       if (isYesNoChoice || isMonsterCampChoice) {
+       const expectedUserId = interaction.user.id;
        const collector = msg.createMessageComponentCollector({
-        filter: (i) => i.user.id === interaction.user.id,
+        filter: (i) => {
+         const match = i.user.id === expectedUserId;
+         if (!match) {
+          logger.info("EXPLORE", `[explore.js] Grotto/ruins/chest button filter REJECTED: clicker=${i.user.id} (${i.user.tag}) expected=${expectedUserId} outcomeType=${outcomeType} customId=${i.customId}`);
+         }
+         return match;
+        },
         time: 5 * 60 * 1000,
         max: 1,
        });
        collector.on("collect", async (i) => {
+        logger.info("EXPLORE", `[explore.js] Button collected: outcomeType=${outcomeType} customId=${i.customId} userId=${i.user.id} expeditionId=${expeditionId}`);
+        try {
         await i.deferUpdate();
         const isYes = i.customId.endsWith("_yes") || i.customId.includes("_yes|");
         let disabledRow;
@@ -3451,8 +3465,10 @@ module.exports = {
         if (outcomeType === "grotto") {
          const at = new Date();
          if (isYes) {
+          logger.info("EXPLORE", `[explore.js] Grotto Yes chosen, calling handleGrottoCleanse expeditionId=${expeditionId} characterIndex=${characterIndex}`);
           // Yes = cleanse (handled by handleGrottoCleanse; discovery pushed there if needed)
           await handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextCharacter, ruinRestRecovered);
+          logger.info("EXPLORE", `[explore.js] handleGrottoCleanse returned expeditionId=${expeditionId}`);
           return;
          }
          // No = mark on map for later
@@ -3516,8 +3532,19 @@ module.exports = {
           content: `**${character.name}** decided not to explore the ruins! <@${nextCharacter.userId}> take your turn.`,
          }).catch(() => {});
         }
+        } catch (collectErr) {
+         logger.error("EXPLORE", `[explore.js] ❌ Collector collect handler error outcomeType=${outcomeType} customId=${i?.customId} userId=${i?.user?.id}: ${collectErr?.message || collectErr}`);
+         if (i && !i.replied && !i.deferred) {
+          await i.reply({ content: "❌ Something went wrong processing your choice. Try /explore roll again.", flags: 64 }).catch(() => {});
+         } else if (i?.followUp) {
+          await i.followUp({ content: "❌ Something went wrong processing your choice. Try /explore roll again.", flags: 64 }).catch(() => {});
+         }
+        }
        });
        collector.on("end", async (collected, reason) => {
+        if (collected.size === 0) {
+         logger.info("EXPLORE", `[explore.js] Collector ended without collect: reason=${reason} outcomeType=${outcomeType} expeditionId=${expeditionId}`);
+        }
         if (reason === "time" && collected.size === 0 && msg.editable) {
          const fp = await Party.findActiveByPartyId(expeditionId);
          if (fp) {
