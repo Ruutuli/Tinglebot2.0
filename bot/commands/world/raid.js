@@ -9,6 +9,7 @@ const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommand
 const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
 const Raid = require('@/models/RaidModel');
 const Party = require('@/models/PartyModel');
+const Grotto = require('@/models/GrottoModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 
 // ============================================================================
@@ -872,6 +873,32 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
 // Eligible: 1+ damage OR 3+ rounds participated; plus anyone in lootEligibleRemoved (left/removed but was eligible)
 async function handleRaidVictory(interaction, raidData, monster) {
   try {
+    // ------------------- Grotto Test of Power: complete grotto and grant Spirit Orbs to party -------------------
+    if (raidData.grottoId) {
+      try {
+        const grotto = await Grotto.findById(raidData.grottoId);
+        if (grotto && grotto.trialType === 'test_of_power' && !grotto.completedAt && raidData.expeditionId) {
+          grotto.completedAt = new Date();
+          await grotto.save();
+          const party = await Party.findActiveByPartyId(raidData.expeditionId);
+          if (party && party.characters && party.characters.length > 0) {
+            for (const slot of party.characters) {
+              if (slot._id) {
+                try {
+                  await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
+                } catch (orbErr) {
+                  console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
+                }
+              }
+            }
+            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members`);
+          }
+        }
+      } catch (grottoErr) {
+        console.error(`[raid.js]: ❌ Error completing Grotto Test of Power:`, grottoErr);
+      }
+    }
+
     const participants = raidData.participants || [];
     const lootEligibleRemoved = raidData.lootEligibleRemoved || [];
     const eligibleParticipants = participants.filter(
@@ -1073,6 +1100,15 @@ async function handleRaidVictory(interaction, raidData, monster) {
     if (blightedCharacters.length > 0) {
       const blightValue = `The following characters have been **blighted** by the Gloom Hands encounter:\n${blightedCharacters.map(name => `• **${name}**`).join('\n')}\n\nYou can be healed by **Oracles, Sages & Dragons**\n▹ [Blight Information](https://rootsofthewild.com/world/blight)`;
       victoryEmbed.addFields(splitIntoEmbedFields(blightValue, '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**'));
+    }
+
+    // Grotto Test of Power: note that Spirit Orbs were granted to the party
+    if (raidData.grottoId) {
+      victoryEmbed.addFields({
+        name: '🗺️ **Grotto Trial**',
+        value: 'Test of Power complete — each party member received a Spirit Orb. Use </explore roll> or </explore move> to continue your expedition.',
+        inline: false
+      });
     }
     
     victoryEmbed

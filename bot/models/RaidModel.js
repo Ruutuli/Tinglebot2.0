@@ -50,6 +50,8 @@ const raidSchema = new mongoose.Schema({
 
   // Optional: only set when raid was triggered from /explore roll (exploration). Most raids are village raids and have this null.
   expeditionId: { type: String, default: null },
+  // When set, this raid is a Grotto Test of Power; on victory complete the grotto and grant Spirit Orbs to party.
+  grottoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Grotto', default: null },
   // Exploration raids only: number of failed retreat attempts this raid. Each failure adds 5% to next attempt (like travel flee).
   failedRetreatAttempts: { type: Number, default: 0, min: 0 },
 

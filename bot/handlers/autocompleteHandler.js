@@ -863,6 +863,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
               await handleExploreMoveQuadrantAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "discovery" && interaction.options.getSubcommand() === "discovery") {
               await handleExploreDiscoveryAutocomplete(interaction, focusedOption);
+          } else if (focusedOption.name === "grotto" && interaction.options.getSubcommandGroup() === "grotto") {
+              await handleExploreGrottoNameAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -3602,6 +3604,63 @@ async function handleExploreDiscoveryAutocomplete(interaction, focusedOption) {
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("Error during explore discovery autocomplete:", error);
+  await interaction.respond([]);
+ }
+}
+
+// ------------------- Explore: Grotto Name Autocomplete -------------------
+// Lists grottos at party's current location for /explore grotto subcommands.
+async function handleExploreGrottoNameAutocomplete(interaction, focusedOption) {
+ try {
+  await DatabaseConnectionManager.connectToTinglebot();
+  const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
+  if (!expeditionId) return await interaction.respond([]);
+
+  const party = await Party.findActiveByPartyId(expeditionId).select("square quadrant").lean();
+  if (!party || !party.square || !party.quadrant) {
+   return await interaction.respond([{ name: "No expedition location", value: "none" }]);
+  }
+
+  const Grotto = require("../models/GrottoModel.js");
+  const squareId = String(party.square || "").trim();
+  const quadrantId = String(party.quadrant || "").trim().toUpperCase();
+  if (!squareId || !quadrantId) return await interaction.respond([]);
+
+  const grottos = await Grotto.find({
+   squareId: new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+   quadrantId: new RegExp(`^${quadrantId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+   partyId: expeditionId,
+   sealed: false,
+   completedAt: null,
+  })
+   .sort({ unsealedAt: -1 })
+   .select("name trialType")
+   .lean();
+
+  const trialLabels = { blessing: "Blessing", target_practice: "Target Practice", puzzle: "Puzzle", test_of_power: "Test of Power", maze: "Maze" };
+  const choices = grottos.map((g) => {
+   const grottoName = (g.name || "Unknown Grotto").trim();
+   const trial = trialLabels[g.trialType] || g.trialType || "Trial";
+   const displayName = grottos.length > 1 ? `${grottoName} (${trial})` : grottoName;
+   return { name: displayName.length > 100 ? displayName.slice(0, 97) + "..." : displayName, value: grottoName || String(g._id) };
+  });
+
+  if (choices.length === 0) {
+   return await interaction.respond([{ name: "No active grottos at this location", value: "none" }]);
+  }
+
+  const value = (focusedOption.value || "").toLowerCase();
+  const filtered = value
+   ? choices.filter((c) => c.value.toLowerCase().includes(value) || c.name.toLowerCase().includes(value))
+   : choices;
+
+  return await safeRespondWithValidation(
+   interaction,
+   filtered.length > 0 ? filtered.slice(0, 25) : choices.slice(0, 25)
+  );
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore grotto name autocomplete:", error);
   await interaction.respond([]);
  }
 }

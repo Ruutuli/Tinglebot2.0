@@ -1,6 +1,6 @@
 // ============================================================================
 // Grotto Maze — Song of Scrying / wall roll outcomes (Roll 1–6)
-// Used by /explore grotto maze when action is "wall". No /tableroll; use commands.
+// Used by /explore grotto maze when action is "wall".
 // ============================================================================
 
 const GROTTO_MAZE_OUTCOMES = [
@@ -32,11 +32,29 @@ const GROTTO_MAZE_OUTCOMES = [
     staminaCost: 3,
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
+  // Roll 4 — Pit trap (alternate)
+  {
+    roll: 4,
+    flavor:
+      "You sing the sequence on the wall and... wrong note! The floor gives way beneath you.\n\nYou lose 3❤️ hearts in the fall!\nYou spend 3🟩 stamina to climb out!",
+    type: 'pit_trap',
+    heartsLost: 3,
+    staminaCost: 3,
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
   // Roll 2 — Nothing
   {
     roll: 2,
     flavor:
       "You sing the sequence on the wall and... nothing changes, it's just as still as it was to begin with. Maybe there's another way?",
+    type: 'nothing',
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 2 — Nothing (alternate)
+  {
+    roll: 2,
+    flavor:
+      "You sing the sequence on the wall and... the runes flicker once, then go dark. Perhaps you need a different approach?",
     type: 'nothing',
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
@@ -57,6 +75,14 @@ const GROTTO_MAZE_OUTCOMES = [
     type: 'faster_path_open',
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
+  // Roll 1 — Faster path (alternate—lucky!)
+  {
+    roll: 1,
+    flavor:
+      "You sing the sequence on the wall and... somehow it works anyway! The wall slides aside, revealing a faster route. Beginner's luck?",
+    type: 'faster_path_open',
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
   // Roll 1 — Passage collapses
   {
     roll: 1,
@@ -73,6 +99,14 @@ const GROTTO_MAZE_OUTCOMES = [
     type: 'faster_path_open',
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
+  // Roll 6 — Success, faster path (alternate)
+  {
+    roll: 6,
+    flavor:
+      "You sing the sequence on the wall and... the ancient runes glow in approval. The wall grinds downward—a shortcut to the exit opens!",
+    type: 'faster_path_open',
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
   // Roll 5 — Nothing (duplicate roll 5)
   {
     roll: 5,
@@ -86,6 +120,14 @@ const GROTTO_MAZE_OUTCOMES = [
     roll: 3,
     flavor:
       "You sing the sequence on the wall and... the entire passageway rumbles. Your group is forced to flee as it collapses in on itself — your group is back in an earlier part of the maze.",
+    type: 'collapse',
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 3 — Collapse (alternate)
+  {
+    roll: 3,
+    flavor:
+      "You sing the sequence on the wall and... the walls tremble. A cascade of roots and stone forces you to retreat—you're back at an earlier junction.",
     type: 'collapse',
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
@@ -120,7 +162,7 @@ const GROTTO_MAZE_OUTCOMES = [
 
 // ============================================================================
 // Grotto Maze — Trap cell outcomes (stepping on a yellow trap tile). Roll 1–5.
-// No battles, no tableroll. Used when party moves onto a trap cell.
+// Used when party moves onto a trap cell.
 // ============================================================================
 
 const GROTTO_MAZE_TRAP_OUTCOMES = [
@@ -133,11 +175,29 @@ const GROTTO_MAZE_TRAP_OUTCOMES = [
     staminaCost: 4,
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
+  // Roll 5 — Dart trap (alternate)
+  {
+    roll: 5,
+    flavor:
+      "Something clicks. Sharpened stakes shoot from hidden slots—you dodge most, but one grazes your side.\n\nYou lose 4❤️ hearts.\nYou spend 4🟩 stamina scrambling to safety.",
+    heartsLost: 4,
+    staminaCost: 4,
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
   // Roll 4 — Pit trap
   {
     roll: 4,
     flavor:
       "You step on something loose, the ground crumbles around you and you've fallen into a pit trap!\n\nYou lose 3❤️ hearts in the fall!\nYou spend 3🟩 stamina to climb out!",
+    heartsLost: 3,
+    staminaCost: 3,
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 4 — Pit trap (alternate)
+  {
+    roll: 4,
+    flavor:
+      "The ground collapses! You tumble into a shallow pit.\n\nYou lose 3❤️ hearts in the fall!\nYou spend 3🟩 stamina to climb out!",
     heartsLost: 3,
     staminaCost: 3,
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
@@ -158,6 +218,14 @@ const GROTTO_MAZE_TRAP_OUTCOMES = [
     staminaCost: 2,
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
+  // Roll 3 — Darts dodge (alternate)
+  {
+    roll: 3,
+    flavor:
+      "A tripwire snaps! Darts fly from the walls. You spin aside in time—winded but unharmed.\n\nYou spend 2🟩 stamina recovering your balance.",
+    staminaCost: 2,
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
   // Roll 3 — Crumbling floor avoid
   {
     roll: 3,
@@ -166,11 +234,26 @@ const GROTTO_MAZE_TRAP_OUTCOMES = [
     staminaCost: 1,
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
+  // Roll 3 — Crumbling floor avoid (alternate)
+  {
+    roll: 3,
+    flavor:
+      "The tiles crack underfoot—you leap to solid ground just in time!\n\nYou spend 1🟩 stamina in the scramble but suffer no injuries.",
+    staminaCost: 1,
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
   // Roll 1 — Nothing
   {
     roll: 1,
     flavor:
       "You hear something click... but nothing happens? Perhaps whatever was here doesn't work anymore... lucky!",
+    ctaHint: 'Continue exploring. Use </explore grotto maze>.',
+  },
+  // Roll 1 — Nothing (alternate)
+  {
+    roll: 1,
+    flavor:
+      "Your foot lands on a suspicious stone—it shifts, then... nothing. The mechanism must be rusted shut. Lucky break!",
     ctaHint: 'Continue exploring. Use </explore grotto maze>.',
   },
 ];

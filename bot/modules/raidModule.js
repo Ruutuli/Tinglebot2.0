@@ -451,7 +451,8 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
 // ---- Function: startRaid ----
 // Creates a new raid instance with the given monster and village
 // expeditionId: when set, only members of that expedition can join (exploration-triggered raid)
-async function startRaid(monster, village, interaction = null, expeditionId = null) {
+// grottoId: when set, this raid is a Grotto Test of Power; on victory complete grotto and grant Spirit Orbs
+async function startRaid(monster, village, interaction = null, expeditionId = null, grottoId = null) {
   try {
     // Generate unique raid ID with 'R' prefix for Raid
     const raidId = generateUniqueId('R');
@@ -478,6 +479,7 @@ async function startRaid(monster, village, interaction = null, expeditionId = nu
       village: village,
       channelId: interaction?.channel?.id || null,
       expeditionId: expeditionId || null,
+      grottoId: grottoId || null,
       expiresAt,
       analytics: {
         monsterTier: monster.tier,
@@ -1339,9 +1341,9 @@ async function createRaidEmbed(raid, monsterImage) {
 // ---- Function: triggerRaid ----
 // Triggers a raid in the specified channel
 // expeditionId: when set, raid is linked to that expedition (only party members can join; skip global cooldown)
-async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null, isQuotaBased = false, expeditionId = null) {
+async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null, isQuotaBased = false, expeditionId = null, grottoId = null) {
   try {
-    console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}${expeditionId ? ` (expedition ${expeditionId})` : ''}`);
+    console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}${expeditionId ? ` (expedition ${expeditionId})` : ''}${grottoId ? ' (Test of Power grotto)' : ''}`);
     console.log(`[raidModule.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
     console.log(`[raidModule.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
     
@@ -1410,7 +1412,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     }
     
     // Start the raid
-    const { raidId, raidData } = await startRaid(monster, villageId, interaction, expeditionId);
+    const { raidId, raidData } = await startRaid(monster, villageId, interaction, expeditionId, grottoId);
     
     // Automatically add character to raid if provided (from loot command)
     if (character) {

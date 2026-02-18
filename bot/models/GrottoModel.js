@@ -31,6 +31,9 @@ const GrottoSchema = new Schema({
     failed: { type: Boolean, default: false },
   },
   puzzleState: {
+    puzzleSubType: { type: String, enum: ['odd_structure', 'offering_statue'], default: null },
+    puzzleVariant: { type: Number, default: null }, // 0-4 for odd structure
+    puzzleClueIndex: { type: Number, default: null }, // 0-13 for offering statue
     offeringSubmitted: { type: Boolean, default: false },
     offeringApproved: { type: Boolean, default: null },
     offeringDeniedAt: { type: Date, default: null },
@@ -56,6 +59,10 @@ const GrottoSchema = new Schema({
       }],
     },
     openedChests: [{ type: String }], // cell keys e.g. '3,5' to avoid double-open
+  },
+  testOfPowerState: {
+    raidStarted: { type: Boolean, default: false },
+    raidId: { type: String, default: null },
   },
 }, { collection: 'grottos' });
 

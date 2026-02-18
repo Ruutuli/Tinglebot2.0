@@ -12,7 +12,7 @@ const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
 // ------------------- Database ------------------
-const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, fetchMonsterByName, fetchCharacterById } = require('@/database/db.js');
+const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, getCharacterInventoryCollectionWithModSupport, fetchMonsterByName, fetchCharacterById } = require('@/database/db.js');
 
 // ------------------- Models ------------------
 const Raid = require("../../models/RaidModel.js");
@@ -47,9 +47,11 @@ const path = require("path");
 
 // ------------------- Data ------------------
 const { rollGrottoTrialType, getTrialLabel } = require('@/data/grottoTrials.js');
-const { getRandomGrottoName } = require('@/data/grottoNames.js');
+const { rollPuzzleConfig, getPuzzleFlavor, ensurePuzzleConfig, checkPuzzleOffer } = require('@/data/grottoPuzzleData.js');
+const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
 const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome } = require('@/data/grottoMazeOutcomes.js');
+const { rollTestOfPowerMonster } = require('@/data/grottoTestOfPowerMonsters.js');
 const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 
@@ -425,6 +427,28 @@ async function hasActiveGrottoAtLocation(party, expeditionId) {
   return true;
 }
 
+// ------------------- resolveGrottoAtLocation ------------------
+// Resolve grotto by optional name/id, or fall back to most recently unsealed
+async function resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption) {
+ const query = {
+  squareId: new RegExp(`^${String(squareId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+  quadrantId: new RegExp(`^${String(quadrantId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+  partyId: expeditionId,
+  sealed: false,
+ };
+ if (grottoOption && String(grottoOption).trim()) {
+  const val = String(grottoOption).trim();
+  if (val === "none") return null;
+  const byName = await Grotto.findOne({ ...query, name: new RegExp(`^${val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+  if (byName) return byName;
+  try {
+   const byId = await Grotto.findById(val);
+   if (byId && byId.partyId === expeditionId && !byId.sealed) return byId;
+  } catch (_) {}
+ }
+ return Grotto.findOne(query).sort({ unsealedAt: -1 });
+}
+
 // ------------------- getActiveGrottoCommand ------------------
 // Returns the grotto subcommand mention for the trial type (targetpractice, maze, puzzle, continue)
 function getActiveGrottoCommand(trialType) {
@@ -433,6 +457,25 @@ function getActiveGrottoCommand(trialType) {
   if (trialType === "maze") return `</explore grotto maze:${cmdId}>`;
   if (trialType === "puzzle") return `</explore grotto puzzle:${cmdId}>`;
   return `</explore grotto continue:${cmdId}>`;
+}
+
+// ------------------- parsePuzzleItems ------------------
+// Parse items string: "Wood x50, Ancient Screw x20, Flint" -> [{ itemName, quantity }, ...]
+// Format: "Name" (qty 1) or "Name xN"
+function parsePuzzleItems(itemsStr) {
+  if (!itemsStr || typeof itemsStr !== "string") return [];
+  const parts = itemsStr.split(",").map((s) => s.trim()).filter(Boolean);
+  const result = [];
+  const xQtyRe = /^\s*(.+?)\s*x\s*(\d+)\s*$/i;
+  for (const part of parts) {
+    const m = part.match(xQtyRe);
+    if (m) {
+      result.push({ itemName: m[1].trim(), quantity: Math.max(1, parseInt(m[2], 10)) });
+    } else {
+      result.push({ itemName: part, quantity: 1 });
+    }
+  }
+  return result;
 }
 
 // ------------------- getLastProgressOutcomeForLocation ------------------
@@ -585,32 +628,34 @@ async function updateDiscoveryName(squareId, quadrantId, discoveryKey, name) {
 }
 
 // ------------------- findGoddessPlumeHolder ------------------
-// First loadout, then inventory; returns { characterIndex, character, source } or null
+// Party loadout only (Goddess Plume must be in expedition loadout; other grotto items use regular inventory)
 async function findGoddessPlumeHolder(party) {
  for (let ci = 0; ci < (party.characters || []).length; ci++) {
   const slot = party.characters[ci];
   const items = slot.items || [];
   if (items.some((it) => String(it.itemName || "").toLowerCase() === "goddess plume")) {
    const character = await Character.findById(slot._id);
-   if (character) return { characterIndex: ci, character, source: "loadout" };
-  }
- }
- for (let ci = 0; ci < (party.characters || []).length; ci++) {
-  const slot = party.characters[ci];
-  const character = await Character.findById(slot._id);
-  if (!character) continue;
-  try {
-   const collection = await getCharacterInventoryCollection(character.name);
-   const entry = await collection.findOne({
-    itemName: { $regex: /^Goddess Plume$/i },
-    quantity: { $gte: 1 },
-   });
-   if (entry) return { characterIndex: ci, character, source: "inventory" };
-  } catch (_) {
-   /* skip */
+   if (character) return { characterIndex: ci, character };
   }
  }
  return null;
+}
+
+// ------------------- partyHasLensOfTruth ------------------
+// True if any party member has "Lens of Truth" in inventory (grottos use inventory, not party/loadout items)
+async function partyHasLensOfTruth(party) {
+  for (const slot of party.characters || []) {
+    try {
+      const collection = await getCharacterInventoryCollectionWithModSupport(slot);
+      const entry = await collection.findOne({
+        characterId: slot._id,
+        itemName: { $regex: /^Lens of Truth$/i },
+        quantity: { $gte: 1 },
+      });
+      if (entry) return true;
+    } catch (_) { /* skip */ }
+  }
+  return false;
 }
 
 // ------------------- handleGrottoCleanse ------------------
@@ -648,37 +693,34 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   const noPlumeEmbed = new EmbedBuilder()
    .setTitle("❌ No Goddess Plume to cleanse the grotto")
    .setColor(regionColors[freshParty.region] || "#00ff99")
-   .setDescription("No party member has a Goddess Plume in their loadout or inventory. Mark the grotto on the dashboard for later or continue exploring.")
+   .setDescription("No party member has a Goddess Plume in their expedition loadout. Add one to your loadout before departing, then mark the grotto on the dashboard for later or continue exploring.")
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(noPlumeEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
   await msg.edit({ embeds: [noPlumeEmbed], components: [disabledRow] }).catch(() => {});
   await i.followUp({ embeds: [noPlumeEmbed], ephemeral: true }).catch(() => {});
   return;
  }
- const { character: cleanseCharacter, source: plumeSource } = plumeHolder;
- if (plumeSource === "loadout") {
-  const idx = (freshParty.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
-  if (idx !== -1) {
-   freshParty.characters[plumeHolder.characterIndex].items.splice(idx, 1);
-   freshParty.markModified("characters");
-  }
- } else {
-  try {
-   await removeItemInventoryDatabase(cleanseCharacter._id, "Goddess Plume", 1, i, "Grotto cleanse");
-  } catch (err) {
-   handleInteractionError(err, i, { source: "explore.js grotto cleanse remove plume" });
-   await msg.edit({ components: [disabledRow] }).catch(() => {});
-   return;
-  }
+ const idx = (freshParty.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
+ if (idx !== -1) {
+  freshParty.characters[plumeHolder.characterIndex].items.splice(idx, 1);
+  freshParty.markModified("characters");
  }
  // Cost already applied by payStaminaOrStruggle
 
  const at = new Date();
  const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
  const quadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
- const grottoName = getRandomGrottoName();
+ const usedGrottoNames = await Grotto.distinct("name").catch(() => []);
+ const grottoName = getRandomGrottoNameUnused(usedGrottoNames);
  const discoveryKey = `grotto|${squareId}|${quadrantId}|${at.toISOString()}`;
  const trialType = rollGrottoTrialType();
+ const puzzleState = trialType === 'puzzle' ? (() => {
+  const cfg = rollPuzzleConfig();
+  const s = { puzzleSubType: cfg.subType };
+  if (cfg.subType === 'odd_structure') s.puzzleVariant = cfg.variant;
+  else s.puzzleClueIndex = cfg.clueIndex;
+  return s;
+ })() : undefined;
  const grottoDoc = new Grotto({
   squareId,
   quadrantId,
@@ -689,6 +731,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   partyId: expeditionId,
   unsealedAt: at,
   unsealedBy: cleanseCharacter.name,
+  ...(puzzleState && { puzzleState: puzzleState }),
  });
  await grottoDoc.save();
  await pushDiscoveryToMap(freshParty, "grotto", at, i.user?.id, { discoveryKey, name: grottoName });
@@ -732,13 +775,18 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
 
  const trialLabel = getTrialLabel(trialType);
  const grottoCmdHint = getActiveGrottoCommand(trialType);
+ let continueDesc = `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n**Trial: ${trialLabel}** — `;
+ if (trialType === 'puzzle' && grottoDoc.puzzleState?.puzzleSubType) {
+  const puzzleFlavor = getPuzzleFlavor(grottoDoc);
+  if (puzzleFlavor) continueDesc += `\n\n${puzzleFlavor}`;
+  else continueDesc += `Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdHint} for your turn.`;
+ } else {
+  continueDesc += `Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdHint} for your turn.`;
+ }
  const continueEmbed = new EmbedBuilder()
   .setTitle("🗺️ **Expedition: Grotto cleansed!**")
   .setColor(regionColors[freshParty.region] || "#00ff99")
-  .setDescription(
-   `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n` +
-   `**Trial: ${trialLabel}** — Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdHint} for your turn.`
-  )
+  .setDescription(continueDesc)
   .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
  addExplorationStandardFields(continueEmbed, {
   party: freshParty,
@@ -1043,6 +1091,7 @@ module.exports = {
       .setDescription("Enter or continue the grotto trial after cleansing")
       .addStringOption((o) => o.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName("charactername").setDescription("Your character name").setRequired(true).setAutocomplete(true))
+      .addStringOption((o) => o.setName("grotto").setDescription("Grotto name (if multiple at this location)").setRequired(false).setAutocomplete(true))
     )
     .addSubcommand((sub) =>
      sub
@@ -1050,13 +1099,15 @@ module.exports = {
       .setDescription("Take your turn in a Target Practice grotto trial")
       .addStringOption((o) => o.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName("charactername").setDescription("Your character name").setRequired(true).setAutocomplete(true))
+      .addStringOption((o) => o.setName("grotto").setDescription("Grotto name (if multiple at this location)").setRequired(false).setAutocomplete(true))
     )
     .addSubcommand((sub) =>
      sub
       .setName("puzzle")
-      .setDescription("Submit an offering for a Puzzle grotto (mod will approve or deny)")
+      .setDescription("Submit an offering for a Puzzle grotto (correct items = Spirit Orbs for all)")
       .addStringOption((o) => o.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName("charactername").setDescription("Your character name").setRequired(true).setAutocomplete(true))
+      .addStringOption((o) => o.setName("grotto").setDescription("Grotto name (if multiple at this location)").setRequired(false).setAutocomplete(true))
       .addStringOption((o) => o.setName("items").setDescription("Item(s) offered (comma-separated)").setRequired(true))
       .addStringOption((o) => o.setName("description").setDescription("Optional flavor text"))
     )
@@ -1066,6 +1117,7 @@ module.exports = {
       .setDescription("Maze direction or wall roll (direction: left/right/straight/back)")
       .addStringOption((o) => o.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName("charactername").setDescription("Your character name").setRequired(true).setAutocomplete(true))
+      .addStringOption((o) => o.setName("grotto").setDescription("Grotto name (if multiple at this location)").setRequired(false).setAutocomplete(true))
       .addStringOption((o) =>
        o
         .setName("action")
@@ -1112,7 +1164,8 @@ module.exports = {
     const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
 
     if (subcommand === "continue") {
-     const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
+     const grottoOption = interaction.options.getString("grotto");
+     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
      if (!grotto) {
       return interaction.editReply(
        "No active grotto trial at this location for this expedition. Make sure you have cleansed a grotto here and are in the same square and quadrant."
@@ -1143,19 +1196,74 @@ module.exports = {
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === false) {
       return interaction.editReply("The puzzle offering was denied. Items offered are still consumed. The grotto trial is complete with no Spirit Orbs.");
      }
+     if (grotto.trialType === "test_of_power") {
+      const raidStarted = grotto.testOfPowerState?.raidStarted && grotto.testOfPowerState?.raidId;
+      if (raidStarted) {
+       const raidId = grotto.testOfPowerState.raidId;
+       const embedInProgress = new EmbedBuilder()
+        .setTitle("🗺️ **Grotto: Test of Power**")
+        .setColor(regionColors[party.region] || "#00ff99")
+        .setDescription(`The trial has already begun. Use </raid> with Raid ID **${raidId}** to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
+        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+       addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</raid> (Raid ID: ${raidId})` });
+       return interaction.editReply({ embeds: [embedInProgress] });
+      }
+      const poolEntry = rollTestOfPowerMonster();
+      let monster = await fetchMonsterByName(poolEntry.name);
+      if (!monster) {
+       monster = {
+        name: poolEntry.name,
+        hearts: poolEntry.hearts,
+        tier: poolEntry.tier,
+        nameMapping: (poolEntry.name || "").replace(/\s+/g, ""),
+        image: "",
+       };
+      }
+      const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
+      const raidResult = await triggerRaid(monster, interaction, village, false, null, false, expeditionId, grotto._id);
+      if (raidResult && raidResult.success) {
+       grotto.testOfPowerState = grotto.testOfPowerState || {};
+       grotto.testOfPowerState.raidStarted = true;
+       grotto.testOfPowerState.raidId = raidResult.raidId;
+       await grotto.save();
+       const embedStarted = new EmbedBuilder()
+        .setTitle("🗺️ **Grotto: Test of Power — Raid Started**")
+        .setColor(regionColors[party.region] || "#00ff99")
+        .setDescription(`The trial has begun! A **${monster.name}** has appeared. Use </raid> with Raid ID **${raidResult.raidId}** to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
+        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+       addExplorationStandardFields(embedStarted, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</raid> (Raid ID: ${raidResult.raidId})` });
+       return interaction.editReply({ embeds: [embedStarted] });
+      }
+      const errMsg = raidResult?.error || "Could not start the raid. Try again.";
+      return interaction.editReply(`Test of Power could not start the raid: ${errMsg}`);
+     }
      const trialLabel = getTrialLabel(grotto.trialType);
      const cmdId = getExploreCommandId();
-     const instructions = {
-      target_practice: `Establish turn order. Use </explore grotto targetpractice:${cmdId}> on each turn until the party succeeds (required successes) or one character fails.`,
-      puzzle: `Discuss with your group. Submit an offering with </explore grotto puzzle:${cmdId}> (items and optional description). A mod will approve or deny.`,
-      test_of_power: "Boss battle — no backing out. Prepare and fight; spirit orbs on victory. (Test of Power flow uses raid-style encounter; ensure party is ready.)",
-      maze: `Use </explore grotto maze:${cmdId}> with direction (left/right/straight/back) or **Wall** for Song of Scrying.`,
-     };
-     const text = instructions[grotto.trialType] || `Complete the ${trialLabel} trial.`;
+     let grottoDesc = `Party is at grotto in **${location}**.\n\n**Trial:** ${trialLabel}\n\n`;
+     if (grotto.trialType === 'puzzle') {
+      const ensured = ensurePuzzleConfig(grotto);
+      if (ensured !== grotto) {
+       await ensured.save();
+       Object.assign(grotto.puzzleState || {}, ensured.puzzleState);
+      }
+      const flavor = getPuzzleFlavor(grotto);
+      if (flavor) {
+       grottoDesc += `${flavor}`;
+      } else {
+       grottoDesc += `Discuss with your group. Submit an offering with </explore grotto puzzle:${cmdId}> (items and optional description). If correct, everyone gets Spirit Orbs.`;
+      }
+     } else {
+      const instructions = {
+       target_practice: `Establish turn order. Use </explore grotto targetpractice:${cmdId}> on each turn until the party succeeds (required successes) or one character fails.`,
+       test_of_power: "Boss battle — no backing out. Prepare and fight; spirit orbs on victory. (Test of Power flow uses raid-style encounter; ensure party is ready.)",
+       maze: `Use </explore grotto maze:${cmdId}> with direction (left/right/straight/back) or **Wall** for Song of Scrying.`,
+      };
+      grottoDesc += instructions[grotto.trialType] || `Complete the ${trialLabel} trial.`;
+     }
      const embed = new EmbedBuilder()
       .setTitle(`🗺️ **Grotto: ${trialLabel}**`)
       .setColor(regionColors[party.region] || "#00ff99")
-      .setDescription(`Party is at grotto in **${location}**.\n\n**Trial:** ${trialLabel}\n\n${text}`)
+      .setDescription(grottoDesc)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      addExplorationStandardFields(embed, {
       party,
@@ -1171,7 +1279,8 @@ module.exports = {
     }
 
     if (subcommand === "targetpractice") {
-     const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
+     const grottoOption = interaction.options.getString("grotto");
+     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
      if (!grotto || grotto.trialType !== "target_practice") {
       return interaction.editReply("No Target Practice grotto at this location for this expedition.");
      }
@@ -1298,24 +1407,67 @@ module.exports = {
     }
 
     if (subcommand === "puzzle") {
-     const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
+     const grottoOption = interaction.options.getString("grotto");
+     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
      if (!grotto || grotto.trialType !== "puzzle") {
       return interaction.editReply("No Puzzle grotto at this location for this expedition.");
      }
      if (grotto.puzzleState.offeringSubmitted) {
-      return interaction.editReply("An offering has already been submitted for this grotto. Await mod approval or denial.");
+      return interaction.editReply("An offering has already been submitted for this grotto. Use </explore grotto continue> to check the result.");
      }
      const itemsStr = interaction.options.getString("items");
      const description = interaction.options.getString("description") || "";
-     const itemNames = (itemsStr || "").split(",").map((s) => s.trim()).filter(Boolean);
-     if (itemNames.length === 0) return interaction.editReply("Provide at least one item name in the `items` option.");
+     const parsedItems = parsePuzzleItems(itemsStr);
+     if (parsedItems.length === 0) return interaction.editReply("Provide at least one item in the `items` option (e.g. `Wood x50, Ancient Screw x20` or `Wood, Flint`).");
+     // Validate: submitting character must have each item in required quantity (inventory only)
+     let inventoryCollection;
+     try {
+      inventoryCollection = await getCharacterInventoryCollectionWithModSupport(character);
+     } catch (err) {
+      logger.warn("EXPLORE", `[explore.js] puzzle getCharacterInventoryCollectionWithModSupport: ${err?.message || err}`);
+      return interaction.editReply("Could not read your inventory. Try again or contact staff.");
+     }
+     const inventoryEntries = await inventoryCollection.find({ characterId: character._id }).toArray();
+     const inventoryByItem = new Map();
+     for (const entry of inventoryEntries || []) {
+      const name = (entry.itemName || "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      inventoryByItem.set(key, (inventoryByItem.get(key) || 0) + (entry.quantity || 0));
+     }
+     for (const { itemName, quantity } of parsedItems) {
+      const key = itemName.trim().toLowerCase();
+      const have = inventoryByItem.get(key) || 0;
+      if (have < quantity) {
+       return interaction.editReply(
+        `You don't have enough **${itemName}**. You need ${quantity} but have ${have}. Check your inventory and try again.`
+       );
+      }
+     }
+     // Consume: remove each item; if any fails, do not set offeringSubmitted
+     try {
+      for (const { itemName, quantity } of parsedItems) {
+       await removeItemInventoryDatabase(character._id, itemName, quantity, interaction, "Grotto puzzle offering");
+      }
+     } catch (err) {
+      handleInteractionError(err, interaction, { source: "explore.js grotto puzzle removeItem" });
+      return interaction.editReply(
+        `Could not remove one or more items from your inventory. ${err?.message || err}. If items were partially consumed, contact staff.`
+      ).catch(() => {});
+     }
+     const displayItems = parsedItems.map((p) => (p.quantity > 1 ? `${p.itemName} x${p.quantity}` : p.itemName));
+     const checkResult = checkPuzzleOffer(grotto, parsedItems);
      grotto.puzzleState.offeringSubmitted = true;
-     grotto.puzzleState.offeringItems = itemNames;
+     grotto.puzzleState.offeringApproved = checkResult.approved;
+     grotto.puzzleState.offeringItems = displayItems;
      grotto.puzzleState.offeringDescription = description;
      grotto.puzzleState.offeringBy = character.name;
      grotto.puzzleState.offeredAt = new Date();
      await grotto.save();
-     pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${itemNames.join(", ")}. Await mod approval.`, undefined, undefined, new Date());
+     const approvedMsg = checkResult.approved
+      ? "**Correct!** Use </explore grotto continue> to receive Spirit Orbs for everyone."
+      : "The offering was not correct. Items are consumed. The grotto trial is complete with no Spirit Orbs.";
+     pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${displayItems.join(", ")}. ${checkResult.approved ? "Approved." : "Denied."}`, undefined, undefined, new Date());
      await party.save();
      return interaction.editReply({
       embeds: [
@@ -1323,7 +1475,7 @@ module.exports = {
         .setTitle("🗺️ **Grotto: Puzzle — Offering Submitted**")
         .setColor(regionColors[party.region] || "#00ff99")
         .setDescription(
-         `**${character.name}** submitted an offering: **${itemNames.join(", ")}**${description ? `\n\nDescription: ${description}` : ""}\n\nA mod will approve or deny. If approved, the party receives Spirit Orbs. If denied, items are still consumed.`
+         `**${character.name}** submitted an offering: **${displayItems.join(", ")}**${description ? `\n\nDescription: ${description}` : ""}\n\n${approvedMsg}`
         )
         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK),
       ],
@@ -1332,12 +1484,14 @@ module.exports = {
 
     if (subcommand === "maze") {
      const mazeCmdId = getExploreCommandId();
-     const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
+     const grottoOption = interaction.options.getString("grotto");
+     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
      if (!grotto || grotto.trialType !== "maze") {
       return interaction.editReply("No Maze grotto at this location for this expedition.");
      }
      const layout = grotto.mazeState?.layout;
-     const hasLayout = layout && layout.pathCells && layout.pathCells.length > 0 && layout.matrix && layout.matrix.length > 0;
+     let hasLayout = layout && layout.pathCells && layout.pathCells.length > 0 && layout.matrix && layout.matrix.length > 0;
+     let layoutJustCreated = false;
      if (!hasLayout) {
       const generated = generateGrottoMaze({ width: 12, height: 12, entryType: 'diagonal' });
       if (!generated.pathCells || generated.pathCells.length === 0) {
@@ -1357,6 +1511,79 @@ module.exports = {
       grotto.mazeState.steps = [];
       grotto.mazeState.openedChests = [];
       await grotto.save();
+      hasLayout = true;
+      layoutJustCreated = true;
+     }
+     // Lens of Truth bypass: offer skip on first entry (layout just created)
+     if (layoutJustCreated && (await partyHasLensOfTruth(party))) {
+      const bypassRow = new ActionRowBuilder().addComponents(
+       new ButtonBuilder().setCustomId(`grotto_maze_bypass_yes|${expeditionId}|${grotto._id}`).setLabel("Bypass maze (Lens of Truth)").setStyle(ButtonStyle.Primary),
+       new ButtonBuilder().setCustomId(`grotto_maze_bypass_no|${expeditionId}|${grotto._id}`).setLabel("Enter the maze").setStyle(ButtonStyle.Secondary)
+      );
+      const bypassEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Grotto: Maze**")
+       .setColor(regionColors[party.region] || "#00ff99")
+       .setDescription("Someone in your party has a **Lens of Truth** in their inventory. You may bypass the maze for immediate Spirit Orbs (forgoing chests), or enter the maze as normal.")
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+      addExplorationStandardFields(bypassEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: false, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>` });
+      const bypassMsg = await interaction.editReply({ embeds: [bypassEmbed], components: [bypassRow] });
+      const bypassCollector = bypassMsg.createMessageComponentCollector({
+       filter: (i) => i.user.id === interaction.user.id,
+       time: 60 * 1000,
+       max: 1,
+      });
+      bypassCollector.on("collect", async (i) => {
+       await i.deferUpdate();
+       const disabledRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`grotto_maze_bypass_yes|${expeditionId}|${grotto._id}`).setLabel("Bypass maze (Lens of Truth)").setStyle(ButtonStyle.Primary).setDisabled(true),
+        new ButtonBuilder().setCustomId(`grotto_maze_bypass_no|${expeditionId}|${grotto._id}`).setLabel("Enter the maze").setStyle(ButtonStyle.Secondary).setDisabled(true)
+       );
+       await i.editReply({ components: [disabledRow] }).catch(() => {});
+       const isBypass = i.customId.includes("_yes|");
+       if (isBypass) {
+        const freshParty = await Party.findActiveByPartyId(expeditionId);
+        const freshGrotto = await Grotto.findById(grotto._id);
+        if (freshGrotto && !freshGrotto.completedAt && freshParty) {
+         freshGrotto.completedAt = new Date();
+         await freshGrotto.save();
+         for (const slot of freshParty.characters) {
+          if (slot._id) {
+           try {
+            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
+           } catch (err) {
+            logger.warn("EXPLORE", `[explore.js] Grotto maze bypass Spirit Orb: ${err?.message || err}`);
+           }
+          }
+         }
+         pushProgressLog(freshParty, character.name, "grotto_maze_success", "Maze bypassed with Lens of Truth. Each party member received a Spirit Orb.", undefined, undefined, new Date());
+         await freshParty.save();
+         const doneEmbed = new EmbedBuilder()
+          .setTitle("🗺️ **Grotto: Maze — Bypassed**")
+          .setColor(regionColors[freshParty.region] || "#00ff99")
+          .setDescription("Your party used the **Lens of Truth** to see through the maze and received a **Spirit Orb** each. Use </explore roll> or </explore move> to continue.")
+          .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
+         addExplorationStandardFields(doneEmbed, { party: freshParty, expeditionId, location: `${freshParty.square} ${freshParty.quadrant}`, nextCharacter: freshParty.characters[freshParty.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
+         await i.editReply({ embeds: [doneEmbed], components: [disabledRow] }).catch(() => {});
+        }
+       } else {
+        const enterEmbed = new EmbedBuilder()
+         .setTitle("🗺️ **Grotto: Maze**")
+         .setColor(regionColors[party.region] || "#00ff99")
+         .setDescription(`You enter the maze. Use </explore grotto maze:${mazeCmdId}> with **action:** left, right, straight, back, or **wall** (Song of Scrying).`)
+         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+        addExplorationStandardFields(enterEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>` });
+        await i.editReply({ embeds: [enterEmbed], components: [disabledRow] }).catch(() => {});
+       }
+      });
+      bypassCollector.on("end", (collected, reason) => {
+       if (collected.size === 0 && reason === "time") {
+        bypassMsg.edit({ components: [new ActionRowBuilder().addComponents(
+         new ButtonBuilder().setCustomId(`grotto_maze_bypass_yes|${expeditionId}|${grotto._id}`).setLabel("Bypass maze (Lens of Truth)").setStyle(ButtonStyle.Primary).setDisabled(true),
+         new ButtonBuilder().setCustomId(`grotto_maze_bypass_no|${expeditionId}|${grotto._id}`).setLabel("Enter the maze").setStyle(ButtonStyle.Secondary).setDisabled(true)
+        )] }).catch(() => {});
+       }
+      });
+      return;
      }
      const action = interaction.options.getString("action");
      const matrix = grotto.mazeState.layout?.matrix || [];
@@ -1858,7 +2085,7 @@ module.exports = {
       const instructions = {
        blessing: "The grotto held a blessing. Everyone received a Spirit Orb!",
        target_practice: `Establish turn order. Use </explore grotto targetpractice:${cmdId}> on each turn until the party succeeds (required successes) or one character fails.`,
-       puzzle: `Discuss with your group. Submit an offering with </explore grotto puzzle:${cmdId}> (items and optional description). A mod will approve or deny.`,
+       puzzle: `Discuss with your group. Submit an offering with </explore grotto puzzle:${cmdId}> (items and optional description). Staff will review; if approved, everyone gets Spirit Orbs.`,
        maze: `Use </explore grotto maze:${cmdId}> with direction (left/right/straight/back) or **Wall** for Song of Scrying.`,
       };
       const text = instructions[grotto.trialType] || `Complete the ${trialLabel} trial.`;
@@ -1882,7 +2109,7 @@ module.exports = {
      const plumeHolder = await findGoddessPlumeHolder(party);
      if (!plumeHolder) {
       return interaction.editReply(
-       "No party member has a Goddess Plume to cleanse this grotto. Get one or use </explore roll> and when you get a grotto here choose **Yes** to cleanse with a plume."
+       "No party member has a Goddess Plume in their expedition loadout to cleanse this grotto. Add one to your loadout before departing, or use </explore roll> and when you get a grotto here choose **Yes** to cleanse with a plume."
       );
      }
      const grottoPayResult = await payStaminaOrStruggle(party, plumeHolder.characterIndex, 1, { order: "currentFirst" });
@@ -1893,10 +2120,24 @@ module.exports = {
        `Not enough stamina or hearts to cleanse the grotto. Party has ${partyTotalStamina} 🟩 and ${partyTotalHearts} ❤ (need 1 total). Camp to recover or use hearts to Struggle.`
       );
      }
-     await removeItemInventoryDatabase(plumeHolder.character._id, "Goddess Plume", 1, interaction, "Grotto cleanse (revisit)");
+     const plumeIdx = (party.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
+     if (plumeIdx !== -1) {
+      party.characters[plumeHolder.characterIndex].items.splice(plumeIdx, 1);
+      party.markModified("characters");
+      await party.save();
+     }
      const at = new Date();
-     const grottoName = getRandomGrottoName();
+     const usedGrottoNamesRevisit = await Grotto.distinct("name").catch(() => []);
+     const grottoName = getRandomGrottoNameUnused(usedGrottoNamesRevisit);
      const discoveryKeyGrotto = discovery.discoveryKey || `grotto|${squareId}|${quadrantId}|${at.toISOString()}`;
+     const trialTypeRevisit = rollGrottoTrialType();
+     const puzzleStateRevisit = trialTypeRevisit === 'puzzle' ? (() => {
+      const cfg = rollPuzzleConfig();
+      const s = { puzzleSubType: cfg.subType };
+      if (cfg.subType === 'odd_structure') s.puzzleVariant = cfg.variant;
+      else s.puzzleClueIndex = cfg.clueIndex;
+      return s;
+     })() : undefined;
      const grottoDoc = new Grotto({
       discoveryKey: discoveryKeyGrotto,
       squareId,
@@ -1905,7 +2146,8 @@ module.exports = {
       partyId: expeditionId,
       sealed: false,
       unsealedAt: at,
-      trialType: rollGrottoTrialType(),
+      trialType: trialTypeRevisit,
+      ...(puzzleStateRevisit && { puzzleState: puzzleStateRevisit }),
      });
      await grottoDoc.save();
      if (discovery.discoveryKey) await updateDiscoveryName(squareId, quadrantId, discovery.discoveryKey, grottoName);
@@ -1933,13 +2175,18 @@ module.exports = {
      }
      const trialLabelRevisit = getTrialLabel(grottoDoc.trialType);
      const grottoCmdRevisit = getActiveGrottoCommand(grottoDoc.trialType);
+     let continueDescRevisit = `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n**Trial: ${trialLabelRevisit}** — `;
+     if (grottoDoc.trialType === 'puzzle' && grottoDoc.puzzleState?.puzzleSubType) {
+      const puzzleFlavorRevisit = getPuzzleFlavor(grottoDoc);
+      if (puzzleFlavorRevisit) continueDescRevisit += `\n\n${puzzleFlavorRevisit}`;
+      else continueDescRevisit += `Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdRevisit} for your turn.`;
+     } else {
+      continueDescRevisit += `Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdRevisit} for your turn.`;
+     }
      const continueEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
       .setColor(regionColors[party.region] || "#00ff99")
-      .setDescription(
-       `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n` +
-       `**Trial: ${trialLabelRevisit}** — Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdRevisit} for your turn.`
-      )
+      .setDescription(continueDescRevisit)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      addExplorationStandardFields(continueEmbed, {
       party,

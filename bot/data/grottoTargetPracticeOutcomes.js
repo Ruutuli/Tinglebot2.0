@@ -16,6 +16,14 @@ const FAIL_OUTCOMES = [
     flavor: "The blimp bursts into golden leaves. A Korok pops out with a cheeky grin. \"You found me... but you missed the target!\" The grotto gates slam closed. Better luck next expedition.",
     ctaHint: "Continue exploring!",
   },
+  {
+    flavor: "A maraca rattles from the shadows. The blimp balloons to twice its size—then pops. Seeds rain down and roots erupt from the grotto floor, sealing the trial until you return.",
+    ctaHint: "Continue exploring!",
+  },
+  {
+    flavor: "The blimp drifts into a crack in the ceiling. The ground shudders. When the dust settles, the grotto entrance has sealed. The Koroks have spoken.",
+    ctaHint: "Continue exploring!",
+  },
 ];
 
 const MISS_OUTCOMES = [
@@ -51,6 +59,18 @@ const MISS_OUTCOMES = [
     flavor: "{char} fires, and the projectile vanishes into the grotto mist. The blimp remains, drifting tauntingly.",
     ctaHint: "Try again!",
   },
+  {
+    flavor: "{char} aims, fires—and the blimp floats sideways at the last moment. A tiny leaf drifts down. Mockery.",
+    ctaHint: "Try again!",
+  },
+  {
+    flavor: "{char}'s ammunition bounces off a root and ricochets into the ceiling. The blimp wobbles with what might be laughter.",
+    ctaHint: "Try again!",
+  },
+  {
+    flavor: "{char} blinks at a critical moment. By the time they focus, the blimp has drifted elsewhere.",
+    ctaHint: "Try again!",
+  },
 ];
 
 const SUCCESS_OUTCOMES = [
@@ -70,23 +90,47 @@ const SUCCESS_OUTCOMES = [
     flavor: "{char}'s shot connects! The blimp sags and settles slowly onto the grotto floor.",
     ctaHint: "Success!",
   },
+  {
+    flavor: "{char}'s arrow punches right through! The blimp hisses and spirals down like a deflating balloon.",
+    ctaHint: "Success!",
+  },
+  {
+    flavor: "{char} nails it! The blimp squishes in the middle and plops to the ground with a soft thud.",
+    ctaHint: "Success!",
+  },
+  {
+    flavor: "{char} strikes true! A tiny \"Yah!\" echoes as the blimp wilts and drifts earthward.",
+    ctaHint: "Success!",
+  },
 ];
 
 const COMPLETE_OUTCOMES = [
   {
-    flavor: "{char} hits perfectly! It POPS loudly and out drops a chest that... definitely did not fit inside that blimp? You've completed the shrine! Each party member gets a spirit orb. Don't forget to @mod with a shrine name.",
+    flavor: "{char} hits perfectly! It POPS loudly and out drops a chest that... definitely did not fit inside that blimp? You've completed the shrine! Each party member gets a spirit orb.",
     ctaHint: "Continue exploring!",
   },
   {
-    flavor: "{char} hits it! It flutters pathetically to the ground, taking about a minute and a half on its descent. You've completed the shrine! Each party member gets a spirit orb. Don't forget to @mod with a shrine name.",
+    flavor: "{char} hits it! It flutters pathetically to the ground, taking about a minute and a half on its descent. You've completed the shrine! Each party member gets a spirit orb.",
     ctaHint: "Continue exploring!",
   },
   {
-    flavor: "{char}'s final shot strikes true! The blimp pops in a shower of golden leaves. The shrine glows—spirit orbs materialize for each party member. Don't forget to @mod with a shrine name.",
+    flavor: "{char}'s final shot strikes true! The blimp pops in a shower of golden leaves. The shrine glows—spirit orbs materialize for each party member.",
     ctaHint: "Continue exploring!",
   },
   {
-    flavor: "{char} aims true! The blimp bursts and a chest tumbles out (somehow). Shrine complete! Everyone receives a spirit orb. Don't forget to @mod with a shrine name.",
+    flavor: "{char} aims true! The blimp bursts and a chest tumbles out (somehow). Shrine complete! Everyone receives a spirit orb.",
+    ctaHint: "Continue exploring!",
+  },
+  {
+    flavor: "{char}'s last shot punctures the blimp's core. It explodes in a cascade of seeds and leaves—and spirit orbs coalesce for each party member. Trial complete!",
+    ctaHint: "Continue exploring!",
+  },
+  {
+    flavor: "{char} delivers the final blow! The blimp deflates like a dying sigh, and the grotto shimmers. Spirit orbs appear before each of you.",
+    ctaHint: "Continue exploring!",
+  },
+  {
+    flavor: "{char} hits the bullseye! The blimp pops—and something clatters free: a small chest, plus orbs of light for everyone. The trial is yours!",
     ctaHint: "Continue exploring!",
   },
 ];
