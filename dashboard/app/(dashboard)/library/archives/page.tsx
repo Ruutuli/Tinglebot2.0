@@ -117,12 +117,6 @@ export default function LibraryArchivesPage() {
     }
   }, [placingRelicId, relics]);
 
-  useEffect(() => {
-    if (placingRelicId && modSectionRef.current) {
-      modSectionRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }, [placingRelicId]);
-
   const handleLoadRelic = useCallback(async () => {
     const id = uploadRelicId.trim().toUpperCase();
     if (!id) {
@@ -756,6 +750,19 @@ export default function LibraryArchivesPage() {
                   cursor: isDraggable ? "grab" : "default",
                 }}
                 draggable={!!isDraggable}
+                onClick={(e) => {
+                  if (!isMod) return;
+                  e.stopPropagation();
+                  setPlacingRelicId((prev) => (prev === relic._id ? null : relic._id));
+                  setPlacementSize(size);
+                }}
+                onTouchEnd={(e) => {
+                  if (!isMod) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setPlacingRelicId((prev) => (prev === relic._id ? null : relic._id));
+                  setPlacementSize(size);
+                }}
                 onDragStart={(e) => {
                   if (!isDraggable) return;
                   e.dataTransfer.setData("text/plain", relic._id);
@@ -971,40 +978,41 @@ export default function LibraryArchivesPage() {
               {relics.map((relic) => (
                 <article
                   key={relic._id}
-                  className="flex flex-col overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-lg transition-shadow hover:shadow-xl hover:shadow-black/20 sm:flex-row"
+                  className="flex flex-col overflow-hidden rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)] shadow-lg shadow-black/25 ring-1 ring-[var(--totk-dark-ocher)]/20 transition-all duration-200 hover:border-[var(--totk-light-ocher)]/40 hover:shadow-xl hover:shadow-black/30 hover:ring-[var(--totk-light-ocher)]/20 sm:flex-row"
                 >
-                  <div className="relative h-32 w-full shrink-0 bg-[var(--totk-brown)] sm:h-auto sm:w-40">
+                  <div className="relative flex h-36 w-full shrink-0 items-center justify-center bg-gradient-to-br from-[var(--totk-brown)]/90 to-[var(--totk-brown)]/60 p-4 sm:h-auto sm:w-44">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.15)_100%)]" aria-hidden />
                     {relic.imageUrl ? (
                       <img
                         src={normalizeImageUrl(relic.imageUrl)}
                         alt={relic.rollOutcome || relic.name}
-                        className="h-full w-full object-contain"
+                        className="relative z-10 h-full w-full object-contain drop-shadow-md"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-4xl text-[var(--totk-grey-300)]">
+                      <div className="relative z-10 flex h-full w-full items-center justify-center text-4xl text-[var(--totk-grey-400)]/80">
                         <i className="fa-solid fa-gem" aria-hidden />
                       </div>
                     )}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
-                    <h3 className="text-base font-bold text-[var(--totk-light-ocher)] sm:text-lg">
+                    <h3 className="text-base font-bold tracking-tight text-[var(--totk-light-ocher)] sm:text-lg">
                       {relic.rollOutcome || relic.name}
                     </h3>
-                    <dl className="mt-2 grid grid-cols-1 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-3">
-                      <dt className="text-[var(--totk-grey-200)]">Discovered By</dt>
-                      <dd className="font-medium text-[var(--botw-pale)]">{relic.discoveredBy || "—"}</dd>
-                      <dt className="text-[var(--totk-grey-200)]">Appraised By</dt>
-                      <dd className="font-medium text-[var(--botw-pale)]">{relic.appraisedBy ?? "—"}</dd>
-                      <dt className="text-[var(--totk-grey-200)]">Region</dt>
-                      <dd className="font-medium text-[var(--botw-pale)]">{relic.region || "—"}</dd>
-                      <dt className="text-[var(--totk-grey-200)]">Square</dt>
-                      <dd className="font-medium text-[var(--botw-pale)]">{relic.square || "—"}</dd>
-                      <dt className="text-[var(--totk-grey-200)]">Quadrant</dt>
-                      <dd className="font-medium text-[var(--botw-pale)]">{relic.quadrant || "—"}</dd>
+                    <dl className="mt-2.5 grid grid-cols-1 gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
+                      <dt className="text-[var(--totk-grey-100)]">Discovered By</dt>
+                      <dd className="font-semibold text-[var(--botw-pale)]">{relic.discoveredBy || "—"}</dd>
+                      <dt className="text-[var(--totk-grey-100)]">Appraised By</dt>
+                      <dd className="font-semibold text-[var(--botw-pale)]">{relic.appraisedBy ?? "—"}</dd>
+                      <dt className="text-[var(--totk-grey-100)]">Region</dt>
+                      <dd className="font-semibold text-[var(--botw-pale)]">{relic.region || "—"}</dd>
+                      <dt className="text-[var(--totk-grey-100)]">Square</dt>
+                      <dd className="font-semibold text-[var(--botw-pale)]">{relic.square || "—"}</dd>
+                      <dt className="text-[var(--totk-grey-100)]">Quadrant</dt>
+                      <dd className="font-semibold text-[var(--botw-pale)]">{relic.quadrant || "—"}</dd>
                     </dl>
-                    <div className="mt-3 border-t border-[var(--totk-dark-ocher)]/40 pt-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--totk-grey-200)]">Info</p>
-                      <p className="mt-1.5 line-clamp-3 text-sm leading-relaxed text-[var(--botw-pale)]/95">
+                    <div className="mt-3.5 flex flex-col border-t border-[var(--totk-dark-ocher)]/50 pt-3.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-100)]">Info</p>
+                      <p className="mt-1.5 line-clamp-3 text-sm leading-relaxed text-[var(--botw-pale)]/90">
                         {relic.appraisalDescription || "—"}
                       </p>
                     </div>
