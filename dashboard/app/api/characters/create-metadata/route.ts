@@ -93,9 +93,9 @@ export async function GET() {
     const races = RACES.map((r) => ({ name: r.name, value: r.value })).sort((a, b) =>
       a.name.localeCompare(b.name)
     );
-    // Filter out mod jobs for non-admins
+    // Include mod jobs (Oracle, Sage, Dragon) for admins; filter out for non-admins
     const availableJobs = isAdmin 
-      ? [...ALL_JOBS] 
+      ? [...ALL_JOBS, ...MOD_JOBS] 
       : ALL_JOBS.filter(job => !MOD_JOBS.includes(job as typeof MOD_JOBS[number]));
     const jobs = [...availableJobs].sort();
     

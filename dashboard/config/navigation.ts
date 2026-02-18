@@ -19,6 +19,7 @@ export const navItems: NavItem[] = [
     icon: "fa-globe",
     children: [
       { href: "/map", label: "ROTW Map", icon: "fa-map" },
+      { href: "/explore", label: "Explore", icon: "fa-compass" },
       { href: "/library/archives", label: "Library Archives", icon: "fa-book" },
       { href: "/calendar", label: "Calendar", icon: "fa-calendar" },
     ],

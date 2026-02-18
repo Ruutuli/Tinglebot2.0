@@ -10,6 +10,7 @@ import { useParams, useRouter, usePathname, useSearchParams } from "next/navigat
 import Link from "next/link";
 import Image from "next/image";
 import ReactMarkdown, { type Components } from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import { Loading } from "@/components/ui";
 import { useSession } from "@/hooks/use-session";
 import { capitalize, createSlug } from "@/lib/string-utils";
@@ -185,36 +186,36 @@ function convertUrlsToMarkdown(text: string): string {
 
 const MARKDOWN_COMPONENTS: Components = {
   p: ({ children }: MarkdownComponentProps) => (
-    <p className="mb-3 last:mb-0">{children}</p>
+    <p className="mb-4 last:mb-0 leading-relaxed">{children}</p>
   ),
   h1: ({ children }: MarkdownComponentProps) => (
-    <h1 className="text-xl font-bold text-[var(--totk-light-green)] mb-2 mt-4 first:mt-0">
+    <h1 className="text-xl font-bold text-[var(--totk-light-green)] mb-3 mt-6 first:mt-0">
       {children}
     </h1>
   ),
   h2: ({ children }: MarkdownComponentProps) => (
-    <h2 className="text-lg font-bold text-[var(--totk-light-green)] mb-2 mt-4 first:mt-0">
+    <h2 className="text-lg font-bold text-[var(--totk-light-green)] mb-3 mt-5 first:mt-0">
       {children}
     </h2>
   ),
   h3: ({ children }: MarkdownComponentProps) => (
-    <h3 className="text-base font-bold text-[var(--totk-light-green)] mb-2 mt-3 first:mt-0">
+    <h3 className="text-base font-bold text-[var(--totk-light-green)] mb-2 mt-4 first:mt-0">
       {children}
     </h3>
   ),
   h4: ({ children }: MarkdownComponentProps) => (
-    <h4 className="text-sm font-bold text-[var(--totk-light-green)] mb-1 mt-2 first:mt-0">
+    <h4 className="text-sm font-bold text-[var(--totk-light-green)] mb-2 mt-3 first:mt-0">
       {children}
     </h4>
   ),
   ul: ({ children }: MarkdownComponentProps) => (
-    <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
+    <ul className="list-disc pl-5 mb-4 space-y-2 [&>li]:leading-relaxed">{children}</ul>
   ),
   ol: ({ children }: MarkdownComponentProps) => (
-    <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
+    <ol className="list-decimal pl-5 mb-4 space-y-2 [&>li]:leading-relaxed">{children}</ol>
   ),
   li: ({ children }: MarkdownComponentProps) => (
-    <li className="ml-2">{children}</li>
+    <li className="pl-1">{children}</li>
   ),
   strong: ({ children }: MarkdownComponentProps) => (
     <strong className="font-bold text-[var(--totk-light-green)]">{children}</strong>
@@ -233,7 +234,7 @@ const MARKDOWN_COMPONENTS: Components = {
     </pre>
   ),
   blockquote: ({ children }: MarkdownComponentProps) => (
-    <blockquote className="border-l-4 border-[var(--totk-green)] pl-4 italic mb-3">
+    <blockquote className="border-l-4 border-[var(--totk-green)] pl-4 my-4 italic text-[var(--totk-grey-200)]">
       {children}
     </blockquote>
   ),
@@ -247,7 +248,7 @@ const MARKDOWN_COMPONENTS: Components = {
       {children}
     </a>
   ),
-  hr: () => <hr className="border-[var(--totk-green)] my-4" />,
+  hr: () => <hr className="border-[var(--totk-green)] my-6" />,
 };
 
 const GEAR_ITEMS_CONFIG = [
@@ -259,7 +260,7 @@ const GEAR_ITEMS_CONFIG = [
 ] as const;
 
 const PROSE_BASE_CLASSES =
-  "prose prose-invert prose-sm max-w-none rounded border border-[var(--totk-green)] bg-[var(--totk-ocher)]/10 p-3 sm:p-4 text-xs sm:text-sm leading-relaxed text-[var(--botw-pale)] prose-headings:text-[var(--totk-light-green)] prose-a:text-[var(--botw-blue)] prose-a:underline hover:prose-a:text-[var(--totk-light-green)] prose-strong:text-[var(--totk-light-green)] prose-code:text-[var(--totk-light-green)] prose-code:bg-[var(--botw-warm-black)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[var(--botw-warm-black)]";
+  "prose prose-invert prose-sm max-w-none rounded-lg border border-[var(--totk-green)] bg-[var(--totk-ocher)]/10 p-4 sm:p-5 text-sm leading-relaxed text-[var(--botw-pale)] prose-headings:text-[var(--totk-light-green)] prose-headings:font-bold prose-p:mb-4 prose-p:last:mb-0 prose-p:leading-relaxed prose-ul:my-4 prose-ol:my-4 prose-li:my-1 prose-a:text-[var(--botw-blue)] prose-a:underline hover:prose-a:text-[var(--totk-light-green)] prose-strong:text-[var(--totk-light-green)] prose-code:text-[var(--totk-light-green)] prose-code:bg-[var(--botw-warm-black)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-[var(--botw-warm-black)] prose-blockquote:border-[var(--totk-green)] prose-blockquote:pl-4 prose-blockquote:italic prose-hr:border-[var(--totk-green)] prose-hr:my-6";
 
 const CARD_BASE_CLASSES =
   "rounded-lg border-2 border-[var(--totk-green)] bg-[var(--botw-warm-black)] p-4 sm:p-6 shadow-lg";
@@ -815,44 +816,46 @@ function BiographySection({
 }: BiographySectionProps) {
   if (!personality && !history && !extras) return null;
 
+  const markdownOpts = { components: MARKDOWN_COMPONENTS, remarkPlugins: [remarkBreaks] };
+
   return (
     <CardSection icon="fa-scroll" title="Biography">
-      <div className="space-y-4">
+      <div className="space-y-6">
         {personality && (
           <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
               <i className="fa-solid fa-brain" />
               Personality
             </h3>
             <div className={PROSE_BASE_CLASSES}>
-              <ReactMarkdown components={MARKDOWN_COMPONENTS}>
-                {personality}
+              <ReactMarkdown {...markdownOpts}>
+                {convertUrlsToMarkdown(personality)}
               </ReactMarkdown>
             </div>
           </div>
         )}
         {history && (
           <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
               <i className="fa-solid fa-book" />
               History
             </h3>
             <div className={PROSE_BASE_CLASSES}>
-              <ReactMarkdown components={MARKDOWN_COMPONENTS as any}>
-                {history}
+              <ReactMarkdown {...markdownOpts}>
+                {convertUrlsToMarkdown(history)}
               </ReactMarkdown>
             </div>
           </div>
         )}
         {extras && (
           <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
               <i className="fa-solid fa-plus-circle" />
               Additional Information
             </h3>
             <div className={PROSE_BASE_CLASSES}>
-              <ReactMarkdown components={MARKDOWN_COMPONENTS}>
-                {extras}
+              <ReactMarkdown {...markdownOpts}>
+                {convertUrlsToMarkdown(extras)}
               </ReactMarkdown>
             </div>
           </div>
@@ -1520,8 +1523,8 @@ export default function OCDetailPage() {
                         </span>
                       </div>
                     )}
-                    <div className="text-sm leading-relaxed text-[var(--botw-pale)]">
-                      <ReactMarkdown components={MARKDOWN_COMPONENTS}>
+                    <div className="text-sm leading-relaxed text-[var(--botw-pale)] prose prose-invert prose-sm max-w-none prose-p:mb-2 prose-p:last:mb-0 prose-ul:my-2 prose-ol:my-2">
+                      <ReactMarkdown components={MARKDOWN_COMPONENTS} remarkPlugins={[remarkBreaks]}>
                         {convertUrlsToMarkdown(feedback.text || "No feedback provided")}
                       </ReactMarkdown>
                     </div>

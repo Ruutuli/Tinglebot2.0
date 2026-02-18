@@ -615,9 +615,9 @@ export async function PUT(
         (ModCharacter as { distinct: (f: string) => Promise<string[]> }).distinct("race"),
       ]);
       const races = [...new Set([...(charRaces ?? []), ...(modRaces ?? [])])].filter(Boolean).sort();
-      // Use ALL_JOBS from static data instead of database distinct jobs
-      // This ensures validation matches what the form shows
-      const jobs = [...ALL_JOBS].sort();
+      // Use ALL_JOBS + MOD_JOBS from static data instead of database distinct jobs
+      // This ensures validation matches what the form shows (Oracle, Sage, Dragon for mod chars)
+      const jobs = [...ALL_JOBS, ...MOD_JOBS].sort();
       const villages = [...VILLAGES] as string[];
 
       let res = validateRace(race, races);

@@ -265,6 +265,21 @@ function useIsMobile(): boolean {
 
 type BarChartDataItem = { name: string; count: number; [key: string]: unknown };
 
+/** Dedupe chart data by name (aggregate counts) and ensure unique tick keys for recharts. */
+function dedupeBarChartData(
+  data: BarChartDataItem[],
+  dataKey: string,
+  nameKey: string
+): BarChartDataItem[] {
+  const map = new Map<string, number>();
+  for (const item of data) {
+    const name = String(item[nameKey] ?? "Unknown").trim() || "Unknown";
+    const val = Number(item[dataKey] ?? 0) || 0;
+    map.set(name, (map.get(name) ?? 0) + val);
+  }
+  return Array.from(map.entries()).map(([name, count]) => ({ [nameKey]: name, [dataKey]: count }));
+}
+
 function SharedBarChart({
   data,
   dataKey = "count",
@@ -290,7 +305,11 @@ function SharedBarChart({
 }) {
   const isMobile = useIsMobile();
   const horizontalBars = layout === "vertical";
-  const categoryTicks = horizontalBars ? data.map((d) => d.name) : undefined;
+  const deduped = useMemo(
+    () => dedupeBarChartData(data, dataKey, nameKey),
+    [data, dataKey, nameKey]
+  );
+  const categoryTicks = horizontalBars ? deduped.map((d) => d.name) : undefined;
   const effectiveHeight = isMobile ? Math.min(height, horizontalBars ? 320 : 280) : height;
   const effectiveBarSize = isMobile ? (horizontalBars ? 18 : 22) : barSize;
   const yAxisWidth = horizontalBars ? (isMobile ? 90 : 180) : undefined;
@@ -300,7 +319,7 @@ function SharedBarChart({
     <div className={`min-w-0 w-full ${horizontalBars ? "overflow-visible" : "overflow-hidden"}`} style={{ height: effectiveHeight }}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart
-          data={data}
+          data={deduped}
           layout={layout}
           margin={{ top: horizontalBars ? (isMobile ? 40 : 52) : 32, right: horizontalBars ? (isMobile ? 36 : 80) : 32, left: horizontalBars ? 12 : 12, bottom: horizontalBars ? (isMobile ? 16 : 20) : 8 }}
         >
@@ -344,8 +363,8 @@ function SharedBarChart({
             style={onBarClick ? { cursor: "pointer" } : undefined}
           >
             {barColor
-              ? data.map((_, index) => <Cell key={index} fill={barColor} />)
-              : data.map((_, index) => (
+              ? deduped.map((_, index) => <Cell key={index} fill={barColor} />)
+              : deduped.map((_, index) => (
                   <Cell
                     key={index}
                     fill={
