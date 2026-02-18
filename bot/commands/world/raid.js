@@ -19,6 +19,7 @@ const { fetchItemsByMonster } = require('@/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { markGrottoCleared } = require('../../modules/exploreModule');
+const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const { GROTTO_CLEARED_FLAVOR } = require('../../data/grottoTrials.js');
 // Google Sheets validation removed
 // Google Sheets functionality removed
@@ -888,16 +889,18 @@ async function handleRaidVictory(interaction, raidData, monster) {
           await markGrottoCleared(grotto);
           const party = await Party.findActiveByPartyId(raidData.expeditionId);
           if (party && party.characters && party.characters.length > 0) {
-            for (const slot of party.characters) {
-              if (slot._id) {
-                try {
-                  await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
-                } catch (orbErr) {
-                  console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
+            if (!EXPLORATION_TESTING_MODE) {
+              for (const slot of party.characters) {
+                if (slot._id) {
+                  try {
+                    await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
+                  } catch (orbErr) {
+                    console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
+                  }
                 }
               }
             }
-            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members`);
+            if (!EXPLORATION_TESTING_MODE) console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members`);
           }
         }
       } catch (grottoErr) {

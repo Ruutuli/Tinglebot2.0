@@ -423,6 +423,7 @@ module.exports = {
 const { fetchItemsByMonster, fetchAllItems } = require('@/database/db');
 const { createWeightedItemList } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
+const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const Party = require('@/models/PartyModel');
 const { addExplorationStandardFields, regionColors, regionImages } = require('../../embeds/embeds.js');
 const { syncPartyMemberStats, pushProgressLog, hasDiscoveriesInQuadrant } = require('../../modules/exploreModule');
@@ -756,14 +757,16 @@ async function handleWaveVictory(interaction, waveData) {
         // Add to inventory if character has inventory link
         if (character.inventory) {
           try {
-            console.log(`[wave.js]: 💾 [${i + 1}/${defeatedMonsters.length}] Adding ${lootedItem.itemName} × ${lootedItem.quantity} to ${character.name}'s inventory...`);
-            await addItemInventoryDatabase(
-              character._id,
-              lootedItem.itemName,
-              lootedItem.quantity,
-              interaction,
-              "Wave Loot"
-            );
+            if (!(waveData.expeditionId && EXPLORATION_TESTING_MODE)) {
+              console.log(`[wave.js]: 💾 [${i + 1}/${defeatedMonsters.length}] Adding ${lootedItem.itemName} × ${lootedItem.quantity} to ${character.name}'s inventory...`);
+              await addItemInventoryDatabase(
+                character._id,
+                lootedItem.itemName,
+                lootedItem.quantity,
+                interaction,
+                "Wave Loot"
+              );
+            }
             console.log(`[wave.js]: ✅ [${i + 1}/${defeatedMonsters.length}] Successfully added ${lootedItem.itemName} to ${character.name}'s inventory`);
             
             // Determine loot quality indicator based on damage
@@ -865,7 +868,9 @@ async function handleWaveVictory(interaction, waveData) {
           if (!char) char = await ModCharacter.findById(participant.characterId);
           if (!char || !char.inventory) continue;
           const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
-          await addItemInventoryDatabase(char._id, randomItem.itemName, 1, interaction, "Wave Victory Chest");
+          if (!(waveData.expeditionId && EXPLORATION_TESTING_MODE)) {
+            await addItemInventoryDatabase(char._id, randomItem.itemName, 1, interaction, "Wave Victory Chest");
+          }
           const emoji = randomItem.emoji || '📦';
           lootResults.push(`**${participant.name}** 📦 opened a chest and found ${emoji} **${randomItem.itemName}**!`);
           participantsWhoGotLoot.add(participant.name);

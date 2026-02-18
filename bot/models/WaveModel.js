@@ -601,19 +601,22 @@ waveSchema.methods.failWave = async function() {
     this.participants = [];
   }
   
-  // KO all participants
-  const Character = require('./CharacterModel');
-  for (const participant of this.participants) {
-    try {
-      const character = await Character.findById(participant.characterId);
-      if (character) {
-        character.ko = true;
-        character.currentHearts = 0;
-        await character.save();
-        console.log(`[WaveModel.js]: 💀 KO'd participant ${character.name} in failed wave ${this.waveId}`);
+  // KO all participants (skip when expedition + exploration testing mode)
+  const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
+  if (!(this.expeditionId && EXPLORATION_TESTING_MODE)) {
+    const Character = require('./CharacterModel');
+    for (const participant of this.participants) {
+      try {
+        const character = await Character.findById(participant.characterId);
+        if (character) {
+          character.ko = true;
+          character.currentHearts = 0;
+          await character.save();
+          console.log(`[WaveModel.js]: 💀 KO'd participant ${character.name} in failed wave ${this.waveId}`);
+        }
+      } catch (error) {
+        console.error(`[WaveModel.js]: ❌ Error KO'ing participant ${participant.name}:`, error);
       }
-    } catch (error) {
-      console.error(`[WaveModel.js]: ❌ Error KO'ing participant ${participant.name}:`, error);
     }
   }
   

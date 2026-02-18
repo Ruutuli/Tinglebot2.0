@@ -96,7 +96,8 @@ function calculateDamage(attacker, defender) {
 
 // ---- Function: getEncounterOutcome ----
 // Determines the outcome of battles for tiers 1-4
-const getEncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
+// options: { skipPersist } - when true, do not call useHearts (for exploration testing mode)
+const getEncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, options = {}) => {
     try {
         const tier = monster.tier;
         let outcome;
@@ -157,9 +158,9 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
             outcome = { result: 'Win!/Loot', canLoot: true, hearts: 0 };
         }
 
-        if (outcome.hearts > 0) {
+        if (outcome.hearts > 0 && !options.skipPersist) {
             logger.info('LOOT', `${character.name} loses ${outcome.hearts} hearts`);
-                    await useHearts(character._id, outcome.hearts, createEncounterContext(character, 'encounter_heart_loss'));
+            await useHearts(character._id, outcome.hearts, createEncounterContext(character, 'encounter_heart_loss'));
         }
 
         return {

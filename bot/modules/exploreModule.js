@@ -125,7 +125,8 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs, at
  * Update grottoStatus on a map discovery (found | cleansed | cleared).
  */
 async function updateDiscoveryGrottoStatus(squareId, quadrantId, discoveryKey, grottoStatus) {
-    if (!squareId || !quadrantId || !discoveryKey || !grottoStatus) return;
+    const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
+    if (EXPLORATION_TESTING_MODE || !squareId || !quadrantId || !discoveryKey || !grottoStatus) return;
     const sq = String(squareId).trim();
     const qd = String(quadrantId).trim().toUpperCase();
     await Square.updateOne(

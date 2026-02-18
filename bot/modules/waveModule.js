@@ -1160,6 +1160,8 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
     const characterHeartsBefore = character.currentHearts;
     
     // Process the battle turn using raid battle logic
+    const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
+    const skipPersist = !!(wave.expeditionId && EXPLORATION_TESTING_MODE);
     const battleResult = await processRaidBattle(
       character,
       wave.currentMonster,
@@ -1168,7 +1170,8 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
       adjustedRandomValue,
       attackSuccess,
       defenseSuccess,
-      characterHeartsBefore
+      characterHeartsBefore,
+      { skipPersist }
     );
 
     if (!battleResult) {

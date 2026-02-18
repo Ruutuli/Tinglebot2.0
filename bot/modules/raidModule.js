@@ -22,6 +22,7 @@ const Raid = require('@/models/RaidModel');
 const { finalizeBlightApplication } = require('../handlers/blightHandler');
 const { getExploreCommandId } = require('../embeds/embeds.js');
 const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
+const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 
 // ============================================================================
 // ---- Constants ----
@@ -107,7 +108,9 @@ async function applyPartySizeScalingToRaid(raid) {
 
 // ---- Function: processRaidBattle ----
 // Processes a raid battle turn using the encounter module's tier-specific logic
-async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, characterHeartsBefore = null) {
+// options: { skipPersist: true } when expedition + EXPLORATION_TESTING_MODE (no hearts/elixir DB writes)
+async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, characterHeartsBefore = null, options = {}) {
+  const skipPersist = options.skipPersist === true;
   try {
     // Battle processing details logged only in debug mode
 
@@ -152,14 +155,16 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       
       // Handle tiers 1-4 using getEncounterOutcome, tiers 5-10 using tier-specific functions
       if (monster.tier <= 4) {
-        const encounterOutcome = await getEncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        const encounterOutcome = await getEncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, skipPersist ? { skipPersist: true } : {});
         
-        // getEncounterOutcome already saved character damage via useHearts
-        // Reload character to get updated hearts
-        const { fetchCharacterById } = require('@/database/db');
-        const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
-        if (updatedCharacter) {
-          Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
+        // getEncounterOutcome already saved character damage via useHearts (unless skipPersist)
+        // Reload character to get updated hearts when not in testing mode
+        if (!skipPersist) {
+          const { fetchCharacterById } = require('@/database/db');
+          const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
+          if (updatedCharacter) {
+            Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
+          }
         }
         
         // Convert outcome format: getEncounterOutcome uses 'hearts' for character damage,
@@ -364,7 +369,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // For tiers 1-4, damage was already saved by getEncounterOutcome, so skip saving here
     // For tiers 5+, the encounter module doesn't save hearts to DB, so we need to do it here
     // Apply the final damage (after boost reduction) to the database
-    if (finalDamage > 0 && !damageAlreadySaved) {
+    if (finalDamage > 0 && !damageAlreadySaved && !skipPersist) {
       const { useHearts } = require('./characterStatsModule');
       const { createEncounterContext } = require('./encounterModule');
       // Calculate final hearts after damage
@@ -385,6 +390,11 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       if (outcome.playerHearts) {
         outcome.playerHearts.current = character.currentHearts;
       }
+    } else if (finalDamage > 0 && skipPersist && outcome.playerHearts) {
+      // Testing mode: update in-memory hearts only for display
+      const finalHearts = Math.max(0, characterHeartsBefore - finalDamage);
+      character.currentHearts = finalHearts;
+      outcome.playerHearts.current = finalHearts;
     } else if (outcome.playerHearts) {
       // No damage taken, but ensure we have the correct hearts value
       outcome.playerHearts.current = characterHeartsBefore;
@@ -394,16 +404,18 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // ------------------- Elixir Consumption Logic -------------------
     // Check if elixirs should be consumed based on the raid encounter
     try {
-      const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
-      if (shouldConsumeElixir(character, 'raid', { monster: monster })) {
-        consumeElixirBuff(character);
-        console.log(`[raidModule.js]: 🧪 Elixir consumed for ${character.name} during raid against ${monster.name}`);
-        
-        // Update character in database to persist the consumed elixir
-        await character.save();
-      } else if (character.buff?.active) {
-        // Log when elixir is not used due to conditions not met
-        console.log(`[raidModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+      if (!skipPersist) {
+        const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+        if (shouldConsumeElixir(character, 'raid', { monster: monster })) {
+          consumeElixirBuff(character);
+          console.log(`[raidModule.js]: 🧪 Elixir consumed for ${character.name} during raid against ${monster.name}`);
+          
+          // Update character in database to persist the consumed elixir
+          await character.save();
+        } else if (character.buff?.active) {
+          // Log when elixir is not used due to conditions not met
+          console.log(`[raidModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+        }
       }
     } catch (elixirError) {
       console.error(`[raidModule.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
@@ -936,6 +948,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     const characterHeartsBefore = character.currentHearts;
     
     // Process the raid battle turn
+    const skipPersist = !!(raid.expeditionId && EXPLORATION_TESTING_MODE);
     const battleResult = await processRaidBattle(
       character,
       raid.monster,
@@ -944,7 +957,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       adjustedRandomValue,
       attackSuccess,
       defenseSuccess,
-      characterHeartsBefore
+      characterHeartsBefore,
+      { skipPersist }
     );
 
     if (!battleResult) {

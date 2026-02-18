@@ -40,6 +40,7 @@ const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('@/uti
 const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap } = require('@/utils/oldMapUtils.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
+const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig.js');
 const { generateGrottoMaze, getPathCellAt, getNeighbourCoords, getCellBeyondWall } = require('@/utils/grottoMazeGenerator.js');
 const { renderMazeToBuffer } = require('@/utils/grottoMazeRenderer.js');
 const logger = require("@/utils/logger.js");
@@ -251,9 +252,11 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
       const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
       const take = Math.min(remaining, have);
       if (take > 0) {
-        charDoc.currentStamina = Math.max(0, have - take);
-        await charDoc.save();
-        slot.currentStamina = charDoc.currentStamina;
+        if (!EXPLORATION_TESTING_MODE) {
+          charDoc.currentStamina = Math.max(0, have - take);
+          await charDoc.save();
+        }
+        slot.currentStamina = Math.max(0, have - take);
         remaining -= take;
       }
     }
@@ -272,9 +275,11 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
     const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
     const take = Math.min(remainingStamina, have);
     if (take > 0) {
-      charDoc.currentStamina = Math.max(0, have - take);
-      await charDoc.save();
-      slot.currentStamina = charDoc.currentStamina;
+      if (!EXPLORATION_TESTING_MODE) {
+        charDoc.currentStamina = Math.max(0, have - take);
+        await charDoc.save();
+      }
+      slot.currentStamina = Math.max(0, have - take);
       remainingStamina -= take;
     }
   }
@@ -287,14 +292,18 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
     const currentH = typeof charDoc.currentHearts === "number" ? charDoc.currentHearts : 0;
     const take = Math.min(remainingHearts, currentH);
     if (take > 0) {
-      try {
-        await useHearts(charDoc._id, take, EXPLORE_STRUGGLE_CONTEXT);
-      } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ payStaminaOrStruggle useHearts: ${err?.message || err}`);
-      }
-      const updated = await fetchCharacterById(slot._id);
-      if (updated) {
-        party.characters[idx].currentHearts = updated.currentHearts ?? 0;
+      if (!EXPLORATION_TESTING_MODE) {
+        try {
+          await useHearts(charDoc._id, take, EXPLORE_STRUGGLE_CONTEXT);
+        } catch (err) {
+          logger.warn("EXPLORE", `[explore.js]⚠️ payStaminaOrStruggle useHearts: ${err?.message || err}`);
+        }
+        const updated = await fetchCharacterById(slot._id);
+        if (updated) {
+          party.characters[idx].currentHearts = updated.currentHearts ?? 0;
+        }
+      } else {
+        party.characters[idx].currentHearts = Math.max(0, currentH - take);
       }
       remainingHearts -= take;
     }
@@ -345,21 +354,25 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
   if (isRelic && (await characterAlreadyFoundRelicThisExpedition(party, char.name, char._id))) isRelic = false;
   if (isRelic) {
    try {
-    const savedRelic = await createRelic({
-     name: "Unknown Relic",
-     discoveredBy: char.name,
-     characterId: char._id,
-     discoveredDate: new Date(),
-     locationFound: location,
-     appraised: false,
-    });
-    lootLines.push(`${char.name}: 🔸 Unknown Relic (${savedRelic?.relicId || '—'})`);
+    if (!EXPLORATION_TESTING_MODE) {
+     const savedRelic = await createRelic({
+      name: "Unknown Relic",
+      discoveredBy: char.name,
+      characterId: char._id,
+      discoveredDate: new Date(),
+      locationFound: location,
+      appraised: false,
+     });
+     lootLines.push(`${char.name}: 🔸 Unknown Relic (${savedRelic?.relicId || '—'})`);
+    } else {
+     lootLines.push(`${char.name}: 🔸 Unknown Relic (testing)`);
+    }
     if (!party.gatheredItems) party.gatheredItems = [];
     party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
     pushProgressLog(party, char.name, "relic", `Found a relic in chest in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
    } catch (err) {
     logger.error("EXPLORE", `[explore.js]❌ createRelic (chest): ${err?.message || err}`);
-    if (allItems && allItems.length > 0) {
+    if (!EXPLORATION_TESTING_MODE && allItems && allItems.length > 0) {
      const fallback = allItems[Math.floor(Math.random() * allItems.length)];
      if (!party.gatheredItems) party.gatheredItems = [];
      party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: fallback.itemName, quantity: 1, emoji: fallback.emoji || "" });
@@ -367,6 +380,9 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
       await addItemInventoryDatabase(char._id, fallback.itemName, 1, interaction, "Exploration Chest");
       lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName}`);
      } catch (_) {}
+    } else if (allItems && allItems.length > 0) {
+     const fallback = allItems[Math.floor(Math.random() * allItems.length)];
+     lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName} (testing)`);
     }
    }
   } else {
@@ -378,12 +394,16 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
    const item = allItems[Math.floor(Math.random() * allItems.length)];
    if (!party.gatheredItems) party.gatheredItems = [];
    party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: item.itemName, quantity: 1, emoji: item.emoji || "" });
-   try {
-    await addItemInventoryDatabase(char._id, item.itemName, 1, interaction, "Exploration Chest");
-    lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName}`);
-   } catch (err) {
-    handleInteractionError(err, interaction, { source: "explore.js chest open" });
-    lootLines.push(`${char.name}: (failed to add item)`);
+   if (!EXPLORATION_TESTING_MODE) {
+    try {
+     await addItemInventoryDatabase(char._id, item.itemName, 1, interaction, "Exploration Chest");
+     lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName}`);
+    } catch (err) {
+     handleInteractionError(err, interaction, { source: "explore.js chest open" });
+     lootLines.push(`${char.name}: (failed to add item)`);
+    }
+   } else {
+    lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName} (testing)`);
    }
   }
  }
@@ -641,6 +661,7 @@ const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto"
 // ------------------- pushDiscoveryToMap ------------------
 // Add discovery to Square.quadrants[].discoveries for map display
 async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) {
+ if (EXPLORATION_TESTING_MODE) return;
  const squareId = (party.square && String(party.square).trim()) || "";
  const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
  if (!squareId || !quadrantId) return;
@@ -665,7 +686,7 @@ async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) 
 // ------------------- updateDiscoveryName ------------------
 // Set name on an existing discovery (e.g. grotto when cleansed on revisit)
 async function updateDiscoveryName(squareId, quadrantId, discoveryKey, name) {
- if (!squareId || !quadrantId || !discoveryKey || !name) return;
+ if (EXPLORATION_TESTING_MODE || !squareId || !quadrantId || !discoveryKey || !name) return;
  await Square.updateOne(
   { squareId },
   { $set: { "quadrants.$[q].discoveries.$[d].name": name } },
@@ -752,7 +773,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  }
  const cleanseCharacter = plumeHolder.character;
  const idx = (freshParty.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
- if (idx !== -1) {
+ if (idx !== -1 && !EXPLORATION_TESTING_MODE) {
   freshParty.characters[plumeHolder.characterIndex].items.splice(idx, 1);
   freshParty.markModified("characters");
  }
@@ -838,10 +859,12 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
 
  if (trialType === "blessing") {
   for (const slot of freshParty.characters) {
-   try {
-    await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
-   } catch (err) {
-    logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
+   if (!EXPLORATION_TESTING_MODE) {
+    try {
+     await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
+    } catch (err) {
+     logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
+    }
    }
   }
   await markGrottoCleared(grottoDoc);
@@ -955,6 +978,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
 // ------------------- applyBlightExposure ------------------
 // Increment blight exposure when revealing/traveling blighted quadrant
 async function applyBlightExposure(party, square, quadrant, reason, characterName) {
+ if (EXPLORATION_TESTING_MODE) return;
  const prev = typeof party.blightExposure === "number" ? party.blightExposure : 0;
  party.blightExposure = prev + 1;
  party.markModified("blightExposure");
@@ -985,32 +1009,36 @@ async function handleExpeditionFailed(party, interaction) {
  const targetVillage = REGION_TO_VILLAGE_LOWER[party.region] || "rudania";
  const debuffEndDate = new Date(Date.now() + EXPLORATION_KO_DEBUFF_DAYS * 24 * 60 * 60 * 1000);
 
- for (const partyChar of party.characters) {
-  const char = await Character.findById(partyChar._id);
-  if (char) {
-   await handleKO(char._id);
-   char.currentStamina = 0;
-   char.currentVillage = targetVillage;
-   char.debuff = char.debuff || {};
-   char.debuff.active = true;
-   char.debuff.endDate = debuffEndDate;
-   await char.save();
-  }
- }
-
- // Reset any quadrants this expedition marked as Explored back to Unexplored
- const exploredThisRun = party.exploredQuadrantsThisRun || [];
- if (exploredThisRun.length > 0) {
-  for (const { squareId, quadrantId } of exploredThisRun) {
-   if (squareId && quadrantId) {
-    const squareIdRegex = new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-    await Square.updateOne(
-     { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
-     { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
-     { arrayFilters: [{ "q.quadrantId": quadrantId }] }
-    ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
+ if (!EXPLORATION_TESTING_MODE) {
+  for (const partyChar of party.characters) {
+   const char = await Character.findById(partyChar._id);
+   if (char) {
+    await handleKO(char._id);
+    char.currentStamina = 0;
+    char.currentVillage = targetVillage;
+    char.debuff = char.debuff || {};
+    char.debuff.active = true;
+    char.debuff.endDate = debuffEndDate;
+    await char.save();
    }
   }
+  // Reset any quadrants this expedition marked as Explored back to Unexplored
+  const exploredThisRun = party.exploredQuadrantsThisRun || [];
+  if (exploredThisRun.length > 0) {
+   for (const { squareId, quadrantId } of exploredThisRun) {
+    if (squareId && quadrantId) {
+     const squareIdRegex = new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+     await Square.updateOne(
+      { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
+      { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+      { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+     ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
+    }
+   }
+  }
+ }
+ if (EXPLORATION_TESTING_MODE) {
+  await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[explore.js] Grotto delete on fail: ${err?.message}`));
  }
 
  party.square = start.square;
@@ -1298,10 +1326,12 @@ module.exports = {
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === true && !grotto.completedAt) {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb: ${err?.message || err}`);
+        }
        }
       }
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -1537,10 +1567,12 @@ module.exports = {
      if (newSuccesses >= TARGET_SUCCESSES) {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
+        }
        }
       }
       pushProgressLog(party, character.name, "grotto_target_success", `Target Practice completed. Each party member received a Spirit Orb.`, undefined, undefined, new Date());
@@ -1676,15 +1708,17 @@ module.exports = {
       }
      }
      // Consume: if approved, only remove required amount; if denied, remove full offering
-     try {
-      for (const { itemName, quantity } of consumeItems) {
-       await removeItemInventoryDatabase(character._id, itemName, quantity, interaction, "Grotto puzzle offering");
+     if (!EXPLORATION_TESTING_MODE) {
+      try {
+       for (const { itemName, quantity } of consumeItems) {
+        await removeItemInventoryDatabase(character._id, itemName, quantity, interaction, "Grotto puzzle offering");
+       }
+      } catch (err) {
+       handleInteractionError(err, interaction, { source: "explore.js grotto puzzle removeItem" });
+       return interaction.editReply(
+         `Could not remove one or more items from your inventory. ${err?.message || err}. If items were partially consumed, contact staff.`
+       ).catch(() => {});
       }
-     } catch (err) {
-      handleInteractionError(err, interaction, { source: "explore.js grotto puzzle removeItem" });
-      return interaction.editReply(
-        `Could not remove one or more items from your inventory. ${err?.message || err}. If items were partially consumed, contact staff.`
-      ).catch(() => {});
      }
      const displayItems = consumeItems.map((p) => (p.quantity > 1 ? `${p.itemName} x${p.quantity}` : p.itemName));
      grotto.puzzleState.offeringSubmitted = true;
@@ -1695,10 +1729,12 @@ module.exports = {
      if (checkResult.approved) {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb: ${err?.message || err}`);
+        }
        }
       }
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -1814,10 +1850,12 @@ module.exports = {
          await markGrottoCleared(freshGrotto);
          for (const slot of freshParty.characters) {
           if (slot._id) {
-           try {
-            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
-           } catch (err) {
-            logger.warn("EXPLORE", `[explore.js] Grotto maze bypass Spirit Orb: ${err?.message || err}`);
+           if (!EXPLORATION_TESTING_MODE) {
+            try {
+             await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
+            } catch (err) {
+             logger.warn("EXPLORE", `[explore.js] Grotto maze bypass Spirit Orb: ${err?.message || err}`);
+            }
            }
           }
          }
@@ -1911,19 +1949,21 @@ module.exports = {
        rollLabel = ` (Roll: **${roll}**)`;
       }
       if (outcome.heartsLost > 0 && character._id) {
-       try {
-        await useHearts(character._id, outcome.heartsLost, { commandName: 'explore', operation: 'grotto_maze_trap' });
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze pit trap useHearts: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await useHearts(character._id, outcome.heartsLost, { commandName: 'explore', operation: 'grotto_maze_trap' });
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze pit trap useHearts: ${err?.message || err}`);
+        }
        }
-       const charDoc = await Character.findById(character._id).select('currentHearts');
-       if (charDoc) {
-        const idx = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
-        if (idx !== -1) party.characters[idx].currentHearts = charDoc.currentHearts;
-        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
-        party.markModified("characters");
-        await party.save();
+       const idx = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
+       if (idx !== -1) {
+        const curH = party.characters[idx].currentHearts ?? character.currentHearts ?? 0;
+        party.characters[idx].currentHearts = Math.max(0, curH - outcome.heartsLost);
        }
+       party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+       party.markModified("characters");
+       await party.save();
       }
       if (outcome.staminaCost > 0) {
        let remaining = outcome.staminaCost;
@@ -1936,9 +1976,11 @@ module.exports = {
         const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
         const take = Math.min(remaining, have);
         if (take > 0) {
-         charDoc.currentStamina = Math.max(0, have - take);
-         await charDoc.save();
-         slot.currentStamina = charDoc.currentStamina;
+         if (!EXPLORATION_TESTING_MODE) {
+          charDoc.currentStamina = Math.max(0, have - take);
+          await charDoc.save();
+         }
+         slot.currentStamina = Math.max(0, have - take);
          remaining -= take;
         }
        }
@@ -1962,10 +2004,12 @@ module.exports = {
         if (destType === 'exit') {
          await markGrottoCleared(grotto);
          for (const slot of party.characters) {
-          try {
-           await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-          } catch (err) {
-           logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+          if (!EXPLORATION_TESTING_MODE) {
+           try {
+            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+           } catch (err) {
+            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+           }
           }
          }
          pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -2146,10 +2190,12 @@ module.exports = {
      if (cellType === 'exit') {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+        }
        }
       }
       pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -2186,19 +2232,21 @@ module.exports = {
        const trapRoll = Math.floor(Math.random() * 6) + 1;
       const trapOutcome = getGrottoMazeTrapOutcome(trapRoll);
       if (trapOutcome.heartsLost > 0 && character._id) {
-       try {
-        await useHearts(character._id, trapOutcome.heartsLost, { commandName: 'explore', operation: 'grotto_maze_trap_cell' });
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze trap cell useHearts: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await useHearts(character._id, trapOutcome.heartsLost, { commandName: 'explore', operation: 'grotto_maze_trap_cell' });
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze trap cell useHearts: ${err?.message || err}`);
+        }
        }
-       const charDoc = await Character.findById(character._id).select('currentHearts');
-       if (charDoc) {
-        const idx = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
-        if (idx !== -1) party.characters[idx].currentHearts = charDoc.currentHearts;
-        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
-        party.markModified("characters");
-        await party.save();
+       const idx = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
+       if (idx !== -1) {
+        const curH = party.characters[idx].currentHearts ?? character.currentHearts ?? 0;
+        party.characters[idx].currentHearts = Math.max(0, curH - trapOutcome.heartsLost);
        }
+       party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+       party.markModified("characters");
+       await party.save();
       }
       if (trapOutcome.staminaCost > 0) {
        let remaining = trapOutcome.staminaCost;
@@ -2209,9 +2257,11 @@ module.exports = {
         const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
         const take = Math.min(remaining, have);
         if (take > 0) {
-         charDoc.currentStamina = Math.max(0, have - take);
-         await charDoc.save();
-         slot.currentStamina = charDoc.currentStamina;
+         if (!EXPLORATION_TESTING_MODE) {
+          charDoc.currentStamina = Math.max(0, have - take);
+          await charDoc.save();
+         }
+         slot.currentStamina = Math.max(0, have - take);
          remaining -= take;
         }
        }
@@ -2254,10 +2304,12 @@ module.exports = {
       const opened = grotto.mazeState.openedChests || [];
       if (!opened.includes(nextKey)) {
        grotto.mazeState.openedChests = [...opened, nextKey];
-       try {
-        await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest: ${err?.message || err}`);
+        }
        }
        const charDoc = await Character.findById(character._id);
        if (charDoc && party.characters) {
@@ -2380,9 +2432,11 @@ module.exports = {
       const have = typeof charDoc.currentStamina === "number" ? charDoc.currentStamina : 0;
       const take = Math.min(remaining, have, costPerMember);
       if (take > 0) {
-       charDoc.currentStamina = Math.max(0, have - take);
-       await charDoc.save();
-       slot.currentStamina = charDoc.currentStamina;
+       if (!EXPLORATION_TESTING_MODE) {
+        charDoc.currentStamina = Math.max(0, have - take);
+        await charDoc.save();
+       }
+       slot.currentStamina = Math.max(0, have - take);
        remaining -= take;
       }
      }
@@ -2592,9 +2646,11 @@ module.exports = {
       );
      }
      const plumeIdx = (party.characters[plumeHolder.characterIndex].items || []).findIndex((it) => String(it.itemName || "").toLowerCase() === "goddess plume");
-     if (plumeIdx !== -1) {
+     if (plumeIdx !== -1 && !EXPLORATION_TESTING_MODE) {
       party.characters[plumeHolder.characterIndex].items.splice(plumeIdx, 1);
       party.markModified("characters");
+      await party.save();
+     } else if (plumeIdx !== -1) {
       await party.save();
      }
      const at = new Date();
@@ -2651,10 +2707,12 @@ module.exports = {
      if (grottoDoc.trialType === "blessing") {
       await markGrottoCleared(grottoDoc);
       for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
+        }
        }
       }
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -2801,21 +2859,23 @@ module.exports = {
        const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
        if (mapSquareId && mapQuadrantId) {
         try {
-         const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-         await Square.updateOne(
-          { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
-          {
-           $set: {
-            "quadrants.$[q].status": "explored",
-            "quadrants.$[q].exploredBy": interaction.user?.id || party.leaderId || "",
-            "quadrants.$[q].exploredAt": new Date(),
-           },
-         },
-         { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
-        );
-        if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
-        party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
-        party.markModified("exploredQuadrantsThisRun");
+         if (!EXPLORATION_TESTING_MODE) {
+          const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+          await Square.updateOne(
+           { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+           {
+            $set: {
+             "quadrants.$[q].status": "explored",
+             "quadrants.$[q].exploredBy": interaction.user?.id || party.leaderId || "",
+             "quadrants.$[q].exploredAt": new Date(),
+            },
+          },
+          { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+          );
+          if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
+          party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
+          party.markModified("exploredQuadrantsThisRun");
+         }
         } catch (mapErr) {
          logger.error("EXPLORE", `[explore.js]❌ Mark quadrant explored (roll sync): ${mapErr.message}`);
         }
@@ -2837,7 +2897,7 @@ module.exports = {
        const add = Math.min(restStamina, Math.max(0, maxStam - curStam));
        if (add > 0) {
         character.currentStamina = Math.min(maxStam, curStam + add);
-        await character.save();
+        if (!EXPLORATION_TESTING_MODE) await character.save();
         party.characters[characterIndex].currentStamina = character.currentStamina;
         party.markModified("characters");
         party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
@@ -2969,7 +3029,7 @@ module.exports = {
       try {
        const mapSquareId = (party.square && String(party.square).trim()) || "";
        const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
-       if (mapSquareId && mapQuadrantId) {
+       if (mapSquareId && mapQuadrantId && !EXPLORATION_TESTING_MODE) {
         const squareIdRegexExplored = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
         const result = await Square.updateOne(
          { squareId: squareIdRegexExplored, "quadrants.quadrantId": mapQuadrantId },
@@ -3092,10 +3152,12 @@ module.exports = {
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
-      try {
-       await addItemInventoryDatabase(character._id, "Fairy", 1, interaction, "Exploration");
-      } catch (err) {
-       handleInteractionError(err, interaction, { source: "explore.js fairy" });
+      if (!EXPLORATION_TESTING_MODE) {
+       try {
+        await addItemInventoryDatabase(character._id, "Fairy", 1, interaction, "Exploration");
+       } catch (err) {
+        handleInteractionError(err, interaction, { source: "explore.js fairy" });
+       }
       }
       return;
      }
@@ -3110,7 +3172,7 @@ module.exports = {
        campStaminaRecovered = Math.floor(Math.random() * 3) + 1;
        character.currentHearts = Math.min(character.maxHearts, character.currentHearts + campHeartsRecovered);
        character.currentStamina = Math.min(character.maxStamina, character.currentStamina + campStaminaRecovered);
-       await character.save();
+       if (!EXPLORATION_TESTING_MODE) await character.save();
        const campCharIndex = party.characters.findIndex((c) => c._id.toString() === character._id.toString());
        if (campCharIndex >= 0) {
         party.characters[campCharIndex].currentHearts = character.currentHearts;
@@ -3125,10 +3187,12 @@ module.exports = {
       let savedOldMapDoc = null;
       if (outcomeType === "old_map") {
        chosenMapOldMap = getRandomOldMap();
-       try {
-        savedOldMapDoc = await addOldMapToCharacter(character.name, chosenMapOldMap.number, location);
-       } catch (err) {
-        handleInteractionError(err, interaction, { source: "explore.js old_map" });
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         savedOldMapDoc = await addOldMapToCharacter(character.name, chosenMapOldMap.number, location);
+        } catch (err) {
+         handleInteractionError(err, interaction, { source: "explore.js old_map" });
+        }
        }
        const mapIdStr = savedOldMapDoc?.mapId ? `\`${savedOldMapDoc.mapId}\`` : "—";
        const userIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
@@ -3164,17 +3228,19 @@ module.exports = {
 
       if (outcomeType === "relic") {
        let savedRelic = null;
-       try {
-        savedRelic = await createRelic({
-         name: "Unknown Relic",
-         discoveredBy: character.name,
-         characterId: character._id,
-         discoveredDate: new Date(),
-         locationFound: location,
-         appraised: false,
-        });
-       } catch (err) {
-        logger.error("EXPLORE", `[explore.js]❌ createRelic (roll): ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
+        try {
+         savedRelic = await createRelic({
+          name: "Unknown Relic",
+          discoveredBy: character.name,
+          characterId: character._id,
+          discoveredDate: new Date(),
+          locationFound: location,
+          appraised: false,
+         });
+        } catch (err) {
+         logger.error("EXPLORE", `[explore.js]❌ createRelic (roll): ${err?.message || err}`);
+        }
        }
        if (!party.gatheredItems) party.gatheredItems = [];
        party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
@@ -3494,25 +3560,26 @@ module.exports = {
          } else if (ruinsOutcome === "camp") {
           const recover = 1;
           ruinsCharacter.currentStamina = Math.min(ruinsCharacter.maxStamina ?? ruinsCharacter.currentStamina, ruinsCharacter.currentStamina + recover);
-          await ruinsCharacter.save();
+          if (!EXPLORATION_TESTING_MODE) await ruinsCharacter.save();
           const idx = freshParty.characters.findIndex((c) => c._id.toString() === ruinsCharacter._id.toString());
           if (idx >= 0) { freshParty.characters[idx].currentStamina = ruinsCharacter.currentStamina; }
           freshParty.totalStamina = freshParty.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
           await freshParty.save();
-          // Mark this quadrant as a ruin-rest spot so future visits auto-heal
-          try {
-           const mapSquareId = (freshParty.square && String(freshParty.square).trim()) || "";
-           const mapQuadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim().toUpperCase()) || "";
-           if (mapSquareId && mapQuadrantId) {
-            const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-            await Square.updateOne(
-             { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
-             { $set: { "quadrants.$[q].ruinRestStamina": recover } },
-             { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
-            );
+          if (!EXPLORATION_TESTING_MODE) {
+           try {
+            const mapSquareId = (freshParty.square && String(freshParty.square).trim()) || "";
+            const mapQuadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim().toUpperCase()) || "";
+            if (mapSquareId && mapQuadrantId) {
+             const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+             await Square.updateOne(
+              { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+              { $set: { "quadrants.$[q].ruinRestStamina": recover } },
+              { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+             );
+            }
+           } catch (mapErr) {
+            logger.warn("EXPLORE", `[explore.js]⚠️ Mark ruin-rest on map: ${mapErr?.message || mapErr}`);
            }
-          } catch (mapErr) {
-           logger.warn("EXPLORE", `[explore.js]⚠️ Mark ruin-rest on map: ${mapErr?.message || mapErr}`);
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found a solid camp spot in the ruins and recovered **${recover}** 🟩 stamina. Remember to add it to the map for future expeditions!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a camp spot; recovered 1 stamina.";
@@ -3523,17 +3590,19 @@ module.exports = {
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else if (ruinsOutcome === "relic") {
           let ruinsSavedRelic = null;
-          try {
-           ruinsSavedRelic = await createRelic({
-            name: "Unknown Relic",
-            discoveredBy: ruinsCharacter.name,
-            characterId: ruinsCharacter._id,
-            discoveredDate: new Date(),
-            locationFound: location,
-            appraised: false,
-          });
-          } catch (err) {
-           logger.error("EXPLORE", `[explore.js]❌ createRelic (ruins): ${err?.message || err}`);
+          if (!EXPLORATION_TESTING_MODE) {
+           try {
+            ruinsSavedRelic = await createRelic({
+             name: "Unknown Relic",
+             discoveredBy: ruinsCharacter.name,
+             characterId: ruinsCharacter._id,
+             discoveredDate: new Date(),
+             locationFound: location,
+             appraised: false,
+            });
+           } catch (err) {
+            logger.error("EXPLORE", `[explore.js]❌ createRelic (ruins): ${err?.message || err}`);
+           }
           }
           if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
           freshParty.gatheredItems.push({ characterId: ruinsCharacter._id, characterName: ruinsCharacter.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
@@ -3573,10 +3642,12 @@ module.exports = {
          } else if (ruinsOutcome === "old_map") {
           const chosenMap = getRandomOldMap();
           let ruinsSavedMapDoc = null;
-          try {
-           ruinsSavedMapDoc = await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
-          } catch (err) {
-           handleInteractionError(err, i, { source: "explore.js ruins old_map" });
+          if (!EXPLORATION_TESTING_MODE) {
+           try {
+            ruinsSavedMapDoc = await addOldMapToCharacter(ruinsCharacter.name, chosenMap.number, location);
+           } catch (err) {
+            handleInteractionError(err, i, { source: "explore.js ruins old_map" });
+           }
           }
           const ruinsMapIdStr = ruinsSavedMapDoc?.mapId ? ` Map ID: \`${ruinsSavedMapDoc.mapId}\`.` : "";
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found **Map #${chosenMap.number}** in the ruins! The script is faded and hard to read—take it to the Inariko Library to get it deciphered.\n\n**Saved to ${ruinsCharacter.name}'s map collection.**${ruinsMapIdStr} Find out more about maps [here](${OLD_MAPS_LINK}).\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
@@ -3615,32 +3686,38 @@ module.exports = {
            }
           }
          } else if (ruinsOutcome === "star_fragment") {
-          try {
-           await addItemInventoryDatabase(ruinsCharacter._id, "Star Fragment", 1, i, "Exploration - Ruins");
-          } catch (err) {
-           handleInteractionError(err, i, { source: "explore.js ruins star_fragment" });
+          if (!EXPLORATION_TESTING_MODE) {
+           try {
+            await addItemInventoryDatabase(ruinsCharacter._id, "Star Fragment", 1, i, "Exploration - Ruins");
+           } catch (err) {
+            handleInteractionError(err, i, { source: "explore.js ruins star_fragment" });
+           }
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** collected a **Star Fragment** in the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found a Star Fragment.";
           lootForLog = { itemName: "Star Fragment", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          } else if (ruinsOutcome === "blight") {
-          ruinsCharacter.blighted = true;
-          if (!ruinsCharacter.blightedAt) ruinsCharacter.blightedAt = new Date();
-          if (!ruinsCharacter.blightStage || ruinsCharacter.blightStage === 0) {
-           ruinsCharacter.blightStage = 1;
-           ruinsCharacter.blightEffects = { rollMultiplier: 1.0, noMonsters: false, noGathering: false };
+          if (!EXPLORATION_TESTING_MODE) {
+           ruinsCharacter.blighted = true;
+           if (!ruinsCharacter.blightedAt) ruinsCharacter.blightedAt = new Date();
+           if (!ruinsCharacter.blightStage || ruinsCharacter.blightStage === 0) {
+            ruinsCharacter.blightStage = 1;
+            ruinsCharacter.blightEffects = { rollMultiplier: 1.0, noMonsters: false, noGathering: false };
+           }
+           await ruinsCharacter.save();
           }
-          await ruinsCharacter.save();
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. You're blighted! Use the </blight:...> command for healing and info.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Found blight; character is now blighted.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else {
           // goddess_plume
-          try {
-           await addItemInventoryDatabase(ruinsCharacter._id, "Goddess Plume", 1, i, "Exploration - Ruins");
-          } catch (err) {
-           handleInteractionError(err, i, { source: "explore.js ruins goddess_plume" });
+          if (!EXPLORATION_TESTING_MODE) {
+           try {
+            await addItemInventoryDatabase(ruinsCharacter._id, "Goddess Plume", 1, i, "Exploration - Ruins");
+           } catch (err) {
+            handleInteractionError(err, i, { source: "explore.js ruins goddess_plume" });
+           }
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** excavated a **Goddess Plume** from the ruins!\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
           progressMsg += "Excavated a Goddess Plume.";
@@ -4171,17 +4248,19 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
 
-      try {
-       await addItemInventoryDatabase(
-        character._id,
-        selectedItem.itemName,
-        1,
-        interaction,
-        "Exploration"
-       );
-      } catch (error) {
-       handleInteractionError(error, interaction, { source: "explore.js" });
-       logger.error("EXPLORE", `[explore.js]❌ Add item to inventory: ${error.message}`);
+      if (!EXPLORATION_TESTING_MODE) {
+       try {
+        await addItemInventoryDatabase(
+         character._id,
+         selectedItem.itemName,
+         1,
+         interaction,
+         "Exploration"
+        );
+       } catch (error) {
+        handleInteractionError(error, interaction, { source: "explore.js" });
+        logger.error("EXPLORE", `[explore.js]❌ Add item to inventory: ${error.message}`);
+       }
       }
      } else if (outcomeType === "monster") {
       // Check if character has blight stage 3 or higher (monsters don't attack them)
@@ -4282,13 +4361,15 @@ module.exports = {
            inline: false,
           });
 
-          await addItemInventoryDatabase(
-           character._id,
-           lootedItem.itemName,
-           qty,
-           interaction,
-           "Exploration Loot"
-          );
+          if (!EXPLORATION_TESTING_MODE) {
+           await addItemInventoryDatabase(
+            character._id,
+            lootedItem.itemName,
+            qty,
+            interaction,
+            "Exploration Loot"
+           );
+          }
 
           if (!party.gatheredItems) {
            party.gatheredItems = [];
@@ -4326,7 +4407,8 @@ module.exports = {
         damageValue,
         adjustedRandomValue,
         attackSuccess,
-        defenseSuccess
+        defenseSuccess,
+        EXPLORATION_TESTING_MODE ? { skipPersist: true } : {}
        );
 
        if (outcome.hearts > 0) {
@@ -4337,11 +4419,12 @@ module.exports = {
          character.currentHearts - outcome.hearts
         );
 
-        if (character.currentHearts === 0) {
-         await handleKO(character._id);
+        if (!EXPLORATION_TESTING_MODE) {
+         if (character.currentHearts === 0) {
+          await handleKO(character._id);
+         }
+         await character.save();
         }
-
-        await character.save();
 
         party.characters[characterIndex].currentHearts = character.currentHearts;
         party.characters[characterIndex].currentStamina = character.currentStamina;
@@ -4443,13 +4526,15 @@ module.exports = {
          inline: false,
         });
 
-        await addItemInventoryDatabase(
-         character._id,
-         lootedItem.itemName,
-         qty,
-         interaction,
-         "Exploration Loot"
-        );
+        if (!EXPLORATION_TESTING_MODE) {
+         await addItemInventoryDatabase(
+          character._id,
+          lootedItem.itemName,
+          qty,
+          interaction,
+          "Exploration Loot"
+         );
+        }
 
         if (!party.gatheredItems) {
          party.gatheredItems = [];
@@ -4617,23 +4702,25 @@ module.exports = {
     // Cost already applied by payStaminaOrStruggle
 
     // Remove Wood and Eldin Ore (or their bundles) from the party — one of each from whoever has them
-    for (const resource of requiredResources) {
-     for (let ci = 0; ci < party.characters.length; ci++) {
-      const idx = (party.characters[ci].items || []).findIndex(
-       (item) => item.itemName === resource || item.itemName === `${resource} Bundle`
-      );
-      if (idx !== -1) {
-       party.characters[ci].items.splice(idx, 1);
-       break;
+    if (!EXPLORATION_TESTING_MODE) {
+     for (const resource of requiredResources) {
+      for (let ci = 0; ci < party.characters.length; ci++) {
+       const idx = (party.characters[ci].items || []).findIndex(
+        (item) => item.itemName === resource || item.itemName === `${resource} Bundle`
+       );
+       if (idx !== -1) {
+        party.characters[ci].items.splice(idx, 1);
+        break;
+       }
       }
      }
+     party.markModified("characters");
     }
-    party.markModified("characters");
 
     // Mark quadrant as secured in the canonical map (exploringMap) — use case-insensitive squareId to match dashboard
     const mapSquareId = (party.square && String(party.square).trim()) || "";
     const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
-    if (mapSquareId && mapQuadrantId) {
+    if (mapSquareId && mapQuadrantId && !EXPLORATION_TESTING_MODE) {
      try {
       const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
       const mapResult = await Square.updateOne(
@@ -4984,7 +5071,7 @@ module.exports = {
     if (destinationQuadrantState === "unexplored") {
      const mapSquareId = (newLocation.square && String(newLocation.square).trim()) || "";
      const mapQuadrantId = (newLocation.quadrant && String(newLocation.quadrant).trim().toUpperCase()) || "";
-     if (mapSquareId && mapQuadrantId) {
+     if (mapSquareId && mapQuadrantId && !EXPLORATION_TESTING_MODE) {
       try {
        const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
        await Square.updateOne(
@@ -5169,7 +5256,9 @@ module.exports = {
     partyChar.currentHearts = character.currentHearts;
     partyChar.currentStamina = character.currentStamina;
 
-    partyChar.items.splice(itemIndex, 1);
+    if (!EXPLORATION_TESTING_MODE) {
+     partyChar.items.splice(itemIndex, 1);
+    }
     party.totalHearts = party.characters.reduce(
      (sum, c) => sum + (c.currentHearts ?? 0),
      0
@@ -5181,7 +5270,7 @@ module.exports = {
 
     // Using an item counts as a turn — advance to next character
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-    await character.save();
+    if (!EXPLORATION_TESTING_MODE) await character.save();
     await party.save();
 
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
@@ -5292,65 +5381,77 @@ module.exports = {
     const remainingStamina = Math.max(0, party.totalStamina ?? 0);
     const memberCount = (party.characters || []).length;
     const splitLinesEnd = [];
-    if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
-     const heartsPerMember = Math.floor(remainingHearts / memberCount);
-     const heartsRemainder = remainingHearts % memberCount;
-     const staminaPerMember = Math.floor(remainingStamina / memberCount);
-     const staminaRemainder = remainingStamina % memberCount;
-     for (let idx = 0; idx < party.characters.length; idx++) {
-      const partyCharacter = party.characters[idx];
-      const char = await Character.findById(partyCharacter._id);
-      if (char) {
+    if (!EXPLORATION_TESTING_MODE) {
+     if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
+      const heartsPerMember = Math.floor(remainingHearts / memberCount);
+      const heartsRemainder = remainingHearts % memberCount;
+      const staminaPerMember = Math.floor(remainingStamina / memberCount);
+      const staminaRemainder = remainingStamina % memberCount;
+      for (let idx = 0; idx < party.characters.length; idx++) {
+       const partyCharacter = party.characters[idx];
+       const char = await Character.findById(partyCharacter._id);
+       if (char) {
+        const heartShare = heartsPerMember + (idx < heartsRemainder ? 1 : 0);
+        const staminaShare = staminaPerMember + (idx < staminaRemainder ? 1 : 0);
+        const maxH = char.maxHearts ?? 0;
+        const maxS = char.maxStamina ?? 0;
+        char.currentHearts = Math.min(maxH, heartShare);
+        char.currentStamina = Math.min(maxS, staminaShare);
+        char.currentVillage = targetVillage;
+        await char.save();
+        partyCharacter.currentHearts = char.currentHearts;
+        partyCharacter.currentStamina = char.currentStamina;
+        const name = partyCharacter.name || char.name || "Unknown";
+        splitLinesEnd.push(`${name}: ${heartShare} ❤, ${staminaShare} stamina`);
+       }
+      }
+     } else if (memberCount > 0) {
+      for (const partyCharacter of party.characters) {
+       const char = await Character.findById(partyCharacter._id);
+       if (char) {
+        char.currentVillage = targetVillage;
+        await char.save();
+       }
+      }
+     }
+     for (const partyCharacter of party.characters || []) {
+      const items = partyCharacter.items || [];
+      for (const item of items) {
+       if (!item || !item.itemName) continue;
+       const bundle = PAVING_BUNDLES[item.itemName];
+       if (bundle) {
+        await addItemInventoryDatabase(
+         partyCharacter._id,
+         bundle.baseItemName,
+         bundle.quantityPerSlot,
+         interaction,
+         "Expedition ended — returned from party (bundle)"
+        ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return bundle to owner: ${err.message}`));
+       } else {
+        await addItemInventoryDatabase(
+         partyCharacter._id,
+         item.itemName,
+         1,
+         interaction,
+         "Expedition ended — returned from party"
+        ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return item to owner: ${err.message}`));
+       }
+      }
+     }
+    } else {
+     if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
+      const heartsPerMember = Math.floor(remainingHearts / memberCount);
+      const heartsRemainder = remainingHearts % memberCount;
+      const staminaPerMember = Math.floor(remainingStamina / memberCount);
+      const staminaRemainder = remainingStamina % memberCount;
+      for (let idx = 0; idx < party.characters.length; idx++) {
+       const partyCharacter = party.characters[idx];
        const heartShare = heartsPerMember + (idx < heartsRemainder ? 1 : 0);
        const staminaShare = staminaPerMember + (idx < staminaRemainder ? 1 : 0);
-       const maxH = char.maxHearts ?? 0;
-       const maxS = char.maxStamina ?? 0;
-       char.currentHearts = Math.min(maxH, heartShare);
-       char.currentStamina = Math.min(maxS, staminaShare);
-       char.currentVillage = targetVillage;
-       await char.save();
-       // Sync party document so dashboard expedition report shows same split as embed
-       partyCharacter.currentHearts = char.currentHearts;
-       partyCharacter.currentStamina = char.currentStamina;
-       const name = partyCharacter.name || char.name || "Unknown";
-       splitLinesEnd.push(`${name}: ${heartShare} ❤, ${staminaShare} stamina`);
+       splitLinesEnd.push(`${partyCharacter.name || "Unknown"}: ${heartShare} ❤, ${staminaShare} stamina`);
       }
      }
-    } else if (memberCount > 0) {
-     for (const partyCharacter of party.characters) {
-      const char = await Character.findById(partyCharacter._id);
-      if (char) {
-       char.currentVillage = targetVillage;
-       await char.save();
-      }
-     }
-    }
-
-    // Return any remaining loadout items to each character's inventory
-    // Bundles (Eldin Ore Bundle, Wood Bundle) are virtual slots: return as base item with quantity per slot
-    for (const partyCharacter of party.characters || []) {
-     const items = partyCharacter.items || [];
-     for (const item of items) {
-      if (!item || !item.itemName) continue;
-      const bundle = PAVING_BUNDLES[item.itemName];
-      if (bundle) {
-       await addItemInventoryDatabase(
-        partyCharacter._id,
-        bundle.baseItemName,
-        bundle.quantityPerSlot,
-        interaction,
-        "Expedition ended — returned from party (bundle)"
-       ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return bundle to owner: ${err.message}`));
-      } else {
-       await addItemInventoryDatabase(
-        partyCharacter._id,
-        item.itemName,
-        1,
-        interaction,
-        "Expedition ended — returned from party"
-       ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return item to owner: ${err.message}`));
-      }
-     }
+     await Grotto.deleteMany({ partyId: expeditionId }).catch((err) => logger.warn("EXPLORE", `[explore.js] Grotto delete on end: ${err?.message}`));
     }
 
     const villageLabelEnd = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
@@ -5481,7 +5582,7 @@ module.exports = {
     if (success) {
      await endExplorationRaidAsRetreat(raid, interaction.client);
      character.failedFleeAttempts = 0;
-     await character.save();
+     if (!EXPLORATION_TESTING_MODE) await character.save();
      pushProgressLog(party, character.name, "retreat", "Party attempted to retreat and escaped.", undefined, retreatCostsForLog);
      await party.save();
      const monsterName = raid.monster?.name || "the monster";
@@ -5508,7 +5609,7 @@ module.exports = {
     await raid.save();
 
     character.failedFleeAttempts = (character.failedFleeAttempts ?? 0) + 1;
-    await character.save();
+    if (!EXPLORATION_TESTING_MODE) await character.save();
 
     pushProgressLog(party, character.name, "retreat_failed", "Party attempted to retreat but could not get away.", undefined, retreatCostsForLog);
     await party.save();
@@ -5587,7 +5688,7 @@ module.exports = {
      const campCharDoc = await Character.findById(campChar._id);
      if (campCharDoc) {
       campCharDoc.currentStamina = Math.max(0, (campCharDoc.currentStamina ?? 0) - staminaCost);
-      await campCharDoc.save();
+      if (!EXPLORATION_TESTING_MODE) await campCharDoc.save();
       party.characters[characterIndex].currentStamina = campCharDoc.currentStamina;
       party.markModified("characters");
      }
@@ -5615,7 +5716,7 @@ module.exports = {
       recoveryPerMember.push({ name: char.name, hearts: heartsRecovered, stamina: staminaRecovered });
       char.currentHearts = Math.min(char.maxHearts, char.currentHearts + heartsRecovered);
       party.characters[i].currentHearts = char.currentHearts;
-      await char.save();
+      if (!EXPLORATION_TESTING_MODE) await char.save();
      }
     }
     party.markModified("characters");
