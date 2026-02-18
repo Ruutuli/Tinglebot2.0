@@ -176,12 +176,21 @@ type MarkdownComponentProps = {
 };
 
 /**
- * Convert plain URLs in text to markdown links
+ * Convert plain URLs in text to markdown links and fix malformed links.
+ * Fixes "Label](URL)" (missing opening bracket) -> "[Label](URL)"
  */
 function convertUrlsToMarkdown(text: string): string {
-  // URL regex pattern - matches http(s):// URLs
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.replace(urlRegex, (url) => `[${url}](${url})`);
+  let result = text;
+  // Fix malformed links: "Link Text](URL)" -> "[Link Text](URL)" (missing opening [)
+  // Use negative lookbehind to avoid doubling already-correct links
+  result = result.replace(
+    /(?<!\[)([^\n\[]+)\]\((https?:\/\/[^\s\)]+)\)/g,
+    (_, label, url) => `[${label}](${url})`
+  );
+  // Convert plain bare URLs to markdown links (skip URLs already inside ](url) )
+  const urlRegex = /(?<!\]\()(https?:\/\/[^\s\]\)]+)/g;
+  result = result.replace(urlRegex, (url) => `[${url}](${url})`);
+  return result;
 }
 
 const MARKDOWN_COMPONENTS: Components = {
