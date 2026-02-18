@@ -277,7 +277,12 @@ function dedupeBarChartData(
     const val = Number(item[dataKey] ?? 0) || 0;
     map.set(name, (map.get(name) ?? 0) + val);
   }
-  return Array.from(map.entries()).map(([name, count]) => ({ [nameKey]: name, [dataKey]: count }));
+  return Array.from(map.entries()).map(([name, count]) => ({
+    name,
+    count,
+    [nameKey]: name,
+    [dataKey]: count,
+  }));
 }
 
 function SharedBarChart({
@@ -641,6 +646,13 @@ function normalizeVillageName(village: string): string {
   if (normalized.includes("inariko")) return "Inariko";
   if (normalized.includes("vhintl")) return "Vhintl";
   return capitalize(village);
+}
+
+/** Only collapse literal "nonbinary" spelling variants (Nonbinary, Non-binary, Non-Binary, etc.). */
+function isNonbinarySpellingVariant(g: string): boolean {
+  if (!g) return false;
+  const fullText = String(g).toLowerCase().replace(/[|/]/g, " ").replace(/\s+/g, " ").trim();
+  return /\bnonbinary\b/.test(fullText) || /\bnon-binary\b/.test(fullText) || /\bnon binary\b/.test(fullText);
 }
 
 function CharacterStatsSection({
@@ -1651,26 +1663,39 @@ function BreakdownModal({
                   </div>
                 </div>
 
-                {data.breakdown.byGenderDetailed && (
-                  <div>
-                    <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
-                      Detailed Gender Breakdown
-                    </h3>
-                    <div className="space-y-2">
-                      {data.breakdown.byGenderDetailed.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
-                        >
-                          <span className="text-[var(--botw-pale)]">{item.gender || "Unknown"}</span>
-                          <span className="font-semibold text-[var(--totk-light-green)]">
-                            {item.count}
-                          </span>
-                        </div>
-                      ))}
+                {data.breakdown.byGenderDetailed && (() => {
+                  const merged = (() => {
+                    const map = new Map<string, number>();
+                    data.breakdown.byGenderDetailed!.forEach((item) => {
+                      const raw = item.gender || "Unknown";
+                      const key = isNonbinarySpellingVariant(raw) ? "Nonbinary" : raw;
+                      map.set(key, (map.get(key) ?? 0) + item.count);
+                    });
+                    return Array.from(map.entries())
+                      .map(([gender, count]) => ({ gender, count }))
+                      .sort((a, b) => b.count - a.count);
+                  })();
+                  return (
+                    <div>
+                      <h3 className="mb-3 text-lg font-semibold text-[var(--totk-light-green)]">
+                        Detailed Gender Breakdown
+                      </h3>
+                      <div className="space-y-2">
+                        {merged.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-4 py-2"
+                          >
+                            <span className="text-[var(--botw-pale)]">{item.gender || "Unknown"}</span>
+                            <span className="font-semibold text-[var(--totk-light-green)]">
+                              {item.count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {data.breakdown.byJob && (
                   <div>
