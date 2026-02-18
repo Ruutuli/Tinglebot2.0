@@ -46,6 +46,7 @@ const MISS_OUTCOMES = [
   {
     flavor: "{char}'s finger gets caught in the string of their slingshot or bow. OW??? They take one heart of damage.",
     ctaHint: "Try again!",
+    heartsLost: 1,
   },
   {
     flavor: "{char}'s arrow whistles through empty air. The blimp bobs gently on the breeze, utterly unimpressed.",

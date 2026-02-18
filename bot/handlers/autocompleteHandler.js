@@ -3498,7 +3498,9 @@ async function handleExploreRollCharacterAutocomplete(
 }
 
 // ------------------- Explore: Grotto Puzzle Items Autocomplete -------------------
-// Lists items from the character's inventory for grotto puzzle offerings.
+// Lists items from the character's own inventory only (not loadout). This ensures users only
+// autocomplete items they own; they can still type other party members' items manually to offer
+// them (party-wide validation applies on submit).
 async function handleExploreGrottoPuzzleItemsAutocomplete(interaction, focusedOption) {
  try {
   let characterName = (interaction.options.getString("charactername") || "").trim();
@@ -3510,7 +3512,7 @@ async function handleExploreGrottoPuzzleItemsAutocomplete(interaction, focusedOp
   if (!character) return await interaction.respond([]);
 
   const inventoryCollection = await DatabaseConnectionManager.getInventoryCollection(character.name);
-  const inventoryItems = await inventoryCollection.find().toArray();
+  const inventoryItems = await inventoryCollection.find({ characterId: character._id }).toArray();
 
   const itemMap = new Map();
   for (const item of inventoryItems) {

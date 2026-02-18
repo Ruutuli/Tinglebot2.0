@@ -35,6 +35,7 @@ const {
 // Google Sheets functionality removed
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const ItemModel = require('@/models/ItemModel.js');
+const Party = require('@/models/PartyModel.js');
 const ShopStock = require('@/models/VillageShopsModel');
 const User = require('@/models/UserModel');
 const CharacterModel = require('@/models/CharacterModel.js');
@@ -2107,6 +2108,27 @@ for (const { quantity } of cleanedItems) {
       footer: {
         text: 'Character Validation'
       }
+    }],
+    ephemeral: true,
+   });
+   return;
+  }
+
+  // ------------------- Block transfer when character is on an expedition -------------------
+  // Items cannot be transferred between characters during an expedition.
+  const [fromOnExpedition, toOnExpedition] = await Promise.all([
+   Party.findOne({ status: 'started', 'characters._id': fromCharacter._id }).lean(),
+   Party.findOne({ status: 'started', 'characters._id': toCharacter._id }).lean(),
+  ]);
+  if (fromOnExpedition || toOnExpedition) {
+   const charName = fromOnExpedition ? fromCharacter.name : toCharacter.name;
+   await interaction.editReply({
+    embeds: [{
+      color: 0xFF6600,
+      title: '🗺️ Cannot transfer during expedition',
+      description: `**${charName}** is currently on an active expedition. Item transfers between characters are not allowed during expeditions. End the expedition first, then transfer.`,
+      image: { url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png' },
+      footer: { text: 'Expedition Rules' }
     }],
     ephemeral: true,
    });

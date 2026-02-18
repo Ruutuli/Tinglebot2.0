@@ -121,7 +121,7 @@ function getPuzzleFlavor(grotto) {
 
   if (subType === ODDS_STRUCTURE) {
     const v = ODD_STRUCTURE_VARIANTS[state.puzzleVariant ?? 0];
-    return v ? `${v.flavor}\n\n↳ ${v.hint} Only the required amount will be taken from your inventory.` : null;
+    return v ? `${v.flavor}\n\n↳ ${v.hint} Only the required amount will be taken from party inventories (any character's inventory — not loadout; no transfers during expedition).` : null;
   }
   if (subType === OFFERING_STATUE) {
     const idx = state.puzzleClueIndex ?? 0;
@@ -130,7 +130,7 @@ function getPuzzleFlavor(grotto) {
     const itemList = c.expectedItems.length > 1
       ? `one of: ${c.expectedItems.join(', ')}`
       : c.expectedItems[0];
-    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n↳ Offer **1** × ${itemList}. Only that amount will be taken. ➾ \`</explore grotto puzzle items:...>\``;
+    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n↳ Offer **1** × ${itemList}. Only that amount will be taken from party inventories (any character — not loadout; no transfers during expedition). ➾ \`</explore grotto puzzle items:...>\``;
   }
   return null;
 }

@@ -708,6 +708,36 @@ async function findGoddessPlumeHolder(party) {
  return null;
 }
 
+// ------------------- getPartyWideInventory ------------------
+// Returns party-wide inventory for grotto puzzles (items in any character's inventory, NOT loadout).
+// Does NOT require items in exploring/loadout. Characters cannot transfer items during expedition.
+// Returns: { totalByItem, slotQuantities: [{ slot, quantities: Map<key, number>, names: Map<key, string> }] }
+async function getPartyWideInventory(party) {
+  const totalByItem = new Map();
+  const slotQuantities = [];
+  for (const slot of party.characters || []) {
+    try {
+      const collection = await getCharacterInventoryCollectionWithModSupport(slot);
+      const entries = await collection.find({ characterId: slot._id }).toArray();
+      const quantities = new Map();
+      const names = new Map();
+      for (const entry of entries || []) {
+        const name = (entry.itemName || "").trim();
+        if (!name || name.toLowerCase() === "initial item") continue;
+        const qty = entry.quantity || 0;
+        if (qty <= 0) continue;
+        const key = name.toLowerCase();
+        const prev = quantities.get(key) || 0;
+        quantities.set(key, prev + qty);
+        if (!names.has(key)) names.set(key, name);
+        totalByItem.set(key, (totalByItem.get(key) || 0) + qty);
+      }
+      slotQuantities.push({ slot, quantities, names });
+    } catch (_) { /* skip */ }
+  }
+  return { totalByItem, slotQuantities };
+}
+
 // ------------------- partyHasLensOfTruth ------------------
 // True if any party member has "Lens of Truth" in inventory (grottos use inventory, not party/loadout items)
 async function partyHasLensOfTruth(party) {
@@ -1444,7 +1474,7 @@ module.exports = {
       }
      } else {
       const instructions = {
-       target_practice: "Establish turn order. Each turn: one character shoots — 3 successes wins, 1 fail ends the trial. See **Commands** below.",
+       target_practice: "Establish turn order. Each shot costs 1 stamina. Some misses can cause damage to the shooter. 3 successes wins, 1 fail ends the trial. See **Commands** below.",
        test_of_power: "Boss battle — no backing out. Prepare and fight; spirit orbs on victory. (Test of Power flow uses raid-style encounter; ensure party is ready.)",
        maze: "Use North, East, South, or West to move, or Song of Scrying at a wall. See **Commands** below.",
       };
@@ -1512,6 +1542,26 @@ module.exports = {
       });
       return interaction.editReply({ embeds: [failedEmbed] });
      }
+     const characterIndex = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
+     if (characterIndex === -1) {
+      return interaction.editReply("Character is not in this expedition party.");
+     }
+     const TARGET_PRACTICE_STAMINA_COST = 1;
+     const payResult = await payStaminaOrStruggle(party, characterIndex, TARGET_PRACTICE_STAMINA_COST, { order: "currentFirst" });
+     if (!payResult.ok) {
+      const partyTotalStamina = party.totalStamina ?? party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+      const partyTotalHearts = party.totalHearts ?? party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+      return interaction.editReply({
+       embeds: [
+        new EmbedBuilder()
+         .setTitle("❌ Not enough stamina or hearts")
+         .setDescription(
+          `Target Practice costs **${TARGET_PRACTICE_STAMINA_COST}** stamina per shot. Party has ${partyTotalStamina} 🟩 and ${partyTotalHearts} ❤. **Camp** to recover, or use hearts to **Struggle**.`
+         )
+         .setColor(0x8b0000),
+       ],
+      });
+     }
      const { failReduction, missReduction } = getTargetPracticeModifiers(character);
      const failThreshold = Math.max(0.04, BASE_FAIL - failReduction);
      const missThreshold = Math.max(0.10, BASE_MISS - missReduction);
@@ -1550,7 +1600,32 @@ module.exports = {
      if (roll < failThreshold + missThreshold) {
       const outcome = getMissOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
-      const desc = `The blimp looms before you. ${flavor}\n\n**Miss.** Use the command in **Commands** below to try again.`;
+      const damageAmount = outcome.heartsLost ?? 0;
+      let heartsLost = 0;
+      if (damageAmount > 0 && character._id) {
+       const currentHearts = party.characters[characterIndex]?.currentHearts ?? character.currentHearts ?? 0;
+       if (currentHearts >= damageAmount) {
+        if (!EXPLORATION_TESTING_MODE) {
+         try {
+          await useHearts(character._id, damageAmount, { commandName: "explore", operation: "grotto_target_practice_miss" });
+         } catch (err) {
+          logger.warn("EXPLORE", `[explore.js] Grotto target practice miss useHearts: ${err?.message || err}`);
+         }
+         const updated = await fetchCharacterById(character._id);
+         if (updated) {
+          party.characters[characterIndex].currentHearts = updated.currentHearts ?? 0;
+         }
+        } else {
+         party.characters[characterIndex].currentHearts = Math.max(0, currentHearts - damageAmount);
+        }
+        heartsLost = damageAmount;
+        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+        party.markModified("characters");
+        await party.save();
+       }
+      }
+      const damageNote = heartsLost > 0 ? ` **${character.name}** took ${heartsLost} ❤ damage.` : "";
+      const desc = `The blimp looms before you. ${flavor}\n\n**Miss.**${damageNote} Use the command in **Commands** below to try again.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(regionColors[party.region] || "#00ff99")
@@ -1689,43 +1764,58 @@ module.exports = {
       });
       return interaction.editReply({ embeds: [embed] });
      }
-     // Validate: submitting character must have each item in required quantity (inventory only)
-     let inventoryCollection;
+     // Validate: party must have each item in required quantity (in any character's inventory — NOT loadout)
+     // Cannot transfer items between characters during expedition.
+     let partyInv;
      try {
-      inventoryCollection = await getCharacterInventoryCollectionWithModSupport(character);
+      partyInv = await getPartyWideInventory(party);
      } catch (err) {
-      logger.warn("EXPLORE", `[explore.js] puzzle getCharacterInventoryCollectionWithModSupport: ${err?.message || err}`);
-      return interaction.editReply("Could not read your inventory. Try again or contact staff.");
-     }
-     const inventoryEntries = await inventoryCollection.find({ characterId: character._id }).toArray();
-     const inventoryByItem = new Map();
-     for (const entry of inventoryEntries || []) {
-      const name = (entry.itemName || "").trim();
-      if (!name) continue;
-      const key = name.toLowerCase();
-      inventoryByItem.set(key, (inventoryByItem.get(key) || 0) + (entry.quantity || 0));
+      logger.warn("EXPLORE", `[explore.js] puzzle getPartyWideInventory: ${err?.message || err}`);
+      return interaction.editReply("Could not read party inventories. Try again or contact staff.");
      }
      const checkResult = checkPuzzleOffer(grotto, parsedItems);
      const consumeItems = checkResult.approved ? getPuzzleConsumeItems(grotto, parsedItems) : parsedItems;
      for (const { itemName, quantity } of consumeItems) {
       const key = itemName.trim().toLowerCase();
-      const have = inventoryByItem.get(key) || 0;
+      const have = partyInv.totalByItem.get(key) || 0;
       if (have < quantity) {
        return interaction.editReply(
-        `You don't have enough **${itemName}**. ${checkResult.approved ? `The puzzle requires ${quantity}` : `You offered ${quantity}`} but you have ${have}. Check your inventory and try again.`
+        `Your party doesn't have enough **${itemName}** in anyone's inventory. ${checkResult.approved ? `The puzzle requires ${quantity}` : `You offered ${quantity}`} but the party has ${have} total. Items must be in a character's inventory (not loadout); no transfers during expedition.`
        );
       }
      }
-     // Consume: if approved, only remove required amount; if denied, remove full offering
+     // Allocate removals: submitter first, then others. No transfer — deduct from whoever has it.
+     const submitterIndex = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
+     const orderedSlots = submitterIndex >= 0
+      ? [party.characters[submitterIndex], ...party.characters.filter((_, i) => i !== submitterIndex)]
+      : party.characters;
+     const toRemove = [];
+     for (const { itemName, quantity: need } of consumeItems) {
+      let remaining = need;
+      const key = itemName.trim().toLowerCase();
+      for (const pc of orderedSlots) {
+       if (remaining <= 0) break;
+       const sq = partyInv.slotQuantities.find((s) => s.slot._id.toString() === pc._id.toString());
+       if (!sq) continue;
+       const charHave = sq.quantities.get(key) || 0;
+       if (charHave <= 0) continue;
+       const take = Math.min(remaining, charHave);
+       if (take > 0) {
+        const canonicalName = sq.names.get(key) || itemName;
+        toRemove.push({ characterId: pc._id, itemName: canonicalName, quantity: take });
+        remaining -= take;
+       }
+      }
+     }
      if (!EXPLORATION_TESTING_MODE) {
       try {
-       for (const { itemName, quantity } of consumeItems) {
-        await removeItemInventoryDatabase(character._id, itemName, quantity, interaction, "Grotto puzzle offering");
+       for (const { characterId, itemName, quantity } of toRemove) {
+        await removeItemInventoryDatabase(characterId, itemName, quantity, interaction, "Grotto puzzle offering");
        }
       } catch (err) {
        handleInteractionError(err, interaction, { source: "explore.js grotto puzzle removeItem" });
        return interaction.editReply(
-         `Could not remove one or more items from your inventory. ${err?.message || err}. If items were partially consumed, contact staff.`
+         `Could not remove one or more items from party inventories. ${err?.message || err}. If items were partially consumed, contact staff.`
        ).catch(() => {});
       }
      }
@@ -2606,7 +2696,7 @@ module.exports = {
       const cmdId = getExploreCommandId();
       const instructions = {
        blessing: "The grotto held a blessing. Everyone received a Spirit Orb!",
-       target_practice: "Establish turn order. Each turn: one character shoots — 3 successes wins, 1 fail ends the trial. See **Commands** below.",
+       target_practice: "Establish turn order. Each shot costs 1 stamina. Some misses can cause damage to the shooter. 3 successes wins, 1 fail ends the trial. See **Commands** below.",
        puzzle: "Discuss with your group. Submit an offering (items); staff will review. If approved, everyone gets Spirit Orbs. See **Commands** below.",
        maze: "Use North, East, South, or West to move, or Song of Scrying at a wall. See **Commands** below.",
       };
