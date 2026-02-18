@@ -66,6 +66,8 @@ async function calculateTotalHeartsAndStamina(party) {
  */
 async function syncPartyMemberStats(party) {
     if (!party || !party.characters || party.characters.length === 0) return;
+    const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
+    if (EXPLORATION_TESTING_MODE) return; // Preserve in-session hearts/stamina display; never overwrite from DB
     try {
         for (let i = 0; i < party.characters.length; i++) {
             const slot = party.characters[i];
