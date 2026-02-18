@@ -296,10 +296,16 @@ export async function POST(
       await deductMaterialFromInventory(collection, charId, itemName, count);
     }
 
+    const maxHearts = Number.isFinite(Number(character.maxHearts)) ? Number(character.maxHearts) : 0;
+    const maxStamina = Number.isFinite(Number(character.maxStamina)) ? Number(character.maxStamina) : 0;
     const rawHearts = Number(character.currentHearts);
     const rawStamina = Number(character.currentStamina);
-    const currentHearts = Number.isFinite(rawHearts) ? rawHearts : (Number.isFinite(Number(character.maxHearts)) ? Number(character.maxHearts) : 0);
-    const currentStamina = Number.isFinite(rawStamina) ? rawStamina : (Number.isFinite(Number(character.maxStamina)) ? Number(character.maxStamina) : 0);
+    let currentHearts = Number.isFinite(rawHearts) ? rawHearts : maxHearts;
+    let currentStamina = Number.isFinite(rawStamina) ? rawStamina : maxStamina;
+    if (process.env.EXPLORATION_TESTING_MODE === "true") {
+      currentHearts = maxHearts;
+      currentStamina = maxStamina;
+    }
     const iconVal = character.icon;
     const icon = typeof iconVal === "string" && iconVal.trim() ? iconVal.trim() : "https://via.placeholder.com/100";
 
