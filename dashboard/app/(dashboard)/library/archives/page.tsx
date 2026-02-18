@@ -1214,21 +1214,8 @@ export default function LibraryArchivesPage() {
                   key={relic._id}
                   className="flex flex-col overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)] shadow-lg shadow-black/25 ring-1 ring-[var(--totk-dark-ocher)]/20 transition-all duration-200 hover:border-[var(--totk-light-ocher)]/40 hover:shadow-xl hover:shadow-black/30 hover:ring-[var(--totk-light-ocher)]/20 sm:rounded-2xl"
                 >
-                  <div className="flex flex-row items-start gap-3 p-3 sm:flex-row sm:gap-4 sm:p-5">
-                    <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/90 to-[var(--totk-brown)]/60 sm:h-28 sm:w-28">
-                      {relic.imageUrl ? (
-                        <img
-                          src={normalizeImageUrl(relic.imageUrl)}
-                          alt={relic.rollOutcome || relic.name}
-                          className="h-full w-full object-contain drop-shadow-md"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--totk-grey-400)]/80 sm:text-3xl">
-                          <i className="fa-solid fa-gem" aria-hidden />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
+                  <div className="flex flex-row items-start gap-3 p-3 sm:gap-4 sm:p-5">
+                    <div className="min-w-0 flex-1 order-2 sm:order-1">
                       <h3 className="text-sm font-bold leading-tight tracking-tight text-[var(--totk-light-ocher)] line-clamp-2 sm:text-lg sm:line-clamp-none">
                         {relic.rollOutcome || relic.name}
                       </h3>
@@ -1247,6 +1234,19 @@ export default function LibraryArchivesPage() {
                         <dt className="text-[var(--totk-grey-100)]">Quadrant</dt>
                         <dd className="font-semibold text-[var(--botw-pale)]">{relic.quadrant || "—"}</dd>
                       </dl>
+                    </div>
+                    <div className="relative order-1 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/90 to-[var(--totk-brown)]/60 sm:order-2 sm:h-28 sm:w-28">
+                      {relic.imageUrl ? (
+                        <img
+                          src={normalizeImageUrl(relic.imageUrl)}
+                          alt={relic.rollOutcome || relic.name}
+                          className="h-full w-full object-contain drop-shadow-md"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-2xl text-[var(--totk-grey-400)]/80 sm:text-3xl">
+                          <i className="fa-solid fa-gem" aria-hidden />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="border-t border-[var(--totk-dark-ocher)]/50 px-3 py-3 sm:px-5 sm:pb-5 sm:pt-3">
