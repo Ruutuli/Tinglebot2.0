@@ -18,6 +18,7 @@ const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCo
 const Raid = require("../../models/RaidModel.js");
 const Party = require('@/models/PartyModel.js');
 const Character = require('@/models/CharacterModel.js');
+const ModCharacter = require('@/models/ModCharacterModel.js');
 const ItemModel = require('@/models/ItemModel.js');
 const Square = require('@/models/mapModel.js');
 const Grotto = require('@/models/GrottoModel.js');
@@ -322,6 +323,25 @@ function normalizeExpeditionId(value) {
  const trimmed = value.trim();
  const pipe = trimmed.indexOf("|");
  return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
+}
+
+// ------------------- normalizeCharacterName ------------------
+// Autocomplete may send full display string (e.g. "Wren | Rudania | Hunter | ❤ 3 | 🟩 5"); use only the character name.
+function normalizeCharacterName(value) {
+ if (!value || typeof value !== "string") return (value || "").trim();
+ const trimmed = value.trim();
+ const pipe = trimmed.indexOf("|");
+ return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
+}
+
+// ------------------- findCharacterByNameAndUser ------------------
+// Look up character by name and userId; checks both Character and ModCharacter.
+async function findCharacterByNameAndUser(characterName, userId) {
+ const name = normalizeCharacterName(characterName);
+ if (!name || !userId) return null;
+ let character = await Character.findOne({ name, userId });
+ if (!character) character = await ModCharacter.findOne({ name, userId });
+ return character || null;
 }
 
 // ------------------- handleExplorationChestOpen ------------------
@@ -1343,12 +1363,11 @@ module.exports = {
    // ------------------- Grotto subcommands -------------------
    if (subcommandGroup === "grotto") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    let characterName = (interaction.options.getString("charactername") || "").trim();
-    if (characterName.includes("|")) characterName = characterName.split("|")[0].trim();
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const userId = interaction.user.id;
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) return interaction.editReply("Expedition ID not found.");
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) return interaction.editReply("Character not found or you do not own this character.");
     const location = `${party.square} ${party.quadrant}`;
     const squareId = (party.square && String(party.square).trim()) || "";
@@ -2560,13 +2579,13 @@ module.exports = {
    // ------------------- Revisit discovery (monster camp or grotto in current quadrant) -------------------
    if (subcommand === "discovery") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const discoveryKey = (interaction.options.getString("discovery") || "").trim();
     const userId = interaction.user.id;
 
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) return interaction.editReply("Expedition ID not found.");
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) return interaction.editReply("Character not found or you do not own this character.");
     const characterIndex = party.characters.findIndex((c) => c.name === characterName);
     if (characterIndex === -1) return interaction.editReply("Your character is not part of this expedition.");
@@ -2874,7 +2893,7 @@ module.exports = {
    if (subcommand === "roll") {
     try {
      const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-     const characterName = interaction.options.getString("charactername");
+     const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
      const userId = interaction.user.id;
 
      const party = await Party.findActiveByPartyId(expeditionId);
@@ -2883,7 +2902,7 @@ module.exports = {
      }
      await syncPartyMemberStats(party);
 
-     const character = await Character.findOne({ name: characterName, userId });
+     const character = await findCharacterByNameAndUser(characterName, userId);
      if (!character) {
       return interaction.editReply(
        "Character not found or you do not own this character."
@@ -2939,12 +2958,11 @@ module.exports = {
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
-     // Compute roll stamina cost from quadrant state BEFORE sync (rolling in unexplored costs 2)
-     const rollStaminaCost = party.quadrantState === "unexplored" ? 2 : party.quadrantState === "explored" ? 1 : 0;
-
-     // Sync quadrant state from map so stamina cost matches canonical explored/secured status
+     // Sync quadrant state from map so stamina cost matches canonical explored/secured status.
+     // Cost: 2 stamina (unexplored), 1 (explored), 0 (secured). Compute from canonical state.
      const mapSquare = await Square.findOne({ squareId: party.square });
      let ruinRestRecovered = 0;
+     let rollStaminaCost = party.quadrantState === "unexplored" ? 2 : party.quadrantState === "explored" ? 1 : 0;
      if (mapSquare && mapSquare.quadrants && mapSquare.quadrants.length) {
       const q = mapSquare.quadrants.find(
        (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
@@ -2952,6 +2970,7 @@ module.exports = {
       if (q && (q.status === "explored" || q.status === "secured")) {
        party.quadrantState = q.status;
        party.markModified("quadrantState");
+       rollStaminaCost = q.status === "secured" ? 0 : 1;
       } else if (party.quadrantState === "unexplored" && party.square && party.quadrant) {
        // Entering a quadrant counts as explored: ensure map and party are in sync (e.g. moved before this was persisted)
        const mapSquareId = (party.square && String(party.square).trim()) || "";
@@ -4677,7 +4696,7 @@ module.exports = {
     // ------------------- Secure Quadrant Command -------------------
    } else if (subcommand === "secure") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const userId = interaction.user.id;
 
     const party = await Party.findActiveByPartyId(expeditionId);
@@ -4685,7 +4704,7 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
       "Character not found or you do not own this character."
@@ -4903,7 +4922,7 @@ module.exports = {
     // ------------------- Move to Adjacent Quadrant -------------------
    } else if (subcommand === "move") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const quadrantInput = interaction.options.getString("quadrant") || "";
     const userId = interaction.user.id;
 
@@ -4912,7 +4931,7 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
       "Character not found or you do not own this character."
@@ -5296,7 +5315,7 @@ module.exports = {
     // ------------------- Use Item (healing from expedition loadout) -------------------
    } else if (subcommand === "item") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const itemName = interaction.options.getString("item");
     const userId = interaction.user.id;
 
@@ -5305,7 +5324,7 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
       "Character not found or you do not own this character."
@@ -5437,7 +5456,7 @@ module.exports = {
     // ------------------- End Expedition (at starting quadrant) -------------------
    } else if (subcommand === "end") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const userId = interaction.user.id;
 
     const party = await Party.findActiveByPartyId(expeditionId);
@@ -5445,7 +5464,7 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
       "Character not found or you do not own this character."
@@ -5519,29 +5538,29 @@ module.exports = {
       }
      }
      for (const partyCharacter of party.characters || []) {
-      const items = partyCharacter.items || [];
-      for (const item of items) {
-       if (!item || !item.itemName) continue;
-       const bundle = PAVING_BUNDLES[item.itemName];
-       if (bundle) {
-        await addItemInventoryDatabase(
-         partyCharacter._id,
-         bundle.baseItemName,
-         bundle.quantityPerSlot,
-         interaction,
-         "Expedition ended — returned from party (bundle)"
-        ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return bundle to owner: ${err.message}`));
-       } else {
-        await addItemInventoryDatabase(
-         partyCharacter._id,
-         item.itemName,
-         1,
-         interaction,
-         "Expedition ended — returned from party"
-        ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return item to owner: ${err.message}`));
+       const items = partyCharacter.items || [];
+       for (const item of items) {
+        if (!item || !item.itemName) continue;
+        const bundle = PAVING_BUNDLES[item.itemName];
+        if (bundle) {
+         await addItemInventoryDatabase(
+          partyCharacter._id,
+          bundle.baseItemName,
+          bundle.quantityPerSlot,
+          interaction,
+          "Expedition ended — returned from party (bundle)"
+         ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return bundle to owner: ${err.message}`));
+        } else {
+         await addItemInventoryDatabase(
+          partyCharacter._id,
+          item.itemName,
+          1,
+          interaction,
+          "Expedition ended — returned from party"
+         ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return item to owner: ${err.message}`));
+        }
        }
       }
-     }
     } else {
      if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
       const heartsPerMember = Math.floor(remainingHearts / memberCount);
@@ -5640,7 +5659,7 @@ module.exports = {
     // ------------------- Retreat (tier 5+ exploration raid only) -------------------
    } else if (subcommand === "retreat") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const userId = interaction.user.id;
 
     const party = await Party.findActiveByPartyId(expeditionId);
@@ -5648,7 +5667,7 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
       "Character not found or you do not own this character."
@@ -5750,7 +5769,7 @@ module.exports = {
    // ------------------- Camp Command -------------------
    } else if (subcommand === "camp") {
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
-    const characterName = interaction.options.getString("charactername");
+    const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const userId = interaction.user.id;
 
     const party = await Party.findActiveByPartyId(expeditionId);
@@ -5758,7 +5777,7 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
       "Character not found or you do not own this character."

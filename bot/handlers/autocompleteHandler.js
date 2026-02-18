@@ -3377,6 +3377,13 @@ function normalizeExploreExpeditionId(v) {
   return i === -1 ? t : t.slice(0, i).trim();
 }
 
+function normalizeExploreCharacterName(v) {
+  if (!v || typeof v !== "string") return (v || "").trim();
+  const t = (v || "").trim();
+  const i = t.indexOf("|");
+  return i === -1 ? t : t.slice(0, i).trim();
+}
+
 async function handleExploreIdAutocomplete(interaction, focusedOption) {
  try {
   await DatabaseConnectionManager.connectToTinglebot();
@@ -3551,7 +3558,7 @@ async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
   await DatabaseConnectionManager.connectToTinglebot();
 
   const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
-  const characterName = interaction.options.getString("charactername");
+  const characterName = normalizeExploreCharacterName(interaction.options.getString("charactername"));
   if (!expeditionId || !characterName) return await interaction.respond([]);
 
   const party = await Party.findActiveByPartyId(expeditionId).lean();

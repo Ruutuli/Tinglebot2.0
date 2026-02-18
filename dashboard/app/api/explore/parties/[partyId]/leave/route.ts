@@ -8,7 +8,6 @@ import mongoose, { type Model } from "mongoose";
 
 export const dynamic = "force-dynamic";
 
-/** Paving bundles: 5 Eldin Ore = 1 bundle, 5 Wood = 1 bundle — return materials when refunding. */
 const PAVING_BUNDLES: Record<string, { material: string; quantityPerSlot: number }> = {
   "Eldin Ore Bundle": { material: "Eldin Ore", quantityPerSlot: 5 },
   "Wood Bundle": { material: "Wood", quantityPerSlot: 5 },
@@ -139,45 +138,45 @@ export async function POST(
         ? (charArray.find((c) => c.userId !== user.id)?.userId as string) ?? ""
         : undefined;
 
-    // Return the character's expedition loadout items to their inventory (same collection as join uses)
-    const rawItems = (me.items as Array<Record<string, unknown>> | undefined) ?? [];
-    const loadoutItemNames = rawItems
-      .map((slot) => String((slot.itemName ?? slot.item_name ?? "") ?? "").trim())
-      .filter(Boolean);
-    const charId =
-      me._id instanceof mongoose.Types.ObjectId
-        ? me._id
-        : new mongoose.Types.ObjectId(String(me._id));
+    // Return loadout items to inventory (skip in EXPLORATION_TESTING_MODE — we never deducted)
+    const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
+    if (!isTestingMode) {
+      const rawItems = (me.items as Array<Record<string, unknown>> | undefined) ?? [];
+      const loadoutItemNames = rawItems
+        .map((slot) => String((slot.itemName ?? slot.item_name ?? "") ?? "").trim())
+        .filter(Boolean);
+      const charId =
+        me._id instanceof mongoose.Types.ObjectId
+          ? me._id
+          : new mongoose.Types.ObjectId(String(me._id));
 
-    if (loadoutItemNames.length > 0) {
-      // Resolve canonical character name from DB so we use the exact same inventory collection as join
-      let collectionName = String(me.name ?? "").trim().toLowerCase();
-      const charFromDb = (await Character.findById(charId).select("name").lean()) as { name: string } | null;
-      if (charFromDb?.name) {
-        collectionName = charFromDb.name.trim().toLowerCase();
-      } else {
-        const modChar = (await ModCharacter.findById(charId).select("name").lean()) as { name: string } | null;
-        if (modChar?.name) {
-          collectionName = modChar.name.trim().toLowerCase();
+      if (loadoutItemNames.length > 0) {
+        let collectionName = String(me.name ?? "").trim().toLowerCase();
+        const charFromDb = (await Character.findById(charId).select("name").lean()) as { name: string } | null;
+        if (charFromDb?.name) {
+          collectionName = charFromDb.name.trim().toLowerCase();
+        } else {
+          const modChar = (await ModCharacter.findById(charId).select("name").lean()) as { name: string } | null;
+          if (modChar?.name) {
+            collectionName = modChar.name.trim().toLowerCase();
+          }
         }
-      }
-      if (!collectionName) {
-        console.error("[explore/parties/[partyId]/leave] Could not resolve inventory collection name for character", charId);
-      } else {
-        const db = await getInventoriesDb();
-        const collection = db.collection(collectionName);
-        for (const itemName of loadoutItemNames) {
-          const bundle = PAVING_BUNDLES[itemName];
-          if (bundle) {
-            await addMaterialToInventory(
-              collection,
-              charId,
-              bundle.material,
-              bundle.quantityPerSlot,
-              Item
-            );
-          } else {
-            await addMaterialToInventory(collection, charId, itemName, 1, Item);
+        if (collectionName) {
+          const db = await getInventoriesDb();
+          const collection = db.collection(collectionName);
+          for (const itemName of loadoutItemNames) {
+            const bundle = PAVING_BUNDLES[itemName];
+            if (bundle) {
+              await addMaterialToInventory(
+                collection,
+                charId,
+                bundle.material,
+                bundle.quantityPerSlot,
+                Item
+              );
+            } else {
+              await addMaterialToInventory(collection, charId, itemName, 1, Item);
+            }
           }
         }
       }

@@ -188,26 +188,47 @@ export async function PATCH(
       inventoryQty.set(key, (inventoryQty.get(key) ?? 0) + Number(row.quantity) || 0);
     }
 
+    // Would-have after refund: we refund first, then deduct. Validate (current + refund) >= deduct.
+    const wouldHave = new Map(inventoryQty);
+    const oldItems = (member.items as Array<{ itemName: string }>) ?? [];
+    const oldNames = oldItems.map((it) => (it.itemName || "").trim()).filter(Boolean);
+    const oldEldinBundles = oldNames.filter((n) => n === "Eldin Ore Bundle").length;
+    const oldWoodBundles = oldNames.filter((n) => n === "Wood Bundle").length;
+    if (oldEldinBundles > 0) {
+      const k = "eldin ore";
+      wouldHave.set(k, (wouldHave.get(k) ?? 0) + oldEldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
+    }
+    if (oldWoodBundles > 0) {
+      const k = "wood";
+      wouldHave.set(k, (wouldHave.get(k) ?? 0) + oldWoodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
+    }
+    const distinctOldNonBundle = [...new Set(oldNames.filter((n) => !PAVING_BUNDLES[n]))];
+    for (const itemName of distinctOldNonBundle) {
+      const key = itemName.toLowerCase();
+      const count = oldNames.filter((n) => n === itemName).length;
+      wouldHave.set(key, (wouldHave.get(key) ?? 0) + count);
+    }
+
     for (const itemName of names) {
       const key = itemName.toLowerCase();
       const bundleSpec = PAVING_BUNDLES[itemName];
       if (bundleSpec) {
         const materialKey = bundleSpec.material.toLowerCase();
-        const have = inventoryQty.get(materialKey) ?? 0;
+        const have = wouldHave.get(materialKey) ?? 0;
         const bundlesWanted = names.filter((n) => (n || "").trim() === itemName).length;
         const need = bundleSpec.requiredPerSlot * bundlesWanted;
         if (have < need) {
           return NextResponse.json(
-            { error: `Not enough "${bundleSpec.material}" for ${bundlesWanted}× ${itemName} (need ${need}, have ${have}).` },
+            { error: `Not enough "${bundleSpec.material}" for ${bundlesWanted}× ${itemName} (need ${need}, have ${have} after refund).` },
             { status: 400 }
           );
         }
       } else {
-        const have = inventoryQty.get(key) ?? 0;
+        const have = wouldHave.get(key) ?? 0;
         const need = names.filter((n) => n.toLowerCase() === key).length;
         if (have < need) {
           return NextResponse.json(
-            { error: `Not enough "${itemName}" in inventory (have ${have}, need ${need}).` },
+            { error: `Not enough "${itemName}" in inventory (have ${have}, need ${need} after refund).` },
             { status: 400 }
           );
         }
@@ -246,48 +267,45 @@ export async function PATCH(
       });
     }
 
-    // Refund previous items: bundles -> material qty; normal -> 1 each
-    const oldItems = (member.items as Array<{ itemName: string }>) ?? [];
-    const oldNames = oldItems.map((it) => (it.itemName || "").trim()).filter(Boolean);
-    const oldEldinBundles = oldNames.filter((n) => n === "Eldin Ore Bundle").length;
-    const oldWoodBundles = oldNames.filter((n) => n === "Wood Bundle").length;
-    if (oldEldinBundles > 0) {
-      await addMaterialToInventory(
-        collection,
-        charId,
-        "Eldin Ore",
-        oldEldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot,
-        Item
-      );
-    }
-    if (oldWoodBundles > 0) {
-      await addMaterialToInventory(
-        collection,
-        charId,
-        "Wood",
-        oldWoodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot,
-        Item
-      );
-    }
-    const distinctOldNonBundle = [...new Set(oldNames.filter((n) => !PAVING_BUNDLES[n]))];
-    for (const itemName of distinctOldNonBundle) {
-      const count = oldNames.filter((n) => n === itemName).length;
-      await addMaterialToInventory(collection, charId, itemName, count, Item);
-    }
-
-    // Deduct new items: bundles -> material qty; normal -> 1 each
-    const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
-    const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
-    if (eldinBundles > 0) {
-      await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
-    }
-    if (woodBundles > 0) {
-      await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
-    }
-    const distinctNewNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
-    for (const itemName of distinctNewNonBundle) {
-      const count = names.filter((n) => (n || "").trim() === itemName).length;
-      await deductMaterialFromInventory(collection, charId, itemName, count);
+    // Refund old + deduct new items (skip in EXPLORATION_TESTING_MODE — loadout is reference-only)
+    const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
+    if (!isTestingMode) {
+      if (oldEldinBundles > 0) {
+        await addMaterialToInventory(
+          collection,
+          charId,
+          "Eldin Ore",
+          oldEldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot,
+          Item
+        );
+      }
+      if (oldWoodBundles > 0) {
+        await addMaterialToInventory(
+          collection,
+          charId,
+          "Wood",
+          oldWoodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot,
+          Item
+        );
+      }
+      const distinctOldNonBundle = [...new Set(oldNames.filter((n) => !PAVING_BUNDLES[n]))];
+      for (const itemName of distinctOldNonBundle) {
+        const count = oldNames.filter((n) => n === itemName).length;
+        await addMaterialToInventory(collection, charId, itemName, count, Item);
+      }
+      const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
+      const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
+      if (eldinBundles > 0) {
+        await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
+      }
+      if (woodBundles > 0) {
+        await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
+      }
+      const distinctNewNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
+      for (const itemName of distinctNewNonBundle) {
+        const count = names.filter((n) => (n || "").trim() === itemName).length;
+        await deductMaterialFromInventory(collection, charId, itemName, count);
+      }
     }
 
     await Party.updateOne(

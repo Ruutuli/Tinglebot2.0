@@ -28,7 +28,7 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Remove quantity of a material from character inventory (by decrementing/deleting entries). */
+/** Remove quantity of a material from character inventory. Skipped when EXPLORATION_TESTING_MODE=true. */
 async function deductMaterialFromInventory(
   collection: mongoose.mongo.Collection,
   charId: mongoose.Types.ObjectId,
@@ -280,20 +280,22 @@ export async function POST(
       });
     }
 
-    // Deduct all brought items from inventory: bundles = material qty (5 Eldin Ore / 5 Wood per bundle), normal items = 1 each
-    const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
-    const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
-    if (eldinBundles > 0) {
-      await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
-    }
-    if (woodBundles > 0) {
-      await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
-    }
-    // Deduct non-bundle items (1 per slot)
-    const distinctNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
-    for (const itemName of distinctNonBundle) {
-      const count = names.filter((n) => (n || "").trim() === itemName).length;
-      await deductMaterialFromInventory(collection, charId, itemName, count);
+    // Deduct brought items from inventory (skip in EXPLORATION_TESTING_MODE — loadout is reference-only)
+    const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
+    if (!isTestingMode) {
+      const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
+      const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
+      if (eldinBundles > 0) {
+        await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
+      }
+      if (woodBundles > 0) {
+        await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
+      }
+      const distinctNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
+      for (const itemName of distinctNonBundle) {
+        const count = names.filter((n) => (n || "").trim() === itemName).length;
+        await deductMaterialFromInventory(collection, charId, itemName, count);
+      }
     }
 
     const maxHearts = Number.isFinite(Number(character.maxHearts)) ? Number(character.maxHearts) : 0;
