@@ -3525,11 +3525,6 @@ module.exports = {
          }
          const ruinsCostsForLog = buildCostsForLog(ruinsPayResult);
 
-         // Now that user chose Yes, add ruins to map and reportable progress log (so dashboard shows "Set pin" only after Yes)
-         const ruinsAt = new Date();
-         await pushDiscoveryToMap(freshParty, "ruins", ruinsAt, i.user?.id);
-         pushProgressLog(freshParty, ruinsCharacter.name, "ruins", `Explored ruins in ${location}.`, undefined, ruinsCostsForLog, ruinsAt);
-
          // Weighted roll: chest 7, camp 3, landmark 3, relic 1, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20)
          const roll = Math.random() * 20;
          let ruinsOutcome;
@@ -3553,6 +3548,11 @@ module.exports = {
          if (ruinsOutcome === "relic" && (await characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name, ruinsCharacter._id))) {
           ruinsOutcome = "landmark";
          }
+         const ruinsAt = new Date();
+         if (ruinsOutcome !== "landmark") {
+          await pushDiscoveryToMap(freshParty, "ruins", ruinsAt, i.user?.id);
+         }
+         pushProgressLog(freshParty, ruinsCharacter.name, "ruins", `Explored ruins in ${location}.`, undefined, ruinsCostsForLog, ruinsAt);
          if (ruinsOutcome === "chest") {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
           progressMsg += "Found a chest (open for 1 stamina).";
@@ -3585,8 +3585,8 @@ module.exports = {
           progressMsg += "Found a camp spot; recovered 1 stamina.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { ...ruinsCostsForLog, staminaRecovered: recover });
          } else if (ruinsOutcome === "landmark") {
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found nothing special in the ruins—but an interesting landmark. It's been marked on the map.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
-          progressMsg += "Found an interesting landmark (marked on map).";
+          resultDescription = summaryLine + `**${ruinsCharacter.name}** found nothing special in the ruins—just an interesting landmark with no mechanical value. Not marked on the map.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
+          progressMsg += "Found an interesting landmark (no mechanical value; not marked).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else if (ruinsOutcome === "relic") {
           let ruinsSavedRelic = null;
@@ -5463,6 +5463,16 @@ module.exports = {
     const memberNamesEnd = (party.characters || []).map((c) => c.name).filter(Boolean);
     const membersTextEnd = memberNamesEnd.length > 0 ? memberNamesEnd.join(", ") : "—";
     pushProgressLog(party, character.name, "end", `Expedition ended. Returned to ${villageLabelEnd}: ${membersTextEnd}.`, undefined, undefined);
+    if (EXPLORATION_TESTING_MODE) {
+     pushProgressLog(party, character.name, "end_test_reset",
+      "Testing mode — nothing persisted:\n" +
+      "• Hearts & stamina: damage, costs, and recovery not saved to characters\n" +
+      "• Items: none used from loadout; none added to inventory (chest, grotto, fairy, loot, ruins)\n" +
+      "• Grottos: found/cleansed grottos deleted on end\n" +
+      "• Map: explored/secured quadrants and discoveries not updated\n" +
+      "• KO/debuff: never applied to characters",
+      undefined, undefined);
+    }
 
     party.status = "completed";
     await party.save();
@@ -5505,11 +5515,20 @@ module.exports = {
     const splitSectionEnd = splitLinesEnd.length > 0
       ? `**Split (remaining hearts & stamina):**\n${splitLinesEnd.join("\n")}\n\n`
       : "No remaining hearts or stamina to divide.\n\n";
+    const testingResetNote = EXPLORATION_TESTING_MODE
+      ? "⚠️ **Testing mode — nothing persisted:**\n" +
+        "• Hearts & stamina: damage, costs, recovery not saved\n" +
+        "• Items: none used or added\n" +
+        "• Grottos: deleted on end\n" +
+        "• Map: quadrants/discoveries unchanged\n" +
+        "• KO/debuff: never applied\n\n"
+      : "";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#4CAF50")
      .setDescription(
       `The expedition has ended.\n\n` +
+      testingResetNote +
       `**Returned to ${villageLabelEnd}:**\n${membersTextEnd}\n\n` +
       splitSectionEnd +
       `**View the expedition report here:** [Open expedition report](${reportUrl})`
