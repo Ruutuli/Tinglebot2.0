@@ -25,8 +25,6 @@ import {
   getVillageBorderStyle,
   getVillageTextStyle,
   getVillageCrestIcon,
-  VILLAGE_COLORS,
-  MOD_CHARACTER_GOLD,
 } from "@/app/(dashboard)/models/characters/page";
 
 // ============================================================================
@@ -165,62 +163,15 @@ type Relationship = {
   updatedAt?: string;
 };
 
-// ============================================================================
-// ------------------- Constants -------------------
-// ============================================================================
-// [page.tsx]✨ Shared configuration and reusable values -
-
 type MarkdownComponentProps = {
   children?: ReactNode;
   href?: string;
 };
 
-/**
- * Convert plain URLs in text to markdown links and fix malformed links.
- */
-function convertUrlsToMarkdown(text: string): string {
-  let result = text;
-  const sanitizeLabel = (s: string) => s.replace(/[\[\]]/g, "").trim();
-
-  // Fix label + URL on consecutive lines (no ]( ) - e.g. "[OC Playlist\nhttps://..."]
-  result = result.replace(
-    /(^|\n)([^\n]+?)\s*\n\s*(https?:\/\/[^\s\n\)]+)(?=\s*\n|$)/gm,
-    (_, before, label, url) => before + `[${sanitizeLabel(label)}](${url})`
-  );
-  // Fix links with newline between label and ](url)
-  result = result.replace(
-    /\[([^\]]*?)\s*\]\((https?:\/\/[^\s\)]+)\)/g,
-    (_, label, url) => `[${sanitizeLabel(label)}](${url})`
-  );
-  // Fix malformed links: "Link Text](URL)" (no opening [)
-  result = result.replace(
-    /([^\[]+?)\s*\]\((https?:\/\/[^\s\)]+)\)/g,
-    (match, label, url, offset, fullStr) =>
-      offset > 0 && fullStr[offset - 1] === "[" ? match : `[${sanitizeLabel(label)}](${url})`
-  );
-  // Convert plain bare URLs to markdown links (skip those already inside ](url))
-  result = result.replace(
-    /(https?:\/\/[^\s\]\)]+)/g,
-    (url, offset, fullStr) =>
-      offset >= 2 && fullStr.slice(offset - 2, offset) === "](" ? url : `[${url}](${url})`
-  );
-  return result;
-}
-
-/**
- * Preprocess extras for ReactMarkdown. Converts "- [text](url)" list items to
- * "• [text](url)" paragraphs - the "• " before [ fixes the parsing bug so
- * links display correctly (text as clickable link).
- */
-function preprocessExtrasForMarkdown(extras: string): string {
-  const lines = extras.split(/\r?\n/).filter((line) => line.trim());
-  return lines
-    .map((line) => {
-      const m = line.match(/^(\s*[-*+])\s+(.*)$/);
-      return m ? `• ${m[2]}` : line;
-    })
-    .join("\n\n");
-}
+// ============================================================================
+// ------------------- Constants -------------------
+// ============================================================================
+// [page.tsx]✨ Shared configuration and reusable values -
 
 const MARKDOWN_COMPONENTS: Components = {
   p: ({ children }: MarkdownComponentProps) => (
@@ -315,11 +266,74 @@ const BUTTON_SECONDARY_CLASSES =
 const BUTTON_TERTIARY_CLASSES =
   "rounded-md bg-[var(--totk-mid-ocher)] px-4 py-2 text-sm font-medium text-[var(--totk-ivory)] shadow-sm transition-all hover:bg-[var(--totk-dark-ocher)] hover:shadow-md";
 
-/* ============================================================================ */
-/* ------------------- Utils ------------------- */
-/* ============================================================================ */
-/* [page.tsx]🧠 Utility functions for data transformation and formatting - */
+const DEFAULT_AVATAR = "/ankle_icon.png";
+const SAVED_BANNER_MS = 5000;
+const SUBMIT_SUCCESS_MS = 3000;
 
+// ============================================================================
+// ------------------- Utils -------------------
+// ============================================================================
+// [page.tsx] Utility functions for data transformation and formatting -
+
+// ------------------- toError ------------------
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
+}
+
+// ------------------- pluralize ------------------
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
+}
+
+// ------------------- scrollToTop ------------------
+function scrollToTop(): void {
+  window.scrollTo({ top: 0, behavior: "instant" });
+  document.querySelector("main")?.scrollTo({ top: 0, behavior: "instant" });
+  document.documentElement.scrollTo({ top: 0, behavior: "instant" });
+}
+
+// ------------------- convertUrlsToMarkdown ------------------
+function convertUrlsToMarkdown(text: string): string {
+  let result = text;
+  const sanitizeLabel = (s: string) => s.replace(/[\[\]]/g, "").trim();
+
+  // Fix label + URL on consecutive lines (no ]( ) - e.g. "[OC Playlist\nhttps://..."]
+  result = result.replace(
+    /(^|\n)([^\n]+?)\s*\n\s*(https?:\/\/[^\s\n\)]+)(?=\s*\n|$)/gm,
+    (_, before, label, url) => before + `[${sanitizeLabel(label)}](${url})`
+  );
+  // Fix links with newline between label and ](url)
+  result = result.replace(
+    /\[([^\]]*?)\s*\]\((https?:\/\/[^\s\)]+)\)/g,
+    (_, label, url) => `[${sanitizeLabel(label)}](${url})`
+  );
+  // Fix malformed links: "Link Text](URL)" (no opening [)
+  result = result.replace(
+    /([^\[]+?)\s*\]\((https?:\/\/[^\s\)]+)\)/g,
+    (match, label, url, offset, fullStr) =>
+      offset > 0 && fullStr[offset - 1] === "[" ? match : `[${sanitizeLabel(label)}](${url})`
+  );
+  // Convert plain bare URLs to markdown links (skip those already inside ](url))
+  result = result.replace(
+    /(https?:\/\/[^\s\]\)]+)/g,
+    (url, offset, fullStr) =>
+      offset >= 2 && fullStr.slice(offset - 2, offset) === "](" ? url : `[${url}](${url})`
+  );
+  return result;
+}
+
+// ------------------- preprocessExtrasForMarkdown ------------------
+function preprocessExtrasForMarkdown(extras: string): string {
+  const lines = extras.split(/\r?\n/).filter((line) => line.trim());
+  return lines
+    .map((line) => {
+      const m = line.match(/^(\s*[-*+])\s+(.*)$/);
+      return m ? `• ${m[2]}` : line;
+    })
+    .join("\n\n");
+}
+
+// ------------------- hexToRgb ------------------
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result
@@ -388,8 +402,9 @@ function formatTimeRemaining(date: Date | string | null | undefined): string {
   }
 }
 
+// ------------------- handleImageError ------------------
 function handleImageError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
-  (e.target as HTMLImageElement).src = "/ankle_icon.png";
+  (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
 }
 
 function getStatsGridClass(hasSpiritOrbs: boolean): string {
@@ -398,27 +413,23 @@ function getStatsGridClass(hasSpiritOrbs: boolean): string {
     : "grid-cols-2 sm:grid-cols-4";
 }
 
+const GEAR_KEY_ACCESSORS: Record<string, (c: CharacterDetail) => GearItem | null | undefined> = {
+  weapon: (c) => c.gearWeapon,
+  shield: (c) => c.gearShield,
+  head: (c) => c.gearArmor?.head,
+  chest: (c) => c.gearArmor?.chest,
+  legs: (c) => c.gearArmor?.legs,
+};
+
+// ------------------- getGearByKey ------------------
 function getGearByKey(
   character: CharacterDetail,
   key: string
 ): GearItem | null | undefined {
-  switch (key) {
-    case "weapon":
-      return character.gearWeapon;
-    case "shield":
-      return character.gearShield;
-    case "head":
-      return character.gearArmor?.head;
-    case "chest":
-      return character.gearArmor?.chest;
-    case "legs":
-      return character.gearArmor?.legs;
-    default:
-      return null;
-  }
+  return GEAR_KEY_ACCESSORS[key]?.(character) ?? null;
 }
 
-/* [page.tsx]🧠 Format roll combination type to readable label - */
+// ------------------- formatRollType ------------------
 function formatRollType(rollType: string | null | undefined): string {
   const rollTypeMap: Record<string, string> = {
     petprey: "Prey",
@@ -431,7 +442,58 @@ function formatRollType(rollType: string | null | undefined): string {
   return rollTypeMap[normalized] || capitalize(rollType.replace(/^pet/, ""));
 }
 
-/* [page.tsx]🧠 Get quest type styling (icon, color, label) - */
+const QUEST_TYPE_CONFIG: Record<string, { icon: string; color: string; textColor: string; bgColor: string; borderColor: string; label: string }> = {
+  item: {
+    icon: "fa-box",
+    color: "#4A90E2",
+    textColor: "text-[#6BB3FF]",
+    bgColor: "bg-[#4A90E2]/25",
+    borderColor: "border-[#4A90E2]",
+    label: "Item",
+  },
+  crafting: {
+    icon: "fa-hammer",
+    color: "#E67E22",
+    textColor: "text-[#FF9A4D]",
+    bgColor: "bg-[#E67E22]/25",
+    borderColor: "border-[#E67E22]",
+    label: "Crafting",
+  },
+  monster: {
+    icon: "fa-skull",
+    color: "#E74C3C",
+    textColor: "text-[#FF6B5C]",
+    bgColor: "bg-[#E74C3C]/25",
+    borderColor: "border-[#E74C3C]",
+    label: "Monster",
+  },
+  escort: {
+    icon: "fa-people-group",
+    color: "#9B59B6",
+    textColor: "text-[#B87ED8]",
+    bgColor: "bg-[#9B59B6]/25",
+    borderColor: "border-[#9B59B6]",
+    label: "Escort",
+  },
+  art: {
+    icon: "fa-palette",
+    color: "#E91E63",
+    textColor: "text-[#FF4D8A]",
+    bgColor: "bg-[#E91E63]/25",
+    borderColor: "border-[#E91E63]",
+    label: "Art",
+  },
+  writing: {
+    icon: "fa-feather",
+    color: "#00BCD4",
+    textColor: "text-[#4DD0E1]",
+    bgColor: "bg-[#00BCD4]/25",
+    borderColor: "border-[#00BCD4]",
+    label: "Writing",
+  },
+};
+
+// ------------------- getQuestTypeConfig ------------------
 function getQuestTypeConfig(questType: string | undefined | null): {
   icon: string;
   color: string;
@@ -441,75 +503,19 @@ function getQuestTypeConfig(questType: string | undefined | null): {
   label: string;
 } {
   const normalized = questType?.toLowerCase() || "unknown";
-  
-  switch (normalized) {
-    case "item":
-      return {
-        icon: "fa-box",
-        color: "#4A90E2",
-        textColor: "text-[#6BB3FF]",
-        bgColor: "bg-[#4A90E2]/25",
-        borderColor: "border-[#4A90E2]",
-        label: "Item",
-      };
-    case "crafting":
-      return {
-        icon: "fa-hammer",
-        color: "#E67E22",
-        textColor: "text-[#FF9A4D]",
-        bgColor: "bg-[#E67E22]/25",
-        borderColor: "border-[#E67E22]",
-        label: "Crafting",
-      };
-    case "monster":
-      return {
-        icon: "fa-skull",
-        color: "#E74C3C",
-        textColor: "text-[#FF6B5C]",
-        bgColor: "bg-[#E74C3C]/25",
-        borderColor: "border-[#E74C3C]",
-        label: "Monster",
-      };
-    case "escort":
-      return {
-        icon: "fa-people-group",
-        color: "#9B59B6",
-        textColor: "text-[#B87ED8]",
-        bgColor: "bg-[#9B59B6]/25",
-        borderColor: "border-[#9B59B6]",
-        label: "Escort",
-      };
-    case "art":
-      return {
-        icon: "fa-palette",
-        color: "#E91E63",
-        textColor: "text-[#FF4D8A]",
-        bgColor: "bg-[#E91E63]/25",
-        borderColor: "border-[#E91E63]",
-        label: "Art",
-      };
-    case "writing":
-      return {
-        icon: "fa-feather",
-        color: "#00BCD4",
-        textColor: "text-[#4DD0E1]",
-        bgColor: "bg-[#00BCD4]/25",
-        borderColor: "border-[#00BCD4]",
-        label: "Writing",
-      };
-    default:
-      return {
-        icon: "fa-question",
-        color: "var(--totk-grey-200)",
-        textColor: "text-[var(--totk-light-green)]",
-        bgColor: "bg-[var(--totk-grey-200)]/20",
-        borderColor: "border-[var(--totk-grey-200)]",
-        label: capitalize(questType || "Unknown"),
-      };
-  }
+  const config = QUEST_TYPE_CONFIG[normalized];
+  if (config) return config;
+  return {
+    icon: "fa-question",
+    color: "var(--totk-grey-200)",
+    textColor: "text-[var(--totk-light-green)]",
+    bgColor: "bg-[var(--totk-grey-200)]/20",
+    borderColor: "border-[var(--totk-grey-200)]",
+    label: capitalize(questType || "Unknown"),
+  };
 }
 
-/* [page.tsx]🧠 Extract modifierHearts from gear stats - */
+// ------------------- getModifierHearts ------------------
 function getModifierHearts(
   stats: Record<string, number> | Map<string, number> | undefined | null
 ): number {
@@ -542,7 +548,7 @@ function getModifierHearts(
   return 0;
 }
 
-/* [page.tsx]🧠 Calculate attack from weapon - */
+// ------------------- calculateAttack ------------------
 function calculateAttack(
   character: CharacterDetail,
   gearModifierHearts?: Record<string, number>
@@ -566,7 +572,7 @@ function calculateAttack(
   return getModifierHearts(character.gearWeapon?.stats);
 }
 
-/* [page.tsx]🧠 Calculate defense from armor and shield - */
+// ------------------- calculateDefense ------------------
 function calculateDefense(
   character: CharacterDetail,
   gearModifierHearts?: Record<string, number>
@@ -611,39 +617,46 @@ function canSubmitCharacter(status: string | null | undefined): boolean {
   return status === null || status === undefined || status === "needs_changes";
 }
 
+const VILLAGE_ASSETS: Record<string, { color: string; top: string; bottom: string }> = {
+  rudania: {
+    color: "#C6000A",
+    top: "/assets/BOTW Sheikah Borders/ROTW_border_red_top.png",
+    bottom: "/assets/BOTW Sheikah Borders/ROTW_border_red_bottom.png",
+  },
+  inariko: {
+    color: "#6BA3FF",
+    top: "/assets/BOTW Sheikah Borders/ROTW_border_blue_top.png",
+    bottom: "/assets/BOTW Sheikah Borders/ROTW_border_blue_bottom.png",
+  },
+  vhintl: {
+    color: "#4AA144",
+    top: "/assets/BOTW Sheikah Borders/ROTW_border_green_top.png",
+    bottom: "/assets/BOTW Sheikah Borders/ROTW_border_green_bottom.png",
+  },
+};
+
+const DEFAULT_BORDER_IMAGES = {
+  top: "/assets/BOTW Sheikah Borders/ROTW_border_cyan_top.png",
+  bottom: "/assets/BOTW Sheikah Borders/ROTW_border_cyan_bottom.png",
+};
+
+// ------------------- getVillageBadgeColor ------------------
+function getVillageBadgeColor(village: string): string {
+  return VILLAGE_ASSETS[String(village).toLowerCase()]?.color ?? "var(--totk-green)";
+}
+
+// ------------------- getVillageBorderImages ------------------
 function getVillageBorderImages(
   village: string | null | undefined
 ): { top: string; bottom: string } {
-  const villageLower = String(village ?? "").toLowerCase();
-  if (villageLower === "rudania") {
-    return {
-      top: "/assets/BOTW Sheikah Borders/ROTW_border_red_top.png",
-      bottom: "/assets/BOTW Sheikah Borders/ROTW_border_red_bottom.png",
-    };
-  }
-  if (villageLower === "inariko") {
-    return {
-      top: "/assets/BOTW Sheikah Borders/ROTW_border_blue_top.png",
-      bottom: "/assets/BOTW Sheikah Borders/ROTW_border_blue_bottom.png",
-    };
-  }
-  if (villageLower === "vhintl") {
-    return {
-      top: "/assets/BOTW Sheikah Borders/ROTW_border_green_top.png",
-      bottom: "/assets/BOTW Sheikah Borders/ROTW_border_green_bottom.png",
-    };
-  }
-  // Default to cyan if village doesn't match
-  return {
-    top: "/assets/BOTW Sheikah Borders/ROTW_border_cyan_top.png",
-    bottom: "/assets/BOTW Sheikah Borders/ROTW_border_cyan_bottom.png",
-  };
+  const assets = VILLAGE_ASSETS[String(village ?? "").toLowerCase()];
+  return assets ? { top: assets.top, bottom: assets.bottom } : DEFAULT_BORDER_IMAGES;
 }
 
-/* ============================================================================ */
-/* ------------------- Subcomponents ------------------- */
-/* ============================================================================ */
-/* [page.tsx]🧩 Reusable UI components - */
+// ============================================================================
+// ------------------- Subcomponents -------------------
+// ============================================================================
+// [page.tsx] Reusable UI components -
 
 interface InfoFieldProps {
   icon: string;
@@ -730,8 +743,65 @@ function RelationshipTypeBadge({ type }: { type: RelationshipType }) {
   );
 }
 
+interface RelationshipBlockProps {
+  relationship: Relationship;
+  label: string;
+  className?: string;
+}
+
+function RelationshipBlock({ relationship, label, className = "" }: RelationshipBlockProps) {
+  const primaryConfig = getPrimaryRelationshipConfig(relationship.relationshipTypes);
+  return (
+    <div
+      className={`rounded-lg border-2 p-3 sm:p-4 shadow-inner ${className}`.trim()}
+      style={{
+        borderColor: primaryConfig.borderColor,
+        background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
+      }}
+    >
+      <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          {relationship.relationshipTypes.map((type) => {
+            const config = RELATIONSHIP_CONFIG[type];
+            return (
+              <i
+                key={type}
+                className={`fa-solid ${config.icon} text-base sm:text-lg`}
+                style={{ color: config.color }}
+                title={config.label}
+                aria-hidden="true"
+              />
+            );
+          })}
+        </div>
+        <p
+          className="text-xs sm:text-sm font-bold uppercase tracking-wider"
+          style={{ color: primaryConfig.color }}
+        >
+          {label}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+        {relationship.relationshipTypes.map((type) => (
+          <RelationshipTypeBadge key={type} type={type} />
+        ))}
+      </div>
+      {relationship.notes && (
+        <div
+          className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t"
+          style={{ borderColor: primaryConfig.borderColor }}
+        >
+          <p className="text-xs sm:text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
+            {relationship.notes}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const normalizeImageUrl = (imageUrl: string | undefined): string => {
-  if (!imageUrl) return "/ankle_icon.png";
+  if (!imageUrl) return DEFAULT_AVATAR;
   if (imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")) {
     return `/api/images/${imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`;
   }
@@ -756,6 +826,55 @@ const getPrimaryRelationshipConfig = (types: RelationshipType[]) => {
   if (types.length === 0) return RELATIONSHIP_CONFIG.NEUTRAL;
   return RELATIONSHIP_CONFIG[types[0]];
 };
+
+// ------------------- getFeedbackKey ------------------
+function getFeedbackKey(
+  feedback: { modId?: string; createdAt?: Date | string; text?: string },
+  index: number
+): string {
+  if (feedback.modId && feedback.createdAt) return `feedback-${feedback.modId}-${feedback.createdAt}`;
+  if (feedback.modId) return `feedback-${feedback.modId}-${index}`;
+  if (feedback.createdAt) return `feedback-${feedback.createdAt}-${index}`;
+  return `feedback-${feedback.text?.slice(0, 20) || "unknown"}-${index}`;
+}
+
+interface MessageBannerProps {
+  variant: "success" | "error" | "saved";
+  message: string;
+}
+
+const MESSAGE_BANNER_CONFIG = {
+  success: {
+    borderColor: "border-[var(--totk-light-green)]",
+    bgColor: "bg-[var(--totk-light-green)]/10",
+    icon: "fa-check-circle",
+    iconColor: "text-[var(--totk-light-green)]",
+  },
+  error: {
+    borderColor: "border-[#ff6347]",
+    bgColor: "bg-[#ff6347]/10",
+    icon: "fa-exclamation-triangle",
+    iconColor: "text-[#ff6347]",
+  },
+  saved: {
+    borderColor: "border-[var(--totk-light-green)]",
+    bgColor: "bg-[var(--totk-light-green)]/10",
+    icon: "fa-check-circle",
+    iconColor: "text-[var(--totk-light-green)]",
+  },
+} as const;
+
+function MessageBanner({ variant, message }: MessageBannerProps) {
+  const config = MESSAGE_BANNER_CONFIG[variant];
+  return (
+    <div className={`mb-4 rounded-lg border-2 ${config.borderColor} ${config.bgColor} p-3 text-center`}>
+      <p className={`text-sm font-medium ${config.iconColor}`}>
+        <i className={`fa-solid ${config.icon} mr-2`} aria-hidden="true" />
+        {message}
+      </p>
+    </div>
+  );
+}
 
 interface CardSectionProps {
   icon: string;
@@ -841,6 +960,17 @@ function GearItemDisplay({
   );
 }
 
+const BIOGRAPHY_ITEMS = [
+  { key: "personality", icon: "fa-brain", title: "Personality", preprocess: (s: string) => convertUrlsToMarkdown(s) },
+  { key: "history", icon: "fa-book", title: "History", preprocess: (s: string) => convertUrlsToMarkdown(s) },
+  {
+    key: "extras",
+    icon: "fa-plus-circle",
+    title: "Additional Information",
+    preprocess: (s: string) => convertUrlsToMarkdown(preprocessExtrasForMarkdown(s)),
+  },
+] as const;
+
 interface BiographySectionProps {
   personality?: string;
   history?: string;
@@ -852,52 +982,30 @@ function BiographySection({
   history,
   extras,
 }: BiographySectionProps) {
-  if (!personality && !history && !extras) return null;
+  const contentByKey = { personality, history, extras };
+  const hasContent = personality || history || extras;
+  if (!hasContent) return null;
 
   const markdownOpts = { components: MARKDOWN_COMPONENTS, remarkPlugins: [remarkBreaks] };
 
   return (
     <CardSection icon="fa-scroll" title="Biography">
       <div className="space-y-6">
-        {personality && (
-          <div>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
-              <i className="fa-solid fa-brain" />
-              Personality
-            </h3>
-            <div className={PROSE_BASE_CLASSES}>
-              <ReactMarkdown {...markdownOpts}>
-                {convertUrlsToMarkdown(personality)}
-              </ReactMarkdown>
+        {BIOGRAPHY_ITEMS.map(({ key, icon, title, preprocess }) => {
+          const content = contentByKey[key];
+          if (!content) return null;
+          return (
+            <div key={key}>
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
+                <i className={`fa-solid ${icon}`} />
+                {title}
+              </h3>
+              <div className={PROSE_BASE_CLASSES}>
+                <ReactMarkdown {...markdownOpts}>{preprocess(content)}</ReactMarkdown>
+              </div>
             </div>
-          </div>
-        )}
-        {history && (
-          <div>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
-              <i className="fa-solid fa-book" />
-              History
-            </h3>
-            <div className={PROSE_BASE_CLASSES}>
-              <ReactMarkdown {...markdownOpts}>
-                {convertUrlsToMarkdown(history)}
-              </ReactMarkdown>
-            </div>
-          </div>
-        )}
-        {extras && (
-          <div>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--totk-light-green)]">
-              <i className="fa-solid fa-plus-circle" />
-              Additional Information
-            </h3>
-            <div className={PROSE_BASE_CLASSES}>
-              <ReactMarkdown {...markdownOpts}>
-                {convertUrlsToMarkdown(preprocessExtrasForMarkdown(extras))}
-              </ReactMarkdown>
-            </div>
-          </div>
-        )}
+          );
+        })}
       </div>
     </CardSection>
   );
@@ -967,7 +1075,7 @@ function CompanionDisplay({ type, companion }: CompanionDisplayProps) {
           />
         ) : (
           <img
-            src="/ankle_icon.png"
+            src={DEFAULT_AVATAR}
             alt={companion.name || title}
             className="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 rounded-lg object-cover flex-shrink-0 border-2 border-[var(--totk-green)]/30"
           />
@@ -1055,10 +1163,10 @@ function CompanionDisplay({ type, companion }: CompanionDisplayProps) {
   );
 }
 
-/* ============================================================================ */
-/* ------------------- Main Component ------------------- */
-/* ============================================================================ */
-/* [page.tsx]🧱 Character detail page component - */
+// ============================================================================
+// ------------------- Main Component -------------------
+// ============================================================================
+// [page.tsx] Character detail page component -
 
 export default function OCDetailPage() {
   const params = useParams();
@@ -1097,11 +1205,11 @@ export default function OCDetailPage() {
     next.delete("saved");
     const q = next.toString();
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
-    const t = setTimeout(() => setSavedBannerVisible(false), 5000);
+    const t = setTimeout(() => setSavedBannerVisible(false), SAVED_BANNER_MS);
     return () => clearTimeout(t);
   }, [savedParam, pathname, router, searchParams]);
 
-  const fetchCharacter = useCallback(async () => {
+  const fetchCharacter = useCallback(async (signal?: AbortSignal) => {
     if (!characterId) {
       setError("Character ID is required");
       setLoading(false);
@@ -1111,17 +1219,12 @@ export default function OCDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      console.log("[OCDetailPage] Fetching character (callback):", {
-        characterId,
-        params,
-        pathname,
+      const res = await fetch(`/api/characters/${characterId}`, {
+        cache: "no-store",
+        signal,
       });
-      const res = await fetch(`/api/characters/${characterId}`, { cache: "no-store" });
-      console.log("[OCDetailPage] /api/characters response (callback):", {
-        characterId,
-        status: res.status,
-        ok: res.ok,
-      });
+      if (signal?.aborted) return;
+
       if (!res.ok) {
         const raw = await res.text().catch(() => "");
         let b: unknown = {};
@@ -1130,31 +1233,31 @@ export default function OCDetailPage() {
         } catch {
           b = { raw };
         }
-        console.error("[OCDetailPage] /api/characters non-OK body (callback):", b);
-        throw new Error(
-          (b as { error?: string }).error ?? `Request failed: ${res.status}`
-        );
+        const errMsg = (b as { error?: string }).error ?? `Request failed: ${res.status}`;
+        console.error("[page.tsx]❌ Character fetch failed:", errMsg);
+        throw new Error(errMsg);
       }
       const data = (await res.json()) as { character?: CharacterDetail };
-      console.log("[OCDetailPage] /api/characters JSON (callback):", {
-        hasCharacter: Boolean(data.character),
-        characterKeys: data.character ? Object.keys(data.character).slice(0, 25) : [],
-      });
+      if (signal?.aborted) return;
+
       if (!data.character) {
         throw new Error("Character not found");
       }
       setCharacter(data.character);
     } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      console.error("[OCDetailPage] Failed to fetch character (callback):", error);
+      if (signal?.aborted) return;
+      const error = toError(err);
+      console.error("[page.tsx]❌ Failed to fetch character:", error);
       setError(error.message);
       setCharacter(null);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [characterId]);
 
-  const fetchGearImages = useCallback(async (character: CharacterDetail) => {
+  const fetchGearImages = useCallback(async (character: CharacterDetail, signal?: AbortSignal) => {
     const gearNames: string[] = [];
 
     if (character.gearWeapon?.name) gearNames.push(character.gearWeapon.name);
@@ -1176,8 +1279,10 @@ export default function OCDetailPage() {
         gearNames.map(async (name) => {
           try {
             const response = await fetch(
-              `/api/models/items?search=${encodeURIComponent(name)}&limit=1`
+              `/api/models/items?search=${encodeURIComponent(name)}&limit=1`,
+              { signal }
             );
+            if (signal?.aborted) return;
             if (response.ok) {
               const data = await response.json();
               if (data.data && data.data.length > 0) {
@@ -1196,145 +1301,79 @@ export default function OCDetailPage() {
               }
             }
           } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.warn(`[page.tsx]⚠️ Failed to fetch image for ${name}:`, error);
+            console.warn(`[page.tsx]⚠️ Failed to fetch image for ${name}:`, toError(err));
           }
         })
       );
 
+      if (signal?.aborted) return;
       setGearImages(images);
       setGearModifierHearts(modifierHearts);
     } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      console.warn("[page.tsx]⚠️ Failed to fetch gear images:", error);
+      if (signal?.aborted) return;
+      console.warn("[page.tsx]⚠️ Failed to fetch gear images:", toError(err));
     }
   }, []);
 
-  const fetchRelationships = useCallback(async (characterId: string) => {
+  const fetchRelationships = useCallback(async (characterId: string, signal?: AbortSignal) => {
     if (!characterId) return;
 
     setRelationshipsLoading(true);
     setRelationshipsError(null);
     try {
-      const res = await fetch(`/api/characters/relationships/${characterId}`);
+      const res = await fetch(`/api/characters/relationships/${characterId}`, { signal });
+      if (signal?.aborted) return;
       if (!res.ok) {
         throw new Error(`Failed to fetch relationships: ${res.status}`);
       }
       const data = (await res.json()) as { outgoing?: Relationship[]; incoming?: Relationship[] };
+      if (signal?.aborted) return;
       setRelationships({
         outgoing: data.outgoing || [],
         incoming: data.incoming || [],
       });
     } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      console.error("[OCDetailPage] Failed to fetch relationships:", error);
+      if (signal?.aborted) return;
+      const error = toError(err);
+      console.error("[page.tsx]❌ Failed to fetch relationships:", error);
       setRelationshipsError(error.message);
       setRelationships({ outgoing: [], incoming: [] });
     } finally {
-      setRelationshipsLoading(false);
+      if (!signal?.aborted) {
+        setRelationshipsLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     const abortController = new AbortController();
-    const fetchWithAbort = async () => {
-      if (!characterId) {
-        setError("Character ID is required");
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        console.log("[OCDetailPage] Fetching character:", {
-          characterId,
-          params,
-          pathname,
-          sessionLoading,
-          hasUser: Boolean(user?.id),
-        });
-        const res = await fetch(`/api/characters/${characterId}`, { signal: abortController.signal, cache: "no-store" });
-        if (abortController.signal.aborted) return;
-        console.log("[OCDetailPage] /api/characters response:", {
-          characterId,
-          status: res.status,
-          ok: res.ok,
-        });
-        
-        if (!res.ok) {
-          const raw = await res.text().catch(() => "");
-          let b: unknown = {};
-          try {
-            b = raw ? JSON.parse(raw) : {};
-          } catch {
-            b = { raw };
-          }
-          console.error("[OCDetailPage] /api/characters non-OK body:", b);
-          throw new Error(
-            (b as { error?: string }).error ?? `Request failed: ${res.status}`
-          );
-        }
-        const data = (await res.json()) as { character?: CharacterDetail };
-        if (abortController.signal.aborted) return;
-        console.log("[OCDetailPage] /api/characters JSON:", {
-          hasCharacter: Boolean(data.character),
-          characterKeys: data.character ? Object.keys(data.character).slice(0, 25) : [],
-        });
-        
-        if (!data.character) {
-          throw new Error("Character not found");
-        }
-        setCharacter(data.character);
-      } catch (err: unknown) {
-        if (abortController.signal.aborted) return;
-        const error = err instanceof Error ? err : new Error(String(err));
-        console.error("[OCDetailPage] Failed to fetch character:", error);
-        setError(error.message);
-        setCharacter(null);
-      } finally {
-        if (!abortController.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchWithAbort();
-
-    return () => {
-      abortController.abort();
-    };
-  }, [characterId]);
+    fetchCharacter(abortController.signal);
+    return () => abortController.abort();
+  }, [characterId, fetchCharacter]);
 
   useEffect(() => {
-    if (character) {
-      fetchGearImages(character);
-      // Fetch relationships when character is loaded and has _id
-      if (character._id) {
-        const charId = typeof character._id === "string" ? character._id : String(character._id);
-        fetchRelationships(charId);
-      }
+    if (!character) return;
+
+    const abortController = new AbortController();
+    const { signal } = abortController;
+
+    fetchGearImages(character, signal);
+    if (character._id) {
+      const charId = typeof character._id === "string" ? character._id : String(character._id);
+      fetchRelationships(charId, signal);
     }
+
+    return () => abortController.abort();
   }, [character, fetchGearImages, fetchRelationships]);
 
   useLayoutEffect(() => {
-    const mainElement = document.querySelector("main");
-
-    window.scrollTo({ top: 0, behavior: "instant" });
-    mainElement?.scrollTo({ top: 0, behavior: "instant" });
-    document.documentElement.scrollTo({ top: 0, behavior: "instant" });
+    scrollToTop();
   }, [pathname]);
 
   useEffect(() => {
     if (!loading && character) {
-      const mainElement = document.querySelector("main");
-
-      requestAnimationFrame(() => {
-        const mainEl = document.querySelector("main");
-        window.scrollTo({ top: 0, behavior: "instant" });
-        mainEl?.scrollTo({ top: 0, behavior: "instant" });
-        document.documentElement.scrollTo({ top: 0, behavior: "instant" });
-      });
+      const rafId = requestAnimationFrame(scrollToTop);
+      return () => cancelAnimationFrame(rafId);
     }
   }, [loading, character]);
 
@@ -1377,10 +1416,9 @@ export default function OCDetailPage() {
       submitSuccessTimeoutRef.current = setTimeout(() => {
         setSubmitSuccess(false);
         submitSuccessTimeoutRef.current = null;
-      }, 3000);
+      }, SUBMIT_SUCCESS_MS);
     } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setSubmitError(error.message);
+      setSubmitError(toError(err).message);
     } finally {
       setSubmitting(false);
     }
@@ -1390,6 +1428,7 @@ export default function OCDetailPage() {
   // This must be called before any conditional returns to follow Rules of Hooks
   const mergedRelationships = useMemo(() => {
     const map = new Map<string, {
+      targetId: string;
       targetChar: CharacterRef | null;
       targetName: string;
       relationshipTypes: RelationshipType[];
@@ -1397,15 +1436,15 @@ export default function OCDetailPage() {
       incoming?: Relationship;
     }>();
 
-    // Add outgoing relationships
     relationships.outgoing.forEach((rel) => {
       const targetId = getCharacterId(rel.targetCharacterId);
       if (!targetId) return;
-      
+
       const targetChar = getCharacter(rel.targetCharacterId);
-      
+
       if (!map.has(targetId)) {
         map.set(targetId, {
+          targetId,
           targetChar,
           targetName: rel.targetCharacterName,
           relationshipTypes: [],
@@ -1416,15 +1455,15 @@ export default function OCDetailPage() {
       entry.relationshipTypes = [...new Set([...entry.relationshipTypes, ...rel.relationshipTypes])];
     });
 
-    // Add incoming relationships
     relationships.incoming.forEach((rel) => {
       const sourceId = getCharacterId(rel.characterId);
       if (!sourceId) return;
-      
+
       const sourceChar = getCharacter(rel.characterId);
-      
+
       if (!map.has(sourceId)) {
         map.set(sourceId, {
+          targetId: sourceId,
           targetChar: sourceChar,
           targetName: rel.characterName,
           relationshipTypes: [],
@@ -1540,18 +1579,9 @@ export default function OCDetailPage() {
                 Moderator Feedback
               </h2>
               <div className="space-y-3 sm:space-y-4">
-                {character.applicationFeedback.map((feedback, index) => {
-                  // Create stable key from available fields
-                  const stableKey = feedback.modId && feedback.createdAt
-                    ? `feedback-${feedback.modId}-${feedback.createdAt}`
-                    : feedback.modId
-                    ? `feedback-${feedback.modId}-${index}`
-                    : feedback.createdAt
-                    ? `feedback-${feedback.createdAt}-${index}`
-                    : `feedback-${feedback.text?.slice(0, 20) || 'unknown'}-${index}`;
-                  return (
+                {character.applicationFeedback.map((feedback, index) => (
                   <div
-                    key={stableKey}
+                    key={getFeedbackKey(feedback, index)}
                     className="rounded-lg border border-[#ffa500]/30 bg-[var(--botw-warm-black)]/50 p-3 sm:p-4"
                   >
                     {feedback.createdAt && (
@@ -1567,8 +1597,7 @@ export default function OCDetailPage() {
                       </ReactMarkdown>
                     </div>
                   </div>
-                  );
-                })}
+                ))}
               </div>
               <div className="mt-4 rounded-lg border border-[#ffa500]/30 bg-[#ffa500]/5 p-3">
                 <p className="text-sm text-[var(--botw-pale)]">
@@ -1605,7 +1634,7 @@ export default function OCDetailPage() {
                   />
                 ) : (
                   <img
-                    src="/ankle_icon.png"
+                    src={DEFAULT_AVATAR}
                     alt={character.name}
                     className={`mx-auto h-32 w-32 sm:h-40 sm:w-40 md:h-48 md:w-48 rounded-lg border-2 object-cover shadow-xl ${iconBorderClass}`}
                   />
@@ -1680,28 +1709,11 @@ export default function OCDetailPage() {
 
             {/* Submit Messages */}
             {submitSuccess && (
-              <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 p-3 text-center">
-                <p className="text-sm font-medium text-[var(--totk-light-green)]">
-                  <i className="fa-solid fa-check-circle mr-2" aria-hidden="true" />
-                  Character submitted successfully!
-                </p>
-              </div>
+              <MessageBanner variant="success" message="Character submitted successfully!" />
             )}
-            {submitError && (
-              <div className="mb-4 rounded-lg border-2 border-[#ff6347] bg-[#ff6347]/10 p-3 text-center">
-                <p className="text-sm font-medium text-[#ff6347]">
-                  <i className="fa-solid fa-exclamation-triangle mr-2" aria-hidden="true" />
-                  {submitError}
-                </p>
-              </div>
-            )}
+            {submitError && <MessageBanner variant="error" message={submitError} />}
             {showSavedBanner && (
-              <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 p-3 text-center">
-                <p className="text-sm font-medium text-[var(--totk-light-green)]">
-                  <i className="fa-solid fa-check-circle mr-2" aria-hidden="true" />
-                  Your changes have been saved.
-                </p>
-              </div>
+              <MessageBanner variant="saved" message="Your changes have been saved." />
             )}
 
             {/* Basic Info Card */}
@@ -2188,28 +2200,13 @@ export default function OCDetailPage() {
                       completions.forEach((completion) => {
                         const questType = completion.questType?.toLowerCase() || "unknown";
                         questTypeStats[questType] = (questTypeStats[questType] || 0) + 1;
-                        
+
                         if (completion.village) {
-                            const village = String(completion.village).toLowerCase();
+                          const village = String(completion.village).toLowerCase();
                           villageStats[village] = (villageStats[village] || 0) + 1;
                         }
                       });
-                      
-                      // Helper function to get village color
-                      const getVillageBadgeColor = (village: string): string => {
-                        const normalized = String(village).toLowerCase();
-                        switch (normalized) {
-                          case "rudania":
-                            return "#C6000A";
-                          case "inariko":
-                            return "#6BA3FF";
-                          case "vhintl":
-                            return "#4AA144";
-                          default:
-                            return "var(--totk-green)";
-                        }
-                      };
-                      
+
                       return (
                         <div className="space-y-4">
                           {/* Total Stats */}
@@ -2244,7 +2241,7 @@ export default function OCDetailPage() {
                                         {questConfig.label}
                                       </div>
                                       <div className="text-xs text-[var(--botw-pale)] font-medium">
-                                        {count} {count === 1 ? "quest" : "quests"}
+                                        {count} {pluralize(count, "quest", "quests")}
                                       </div>
                                     </div>
                                   </div>
@@ -2295,7 +2292,7 @@ export default function OCDetailPage() {
                                           </span>
                                         </div>
                                         <div className="text-xs text-[var(--botw-pale)] font-medium mt-1">
-                                          {count === 1 ? "quest" : "quests"} completed
+                                          {pluralize(count, "quest", "quests")} completed
                                         </div>
                                       </div>
                                     );
@@ -2337,16 +2334,16 @@ export default function OCDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2" style={{ overscrollBehavior: 'contain' }}>
-                  {mergedRelationships.map((relData, idx) => {
+                  {mergedRelationships.map((relData) => {
                     const targetChar = relData.targetChar;
-                    const targetIconUrl = targetChar?.icon ? normalizeImageUrl(targetChar.icon) : "/ankle_icon.png";
+                    const targetIconUrl = targetChar?.icon ? normalizeImageUrl(targetChar.icon) : DEFAULT_AVATAR;
                     const targetVillage = targetChar?.homeVillage || targetChar?.currentVillage || "";
                     const targetVillageCrestIcon = targetVillage ? getVillageCrestIcon(targetVillage) : null;
                     const targetSlug = createSlug(relData.targetName);
 
                     return (
                       <div
-                        key={`${relData.targetName}-${idx}`}
+                        key={relData.targetId}
                         className="rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)]/80 to-[var(--totk-brown)]/40 p-4 shadow-lg"
                       >
                         {/* Character Header */}
@@ -2362,9 +2359,7 @@ export default function OCDetailPage() {
                                 fill
                                 className="object-cover"
                                 unoptimized
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = "/ankle_icon.png";
-                                }}
+                                onError={handleImageError}
                               />
                             </div>
                             <div className="text-center sm:text-left">
@@ -2387,109 +2382,19 @@ export default function OCDetailPage() {
                           </Link>
                         </div>
 
-                        {/* My character feels this way */}
-                        {relData.outgoing && (() => {
-                          const primaryConfig = getPrimaryRelationshipConfig(relData.outgoing.relationshipTypes);
-                          return (
-                            <div 
-                              className="relative mb-3 rounded-lg border-2 p-3 sm:p-4 shadow-inner"
-                              style={{
-                                borderColor: `${primaryConfig.borderColor}`,
-                                background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
-                              }}
-                            >
-                              <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
-                                <div className="flex items-center gap-1.5">
-                                  {relData.outgoing.relationshipTypes.map((type) => {
-                                    const config = RELATIONSHIP_CONFIG[type];
-                                    return (
-                                      <i 
-                                        key={type}
-                                        className={`fa-solid ${config.icon} text-base sm:text-lg`}
-                                        style={{ color: config.color }}
-                                        title={config.label}
-                                        aria-hidden="true"
-                                      />
-                                    );
-                                  })}
-                                </div>
-                                <p 
-                                  className="text-xs sm:text-sm font-bold uppercase tracking-wider"
-                                  style={{ color: primaryConfig.color }}
-                                >
-                                  {character.name} feels this way:
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                                {relData.outgoing.relationshipTypes.map((type) => (
-                                  <RelationshipTypeBadge key={type} type={type} />
-                                ))}
-                              </div>
-                              {relData.outgoing.notes && (
-                                <div 
-                                  className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t"
-                                  style={{ borderColor: `${primaryConfig.borderColor}` }}
-                                >
-                                  <p className="text-xs sm:text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
-                                    {relData.outgoing.notes}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        {/* This character feels this way */}
-                        {relData.incoming && (() => {
-                          const primaryConfig = getPrimaryRelationshipConfig(relData.incoming.relationshipTypes);
-                          return (
-                            <div 
-                              className="rounded-lg border-2 p-3 sm:p-4 shadow-inner"
-                              style={{
-                                borderColor: `${primaryConfig.borderColor}`,
-                                background: `linear-gradient(to bottom right, ${primaryConfig.bgColor}, transparent)`,
-                              }}
-                            >
-                              <div className="flex items-center gap-2 mb-2 sm:mb-3 flex-wrap">
-                                <div className="flex items-center gap-1.5">
-                                  {relData.incoming.relationshipTypes.map((type) => {
-                                    const config = RELATIONSHIP_CONFIG[type];
-                                    return (
-                                      <i 
-                                        key={type}
-                                        className={`fa-solid ${config.icon} text-base sm:text-lg`}
-                                        style={{ color: config.color }}
-                                        title={config.label}
-                                        aria-hidden="true"
-                                      />
-                                    );
-                                  })}
-                                </div>
-                                <p 
-                                  className="text-xs sm:text-sm font-bold uppercase tracking-wider"
-                                  style={{ color: primaryConfig.color }}
-                                >
-                                  {relData.targetName} feels this way:
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                                {relData.incoming.relationshipTypes.map((type) => (
-                                  <RelationshipTypeBadge key={type} type={type} />
-                                ))}
-                              </div>
-                              {relData.incoming.notes && (
-                                <div 
-                                  className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t"
-                                  style={{ borderColor: `${primaryConfig.borderColor}` }}
-                                >
-                                  <p className="text-xs sm:text-sm text-[var(--botw-pale)] whitespace-pre-wrap break-words leading-relaxed">
-                                    {relData.incoming.notes}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        {relData.outgoing && (
+                          <RelationshipBlock
+                            relationship={relData.outgoing}
+                            label={`${character.name} feels this way:`}
+                            className="relative mb-3"
+                          />
+                        )}
+                        {relData.incoming && (
+                          <RelationshipBlock
+                            relationship={relData.incoming}
+                            label={`${relData.targetName} feels this way:`}
+                          />
+                        )}
                       </div>
                     );
                   })}
