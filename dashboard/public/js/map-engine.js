@@ -305,9 +305,10 @@ class MapEngine {
         return this.map.getZoom();
     }
     
-    // setZoom - Set zoom level
+    // setZoom - Set zoom level (animated so zoom feels less sudden)
     setZoom(zoom) {
-        this.map.setZoom(zoom);
+        const center = this.map.getCenter();
+        this.map.flyTo(center, zoom, { duration: 0.35 });
     }
     
     // getCenter - Get current center {x, y}

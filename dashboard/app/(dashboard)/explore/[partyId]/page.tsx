@@ -2290,9 +2290,9 @@ export default function ExplorePartyPage() {
                           aria-label={isPlacing ? `Click to place marker for ${placingForDiscovery!.label}` : undefined}
                         >
                           <div
-                            className="absolute inset-0 transition-transform duration-200 ease-out"
+                            className="absolute inset-0 transition-transform duration-300 ease-out"
                             style={{
-                              transform: isPlacing && mapHovered ? "scale(1.75)" : "scale(1)",
+                              transform: isPlacing && mapHovered ? "scale(1.45)" : "scale(1)",
                               transformOrigin: `${mapHoverPct.x * 100}% ${mapHoverPct.y * 100}%`,
                             }}
                             aria-hidden
@@ -2467,7 +2467,9 @@ export default function ExplorePartyPage() {
                         </div>
                       )}
                       {isPlacing && showMap && placingForDiscovery && (
-                        <p className="mt-1.5 text-[10px] text-amber-400/90">Hover over the map to zoom in. Click inside the highlighted {placingForDiscovery.quadrant} quadrant to place your marker.</p>
+                        <p className="mt-1.5 text-[10px] text-amber-400/90">
+                          The map magnifies under your cursor when you hover. Move the cursor to pan the magnified view; click inside the highlighted {placingForDiscovery.quadrant} quadrant to place your marker.
+                        </p>
                       )}
                     </section>
                   );

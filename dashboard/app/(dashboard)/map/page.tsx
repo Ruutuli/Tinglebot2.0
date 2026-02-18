@@ -276,6 +276,9 @@ export default function MapPage() {
                 <i className="fas fa-home" />
               </button>
             </div>
+            <p className="zoom-hint" title="Keyboard navigation">
+              Arrow keys pan · Scroll to zoom
+            </p>
             <div className="village-nav">
               <h4><i className="fas fa-map-marker-alt" /> Quick Village Access</h4>
               <div className="village-buttons-horizontal">
