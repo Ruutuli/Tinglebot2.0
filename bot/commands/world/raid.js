@@ -965,13 +965,15 @@ async function handleRaidVictory(interaction, raidData, monster) {
           // Add to inventory if character has inventory link
           if (character.inventory) {
             try {
-              await addItemInventoryDatabase(
-                character._id,
-                lootedItem.itemName,
-                lootedItem.quantity,
-                interaction,
-                "Raid Loot"
-              );
+              if (!(raidData.expeditionId && EXPLORATION_TESTING_MODE)) {
+                await addItemInventoryDatabase(
+                  character._id,
+                  lootedItem.itemName,
+                  lootedItem.quantity,
+                  interaction,
+                  "Raid Loot"
+                );
+              }
               let qualityIndicator = '';
               if (participant.damage >= 10) qualityIndicator = ' 🔥';
               else if (participant.damage >= 5) qualityIndicator = ' ⚡';

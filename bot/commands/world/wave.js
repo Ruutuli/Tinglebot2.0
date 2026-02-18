@@ -826,7 +826,6 @@ async function handleWaveVictory(interaction, waveData) {
           } else if (participantDamage >= 2) {
             qualityIndicator = ' ✨';
           }
-          
           lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
           participantsWhoGotLoot.add(character.name);
           console.log(`[wave.js]: ✅ [${i + 1}/${defeatedMonsters.length}] Processed loot for ${character.name} (no inventory link)`);

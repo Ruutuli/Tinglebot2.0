@@ -365,7 +365,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
      });
      lootLines.push(`${char.name}: 🔸 Unknown Relic (${savedRelic?.relicId || '—'})`);
     } else {
-     lootLines.push(`${char.name}: 🔸 Unknown Relic (testing)`);
+     lootLines.push(`${char.name}: 🔸 Unknown Relic`);
     }
     if (!party.gatheredItems) party.gatheredItems = [];
     party.gatheredItems.push({ characterId: char._id, characterName: char.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
@@ -382,7 +382,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
      } catch (_) {}
     } else if (allItems && allItems.length > 0) {
      const fallback = allItems[Math.floor(Math.random() * allItems.length)];
-     lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName} (testing)`);
+     lootLines.push(`${char.name}: ${fallback.emoji || "📦"} ${fallback.itemName}`);
     }
    }
   } else {
@@ -403,7 +403,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
      lootLines.push(`${char.name}: (failed to add item)`);
     }
    } else {
-    lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName} (testing)`);
+    lootLines.push(`${char.name}: ${item.emoji || "📦"} ${item.itemName}`);
    }
   }
  }
@@ -978,11 +978,18 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
 // ------------------- applyBlightExposure ------------------
 // Increment blight exposure when revealing/traveling blighted quadrant
 async function applyBlightExposure(party, square, quadrant, reason, characterName) {
- if (EXPLORATION_TESTING_MODE) return;
- const prev = typeof party.blightExposure === "number" ? party.blightExposure : 0;
- party.blightExposure = prev + 1;
- party.markModified("blightExposure");
  const location = `${square} ${quadrant}`;
+ const prev = typeof party.blightExposure === "number" ? party.blightExposure : 0;
+ const displayTotal = prev + 1;
+ if (EXPLORATION_TESTING_MODE) {
+  pushProgressLog(party, characterName || "Party", "blight_exposure",
+   `Blight exposure +1 (${reason}) at ${location}. Total exposure: ${displayTotal}.`,
+   undefined, undefined);
+  await party.save();
+  return;
+ }
+ party.blightExposure = displayTotal;
+ party.markModified("blightExposure");
  pushProgressLog(
   party,
   characterName || "Party",
@@ -5464,14 +5471,7 @@ module.exports = {
     const membersTextEnd = memberNamesEnd.length > 0 ? memberNamesEnd.join(", ") : "—";
     pushProgressLog(party, character.name, "end", `Expedition ended. Returned to ${villageLabelEnd}: ${membersTextEnd}.`, undefined, undefined);
     if (EXPLORATION_TESTING_MODE) {
-     pushProgressLog(party, character.name, "end_test_reset",
-      "Testing mode — nothing persisted:\n" +
-      "• Hearts & stamina: damage, costs, and recovery not saved to characters\n" +
-      "• Items: none used from loadout; none added to inventory (chest, grotto, fairy, loot, ruins)\n" +
-      "• Grottos: found/cleansed grottos deleted on end\n" +
-      "• Map: explored/secured quadrants and discoveries not updated\n" +
-      "• KO/debuff: never applied to characters",
-      undefined, undefined);
+     pushProgressLog(party, character.name, "end_test_reset", "Testing mode: No changes were saved.", undefined, undefined);
     }
 
     party.status = "completed";
@@ -5515,14 +5515,7 @@ module.exports = {
     const splitSectionEnd = splitLinesEnd.length > 0
       ? `**Split (remaining hearts & stamina):**\n${splitLinesEnd.join("\n")}\n\n`
       : "No remaining hearts or stamina to divide.\n\n";
-    const testingResetNote = EXPLORATION_TESTING_MODE
-      ? "⚠️ **Testing mode — nothing persisted:**\n" +
-        "• Hearts & stamina: damage, costs, recovery not saved\n" +
-        "• Items: none used or added\n" +
-        "• Grottos: deleted on end\n" +
-        "• Map: quadrants/discoveries unchanged\n" +
-        "• KO/debuff: never applied\n\n"
-      : "";
+    const testingResetNote = EXPLORATION_TESTING_MODE ? "⚠️ **Testing mode:** No changes were saved.\n\n" : "";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(regionColors[party.region] || "#4CAF50")
