@@ -91,10 +91,10 @@ const REPORTABLE_LOC_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2])\s+Q[1-4])(?:\s|
 /** Extract grotto name from messages like "Cleansed grotto **Taunhiy Grotto** in H8 Q2..." */
 const GROTTO_NAME_RE = /\*\*([^*]+)\*\*/;
 
-/** Discoveries that can be placed on the map (Report to town hall). Relics are not placed on the map. */
+/** Discoveries that can be placed on the map (Report to town hall). Relics are not placed on the map. Ruins are only placeable when they are a rest spot (camp). */
 const REPORTABLE_OUTCOMES: Record<string, string> = {
   monster_camp: "Monster Camp",
-  ruins: "Ruins",
+  ruin_rest: "Ruins (rest spot)", // only when ruins yielded a camp; generic "ruins" is not placeable
   grotto: "Grotto",
   grotto_cleansed: "Grotto", // cleansed grottos (Yes) — same as grotto for placement
 };
@@ -311,6 +311,8 @@ type PartyData = {
   reportedDiscoveryKeys?: string[];
   /** Square IDs for which a path image was uploaded; when current square is in this list, hide "draw path" prompt. */
   pathImageUploadedSquares?: string[];
+  /** Quadrants the party has set foot in this run; fog stays clear for these when they move away. */
+  visitedQuadrantsThisRun?: Array<{ squareId?: string; quadrantId?: string }>;
 };
 
 type Character = {
@@ -407,8 +409,14 @@ function getMemberDisplay(
 ): { displayIcon: string | undefined; displayHearts: number | undefined; displayStamina: number | undefined; isCurrentTurn: boolean } {
   const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
   const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
-  const displayHearts = typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts);
-  const displayStamina = typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina);
+  // During expedition we only use the party pool; per-character display shows max so "player hearts/stamina" don't decrease
+  const useMaxDuringExpedition = party.status === "started";
+  const displayHearts = useMaxDuringExpedition
+    ? (charFromList?.maxHearts ?? m.currentHearts ?? undefined)
+    : (typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts));
+  const displayStamina = useMaxDuringExpedition
+    ? (charFromList?.maxStamina ?? m.currentStamina ?? undefined)
+    : (typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina));
   const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
   return { displayIcon, displayHearts, displayStamina, isCurrentTurn };
 }
@@ -1381,9 +1389,17 @@ export default function ExplorePartyPage() {
                     if (!fogLayer) return null;
                     const statuses = squarePreview.quadrantStatuses ?? party.quadrantStatuses ?? {};
                     const fogQuadrants: number[] = [];
+                    const currentQuadrant = party.quadrant ? String(party.quadrant).trim().toUpperCase() : null;
+                    const currentSquareNorm = party.square ? String(party.square).trim().toUpperCase() : "";
+                    const visitedHere = (party.visitedQuadrantsThisRun ?? []).filter(
+                      (v) => String(v.squareId ?? "").trim().toUpperCase() === currentSquareNorm
+                    );
+                    const visitedQuadrantIds = new Set(visitedHere.map((v) => String(v.quadrantId ?? "").trim().toUpperCase()));
                     (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
                       const s = (statuses[qId] ?? "unexplored").toLowerCase();
-                      if (s === "unexplored" || s === "inaccessible") fogQuadrants.push(i + 1);
+                      const isCurrentQuadrant = currentQuadrant && qId === currentQuadrant;
+                      const wasVisited = visitedQuadrantIds.has(qId);
+                      if ((s === "unexplored" || s === "inaccessible") && !isCurrentQuadrant && !wasVisited) fogQuadrants.push(i + 1);
                     });
                     if (fogQuadrants.length === 0) return null;
                     const clipPath = fogClipPathForQuadrants(fogQuadrants);
@@ -2374,9 +2390,17 @@ export default function ExplorePartyPage() {
                             if (!fogLayer) return null;
                             const statuses = displayPreview!.quadrantStatuses ?? party.quadrantStatuses ?? {};
                             const fogQuadrants: number[] = [];
+                            const currentQuadrantDisplay = party.quadrant ? String(party.quadrant).trim().toUpperCase() : null;
+                            const currentSquareNormDisplay = party.square ? String(party.square).trim().toUpperCase() : "";
+                            const visitedHereDisplay = (party.visitedQuadrantsThisRun ?? []).filter(
+                              (v) => String(v.squareId ?? "").trim().toUpperCase() === currentSquareNormDisplay
+                            );
+                            const visitedQuadrantIdsDisplay = new Set(visitedHereDisplay.map((v) => String(v.quadrantId ?? "").trim().toUpperCase()));
                             (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
                               const s = (statuses[qId] ?? "unexplored").toLowerCase();
-                              if (s === "unexplored" || s === "inaccessible") fogQuadrants.push(i + 1);
+                              const isCurrentQuadrant = currentQuadrantDisplay && qId === currentQuadrantDisplay;
+                              const wasVisited = visitedQuadrantIdsDisplay.has(qId);
+                              if ((s === "unexplored" || s === "inaccessible") && !isCurrentQuadrant && !wasVisited) fogQuadrants.push(i + 1);
                             });
                             if (fogQuadrants.length === 0) return null;
                             const clipPath = fogClipPathForQuadrants(fogQuadrants);

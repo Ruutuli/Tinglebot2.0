@@ -562,11 +562,16 @@ function createVendingSetupInstructionsEmbed(character = null) {
 
 // ------------------- Function: getExplorationPartyCharacterFields -------------------
 // Returns embed fields for each party member's hearts and stamina (for grotto maze / trial embeds).
+// When expedition is started, pool is authoritative: show fair share (floor(pool/n)) per member.
 function getExplorationPartyCharacterFields(party) {
  if (!party?.characters?.length) return [];
+ const n = party.characters.length;
+ const usePoolShare = party.status === 'started' && n > 0;
+ const poolH = usePoolShare ? Math.floor((party.totalHearts ?? 0) / n) : 0;
+ const poolS = usePoolShare ? Math.floor((party.totalStamina ?? 0) / n) : 0;
  return party.characters.map((c) => {
-  const h = c.currentHearts ?? 0;
-  const s = c.currentStamina ?? 0;
+  const h = usePoolShare ? poolH : (c.currentHearts ?? 0);
+  const s = usePoolShare ? poolS : (c.currentStamina ?? 0);
   const heartsStr = c.maxHearts ? `${h}/${c.maxHearts}` : String(h);
   const staminaStr = c.maxStamina ? `${s}/${c.maxStamina}` : String(s);
   return {
@@ -757,7 +762,6 @@ const createExplorationItemEmbed = (
   nextCharacter: nextCharacter ?? null,
   showNextAndCommands: !!nextCharacter && showNextAndCommands,
   showRestSecureMove: false,
-  extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
   ruinRestRecovered,
   hasDiscoveriesInQuadrant,
  });
@@ -804,7 +808,6 @@ const createExplorationMonsterEmbed = (
   showNextAndCommands: !!nextCharacter && showNextAndCommands,
   showRestSecureMove: false,
   commandsLast: true,
-  extraFieldsBeforeIdQuadrant: [{ name: `❤️ __${character.name} Hearts__`, value: `${character.currentHearts ?? 0}/${character.maxHearts ?? 0}`, inline: true }],
   ruinRestRecovered,
   hasDiscoveriesInQuadrant,
  });

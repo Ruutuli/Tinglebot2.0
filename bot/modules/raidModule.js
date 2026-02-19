@@ -862,12 +862,44 @@ async function advanceRaidTurnOnItemUse(characterId) {
   }
 }
 
+// ---- Function: syncExpeditionPartyPoolFromRaid ----
+// When an expedition raid ends, set party pool to sum of all participants' currentHearts/currentStamina.
+async function syncExpeditionPartyPoolFromRaid(raid) {
+  if (!raid?.expeditionId || !raid.participants?.length) return;
+  try {
+    const Party = require('@/models/PartyModel');
+    const Character = require('@/models/CharacterModel');
+    const ModCharacter = require('@/models/ModCharacterModel');
+    const party = await Party.findActiveByPartyId(raid.expeditionId);
+    if (!party || party.status !== 'started') return;
+    let sumHearts = 0;
+    let sumStamina = 0;
+    for (const p of raid.participants) {
+      if (!p.characterId) continue;
+      const char = (await Character.findById(p.characterId).lean()) || (await ModCharacter.findById(p.characterId).lean());
+      if (char) {
+        sumHearts += (char.currentHearts ?? 0);
+        sumStamina += (char.currentStamina ?? 0);
+      }
+    }
+    party.totalHearts = Math.max(0, sumHearts);
+    party.totalStamina = Math.max(0, sumStamina);
+    party.markModified('totalHearts');
+    party.markModified('totalStamina');
+    await party.save();
+    logger.info('RAID', `Synced expedition pool from raid ${raid.raidId}: ${party.totalHearts} ❤, ${party.totalStamina} 🟩`);
+  } catch (err) {
+    logger.warn('RAID', `syncExpeditionPartyPoolFromRaid: ${err?.message || err}`);
+  }
+}
+
 // ---- Function: endExplorationRaidAsRetreat ----
 // Called when party successfully retreats from an exploration raid. Ends the raid as 'fled' and notifies expedition.
 async function endExplorationRaidAsRetreat(raid, client) {
   if (!raid || raid.status !== 'active') return;
   try {
     await cancelRaidTurnSkip(raid.raidId);
+    await syncExpeditionPartyPoolFromRaid(raid);
     await raid.completeRaid('fled');
     if (raid.expeditionId && client) {
       await notifyExpeditionRaidOver(raid, client, 'fled');
@@ -894,6 +926,7 @@ async function closeRaidsForExpedition(expeditionId) {
         } catch (cancelErr) {
           // Ignore—expedition raids typically have no expiration job
         }
+        await syncExpeditionPartyPoolFromRaid(raid);
         await raid.completeRaid('fled');
         logger.info('RAID', `Closed expedition raid ${raid.raidId} for expedition ${expeditionId}`);
       } catch (raidErr) {
@@ -1046,7 +1079,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
             logger.warn('RAID', `Failed to cancel expiration job for raid ${raidId}: ${cancelError.message}`);
             // Don't fail the raid completion if job cancellation fails
           }
-          
+
+          await syncExpeditionPartyPoolFromRaid(raid);
           await raid.completeRaid('defeated');
           if (raid.expeditionId && interaction?.client) {
             await notifyExpeditionRaidOver(raid, interaction.client, 'defeated');
@@ -1543,7 +1577,50 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         // Don't fail the raid creation if auto-join fails
       }
     }
-    
+
+    // Re-fetch raid so we have the full participants list for expedition turn ping (raidData from startRaid is stale after joinRaid calls)
+    let raidForTurnPing = raidData;
+    if (expeditionId && raidData.expeditionId) {
+      try {
+        const refreshed = await Raid.findOne({ raidId });
+        if (refreshed && refreshed.participants && refreshed.participants.length > 0) {
+          raidForTurnPing = refreshed;
+          // Assign party pool to raid participants (pooled hearts/stamina: loan pool to participants for raid)
+          const Party = require('@/models/PartyModel');
+          const party = await Party.findActiveByPartyId(expeditionId);
+          if (party && party.status === 'started') {
+            const poolHearts = Math.max(0, party.totalHearts ?? 0);
+            const poolStamina = Math.max(0, party.totalStamina ?? 0);
+            const n = refreshed.participants.length;
+            const Character = require('@/models/CharacterModel');
+            const ModCharacter = require('@/models/ModCharacterModel');
+            const heartsPer = Math.floor(poolHearts / n);
+            const heartsRem = poolHearts % n;
+            const staminaPer = Math.floor(poolStamina / n);
+            const staminaRem = poolStamina % n;
+            for (let i = 0; i < n; i++) {
+              const p = refreshed.participants[i];
+              if (!p?.characterId) continue;
+              const heartShare = heartsPer + (i < heartsRem ? 1 : 0);
+              const staminaShare = staminaPer + (i < staminaRem ? 1 : 0);
+              let char = await Character.findById(p.characterId);
+              if (!char) char = await ModCharacter.findById(p.characterId);
+              if (char) {
+                const maxH = char.maxHearts ?? 0;
+                const maxS = char.maxStamina ?? 0;
+                char.currentHearts = Math.min(maxH, heartShare);
+                char.currentStamina = Math.min(maxS, staminaShare);
+                await char.save();
+              }
+            }
+            console.log(`[raidModule.js]: 🗺️ Assigned expedition pool to raid participants: ${poolHearts} ❤, ${poolStamina} 🟩`);
+          }
+        }
+      } catch (e) {
+        console.warn(`[raidModule.js]: ⚠️ Could not re-fetch raid for turn ping: ${e?.message || e}`);
+      }
+    }
+
     // Create the raid embed
     const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
       ? monsterMapping[monster.nameMapping] 
@@ -1612,6 +1689,19 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       const threadRaidEmbed = await createRaidEmbed(raidData, raidData.monster?.image);
       await thread.send({ content: roleMention || undefined, embeds: [threadRaidEmbed] });
       console.log(`[raidModule.js]: 💬 Thread message sent`);
+
+      // Expedition raid: ping the raid's current-turn participant in the thread (turn order was auto-set when raid started)
+      if (raidForTurnPing.expeditionId && raidForTurnPing.participants && raidForTurnPing.participants.length > 0) {
+        const currentIdx = typeof raidForTurnPing.currentTurn === 'number' ? raidForTurnPing.currentTurn % raidForTurnPing.participants.length : 0;
+        const firstTurn = raidForTurnPing.participants[currentIdx];
+        if (firstTurn?.userId) {
+          try {
+            await thread.send({ content: `<@${firstTurn.userId}> it's your turn now` });
+          } catch (pingErr) {
+            console.warn(`[raidModule.js]: ⚠️ Could not send expedition turn ping in thread: ${pingErr?.message || pingErr}`);
+          }
+        }
+      }
 
       // Update raid data with thread information
       raidData.threadId = thread.id;

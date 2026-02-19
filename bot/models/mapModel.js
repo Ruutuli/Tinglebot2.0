@@ -118,5 +118,5 @@ SquareSchema.methods.getExplorationProgress = function() {
   };
 };
 
-// Export as 'exploringMap' collection
+// Export as 'exploringMap' collection (tinglebot DB). Dashboard must use same DB (MONGODB_TINGLEBOT_URI) to read quadrant status.
 module.exports = mongoose.model('Square', SquareSchema, 'exploringMap');

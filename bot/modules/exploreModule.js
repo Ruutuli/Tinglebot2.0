@@ -48,12 +48,18 @@ function formatCharacterItems(items) {
 }
 
 // ------------------- calculateTotalHeartsAndStamina ------------------
-// Total hearts and stamina for the party -
+// Total hearts and stamina for the party. During started expedition, pool is authoritative.
 async function calculateTotalHeartsAndStamina(party) {
+    if (party && party.status === 'started') {
+        return {
+            totalHearts: Math.max(0, party.totalHearts ?? 0),
+            totalStamina: Math.max(0, party.totalStamina ?? 0)
+        };
+    }
     let totalHearts = 0;
     let totalStamina = 0;
 
-    for (const char of party.characters) {
+    for (const char of party.characters || []) {
         try {
             const characterData = await Character.findById(char._id).lean();
             if (characterData) {
@@ -69,9 +75,10 @@ async function calculateTotalHeartsAndStamina(party) {
 }
 
 // ------------------- recomputePartyTotals ------------------
-// Set party.totalHearts and party.totalStamina from party.characters; call after any slot currentHearts/currentStamina change.
+// Set party.totalHearts and party.totalStamina from party.characters. During started expedition, pool is authoritative: no-op.
 function recomputePartyTotals(party) {
     if (!party || !party.characters || !Array.isArray(party.characters)) return;
+    if (party.status === 'started') return; // Pool-only: do not recompute from slots
     party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
     party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
     party.markModified('totalHearts');
@@ -79,7 +86,7 @@ function recomputePartyTotals(party) {
 }
 
 // ------------------- syncPartyMemberStats ------------------
-// Sync member stats from DB into party.characters, recompute totals and save -
+// Sync member stats from DB into party.characters, recompute totals and save. During started expedition, do not overwrite pool.
 async function syncPartyMemberStats(party) {
     if (!party || !party.characters || party.characters.length === 0) return;
     if (EXPLORATION_TESTING_MODE) return; // Preserve in-session hearts/stamina display; never overwrite from DB
@@ -96,8 +103,10 @@ async function syncPartyMemberStats(party) {
                 slot.currentStamina = charDoc.currentStamina ?? 0;
             }
         }
-        party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
-        party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+        if (party.status !== 'started') {
+            party.totalHearts = party.characters.reduce((s, c) => s + (c.currentHearts ?? 0), 0);
+            party.totalStamina = party.characters.reduce((s, c) => s + (c.currentStamina ?? 0), 0);
+        }
         party.markModified('characters');
         await party.save();
     } catch (error) {

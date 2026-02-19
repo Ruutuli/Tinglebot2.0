@@ -190,11 +190,10 @@ export async function POST(
       }
     }
 
+    // Pooled model: leave pool unchanged when someone leaves (remaining members keep the full pool)
     const updatePayload: Record<string, unknown> = {
       $pull: { characters: { userId: user.id } },
       $set: {
-        totalHearts: Math.max(0, totalHearts - currentHearts),
-        totalStamina: Math.max(0, totalStamina - currentStamina),
         currentTurn: newCurrentTurn,
       },
     };

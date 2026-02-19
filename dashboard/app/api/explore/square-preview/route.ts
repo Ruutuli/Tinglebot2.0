@@ -55,18 +55,26 @@ const VILLAGE_CIRCLE_LAYERS = [
 /** Quadrant status from DB; used to skip hidden/fog for explored/secured quads */
 type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
 
-/** Build ordered layer list for a square. Fog when any quadrant is unexplored/inaccessible. Region names omitted (cover too much). */
+/**
+ * Build ordered layer list for a square.
+ * Fog: quadrants that are unexplored or inaccessible, EXCEPT the party's current quadrant.
+ * The quadrant the party has moved into is "revealed" (no fog) even though it stays unexplored until they get the "Quadrant Explored!" prompt.
+ */
 function getLayersForSquare(
   squareId: string,
-  options?: { quadrantStatuses?: Record<string, QuadrantStatus> }
+  options?: { quadrantStatuses?: Record<string, QuadrantStatus>; revealedQuadrant?: string }
 ): string[] {
   const layers: string[] = [];
 
-  // 1. Mask/fog — include when any quadrant is unexplored or inaccessible (client will clip to those quads)
+  // 1. Mask/fog — unexplored/inaccessible quads only; exclude party's current quadrant (revealed when they move there)
   const statuses = options?.quadrantStatuses ?? {};
-  const fogQuadrants = (["Q1", "Q2", "Q3", "Q4"] as const).filter(
-    (q) => (statuses[q] ?? "unexplored") === "unexplored" || (statuses[q] ?? "unexplored") === "inaccessible"
-  );
+  const revealed = options?.revealedQuadrant ? String(options.revealedQuadrant).trim().toUpperCase() : null;
+  const fogQuadrants = (["Q1", "Q2", "Q3", "Q4"] as const).filter((q) => {
+    const status = statuses[q] ?? "unexplored";
+    const isUnexploredOrInaccessible = status === "unexplored" || status === "inaccessible";
+    const isCurrentQuadrant = revealed && q === revealed;
+    return isUnexploredOrInaccessible && !isCurrentQuadrant;
+  });
   if (fogQuadrants.length > 0) {
     layers.push("MAP_0001_hidden-areas");
   }
@@ -163,8 +171,9 @@ export async function GET(request: NextRequest) {
       // DB optional – continue without it
     }
 
-    // Build layers: fog when any quadrant is unexplored/inaccessible; no region-names layer
-    let layers = getLayersForSquare(square, { quadrantStatuses });
+    // Build layers: fog for unexplored/inaccessible quads except party's current quadrant (revealed on move)
+    const revealedQuadrant = quadrant && /^Q[1-4]$/i.test(quadrant) ? quadrant.trim().toUpperCase() : undefined;
+    let layers = getLayersForSquare(square, { quadrantStatuses, revealedQuadrant });
     if (noMask) {
       layers = layers.filter((l) => l !== "MAP_0001_hidden-areas");
     }

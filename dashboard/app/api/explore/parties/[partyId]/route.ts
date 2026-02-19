@@ -162,6 +162,13 @@ export async function GET(
       ? (p.pathImageUploadedSquares as string[]).filter((s) => typeof s === "string" && s.trim().length > 0).map((s) => s.trim().toUpperCase())
       : [];
 
+    const visitedQuadrantsThisRun = Array.isArray(p.visitedQuadrantsThisRun)
+      ? (p.visitedQuadrantsThisRun as Array<{ squareId?: string; quadrantId?: string }>).map((v) => ({
+          squareId: String(v.squareId ?? "").trim().toUpperCase(),
+          quadrantId: String(v.quadrantId ?? "").trim().toUpperCase(),
+        })).filter((v) => v.squareId && v.quadrantId)
+      : [];
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
@@ -183,6 +190,7 @@ export async function GET(
       progressLog,
       reportedDiscoveryKeys,
       pathImageUploadedSquares,
+      visitedQuadrantsThisRun,
     });
   } catch (err) {
     console.error("[explore/parties/[partyId] GET]", err);

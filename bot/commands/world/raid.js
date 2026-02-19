@@ -18,7 +18,7 @@ const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 const { fetchItemsByMonster } = require('@/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
-const { markGrottoCleared } = require('../../modules/exploreModule');
+const { markGrottoCleared, pushProgressLog } = require('../../modules/exploreModule');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const { GROTTO_CLEARED_FLAVOR } = require('../../data/grottoTrials.js');
 // Google Sheets validation removed
@@ -531,10 +531,14 @@ module.exports = {
       // KO'd member's turn: prompt to use a fairy or leave (don't process a roll)
       if (!isModInRaid && isMyTurn && character.ko) {
         await scheduleRaidTurnSkip(raidId);
+        const cmdExploreItem = isExpeditionRaid && getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : null;
+        const koWhatToDo = isExpeditionRaid && cmdExploreItem
+          ? `Use ${cmdExploreItem} to heal from your expedition loadout, or </item:1463789335626125378> for a fairy.`
+          : 'Please use a fairy with </item:1463789335626125378>.';
         const koFields = [
           {
             name: 'What to do',
-            value: 'Please use a fairy with </item:1463789335626125378>.',
+            value: koWhatToDo,
             inline: false
           },
           ...(isExpeditionRaid ? [] : [{
@@ -569,8 +573,9 @@ module.exports = {
         const cmdRetreat = isExpeditionRaid && getExploreCommandId()
           ? chatInputApplicationCommandMention('explore', 'retreat', getExploreCommandId())
           : null;
+        const cmdExploreItemBody = isExpeditionRaid && getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : null;
         const koInstruction = isExpeditionRaid
-          ? `KO'd — please use a fairy with </item:1463789335626125378>. To escape, the party retreats together with ${cmdRetreat || '`/explore retreat`'}.`
+          ? `KO'd — use ${cmdExploreItemBody || '`/explore item`'} to heal from your expedition loadout, or </item:1463789335626125378> for a fairy. To escape, the party retreats together with ${cmdRetreat || '`/explore retreat`'}.`
           : `KO'd — please use a fairy with </item:1463789335626125378> or leave with </raid:1470659276287774734> raidid, charactername, action: Leave raid.`;
         const whoseTurnBody = currentTurnParticipant
           ? currentTurnIsKO
@@ -596,6 +601,34 @@ module.exports = {
       
       // Create embed for the turn result using the updated raid data from turnResult
       const { embed, koCharacters } = await createRaidTurnEmbed(character, raidId, turnResult, turnResult.raidData);
+
+      // Expedition raids: log raid turn to party progress (roll, gear, numbers, damage) for explore dashboard
+      if (turnResult.raidData.expeditionId) {
+        try {
+          const party = await Party.findActiveByPartyId(turnResult.raidData.expeditionId);
+          if (party) {
+            const br = turnResult.battleResult;
+            const rollLine = `Roll ${br.originalRoll} → ${Math.round(br.adjustedRandomValue)}`;
+            const atkLine = br.attackSuccess && br.attackStat > 0 ? `ATK +${Math.round(br.attackStat * 1.8)} (${br.attackStat} attack)` : '';
+            const defLine = br.defenseSuccess && br.defenseStat > 0 ? `DEF +${Math.round(br.defenseStat * 0.7)} (${br.defenseStat} defense)` : '';
+            const statLine = [atkLine, defLine].filter(Boolean).join(' | ') || 'No ATK/DEF bonus';
+            const gearParts = [];
+            if (character.gearWeapon?.name) gearParts.push(`Weapon: ${character.gearWeapon.name}`);
+            const armor = character.gearArmor;
+            if (armor?.head?.name || armor?.chest?.name || armor?.legs?.name) {
+              const pieces = [armor.head?.name, armor.chest?.name, armor.legs?.name].filter(Boolean);
+              if (pieces.length) gearParts.push(`Armor: ${pieces.join(', ')}`);
+            }
+            const gearLine = gearParts.length ? ` Gear: ${gearParts.join('; ')}.` : '';
+            const monsterName = turnResult.raidData.monster?.name || 'monster';
+            const logMessage = `Raid vs ${monsterName}: ${rollLine}. ${statLine}. Dealt ${br.hearts} hearts.${gearLine}`;
+            pushProgressLog(party, character.name, 'raid_turn', logMessage, undefined, { heartsDealt: br.hearts, roll: br.originalRoll, adjustedRoll: Math.round(br.adjustedRandomValue) }, new Date());
+            await party.save();
+          }
+        } catch (logErr) {
+          console.warn(`[raid.js]: Could not log expedition raid turn to progressLog:`, logErr?.message || logErr);
+        }
+      }
 
       // Check if monster was defeated in this turn
       if (turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed') {
@@ -637,8 +670,9 @@ module.exports = {
         const nextCmdRetreat = nextIsExpedition && getExploreCommandId()
           ? chatInputApplicationCommandMention('explore', 'retreat', getExploreCommandId())
           : null;
+        const nextCmdExploreItem = nextIsExpedition && getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : null;
         const nextTurnDesc = nextIsKO
-          ? `**${nextParticipant.name}** — you're knocked out.\n\nPlease use a fairy with </item:1463789335626125378>.${nextIsExpedition ? `\n\nTo escape, the party retreats together with ${nextCmdRetreat || '`/explore retreat`'} (id, character).` : '\n\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).'}${nextIsExpedition ? '\n\n' : '\n\nYou have 1 minute.\n\n'}**New characters can join the raid now** (added at the end of turn order).`
+          ? `**${nextParticipant.name}** — you're knocked out.\n\n${nextIsExpedition && nextCmdExploreItem ? `Use ${nextCmdExploreItem} to heal from your expedition loadout, or </item:1463789335626125378> for a fairy.` : 'Please use a fairy with </item:1463789335626125378>.'}${nextIsExpedition ? `\n\nTo escape, the party retreats together with ${nextCmdRetreat || '`/explore retreat`'} (id, character).` : '\n\nLeave the raid with </raid:1470659276287774734> (raidid, charactername, action: Leave raid).'}${nextIsExpedition ? '\n\n' : '\n\nYou have 1 minute.\n\n'}**New characters can join the raid now** (added at the end of turn order).`
           : (nextIsExpedition ? `**${nextParticipant.name}** — use </raid:1470659276287774734> to take your turn.` : `**${nextParticipant.name}** — you have 1 minute to roll. Use </raid:1470659276287774734> to take your turn.`);
         const nextTurnEmbed = new EmbedBuilder()
           .setColor(nextIsKO ? '#FF0000' : '#00FF00')
@@ -881,9 +915,14 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
 
   // Add KO warning if character is down
   if (battleResult.playerHearts.current <= 0) {
+    const isExpeditionRaidKo = !!raidData.expeditionId;
+    const cmdExploreItem = isExpeditionRaidKo && getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : null;
+    const koValue = isExpeditionRaidKo && cmdExploreItem
+      ? `💥 **${character.name} has been knocked out and cannot continue!**\n\nUse ${cmdExploreItem} to heal from your expedition loadout (or </item:1463789335626125378> for a fairy).`
+      : `💥 **${character.name} has been knocked out and cannot continue!**`;
     embed.addFields({
       name: 'KO',
-      value: `💥 **${character.name} has been knocked out and cannot continue!**`,
+      value: koValue,
       inline: false
     });
   }

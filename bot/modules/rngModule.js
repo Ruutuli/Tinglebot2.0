@@ -246,7 +246,13 @@ function calculateFinalValue(character, diceRoll) {
   const effectiveAttack = weaponApplies ? attackStat : 0;
   const effectiveDefense = armorApplies ? defenseStat : 0;
 
-  logger.info('EXPLORE', `[rngModule.js] Gear trigger: atk=${rawAttack} weaponChance=${(weaponChance * 100).toFixed(1)}% triggered=${weaponApplies} | def=${rawDefense} armorChance=${(armorChance * 100).toFixed(1)}% triggered=${armorApplies}`);
+  const weaponName = character?.gearWeapon?.name ? String(character.gearWeapon.name).trim() : 'none';
+  const armorParts = [];
+  if (character?.gearArmor?.head?.name) armorParts.push(String(character.gearArmor.head.name).trim());
+  if (character?.gearArmor?.chest?.name) armorParts.push(String(character.gearArmor.chest.name).trim());
+  if (character?.gearArmor?.legs?.name) armorParts.push(String(character.gearArmor.legs.name).trim());
+  const armorDesc = armorParts.length > 0 ? armorParts.join(', ') : 'none';
+  logger.info('EXPLORE', `[rngModule.js] Gear trigger: atk=${rawAttack} (weapon: ${weaponName}) weaponChance=${(weaponChance * 100).toFixed(1)}% triggered=${weaponApplies} → effectiveAtk=${effectiveAttack} | def=${rawDefense} (armor: ${armorDesc}) armorChance=${(armorChance * 100).toFixed(1)}% triggered=${armorApplies} → effectiveDef=${effectiveDefense}`);
 
   const adjustedRandomValue = applyBuffs(
     finalDiceRoll,

@@ -66,6 +66,8 @@ const PartySchema = new Schema({
   reportedDiscoveryKeys: [{ type: String }],
   /** Quadrants this expedition marked as Explored (reset to Unexplored on full party KO). */
   exploredQuadrantsThisRun: [{ squareId: { type: String }, quadrantId: { type: String } }],
+  /** Quadrants the party has set foot in this run; fog stays clear for these when they move away. */
+  visitedQuadrantsThisRun: [{ squareId: { type: String }, quadrantId: { type: String } }],
   /** Square IDs for which a path image was uploaded from this expedition; used to hide "draw path" prompt. */
   pathImageUploadedSquares: [{ type: String }],
 });

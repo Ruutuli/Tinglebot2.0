@@ -65,7 +65,8 @@ const QUEST_SEARCH_CRITERIA = {
 async function handleRPPostTracking(message) {
     try {
         // Prefer thread-id-based lookup first so renames don't break tracking
-        let quest = await findQuestByThreadId(message.channel.id);
+        const categoryId = message.channel.parent?.parentId ?? null;
+        let quest = await findQuestByThreadId(message.channel.id, { categoryId });
         if (!quest || !isValidRPQuest(quest)) {
             // Fallback: only consider channel as RP quest thread if name matches (avoids logging on every message)
             if (!isRPQuestThread(message.channel)) return;
@@ -223,8 +224,10 @@ async function sendRequirementMetNotification(quest, participant, channelId) {
 // ------------------- Quest Finding Functions -------------------
 // ============================================================================
 
+const QUEST_CATEGORY_ID = '717090310911426590';
+
 // ------------------- Find Quest by Thread ID -------------------
-async function findQuestByThreadId(threadId) {
+async function findQuestByThreadId(threadId, options = {}) {
     try {
         const quest = await Quest.findOne({ 
             status: QUEST_SEARCH_CRITERIA.STATUS,
@@ -243,7 +246,9 @@ async function findQuestByThreadId(threadId) {
             return fallbackQuest;
         }
 
-        logger.info('QUEST', `No quest found for thread ${threadId}`);
+        if (options.categoryId === QUEST_CATEGORY_ID) {
+            logger.info('QUEST', `No quest found for thread ${threadId}`);
+        }
         return null;
     } catch (error) {
         logger.error('QUEST', 'Error finding quest by thread ID');

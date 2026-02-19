@@ -301,7 +301,7 @@ export async function POST(
       const ch = charDoc as Record<string, unknown> | null;
       const h = typeof ch?.currentHearts === "number" ? (ch.currentHearts as number) : (typeof ch?.maxHearts === "number" ? (ch.maxHearts as number) : 0);
       const s = typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : (typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0);
-      const updated = { ...c, currentHearts: h, currentStamina: s };
+      const updated = { ...c, currentHearts: 0, currentStamina: 0 };
       updatedCharacters.push(updated);
       totalHeartsSum += h;
       totalStaminaSum += s;
@@ -314,6 +314,7 @@ export async function POST(
           status: "started",
           discordThreadId: threadId,
           exploredQuadrantsThisRun: [],
+          visitedQuadrantsThisRun: [{ squareId: square, quadrantId: quadrant }],
           characters: updatedCharacters,
           totalHearts: totalHeartsSum,
           totalStamina: totalStaminaSum,
