@@ -2644,9 +2644,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      }
      const isFightable = await MonsterCamp.isFightable(camp);
      if (!isFightable) {
-      return interaction.editReply(
-       "This camp was recently cleared. Wait for the next Blood Moon to fight it again. Continue with </explore roll>."
-      );
+      pushProgressLog(party, character.name, "monster_camp_fight_blocked", `Found a monster camp in ${location}; camp recently cleared (wait for Blood Moon).`, undefined, undefined, new Date());
+      await party.save();
+      const cmdRoll = getExploreCommandId() ? `</explore roll:${getExploreCommandId()}>` : "`/explore roll`";
+      const blockedEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Expedition: Monster Camp**")
+       .setColor(getExploreOutcomeColor("monster_camp_fight_blocked", regionColors[party.region] || "#00ff99"))
+       .setDescription(
+        `🔴 **This camp was recently cleared.** Wait for the next Blood Moon to fight it again. Continue with ${cmdRoll}.`
+       )
+       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+      addExplorationStandardFields(blockedEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered: undefined, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+      return interaction.editReply({ embeds: [blockedEmbed] });
      }
      const village = REGION_TO_VILLAGE[regionKey?.toLowerCase()] || "Inariko";
      const MONSTER_CAMP_DIFFICULTIES = ["beginner", "beginner+", "easy", "easy+", "mixed-low", "mixed-medium", "intermediate", "intermediate+"];
@@ -5669,6 +5678,23 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         }
        }
       }
+     // Revert every quadrant this expedition marked explored or secured back to unexplored (same as on KO / testing end)
+     const exploredThisRunProd = party.exploredQuadrantsThisRun || [];
+     if (exploredThisRunProd.length > 0) {
+      for (const { squareId, quadrantId } of exploredThisRunProd) {
+       if (squareId && quadrantId) {
+        const resolvedProd = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+        if (resolvedProd) {
+         const { exactSquareId, exactQuadrantId } = resolvedProd;
+         await Square.updateOne(
+          { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+          { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+          { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
+         ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ End: reset quadrant to unexplored: ${err?.message}`));
+        }
+       }
+      }
+     }
     } else {
      // Testing mode: no character DB persist; revert all map state so the map is clean after the test
      if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
@@ -5777,6 +5803,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       ? `**Split (remaining hearts & stamina):**\n${splitLinesEnd.join("\n")}\n\n`
       : "No remaining hearts or stamina to divide.\n\n";
     const testingResetNote = EXPLORATION_TESTING_MODE ? "⚠️ **Testing mode:** No changes were saved.\n\n" : "";
+    const startTime = party.createdAt ? new Date(party.createdAt).getTime() : Date.now();
+    const durationMs = Math.max(0, Date.now() - startTime);
+    const durationMins = Math.floor(durationMs / 60000);
+    const hours = Math.floor(durationMins / 60);
+    const mins = durationMins % 60;
+    const durationText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
      .setColor(getExploreOutcomeColor("end", regionColors[party.region] || "#4CAF50"))
@@ -5791,7 +5823,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
     embed.addFields({
      name: "📊 **Expedition stats**",
-     value: `**${turnsOrActions}** actions · **${itemsGathered}** item(s) gathered`,
+     value: `**${turnsOrActions}** actions · **${itemsGathered}** item(s) gathered · **${durationText}**`,
      inline: false
     });
     if (highlightsValue) {
@@ -5973,11 +6005,13 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const isSecured = party.quadrantState === "secured";
     // Camp costs 1 stamina (same as one roll in explored quad); secured = 0; stuck in wild = 0
     let staminaCost = isSecured ? 0 : 1;
-    let heartsPct = isSecured ? 0.5 : 0.35;
+    // Recovery: up to 25% of max hearts/stamina unsecured, 50% if quadrant is secured
+    let heartsPct = isSecured ? 0.5 : 0.25;
+    const staminaPct = isSecured ? 0.5 : 0.25;
     const stuckInWild = staminaCost > 0 && party.totalStamina < staminaCost;
     if (stuckInWild) {
      staminaCost = 0;
-     heartsPct = 0.35;
+     heartsPct = 0.25;
     }
 
     // Chance of monster attack when camping: explored/unexplored 25%, secured 5%. When party has 0 stamina (exhausted), higher chance but capped at 50%.
@@ -6101,7 +6135,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      party.markModified("totalStamina");
     }
 
-    // Pool-only: compute party recovery (sum over members' maxHearts * heartsPct; wild adds stamina); cap at combined party max
+    // Pool-only: recovery is random, up to heartsPct/staminaPct of max (25% unsecured, 50% secured)
     let totalHeartsRecovered = 0;
     let sumMaxHearts = 0;
     let sumMaxStamina = 0;
@@ -6111,16 +6145,17 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const maxHrt = char.maxHearts ?? 0;
      sumMaxHearts += maxHrt;
      sumMaxStamina += char.maxStamina ?? 0;
-     let heartsRecovered = Math.floor(maxHrt * heartsPct);
+     const heartsCap = Math.floor(maxHrt * heartsPct);
+     const heartsRecovered = heartsCap > 0 ? Math.floor(Math.random() * (heartsCap + 1)) : 0;
      totalHeartsRecovered += heartsRecovered;
     }
     if (totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < sumMaxHearts) totalHeartsRecovered = 1;
-    let totalStaminaRecovered = 0;
-    if (stuckInWild) {
-     const poolStam = party.totalStamina ?? 0;
-     const room = Math.max(0, sumMaxStamina - poolStam);
-     if (room > 0) totalStaminaRecovered = Math.min(room, Math.floor(Math.random() * 4) + 2);
-    }
+    // Stamina: random up to staminaPct of party max (25% unsecured, 50% secured)
+    const poolStam = party.totalStamina ?? 0;
+    const staminaRoom = Math.max(0, sumMaxStamina - poolStam);
+    const staminaCap = Math.floor(sumMaxStamina * staminaPct);
+    const staminaMaxRecover = Math.min(staminaRoom, staminaCap);
+    const totalStaminaRecovered = staminaMaxRecover > 0 ? Math.floor(Math.random() * (staminaMaxRecover + 1)) : 0;
     party.totalHearts = Math.min(sumMaxHearts, Math.max(0, (party.totalHearts ?? 0) + totalHeartsRecovered));
     party.totalStamina = Math.min(sumMaxStamina, Math.max(0, (party.totalStamina ?? 0) + totalStaminaRecovered));
     party.markModified("totalHearts");
@@ -6128,11 +6163,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
     const locationCamp = `${party.square} ${party.quadrant}`;
     const costsForLog = staminaCost > 0
-     ? { staminaLost: staminaCost, heartsRecovered: totalHeartsRecovered }
-     : { heartsRecovered: totalHeartsRecovered, ...(stuckInWild && totalStaminaRecovered > 0 && { staminaRecovered: totalStaminaRecovered }) };
+     ? { staminaLost: staminaCost, heartsRecovered: totalHeartsRecovered, ...(totalStaminaRecovered > 0 && { staminaRecovered: totalStaminaRecovered }) }
+     : { heartsRecovered: totalHeartsRecovered, ...(totalStaminaRecovered > 0 && { staminaRecovered: totalStaminaRecovered }) };
     const campLogStamina = stuckInWild
      ? (totalStaminaRecovered > 0 ? ` (camp in the wild — no cost; recovered ${totalStaminaRecovered} stamina)` : " (camp in the wild — no cost)")
-     : (staminaCost > 0 ? ` (-${staminaCost} stamina)` : "");
+     : (staminaCost > 0 ? ` (-${staminaCost} stamina)` : "") + (totalStaminaRecovered > 0 ? ` (+${totalStaminaRecovered} stamina)` : "");
     pushProgressLog(
      party,
      character.name,
