@@ -206,14 +206,14 @@ const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 const EXPLORATION_OUTCOME_CHANCES = {
   monster: 0.25,   // more likely: combat encounters
   item: 0.33,
-  explored: 0.205, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
+  explored: 0.245, // fallback when grotto can't be placed (square has grotto, at cap, etc.); +0.04 from monster_camp reduction
   fairy: 0.05,
   chest: 0.01,     // reduced: chests show up less often
   old_map: 0.01,   // less likely: map finds
   ruins: 0.04,
   relic: 0.005,
   camp: 0.02,     // safe space: reduced (was 6%)
-  monster_camp: 0.08,
+  monster_camp: 0.04,  // reduced: monster camps show up less
   grotto: 0.02,
 };
 
@@ -1326,7 +1326,7 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("camp")
-    .setDescription("Set up camp to recover hearts (1 stamina unsecured; 0 in secured; at 0 stamina, recovers stamina instead). You can camp anytime.")
+    .setDescription("Camp to recover hearts. 1 stamina unsecured, 0 secured. At 0 stamina recovers stamina.")
     .addStringOption((option) =>
      option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
@@ -1341,7 +1341,7 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("end")
-    .setDescription("End expedition and return home (only at starting quadrant). Use when at start to finish before running out of hearts/stamina.")
+    .setDescription("End expedition and return home (only at starting quadrant). Finish before running out.")
     .addStringOption((option) =>
      option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
@@ -2688,7 +2688,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const waveEmbed = createWaveEmbed(waveData);
      const joinNote = joinedNames.length > 0 ? `**All party members** (${joinedNames.join(", ")}) must fight. ` : "";
      await interaction.channel.send({
-      content: `🌊 **MONSTER CAMP WAVE!** — Revisiting a camp at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</item:${getItemCommandId()}> to heal during the wave!`,
+      content: `🌊 **MONSTER CAMP WAVE!** — Revisiting a camp at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!\n\n**Mark this camp on the map** from the expedition thread if you haven't already (so you can revisit it later).`,
       embeds: [waveEmbed],
      });
      if (failedJoins.length > 0) {
@@ -4032,7 +4032,6 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           }
           // In testing mode waves still run; damage/hearts use party totals only (no persist to Character DB)
           await pushDiscoveryToMap(freshParty, "monster_camp", at, i.user?.id);
-          pushProgressLog(freshParty, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map and fighting now.`, undefined, monsterCampCosts, at);
           const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
           const quadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
           const regionKey = (freshParty.region && String(freshParty.region).trim()) || "Eldin";
@@ -4112,7 +4111,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            ? `**All party members** (${joinedNames.join(", ")}) must fight. `
            : "";
           await i.channel.send({
-           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</item:${getItemCommandId()}> to heal during the wave!`,
+           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!\n\n**Mark this camp on the map** from the expedition thread if you haven't already (so you can revisit it later).`,
            embeds: [waveEmbed],
           });
           if (failedJoins.length > 0) {

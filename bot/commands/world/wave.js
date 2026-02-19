@@ -220,13 +220,15 @@ module.exports = {
 
       // KO'd member's turn: prompt to use a fairy (don't process a roll)
       if (!isModInWave && isMyTurn && character.ko) {
-        const { getItemCommandId, getWaveCommandId } = require('../../embeds/embeds.js');
+        const { getItemCommandId, getWaveCommandId, getExploreCommandId } = require('../../embeds/embeds.js');
+        const isMonsterCampWave = updatedWaveData?.source === 'monster_camp' && updatedWaveData?.expeditionId;
+        const healCmd = isMonsterCampWave ? `</explore item:${getExploreCommandId()}>` : `</item:${getItemCommandId()}>`;
         const koTurnEmbed = new EmbedBuilder()
           .setColor('#FF0000')
           .setTitle('💀 KO\'d — it\'s your turn')
           .setDescription('You\'re knocked out and cannot attack.')
           .addFields(
-            { name: 'What to do', value: `Use </item:${getItemCommandId()}> with a fairy to revive, then use </wave:${getWaveCommandId()}> to take your turn.`, inline: false },
+            { name: 'What to do', value: `Use ${healCmd} with a fairy to revive, then use </wave:${getWaveCommandId()}> to take your turn.`, inline: false },
             { name: 'Wave ID', value: `\`\`\`${waveId}\`\`\``, inline: false }
           )
           .setFooter({ text: `Wave ID: ${waveId}` })
@@ -236,10 +238,12 @@ module.exports = {
 
       // Not this player's turn
       if (!isModInWave && (!currentTurnParticipant || !isMyTurn)) {
-        const { getWaveCommandId, getItemCommandId } = require('../../embeds/embeds.js');
+        const { getWaveCommandId, getItemCommandId, getExploreCommandId } = require('../../embeds/embeds.js');
+        const isMonsterCampWave = updatedWaveData?.source === 'monster_camp' && updatedWaveData?.expeditionId;
+        const healCmd = isMonsterCampWave ? `</explore item:${getExploreCommandId()}>` : `</item:${getItemCommandId()}>`;
         const whoseTurnBody = currentTurnParticipant
           ? currentTurnIsKO
-            ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with </item:${getItemCommandId()}> first).`
+            ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with ${healCmd} first).`
             : `It's **${currentTurnParticipant.name}**'s turn. Use </wave:${getWaveCommandId()}> to take your turn.`
           : 'No valid turn order.';
         const intro = !existingParticipant
@@ -263,8 +267,30 @@ module.exports = {
       // Create embed for the turn result
       const { embed, koCharacters } = await createWaveTurnEmbed(character, waveId, turnResult, turnResult.waveData);
 
-      const { getWaveCommandId, getItemCommandId } = require('../../embeds/embeds.js');
-      const waveCommandContent = `</wave:${getWaveCommandId()}> to join • </item:${getItemCommandId()}> to heal`;
+      const { getWaveCommandId, getItemCommandId, getExploreCommandId } = require('../../embeds/embeds.js');
+      const isMonsterCampWave = turnResult.waveData?.source === 'monster_camp' && turnResult.waveData?.expeditionId;
+      const healCmd = isMonsterCampWave ? `</explore item:${getExploreCommandId()}>` : `</item:${getItemCommandId()}>`;
+      const waveCommandContent = `</wave:${getWaveCommandId()}> to join • ${healCmd} to heal`;
+
+      // Monster camp waves: log each turn to expedition progress log
+      if (isMonsterCampWave && turnResult.waveData.expeditionId) {
+        const party = await Party.findActiveByPartyId(turnResult.waveData.expeditionId);
+        if (party) {
+          const br = turnResult.battleResult;
+          const damageDealt = br.hearts ?? 0;
+          const defeatedCount = turnResult.waveData.defeatedMonsters?.length ?? 0;
+          const wasDefeated = br.monsterHearts?.current <= 0;
+          const monsterName = wasDefeated && defeatedCount > 0
+            ? (turnResult.waveData.monsters[defeatedCount - 1]?.name || 'Monster')
+            : (turnResult.waveData.currentMonster?.name || 'Monster');
+          const damageTaken = (br.characterHeartsBefore ?? br.playerHearts?.max ?? 0) - (br.playerHearts?.current ?? 0);
+          let turnMsg = `${character.name} dealt ${damageDealt} heart${damageDealt !== 1 ? 's' : ''} to ${monsterName}.`;
+          if (damageTaken > 0) turnMsg += ` Took ${damageTaken} heart${damageTaken !== 1 ? 's' : ''} damage.`;
+          if (br.playerHearts?.current <= 0) turnMsg = `${character.name} was KO'd during the monster camp wave.`;
+          pushProgressLog(party, character.name, 'monster_camp_turn', turnMsg, undefined, undefined, new Date());
+          await party.save();
+        }
+      }
 
       // Check if wave was completed in this turn
       if (turnResult.waveData.status === 'completed') {
@@ -286,6 +312,13 @@ module.exports = {
       
       // Check if wave failed (all participants KO'd)
       if (turnResult.waveData.status === 'failed') {
+        if (isMonsterCampWave && turnResult.waveData.expeditionId) {
+          const party = await Party.findActiveByPartyId(turnResult.waveData.expeditionId);
+          if (party) {
+            pushProgressLog(party, 'Party', 'monster_camp_failed', "Monster camp wave failed — party was KO'd.", undefined, undefined, new Date());
+            await party.save();
+          }
+        }
         await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
         return;
       }
@@ -296,9 +329,12 @@ module.exports = {
       const nextTurnParticipant = participants[nextTurnIndex];
       const yourTurnMention = nextTurnParticipant?.userId ? `<@${nextTurnParticipant.userId}> it's your turn! ` : '';
 
-      // Send the turn result embed (content ensures commands are clickable; mention next player)
-      await interaction.editReply({ content: `${yourTurnMention}${waveCommandContent}`.trim() || waveCommandContent, embeds: [embed] });
-      
+      // Send the turn result embed (content ensures commands are clickable). Mention next player in a separate message so the ping is not attached to the embed.
+      await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
+      if (yourTurnMention) {
+        await interaction.followUp({ content: `${yourTurnMention}${waveCommandContent}`.trim() });
+      }
+
       // Check if a monster was defeated in this turn (but wave continues)
       // The monster is defeated if battleResult shows 0 hearts AND wave is still active
       const monsterDefeatedThisTurn = turnResult.battleResult.monsterHearts?.current <= 0 && 
@@ -360,7 +396,16 @@ module.exports = {
             const lastDefeated = defeatedMonsters[defeatedCount - 1];
             const defeatedByName = lastDefeated?.defeatedBy?.name || 'Unknown';
             console.log(`[wave.js]: 👤 Defeat embed - Defeated by: ${defeatedByName} (from lastDefeated entry)`);
-            
+
+            // Monster camp: log mid-wave monster defeat to expedition progress log
+            if (isMonsterCampWave && turnResult.waveData.expeditionId) {
+              const party = await Party.findActiveByPartyId(turnResult.waveData.expeditionId);
+              if (party) {
+                pushProgressLog(party, defeatedByName, 'monster_camp_monster_defeated', `${defeatedMonster.name} defeated by ${defeatedByName} (monster ${defeatedCount} of ${totalMonsters}).`, undefined, undefined, new Date());
+                await party.save();
+              }
+            }
+
             const monsterDefeatedEmbed = new EmbedBuilder()
               .setColor('#00FF00') // Green for victory
               .setTitle(`✅ ${defeatedMonster.name} Defeated!`)
@@ -393,7 +438,7 @@ module.exports = {
               .setTimestamp();
             
             console.log(`[wave.js]: ✅ Defeat embed created for ${defeatedMonster.name} (defeated by ${defeatedByName}), sending follow-up message`);
-            await interaction.followUp({ content: `${yourTurnMention}${waveCommandContent}`.trim() || waveCommandContent, embeds: [monsterDefeatedEmbed] });
+            await interaction.followUp({ content: waveCommandContent, embeds: [monsterDefeatedEmbed] });
             console.log(`[wave.js]: ✅ Defeat embed sent successfully`);
           } else {
             console.log(`[wave.js]: ⚠️ Defeat embed - Monster at index ${defeatedMonsterIndex} has no name, skipping embed`);
@@ -581,8 +626,10 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
         inline: false
       },
       {
-        name: `__${character.name} Status__`,
-        value: `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage Taken This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`,
+        name: waveData.expeditionId ? `__Party Hearts__` : `__${character.name} Status__`,
+        value: waveData.expeditionId
+          ? `❤️ **Party pool:** ${battleResult.playerHearts.current}/${battleResult.characterHeartsBefore ?? battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`
+          : `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage Taken This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`,
         inline: false
       },
       {
@@ -890,11 +937,11 @@ async function handleWaveVictory(interaction, waveData) {
       console.log(`[wave.js]: ⚠️ Failed characters:`, failedCharacters.map(fc => `${fc.name} (${fc.monster}): ${fc.reason}`));
     }
     
-    // Create participant list (all participants, showing damage even if they didn't get loot)
-    // Split into chunks that fit within Discord's 1024 character limit
+    // Create participant list (all participants). For monster camp expeditions we only use party hearts — show names only, no per-character hearts/damage.
     const MAX_FIELD_VALUE_LENGTH = 1024;
+    const isMonsterCampVictory = waveData.source === 'monster_camp' && waveData.expeditionId;
     const participantLines = waveData.participants
-      .map(participant => `• **${participant.name}** (${participant.damage || 0} hearts)`);
+      .map(participant => isMonsterCampVictory ? `• **${participant.name}**` : `• **${participant.name}** (${participant.damage || 0} hearts)`);
     
     const participantFields = [];
     if (participantLines.length > 0) {
@@ -1140,9 +1187,9 @@ async function handleWaveVictory(interaction, waveData) {
     const isMonsterCampExpedition = waveData.source === 'monster_camp' && waveData.expeditionId;
     if (isMonsterCampExpedition) {
       // Monster camp in exploration: "OK defeated! Here who is next. Keep exploring."
+      // Do not syncPartyMemberStats — expedition waves use party hearts only; character hearts were never modified.
       const party = await Party.findActiveByPartyId(waveData.expeditionId);
       if (party) {
-        await syncPartyMemberStats(party);
         const location = party.square && party.quadrant ? `${party.square} ${party.quadrant}` : 'Unknown';
         const nextCharacter = party.characters?.[party.currentTurn] ?? null;
         victoryEmbed = new EmbedBuilder()
@@ -1169,7 +1216,7 @@ async function handleWaveVictory(interaction, waveData) {
           showRestSecureMove: false,
           hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant)
         });
-        // Store for sending: content with @mention so next player gets notified
+        // Store for sending: @mention in a separate message after the embed (so the ping is not attached to the embed)
         monsterCampContent = nextCharacter?.userId
           ? `<@${nextCharacter.userId}> 🗺️ **Monster camp defeated!** It's your turn — keep exploring.`
           : null;
@@ -1213,26 +1260,29 @@ async function handleWaveVictory(interaction, waveData) {
         .setTimestamp();
     }
     
-    // Send victory embed to the wave thread (if it exists) or followUp
-    const sendPayload = monsterCampContent ? { content: monsterCampContent, embeds: [victoryEmbed] } : { embeds: [victoryEmbed] };
+    // Send victory embed first; then send @mention in a separate message so the ping is not attached to the embed
+    const embedPayload = { embeds: [victoryEmbed] };
     if (waveData.threadId) {
       try {
-        // Validate thread exists and is accessible
         const thread = await interaction.client.channels.fetch(waveData.threadId);
         if (thread && thread.isThread && !thread.archived) {
-          await thread.send(sendPayload);
+          await thread.send(embedPayload);
+          if (monsterCampContent) await thread.send({ content: monsterCampContent });
           console.log(`[wave.js]: ✅ Victory embed sent to wave thread ${waveData.threadId}`);
         } else {
           console.warn(`[wave.js]: ⚠️ Thread ${waveData.threadId} is not accessible or is archived`);
-          await interaction.followUp(sendPayload);
+          await interaction.followUp(embedPayload);
+          if (monsterCampContent) await interaction.followUp({ content: monsterCampContent });
         }
       } catch (error) {
         console.error(`[wave.js]: ❌ Error sending victory embed to thread ${waveData.threadId}:`, error);
-        await interaction.followUp(sendPayload);
+        await interaction.followUp(embedPayload);
+        if (monsterCampContent) await interaction.followUp({ content: monsterCampContent });
       }
     } else {
       console.log(`[wave.js]: ⚠️ No thread ID found for wave ${waveData.waveId} - victory embed will only be sent to the original interaction`);
-      await interaction.followUp(sendPayload);
+      await interaction.followUp(embedPayload);
+      if (monsterCampContent) await interaction.followUp({ content: monsterCampContent });
     }
     
     // Notify mods if there were any failed loot processing

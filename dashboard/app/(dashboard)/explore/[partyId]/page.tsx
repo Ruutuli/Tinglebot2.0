@@ -209,6 +209,14 @@ function getExploreLayerZIndex(layerName: string): number {
   return 1;
 }
 
+/** Per-quadrant position and background position for fog (so each quadrant shows the correct quarter of the fog image; avoids diagonal half-coverage). */
+const FOG_QUADRANT_LAYOUT: Record<number, { left: string; top: string; width: string; height: string; bgPos: string }> = {
+  1: { left: "0%", top: "0%", width: "50%", height: "50%", bgPos: "0% 0%" },
+  2: { left: "50%", top: "0%", width: "50%", height: "50%", bgPos: "100% 0%" },
+  3: { left: "0%", top: "50%", width: "50%", height: "50%", bgPos: "0% 100%" },
+  4: { left: "50%", top: "50%", width: "50%", height: "50%", bgPos: "100% 100%" },
+};
+
 /** CSS clip-path polygon for fog to show only given quadrants (1–4). Matches map-layers.js _fogClipPathForQuadrants. */
 function fogClipPathForQuadrants(quads: number[]): string | null {
   if (!quads.length || quads.length === 4) return null;
@@ -263,6 +271,8 @@ type PartyMember = {
   name: string;
   currentHearts?: number;
   currentStamina?: number;
+  maxHearts?: number;
+  maxStamina?: number;
   icon?: string;
   items: Array<{ itemName: string; modifierHearts?: number; staminaRecovered?: number; emoji?: string }>;
 };
@@ -409,13 +419,13 @@ function getMemberDisplay(
 ): { displayIcon: string | undefined; displayHearts: number | undefined; displayStamina: number | undefined; isCurrentTurn: boolean } {
   const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
   const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
-  // During expedition we only use the party pool; per-character display shows max so "player hearts/stamina" don't decrease
+  // During expedition we only use the party pool; per-character display shows max (from API) so we know where the numbers come from
   const useMaxDuringExpedition = party.status === "started";
   const displayHearts = useMaxDuringExpedition
-    ? (charFromList?.maxHearts ?? m.currentHearts ?? undefined)
+    ? (m.maxHearts ?? charFromList?.maxHearts ?? undefined)
     : (typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts));
   const displayStamina = useMaxDuringExpedition
-    ? (charFromList?.maxStamina ?? m.currentStamina ?? undefined)
+    ? (m.maxStamina ?? charFromList?.maxStamina ?? undefined)
     : (typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina));
   const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
   return { displayIcon, displayHearts, displayStamina, isCurrentTurn };
@@ -1186,6 +1196,7 @@ export default function ExplorePartyPage() {
     items,
     isYou,
     label,
+    heartsStaminaLabel,
   }: {
     name: string;
     icon?: string | null;
@@ -1194,6 +1205,8 @@ export default function ExplorePartyPage() {
     items: Array<{ itemName: string }>;
     isYou?: boolean;
     label?: string;
+    /** When set (e.g. "max"), shown next to hearts/stamina so we don't imply current during expedition */
+    heartsStaminaLabel?: string;
   }) {
     return (
       <div
@@ -1224,15 +1237,20 @@ export default function ExplorePartyPage() {
             {label && (
               <span className="inline-block text-xs font-medium text-[var(--totk-light-green)]">{label}</span>
             )}
-            <div className="mt-1 flex items-center gap-3 text-sm text-[var(--totk-grey-200)]">
-              <span className="flex items-center gap-1" title="Hearts">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-[var(--totk-grey-200)]">
+              <span className="flex items-center gap-1" title={heartsStaminaLabel ? "Hearts (max)" : "Hearts"}>
                 <i className="fa-solid fa-heart text-[10px] text-red-400/90" aria-hidden />
                 <span>{hearts ?? "?"}</span>
               </span>
-              <span className="flex items-center gap-1" title="Stamina">
+              <span className="flex items-center gap-1" title={heartsStaminaLabel ? "Stamina (max)" : "Stamina"}>
                 <i className="fa-solid fa-bolt text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />
                 <span>{stamina ?? "?"}</span>
               </span>
+              {heartsStaminaLabel && (
+                <span className="inline-flex items-center text-[10px] font-medium uppercase tracking-wider text-[var(--totk-light-green)]/90" title="Pool is party total; this is each member's max">
+                  · {heartsStaminaLabel}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -1403,16 +1421,27 @@ export default function ExplorePartyPage() {
                       if ((s === "unexplored" || s === "inaccessible") && !isCurrentQuadrant && !wasVisited) fogQuadrants.push(i + 1);
                     });
                     if (fogQuadrants.length === 0) return null;
-                    const clipPath = fogClipPathForQuadrants(fogQuadrants);
                     return (
                       <div className="pointer-events-none absolute inset-0 z-10" aria-hidden>
-                        <img
-                          src={fogLayer.url}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-cover"
-                          style={clipPath ? { clipPath, WebkitClipPath: clipPath } : undefined}
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
+                        {fogQuadrants.map((q) => {
+                          const pos = FOG_QUADRANT_LAYOUT[q];
+                          if (!pos) return null;
+                          return (
+                            <div
+                              key={q}
+                              className="absolute bg-cover bg-no-repeat"
+                              style={{
+                                left: pos.left,
+                                top: pos.top,
+                                width: pos.width,
+                                height: pos.height,
+                                backgroundImage: `url(${fogLayer.url})`,
+                                backgroundSize: "200% 200%",
+                                backgroundPosition: pos.bgPos,
+                              }}
+                            />
+                          );
+                        })}
                       </div>
                     );
                   })()}
@@ -1428,13 +1457,13 @@ export default function ExplorePartyPage() {
                       aria-hidden
                     />
                   )}
-                  {/* Grid overlay: quadrant divider lines */}
-                  <div className="pointer-events-none absolute inset-0" aria-hidden>
+                  {/* Grid overlay: quadrant divider lines (above fog) */}
+                  <div className="pointer-events-none absolute inset-0 z-20" aria-hidden>
                     <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40" style={{ transform: "translateX(-50%)" }} />
                     <div className="absolute top-1/2 left-0 right-0 h-px bg-white/40" style={{ transform: "translateY(-50%)" }} />
                   </div>
-                  {/* Quadrant labels Q1–Q4: text color = status (inaccessible / unexplored / explored / secured) */}
-                  <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2" aria-hidden>
+                  {/* Quadrant labels Q1–Q4 (above fog) */}
+                  <div className="pointer-events-none absolute inset-0 z-20 grid grid-cols-2 grid-rows-2" aria-hidden>
                     {(["Q1", "Q2", "Q3", "Q4"] as const).map((qId) => {
                       const status = party.quadrantStatuses?.[qId] ?? "unexplored";
                       const color = QUADRANT_STATUS_COLORS[status] ?? QUADRANT_STATUS_COLORS.unexplored;
@@ -1522,32 +1551,72 @@ export default function ExplorePartyPage() {
             </div>
           </header>
 
-          {party.status === "started" && party.members.length > 0 && (
-            <section className="mb-4 rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 px-4 py-3 shadow-inner" aria-label="Current turn order">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
-                Current turn order
-              </p>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                {party.members.map((m, index) => {
-                  const isCurrent = (party.currentTurn ?? 0) === index;
-                  return (
-                    <span key={m.characterId ?? index} className="inline-flex items-center gap-1.5">
-                      {index > 0 && <span className="text-[var(--totk-dark-ocher)]/70" aria-hidden>→</span>}
-                      <span
-                        className={
-                          isCurrent
-                            ? "rounded-md border border-[var(--totk-light-green)]/60 bg-[var(--totk-light-green)]/20 px-2 py-0.5 text-sm font-semibold text-[var(--totk-ivory)]"
-                            : "text-sm text-[var(--totk-grey-200)]"
-                        }
-                      >
-                        {m.name ?? "—"}
-                        {isCurrent && <span className="ml-1 text-[10px] font-normal text-[var(--totk-light-green)]">(current)</span>}
+          {(party.status === "started" || party.status === "completed") && party.members.length > 0 && (
+            <>
+              <section className="mb-4 rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 px-4 py-3 shadow-inner" aria-label="Current turn order">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                  Current turn order
+                </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {party.members.map((m, index) => {
+                    const isCurrent = (party.currentTurn ?? 0) === index;
+                    return (
+                      <span key={m.characterId ?? index} className="inline-flex items-center gap-1.5">
+                        {index > 0 && <span className="text-[var(--totk-dark-ocher)]/70" aria-hidden>→</span>}
+                        <span
+                          className={
+                            isCurrent
+                              ? "rounded-md border border-[var(--totk-light-green)]/60 bg-[var(--totk-light-green)]/20 px-2 py-0.5 text-sm font-semibold text-[var(--totk-ivory)]"
+                              : "text-sm text-[var(--totk-grey-200)]"
+                          }
+                        >
+                          {m.name ?? "—"}
+                          {isCurrent && <span className="ml-1 text-[10px] font-normal text-[var(--totk-light-green)]">(current)</span>}
+                        </span>
                       </span>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Current turn, location, stats */}
+              <section className="mb-6 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 md:gap-3">
+                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
+                    <span className="block truncate text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Last turn" : "Current turn"}</span>
+                    <span className="mt-0.5 block truncate font-semibold text-[var(--totk-ivory)] text-sm">
+                      {party.members[party.currentTurn ?? 0]?.name ?? "—"}
                     </span>
-                  );
-                })}
-              </div>
-            </section>
+                  </div>
+                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
+                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Quadrant" : "Current quadrant"}</span>
+                    <span className="mt-0.5 block truncate font-semibold text-[var(--totk-ivory)] text-sm">
+                      {party.square ?? "—"} {party.quadrant ?? "—"}
+                    </span>
+                  </div>
+                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
+                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Area status</span>
+                    <span className="mt-0.5 block truncate font-semibold capitalize text-[var(--totk-ivory)] text-sm">
+                      {party.quadrantState ?? "unexplored"}
+                    </span>
+                  </div>
+                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
+                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party Hearts</span>
+                    <span className="mt-0.5 flex items-center gap-1 font-semibold text-[var(--totk-ivory)] text-sm">
+                      <i className="fa-solid fa-heart shrink-0 text-[10px] text-red-400/90" aria-hidden />
+                      {party.totalHearts}
+                    </span>
+                  </div>
+                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
+                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party Stamina</span>
+                    <span className="mt-0.5 flex items-center gap-1 font-semibold text-[var(--totk-ivory)] text-sm">
+                      <i className="fa-solid fa-bolt shrink-0 text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />
+                      {party.totalStamina}
+                    </span>
+                  </div>
+                </div>
+              </section>
+            </>
           )}
 
           {party.status === "completed" && (
@@ -2404,23 +2473,30 @@ export default function ExplorePartyPage() {
                               if ((s === "unexplored" || s === "inaccessible") && !isCurrentQuadrant && !wasVisited) fogQuadrants.push(i + 1);
                             });
                             if (fogQuadrants.length === 0) return null;
-                            const clipPath = fogClipPathForQuadrants(fogQuadrants);
                             return (
                               <div
                                 className="pointer-events-none absolute inset-0 z-10"
                                 aria-hidden
                               >
-                                <img
-                                  src={fogLayer.url}
-                                  alt=""
-                                  className="absolute inset-0 h-full w-full object-cover"
-                                  style={
-                                    clipPath
-                                      ? { clipPath, WebkitClipPath: clipPath }
-                                      : undefined
-                                  }
-                                  onError={(e) => { e.currentTarget.style.display = "none"; }}
-                                />
+                                {fogQuadrants.map((q) => {
+                                  const pos = FOG_QUADRANT_LAYOUT[q];
+                                  if (!pos) return null;
+                                  return (
+                                    <div
+                                      key={q}
+                                      className="absolute bg-cover bg-no-repeat"
+                                      style={{
+                                        left: pos.left,
+                                        top: pos.top,
+                                        width: pos.width,
+                                        height: pos.height,
+                                        backgroundImage: `url(${fogLayer.url})`,
+                                        backgroundSize: "200% 200%",
+                                        backgroundPosition: pos.bgPos,
+                                      }}
+                                    />
+                                  );
+                                })}
                               </div>
                             );
                           })()}
@@ -2519,11 +2595,11 @@ export default function ExplorePartyPage() {
                               aria-hidden
                             />
                           )}
-                          <div className="pointer-events-none absolute inset-0" aria-hidden>
+                          <div className="pointer-events-none absolute inset-0 z-20" aria-hidden>
                             <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40" style={{ transform: "translateX(-50%)" }} />
                             <div className="absolute top-1/2 left-0 right-0 h-px bg-white/40" style={{ transform: "translateY(-50%)" }} />
                           </div>
-                          <div className="pointer-events-none absolute inset-0 z-20 grid grid-cols-2 grid-rows-2">
+                          <div className="pointer-events-none absolute inset-0 z-20 grid grid-cols-2 grid-rows-2" aria-hidden>
                             {(["Q1", "Q2", "Q3", "Q4"] as const).map((qId) => {
                               const status = displayPreview!.quadrantStatuses?.[qId] ?? party.quadrantStatuses?.[qId] ?? "unexplored";
                               const color = QUADRANT_STATUS_COLORS[status] ?? QUADRANT_STATUS_COLORS.unexplored;
@@ -2603,46 +2679,8 @@ export default function ExplorePartyPage() {
                 </section>
               </div>
 
-              {/* Current turn, location, stats */}
-              <section className="mb-6 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 md:gap-3">
-                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block truncate text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Last turn" : "Current turn"}</span>
-                    <span className="mt-0.5 block truncate font-semibold text-[var(--totk-ivory)] text-sm">
-                      {party.members[party.currentTurn ?? 0]?.name ?? "—"}
-                    </span>
-                  </div>
-                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Quadrant" : "Current quadrant"}</span>
-                    <span className="mt-0.5 block truncate font-semibold text-[var(--totk-ivory)] text-sm">
-                      {party.square ?? "—"} {party.quadrant ?? "—"}
-                    </span>
-                  </div>
-                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Area status</span>
-                    <span className="mt-0.5 block truncate font-semibold capitalize text-[var(--totk-ivory)] text-sm">
-                      {party.quadrantState ?? "unexplored"}
-                    </span>
-                  </div>
-                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party Hearts</span>
-                    <span className="mt-0.5 flex items-center gap-1 font-semibold text-[var(--totk-ivory)] text-sm">
-                      <i className="fa-solid fa-heart shrink-0 text-[10px] text-red-400/90" aria-hidden />
-                      {party.totalHearts}
-                    </span>
-                  </div>
-                  <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">Party Stamina</span>
-                    <span className="mt-0.5 flex items-center gap-1 font-semibold text-[var(--totk-ivory)] text-sm">
-                      <i className="fa-solid fa-bolt shrink-0 text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />
-                      {party.totalStamina}
-                    </span>
-                  </div>
-                </div>
-              </section>
-
-              {/* 2. Journey | Party — two columns */}
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* 2. Journey above, Party horizontal below */}
+              <div className="flex flex-col gap-4">
                 {/* Journey */}
                 <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
                   <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">Journey</h2>
@@ -2713,7 +2751,7 @@ export default function ExplorePartyPage() {
                   })()}
                 </section>
 
-                {/* Party — turn order (same content as sidebar) */}
+                {/* Party — turn order, horizontal flow */}
                 <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
                   <h3 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-light-green)]">
                     <i className="fa-solid fa-list-ol text-[10px] opacity-80" aria-hidden />
@@ -2727,24 +2765,38 @@ export default function ExplorePartyPage() {
                       <span className="flex items-center gap-1"><i className="fa-solid fa-bolt text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />{party.totalStamina}</span>
                     </span>
                   </div>
-                  <div className="space-y-3">
-                    {party.members.map((m, index) => {
-                      const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
-                      return (
-                        <div key={m.characterId} className="flex items-start gap-2">
-                          <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
-                            {index + 1}
+                  <div className="w-full overflow-x-auto">
+                    <div className="flex w-full flex-nowrap items-stretch gap-2 sm:flex-wrap">
+                      {party.members.map((m, index) => {
+                        const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
+                        return (
+                          <span key={m.characterId} className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[160px]">
+                            {index > 0 && (
+                              <span className="flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
+                                <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="opacity-70">
+                                  <path d="M1 6h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </span>
+                            )}
+                            <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
+                              {index + 1}
+                            </span>
+                            <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined} heartsStaminaLabel={party.status === "started" ? "max" : undefined} />
                           </span>
-                          <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "(you)"].filter(Boolean).join(" ") || undefined} />
-                        </div>
-                      );
-                    })}
-                    {showYourSlotPreview && (
-                      <div className="flex items-start gap-2">
-                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
-                        <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.currentHearts ?? selectedCharacter?.maxHearts} stamina={selectedCharacter?.currentStamina ?? selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" />
-                      </div>
-                    )}
+                        );
+                      })}
+                      {showYourSlotPreview && (
+                        <span className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[160px]">
+                          <span className="flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
+                            <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="opacity-70">
+                              <path d="M1 6h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </span>
+                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
+                          <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.currentHearts ?? selectedCharacter?.maxHearts} stamina={selectedCharacter?.currentStamina ?? selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </section>
               </div>
@@ -2802,7 +2854,8 @@ export default function ExplorePartyPage() {
                       stamina={displayStamina}
                       items={m.items}
                       isYou={userId === m.userId}
-                      label={[isCurrentTurn && "Current turn", userId === m.userId && "(you)"].filter(Boolean).join(" ") || undefined}
+                      label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined}
+                      heartsStaminaLabel={party.status === "started" ? "max" : undefined}
                     />
                   </div>
                 );

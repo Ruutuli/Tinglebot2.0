@@ -601,9 +601,8 @@ waveSchema.methods.failWave = async function() {
     this.participants = [];
   }
   
-  // KO all participants (skip when expedition + exploration testing mode)
-  const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
-  if (!(this.expeditionId && EXPLORATION_TESTING_MODE)) {
+  // KO all participants (skip for expedition waves — we use party hearts only, never individual character hearts)
+  if (!this.expeditionId) {
     const Character = require('./CharacterModel');
     for (const participant of this.participants) {
       try {

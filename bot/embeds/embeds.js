@@ -611,8 +611,8 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
   ...extraFields,
   ...(ruinRestRecovered > 0 ? [{ name: "🟩 **__Ruin rest__**", value: `Recognized a safe spot from your earlier ruins exploration here — **+${ruinRestRecovered} stamina** recovered this roll.`, inline: false }] : []),
-  { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
+  { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
  ];
  if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
   const nextName = nextCharacter.name;
@@ -3398,6 +3398,8 @@ const createWaveEmbed = (wave) => {
     : { image: firstMonster.image };
   const monsterImage = monsterDetails.image || firstMonster.image;
 
+  const isMonsterCampWave = wave.source === 'monster_camp' && wave.expeditionId;
+  const healCmd = isMonsterCampWave ? `</explore item:${getExploreCommandId()}>` : `</item:${getItemCommandId()}>`;
   const embed = new EmbedBuilder()
     .setColor('#0099FF')
     .setTitle('🌊 Monster Wave!')
@@ -3409,7 +3411,7 @@ const createWaveEmbed = (wave) => {
       `• Loot is distributed at the end (only for those who joined at the start)\n` +
       `• You must be in ${villageName} to participate\n\n` +
       `</wave:${getWaveCommandId()}> to join the fight!\n` +
-      `</item:${getItemCommandId()}> to heal during the wave!`
+      `${healCmd} to heal during the wave!`
     )
     .addFields(
       {

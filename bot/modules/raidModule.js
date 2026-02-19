@@ -107,8 +107,8 @@ async function applyPartySizeScalingToRaid(raid) {
 // ============================================================================
 
 // ---- Function: processRaidBattle ----
-// Processes a raid battle turn using the encounter module's tier-specific logic
-// options: { skipPersist: true } when expedition + EXPLORATION_TESTING_MODE (no hearts/elixir DB writes)
+// Processes a raid battle turn using the encounter module's tier-specific logic.
+// options: { skipPersist: true } for expedition (monster camp) waves — no character hearts or KO persisted; caller applies damage to party pool only.
 async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, characterHeartsBefore = null, options = {}) {
   const skipPersist = options.skipPersist === true;
   try {

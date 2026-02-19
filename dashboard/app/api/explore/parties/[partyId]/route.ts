@@ -14,6 +14,8 @@ type PartyMember = {
   name: string;
   currentHearts?: number;
   currentStamina?: number;
+  maxHearts?: number;
+  maxStamina?: number;
   icon?: string;
   items: Array<{
     itemName: string;
@@ -62,22 +64,51 @@ export async function GET(
     }
 
     const partyCharacters = (p.characters as Array<Record<string, unknown>>) ?? [];
-    const members: PartyMember[] = partyCharacters.map((c) => ({
-      characterId: String(c._id),
-      userId: String(c.userId),
-      name: String(c.name),
-      currentHearts: typeof c.currentHearts === "number" ? c.currentHearts : undefined,
-      currentStamina: typeof c.currentStamina === "number" ? c.currentStamina : undefined,
-      icon: typeof c.icon === "string" ? c.icon : undefined,
-      items: Array.isArray(c.items)
-        ? (c.items as Array<Record<string, unknown>>).map((it) => ({
-            itemName: String(it.itemName),
-            modifierHearts: typeof it.modifierHearts === "number" ? it.modifierHearts : undefined,
-            staminaRecovered: typeof it.staminaRecovered === "number" ? it.staminaRecovered : undefined,
-            emoji: typeof it.emoji === "string" ? it.emoji : undefined,
-          }))
-        : [],
-    }));
+    const characterIdsRaw = partyCharacters
+      .map((c) => c._id)
+      .filter((id): id is string | mongoose.Types.ObjectId => id != null);
+    const characterIdsForQuery = characterIdsRaw.map((id) =>
+      id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id))
+    );
+    const Character =
+      mongoose.models.Character ??
+      ((await import("@/models/CharacterModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+    const characterDocs = characterIdsForQuery.length > 0
+      ? await Character.find({ _id: { $in: characterIdsForQuery } })
+          .select("_id maxHearts maxStamina")
+          .lean()
+      : [];
+    const maxByCharId = new Map<string, { maxHearts?: number; maxStamina?: number }>();
+    for (const doc of characterDocs as Array<{ _id: unknown; maxHearts?: number; maxStamina?: number }>) {
+      const id = doc._id instanceof mongoose.Types.ObjectId ? doc._id.toString() : String(doc._id);
+      maxByCharId.set(id, {
+        maxHearts: typeof doc.maxHearts === "number" ? doc.maxHearts : undefined,
+        maxStamina: typeof doc.maxStamina === "number" ? doc.maxStamina : undefined,
+      });
+    }
+
+    const members: PartyMember[] = partyCharacters.map((c) => {
+      const charId = String(c._id);
+      const max = maxByCharId.get(charId);
+      return {
+        characterId: charId,
+        userId: String(c.userId),
+        name: String(c.name),
+        currentHearts: typeof c.currentHearts === "number" ? c.currentHearts : undefined,
+        currentStamina: typeof c.currentStamina === "number" ? c.currentStamina : undefined,
+        maxHearts: max?.maxHearts,
+        maxStamina: max?.maxStamina,
+        icon: typeof c.icon === "string" ? c.icon : undefined,
+        items: Array.isArray(c.items)
+          ? (c.items as Array<Record<string, unknown>>).map((it) => ({
+              itemName: String(it.itemName),
+              modifierHearts: typeof it.modifierHearts === "number" ? it.modifierHearts : undefined,
+              staminaRecovered: typeof it.staminaRecovered === "number" ? it.staminaRecovered : undefined,
+              emoji: typeof it.emoji === "string" ? it.emoji : undefined,
+            }))
+          : [],
+      };
+    });
 
     const myMember = currentUserId
       ? members.find((m) => m.userId === currentUserId)
