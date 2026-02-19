@@ -115,6 +115,14 @@ function appendExploreStat(line) {
 // ------------------- Helper Functions -------------------
 // ============================================================================
 
+/** Consistent "next turn" ping for exploration. next: { userId?, name? }. */
+function getExplorationNextTurnContent(next) {
+  if (!next) return null;
+  const line = "**you're up next.** Use `/explore roll` or `/explore item` to continue.";
+  if (next.userId) return `<@${next.userId}> — ${line}`;
+  return `**${next.name || "Next"}** — ${line}`;
+}
+
 // ------------------- resolveExplorationMonsterLoot ------------------
 // Chuchu loot: Chuchu Jelly (or elemental variant) instead of Chuchu Egg
 async function resolveExplorationMonsterLoot(monsterName, rawLootedItem) {
@@ -3212,7 +3220,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
       });
       await interaction.editReply({ embeds: [embed] });
-      await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacter) });
       return;
      }
 
@@ -3261,7 +3269,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        }
        addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showFairyRollOnly: true });
        await interaction.editReply({ embeds: [fairyEmbed] });
-       await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
+       await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) });
        return;
       }
       const fairyItem = await ItemModel.findOne({ itemName: "Fairy" }).lean().catch(() => null) || { itemName: "Fairy", emoji: "🧚", image: null };
@@ -3273,7 +3281,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
       await interaction.editReply({ embeds: [embed] });
-      await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
+      await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) });
       if (!EXPLORATION_TESTING_MODE) {
        try {
         await addItemInventoryDatabase(character._id, "Fairy", 1, interaction, "Exploration");
@@ -3547,7 +3555,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
       // Only ping next person when there are no buttons — if there are buttons, wait until they click (handler will ping)
       if (components.length === 0 && nextCharacter?.userId) {
-       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
+       await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacter) });
       }
 
       if (isYesNoChoice || isMonsterCampChoice) {
@@ -3891,11 +3899,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
               await resultMsg.edit({ embeds: [openedEmbed], components: [chestDisabledRow] }).catch(() => {});
               await ci.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
               const next = result.nextCharacter;
-              const whoNextContent = next?.userId
-                ? `<@${next.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`
-                : next?.name
-                  ? `**${next.name}** — you're up next. Use \`/explore roll\` or \`/explore item\` to continue.`
-                  : null;
+              const whoNextContent = getExplorationNextTurnContent(next);
               if (whoNextContent) await ci.followUp({ content: whoNextContent }).catch(() => {});
             }
             } else {
@@ -3925,9 +3929,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           const nextUserId = nextCharacter?.userId;
           const nextName = nextCharacter?.name ?? "Next player";
           await i.followUp({
-            content: nextUserId
-              ? `OK, keep going — <@${nextUserId}> it's your turn. Use \`/explore roll\` to continue.`
-              : `OK, keep going — **${nextName}**, use \`/explore roll\` to continue.`,
+            content: getExplorationNextTurnContent(nextCharacter),
           }).catch(() => {});
          }
          return;
@@ -3973,11 +3975,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            await msg.edit({ embeds: [openedEmbed], components: [disabledRow] }).catch(() => {});
            await i.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
            const next = result.nextCharacter;
-           const whoNextContent = next?.userId
-             ? `<@${next.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`
-             : next?.name
-               ? `**${next.name}** — you're up next. Use \`/explore roll\` or \`/explore item\` to continue.`
-               : null;
+           const whoNextContent = getExplorationNextTurnContent(next);
            if (whoNextContent) await i.followUp({ content: whoNextContent }).catch(() => {});
            return;
           }
@@ -3993,7 +3991,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
          addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter: nextAfterChestNo, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
          await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
-         if (nextAfterChestNo?.userId) await i.followUp({ content: `<@${nextAfterChestNo.userId}> it's your turn now` }).catch(() => {});
+         if (getExplorationNextTurnContent(nextAfterChestNo)) await i.followUp({ content: getExplorationNextTurnContent(nextAfterChestNo) }).catch(() => {});
         return;
         }
 
@@ -4021,7 +4019,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
-          if (nextAfterChoice?.userId) await i.followUp({ content: `<@${nextAfterChoice.userId}> it's your turn now` }).catch(() => {});
+          if (getExplorationNextTurnContent(nextAfterChoice)) await i.followUp({ content: getExplorationNextTurnContent(nextAfterChoice) }).catch(() => {});
           return;
          }
          if (monsterCampChoice === "fight") {
@@ -4148,7 +4146,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
           if (nextAfterChoice?.userId) {
            await i.followUp({
-            content: `**${character.name}** chose to ignore the monster camp. <@${nextAfterChoice.userId}> take your turn.`,
+            content: `**${character.name}** chose to ignore the monster camp. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`}`,
            }).catch(() => {});
           }
           return;
@@ -4192,7 +4190,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           .setDescription(`**${character.name}** marked the grotto on the map for later. Continue with </explore roll:${getExploreCommandId()}>.`);
          await i.followUp({ embeds: [decisionEmbed] }).catch(() => {});
          if (nextAfterChoice?.userId) {
-          await i.followUp({ content: `**${character.name}** marked it on the map. <@${nextAfterChoice.userId}> take your turn.` }).catch(() => {});
+          await i.followUp({ content: `**${character.name}** marked it on the map. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`}` }).catch(() => {});
          }
          return;
         }
@@ -4240,7 +4238,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         await msg.edit({ embeds: [choiceEmbed], components: [disabledRow] }).catch(() => {});
         if (outcomeType === "ruins" && !isYes && nextForChoiceEmbed?.userId) {
          await i.followUp({
-          content: `**${character.name}** decided not to explore the ruins! <@${nextForChoiceEmbed.userId}> take your turn.`,
+          content: `**${character.name}** decided not to explore the ruins! ${getExplorationNextTurnContent(nextForChoiceEmbed) || `<@${nextForChoiceEmbed.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`}`,
          }).catch(() => {});
         }
         } catch (collectErr) {
@@ -4334,7 +4332,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
       await interaction.editReply({ embeds: [embed] });
-      await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacter) });
 
       if (!EXPLORATION_TESTING_MODE) {
        try {
@@ -4475,7 +4473,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         }
 
         await interaction.editReply({ embeds: [embed] });
-        await interaction.followUp({ content: `<@${nextCharacterRaid.userId}> it's your turn now` });
+        await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterRaid) });
        } catch (error) {
         handleInteractionError(error, interaction, { source: "explore.js" });
         logger.error("EXPLORE", `[explore.js]❌ Raid processing: ${error?.message || error}`);
@@ -4633,7 +4631,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        });
 
        await interaction.editReply({ embeds: [embed] });
-       await interaction.followUp({ content: `<@${nextCharacterTier.userId}> it's your turn now` });
+       await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterTier) });
       }
      }
     } catch (error) {
@@ -5040,7 +5038,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
       await i.editReply({ embeds: [embed], components: [disabledRow] }).catch(() => {});
       await i.followUp({
-       content: `**Next:** Camp, Item, or Move. <@${nextCharacterSecure.userId}> it's your turn.`,
+       content: `**Next:** Camp, Item, or Move. ${getExplorationNextTurnContent(nextCharacterSecure)}`,
       }).catch(() => {});
      } catch (err) {
       logger.error("EXPLORE", `[explore.js]❌ Secure confirm: ${err?.message || err}`);
@@ -5440,7 +5438,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     });
 
     await interaction.editReply({ embeds: [embed] });
-    await interaction.followUp({ content: `<@${nextCharacterMove.userId}> it's your turn now` });
+    await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterMove) });
 
     // ------------------- Use Item (healing from expedition loadout) -------------------
    } else if (subcommand === "item") {
@@ -5560,7 +5558,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
     await interaction.editReply({ embeds: [embed] });
     if (nextCharacterItem?.userId) {
-     await interaction.followUp({ content: `<@${nextCharacterItem.userId}> it's your turn now` }).catch(() => {});
+     await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterItem) }).catch(() => {});
     }
 
     // ------------------- End Expedition (at starting quadrant) -------------------
@@ -6029,7 +6027,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          const raidForPing = await Raid.findOne({ raidId: battleId });
          const currentTurnParticipant = raidForPing?.participants?.length ? (raidForPing.participants[raidForPing.currentTurn] || raidForPing.participants[0]) : null;
          const pingUserId = currentTurnParticipant?.userId || character.userId;
-         await interaction.followUp({ content: `<@${pingUserId}> it's your turn now` });
+         await interaction.followUp({ content: getExplorationNextTurnContent({ userId: pingUserId }) });
          return;
         }
        } catch (raidErr) {
@@ -6092,13 +6090,13 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       if (outcome.canLoot && lootedItem) embed.addFields({ name: "🎉 __Loot__", value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**${(lootedItem.quantity ?? 1) > 1 ? ` x${lootedItem.quantity}` : ""}`, inline: false });
       addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
       await interaction.editReply({ embeds: [embed] });
-      if (nextChar?.userId) await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
+      if (getExplorationNextTurnContent(nextChar)) await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) });
       return;
      }
     }
 
-    // Pool-only: camp cost from pool
-    if (staminaCost > 0) {
+    // Only charge stamina when camp succeeds (no interrupt). If camp was interrupted by a monster we returned above — never charge for a failed attempt.
+    if (!canBeAttackedAtCamp && staminaCost > 0) {
      party.totalStamina = Math.max(0, (party.totalStamina ?? 0) - staminaCost);
      party.markModified("totalStamina");
     }
@@ -6187,7 +6185,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     });
 
     await interaction.editReply({ embeds: [embed] });
-    await interaction.followUp({ content: `<@${nextCharacterCamp.userId}> it's your turn now` });
+    await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterCamp) });
    }
   } catch (error) {
    await handleInteractionError(error, interaction, {

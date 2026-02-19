@@ -179,6 +179,11 @@ async function safeAutocompleteResponse(interaction, choices, options = {}) {
 
     // Attempt to respond with race condition protection
     try {
+      // Last-moment check to avoid double-respond (e.g. duplicate events or race)
+      if (interaction.responded) {
+        clearTimeout(timeoutId);
+        return false;
+      }
       await Promise.race([
         interaction.respond(preparedChoices),
         timeoutPromise
@@ -190,16 +195,19 @@ async function safeAutocompleteResponse(interaction, choices, options = {}) {
       throw error;
     }
   } catch (error) {
-    // Handle specific error cases silently
+    // Handle specific error cases silently (no log)
     if (error.code === 10062 || error.message === 'Response timeout') {
-      return false; // Interaction expired, no need to log
+      return false; // Interaction expired
+    }
+    if (error.code === 40060 || (error.message && error.message.includes('already been acknowledged'))) {
+      return false; // Already responded (duplicate event or race)
     }
     
     // Log unexpected errors
     logger.error('INTERACTION', `Autocomplete response error: ${error.message}`);
     
-    // Try fallback empty response if enabled
-    if (fallbackToEmpty && isValidInteraction(interaction, false)) {
+    // Try fallback empty response if enabled (only when not already responded)
+    if (fallbackToEmpty && !interaction.responded && interaction.isRepliable()) {
       try {
         await interaction.respond([]).catch(() => {});
       } catch (e) {
@@ -6998,50 +7006,61 @@ async function handleTableRollNameAutocomplete(interaction, focusedOption) {
 }
 
 // ------------------- Raid ID Autocomplete -------------------
+// In-flight set so we only respond once per interaction (avoids 40060 when duplicate events run concurrently)
+const raidAutocompleteInFlight = new Set();
+const RAID_AUTOCOMPLETE_COOLDOWN_MS = 5000;
+
 // Provides autocomplete suggestions for active raid IDs.
 async function handleRaidIdAutocomplete(interaction, focusedOption) {
+  const id = interaction.id;
+  if (raidAutocompleteInFlight.has(id)) return;
+  raidAutocompleteInFlight.add(id);
+  const clearLater = () => {
+    setTimeout(() => raidAutocompleteInFlight.delete(id), RAID_AUTOCOMPLETE_COOLDOWN_MS);
+  };
   try {
-    // Import the Raid model
+    if (interaction.responded) return;
+
     const Raid = require('@/models/RaidModel');
-    
-    // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";
-    
-    // Find active raids
-    const activeRaids = await Raid.find({ 
+
+    const activeRaids = await Raid.find({
       status: 'active',
       isActive: true,
       expiresAt: { $gt: new Date() }
     }).select('raidId village monster.name monster.tier createdAt').limit(25);
-    
+
     if (!activeRaids || activeRaids.length === 0) {
-      return await interaction.respond([]);
+      if (!interaction.responded) await interaction.respond([]);
+      return;
     }
 
-    // Map raids to autocomplete choices
     const choices = activeRaids.map((raid) => {
       const villageName = raid.village;
       const monsterName = raid.monster.name;
       const tier = raid.monster.tier;
       const raidId = raid.raidId;
-      
       return {
         name: `${raidId} | ${monsterName} (T${tier}) in ${villageName}`,
         value: raidId,
       };
     });
 
-    // Filter based on user input (search by raid ID, monster name, or village)
-    const filteredChoices = choices.filter(choice => 
+    const filteredChoices = choices.filter(choice =>
       choice.name.toLowerCase().includes(searchQuery) ||
       choice.value.toLowerCase().includes(searchQuery)
     );
 
-    await interaction.respond(filteredChoices.slice(0, 25));
+    if (!interaction.responded) await interaction.respond(filteredChoices.slice(0, 25));
   } catch (error) {
+    if (error.code === 40060) {
+      return; // Already acknowledged (duplicate or race) — no need to log or respond again
+    }
     handleError(error, "autocompleteHandler.js");
     console.error("[handleRaidIdAutocomplete]: Error:", error);
-    await safeRespondWithError(interaction);
+    if (!interaction.responded) await safeRespondWithError(interaction, error);
+  } finally {
+    clearLater();
   }
 }
 

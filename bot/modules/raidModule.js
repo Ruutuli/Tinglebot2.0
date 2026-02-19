@@ -1147,28 +1147,36 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error(`Failed to update raid after ${maxRaidRetries} retries`);
     }
 
-    // When raid was triggered from exploration, keep Party in sync with Character (hearts/stamina) so dashboard and bot agree
-    if (raid.expeditionId && character?._id) {
+    // When raid was triggered from exploration, keep party pool in sync: sum all participants' hearts/stamina from DB (party.characters slots can be stale)
+    if (raid.expeditionId && raid.participants?.length) {
       try {
         const Party = require('@/models/PartyModel');
+        const Character = require('@/models/CharacterModel');
+        const ModCharacter = require('@/models/ModCharacterModel');
         const party = await Party.findActiveByPartyId(raid.expeditionId);
-        if (party && party.characters && party.characters.length) {
-          const idx = party.characters.findIndex(
-            (c) => c._id && character._id && c._id.toString() === character._id.toString()
-          );
-          if (idx !== -1) {
-            // Use battleResult as source of truth (character object may be stale)
-            const heartsAfter = typeof battleResult?.playerHearts?.current === 'number'
-              ? battleResult.playerHearts.current
-              : (character.currentHearts ?? party.characters[idx].currentHearts);
-            const staminaAfter = character.currentStamina ?? party.characters[idx].currentStamina;
-            party.characters[idx].currentHearts = heartsAfter;
-            party.characters[idx].currentStamina = staminaAfter;
-            party.markModified('characters');
-            party.totalHearts = party.characters.reduce((sum, c) => sum + (c.currentHearts ?? 0), 0);
-            party.totalStamina = party.characters.reduce((sum, c) => sum + (c.currentStamina ?? 0), 0);
-            await party.save();
+        if (party && party.status === 'started') {
+          let sumHearts = 0;
+          let sumStamina = 0;
+          for (const p of raid.participants) {
+            if (!p.characterId) continue;
+            const char = (await Character.findById(p.characterId).lean()) || (await ModCharacter.findById(p.characterId).lean());
+            if (char) {
+              sumHearts += (char.currentHearts ?? 0);
+              sumStamina += (char.currentStamina ?? 0);
+              // Keep party.characters slots in sync for dashboard/display
+              const slotIdx = party.characters?.findIndex((c) => c._id && c._id.toString() === p.characterId.toString());
+              if (slotIdx !== -1 && party.characters[slotIdx]) {
+                party.characters[slotIdx].currentHearts = char.currentHearts ?? 0;
+                party.characters[slotIdx].currentStamina = char.currentStamina ?? 0;
+              }
+            }
           }
+          party.totalHearts = Math.max(0, sumHearts);
+          party.totalStamina = Math.max(0, sumStamina);
+          party.markModified('totalHearts');
+          party.markModified('totalStamina');
+          if (party.characters?.length) party.markModified('characters');
+          await party.save();
         }
       } catch (syncErr) {
         logger.warn('RAID', `Failed to sync expedition party hearts after raid turn: ${syncErr?.message || syncErr}`);
@@ -1696,7 +1704,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         const firstTurn = raidForTurnPing.participants[currentIdx];
         if (firstTurn?.userId) {
           try {
-            await thread.send({ content: `<@${firstTurn.userId}> it's your turn now` });
+            await thread.send({ content: `<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` to take your turn.` });
           } catch (pingErr) {
             console.warn(`[raidModule.js]: ⚠️ Could not send expedition turn ping in thread: ${pingErr?.message || pingErr}`);
           }

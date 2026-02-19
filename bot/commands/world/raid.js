@@ -602,26 +602,14 @@ module.exports = {
       // Create embed for the turn result using the updated raid data from turnResult
       const { embed, koCharacters } = await createRaidTurnEmbed(character, raidId, turnResult, turnResult.raidData);
 
-      // Expedition raids: log raid turn to party progress (roll, gear, numbers, damage) for explore dashboard
+      // Expedition raids: log raid turn to party progress (concise for dashboard)
       if (turnResult.raidData.expeditionId) {
         try {
           const party = await Party.findActiveByPartyId(turnResult.raidData.expeditionId);
           if (party) {
             const br = turnResult.battleResult;
-            const rollLine = `Roll ${br.originalRoll} → ${Math.round(br.adjustedRandomValue)}`;
-            const atkLine = br.attackSuccess && br.attackStat > 0 ? `ATK +${Math.round(br.attackStat * 1.8)} (${br.attackStat} attack)` : '';
-            const defLine = br.defenseSuccess && br.defenseStat > 0 ? `DEF +${Math.round(br.defenseStat * 0.7)} (${br.defenseStat} defense)` : '';
-            const statLine = [atkLine, defLine].filter(Boolean).join(' | ') || 'No ATK/DEF bonus';
-            const gearParts = [];
-            if (character.gearWeapon?.name) gearParts.push(`Weapon: ${character.gearWeapon.name}`);
-            const armor = character.gearArmor;
-            if (armor?.head?.name || armor?.chest?.name || armor?.legs?.name) {
-              const pieces = [armor.head?.name, armor.chest?.name, armor.legs?.name].filter(Boolean);
-              if (pieces.length) gearParts.push(`Armor: ${pieces.join(', ')}`);
-            }
-            const gearLine = gearParts.length ? ` Gear: ${gearParts.join('; ')}.` : '';
             const monsterName = turnResult.raidData.monster?.name || 'monster';
-            const logMessage = `Raid vs ${monsterName}: ${rollLine}. ${statLine}. Dealt ${br.hearts} hearts.${gearLine}`;
+            const logMessage = `Raid vs ${monsterName}: ${br.hearts} heart${br.hearts !== 1 ? 's' : ''} dealt.`;
             pushProgressLog(party, character.name, 'raid_turn', logMessage, undefined, { heartsDealt: br.hearts, roll: br.originalRoll, adjustedRoll: Math.round(br.adjustedRandomValue) }, new Date());
             await party.save();
           }
@@ -845,7 +833,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     ...(raidData.expeditionId && expeditionPartyHearts != null
       ? [{
           name: '❤️ __Party hearts__',
-          value: `**${expeditionPartyHearts}** ❤ · **${expeditionPartyStamina ?? 0}** 🟩 stamina\n_${character.name}: ${battleResult.playerHearts.current}/${battleResult.playerHearts.max} ${battleResult.playerHearts.current <= 0 ? '(KO\'d)' : ''}_`,
+          value: `**${expeditionPartyHearts}** ❤ · **${expeditionPartyStamina ?? 0}** 🟩 stamina`,
           inline: false
         }]
       : [{
@@ -857,11 +845,6 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     {
       name: `__Damage Dealt__`,
       value: `⚔️ **${battleResult.hearts}** hearts`,
-      inline: false
-    },
-    {
-      name: `__Roll Details__`,
-      value: `🎲 **Roll:** ${battleResult.originalRoll} → ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **ATK +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `${battleResult.attackSuccess && battleResult.attackStat > 0 ? ' | ' : ''}🛡️ **DEF +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}`,
       inline: false
     },
     {
@@ -1184,33 +1167,35 @@ async function handleRaidVictory(interaction, raidData, monster) {
       });
     }
 
+    // Build @mention message for next player (expedition only); send in a new post after the embed
+    const getExpeditionNextTurnContent = async () => {
+      if (!raidData.expeditionId) return null;
+      try {
+        const party = await Party.findActiveByPartyId(raidData.expeditionId);
+        if (party && party.characters && party.characters.length > 0) {
+          const idx = party.currentTurn != null ? party.currentTurn % party.characters.length : 0;
+          const nextCharacter = party.characters[idx];
+          if (nextCharacter?.userId) {
+            const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
+            const cmdItem = getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : '`/explore item`';
+            return `<@${nextCharacter.userId}> 🗺️ **Raid over — continue your expedition.** You're up next — use ${cmdRoll} or ${cmdItem} with id \`${raidData.expeditionId}\` and your character to continue.`;
+          }
+        }
+      } catch (e) {
+        console.warn(`[raid.js]: Could not get expedition turn ping:`, e?.message || e);
+      }
+      return null;
+    };
+
     // Send victory embed to the raid thread (if it exists)
     if (raidData.threadId) {
       try {
         const thread = await interaction.client.channels.fetch(raidData.threadId);
         if (thread) {
-          // Expedition raid: send a separate message first so "raid over, use /explore roll" is obvious
-          if (raidData.expeditionId) {
-            const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
-            await thread.send(`**Raid over!** Please use ${cmdRoll} with id \`${raidData.expeditionId}\` to continue your expedition.`);
-          }
           await thread.send({ embeds: [victoryEmbed] });
           console.log(`[raid.js]: ✅ Victory embed sent to raid thread`);
-          // Expedition raid: ping next character so they know it's their turn to /explore roll
-          if (raidData.expeditionId) {
-            try {
-              const party = await Party.findActiveByPartyId(raidData.expeditionId);
-              if (party && party.characters && party.characters.length > 0) {
-                const idx = party.currentTurn != null ? party.currentTurn % party.characters.length : 0;
-                const nextCharacter = party.characters[idx];
-                if (nextCharacter?.userId) {
-                  await thread.send({ content: `<@${nextCharacter.userId}> it's your turn now` });
-                }
-              }
-            } catch (e) {
-              console.warn(`[raid.js]: Could not send expedition turn ping:`, e?.message || e);
-            }
-          }
+          const nextTurnContent = await getExpeditionNextTurnContent();
+          if (nextTurnContent) await thread.send({ content: nextTurnContent });
         }
       } catch (error) {
         console.error(`[raid.js]: ❌ Error sending victory embed to thread:`, error);
@@ -1218,8 +1203,9 @@ async function handleRaidVictory(interaction, raidData, monster) {
       }
     } else {
       console.log(`[raid.js]: ⚠️ No thread ID found for raid ${raidData.raidId} - victory embed will only be sent to the original interaction`);
-      // Only send to original interaction if no thread exists
       await interaction.followUp({ embeds: [victoryEmbed] });
+      const nextTurnContent = await getExpeditionNextTurnContent();
+      if (nextTurnContent) await interaction.followUp({ content: nextTurnContent });
     }
     
     // Notify mods if there were any failed loot processing (grotto raids have no monster loot, so skip)
