@@ -200,75 +200,77 @@ function createWeightedItemList(items, fv, job, villageLevel = 1) {
 }
 
 // ============================================================================
-// Final Value Calculation
-// ------------------- Calculate Final Value -------------------
-// Calculates the Final Value (FV) for a character by generating a damage value,
-// applying attack and defense buffs, and returning the adjusted random value along with buff details.
+// Final Value Calculation (Gear Overview: Regular vs Raid combat)
+// ============================================================================
+// Regular: Weapon = Attack×10% chance → +Attack×10; Armor = Defense×2% chance → +Defense×2.
+// Raid: calculateRaidFinalValue — weapon always +Attack×2.5, armor always +Defense×1.1.
+
+const REGULAR_WEAPON_CHANCE_PER_ATTACK = 0.10; // Attack × 10% chance (doc)
+const REGULAR_ARMOR_CHANCE_PER_DEFENSE = 0.02; // Defense × 2% chance (doc)
+
 function calculateFinalValue(character, diceRoll) {
-  // Apply blight roll multiplier: only stage 2 gets 1.5x (derive from blightStage to avoid stale blightEffects)
-  const blightMultiplier = (character.blighted && character.blightStage === 2) ? 1.5 : 1.0;
-  const adjustedDiceRoll = Math.floor(diceRoll * blightMultiplier);
-  
-  // Get elixir buff effects
+  if (!character || typeof character !== 'object') {
+    logger.warn('RNG', '[rngModule.js] calculateFinalValue: invalid character, using safe defaults');
+  }
+  const safeDiceRoll = Math.max(1, Math.min(100, Math.floor(Number(diceRoll) || 1)));
+  const blightMultiplier = (character?.blighted && character.blightStage === 2) ? 1.5 : 1.0;
+  const adjustedDiceRoll = Math.floor(safeDiceRoll * blightMultiplier);
+
   const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
-  const buffEffects = getActiveBuffEffects(character);
-  
-  // Apply elixir buffs to the dice roll
+  const buffEffects = getActiveBuffEffects(character) || {};
   let finalDiceRoll = adjustedDiceRoll;
-  
-  // Speed boost affects gathering and movement
-  if (buffEffects && buffEffects.speedBoost > 0) {
+
+  if (buffEffects.speedBoost > 0) {
     finalDiceRoll += buffEffects.speedBoost;
-    console.log(`[rngModule.js]: 🧪 Speed buff applied - +${buffEffects.speedBoost} to roll`);
-    
-    // Consume hasty elixir after use
     if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot')) {
       consumeElixirBuff(character);
-    } else if (character.buff?.active) {
-      // Log when elixir is not used due to conditions not met
-      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
-  
-  // Stealth boost affects gathering success
-  if (buffEffects && buffEffects.stealthBoost > 0) {
+  if (buffEffects.stealthBoost > 0) {
     finalDiceRoll += buffEffects.stealthBoost;
-    console.log(`[rngModule.js]: 🧪 Stealth buff applied - +${buffEffects.stealthBoost} to roll`);
-    
-    // Consume sneaky elixir after use
     if (shouldConsumeElixir(character, 'gather') || shouldConsumeElixir(character, 'loot')) {
       consumeElixirBuff(character);
-    } else if (character.buff?.active) {
-      // Log when elixir is not used due to conditions not met
-      console.log(`[rngModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
     }
   }
-  
-  const attackSuccess = calculateAttackBuff(character, character.attack ?? 0);
-  const defenseSuccess = calculateDefenseBuff(character, character.defense ?? 0);
+
+  // Regular combat: chance-based gear (Gear Overview doc)
+  const rawAttack = Math.max(0, Number(character?.attack) || 0);
+  const rawDefense = Math.max(0, Number(character?.defense) || 0);
+  const attackStat = calculateAttackBuff(character, rawAttack);
+  const defenseStat = calculateDefenseBuff(character, rawDefense);
+
+  const weaponChance = Math.max(0, Math.min(1, rawAttack * REGULAR_WEAPON_CHANCE_PER_ATTACK));
+  const armorChance = Math.max(0, Math.min(1, rawDefense * REGULAR_ARMOR_CHANCE_PER_DEFENSE));
+  const weaponApplies = attackStat > 0 && Math.random() < weaponChance;
+  const armorApplies = defenseStat > 0 && Math.random() < armorChance;
+  const effectiveAttack = weaponApplies ? attackStat : 0;
+  const effectiveDefense = armorApplies ? defenseStat : 0;
+
+  logger.info('EXPLORE', `[rngModule.js] Gear trigger: atk=${rawAttack} weaponChance=${(weaponChance * 100).toFixed(1)}% triggered=${weaponApplies} | def=${rawDefense} armorChance=${(armorChance * 100).toFixed(1)}% triggered=${armorApplies}`);
+
   const adjustedRandomValue = applyBuffs(
     finalDiceRoll,
-    attackSuccess,
-    defenseSuccess,
-    character.attack,
-    character.defense
+    effectiveAttack,
+    effectiveDefense,
+    attackStat,
+    defenseStat
   );
-  
+
   // Log blight multiplier effect if present
   if (blightMultiplier !== 1.0) {
     console.log(`[rngModule.js]: 🎲 Blight multiplier applied - Original: ${diceRoll}, Multiplier: ${blightMultiplier}x, Adjusted: ${adjustedDiceRoll}`);
   }
-  
+
   // Log elixir buff effects if present
   if (buffEffects && (buffEffects.speedBoost > 0 || buffEffects.stealthBoost > 0)) {
     console.log(`[rngModule.js]: 🧪 Elixir buffs applied - Final roll: ${finalDiceRoll} (Original: ${adjustedDiceRoll})`);
   }
-  
+
   return {
     damageValue: finalDiceRoll,
     adjustedRandomValue,
-    attackSuccess,
-    defenseSuccess,
+    attackSuccess: effectiveAttack,
+    defenseSuccess: effectiveDefense,
     elixirBuffs: buffEffects
   };
 }
@@ -278,37 +280,39 @@ function calculateFinalValue(character, diceRoll) {
 // ============================================================================
 
 // ---- Function: calculateRaidFinalValue ----
-// Calculates the Final Value for raids with guaranteed equipment benefits
-// Unlike regular combat, equipment always helps in raids
+// Raid combat (Gear Overview): gear always applies. Weapon +Attack×2.5, Armor +Defense×1.1.
 function calculateRaidFinalValue(character, diceRoll) {
   const { calculateRaidAttackBuff, calculateRaidDefenseBuff, applyRaidBuffs } = require('./buffModule');
-  
-  // Apply blight roll multiplier: only stage 2 gets 1.5x (derive from blightStage to avoid stale blightEffects)
-  const blightMultiplier = (character.blighted && character.blightStage === 2) ? 1.5 : 1.0;
-  const adjustedDiceRoll = Math.floor(diceRoll * blightMultiplier);
-  
+
+  if (!character || typeof character !== 'object') {
+    logger.warn('RNG', '[rngModule.js] calculateRaidFinalValue: invalid character');
+  }
+  const safeDiceRoll = Math.max(1, Math.min(100, Math.floor(Number(diceRoll) || 1)));
+  const blightMultiplier = (character?.blighted && character.blightStage === 2) ? 1.5 : 1.0;
+  const adjustedDiceRoll = Math.floor(safeDiceRoll * blightMultiplier);
+
   const attackSuccess = calculateRaidAttackBuff(character);
   const defenseSuccess = calculateRaidDefenseBuff(character);
+  const attackStat = Math.max(0, Number(character?.attack) || 0);
+  const defenseStat = Math.max(0, Number(character?.defense) || 0);
+
   const adjustedRandomValue = applyRaidBuffs(
     adjustedDiceRoll,
     attackSuccess,
     defenseSuccess,
-    character.attack,
-    character.defense
+    attackStat,
+    defenseStat
   );
-  
-  // Log blight multiplier effect if present
+
   if (blightMultiplier !== 1.0) {
-    console.log(`[rngModule.js]: 🎲 Raid blight multiplier applied - Original: ${diceRoll}, Multiplier: ${blightMultiplier}x, Adjusted: ${adjustedDiceRoll}`);
+    logger.info('RNG', `[rngModule.js] Raid blight multiplier: ${diceRoll} → ${adjustedDiceRoll}`);
   }
-  
-  // Raid calculation details logged only in debug mode
-  
+
   return {
     damageValue: adjustedDiceRoll,
     adjustedRandomValue,
-    attackSuccess,
-    defenseSuccess
+    attackSuccess: attackSuccess ? attackStat : 0,
+    defenseSuccess: defenseSuccess ? defenseStat : 0
   };
 }
 

@@ -43,6 +43,67 @@ const regionColors = {
  hebra: "#800080",
 };
 
+// ------------------- Explore outcome color mapping (embeds + progress log) ------------------
+// Each progress log outcome / embed type has a unique color for consistency across Discord and dashboard.
+const EXPLORE_OUTCOME_COLORS = {
+  // Movement & exploration
+  explored: "#00B894",
+  move: "#00CEC9",
+  secure: "#0984E3",
+  grotto_travel: "#1ABC9C",
+  // Grotto discovery & activity
+  grotto: "#6C5CE7",
+  grotto_revisit: "#A29BFE",
+  grotto_skipped: "#9B8BDE",
+  grotto_cleansed: "#5B4BB5",
+  grotto_blessing: "#9B59B6",
+  grotto_puzzle_success: "#8E44AD",
+  grotto_puzzle_offering: "#7D3C98",
+  grotto_target_fail: "#E74C3C",
+  grotto_target_success: "#2ECC71",
+  grotto_maze_success: "#27AE60",
+  grotto_maze_chest: "#1E8449",
+  grotto_maze_trap: "#C0392B",
+  grotto_maze_raid: "#E67E22",
+  grotto_maze_scrying: "#D35400",
+  grotto_maze_scrying_wall: "#F39C12",
+  grotto_maze_blocked: "#6b7280",
+  // Ruins
+  ruins: "#D35400",
+  ruins_explored: "#E67E22",
+  ruins_skipped: "#BD6B2E",
+  ruin_rest: "#F1C40F",
+  // Loot
+  relic: "#F1C40F",
+  chest_open: "#F5B041",
+  item: "#2ECC71",
+  // Fairy & heal
+  fairy: "#E8D5F2",
+  // Monster camp & combat
+  monster_camp: "#E74C3C",
+  monster_camp_fight: "#C0392B",
+  monster_camp_revisit: "#E67E22",
+  monster_camp_defeated: "#27AE60",
+  monster_camp_skipped: "#95A5A6",
+  monster_camp_fight_blocked: "#7F8C8D",
+  raid: "#C0392B",
+  raid_over: "#E74C3C",
+  monster: "#922B21",
+  camp: "#D35400",
+  // Retreat & danger
+  retreat: "#E67E22",
+  retreat_failed: "#C0392B",
+  blight_exposure: "#641E16",
+  // End
+  end: "#7F8C8D",
+  end_test_reset: "#95A5A6",
+};
+function getExploreOutcomeColor(outcome, fallbackHex = "#00ff99") {
+  if (!outcome || typeof outcome !== "string") return fallbackHex;
+  const hex = EXPLORE_OUTCOME_COLORS[outcome.trim()];
+  return hex != null ? hex : fallbackHex;
+}
+
 // ------------------- Command IDs (for clickable slash command mentions) ------------------
 // Fetched dynamically on bot ready; fallbacks used until then or if fetch fails
 let _exploreCmdId = "1471454947089580107";
@@ -522,6 +583,19 @@ function getExplorationPartyCharacterFields(party) {
 // Base URL matches explore.js and dashboard: use DASHBOARD_URL/APP_URL so test and production both resolve correctly.
 const EXPLORE_DASHBOARD_BASE = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/explore`;
 
+// Discord embed field limits (enforced to avoid "Received one or more errors")
+const EMBED_FIELD_VALUE_MAX = 1024;
+const EMBED_FIELD_NAME_MAX = 256;
+
+function sanitizeEmbedField(field) {
+  const rawName = String(field.name ?? "").trim();
+  const rawValue = String(field.value ?? "").trim();
+  const name = rawName.slice(0, EMBED_FIELD_NAME_MAX) || "\u200b";
+  const truncated = rawValue.length > EMBED_FIELD_VALUE_MAX;
+  const value = (truncated ? rawValue.slice(0, EMBED_FIELD_VALUE_MAX - 1) + "…" : rawValue) || "\u200b";
+  return { ...field, name, value };
+}
+
 const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
@@ -560,7 +634,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
     commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
    }
    if ((party?.totalStamina ?? 0) === 0) {
-    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
+    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
    }
   } else {
    const cmdItem = `</explore item:${cmdId}>`;
@@ -571,14 +645,15 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    }
    commandsValue += `\n\n_Use id: \`${expId || "—"}\` and charactername: **${nextName}** for all commands._`;
    if ((party?.totalStamina ?? 0) === 0) {
-    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
+    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
    }
   }
   if (!commandsLast) {
    fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
   }
  }
- embed.addFields(...fields);
+ const safeFields = fields.map(sanitizeEmbedField);
+ embed.addFields(...safeFields);
  return embed;
 };
 
@@ -609,7 +684,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
   if ((party?.totalStamina ?? 0) === 0) {
-   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (move, etc.), actions will **cost hearts** instead. Use **Camp** or **Item** to recover.`;
+   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (move, etc.), actions will **cost hearts** instead. Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
   }
  } else if (showFairyRollOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
@@ -633,7 +708,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
   }
   if ((party?.totalStamina ?? 0) === 0) {
-   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
+   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
   }
  } else {
   const cmdItem = `</explore item:${cmdId}>`;
@@ -643,7 +718,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\nYou can also revisit monster camps or grottos in this quadrant with ${cmdDiscovery} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
   }
   if ((party?.totalStamina ?? 0) === 0) {
-   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** or **Item** to recover.`;
+   commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
   }
  }
  embed.addFields({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
@@ -672,7 +747,7 @@ const createExplorationItemEmbed = (
     item.itemName
    }** during exploration in **${location || "Unknown"}**!\n\n`
   )
-  .setColor(regionColors[party.region] || "#00ff99")
+  .setColor(getExploreOutcomeColor("item", regionColors[party.region] || "#00ff99"))
   .setThumbnail(item.image || "https://via.placeholder.com/100x100")
   .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100");
  addExplorationStandardFields(embed, {
@@ -718,7 +793,7 @@ const createExplorationMonsterEmbed = (
     monster.emoji || ""
    } **${monster.name || "Unknown Monster"}** during exploration in **${location || "Unknown"}**!`
   )
-  .setColor(regionColors[party.region] || "#00ff99")
+  .setColor(getExploreOutcomeColor("monster", regionColors[party.region] || "#00ff99"))
   .setThumbnail(monsterImage)
   .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100");
  addExplorationStandardFields(embed, {
@@ -3508,6 +3583,8 @@ module.exports = {
  jobActions,
  regionColors,
  regionImages,
+ EXPLORE_OUTCOME_COLORS,
+ getExploreOutcomeColor,
  EXPLORE_CMD_ID,
  getExploreCommandId,
  setExploreCommandId,

@@ -1,4 +1,5 @@
 const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+const logger = require('@/utils/logger');
 
 // ------------------- Calculate attack buff -------------------
 // This function calculates whether an attack buff should be applied based on the character's attack stat.
@@ -222,27 +223,25 @@ const calculateRaidDefenseBuff = (character) => {
 };
 
 // ---- Function: applyRaidBuffs ----
-// Applies guaranteed equipment benefits for raids
-// Unlike regular combat, equipment always helps in raids
+// Applies guaranteed equipment benefits for raids (Gear Overview doc).
+// Raid: Weapon always Attack × 1.8, Armor/Shield always Defense × 0.7.
+const RAID_WEAPON_MULTIPLIER = 1.8;
+const RAID_ARMOR_MULTIPLIER = 0.7;
+
 const applyRaidBuffs = (randomValue, attackSuccess, defenseSuccess, attackStat, defenseStat) => {
-  let adjustedRandomValue = randomValue || 0;
+  let adjustedRandomValue = Number(randomValue) || 0;
+  const atk = Math.max(0, Number(attackStat) || 0);
+  const def = Math.max(0, Number(defenseStat) || 0);
 
-  // In raids, if equipment exists, it always provides its benefit
-  if (attackSuccess && attackStat > 0) {
-    // Slightly stronger than previous nerf to ease difficulty
-    adjustedRandomValue += Math.floor(attackStat * 1.8);
+  if (attackSuccess && atk > 0) {
+    adjustedRandomValue += Math.floor(atk * RAID_WEAPON_MULTIPLIER);
   }
-
-  if (defenseSuccess && defenseStat > 0) {
-    // Slightly stronger than previous nerf to ease difficulty
-    const defenseBonus = Math.floor(defenseStat * 0.7);
+  if (defenseSuccess && def > 0) {
+    const defenseBonus = Math.floor(def * RAID_ARMOR_MULTIPLIER);
     adjustedRandomValue += defenseBonus;
-    console.log(`[buffModule.js]: 🛡️ Raid armor bonus applied: +${defenseBonus} (${defenseStat} defense)`);
   }
 
-  // Ensure the final adjusted value is between 1 and 100
   adjustedRandomValue = Math.max(1, Math.min(adjustedRandomValue, 100));
-  
   return adjustedRandomValue;
 };
 
@@ -254,24 +253,29 @@ let lastDebugValues = {
   adjustedRandomValue: null,
 };
 
+// Regular combat (Gear Overview): Bonus = Attack×10 when weapon triggers, Bonus = Defense×2 when armor triggers.
+const REGULAR_WEAPON_BONUS_FACTOR = 10;
+const REGULAR_ARMOR_BONUS_FACTOR = 2;
+
 const applyBuffs = (randomValue, attackSuccess, defenseSuccess, attackStat, defenseStat) => {
-  let adjustedRandomValue = randomValue || 0;  // Ensure the random value is valid by defaulting to 0 if undefined
+  let adjustedRandomValue = Number(randomValue) || 0;
+  const atk = Math.max(0, Number(attackStat) || 0);
+  const def = Math.max(0, Number(defenseStat) || 0);
 
   lastDebugValues.initialRandomValue = randomValue;
 
-  // If attack buff is successful, increase the random value by a factor of the attack stat
-  if (attackSuccess) {
-      adjustedRandomValue += attackStat * 10;
-  }
+  const weaponBonus = (attackSuccess && atk > 0) ? atk * REGULAR_WEAPON_BONUS_FACTOR : 0;
+  const armorBonus = (defenseSuccess && def > 0) ? def * REGULAR_ARMOR_BONUS_FACTOR : 0;
+  adjustedRandomValue += weaponBonus + armorBonus;
 
-  // If defense buff is successful, increase the random value by a factor of the defense stat
-  if (defenseSuccess) {
-      adjustedRandomValue += defenseStat * 2;
-  }
-
-  // Ensure the final adjusted value is between 1 and 100
-  adjustedRandomValue = Math.max(1, Math.min(adjustedRandomValue, 100));
+  adjustedRandomValue = Math.max(1, Math.min(100, adjustedRandomValue));
   lastDebugValues.adjustedRandomValue = adjustedRandomValue;
+
+  const gearTotal = weaponBonus + armorBonus;
+  if (gearTotal > 0) {
+    const pct = Math.round((gearTotal / adjustedRandomValue) * 100);
+    logger.info('EXPLORE', `[buffModule.js] Gear adjustment: base=${randomValue} +weapon=${weaponBonus} +armor=${armorBonus} → final=${adjustedRandomValue} (gear=${pct}% of final)`);
+  }
 
   return adjustedRandomValue;
 };

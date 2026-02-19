@@ -1289,8 +1289,8 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
         const { fetchCharacterById } = require('@/database/db');
         const party = await Party.findActiveByPartyId(wave.expeditionId);
         if (party && party.characters && party.characters.length) {
-          const updatedChar = await fetchCharacterById(character._id, character.isModCharacter);
-          const charToSync = updatedChar || character;
+          // In testing mode damage is not persisted to Character DB; use in-memory character (updated by processRaidBattle)
+          const charToSync = skipPersist ? character : (await fetchCharacterById(character._id, character.isModCharacter)) || character;
           const idx = party.characters.findIndex(
             (c) => c._id && charToSync._id && c._id.toString() === charToSync._id.toString()
           );

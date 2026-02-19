@@ -29,6 +29,58 @@ const QUADRANT_STATUS_COLORS: Record<string, string> = {
   secured: "#15803d",
 };
 
+/** Explore outcome → color for progress log and Discord embeds (keep in sync with bot embeds.js EXPLORE_OUTCOME_COLORS). */
+const EXPLORE_OUTCOME_COLORS: Record<string, string> = {
+  explored: "#00B894",
+  move: "#00CEC9",
+  secure: "#0984E3",
+  grotto_travel: "#1ABC9C",
+  grotto: "#6C5CE7",
+  grotto_revisit: "#A29BFE",
+  grotto_skipped: "#9B8BDE",
+  grotto_cleansed: "#5B4BB5",
+  grotto_blessing: "#9B59B6",
+  grotto_puzzle_success: "#8E44AD",
+  grotto_puzzle_offering: "#7D3C98",
+  grotto_target_fail: "#E74C3C",
+  grotto_target_success: "#2ECC71",
+  grotto_maze_success: "#27AE60",
+  grotto_maze_chest: "#1E8449",
+  grotto_maze_trap: "#C0392B",
+  grotto_maze_raid: "#E67E22",
+  grotto_maze_scrying: "#D35400",
+  grotto_maze_scrying_wall: "#F39C12",
+  grotto_maze_blocked: "#6b7280",
+  ruins: "#D35400",
+  ruins_explored: "#E67E22",
+  ruins_skipped: "#BD6B2E",
+  ruin_rest: "#F1C40F",
+  relic: "#F1C40F",
+  chest_open: "#F5B041",
+  item: "#2ECC71",
+  fairy: "#E8D5F2",
+  monster_camp: "#E74C3C",
+  monster_camp_fight: "#C0392B",
+  monster_camp_revisit: "#E67E22",
+  monster_camp_defeated: "#27AE60",
+  monster_camp_skipped: "#95A5A6",
+  monster_camp_fight_blocked: "#7F8C8D",
+  raid: "#C0392B",
+  raid_over: "#E74C3C",
+  monster: "#922B21",
+  camp: "#D35400",
+  retreat: "#E67E22",
+  retreat_failed: "#C0392B",
+  blight_exposure: "#641E16",
+  end: "#7F8C8D",
+  end_test_reset: "#95A5A6",
+};
+
+function getExploreOutcomeColor(outcome: string | undefined, fallback = "#6b7280"): string {
+  if (!outcome || typeof outcome !== "string") return fallback;
+  return EXPLORE_OUTCOME_COLORS[outcome.trim()] ?? fallback;
+}
+
 // Map grid: 10 cols x 12 rows, each square 2400 x 1666 (canvas 24000 x 20000)
 const SQUARE_W = 2400;
 const SQUARE_H = 1666;
@@ -2487,10 +2539,24 @@ export default function ExplorePartyPage() {
                   ) : (
                     <ul className="max-h-[40rem] min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 py-1.5" role="list">
                       {[...(party.progressLog ?? [])].reverse().map((entry, i) => (
-                        <li key={i} className="flex min-w-0 flex-col gap-0.5 border-b border-[var(--totk-dark-ocher)]/20 px-2 py-1.5 last:border-0">
+                        <li
+                          key={i}
+                          className="flex min-w-0 flex-col gap-0.5 border-b border-[var(--totk-dark-ocher)]/20 px-2 py-1.5 last:border-0 pl-3 rounded-r"
+                          style={{
+                            borderLeftWidth: "3px",
+                            borderLeftStyle: "solid",
+                            borderLeftColor: getExploreOutcomeColor(entry.outcome),
+                            backgroundColor: `${getExploreOutcomeColor(entry.outcome)}14`,
+                          }}
+                        >
                           <div className="flex flex-wrap items-center gap-2 text-[11px]">
                             <span className="font-semibold text-[var(--totk-ivory)]">{entry.characterName}</span>
-                            <span className="rounded bg-[var(--totk-dark-ocher)]/50 px-1 py-0.5 text-[10px] uppercase text-[var(--totk-grey-200)]">{entry.outcome}</span>
+                            <span
+                              className="rounded px-1 py-0.5 text-[10px] uppercase text-[var(--totk-grey-200)]"
+                              style={{ backgroundColor: `${getExploreOutcomeColor(entry.outcome)}33` }}
+                            >
+                              {entry.outcome}
+                            </span>
                             <span className="text-[var(--totk-grey-200)]">
                               {typeof entry.at === "string" ? new Date(entry.at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) : ""}
                             </span>

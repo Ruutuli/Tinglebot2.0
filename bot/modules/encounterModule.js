@@ -138,29 +138,37 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
                 hearts: 0,
                 canLoot: true,
             };
+            logger.info('ENCOUNTER', `[encounterModule.js] Tier ${tier} outcome: defenseSuccess=true → Win!/Loot, hearts=0`);
         } else if (adjustedRandomValue <= 25) {
             outcome = {
                 result: `${tier} HEART(S)`,
                 hearts: tier,
                 canLoot: false,
             };
+            logger.info('ENCOUNTER', `[encounterModule.js] Tier ${tier} outcome: adjustedRandomValue=${adjustedRandomValue} <= 25 → ${tier} HEART(S), hearts=${tier}`);
         } else if (adjustedRandomValue <= 50) {
             outcome = tier === 1
                 ? { result: 'Win!/Loot', canLoot: true, hearts: 0 }
                 : { result: `${tier - 1} HEART(S)`, hearts: tier - 1, canLoot: false };
+            logger.info('ENCOUNTER', `[encounterModule.js] Tier ${tier} outcome: adjustedRandomValue=${adjustedRandomValue} <= 50 → result=${outcome.result} hearts=${outcome.hearts ?? 0}`);
         } else if (adjustedRandomValue <= 75) {
             outcome = tier <= 2
                 ? { result: 'Win!/Loot', canLoot: true, hearts: 0 }
                 : { result: `${tier - 2} HEART(S)`, hearts: tier - 2, canLoot: false };
+            logger.info('ENCOUNTER', `[encounterModule.js] Tier ${tier} outcome: adjustedRandomValue=${adjustedRandomValue} <= 75 → result=${outcome.result} hearts=${outcome.hearts ?? 0}`);
         } else if (adjustedRandomValue <= 89) {
             outcome = { result: 'Win!/Loot', canLoot: true, hearts: 0 };
+            logger.info('ENCOUNTER', `[encounterModule.js] Tier ${tier} outcome: adjustedRandomValue=${adjustedRandomValue} <= 89 → Win!/Loot, hearts=0`);
         } else {
             outcome = { result: 'Win!/Loot', canLoot: true, hearts: 0 };
+            logger.info('ENCOUNTER', `[encounterModule.js] Tier ${tier} outcome: adjustedRandomValue=${adjustedRandomValue} > 89 → Win!/Loot, hearts=0`);
         }
 
         if (outcome.hearts > 0 && !options.skipPersist) {
             logger.info('LOOT', `${character.name} loses ${outcome.hearts} hearts`);
             await useHearts(character._id, outcome.hearts, createEncounterContext(character, 'encounter_heart_loss'));
+        } else if (outcome.hearts > 0 && options.skipPersist) {
+            logger.info('ENCOUNTER', `[encounterModule.js] skipPersist=true: not calling useHearts (hearts=${outcome.hearts} would have been applied)`);
         }
 
         return {

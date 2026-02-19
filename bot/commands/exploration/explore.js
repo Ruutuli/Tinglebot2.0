@@ -44,6 +44,10 @@ const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap } = require('@/utils
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig.js');
+/** During active expedition (or testing), hearts/stamina live only in party model; character DB is updated at end (production). */
+function usePartyOnlyForHeartsStamina(party) {
+  return EXPLORATION_TESTING_MODE || (party && party.status === "started");
+}
 const { generateGrottoMaze, getPathCellAt, getNeighbourCoords, getCellBeyondWall } = require('@/utils/grottoMazeGenerator.js');
 const { renderMazeToBuffer } = require('@/utils/grottoMazeRenderer.js');
 const logger = require("@/utils/logger.js");
@@ -63,29 +67,25 @@ const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL }
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 
 // ------------------- Embeds & Handlers ------------------
-const { addExplorationStandardFields, getExplorationPartyCharacterFields, addExplorationCommandsField, createExplorationItemEmbed, createExplorationMonsterEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId } = require("../../embeds/embeds.js");
+const { addExplorationStandardFields, getExplorationPartyCharacterFields, addExplorationCommandsField, createExplorationItemEmbed, createExplorationMonsterEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor } = require("../../embeds/embeds.js");
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
 // ------------------- Image URLs ------------------
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
 const GROTTO_MAZE_LEGEND = "🟫 Entrance | 🟩 Exit | 🟦 Chest | 🟨 Trap | 🔴 Scrying Wall | ✖️ Used (trap/chest/wall) | 🟧 You are here | ⬜ Path | ⬛ Wall — Unexplored areas stay dark until you enter them.";
-const MAZE_EMBED_COLORS = {
-  success: 0x22c55e,    // green — exit, bypassed, faster path, chest
-  harm: 0xdc2626,       // red — pit trap, trap triggered, stalagmites
-  battle: 0xea580c,     // orange — construct appeared
-  neutral: 0xfbbf24,    // amber — nothing, step_back, collapse
-  scrying: 0x9333ea,    // purple — arrived at Scrying Wall
-  blocked: 0x6b7280,    // gray — wall blocked
-  default: 0x00ff99,    // teal — normal move, entry, etc.
+// Map maze embed outcome type to progress-log outcome for consistent color (see getExploreOutcomeColor in embeds.js)
+const MAZE_OUTCOME_FOR_EMBED = {
+  exit: "grotto_maze_success", bypassed: "grotto_maze_success", faster_path_open: "grotto_maze_success",
+  chest: "grotto_maze_chest",
+  pit_trap: "grotto_maze_trap", trap: "grotto_maze_trap", stalagmites: "grotto_maze_trap",
+  battle: "grotto_maze_raid",
+  scrying: "grotto_maze_scrying",
+  collapse: "grotto_maze_success", step_back: "grotto_maze_success", nothing: "grotto",
+  blocked: "grotto_maze_blocked",
 };
 function getMazeEmbedColor(outcomeType, regionColor) {
-  if (!outcomeType) return regionColor || MAZE_EMBED_COLORS.default;
-  const c = MAZE_EMBED_COLORS;
-  if (['exit', 'bypassed', 'faster_path_open', 'chest'].includes(outcomeType)) return c.success;
-  if (['pit_trap', 'trap', 'stalagmites'].includes(outcomeType)) return c.harm;
-  if (outcomeType === 'battle') return c.battle;
-  if (['collapse', 'step_back', 'nothing'].includes(outcomeType)) return c.neutral;
-  return regionColor || c.default;
+  const outcome = outcomeType ? (MAZE_OUTCOME_FOR_EMBED[outcomeType] || "grotto") : "grotto";
+  return getExploreOutcomeColor(outcome, regionColor || "#00ff99");
 }
 const UNAPPRAISED_RELIC_IMAGE_URL = "https://static.wikia.nocookie.net/zelda_gamepedia_en/images/7/7c/HW_Sealed_Weapon_Icon.png/revision/latest?cb=20150918051232";
 const RELIC_EMBED_BORDER_URL = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
@@ -187,19 +187,26 @@ const PAVING_BUNDLES = {
 
 const DISABLE_EXPLORATION_RAIDS = false; // TODO: remove when done testing
 
+/** Chance (0–1) that camping is interrupted by a monster attack. Explored/unexplored = 40%; secured = 5%. */
+const CAMP_ATTACK_CHANCE_UNSECURED = 0.4;
+const CAMP_ATTACK_CHANCE_SECURED = 0.05;
+/** Extra chance when party has 0 stamina (exhausted camp = easier target). Added to unsecured chance, capped at CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP. */
+const CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA = 0.35;
+const CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP = 0.75;
+
 const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 
 // ------------------- Roll outcome chances (must sum to 1) ------------------
 const EXPLORATION_OUTCOME_CHANCES = {
-  monster: 0.18,
-  item: 0.32,
-  explored: 0.185,  // fallback when grotto can't be placed (square has grotto, at cap, etc.)
+  monster: 0.25,   // more likely: combat encounters
+  item: 0.33,
+  explored: 0.185, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
   fairy: 0.05,
   chest: 0.03,
-  old_map: 0.03,
+  old_map: 0.01,   // less likely: map finds
   ruins: 0.04,
   relic: 0.005,
-  camp: 0.06,
+  camp: 0.02,     // safe space: reduced (was 6%)
   monster_camp: 0.08,
   grotto: 0.02,
 };
@@ -214,9 +221,9 @@ const RETREAT_CHANCE_CAP = 0.95;
 function createStuckInWildEmbed(party, location) {
   return new EmbedBuilder()
     .setTitle("🏕️ Stuck in the wild — camp to recover")
-    .setColor(regionColors[party?.region] || "#8B4513")
+    .setColor(getExploreOutcomeColor("explored", regionColors[party?.region] || "#8B4513"))
     .setDescription(
-      `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> to recover stamina with no heart cost.\n\n` +
+      `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp recovers a random amount of stamina instead of costing.\n\n` +
       `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
     )
     .setImage(EXPLORATION_IMAGE_FALLBACK)
@@ -246,7 +253,7 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
     return { ok: false, reason: "not_enough" };
   }
 
-  const usePartyOnly = EXPLORATION_TESTING_MODE;
+  const usePartyOnly = usePartyOnlyForHeartsStamina(party);
 
   function slotStamina(slot) {
     return typeof slot.currentStamina === "number" ? slot.currentStamina : 0;
@@ -278,6 +285,8 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
         }
         slot.currentStamina = Math.max(0, haveVal - take);
         remaining -= take;
+      } else if (!usePartyOnly) {
+        slot.currentStamina = haveVal; // keep party slot in sync with DB
       }
     }
     party.markModified("characters");
@@ -308,6 +317,9 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
       }
       slot.currentStamina = Math.max(0, haveVal - take);
       remainingStamina -= take;
+    } else if (!usePartyOnly) {
+      // Keep party slots in sync with DB so recomputePartyTotals shows correct totals (e.g. when paying with hearts)
+      slot.currentStamina = haveVal;
     }
   }
   let remainingHearts = shortfall;
@@ -545,7 +557,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  const nextCharacter = party.characters[party.currentTurn];
  const lootEmbed = new EmbedBuilder()
   .setTitle("📦 **Chest opened!**")
-  .setColor(regionColors[party.region] || "#00ff99")
+  .setColor(getExploreOutcomeColor("chest_open", regionColors[party.region] || "#00ff99"))
   .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
  if (lootLines.length > 0) {
   lootEmbed.addFields({
@@ -556,7 +568,11 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  } else {
   lootEmbed.setDescription("Nothing found inside.");
  }
- lootEmbed.setFooter({ text: "−1 stamina" });
+ const footerCost = (chestPayResult.heartsPaid ?? 0) > 0
+  ? `−${chestPayResult.heartsPaid} heart(s) (struggle)`
+  : "−1 stamina";
+ lootEmbed.setFooter({ text: footerCost });
+ recomputePartyTotals(party); // ensure displayed totals match actual deduction
  addExplorationStandardFields(lootEmbed, {
   party,
   expeditionId,
@@ -570,8 +586,14 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  const lootSummary = lootLines.length > 0
   ? lootLines.map((line) => line.trim()).join(" · ")
   : "Nothing found.";
+ // Progress log: no Discord/unicode emoji (item names only)
+ const lootSummaryForLog = lootLines.length > 0
+  ? lootLines
+    .map((line) => line.replace(/<:[^:]+:\d+>/g, "").replace(/\s+/g, " ").trim())
+    .join(" · ")
+  : "Nothing found.";
  const chestCostsForLog = buildCostsForLog(chestPayResult);
- pushProgressLog(party, character.name, "chest_open", `Opened chest in **${location}**. **Found:** ${lootSummary}`, undefined, Object.keys(chestCostsForLog).length ? chestCostsForLog : undefined);
+ pushProgressLog(party, character.name, "chest_open", `Opened chest in **${location}**. **Found:** ${lootSummaryForLog}`, undefined, Object.keys(chestCostsForLog).length ? chestCostsForLog : undefined);
  await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
  return { lootEmbed, party, nextCharacter };
 }
@@ -714,6 +736,22 @@ function getLastProgressOutcomeForLocation(party, square, quadrant) {
 // ------------------- normalizeSquareId ------------------
 function normalizeSquareId(square) {
  return String(square || "").trim().toUpperCase();
+}
+
+// ------------------- findExactMapSquareAndQuadrant ------------------
+// Resolves square + quadrant case-insensitively and returns the exact stored squareId/quadrantId
+// so map updates (explored/secure/reset) always match the DB. Returns null if not found.
+async function findExactMapSquareAndQuadrant(squareId, quadrantId) {
+ if (!squareId || !quadrantId) return null;
+ const square = await Square.findOne({
+  squareId: new RegExp(`^${String(squareId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+ });
+ if (!square || !square.quadrants || !square.quadrants.length) return null;
+ const quadrant = square.quadrants.find(
+  (q) => String(q.quadrantId || "").toUpperCase() === String(quadrantId).trim().toUpperCase()
+ );
+ if (!quadrant) return null;
+ return { square, exactSquareId: square.squareId, exactQuadrantId: quadrant.quadrantId };
 }
 
 // ------------------- countSpecialEventsInSquare ------------------
@@ -901,7 +939,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   }
   const skipEmbed = new EmbedBuilder()
    .setTitle("🗺️ **Expedition: Grotto found (testing — skipped)**")
-   .setColor(regionColors[party.region] || "#00ff99")
+   .setColor(getExploreOutcomeColor("grotto_skipped", regionColors[party.region] || "#00ff99"))
    .setDescription(`Found a grotto in **${location}**.\n\n⚠️ **Testing mode:** Grottos are not created or persisted. Continue with </explore roll>.`)
    .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(skipEmbed, { party: freshParty || party, expeditionId, location, nextCharacter: (freshParty ? freshParty.characters[freshParty.currentTurn] : null) ?? nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
@@ -924,7 +962,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
   const noStaminaEmbed = new EmbedBuilder()
    .setTitle("❌ Not enough stamina or hearts to cleanse the grotto")
-   .setColor(regionColors[freshParty.region] || "#00ff99")
+   .setColor(getExploreOutcomeColor("grotto", regionColors[freshParty.region] || "#00ff99"))
    .setDescription("Party has " + partyTotalStamina + " 🟩 and " + partyTotalHearts + " ❤ (need 1 total). **Camp** to recover, or use hearts to **Struggle**. Mark the grotto on the dashboard for later.")
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
@@ -940,7 +978,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
   const noPlumeEmbed = new EmbedBuilder()
    .setTitle("❌ No Goddess Plume to cleanse the grotto")
-   .setColor(regionColors[freshParty.region] || "#00ff99")
+   .setColor(getExploreOutcomeColor("grotto", regionColors[freshParty.region] || "#00ff99"))
    .setDescription("No party member has a Goddess Plume in their expedition loadout. Add one to your loadout before departing, then mark the grotto on the dashboard for later or continue exploring.")
    .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
   addExplorationStandardFields(noPlumeEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
@@ -1048,7 +1086,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   const blessingFlavor = getRandomBlessingFlavor();
   const blessingEmbed = new EmbedBuilder()
    .setTitle("🗺️ **Expedition: Grotto cleansed — Blessing!**")
-   .setColor(regionColors[freshParty.region] || "#00ff99")
+   .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[freshParty.region] || "#00ff99"))
    .setDescription(
     `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n` +
     blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
@@ -1064,7 +1102,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await msg.edit({ embeds: [blessingEmbed], components: [disabledRow] }).catch(() => {});
   const blessingAnnounce = new EmbedBuilder()
    .setTitle("✨ **A bright light spills from the stump!** ✨")
-   .setColor(0xfbbf24)
+   .setColor(getExploreOutcomeColor("grotto_blessing", "#fbbf24"))
    .setDescription(
     "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is cleansed — and within, a simple blessing awaits.\n\n" +
     blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
@@ -1101,7 +1139,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  }
  const continueEmbed = new EmbedBuilder()
   .setTitle("🗺️ **Expedition: Grotto cleansed!**")
-  .setColor(regionColors[freshParty.region] || "#00ff99")
+  .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[freshParty.region] || "#00ff99"))
   .setDescription(continueDesc)
   .setImage(trialMazeImg);
  addExplorationStandardFields(continueEmbed, {
@@ -1125,7 +1163,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  await msg.edit({ embeds: [continueEmbed], components: [disabledRow], files: trialMazeFiles.length ? trialMazeFiles : undefined }).catch(() => {});
  const cleanseAnnounce = new EmbedBuilder()
   .setTitle("✨ **A bright light spills from the stump!** ✨")
-  .setColor(0xfbbf24)
+  .setColor(getExploreOutcomeColor("grotto_cleansed", "#fbbf24"))
   .setDescription(
    "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is cleansed — **the way is open**. A trial awaits inside; complete it to receive a **Spirit Orb**.\n\n**Trial: " + trialLabel + "**."
   )
@@ -1203,17 +1241,20 @@ async function handleExpeditionFailed(party, interaction) {
     await char.save();
    }
   }
-  // Reset any quadrants this expedition marked as Explored back to Unexplored
+  // Reset any quadrants this expedition marked as Explored back to Unexplored (resolve by exact ids for robustness)
   const exploredThisRun = party.exploredQuadrantsThisRun || [];
   if (exploredThisRun.length > 0) {
    for (const { squareId, quadrantId } of exploredThisRun) {
     if (squareId && quadrantId) {
-     const squareIdRegex = new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-     await Square.updateOne(
-      { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
-      { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
-      { arrayFilters: [{ "q.quadrantId": quadrantId }] }
-     ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
+     const resolved = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+     if (resolved) {
+      const { exactSquareId, exactQuadrantId } = resolved;
+      await Square.updateOne(
+       { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+       { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+       { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
+      ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
+     }
     }
    }
   }
@@ -1522,7 +1563,7 @@ module.exports = {
       const rollCmdId = getExploreCommandId();
       const approvedEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Approved!**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(`**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse </explore roll:${rollCmdId}> to leave the grotto and continue exploring.`)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(approvedEmbed, {
@@ -1541,7 +1582,7 @@ module.exports = {
       const rollCmdId = getExploreCommandId();
       const doneEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Complete**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(`${GROTTO_CLEARED_FLAVOR}\n\nUse </explore roll:${rollCmdId}> to leave the grotto and continue exploring.`)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(doneEmbed, {
@@ -1565,7 +1606,7 @@ module.exports = {
        const raidId = grotto.testOfPowerState.raidId;
        const embedInProgress = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power**")
-        .setColor(regionColors[party.region] || "#00ff99")
+        .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
         .setDescription(`The trial has already begun. Use </raid> with Raid ID **${raidId}** to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
        addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</raid> (Raid ID: ${raidId})` });
@@ -1591,7 +1632,7 @@ module.exports = {
        if (!EXPLORATION_TESTING_MODE) await grotto.save();
        const embedStarted = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power — Raid Started**")
-        .setColor(regionColors[party.region] || "#00ff99")
+        .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
         .setDescription(`The trial has begun! A **${monster.name}** has appeared. Use </raid> with Raid ID **${raidResult.raidId}** to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
        addExplorationStandardFields(embedStarted, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</raid> (Raid ID: ${raidResult.raidId})` });
@@ -1636,7 +1677,7 @@ module.exports = {
      }
      const embed = new EmbedBuilder()
       .setTitle(`🗺️ **Grotto: ${trialLabel}**`)
-      .setColor(regionColors[party.region] || "#00ff99")
+      .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
       .setDescription(grottoDesc)
       .setImage(continueMazeImg);
      addExplorationStandardFields(embed, {
@@ -1748,7 +1789,7 @@ module.exports = {
       if (damageAmount > 0 && character._id) {
        const currentHearts = party.characters[characterIndex]?.currentHearts ?? character.currentHearts ?? 0;
        if (currentHearts >= damageAmount) {
-        if (!EXPLORATION_TESTING_MODE) {
+        if (!usePartyOnlyForHeartsStamina(party)) {
          try {
           await useHearts(character._id, damageAmount, { commandName: "explore", operation: "grotto_target_practice_miss" });
          } catch (err) {
@@ -1771,7 +1812,7 @@ module.exports = {
       const desc = `The blimp looms before you. ${flavor}\n\n**Miss.**${damageNote} Use the command in **Commands** below to try again.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(desc)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
@@ -1809,7 +1850,7 @@ module.exports = {
       const desc = `The blimp looms before you. ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nSee **Commands** below to continue exploring.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Success!**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
        .setDescription(desc)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
@@ -1832,7 +1873,7 @@ module.exports = {
      const desc = `The blimp looms before you. ${flavor}\n\n**Progress:** ${newSuccesses}/${TARGET_SUCCESSES} hits. **Next shooter:** **${nextChar?.name ?? "—"}** — use the command in **Commands** below.`;
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Target Practice**")
-      .setColor(regionColors[party.region] || "#00ff99")
+      .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
       .setDescription(desc)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      addExplorationStandardFields(embed, {
@@ -1860,7 +1901,7 @@ module.exports = {
       const rollCmdId = getExploreCommandId();
       const embed = new EmbedBuilder()
        .setTitle(approved ? "🗺️ **Grotto: Puzzle — Complete**" : "🗺️ **Grotto: Puzzle — Denied**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor(approved ? "grotto_puzzle_success" : "grotto_puzzle_offering", regionColors[party.region] || "#00ff99"))
        .setDescription(
         approved
          ? `An offering was already submitted (${itemsStr}) and approved. Everyone received a **Spirit Orb**. Use </explore roll:${rollCmdId}> to leave the grotto and continue exploring.`
@@ -1892,7 +1933,7 @@ module.exports = {
       const cmdId = getExploreCommandId();
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(grottoDesc)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
@@ -1989,7 +2030,7 @@ module.exports = {
       const rollCmdId = getExploreCommandId();
       const successEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Correct!**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(
         `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\n**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse </explore roll:${rollCmdId}> to leave the grotto and continue exploring.`
        )
@@ -2010,7 +2051,7 @@ module.exports = {
       embeds: [
        new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Puzzle — Offering Submitted**")
-        .setColor(regionColors[party.region] || "#00ff99")
+        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
         .setDescription(
          `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\nThe offering was not correct. Items are consumed. The grotto trial is complete with no Spirit Orbs.`
         )
@@ -2191,7 +2232,7 @@ module.exports = {
        rollLabel = ` (Roll: **${roll}**)`;
       }
       if (outcome.heartsLost > 0 && character._id) {
-       if (!EXPLORATION_TESTING_MODE) {
+       if (!usePartyOnlyForHeartsStamina(party)) {
         try {
          await useHearts(character._id, outcome.heartsLost, { commandName: 'explore', operation: 'grotto_maze_trap' });
         } catch (err) {
@@ -2210,11 +2251,12 @@ module.exports = {
       if (outcome.staminaCost > 0) {
        let remaining = outcome.staminaCost;
        const rollCostOrder = party.characters.map((_, i) => i);
+       const usePartyOnlyMaze = usePartyOnlyForHeartsStamina(party);
        for (const idx of rollCostOrder) {
         if (remaining <= 0) break;
         const slot = party.characters[idx];
         let haveVal;
-        if (EXPLORATION_TESTING_MODE) {
+        if (usePartyOnlyMaze) {
          haveVal = typeof slot.currentStamina === "number" ? slot.currentStamina : 0;
         } else {
          const charDoc = await Character.findById(slot._id);
@@ -2222,7 +2264,7 @@ module.exports = {
         }
         const take = Math.min(remaining, haveVal);
         if (take > 0) {
-         if (!EXPLORATION_TESTING_MODE) {
+         if (!usePartyOnlyMaze) {
           const charDoc = await Character.findById(slot._id);
           if (charDoc) {
            charDoc.currentStamina = Math.max(0, haveVal - take);
@@ -2481,7 +2523,7 @@ module.exports = {
        const trapRoll = Math.floor(Math.random() * 6) + 1;
       const trapOutcome = getGrottoMazeTrapOutcome(trapRoll);
       if (trapOutcome.heartsLost > 0 && character._id) {
-       if (!EXPLORATION_TESTING_MODE) {
+       if (!usePartyOnlyForHeartsStamina(party)) {
         try {
          await useHearts(character._id, trapOutcome.heartsLost, { commandName: 'explore', operation: 'grotto_maze_trap_cell' });
         } catch (err) {
@@ -2499,10 +2541,11 @@ module.exports = {
       }
       if (trapOutcome.staminaCost > 0) {
        let remaining = trapOutcome.staminaCost;
+       const usePartyOnlyTrap = usePartyOnlyForHeartsStamina(party);
        for (let idx = 0; idx < party.characters.length && remaining > 0; idx++) {
         const slot = party.characters[idx];
         let haveVal;
-        if (EXPLORATION_TESTING_MODE) {
+        if (usePartyOnlyTrap) {
          haveVal = typeof slot.currentStamina === "number" ? slot.currentStamina : 0;
         } else {
          const charDoc = await Character.findById(slot._id);
@@ -2510,7 +2553,7 @@ module.exports = {
         }
         const take = Math.min(remaining, haveVal);
         if (take > 0) {
-         if (!EXPLORATION_TESTING_MODE) {
+         if (!usePartyOnlyTrap) {
           const charDoc = await Character.findById(slot._id);
           if (charDoc) {
            charDoc.currentStamina = Math.max(0, haveVal - take);
@@ -2567,10 +2610,12 @@ module.exports = {
          logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest: ${err?.message || err}`);
         }
        }
-       const charDoc = await Character.findById(character._id);
-       if (charDoc && party.characters) {
-        const idx = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
-        if (idx !== -1) party.characters[idx] = { ...party.characters[idx], ...charDoc.toObject?.() || charDoc };
+       if (!usePartyOnlyForHeartsStamina(party)) {
+        const charDoc = await Character.findById(character._id);
+        if (charDoc && party.characters) {
+         const idx = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
+         if (idx !== -1) party.characters[idx] = { ...party.characters[idx], ...charDoc.toObject?.() || charDoc };
+        }
        }
        if (!EXPLORATION_TESTING_MODE) await grotto.save();
        pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} opened a maze chest (moved ${displayDir}) and received a Spirit Orb.`, { itemName: "Spirit Orb", emoji: "💫" }, undefined, new Date());
@@ -2679,11 +2724,12 @@ module.exports = {
      return interaction.editReply(`Not enough stamina to travel to the grotto. Need ${totalCost} 🟩; party has ${partyStamina}.`);
     }
     let remaining = totalCost;
+    const usePartyOnlyTravel = usePartyOnlyForHeartsStamina(party);
     for (let ci = 0; ci < (party.characters || []).length; ci++) {
      if (remaining <= 0) break;
      const slot = party.characters[ci];
      let have;
-     if (EXPLORATION_TESTING_MODE) {
+     if (usePartyOnlyTravel) {
       have = typeof slot.currentStamina === "number" ? slot.currentStamina : 0;
      } else {
       const charDoc = await Character.findById(slot._id);
@@ -2692,7 +2738,7 @@ module.exports = {
      }
      const take = Math.min(remaining, have);
      if (take > 0) {
-      if (!EXPLORATION_TESTING_MODE) {
+      if (!usePartyOnlyTravel) {
        const charDoc = await Character.findById(slot._id);
        if (charDoc) {
         charDoc.currentStamina = Math.max(0, have - take);
@@ -2711,7 +2757,7 @@ module.exports = {
      pushProgressLog(party, character.name, "grotto_travel", `Party traveled to grotto at ${travelSquare} ${travelQuadrant} (−${totalCost} stamina).`, undefined, { staminaLost: totalCost }, new Date());
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Expedition: Arrived at Grotto**")
-      .setColor(regionColors[party.region] || "#00ff99")
+      .setColor(getExploreOutcomeColor("grotto_travel", regionColors[party.region] || "#00ff99"))
       .setDescription(`Party paid 1 🟩 and arrived at the grotto in **${travelSquare} ${travelQuadrant}**.\n\nIf the grotto is sealed, cleanse it. If unsealed, use </explore grotto continue:${getExploreCommandId()}> to enter the trial.`)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      addExplorationStandardFields(embed, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
@@ -2771,18 +2817,7 @@ module.exports = {
     const nextCharacter = party.characters[party.currentTurn] ?? null;
 
     if (discoveryType === "monster_camp") {
-     if (EXPLORATION_TESTING_MODE) {
-      pushProgressLog(party, character.name, "monster_camp_revisit", `Revisited monster camp at ${location} (testing mode — skipped).`, undefined, undefined, new Date());
-      party.currentTurn = (party.currentTurn + 1) % (party.characters?.length || 1);
-      // No persist in testing mode
-      const skipEmbed = new EmbedBuilder()
-       .setTitle("🗺️ **Expedition: Monster camp (testing — skipped)**")
-       .setColor(regionColors[party.region] || "#00ff99")
-       .setDescription(`Revisiting monster camp at **${location}**.\n\n⚠️ **Testing mode:** Waves are not created or persisted. Continue with </explore roll>.`)
-       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-      addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false });
-      return interaction.editReply({ embeds: [skipEmbed] });
-     }
+     // In testing mode waves still run; damage/hearts use party totals only (no persist to Character DB)
      const regionKey = (party.region && String(party.region).trim()) || "Eldin";
      const regionCapitalized = regionKey.charAt(0).toUpperCase() + regionKey.slice(1).toLowerCase();
      let camp;
@@ -2856,7 +2891,7 @@ module.exports = {
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Expedition: Revisiting Monster Camp**")
-      .setColor(regionColors[party.region] || "#00ff99")
+      .setColor(getExploreOutcomeColor("monster_camp_revisit", regionColors[party.region] || "#00ff99"))
       .setDescription(
        `Revisiting a monster camp at **${location}**. All party members must fight. Use </wave:${getWaveCommandId()}> (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**`
       )
@@ -2872,7 +2907,7 @@ module.exports = {
       // No persist in testing mode
       const skipEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Grotto revisit (testing — skipped)**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
        .setDescription(`Revisiting grotto at **${location}**.\n\n⚠️ **Testing mode:** Grottos are not created or persisted. Continue with </explore roll>.`)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false });
@@ -2902,7 +2937,7 @@ module.exports = {
       }
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Revisiting Grotto**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
        .setDescription(`Party is at grotto in **${location}**.\n\n**Trial:** ${trialLabel}\n\n${text}`)
        .setImage(revisitMazeImg);
       addExplorationStandardFields(embed, {
@@ -3004,7 +3039,7 @@ module.exports = {
       const blessingFlavorRevisit = getRandomBlessingFlavor();
       const blessingEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
-       .setColor(regionColors[party.region] || "#00ff99")
+       .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[party.region] || "#00ff99"))
        .setDescription(
         `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n` +
         blessingFlavorRevisit + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
@@ -3031,7 +3066,7 @@ module.exports = {
      }
      const continueEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
-      .setColor(regionColors[party.region] || "#00ff99")
+      .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[party.region] || "#00ff99"))
       .setDescription(continueDescRevisit)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      addExplorationStandardFields(continueEmbed, {
@@ -3120,7 +3155,7 @@ module.exports = {
       const nextCharacter = party.characters[party.currentTurn];
       const notYourTurnEmbed = new EmbedBuilder()
         .setTitle("⏳ Not Your Turn")
-        .setColor(regionColors[party.region] || "#FF9800")
+        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
         .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
@@ -3139,40 +3174,8 @@ module.exports = {
        party.quadrantState = q.status;
        party.markModified("quadrantState");
        rollStaminaCost = q.status === "secured" ? 0 : 1;
-      } else if (party.quadrantState === "unexplored" && party.square && party.quadrant) {
-       // Entering a quadrant counts as explored: ensure map and party are in sync (e.g. moved before this was persisted)
-       const mapSquareId = (party.square && String(party.square).trim()) || "";
-       const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
-       if (mapSquareId && mapQuadrantId) {
-        try {
-         const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-         await Square.updateOne(
-          { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
-          {
-           $set: {
-            "quadrants.$[q].status": "explored",
-            "quadrants.$[q].exploredBy": interaction.user?.id || party.leaderId || "",
-            "quadrants.$[q].exploredAt": new Date(),
-           },
-          },
-          { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
-         );
-         if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
-         party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
-         party.markModified("exploredQuadrantsThisRun");
-        } catch (mapErr) {
-         logger.error("EXPLORE", `[explore.js]❌ Mark quadrant explored (roll sync): ${mapErr.message}`);
-        }
-        party.quadrantState = "explored";
-        party.markModified("quadrantState");
-        const qSync = mapSquare.quadrants.find(
-         (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
-        );
-        if (qSync && qSync.blighted) {
-         await applyBlightExposure(party, party.square, party.quadrant, "reveal", character?.name);
-        }
-       }
       }
+      // Do NOT mark quadrant explored here — only the roll outcome "explored" should mark it and show the Quadrant Explored prompt (so first roll in a new quad costs 2 stamina and can trigger that prompt).
       // Known ruin-rest spot: auto-recover stamina when rolling here again — only if THIS expedition found a camp here
       const restStamina = typeof q?.ruinRestStamina === "number" && q.ruinRestStamina > 0 ? q.ruinRestStamina : 0;
       const partyFoundRuinRestHere = (party.ruinRestQuadrants || []).some(
@@ -3180,13 +3183,14 @@ module.exports = {
       );
       if (restStamina > 0 && partyFoundRuinRestHere && character) {
        const maxStam = typeof character.maxStamina === "number" ? character.maxStamina : (party.characters[characterIndex]?.currentStamina ?? 0);
-       const curStam = EXPLORATION_TESTING_MODE
+       const usePartyOnlyRuinRest = usePartyOnlyForHeartsStamina(party);
+       const curStam = usePartyOnlyRuinRest
          ? (typeof party.characters[characterIndex]?.currentStamina === "number" ? party.characters[characterIndex].currentStamina : 0)
          : (typeof character.currentStamina === "number" ? character.currentStamina : 0);
        const add = Math.min(restStamina, Math.max(0, maxStam - curStam));
        if (add > 0) {
         const newStam = Math.min(maxStam, curStam + add);
-        if (!EXPLORATION_TESTING_MODE) {
+        if (!usePartyOnlyRuinRest) {
           character.currentStamina = newStam;
           await character.save();
         }
@@ -3207,7 +3211,7 @@ module.exports = {
       const location = `${party.square} ${party.quadrant}`;
       const securedNoRollEmbed = new EmbedBuilder()
        .setTitle("🔒 **Quadrant Secured — No Roll**")
-       .setColor(regionColors[party.region] || "#FF9800")
+       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(
         `This quadrant (**${location}**) is already secured. You cannot roll here.\n\nUse **Move** to go to another quadrant, **Item** to use a healing item, or **Camp** to rest and recover hearts.`
        )
@@ -3318,15 +3322,17 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
-      // Mark quadrant as explored in the canonical map (exploringMap) — case-insensitive squareId to match dashboard
+      // Mark quadrant as explored in the canonical map (exploringMap). Use exact stored squareId/quadrantId so update always matches (DB may store e.g. "q1" not "Q1").
       if (!EXPLORATION_TESTING_MODE) {
       try {
-       const mapSquareId = (party.square && String(party.square).trim()) || "";
-       const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
-       if (mapSquareId && mapQuadrantId) {
-        const squareIdRegexExplored = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+       const resolved = await findExactMapSquareAndQuadrant(party.square, party.quadrant);
+       let updated = false;
+       let pushedSquareId = null;
+       let pushedQuadrantId = null;
+       if (resolved) {
+        const { exactSquareId, exactQuadrantId } = resolved;
         const result = await Square.updateOne(
-         { squareId: squareIdRegexExplored, "quadrants.quadrantId": mapQuadrantId },
+         { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
          {
           $set: {
            "quadrants.$[q].status": "explored",
@@ -3334,18 +3340,47 @@ module.exports = {
            "quadrants.$[q].exploredAt": new Date(),
           },
          },
-         { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+         { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
         );
         if (result.matchedCount === 0) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Map update: no square for ${mapSquareId} ${mapQuadrantId}`);
-        } else if (result.modifiedCount === 0) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Map: quadrant not updated ${mapSquareId} ${mapQuadrantId}`);
+         logger.warn("EXPLORE", `[explore.js]⚠️ Map update: no square for ${party.square} ${party.quadrant} (resolved: ${exactSquareId} ${exactQuadrantId})`);
+        } else if (result.modifiedCount > 0) {
+         updated = true;
+         pushedSquareId = exactSquareId;
+         pushedQuadrantId = exactQuadrantId;
         } else {
-         if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
-         party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
-         party.markModified("exploredQuadrantsThisRun");
-         await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+         logger.warn("EXPLORE", `[explore.js]⚠️ Map: quadrant not updated by arrayFilter ${exactSquareId} ${exactQuadrantId}`);
         }
+       } else {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Map update: could not find square/quadrant for ${party.square} ${party.quadrant}`);
+       }
+       // Fallback: if arrayFilter update didn't modify, try find-one + in-memory update (handles odd quadrantId storage)
+       if (!updated && party.square && party.quadrant) {
+        const squareDoc = await Square.findOne({
+         squareId: new RegExp(`^${String(party.square).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+        });
+        if (squareDoc && squareDoc.quadrants && squareDoc.quadrants.length) {
+         const qIndex = squareDoc.quadrants.findIndex(
+          (q) => String(q.quadrantId || "").toUpperCase() === String(party.quadrant).trim().toUpperCase()
+         );
+         if (qIndex >= 0) {
+          squareDoc.quadrants[qIndex].status = "explored";
+          squareDoc.quadrants[qIndex].exploredBy = interaction.user?.id || party.leaderId || "";
+          squareDoc.quadrants[qIndex].exploredAt = new Date();
+          squareDoc.markModified("quadrants");
+          await squareDoc.save();
+          updated = true;
+          pushedSquareId = squareDoc.squareId;
+          pushedQuadrantId = squareDoc.quadrants[qIndex].quadrantId;
+          logger.info("EXPLORE", `[explore.js] Map quadrant explored via fallback save: ${pushedSquareId} ${pushedQuadrantId}`);
+         }
+        }
+       }
+       if (updated && pushedSquareId && pushedQuadrantId) {
+        if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
+        party.exploredQuadrantsThisRun.push({ squareId: pushedSquareId, quadrantId: pushedQuadrantId });
+        party.markModified("exploredQuadrantsThisRun");
+        await party.save();
        }
       } catch (mapErr) {
        logger.error("EXPLORE", `[explore.js]❌ Update map quadrant status: ${mapErr.message}`);
@@ -3366,8 +3401,8 @@ module.exports = {
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
        .setDescription(`**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or secure, or move.`)
-       .setColor(regionColors[party.region] || "#00ff99")
-       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+.setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
+  .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
         party,
         expeditionId,
@@ -3388,11 +3423,12 @@ module.exports = {
       const fairyHealsOnSpot = Math.random() < 0.5;
       if (fairyHealsOnSpot) {
        let totalHeartsRecovered = 0;
+       const usePartyOnlyFairy = usePartyOnlyForHeartsStamina(party);
        for (let i = 0; i < party.characters.length; i++) {
         const partyChar = party.characters[i];
         let maxH;
         let currentH;
-        if (EXPLORATION_TESTING_MODE) {
+        if (usePartyOnlyFairy) {
          const char = await Character.findById(partyChar._id).lean();
          if (!char) continue;
          maxH = char.maxHearts ?? 0;
@@ -3419,7 +3455,7 @@ module.exports = {
        const fairyEmbed = new EmbedBuilder()
         .setTitle(`🧚 **Expedition: A Fairy Appeared!**`)
         .setDescription(`**${character.name}** encountered a fairy in **${location}**! The fairy swept over the party, restoring everyone to full hearts.`)
-        .setColor(regionColors[party.region] || "#E8D5F2")
+        .setColor(getExploreOutcomeColor("fairy", regionColors[party.region] || "#E8D5F2"))
         .setThumbnail("https://via.placeholder.com/100x100")
         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
        const healedChar = party.characters[characterIndex];
@@ -3469,18 +3505,20 @@ module.exports = {
       let campHeartsRecovered = 0;
       let campStaminaRecovered = 0;
       if (outcomeType === "camp") {
+       // Safe space: only the normal turn cost was paid (rollStaminaCost above); no extra stamina charge
        campHeartsRecovered = Math.floor(Math.random() * 3) + 1;
        campStaminaRecovered = Math.floor(Math.random() * 3) + 1;
        const campCharIndex = party.characters.findIndex((c) => c._id.toString() === character._id.toString());
        if (campCharIndex >= 0) {
         const slot = party.characters[campCharIndex];
-        const curH = EXPLORATION_TESTING_MODE ? (slot.currentHearts ?? 0) : (character.currentHearts ?? 0);
-        const curS = EXPLORATION_TESTING_MODE ? (slot.currentStamina ?? 0) : (character.currentStamina ?? 0);
+        const usePartyOnlyCampRoll = usePartyOnlyForHeartsStamina(party);
+        const curH = usePartyOnlyCampRoll ? (slot.currentHearts ?? 0) : (character.currentHearts ?? 0);
+        const curS = usePartyOnlyCampRoll ? (slot.currentStamina ?? 0) : (character.currentStamina ?? 0);
         const newH = Math.min(character.maxHearts ?? curH, curH + campHeartsRecovered);
         const newS = Math.min(character.maxStamina ?? curS, curS + campStaminaRecovered);
         party.characters[campCharIndex].currentHearts = newH;
         party.characters[campCharIndex].currentStamina = newS;
-        if (!EXPLORATION_TESTING_MODE) {
+        if (!usePartyOnlyCampRoll) {
          character.currentHearts = newH;
          character.currentStamina = newS;
          await character.save();
@@ -3590,7 +3628,8 @@ module.exports = {
       if (REPORTABLE_DISCOVERY_OUTCOMES.has(outcomeType) && outcomeType !== "ruins" && outcomeType !== "monster_camp" && outcomeType !== "grotto") {
        await pushDiscoveryToMap(party, outcomeType, at, interaction.user?.id);
       }
-      const progressOutcome = outcomeType === "ruins" ? "ruins_found" : outcomeType;
+      // Safe space = random roll event; camp = /explore camp command only
+      const progressOutcome = outcomeType === "ruins" ? "ruins_found" : outcomeType === "camp" ? "safe_space" : outcomeType;
       // Ruins, monster camp: defer progressLog until button choice (Yes = counts, No = skipped)
       // Grotto: log discovery immediately so dashboard shows it; choice (Yes/No) adds follow-up entries
       if (outcomeType !== "monster_camp" && outcomeType !== "ruins") {
@@ -3604,9 +3643,15 @@ module.exports = {
         at
        );
       }
-      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-      const nextCharacter = party.characters[party.currentTurn];
+      // Choice outcomes: don't advance until they choose; "Next" and ping = roller. Non-choice: advance now.
+      let nextCharacter;
+      if (outcomeType === "monster_camp" || outcomeType === "chest" || outcomeType === "ruins" || outcomeType === "grotto") {
+       nextCharacter = party.characters[party.currentTurn];
+      } else {
+       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+       nextCharacter = party.characters[party.currentTurn];
+      }
 
       let title, description;
       if (outcomeType === "monster_camp") {
@@ -3651,6 +3696,7 @@ module.exports = {
         "**Mark on map** — Save for later (counts toward this square's 3 discovery limit).\n" +
         "**Open** — Cleanse the grotto now (1 Goddess Plume + 1 stamina).";
       } else if (outcomeType === "camp") {
+       // Random event: safe space (instant recovery). Not the /explore camp command.
        const safeSpaceFlavorRoll = getRandomSafeSpaceFlavor();
        title = `🗺️ **Expedition: Found a safe space and rested!**`;
        description =
@@ -3660,8 +3706,8 @@ module.exports = {
       const embed = new EmbedBuilder()
        .setTitle(title)
        .setDescription(description)
-       .setColor(regionColors[party.region] || "#00ff99")
-       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+.setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
+  .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
       addExplorationStandardFields(embed, {
         party,
         expeditionId,
@@ -3716,7 +3762,10 @@ module.exports = {
         embeds: [failedNotifyEmbed],
        }).catch(() => {});
       }
-      await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      // Only ping next person when there are no buttons — if there are buttons, wait until they click (handler will ping)
+      if (components.length === 0 && nextCharacter?.userId) {
+       await interaction.followUp({ content: `<@${nextCharacter.userId}> it's your turn now` });
+      }
 
       if (isYesNoChoice || isMonsterCampChoice) {
        const expectedUserId = interaction.user.id;
@@ -3764,7 +3813,7 @@ module.exports = {
           const partyTotalHearts = Math.max(0, freshParty.totalHearts ?? 0);
           const noStaminaEmbed = new EmbedBuilder()
            .setTitle("❌ Not enough stamina or hearts to explore the ruins")
-           .setColor(regionColors[freshParty.region] || "#00ff99")
+           .setColor(getExploreOutcomeColor("ruins_explored", regionColors[freshParty.region] || "#00ff99"))
            .setDescription("Party has " + partyTotalStamina + " 🟩 and " + partyTotalHearts + " ❤ (need 3 total). **Camp** to recover, or use hearts to **Struggle** (1 heart = 1 stamina).")
            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
           addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
@@ -3835,14 +3884,13 @@ module.exports = {
           await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
           if (!EXPLORATION_TESTING_MODE) {
            try {
-            const mapSquareId = (freshParty.square && String(freshParty.square).trim()) || "";
-            const mapQuadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim().toUpperCase()) || "";
-            if (mapSquareId && mapQuadrantId) {
-             const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+            const resolvedRuinRest = await findExactMapSquareAndQuadrant(freshParty.square, freshParty.quadrant);
+            if (resolvedRuinRest) {
+             const { exactSquareId, exactQuadrantId } = resolvedRuinRest;
              await Square.updateOne(
-              { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+              { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
               { $set: { "quadrants.$[q].ruinRestStamina": recover } },
-              { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+              { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
              );
             }
            } catch (mapErr) {
@@ -3982,7 +4030,7 @@ module.exports = {
          const resultEmbed = new EmbedBuilder()
           .setTitle(resultTitle)
           .setDescription(resultDescription)
-          .setColor(regionColors[finalParty?.region] || "#00ff99")
+          .setColor(getExploreOutcomeColor("ruins_explored", regionColors[finalParty?.region] || "#00ff99"))
           .setImage(regionImages[finalParty?.region] || EXPLORATION_IMAGE_FALLBACK);
          addExplorationStandardFields(resultEmbed, {
           party: finalParty,
@@ -3994,12 +4042,15 @@ module.exports = {
           ruinRestRecovered,
           hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(finalParty.square, finalParty.quadrant),
         });
-         const explorePageUrl = getExplorePageUrl(expeditionId);
-         resultEmbed.addFields({
-          name: "📍 **__Set pin on webpage__**",
-          value: `Set a pin for this discovery on the **explore/${expeditionId}** page: ${explorePageUrl}`,
-          inline: false,
-         });
+         // Only prompt to set a pin when ruins yielded a rest spot (camp); other outcomes are not placed on the map
+         if (ruinsOutcome === "camp") {
+          const explorePageUrl = getExplorePageUrl(expeditionId);
+          resultEmbed.addFields({
+           name: "📍 **__Set pin on webpage__**",
+           value: `Set a pin for this discovery on the **explore/${expeditionId}** page: ${explorePageUrl}`,
+           inline: false,
+          });
+         }
 
          if (ruinsOutcome === "chest") {
           const chestRow = new ActionRowBuilder().addComponents(
@@ -4041,7 +4092,7 @@ module.exports = {
               const fp = await Party.findActiveByPartyId(expeditionId);
               const noStamEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
-               .setColor(regionColors[fp?.region] || "#00ff99")
+               .setColor(getExploreOutcomeColor("ruins_explored", regionColors[fp?.region] || "#00ff99"))
                .setDescription(resultDescription.split("\n\n")[0] + "\n\n❌ **Not enough stamina or hearts to open the chest.** Party has " + (fp?.totalStamina ?? 0) + " 🟩 and " + (fp?.totalHearts ?? 0) + " ❤ (need 1). **Camp** to recover, or use hearts to **Struggle** (1 heart = 1 stamina).")
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(fp.square, fp.quadrant) });
@@ -4052,18 +4103,18 @@ module.exports = {
               const fp = await Party.findActiveByPartyId(expeditionId);
               const openedEmbed = new EmbedBuilder()
                .setTitle(resultTitle)
-               .setColor(regionColors[fp?.region] || "#00ff99")
+               .setColor(getExploreOutcomeColor("ruins_explored", regionColors[fp?.region] || "#00ff99"))
                .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest opened!** Continue with </explore roll:${getExploreCommandId()}>.`)
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(openedEmbed, { party: fp, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(fp.square, fp.quadrant) });
               await resultMsg.edit({ embeds: [openedEmbed], components: [chestDisabledRow] }).catch(() => {});
               await ci.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
-              if (result.nextCharacter?.userId) await ci.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
+              // Don't ping next person here — ping only when they click roll/item
              }
             } else {
              const skipEmbed = new EmbedBuilder()
               .setTitle(resultTitle)
-              .setColor(regionColors[finalParty?.region] || "#00ff99")
+              .setColor(getExploreOutcomeColor("ruins_explored", regionColors[finalParty?.region] || "#00ff99"))
               .setDescription(resultDescription.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${getExploreCommandId()}>.`)
               .setImage(regionImages[finalParty?.region] || EXPLORATION_IMAGE_FALLBACK);
              addExplorationStandardFields(skipEmbed, { party: finalParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(finalParty.square, finalParty.quadrant) });
@@ -4134,20 +4185,22 @@ module.exports = {
            addExplorationStandardFields(openedEmbed, { party: freshParty, expeditionId, location, nextCharacter: result.nextCharacter ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
            await msg.edit({ embeds: [openedEmbed], components: [disabledRow] }).catch(() => {});
            await i.followUp({ embeds: [result.lootEmbed] }).catch(() => {});
-           if (result.nextCharacter?.userId) {
-            await i.followUp({ content: `<@${result.nextCharacter.userId}> it's your turn now` }).catch(() => {});
-           }
+           // Don't ping next person here — ping only when they click roll/item
            return;
           }
           return;
          }
+         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+         await party.save();
+         const nextAfterChestNo = party.characters[party.currentTurn];
          const skipEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Expedition: Chest wasn't opened!**")
-          .setColor(regionColors[party.region] || "#00ff99")
+          .setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
           .setDescription(description.split("\n\n")[0] + `\n\n**Chest wasn't opened!** Continue with </explore roll:${getExploreCommandId()}>.`)
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-         addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+         addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter: nextAfterChestNo, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
          await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
+         if (nextAfterChestNo?.userId) await i.followUp({ content: `<@${nextAfterChestNo.userId}> it's your turn now` }).catch(() => {});
         return;
         }
 
@@ -4162,17 +4215,20 @@ module.exports = {
          if (monsterCampChoice === "mark") {
           await pushDiscoveryToMap(party, "monster_camp", at, i.user?.id);
           pushProgressLog(party, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map (fight later).`, undefined, monsterCampCosts, at);
+          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
           await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+          const nextAfterChoice = party.characters[party.currentTurn];
           const monsterCampEmbed = new EmbedBuilder()
            .setTitle("🗺️ **Expedition: Monster Camp found!**")
-           .setColor(regionColors[party.region] || "#00ff99")
+           .setColor(getExploreOutcomeColor("monster_camp", regionColors[party.region] || "#00ff99"))
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
             `✅ **Marked on map.** You can fight it when you return (or after the next Blood Moon if already cleared). Continue with </explore roll:${getExploreCommandId()}>.`
            )
            .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-          addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+          addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
+          if (nextAfterChoice?.userId) await i.followUp({ content: `<@${nextAfterChoice.userId}> it's your turn now` }).catch(() => {});
           return;
          }
          if (monsterCampChoice === "fight") {
@@ -4181,19 +4237,7 @@ module.exports = {
            await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
            return;
           }
-          if (EXPLORATION_TESTING_MODE) {
-           pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location} (testing mode — skipped).`, undefined, monsterCampCosts, at);
-           freshParty.currentTurn = (freshParty.currentTurn + 1) % (freshParty.characters?.length || 1);
-           // No persist in testing mode
-           const skipEmbed = new EmbedBuilder()
-            .setTitle("🗺️ **Expedition: Monster camp (testing — skipped)**")
-            .setColor(regionColors[freshParty.region] || "#00ff99")
-            .setDescription(`Found a monster camp in **${location}**.\n\n⚠️ **Testing mode:** Waves are not created or persisted. Continue with </explore roll:${getExploreCommandId()}>.`)
-            .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
-           addExplorationStandardFields(skipEmbed, { party: freshParty, expeditionId, location, nextCharacter: freshParty.characters[freshParty.currentTurn] ?? nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant) });
-           await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
-           return;
-          }
+          // In testing mode waves still run; damage/hearts use party totals only (no persist to Character DB)
           await pushDiscoveryToMap(freshParty, "monster_camp", at, i.user?.id);
           pushProgressLog(freshParty, character.name, "monster_camp", `Found a monster camp in ${location}; marked on map and fighting now.`, undefined, monsterCampCosts, at);
           const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
@@ -4214,7 +4258,7 @@ module.exports = {
            await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
            const blockedEmbed = new EmbedBuilder()
             .setTitle("🗺️ **Expedition: Monster Camp found!**")
-            .setColor(regionColors[freshParty.region] || "#00ff99")
+            .setColor(getExploreOutcomeColor("monster_camp_fight_blocked", regionColors[freshParty.region] || "#00ff99"))
             .setDescription(
              description.split("\n\n")[0] + "\n\n" +
              `🔴 **This camp was recently cleared.** Wait for the next Blood Moon to fight it again. Continue with </explore roll:${getExploreCommandId()}>.`
@@ -4285,7 +4329,7 @@ module.exports = {
           await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
           const monsterCampEmbed = new EmbedBuilder()
            .setTitle("🗺️ **Expedition: Monster Camp found!**")
-           .setColor(regionColors[freshParty.region] || "#00ff99")
+           .setColor(getExploreOutcomeColor("monster_camp_fight", regionColors[freshParty.region] || "#00ff99"))
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
             `✅ **Marked on map and fighting now!** All party members must fight. Use </wave:${getWaveCommandId()}> to take turns (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**`
@@ -4297,20 +4341,22 @@ module.exports = {
          }
          if (monsterCampChoice === "leave") {
           pushProgressLog(party, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; didn't mark it (won't count toward discovery limit).`, undefined, monsterCampCosts, at);
+          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
           await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+          const nextAfterChoice = party.characters[party.currentTurn];
           const monsterCampEmbed = new EmbedBuilder()
            .setTitle("🗺️ **Expedition: Monster Camp found!**")
-           .setColor(regionColors[party.region] || "#00ff99")
+           .setColor(getExploreOutcomeColor("monster_camp_skipped", regionColors[party.region] || "#00ff99"))
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
             `✅ **${character.name} chose to ignore the monster camp.** Won't be recorded as a discovery (squares have 3 max). Continue with </explore roll:${getExploreCommandId()}>.`
            )
            .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-          addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+          addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
-          if (nextCharacter?.userId) {
+          if (nextAfterChoice?.userId) {
            await i.followUp({
-            content: `**${character.name}** chose to ignore the monster camp. <@${nextCharacter.userId}> take your turn.`,
+            content: `**${character.name}** chose to ignore the monster camp. <@${nextAfterChoice.userId}> take your turn.`,
            }).catch(() => {});
           }
           return;
@@ -4320,22 +4366,27 @@ module.exports = {
         if (outcomeType === "grotto") {
          const at = new Date();
          if (isYes) {
-          await handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextCharacter, ruinRestRecovered);
+          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+          await party.save();
+          const nextAfterChoice = party.characters[party.currentTurn];
+          await handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextAfterChoice, ruinRestRecovered);
           return;
          }
          // No = mark on map for later
          await pushDiscoveryToMap(party, "grotto", at, i.user?.id);
          pushProgressLog(party, character.name, "grotto", `Found a grotto in ${location}; marked on map for later.`, undefined, undefined, at);
+         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+         const nextAfterChoice = party.characters[party.currentTurn];
          const grottoEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Expedition: Grotto found!**")
-          .setColor(regionColors[party.region] || "#00ff99")
+          .setColor(getExploreOutcomeColor("grotto", regionColors[party.region] || "#00ff99"))
           .setDescription(
            description.split("\n\n")[0] + "\n\n" +
            `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`
           )
           .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-         addExplorationStandardFields(grottoEmbed, { party, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+         addExplorationStandardFields(grottoEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
          const explorePageUrlNo = getExplorePageUrl(expeditionId);
          grottoEmbed.addFields({
           name: "📍 **__Set pin on webpage__**",
@@ -4345,11 +4396,11 @@ module.exports = {
          await msg.edit({ embeds: [grottoEmbed], components: [disabledRow] }).catch(() => {});
          const decisionEmbed = new EmbedBuilder()
           .setTitle("✅ **Decision made**")
-          .setColor(regionColors[party.region] || "#00ff99")
+          .setColor(getExploreOutcomeColor("grotto", regionColors[party.region] || "#00ff99"))
           .setDescription(`**${character.name}** marked the grotto on the map for later. Continue with </explore roll:${getExploreCommandId()}>.`);
          await i.followUp({ embeds: [decisionEmbed] }).catch(() => {});
-         if (nextCharacter?.userId) {
-          await i.followUp({ content: `**${character.name}** marked it on the map. <@${nextCharacter.userId}> take your turn.` }).catch(() => {});
+         if (nextAfterChoice?.userId) {
+          await i.followUp({ content: `**${character.name}** marked it on the map. <@${nextAfterChoice.userId}> take your turn.` }).catch(() => {});
          }
          return;
         }
@@ -4357,14 +4408,16 @@ module.exports = {
         if (outcomeType === "ruins" && !isYes) {
          const at = new Date();
          pushProgressLog(party, character.name, "ruins_skipped", `Found ruins in ${location}; left for later (won't count toward discovery limit).`, undefined, undefined, at);
+         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
         }
 
+        const nextForChoiceEmbed = (outcomeType === "ruins" && !isYes) ? party.characters[party.currentTurn] : nextCharacter;
         const intro = description.split("\n\n")[0];
         const choiceEmbed = new EmbedBuilder()
          .setTitle(title)
-         .setColor(regionColors[party.region] || "#00ff99")
-         .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+.setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
+  .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
         if (outcomeType === "ruins") {
          choiceEmbed.setDescription(
           intro +
@@ -4386,16 +4439,16 @@ module.exports = {
           party,
           expeditionId,
           location,
-          nextCharacter: nextCharacter ?? null,
+          nextCharacter: nextForChoiceEmbed ?? null,
           showNextAndCommands: true,
           showRestSecureMove: false,
           ruinRestRecovered,
           hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
         });
         await msg.edit({ embeds: [choiceEmbed], components: [disabledRow] }).catch(() => {});
-        if (outcomeType === "ruins" && !isYes && nextCharacter?.userId) {
+        if (outcomeType === "ruins" && !isYes && nextForChoiceEmbed?.userId) {
          await i.followUp({
-          content: `**${character.name}** decided not to explore the ruins! <@${nextCharacter.userId}> take your turn.`,
+          content: `**${character.name}** decided not to explore the ruins! <@${nextForChoiceEmbed.userId}> take your turn.`,
          }).catch(() => {});
         }
         } catch (collectErr) {
@@ -4526,6 +4579,7 @@ module.exports = {
       appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}`);
 
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
+       logger.info("EXPLORE", `[explore.js] Monster tier ${selectedMonster.tier} > 4 → starting raid (${selectedMonster.name}); damage handled in raid flow.`);
        try {
         const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
         const raidResult = await triggerRaid(
@@ -4648,6 +4702,8 @@ module.exports = {
         defenseSuccess,
        } = calculateFinalValue(character, diceRoll);
 
+       logger.info("EXPLORE", `[explore.js] Monster encounter (tier ${selectedMonster.tier}): ${character.name} vs ${selectedMonster.name} | diceRoll=${diceRoll} damageValue=${damageValue} adjustedRandomValue=${adjustedRandomValue} attackSuccess=${attackSuccess} defenseSuccess=${defenseSuccess} skipPersist=${!!EXPLORATION_TESTING_MODE}`);
+
        const outcome = await getEncounterOutcome(
         character,
         selectedMonster,
@@ -4655,14 +4711,18 @@ module.exports = {
         adjustedRandomValue,
         attackSuccess,
         defenseSuccess,
-        EXPLORATION_TESTING_MODE ? { skipPersist: true } : {}
+        usePartyOnlyForHeartsStamina(party) ? { skipPersist: true } : {}
        );
+
+       logger.info("EXPLORE", `[explore.js] Encounter outcome: result=${outcome.result} hearts=${outcome.hearts ?? 0} canLoot=${!!outcome.canLoot}`);
 
        if (outcome.hearts > 0) {
         const slotCurH = typeof party.characters[characterIndex]?.currentHearts === "number" ? party.characters[characterIndex].currentHearts : (character.currentHearts ?? 0);
         const newHearts = Math.max(0, slotCurH - outcome.hearts);
+        const persistToChar = !usePartyOnlyForHeartsStamina(party);
+        logger.info("EXPLORE", `[explore.js] Applying damage: ${character.name} slotCurH=${slotCurH} outcome.hearts=${outcome.hearts} newHearts=${newHearts} persistToChar=${persistToChar}`);
         party.characters[characterIndex].currentHearts = newHearts;
-        if (!EXPLORATION_TESTING_MODE) {
+        if (persistToChar) {
          character.currentHearts = newHearts;
          if (newHearts === 0) await handleKO(character._id);
          await character.save();
@@ -4670,6 +4730,8 @@ module.exports = {
         party.characters[characterIndex].currentStamina = party.characters[characterIndex]?.currentStamina ?? character.currentStamina;
         party.markModified("characters");
         recomputePartyTotals(party);
+       } else {
+        logger.info("EXPLORE", `[explore.js] No damage this encounter (outcome.hearts=${outcome.hearts ?? 0})`);
        }
 
        if (party.totalHearts <= 0) {
@@ -4835,7 +4897,7 @@ module.exports = {
      const nextCharacter = party.characters[party.currentTurn];
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
-       .setColor(regionColors[party.region] || "#FF9800")
+       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
@@ -4846,7 +4908,7 @@ module.exports = {
      const nextChar = party.characters[party.currentTurn];
      const notExploredEmbed = new EmbedBuilder()
        .setTitle("🔒 Quadrant Not Explored")
-       .setColor(regionColors[party.region] || "#FF9800")
+       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(
          `You can only **Secure** quadrants that have been fully explored.\n\n` +
          `**${locationSecure}** has not been explored yet. Use **Explore** to reveal this quadrant, then you can secure it.`
@@ -4901,7 +4963,7 @@ module.exports = {
      const nextChar = party.characters[party.currentTurn];
      const embed = new EmbedBuilder()
       .setTitle("🚫 **Cannot Secure Quadrant**")
-      .setColor(regionColors[party.region] || "#FF9800")
+      .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
       .setDescription(
         `To secure **${locationSecure}**, the party needs **Wood** and **Eldin Ore** (in someone's expedition loadout).\n\nContinue exploring to find these resources, then try **Secure** again. Use the commands below for your next action.`
       )
@@ -4936,7 +4998,7 @@ module.exports = {
     const locationSecure = `${party.square} ${party.quadrant}`;
     const confirmEmbed = new EmbedBuilder()
      .setTitle("⚠️ **Are you sure?**")
-     .setColor(regionColors[party.region] || "#FF9800")
+     .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
      .setDescription(
       `**Securing ${locationSecure}** will make this quadrant safe (no stamina cost to move here), but:\n\n` +
       "• **You will no longer be able to roll for encounters or items here.**\n" +
@@ -4992,7 +5054,7 @@ module.exports = {
       if (i.customId.includes("_cancel")) {
        const cancelledEmbed = new EmbedBuilder()
         .setTitle("Secure cancelled")
-        .setColor(regionColors[party.region] || "#FF9800")
+        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
         .setDescription("No changes made. You can continue exploring or secure again when ready.");
        addExplorationStandardFields(cancelledEmbed, {
         party,
@@ -5051,7 +5113,7 @@ module.exports = {
       if (!securePayResult.ok) {
        const noStaminaEmbed = new EmbedBuilder()
         .setTitle("Not enough stamina or hearts")
-        .setColor(regionColors[freshParty.region] || "#FF9800")
+        .setColor(getExploreOutcomeColor("secure", regionColors[freshParty.region] || "#FF9800"))
         .setDescription(
           `Need ${staminaCost} total to secure. Party has ${freshParty.totalStamina ?? 0} stamina and ${freshParty.totalHearts ?? 0} hearts. **Camp** to recover or use hearts to **Struggle**.`
         )
@@ -5103,32 +5165,33 @@ module.exports = {
       }
       freshParty.markModified("characters");
 
-      // Mark quadrant as secured in the canonical map
-      const mapSquareId = (freshParty.square && String(freshParty.square).trim()) || "";
-      const mapQuadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()).toUpperCase() || "";
-      if (mapSquareId && mapQuadrantId) {
+      // Mark quadrant as secured in the canonical map (use exact stored ids for robust update)
+      const resolvedSecure = await findExactMapSquareAndQuadrant(freshParty.square, freshParty.quadrant);
+      if (resolvedSecure) {
        try {
-        const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+        const { exactSquareId, exactQuadrantId } = resolvedSecure;
         const mapResult = await Square.updateOne(
-         { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+         { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
          { $set: { "quadrants.$[q].status": "secured" } },
-         { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+         { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
         );
         if (mapResult.matchedCount === 0) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Secure map: no square ${mapSquareId} ${mapQuadrantId}`);
+         logger.warn("EXPLORE", `[explore.js]⚠️ Secure map: no square for ${freshParty.square} ${freshParty.quadrant}`);
         } else {
          if (!freshParty.exploredQuadrantsThisRun) freshParty.exploredQuadrantsThisRun = [];
          const alreadyHas = freshParty.exploredQuadrantsThisRun.some(
-          (r) => String(r?.squareId || "").toUpperCase() === mapSquareId.toUpperCase() && String(r?.quadrantId || "").toUpperCase() === mapQuadrantId
+          (r) => String(r?.squareId || "").toUpperCase() === exactSquareId.toUpperCase() && String(r?.quadrantId || "").toUpperCase() === exactQuadrantId.toUpperCase()
          );
          if (!alreadyHas) {
-          freshParty.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
+          freshParty.exploredQuadrantsThisRun.push({ squareId: exactSquareId, quadrantId: exactQuadrantId });
           freshParty.markModified("exploredQuadrantsThisRun");
          }
         }
        } catch (mapErr) {
         logger.error("EXPLORE", `[explore.js]❌ Update map to secured: ${mapErr.message}`);
        }
+      } else {
+       logger.warn("EXPLORE", `[explore.js]⚠️ Secure map: could not find square/quadrant for ${freshParty.square} ${freshParty.quadrant}`);
       }
 
       freshParty.quadrantState = "secured";
@@ -5149,7 +5212,7 @@ module.exports = {
       const nextCharacterSecure = freshParty.characters[freshParty.currentTurn];
       const embed = new EmbedBuilder()
        .setTitle(`🗺️ **Expedition: Secured ${locationSecure}**`)
-       .setColor(regionColors[freshParty.region] || "#FF9800")
+       .setColor(getExploreOutcomeColor("secure", regionColors[freshParty.region] || "#FF9800"))
        .setDescription(
         `${freshParty.characters[freshCharIndex].name} secured the quadrant using resources (-${staminaCost} party stamina).`
        )
@@ -5229,7 +5292,7 @@ module.exports = {
      const nextCharacter = party.characters[party.currentTurn];
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
-       .setColor(regionColors[party.region] || "#FF9800")
+       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
@@ -5281,7 +5344,7 @@ module.exports = {
     if (quadrantState !== "explored" && quadrantState !== "secured") {
      const moveBlockedEmbed = new EmbedBuilder()
       .setTitle("🚫 **Move not available**")
-      .setColor(regionColors[party.region] || "#b91c1c")
+      .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#b91c1c"))
       .setDescription(
        "You can't use **Move** right now. This quadrant hasn't been explored yet.\n\n" +
        `Use </explore roll:${getExploreCommandId()}> to explore the current quadrant first. **Move** only becomes available when the expedition prompts you (e.g. after exploring, or when the quadrant is secured).`
@@ -5303,7 +5366,7 @@ module.exports = {
      if (!moveWasPrompted) {
       const moveBlockedEmbed = new EmbedBuilder()
        .setTitle("🚫 **Move not available**")
-       .setColor(regionColors[party.region] || "#b91c1c")
+       .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#b91c1c"))
        .setDescription(
         "You can't use **Move** right now. The expedition hasn't prompted you to move.\n\n" +
         `Use </explore roll:${getExploreCommandId()}> (or respond to the current prompt) until you see the **Quadrant Explored** menu with Roll, Item, Camp, Secure, and **Move**. Only then can you use **Move**.`
@@ -5415,7 +5478,7 @@ module.exports = {
        const locationMove = `${currentSquare} ${party.quadrant}`;
        const cantLeaveEmbed = new EmbedBuilder()
         .setTitle("🚫 **Can't leave yet**")
-        .setColor(regionColors[party.region] || "#b91c1c")
+        .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#b91c1c"))
         .setDescription(
          `You can't leave **${currentSquare}** until the whole square is explored.\n\n` +
          `**Still unexplored:** ${quadList}\n\n` +
@@ -5469,37 +5532,11 @@ module.exports = {
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
-    // Entering a quadrant counts as exploring it: mark explored in map and party (unless already secured)
-    if (destinationQuadrantState === "unexplored") {
-     const mapSquareId = (newLocation.square && String(newLocation.square).trim()) || "";
-     const mapQuadrantId = (newLocation.quadrant && String(newLocation.quadrant).trim().toUpperCase()) || "";
-     if (mapSquareId && mapQuadrantId) {
-      try {
-       const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-       await Square.updateOne(
-        { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
-        {
-         $set: {
-          "quadrants.$[q].status": "explored",
-          "quadrants.$[q].exploredBy": interaction.user?.id || party.leaderId || "",
-          "quadrants.$[q].exploredAt": new Date(),
-         },
-        },
-        { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
-       );
-       if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
-       party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
-       party.markModified("exploredQuadrantsThisRun");
-      } catch (mapErr) {
-       logger.error("EXPLORE", `[explore.js]❌ Mark quadrant explored (move): ${mapErr.message}`);
-      }
-     }
-     destinationQuadrantState = "explored";
-    }
+    // Do NOT mark quadrant explored on move — exploration is completed by a roll outcome "explored", which shows the Quadrant Explored prompt and then marks it.
     party.quadrantState = destinationQuadrantState;
     party.markModified("quadrantState");
     const locationMove = `${newLocation.square} ${newLocation.quadrant}`;
-    const quadrantStateLabel = destinationQuadrantState === "secured" ? "secured" : "explored";
+    const quadrantStateLabel = destinationQuadrantState === "secured" ? "secured" : destinationQuadrantState === "explored" ? "explored" : "unexplored";
     const directionLabel = newLocation.direction || "to";
     pushProgressLog(
      party,
@@ -5556,7 +5593,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Moved to ${newLocation.square} ${newLocation.quadrant}**`)
-     .setColor(regionColors[party.region] || "#2196F3")
+     .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#2196F3"))
      .setDescription(moveDescription)
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     const moveToSecured = destinationQuadrantState === "secured";
@@ -5643,20 +5680,17 @@ module.exports = {
      );
     }
 
-    if (hearts > 0) {
-     character.currentHearts = Math.min(
-      character.maxHearts,
-      character.currentHearts + hearts
-     );
+    const usePartyOnlyItem = usePartyOnlyForHeartsStamina(party);
+    const curH = usePartyOnlyItem ? (partyChar.currentHearts ?? 0) : (character.currentHearts ?? 0);
+    const curS = usePartyOnlyItem ? (partyChar.currentStamina ?? 0) : (character.currentStamina ?? 0);
+    const newH = hearts > 0 ? Math.min(character.maxHearts ?? curH, curH + hearts) : curH;
+    const newS = stamina > 0 ? Math.min(character.maxStamina ?? curS, curS + stamina) : curS;
+    partyChar.currentHearts = newH;
+    partyChar.currentStamina = newS;
+    if (!usePartyOnlyItem) {
+     character.currentHearts = newH;
+     character.currentStamina = newS;
     }
-    if (stamina > 0) {
-     character.currentStamina = Math.min(
-      character.maxStamina,
-      character.currentStamina + stamina
-     );
-    }
-    partyChar.currentHearts = character.currentHearts;
-    partyChar.currentStamina = character.currentStamina;
 
     // Always remove from party loadout so it appears used (testing: still no DB change to character inventory)
     partyChar.items.splice(itemIndex, 1);
@@ -5670,7 +5704,7 @@ module.exports = {
     } catch (raidErr) {
       logger.warn("EXPLORE", `[explore.js] advanceRaidTurnOnItemUse: ${raidErr?.message || raidErr}`);
     }
-    if (!EXPLORATION_TESTING_MODE) await character.save();
+    if (!usePartyOnlyItem) await character.save();
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
@@ -5687,7 +5721,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Used item — ${carried.itemName}**`)
-     .setColor(regionColors[party.region] || "#4CAF50")
+     .setColor(getExploreOutcomeColor("item", regionColors[party.region] || "#4CAF50"))
      .setDescription(
       `${character.name} used **${carried.itemName}** (${effect}).`
      )
@@ -5852,17 +5886,20 @@ module.exports = {
       }
      }
      await Grotto.deleteMany({ partyId: expeditionId }).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Grotto delete on end: ${err?.message}`));
-     // Revert quadrants marked explored/secured during this run back to unexplored
+     // Revert quadrants marked explored/secured during this run back to unexplored (resolve by exact ids for robustness)
      const exploredThisRunEnd = party.exploredQuadrantsThisRun || [];
      if (exploredThisRunEnd.length > 0) {
       for (const { squareId, quadrantId } of exploredThisRunEnd) {
        if (squareId && quadrantId) {
-        const squareIdRegex = new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-        await Square.updateOne(
-         { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
-         { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
-         { arrayFilters: [{ "q.quadrantId": quadrantId }] }
-        ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end: reset quadrant to unexplored: ${err?.message}`));
+        const resolvedEnd = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+        if (resolvedEnd) {
+         const { exactSquareId, exactQuadrantId } = resolvedEnd;
+         await Square.updateOne(
+          { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+          { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+          { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
+         ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end: reset quadrant to unexplored: ${err?.message}`));
+        }
        }
       }
      }
@@ -5944,7 +5981,7 @@ module.exports = {
     const testingResetNote = EXPLORATION_TESTING_MODE ? "⚠️ **Testing mode:** No changes were saved.\n\n" : "";
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Returned Home**`)
-     .setColor(regionColors[party.region] || "#4CAF50")
+     .setColor(getExploreOutcomeColor("end", regionColors[party.region] || "#4CAF50"))
      .setDescription(
       `The expedition has ended.\n\n` +
       testingResetNote +
@@ -6036,7 +6073,7 @@ module.exports = {
      const nextCharacter = party.characters[party.currentTurn] ?? null;
      const embed = new EmbedBuilder()
       .setTitle("🏃 **Retreat successful**")
-      .setColor(regionColors[party.region] || 0x9C27B0)
+      .setColor(getExploreOutcomeColor("raid_over", regionColors[party.region] || "#9C27B0"))
       .setDescription(`The party escaped from **${monsterName}**!`)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      addExplorationStandardFields(embed, {
@@ -6071,7 +6108,7 @@ module.exports = {
     const raidIdDisplay = raid.raidId || raid._id?.toString() || "—";
     const retreatFailedEmbed = new EmbedBuilder()
       .setTitle("🏃 **Retreat failed**")
-      .setColor(regionColors[party.region] || 0xFF9800)
+      .setColor(getExploreOutcomeColor("retreat", regionColors[party.region] || "#FF9800"))
       .setDescription(
         `The party couldn't get away from **${monsterName}**!\n\n` +
         `**Try again:** ${cmdRetreat} with id \`${expeditionId}\` and your character — costs 1 stamina (or 1 heart if you're out of stamina).`
@@ -6098,6 +6135,7 @@ module.exports = {
     return interaction.editReply({ embeds: [retreatFailedEmbed] });
    // ------------------- Camp Command -------------------
    } else if (subcommand === "camp") {
+    // /explore camp command: set up camp (costs stamina, party recovers). Distinct from roll outcome "safe space".
     const expeditionId = normalizeExpeditionId(interaction.options.getString("id"));
     const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const userId = interaction.user.id;
@@ -6128,14 +6166,15 @@ module.exports = {
      const nextCharacter = party.characters[party.currentTurn];
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
-       .setColor(regionColors[party.region] || "#FF9800")
+       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
     const isSecured = party.quadrantState === "secured";
-    let staminaCost = isSecured ? 0 : 3;
+    // Camp costs 1 stamina (same as one roll in explored quad); secured = 0; stuck in wild = 0
+    let staminaCost = isSecured ? 0 : 1;
     let heartsPct = isSecured ? 0.5 : 0.25;
     const stuckInWild = staminaCost > 0 && party.totalStamina < staminaCost;
     if (stuckInWild) {
@@ -6143,11 +6182,113 @@ module.exports = {
      heartsPct = 0.25;
     }
 
+    // Chance of monster attack when camping: explored/unexplored 40%, secured 5%. When party has 0 stamina (exhausted), much more likely to be attacked.
+    let campAttackChance = isSecured ? CAMP_ATTACK_CHANCE_SECURED : CAMP_ATTACK_CHANCE_UNSECURED;
+    if (!isSecured && (party.totalStamina === 0 || (typeof party.totalStamina === "number" && party.totalStamina < 1))) {
+     campAttackChance = Math.min(CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP, campAttackChance + CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA);
+    }
+    const canBeAttackedAtCamp = !(character.blighted && character.blightStage >= 3) && Math.random() < campAttackChance;
+    if (canBeAttackedAtCamp) {
+     const loc = `${party.square} ${party.quadrant}`;
+     const monsters = await getMonstersByRegion(party.region?.toLowerCase() || "");
+     if (monsters && monsters.length > 0) {
+      const selectedMonster = getExplorationMonsterFromList(monsters);
+      if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
+       try {
+        const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
+        const raidResult = await triggerRaid(selectedMonster, interaction, village, false, character, false, expeditionId);
+        if (raidResult && raidResult.success) {
+         pushProgressLog(party, character.name, "camp", `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started.`, undefined, undefined, new Date());
+         await party.save();
+         const battleId = raidResult.raidId;
+         const raidData = raidResult.raidData || {};
+         const monsterHearts = raidData.monster ? { current: raidData.monster.currentHearts, max: raidData.monster.maxHearts } : { current: selectedMonster.hearts, max: selectedMonster.hearts };
+         const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, character, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant));
+         embed.setTitle(`🏕️ **Camp interrupted!** — ${selectedMonster.name}`);
+         embed.setDescription(`**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest — fight with </raid>.`);
+         embed.addFields(
+          { name: "💙 __Monster Hearts__", value: `${monsterHearts.current}/${monsterHearts.max}`, inline: true },
+          { name: "🆔 **__Raid ID__**", value: battleId, inline: true },
+          { name: "⚔️ __Raid__", value: "Raid in progress...", inline: false }
+         );
+         addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+         await interaction.editReply({ embeds: [embed] });
+         await interaction.followUp({ content: `<@${character.userId}> it's your turn now` });
+         return;
+        }
+       } catch (raidErr) {
+        logger.warn("EXPLORE", `[explore.js] Camp attack raid failed: ${raidErr?.message || raidErr}`);
+       }
+      }
+      // Tier 1–4 or raid disabled: resolve encounter inline (no rest)
+      const diceRoll = Math.floor(Math.random() * 100) + 1;
+      const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
+      logger.info("EXPLORE", `[explore.js] Camp-attack encounter: ${character.name} vs ${selectedMonster.name} tier=${selectedMonster.tier} | diceRoll=${diceRoll} adjustedRandomValue=${adjustedRandomValue} defenseSuccess=${defenseSuccess} skipPersist=${!!usePartyOnlyForHeartsStamina(party)}`);
+      const outcome = await getEncounterOutcome(character, selectedMonster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, usePartyOnlyForHeartsStamina(party) ? { skipPersist: true } : {});
+      logger.info("EXPLORE", `[explore.js] Camp-attack outcome: result=${outcome.result} hearts=${outcome.hearts ?? 0}`);
+      if (outcome.hearts > 0) {
+       const slotCurH = typeof party.characters[characterIndex]?.currentHearts === "number" ? party.characters[characterIndex].currentHearts : (character.currentHearts ?? 0);
+       const newHearts = Math.max(0, slotCurH - outcome.hearts);
+       logger.info("EXPLORE", `[explore.js] Camp-attack applying damage: slotCurH=${slotCurH} newHearts=${newHearts}`);
+       party.characters[characterIndex].currentHearts = newHearts;
+       if (!usePartyOnlyForHeartsStamina(party)) {
+        character.currentHearts = newHearts;
+        if (newHearts === 0) await handleKO(character._id);
+        await character.save();
+       }
+       party.characters[characterIndex].currentStamina = party.characters[characterIndex]?.currentStamina ?? character.currentStamina;
+       party.markModified("characters");
+       recomputePartyTotals(party);
+      }
+      if (party.totalHearts <= 0) {
+       await handleExpeditionFailed(party, interaction);
+       return;
+      }
+      let lootedItem = null;
+      if (outcome.canLoot) {
+       const items = await fetchItemsByMonster(selectedMonster.name);
+       const rawItem = items.length > 0 ? items[Math.floor(Math.random() * items.length)] : null;
+       lootedItem = await resolveExplorationMonsterLoot(selectedMonster.name, rawItem);
+      }
+      const campAttackMsg = outcome.hearts > 0
+       ? `Camp at ${loc} interrupted by **${selectedMonster.name}**! ${outcome.result}. Lost ${outcome.hearts} heart(s).${outcome.canLoot ? " Got loot." : ""}`
+       : `Camp at ${loc} interrupted by **${selectedMonster.name}**! ${outcome.result}.${outcome.canLoot ? " Got loot." : ""}`;
+      const campAttackCosts = outcome.hearts > 0 ? { heartsLost: outcome.hearts } : undefined;
+      pushProgressLog(party, character.name, "camp", campAttackMsg, lootedItem ? { itemName: lootedItem.itemName, emoji: lootedItem.emoji || "" } : undefined, campAttackCosts);
+      if (lootedItem && !EXPLORATION_TESTING_MODE) {
+       try {
+        await addItemInventoryDatabase(character._id, lootedItem.itemName, lootedItem.quantity ?? 1, interaction, "Exploration Loot");
+       } catch (e) {}
+      }
+      if (lootedItem) {
+       if (!party.gatheredItems) party.gatheredItems = [];
+       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: lootedItem.itemName, quantity: lootedItem.quantity ?? 1, emoji: lootedItem.emoji ?? "" });
+       party.markModified("gatheredItems");
+      }
+      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      await party.save();
+      const nextChar = party.characters[party.currentTurn];
+      const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, nextChar ?? null, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant));
+      embed.setTitle(`🏕️ **Camp interrupted!** — ${selectedMonster.name}`);
+      embed.setDescription(`**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest.\n\n${outcome.result || "Battle resolved."}`);
+      const hasEquippedWeapon = !!(character?.gearWeapon?.name);
+      const hasEquippedArmor = !!(character?.gearArmor?.head?.name || character?.gearArmor?.chest?.name || character?.gearArmor?.legs?.name);
+      const battleOutcomeDisplay = outcome.hearts > 0 ? generateDamageMessage(outcome.hearts) : (outcome.defenseSuccess ? generateDefenseBuffMessage(outcome.defenseSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedArmor) : (outcome.attackSuccess ? generateAttackBuffMessage(outcome.attackSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedWeapon) : generateVictoryMessage(outcome.adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess)));
+      embed.addFields({ name: "⚔️ __Battle Outcome__", value: battleOutcomeDisplay, inline: false });
+      if (outcome.canLoot && lootedItem) embed.addFields({ name: "🎉 __Loot__", value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**${(lootedItem.quantity ?? 1) > 1 ? ` x${lootedItem.quantity}` : ""}`, inline: false });
+      addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+      await interaction.editReply({ embeds: [embed] });
+      if (nextChar?.userId) await interaction.followUp({ content: `<@${nextChar.userId}> it's your turn now` });
+      return;
+     }
+    }
+
+    const usePartyOnlyCamp = usePartyOnlyForHeartsStamina(party);
     if (staminaCost > 0) {
      const campChar = party.characters[characterIndex];
      const curStam = typeof campChar.currentStamina === "number" ? campChar.currentStamina : 0;
      const newStam = Math.max(0, curStam - staminaCost);
-     if (!EXPLORATION_TESTING_MODE) {
+     if (!usePartyOnlyCamp) {
       const campCharDoc = await Character.findById(campChar._id);
       if (campCharDoc) {
        campCharDoc.currentStamina = newStam;
@@ -6165,10 +6306,10 @@ module.exports = {
      if (!char) continue;
      const maxHrt = char.maxHearts ?? 0;
      const maxStam = char.maxStamina ?? 0;
-     const curH = EXPLORATION_TESTING_MODE
+     const curH = usePartyOnlyCamp
        ? (typeof partyChar.currentHearts === "number" ? partyChar.currentHearts : 0)
        : (char.currentHearts ?? 0);
-     const curStam = EXPLORATION_TESTING_MODE
+     const curStam = usePartyOnlyCamp
        ? (typeof partyChar.currentStamina === "number" ? partyChar.currentStamina : 0)
        : (char.currentStamina ?? 0);
      const heartsRecovered = Math.floor(maxHrt * heartsPct);
@@ -6183,7 +6324,7 @@ module.exports = {
      recoveryPerMember.push({ name: char.name, hearts: heartsRecovered, stamina: staminaRecovered });
      const newHearts = Math.min(maxHrt, curH + heartsRecovered);
      party.characters[i].currentHearts = newHearts;
-     if (!EXPLORATION_TESTING_MODE) {
+     if (!usePartyOnlyCamp) {
       char.currentHearts = newHearts;
       if (stuckInWild && staminaRecovered > 0) char.currentStamina = party.characters[i].currentStamina;
       await char.save();
@@ -6225,7 +6366,7 @@ module.exports = {
     const costNote = staminaCost > 0 ? ` (-${staminaCost} stamina)` : (stuckInWild ? " (no cost — camp in the wild)" : "");
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
-     .setColor(regionColors[party.region] || "#4CAF50")
+     .setColor(getExploreOutcomeColor("camp", regionColors[party.region] || "#4CAF50"))
      .setDescription(
       `${character.name} set up camp.${costNote}\n\n\`\`\`\n${campFlavor}\n\`\`\``
      )

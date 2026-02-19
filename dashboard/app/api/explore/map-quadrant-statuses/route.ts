@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
     try {
       await connect();
       const Square = (await import("@/models/mapModel.js")).default;
-      const doc = await Square.findOne({ squareId: square }).lean() as {
+      const squareIdRegex = new RegExp(`^${square.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const doc = await Square.findOne({ squareId: squareIdRegex }).lean() as {
         quadrants?: Array<{ quadrantId: string; status?: string }>;
       } | null;
       if (doc?.quadrants && Array.isArray(doc.quadrants)) {
