@@ -598,7 +598,8 @@ function sanitizeEmbedField(field) {
   const name = rawName.slice(0, EMBED_FIELD_NAME_MAX) || "\u200b";
   const truncated = rawValue.length > EMBED_FIELD_VALUE_MAX;
   const value = (truncated ? rawValue.slice(0, EMBED_FIELD_VALUE_MAX - 1) + "…" : rawValue) || "\u200b";
-  return { ...field, name, value };
+  // Return only allowed keys so Discord.js/Shapeshift validators accept the field
+  return { name, value, inline: field.inline === true };
 }
 
 const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false }) => {
@@ -726,7 +727,8 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
   }
  }
- embed.addFields({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
+ const commandsField = sanitizeEmbedField({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
+ embed.addFields(commandsField);
  return embed;
 };
 

@@ -74,7 +74,7 @@ class MapModule {
                 addSquare(colIndex, rowIndex + 1, 'Q1', '↙ South-west');
                 addSquare(colIndex, rowIndex + 1, 'Q2', '↓ South');
                 addSquare(colIndex + 1, rowIndex, 'Q1', '→ East');
-                addSquare(colIndex + 1, rowIndex, 'Q3', '↘ South-east');
+                addSquare(colIndex + 1, rowIndex, 'Q3', '→ East');
                 addSquare(colIndex + 1, rowIndex + 1, 'Q1', '↘ South-east');
                 break;
             default:

@@ -152,6 +152,44 @@ export async function GET(
           }
         }
       }
+      // Ensure quadrants explored this run show as explored even if map DB wasn't updated (e.g. different DB or sync delay)
+      const exploredThisRun = Array.isArray(p.exploredQuadrantsThisRun)
+        ? (p.exploredQuadrantsThisRun as Array<{ squareId?: string; quadrantId?: string }>)
+        : [];
+      const currentSquareNorm = squareId.toUpperCase();
+      for (const v of exploredThisRun) {
+        const s = String(v.squareId ?? "").trim().toUpperCase();
+        const q = String(v.quadrantId ?? "").trim().toUpperCase();
+        if (s === currentSquareNorm && (q === "Q1" || q === "Q2" || q === "Q3" || q === "Q4")) {
+          if (quadrantStatuses[q] !== "secured") quadrantStatuses[q] = "explored";
+          if (q === quadrantId) quadrantState = "explored";
+        }
+      }
+      // When party is in "explored" state (just got "Quadrant Explored!" prompt), current quadrant must show as explored
+      if (quadrantState === "explored" && quadrantId && quadrantStatuses[quadrantId] !== "secured") {
+        quadrantStatuses[quadrantId] = "explored";
+      }
+
+      // Persist explored status to map DB so it's marked everywhere (dashboard and database). Never overwrite "secured".
+      const SquareModel =
+        mongoose.models.Square ??
+        ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+      for (const qId of ["Q1", "Q2", "Q3", "Q4"] as const) {
+        if (quadrantStatuses[qId] !== "explored") continue;
+        try {
+          const setPayload: Record<string, unknown> = { "quadrants.$[q].status": "explored" };
+          if (qId === quadrantId && quadrantState === "explored") {
+            setPayload["quadrants.$[q].exploredAt"] = new Date();
+          }
+          await SquareModel.updateOne(
+            { squareId: squareIdRegex },
+            { $set: setPayload },
+            { arrayFilters: [{ "q.quadrantId": qId, "q.status": { $ne: "secured" } }] }
+          );
+        } catch {
+          // ignore per-quadrant errors
+        }
+      }
     }
 
     const reportedDiscoveryKeys = Array.isArray(p.reportedDiscoveryKeys)

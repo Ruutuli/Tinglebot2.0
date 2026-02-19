@@ -521,6 +521,13 @@ const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "ruins_fo
 const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
 const DISCOVERY_REDUCE_CHANCE_WHEN_ANY = 0.25; // 75% less chance when square has 1+ discovery
 
+// One find per expedition (grotto, ruins, or monster_camp); progressLog outcomes that consume the find
+const FIND_OUTCOMES_ROLL = ["grotto", "ruins", "monster_camp"];
+const FIND_OUTCOMES_LOGGED = ["grotto_found", "ruins_found", "monster_camp", "monster_camp_found"];
+function partyHasFindThisExpedition(party) {
+  return (party.progressLog || []).some((e) => FIND_OUTCOMES_LOGGED.includes(String(e.outcome || "")));
+}
+
 const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 
 // ------------------- hasActiveGrottoAtLocation ------------------
@@ -1157,27 +1164,25 @@ async function handleExpeditionFailed(party, interaction) {
     await char.save();
    }
   }
-  // Reset any quadrants this expedition marked as Explored back to Unexplored (resolve by exact ids for robustness)
-  const exploredThisRun = party.exploredQuadrantsThisRun || [];
-  if (exploredThisRun.length > 0) {
-   for (const { squareId, quadrantId } of exploredThisRun) {
-    if (squareId && quadrantId) {
-     const resolved = await findExactMapSquareAndQuadrant(squareId, quadrantId);
-     if (resolved) {
-      const { exactSquareId, exactQuadrantId } = resolved;
-      await Square.updateOne(
-       { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
-       { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
-       { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
-      ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
-     }
+ }
+ // Always reset map and grottos on fail (production and testing) so state is clean
+ const exploredThisRun = party.exploredQuadrantsThisRun || [];
+ if (exploredThisRun.length > 0) {
+  for (const { squareId, quadrantId } of exploredThisRun) {
+   if (squareId && quadrantId) {
+    const resolved = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+    if (resolved) {
+     const { exactSquareId, exactQuadrantId } = resolved;
+     await Square.updateOne(
+      { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+      { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+      { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
+     ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
     }
    }
   }
  }
- if (EXPLORATION_TESTING_MODE) {
-  await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Grotto delete on fail: ${err?.message}`));
- }
+ await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Grotto delete on fail: ${err?.message}`));
 
  await closeRaidsForExpedition(party.partyId);
 
@@ -1187,6 +1192,10 @@ async function handleExpeditionFailed(party, interaction) {
  party.totalHearts = 0;
  party.totalStamina = 0;
  party.gatheredItems = [];
+ party.exploredQuadrantsThisRun = [];
+ party.visitedQuadrantsThisRun = [];
+ party.ruinRestQuadrants = [];
+ party.blightExposure = 0;
  for (const c of party.characters) {
   c.currentHearts = 0;
   c.currentStamina = 0;
@@ -3079,6 +3088,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        outcomeType = rollOutcome();
        continue;
       }
+      // One find per expedition (grotto, ruins, or monster_camp); prevents farming
+      if (FIND_OUTCOMES_ROLL.includes(outcomeType) && partyHasFindThisExpedition(party)) {
+       outcomeType = rollOutcome();
+       continue;
+      }
       if (!SPECIAL_OUTCOMES.includes(outcomeType)) break;
       if (specialCount >= MAX_SPECIAL_EVENTS_PER_SQUARE) {
        const reason = `special discovery count for this square is ${specialCount} (max ${MAX_SPECIAL_EVENTS_PER_SQUARE}); only counted outcomes: monster_camp/grotto/relic/ruins when accepted (monster_camp_skipped does not count)`;
@@ -3128,43 +3142,41 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         await party.save();
       }
 
-      // Mark quadrant as explored in the exploring map DB (collection 'exploringMap'). Use updateOne so the write persists regardless of find+save issues.
-      if (!EXPLORATION_TESTING_MODE) {
-        try {
-          const squareDoc = await Square.findOne({
-            squareId: new RegExp(`^${String(party.square).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-          });
-          if (squareDoc && squareDoc.quadrants && squareDoc.quadrants.length) {
-            const q = squareDoc.quadrants.find(
-              (qu) => String(qu.quadrantId || "").toUpperCase() === normQuad
-            );
-            if (q) {
-              const exactSquareId = squareDoc.squareId;
-              const exactQuadrantId = q.quadrantId;
-              const updateResult = await Square.updateOne(
-                { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
-                {
-                  $set: {
-                    "quadrants.$.status": "explored",
-                    "quadrants.$.exploredBy": interaction.user?.id || party.leaderId || "",
-                    "quadrants.$.exploredAt": new Date(),
-                  },
-                }
-              );
-              if (updateResult.modifiedCount > 0) {
-                logger.info("EXPLORE", `[explore.js] Exploring map DB updated: ${exactSquareId} ${exactQuadrantId} -> explored`);
-              } else if (updateResult.matchedCount === 0) {
-                logger.warn("EXPLORE", `[explore.js]⚠️ Map update: no document matched ${exactSquareId} / ${exactQuadrantId}`);
+      // Mark quadrant as explored in the exploring map DB (collection 'exploringMap'). Always persist so dashboard and DB stay in sync everywhere.
+      try {
+        const squareDoc = await Square.findOne({
+          squareId: new RegExp(`^${String(party.square).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+        });
+        if (squareDoc && squareDoc.quadrants && squareDoc.quadrants.length) {
+          const q = squareDoc.quadrants.find(
+            (qu) => String(qu.quadrantId || "").toUpperCase() === normQuad
+          );
+          if (q) {
+            const exactSquareId = squareDoc.squareId;
+            const exactQuadrantId = q.quadrantId;
+            const updateResult = await Square.updateOne(
+              { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+              {
+                $set: {
+                  "quadrants.$.status": "explored",
+                  "quadrants.$.exploredBy": interaction.user?.id || party.leaderId || "",
+                  "quadrants.$.exploredAt": new Date(),
+                },
               }
-            } else {
-              logger.warn("EXPLORE", `[explore.js]⚠️ Map update: quadrant not found in square ${party.square} ${party.quadrant}`);
+            );
+            if (updateResult.modifiedCount > 0) {
+              logger.info("EXPLORE", `[explore.js] Exploring map DB updated: ${exactSquareId} ${exactQuadrantId} -> explored`);
+            } else if (updateResult.matchedCount === 0) {
+              logger.warn("EXPLORE", `[explore.js]⚠️ Map update: no document matched ${exactSquareId} / ${exactQuadrantId}`);
             }
           } else {
-            logger.warn("EXPLORE", `[explore.js]⚠️ Map update: could not find square for ${party.square}`);
+            logger.warn("EXPLORE", `[explore.js]⚠️ Map update: quadrant not found in square ${party.square} ${party.quadrant}`);
           }
-        } catch (mapErr) {
-          logger.error("EXPLORE", `[explore.js]❌ Update map quadrant status: ${mapErr.message}`);
+        } else {
+          logger.warn("EXPLORE", `[explore.js]⚠️ Map update: could not find square for ${party.square}`);
         }
+      } catch (mapErr) {
+        logger.error("EXPLORE", `[explore.js]❌ Update map quadrant status: ${mapErr.message}`);
       }
 
       const mapSquareForBlight = await Square.findOne({ squareId: party.square });
@@ -3385,8 +3397,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
       // Safe space = random roll event; camp = /explore camp command only
       const progressOutcome = outcomeType === "ruins" ? "ruins_found" : outcomeType === "camp" ? "safe_space" : outcomeType;
-      // Ruins, monster camp: defer progressLog until button choice (Yes = counts, No = skipped)
+      // Ruins, monster camp: defer detailed progressLog until button choice (Yes = counts, No = skipped)
       // Grotto: log discovery immediately so dashboard shows it; choice (Yes/No) adds follow-up entries
+      // For one-find-per-expedition limit, log find when we show ruins or monster_camp so the find is consumed
       if (outcomeType !== "monster_camp" && outcomeType !== "ruins") {
        pushProgressLog(
         party,
@@ -3394,6 +3407,16 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         outcomeType === "grotto" ? "grotto_found" : progressOutcome,
         progressMessages[outcomeType] || `Found something in ${location}.`,
         lootForProgressLog,
+        chestRuinsCosts,
+        at
+       );
+      } else if (outcomeType === "ruins" || outcomeType === "monster_camp") {
+       pushProgressLog(
+        party,
+        character.name,
+        outcomeType === "ruins" ? "ruins_found" : "monster_camp_found",
+        progressMessages[outcomeType] || `Found something in ${location}.`,
+        undefined,
         chestRuinsCosts,
         at
        );

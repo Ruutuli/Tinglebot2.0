@@ -1387,7 +1387,8 @@ export default function ExplorePartyPage() {
                   {(() => {
                     const fogLayer = squarePreview.layers.find((l) => l.name === "MAP_0001_hidden-areas");
                     if (!fogLayer) return null;
-                    const statuses = squarePreview.quadrantStatuses ?? party.quadrantStatuses ?? {};
+                    // Prefer party.quadrantStatuses (includes exploredQuadrantsThisRun) so "explored" shows even if map DB wasn't updated
+                    const statuses = party.quadrantStatuses ?? squarePreview.quadrantStatuses ?? {};
                     const fogQuadrants: number[] = [];
                     const currentQuadrant = party.quadrant ? String(party.quadrant).trim().toUpperCase() : null;
                     const currentSquareNorm = party.square ? String(party.square).trim().toUpperCase() : "";
