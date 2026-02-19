@@ -4932,109 +4932,269 @@ module.exports = {
      return interaction.editReply({ embeds: [embed] });
     }
 
-    // Cost already applied by payStaminaOrStruggle
-
-    // Remove Wood and Eldin Ore (or their bundles) from the party loadout — one of each from whoever has them (testing: no DB change to character inventory)
-    for (const resource of requiredResources) {
-     for (let ci = 0; ci < party.characters.length; ci++) {
-      const idx = (party.characters[ci].items || []).findIndex(
-       (item) => item.itemName === resource || item.itemName === `${resource} Bundle`
-      );
-      if (idx !== -1) {
-       party.characters[ci].items.splice(idx, 1);
-       break;
-      }
-     }
-    }
-    party.markModified("characters");
-
-    // Mark quadrant as secured in the canonical map (exploringMap) — use case-insensitive squareId to match dashboard
-    const mapSquareId = (party.square && String(party.square).trim()) || "";
-    const mapQuadrantId = (party.quadrant && String(party.quadrant).trim().toUpperCase()) || "";
-    if (mapSquareId && mapQuadrantId) {
-     try {
-      const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      const mapResult = await Square.updateOne(
-       { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
-       { $set: { "quadrants.$[q].status": "secured" } },
-       { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
-      );
-      if (mapResult.matchedCount === 0) {
-       logger.warn("EXPLORE", `[explore.js]⚠️ Secure map: no square ${mapSquareId} ${mapQuadrantId}`);
-      } else {
-       if (!party.exploredQuadrantsThisRun) party.exploredQuadrantsThisRun = [];
-       const alreadyHas = party.exploredQuadrantsThisRun.some(
-        (r) => String(r?.squareId || "").toUpperCase() === mapSquareId.toUpperCase() && String(r?.quadrantId || "").toUpperCase() === mapQuadrantId
-       );
-       if (!alreadyHas) {
-        party.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
-        party.markModified("exploredQuadrantsThisRun");
-       }
-      }
-     } catch (mapErr) {
-      logger.error("EXPLORE", `[explore.js]❌ Update map to secured: ${mapErr.message}`);
-     }
-    }
-
-    party.quadrantState = "secured";
-    party.markModified("quadrantState");
-    party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-
+    // Confirmation: securing means no more rolls / items in this quadrant; grottos/ruins here that haven't been visited won't be explorable
     const locationSecure = `${party.square} ${party.quadrant}`;
-    const secureCostsForLog = buildCostsForLog(securePayResult);
-    pushProgressLog(
-     party,
-     character.name,
-     "secure",
-     `Secured ${locationSecure} using Wood and Eldin Ore (-${staminaCost} party stamina). Quadrant secured; no stamina cost to explore here.`,
-     undefined,
-     Object.keys(secureCostsForLog).length ? secureCostsForLog : undefined
-    );
-    await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-
-    const nextCharacterSecure = party.characters[party.currentTurn];
-    const embed = new EmbedBuilder()
-     .setTitle(`🗺️ **Expedition: Secured ${locationSecure}**`)
+    const confirmEmbed = new EmbedBuilder()
+     .setTitle("⚠️ **Are you sure?**")
      .setColor(regionColors[party.region] || "#FF9800")
      .setDescription(
-      `${character.name} secured the quadrant using resources (-${staminaCost} party stamina).`
+      `**Securing ${locationSecure}** will make this quadrant safe (no stamina cost to move here), but:\n\n` +
+      "• **You will no longer be able to roll for encounters or items here.**\n" +
+      "• Any **grottos** or **ruins** in this quadrant that you haven’t visited yet **cannot be explored** after securing.\n\n" +
+      "Make sure you’re done exploring this area (and any discoveries in it) before you secure. Confirm or cancel below."
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-    addExplorationStandardFields(embed, {
-      party,
-      expeditionId,
-      location: locationSecure,
-      nextCharacter: nextCharacterSecure ?? null,
-      showNextAndCommands: true,
-      showRestSecureMove: false,
-      commandsLast: true,
+    addExplorationStandardFields(confirmEmbed, {
+     party,
+     expeditionId,
+     location: locationSecure,
+     nextCharacter: party.characters[party.currentTurn] ?? null,
+     showNextAndCommands: false,
+     showRestSecureMove: false,
+     commandsLast: false,
     });
-    const explorePageUrlSecure = getExplorePageUrl(expeditionId);
-    embed.addFields({
-      name: "📋 **__Benefits__**",
-      value: "Quadrant secured. No stamina cost to explore here, increased safety. You can draw your path on the dashboard before moving:\n🔗 " + explorePageUrlSecure,
-      inline: false,
-     });
-    const startPointSecure = START_POINTS_BY_REGION[party.region];
-    const isAtStartQuadrantSecure =
-      startPointSecure &&
-      String(party.square || "").toUpperCase() === String(startPointSecure.square || "").toUpperCase() &&
-      String(party.quadrant || "").toUpperCase() === String(startPointSecure.quadrant || "").toUpperCase();
-    addExplorationCommandsField(embed, {
-      party,
-      expeditionId,
-      location: locationSecure,
-      nextCharacter: nextCharacterSecure ?? null,
-      showNextAndCommands: true,
-      showRestSecureMove: false,
-      showSecuredQuadrantOnly: true,
-      isAtStartQuadrant: !!isAtStartQuadrantSecure,
+    const secureConfirmRow = new ActionRowBuilder().addComponents(
+     new ButtonBuilder()
+      .setCustomId(`explore_secure_confirm|${expeditionId}`)
+      .setLabel("Yes, secure quadrant")
+      .setStyle(ButtonStyle.Success),
+     new ButtonBuilder()
+      .setCustomId(`explore_secure_cancel|${expeditionId}`)
+      .setLabel("Cancel")
+      .setStyle(ButtonStyle.Secondary)
+    );
+    await interaction.editReply({ embeds: [confirmEmbed], components: [secureConfirmRow] });
+
+    const expectedUserId = interaction.user.id;
+    const collector = interaction.channel.createMessageComponentCollector({
+     filter: (i) => i.user.id === expectedUserId && (i.customId === `explore_secure_confirm|${expeditionId}` || i.customId === `explore_secure_cancel|${expeditionId}`),
+     time: 60 * 1000,
+     max: 1,
     });
 
-    await interaction.editReply({ embeds: [embed] });
-    await interaction.followUp({
-      content: `**Next:** Camp, Item, or Move. <@${nextCharacterSecure.userId}> it's your turn.`,
+    collector.on("collect", async (i) => {
+     try {
+      await i.deferUpdate();
+      const disabledRow = new ActionRowBuilder().addComponents(
+       new ButtonBuilder()
+        .setCustomId(`explore_secure_confirm|${expeditionId}`)
+        .setLabel("Yes, secure quadrant")
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(true),
+       new ButtonBuilder()
+        .setCustomId(`explore_secure_cancel|${expeditionId}`)
+        .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true)
+      );
+      await i.editReply({ components: [disabledRow] }).catch(() => {});
+
+      if (i.customId.includes("_cancel")) {
+       const cancelledEmbed = new EmbedBuilder()
+        .setTitle("Secure cancelled")
+        .setColor(regionColors[party.region] || "#FF9800")
+        .setDescription("No changes made. You can continue exploring or secure again when ready.");
+       addExplorationStandardFields(cancelledEmbed, {
+        party,
+        expeditionId,
+        location: locationSecure,
+        nextCharacter: party.characters[party.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: true,
+        commandsLast: true,
+        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+       });
+       addExplorationCommandsField(cancelledEmbed, {
+        party,
+        expeditionId,
+        location: locationSecure,
+        nextCharacter: party.characters[party.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: true,
+        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        isAtStartQuadrant: (() => {
+         const start = START_POINTS_BY_REGION[party.region];
+         return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+        })(),
+       });
+       await i.editReply({ embeds: [cancelledEmbed], components: [disabledRow] }).catch(() => {});
+       return;
+      }
+
+      // Confirm: re-fetch and re-validate, then pay and secure
+      const freshParty = await Party.findActiveByPartyId(expeditionId);
+      if (!freshParty) {
+       await i.followUp({ content: "Expedition not found. No changes made.", ephemeral: true }).catch(() => {});
+       return;
+      }
+      const freshCharIndex = freshParty.characters.findIndex((c) => c.userId === i.user.id);
+      if (freshCharIndex === -1 || freshParty.currentTurn !== freshCharIndex) {
+       await i.followUp({ content: "It’s not your turn or you’re not in this expedition. No changes made.", ephemeral: true }).catch(() => {});
+       return;
+      }
+      if (freshParty.quadrantState !== "explored") {
+       await i.followUp({ content: "This quadrant is no longer in a state that can be secured. No changes made.", ephemeral: true }).catch(() => {});
+       return;
+      }
+      const freshHasResources = requiredResources.every((resource) =>
+       (freshParty.characters || []).flatMap((c) => c.items || []).some(
+        (item) => item.itemName === resource || item.itemName === `${resource} Bundle`
+       )
+      );
+      if (!freshHasResources) {
+       await i.followUp({ content: "Party no longer has Wood and Eldin Ore. No changes made.", ephemeral: true }).catch(() => {});
+       return;
+      }
+
+      const staminaCost = 5;
+      const securePayResult = await payStaminaOrStruggle(freshParty, freshCharIndex, staminaCost, { order: "currentFirst" });
+      if (!securePayResult.ok) {
+       const noStaminaEmbed = new EmbedBuilder()
+        .setTitle("Not enough stamina or hearts")
+        .setColor(regionColors[freshParty.region] || "#FF9800")
+        .setDescription(
+          `Need ${staminaCost} total to secure. Party has ${freshParty.totalStamina ?? 0} stamina and ${freshParty.totalHearts ?? 0} hearts. **Camp** to recover or use hearts to **Struggle**.`
+        )
+        .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
+       addExplorationStandardFields(noStaminaEmbed, {
+        party: freshParty,
+        expeditionId,
+        location: `${freshParty.square} ${freshParty.quadrant}`,
+        nextCharacter: freshParty.characters[freshParty.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: true,
+        commandsLast: true,
+        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant),
+       });
+       addExplorationCommandsField(noStaminaEmbed, {
+        party: freshParty,
+        expeditionId,
+        location: `${freshParty.square} ${freshParty.quadrant}`,
+        nextCharacter: freshParty.characters[freshParty.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: true,
+        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant),
+        isAtStartQuadrant: (() => {
+         const start = START_POINTS_BY_REGION[freshParty.region];
+         return start && String(freshParty.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(freshParty.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+        })(),
+       });
+       await i.editReply({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
+       return;
+      }
+
+      const character = await findCharacterByNameAndUser(freshParty.characters[freshCharIndex].name, i.user.id);
+      if (character) {
+       character.currentStamina = freshParty.characters[freshCharIndex].currentStamina;
+       character.currentHearts = freshParty.characters[freshCharIndex].currentHearts;
+      }
+
+      // Remove Wood and Eldin Ore (or their bundles) from the party loadout
+      for (const resource of requiredResources) {
+       for (let ci = 0; ci < freshParty.characters.length; ci++) {
+        const idx = (freshParty.characters[ci].items || []).findIndex(
+         (item) => item.itemName === resource || item.itemName === `${resource} Bundle`
+        );
+        if (idx !== -1) {
+         freshParty.characters[ci].items.splice(idx, 1);
+         break;
+        }
+       }
+      }
+      freshParty.markModified("characters");
+
+      // Mark quadrant as secured in the canonical map
+      const mapSquareId = (freshParty.square && String(freshParty.square).trim()) || "";
+      const mapQuadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()).toUpperCase() || "";
+      if (mapSquareId && mapQuadrantId) {
+       try {
+        const squareIdRegex = new RegExp(`^${mapSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+        const mapResult = await Square.updateOne(
+         { squareId: squareIdRegex, "quadrants.quadrantId": mapQuadrantId },
+         { $set: { "quadrants.$[q].status": "secured" } },
+         { arrayFilters: [{ "q.quadrantId": mapQuadrantId }] }
+        );
+        if (mapResult.matchedCount === 0) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Secure map: no square ${mapSquareId} ${mapQuadrantId}`);
+        } else {
+         if (!freshParty.exploredQuadrantsThisRun) freshParty.exploredQuadrantsThisRun = [];
+         const alreadyHas = freshParty.exploredQuadrantsThisRun.some(
+          (r) => String(r?.squareId || "").toUpperCase() === mapSquareId.toUpperCase() && String(r?.quadrantId || "").toUpperCase() === mapQuadrantId
+         );
+         if (!alreadyHas) {
+          freshParty.exploredQuadrantsThisRun.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
+          freshParty.markModified("exploredQuadrantsThisRun");
+         }
+        }
+       } catch (mapErr) {
+        logger.error("EXPLORE", `[explore.js]❌ Update map to secured: ${mapErr.message}`);
+       }
+      }
+
+      freshParty.quadrantState = "secured";
+      freshParty.markModified("quadrantState");
+      freshParty.currentTurn = (freshParty.currentTurn + 1) % freshParty.characters.length;
+
+      const secureCostsForLog = buildCostsForLog(securePayResult);
+      pushProgressLog(
+       freshParty,
+       freshParty.characters[freshCharIndex].name,
+       "secure",
+       `Secured ${locationSecure} using Wood and Eldin Ore (-${staminaCost} party stamina). Quadrant secured; no stamina cost to explore here.`,
+       undefined,
+       Object.keys(secureCostsForLog).length ? secureCostsForLog : undefined
+      );
+      await freshParty.save();
+
+      const nextCharacterSecure = freshParty.characters[freshParty.currentTurn];
+      const embed = new EmbedBuilder()
+       .setTitle(`🗺️ **Expedition: Secured ${locationSecure}**`)
+       .setColor(regionColors[freshParty.region] || "#FF9800")
+       .setDescription(
+        `${freshParty.characters[freshCharIndex].name} secured the quadrant using resources (-${staminaCost} party stamina).`
+       )
+       .setImage(regionImages[freshParty.region] || EXPLORATION_IMAGE_FALLBACK);
+      addExplorationStandardFields(embed, {
+       party: freshParty,
+       expeditionId,
+       location: locationSecure,
+       nextCharacter: nextCharacterSecure ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+       commandsLast: true,
+      });
+      const explorePageUrlSecure = getExplorePageUrl(expeditionId);
+      embed.addFields({
+       name: "📋 **__Benefits__**",
+       value: "Quadrant secured. No stamina cost to explore here, increased safety. You can draw your path on the dashboard before moving:\n🔗 " + explorePageUrlSecure,
+       inline: false,
+      });
+      const startPointSecure = START_POINTS_BY_REGION[freshParty.region];
+      const isAtStartQuadrantSecure =
+       startPointSecure &&
+       String(freshParty.square || "").toUpperCase() === String(startPointSecure.square || "").toUpperCase() &&
+       String(freshParty.quadrant || "").toUpperCase() === String(startPointSecure.quadrant || "").toUpperCase();
+      addExplorationCommandsField(embed, {
+       party: freshParty,
+       expeditionId,
+       location: locationSecure,
+       nextCharacter: nextCharacterSecure ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+       showSecuredQuadrantOnly: true,
+       isAtStartQuadrant: !!isAtStartQuadrantSecure,
+      });
+
+      await i.editReply({ embeds: [embed], components: [disabledRow] }).catch(() => {});
+      await i.followUp({
+       content: `**Next:** Camp, Item, or Move. <@${nextCharacterSecure.userId}> it's your turn.`,
+      }).catch(() => {});
+     } catch (err) {
+      logger.error("EXPLORE", `[explore.js]❌ Secure confirm: ${err?.message || err}`);
+      await i.followUp({ content: "Something went wrong. Please try /explore secure again.", ephemeral: true }).catch(() => {});
+     }
     });
+    return;
 
     // ------------------- Move to Adjacent Quadrant -------------------
    } else if (subcommand === "move") {
