@@ -170,24 +170,27 @@ export async function GET(
         quadrantStatuses[quadrantId] = "explored";
       }
 
-      // Persist explored status to map DB so it's marked everywhere (dashboard and database). Never overwrite "secured".
-      const SquareModel =
-        mongoose.models.Square ??
-        ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
-      for (const qId of ["Q1", "Q2", "Q3", "Q4"] as const) {
-        if (quadrantStatuses[qId] !== "explored") continue;
-        try {
-          const setPayload: Record<string, unknown> = { "quadrants.$[q].status": "explored" };
-          if (qId === quadrantId && quadrantState === "explored") {
-            setPayload["quadrants.$[q].exploredAt"] = new Date();
+      // Persist explored status to map DB only while expedition is active. When expedition is over, do not write — map is source of truth and must not be overwritten by stale party data.
+      const partyStatus = String(p.status ?? "").trim();
+      if (partyStatus === "started") {
+        const SquareModel =
+          mongoose.models.Square ??
+          ((await import("@/models/mapModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+        for (const qId of ["Q1", "Q2", "Q3", "Q4"] as const) {
+          if (quadrantStatuses[qId] !== "explored") continue;
+          try {
+            const setPayload: Record<string, unknown> = { "quadrants.$[q].status": "explored" };
+            if (qId === quadrantId && quadrantState === "explored") {
+              setPayload["quadrants.$[q].exploredAt"] = new Date();
+            }
+            await SquareModel.updateOne(
+              { squareId: squareIdRegex },
+              { $set: setPayload },
+              { arrayFilters: [{ "q.quadrantId": qId, "q.status": { $ne: "secured" } }] }
+            );
+          } catch {
+            // ignore per-quadrant errors
           }
-          await SquareModel.updateOne(
-            { squareId: squareIdRegex },
-            { $set: setPayload },
-            { arrayFilters: [{ "q.quadrantId": qId, "q.status": { $ne: "secured" } }] }
-          );
-        } catch {
-          // ignore per-quadrant errors
         }
       }
     }

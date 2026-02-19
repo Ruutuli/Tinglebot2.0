@@ -193,12 +193,12 @@ const PAVING_BUNDLES = {
 
 const DISABLE_EXPLORATION_RAIDS = false; // TODO: remove when done testing
 
-/** Chance (0–1) that camping is interrupted by a monster attack. Explored/unexplored = 40%; secured = 5%. */
-const CAMP_ATTACK_CHANCE_UNSECURED = 0.4;
+/** Chance (0–1) that camping is interrupted by a monster attack. Explored/unexplored = 25%; secured = 5%. */
+const CAMP_ATTACK_CHANCE_UNSECURED = 0.25;
 const CAMP_ATTACK_CHANCE_SECURED = 0.05;
 /** Extra chance when party has 0 stamina (exhausted camp = easier target). Added to unsecured chance, capped at CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP. */
-const CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA = 0.35;
-const CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP = 0.75;
+const CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA = 0.15;
+const CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP = 0.5;
 
 const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 
@@ -757,6 +757,7 @@ const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto"
 // Add discovery to Square.quadrants[].discoveries for map display
 async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) {
  if (EXPLORATION_TESTING_MODE) return;
+ if (party.status !== "started") return; // Do not update map when expedition is over
  const squareId = (party.square && String(party.square).trim()) || "";
  const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
  if (!squareId || !quadrantId) return;
@@ -780,8 +781,9 @@ async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) 
 
 // ------------------- updateDiscoveryName ------------------
 // Set name on an existing discovery (e.g. grotto when cleansed on revisit)
-async function updateDiscoveryName(squareId, quadrantId, discoveryKey, name) {
+async function updateDiscoveryName(squareId, quadrantId, discoveryKey, name, options = {}) {
  if (EXPLORATION_TESTING_MODE || !squareId || !quadrantId || !discoveryKey || !name) return;
+ if (options.party && options.party.status !== "started") return; // Do not update map when expedition is over
  await Square.updateOne(
   { squareId },
   { $set: { "quadrants.$[q].discoveries.$[d].name": name } },
@@ -1165,7 +1167,7 @@ async function handleExpeditionFailed(party, interaction) {
    }
   }
  }
- // Always reset map and grottos on fail (production and testing) so state is clean
+ // Always reset map and grottos on fail (production and testing) so state is clean; during tests the map must be reverted when over
  const exploredThisRun = party.exploredQuadrantsThisRun || [];
  if (exploredThisRun.length > 0) {
   for (const { squareId, quadrantId } of exploredThisRun) {
@@ -1324,7 +1326,7 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("camp")
-    .setDescription("Set up camp for extended rest")
+    .setDescription("Set up camp to recover hearts (1 stamina unsecured; 0 in secured; at 0 stamina, recovers stamina instead). You can camp anytime.")
     .addStringOption((option) =>
      option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
@@ -1339,7 +1341,7 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("end")
-    .setDescription("End expedition and return home (only at starting quadrant)")
+    .setDescription("End expedition and return home (only at starting quadrant). Use when at start to finish before running out of hearts/stamina.")
     .addStringOption((option) =>
      option.setName("id").setDescription("Expedition ID").setRequired(true).setAutocomplete(true)
     )
@@ -2825,8 +2827,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       await grottoDoc.save();
      }
      if (discovery.discoveryKey) {
-      await updateDiscoveryName(squareId, quadrantId, discovery.discoveryKey, grottoName);
-      await updateDiscoveryGrottoStatus(squareId, quadrantId, discovery.discoveryKey, "cleansed");
+      await updateDiscoveryName(squareId, quadrantId, discovery.discoveryKey, grottoName, { party });
+      await updateDiscoveryGrottoStatus(squareId, quadrantId, discovery.discoveryKey, "cleansed", { party });
      }
      pushProgressLog(party, plumeHolder.character.name, "grotto_cleansed", `Cleansed grotto **${grottoName}** (revisit) in ${location} (1 Goddess Plume + 1 stamina).`, undefined, { staminaLost: 1 }, at);
      if (grottoDoc.trialType === "blessing") {
@@ -3142,41 +3144,44 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         await party.save();
       }
 
-      // Mark quadrant as explored in the exploring map DB (collection 'exploringMap'). Always persist so dashboard and DB stay in sync everywhere.
-      try {
-        const squareDoc = await Square.findOne({
-          squareId: new RegExp(`^${String(party.square).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-        });
-        if (squareDoc && squareDoc.quadrants && squareDoc.quadrants.length) {
-          const q = squareDoc.quadrants.find(
-            (qu) => String(qu.quadrantId || "").toUpperCase() === normQuad
-          );
-          if (q) {
-            const exactSquareId = squareDoc.squareId;
-            const exactQuadrantId = q.quadrantId;
-            const updateResult = await Square.updateOne(
-              { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
-              {
-                $set: {
-                  "quadrants.$.status": "explored",
-                  "quadrants.$.exploredBy": interaction.user?.id || party.leaderId || "",
-                  "quadrants.$.exploredAt": new Date(),
-                },
-              }
+      // Mark quadrant as explored in the exploring map DB (collection 'exploringMap'). Only when expedition is still active.
+      const currentPartyForMap = await Party.findActiveByPartyId(party.partyId);
+      if (currentPartyForMap && currentPartyForMap.status === "started") {
+        try {
+          const squareDoc = await Square.findOne({
+            squareId: new RegExp(`^${String(party.square).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+          });
+          if (squareDoc && squareDoc.quadrants && squareDoc.quadrants.length) {
+            const q = squareDoc.quadrants.find(
+              (qu) => String(qu.quadrantId || "").toUpperCase() === normQuad
             );
-            if (updateResult.modifiedCount > 0) {
-              logger.info("EXPLORE", `[explore.js] Exploring map DB updated: ${exactSquareId} ${exactQuadrantId} -> explored`);
-            } else if (updateResult.matchedCount === 0) {
-              logger.warn("EXPLORE", `[explore.js]⚠️ Map update: no document matched ${exactSquareId} / ${exactQuadrantId}`);
+            if (q) {
+              const exactSquareId = squareDoc.squareId;
+              const exactQuadrantId = q.quadrantId;
+              const updateResult = await Square.updateOne(
+                { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+                {
+                  $set: {
+                    "quadrants.$.status": "explored",
+                    "quadrants.$.exploredBy": interaction.user?.id || party.leaderId || "",
+                    "quadrants.$.exploredAt": new Date(),
+                  },
+                }
+              );
+              if (updateResult.modifiedCount > 0) {
+                logger.info("EXPLORE", `[explore.js] Exploring map DB updated: ${exactSquareId} ${exactQuadrantId} -> explored`);
+              } else if (updateResult.matchedCount === 0) {
+                logger.warn("EXPLORE", `[explore.js]⚠️ Map update: no document matched ${exactSquareId} / ${exactQuadrantId}`);
+              }
+            } else {
+              logger.warn("EXPLORE", `[explore.js]⚠️ Map update: quadrant not found in square ${party.square} ${party.quadrant}`);
             }
           } else {
-            logger.warn("EXPLORE", `[explore.js]⚠️ Map update: quadrant not found in square ${party.square} ${party.quadrant}`);
+            logger.warn("EXPLORE", `[explore.js]⚠️ Map update: could not find square for ${party.square}`);
           }
-        } else {
-          logger.warn("EXPLORE", `[explore.js]⚠️ Map update: could not find square for ${party.square}`);
+        } catch (mapErr) {
+          logger.error("EXPLORE", `[explore.js]❌ Update map quadrant status: ${mapErr.message}`);
         }
-      } catch (mapErr) {
-        logger.error("EXPLORE", `[explore.js]❌ Update map quadrant status: ${mapErr.message}`);
       }
 
       const mapSquareForBlight = await Square.findOne({ squareId: party.square });
@@ -3437,8 +3442,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        description =
         `**${character.name}** found something unsettling in **${location}**.\n\n` +
         "Um....You found a Monster Camp of some kind....!!! What do you want to do?\n\n" +
-        "**Mark it** — Add to map and fight later (counts toward this square's 3 discovery limit).\n" +
-        "**Fight it** — Add to map and fight now (same as Mark, but you fight the wave here; refightable after Blood Moon).\n" +
+        "**Mark it** — Add to map and fight later. **No extra stamina cost** (you already paid for the roll). Counts toward this square's 3 discovery limit.\n" +
+        "**Fight it** — Add to map and fight now. **No extra stamina cost.** Same as Mark, but you fight the wave here; refightable after Blood Moon.\n" +
         `**Leave it** — Don't mark. Won't be recorded as a discovery. Continue with </explore roll:${getExploreCommandId()}>.`;
       } else if (outcomeType === "chest") {
        title = `🗺️ **Expedition: Chest found!**`;
@@ -3657,7 +3662,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            }
           }
           await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
-          if (!EXPLORATION_TESTING_MODE) {
+          if (!EXPLORATION_TESTING_MODE && freshParty.status === "started") {
            try {
             const resolvedRuinRest = await findExactMapSquareAndQuadrant(freshParty.square, freshParty.quadrant);
             if (resolvedRuinRest) {
@@ -4650,6 +4655,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
+    if (party.status !== "started") {
+     return interaction.editReply("This expedition is not active. You can only Secure during an active expedition.");
+    }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
@@ -4946,9 +4954,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
       freshParty.markModified("characters");
 
-      // Mark quadrant as secured in the canonical map (use exact stored ids for robust update)
+      // Mark quadrant as secured in the canonical map (use exact stored ids for robust update). Only when expedition is still active.
       const resolvedSecure = await findExactMapSquareAndQuadrant(freshParty.square, freshParty.quadrant);
-      if (resolvedSecure) {
+      if (resolvedSecure && freshParty.status === "started") {
        try {
         const { exactSquareId, exactQuadrantId } = resolvedSecure;
         const mapResult = await Square.updateOne(
@@ -4971,7 +4979,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        } catch (mapErr) {
         logger.error("EXPLORE", `[explore.js]❌ Update map to secured: ${mapErr.message}`);
        }
-      } else {
+      } else if (resolvedSecure && freshParty.status !== "started") {
+       // Expedition over — do not overwrite map
+      } else if (!resolvedSecure) {
        logger.warn("EXPLORE", `[explore.js]⚠️ Secure map: could not find square/quadrant for ${freshParty.square} ${freshParty.quadrant}`);
       }
 
@@ -5589,8 +5599,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
     if (!isAtStartQuadrant) {
      return interaction.editReply(
-      "You can only end the expedition when at the starting quadrant for your region. Use **Move** to return to the start first."
-     );
+      "You can only end the expedition when at the **starting quadrant** for your region. Use **Move** to return to the start first, then use **End expedition** to return home with your party and items. Use this to finish before running out of hearts/stamina."
+    );
     }
 
     const regionToVillage = {
@@ -5663,6 +5673,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        }
       }
     } else {
+     // Testing mode: no character DB persist; revert all map state so the map is clean after the test
      if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
       const heartsPerMember = Math.floor(remainingHearts / memberCount);
       const heartsRemainder = remainingHearts % memberCount;
@@ -5676,7 +5687,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
      }
      await Grotto.deleteMany({ partyId: expeditionId }).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Grotto delete on end: ${err?.message}`));
-     // Revert quadrants marked explored/secured during this run back to unexplored (resolve by exact ids for robustness)
+     // Revert every quadrant this expedition marked explored or secured back to unexplored (testing: map must be reverted when test is over)
      const exploredThisRunEnd = party.exploredQuadrantsThisRun || [];
      if (exploredThisRunEnd.length > 0) {
       for (const { squareId, quadrantId } of exploredThisRunEnd) {
@@ -5965,14 +5976,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const isSecured = party.quadrantState === "secured";
     // Camp costs 1 stamina (same as one roll in explored quad); secured = 0; stuck in wild = 0
     let staminaCost = isSecured ? 0 : 1;
-    let heartsPct = isSecured ? 0.5 : 0.25;
+    let heartsPct = isSecured ? 0.5 : 0.35;
     const stuckInWild = staminaCost > 0 && party.totalStamina < staminaCost;
     if (stuckInWild) {
      staminaCost = 0;
-     heartsPct = 0.25;
+     heartsPct = 0.35;
     }
 
-    // Chance of monster attack when camping: explored/unexplored 40%, secured 5%. When party has 0 stamina (exhausted), much more likely to be attacked.
+    // Chance of monster attack when camping: explored/unexplored 25%, secured 5%. When party has 0 stamina (exhausted), higher chance but capped at 50%.
     let campAttackChance = isSecured ? CAMP_ATTACK_CHANCE_SECURED : CAMP_ATTACK_CHANCE_UNSECURED;
     if (!isSecured && (party.totalStamina === 0 || (typeof party.totalStamina === "number" && party.totalStamina < 1))) {
      campAttackChance = Math.min(CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP, campAttackChance + CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA);
@@ -6111,7 +6122,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     if (stuckInWild) {
      const poolStam = party.totalStamina ?? 0;
      const room = Math.max(0, sumMaxStamina - poolStam);
-     if (room > 0) totalStaminaRecovered = Math.min(room, Math.floor(Math.random() * 3) + 1);
+     if (room > 0) totalStaminaRecovered = Math.min(room, Math.floor(Math.random() * 4) + 2);
     }
     party.totalHearts = Math.min(sumMaxHearts, Math.max(0, (party.totalHearts ?? 0) + totalHeartsRecovered));
     party.totalStamina = Math.min(sumMaxStamina, Math.max(0, (party.totalStamina ?? 0) + totalStaminaRecovered));

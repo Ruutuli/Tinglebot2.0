@@ -5,6 +5,7 @@
 const Character = require('@/models/CharacterModel');
 const ModCharacter = require('@/models/ModCharacterModel');
 const Square = require('../models/mapModel');
+const Party = require('@/models/PartyModel');
 
 const { handleError } = require('@/utils/globalErrorHandler');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
@@ -141,8 +142,9 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs, at
 
 // ------------------- updateDiscoveryGrottoStatus ------------------
 // Update grottoStatus on map discovery (found | cleansed | cleared) -
-async function updateDiscoveryGrottoStatus(squareId, quadrantId, discoveryKey, grottoStatus) {
+async function updateDiscoveryGrottoStatus(squareId, quadrantId, discoveryKey, grottoStatus, options = {}) {
     if (EXPLORATION_TESTING_MODE || !squareId || !quadrantId || !discoveryKey || !grottoStatus) return;
+    if (options.party && options.party.status !== "started") return; // Do not update map when expedition is over
     const qd = String(quadrantId).trim().toUpperCase();
     await Square.updateOne(
         { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i') },
@@ -162,6 +164,8 @@ async function markGrottoCleared(grotto) {
     await grotto.save();
     const dk = grotto.discoveryKey;
     if (dk && grotto.squareId && grotto.quadrantId) {
+        const party = grotto.partyId ? await Party.findOne({ partyId: grotto.partyId }).lean() : null;
+        if (party && party.status !== "started") return; // Do not update map when expedition is over
         await updateDiscoveryGrottoStatus(grotto.squareId, grotto.quadrantId, dk, "cleared");
     }
 }

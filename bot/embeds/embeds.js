@@ -630,21 +630,22 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    commandsValue += `**Next actions**\nYou can do the following:\n\n` +
     `• **Roll** — ${cmdRoll}\n> Continue exploring current quadrant. (Costs 1 stamina)\n\n` +
     `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
-    `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.\n\n` +
+    `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. **You can camp anytime** (not only at 0 stamina). Costs 1 stamina (unsecured); 0 in secured; at 0 stamina, recovers stamina instead.\n\n` +
     `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
     `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands.`;
    if (hasDiscoveriesInQuadrant) {
     commandsValue += `\n\n• **Revisit discoveries** — </explore discovery:${cmdId}>\n> Visit a monster camp or grotto marked on the map in this quadrant.`;
    }
    if (isAtStartQuadrant) {
-    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
+    commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition. **Only at starting quadrant** — move back to start first if needed. Use this to finish before running out of hearts/stamina.`;
    }
    if ((party?.totalStamina ?? 0) === 0) {
     commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
    }
   } else {
    const cmdItem = `</explore item:${cmdId}>`;
-   commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem}`;
+   const cmdCamp = `</explore camp:${cmdId}>`;
+   commandsValue += `**Take your turn:** ${cmdRoll}, ${cmdItem}, or **Camp** (${cmdCamp}) — you can camp anytime to recover hearts (1 stamina unsecured; 0 secured; at 0 stamina, recovers stamina instead).`;
    if (hasDiscoveriesInQuadrant) {
     const cmdDiscovery = `</explore discovery:${cmdId}>`;
     commandsValue += `\n\n**Revisit discoveries** (monster camps, grottos): ${cmdDiscovery}`;
@@ -676,7 +677,11 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
  if (showMoveToUnexploredOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
-  commandsValue += `**Moved to a new location — use ${cmdRoll} to explore this quadrant, or ${cmdItem} to use a healing item.**`;
+  const cmdCamp = `</explore camp:${cmdId}>`;
+  commandsValue += `**Moved to a new location.** You can:\n\n` +
+   `• **Roll** — ${cmdRoll}\n> Explore this quadrant (costs 2 stamina — unexplored).\n\n` +
+   `• **Item** — ${cmdItem}\n> Use a healing item from your loadout.\n\n` +
+   `• **Camp** — ${cmdCamp}\n> Rest and recover hearts anytime. Costs 1 stamina (unsecured); 0 in secured; at 0 stamina, recovers stamina instead.`;
  } else if (showSecuredQuadrantOnly === true) {
   const cmdCamp = `</explore camp:${cmdId}>`;
   const cmdMove = `</explore move:${cmdId}>`;
@@ -685,9 +690,9 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   commandsValue += `**This quadrant is secured — you cannot roll here.** Use one of:\n\n` +
    `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands.\n\n` +
    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
-   `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.`;
+   `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. You can camp anytime. Costs 1 stamina (unsecured); 0 here (secured).`;
   if (isAtStartQuadrant) {
-   commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
+   commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition. Only at starting quadrant. Use to finish before running out of hearts/stamina.`;
   }
   if ((party?.totalStamina ?? 0) === 0) {
    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (move, etc.), actions will **cost hearts** instead. Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
@@ -704,21 +709,22 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   commandsValue += `**Next actions**\nYou can do the following:\n\n` +
    `• **Roll** — ${cmdRoll}\n> Continue exploring current quadrant. (Costs 1 stamina)\n\n` +
    `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
-   `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. Costs 3 stamina in unsecured quadrants.\n\n` +
+   `• **Camp** — ${cmdCamp}\n> Rest and recover hearts. **You can camp anytime** (not only at 0 stamina). Costs 1 stamina (unsecured); 0 in secured; at 0 stamina, recovers stamina instead.\n\n` +
    `• **Secure** — ${cmdSecure}\n> Secure this quad and create a path. **Requires:** Wood, Eldin Ore (in party), 5 stamina.\n\n` +
    `• **Move** — ${cmdMove}\n> Move to adjacent quadrant. Costs 2 stamina (unexplored), 1 (explored), or 0 (secured). Pick the quadrant to move to via commands. **Only use when the expedition prompts you to move.**`;
   if (hasDiscoveriesInQuadrant) {
    commandsValue += `\n\n• **Revisit discoveries** — </explore discovery:${cmdId}>\n> Visit a monster camp or grotto marked on the map in this quadrant.`;
   }
   if (isAtStartQuadrant) {
-   commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition.`;
+   commandsValue += `\n\n• **End expedition?** — ${cmdEnd}\n> Return home and end the expedition. **Only at starting quadrant** — move back to start first if needed. Use to finish before running out of hearts/stamina.`;
   }
   if ((party?.totalStamina ?? 0) === 0) {
    commandsValue += `\n\n⚠️ **0 stamina:** If you continue (roll, move, secure), actions will **cost hearts** instead (1 heart = 1 stamina). Use **Camp** (at 0 stamina, Camp recovers a random amount of stamina instead of costing) or **Item** to recover.`;
   }
  } else {
   const cmdItem = `</explore item:${cmdId}>`;
-  commandsValue += `**Take your turn:** ${cmdRoll} or ${cmdItem} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
+  const cmdCamp = `</explore camp:${cmdId}>`;
+  commandsValue += `**Take your turn:** ${cmdRoll}, ${cmdItem}, or **Camp** (${cmdCamp}) — id: \`${expId || "—"}\` charactername: **${nextName}**\n\n_You can camp anytime to recover hearts (1 stamina unsecured; 0 secured; at 0 stamina, recovers stamina instead)._`;
   if (hasDiscoveriesInQuadrant) {
    const cmdDiscovery = `</explore discovery:${cmdId}>`;
    commandsValue += `\n\nYou can also revisit monster camps or grottos in this quadrant with ${cmdDiscovery} — id: \`${expId || "—"}\` charactername: **${nextName}**`;
