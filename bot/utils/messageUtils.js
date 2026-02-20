@@ -18,13 +18,11 @@ async function trackLastMessage(message) {
       lastMessageTimestamp: new Date(),
     };
 
-    const result = await User.findOneAndUpdate(
+    await User.findOneAndUpdate(
       { discordId },
       { $set: update },
       { new: true, upsert: true }
     );
-
-    logger.info('SYSTEM', `Updated last message for ${discordId}`);
   } catch (err) {
     handleError(err, 'messageUtils.js');
     logger.error('SYSTEM', `Error tracking message for ${message.author.id}`);

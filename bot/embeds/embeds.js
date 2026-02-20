@@ -47,7 +47,7 @@ const regionColors = {
 // Each progress log outcome / embed type has a unique color for consistency across Discord and dashboard.
 const EXPLORE_OUTCOME_COLORS = {
   // Movement & exploration
-  explored: "#00B894",
+  explored: "#FBBF24",
   move: "#00CEC9",
   secure: "#0984E3",
   grotto_travel: "#1ABC9C",

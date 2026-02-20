@@ -31,7 +31,7 @@ const QUADRANT_STATUS_COLORS: Record<string, string> = {
 
 /** Explore outcome → color for progress log and Discord embeds (keep in sync with bot embeds.js EXPLORE_OUTCOME_COLORS). */
 const EXPLORE_OUTCOME_COLORS: Record<string, string> = {
-  explored: "#00B894",
+  explored: "#FBBF24",
   move: "#00CEC9",
   secure: "#0984E3",
   grotto_travel: "#1ABC9C",
@@ -419,14 +419,9 @@ function getMemberDisplay(
 ): { displayIcon: string | undefined; displayHearts: number | undefined; displayStamina: number | undefined; isCurrentTurn: boolean } {
   const charFromList = characters.find((c) => String(c._id) === String(m.characterId));
   const displayIcon = (m.icon && String(m.icon).trim()) || (charFromList?.icon && String(charFromList.icon).trim()) || undefined;
-  // During expedition we only use the party pool; per-character display shows max (from API) so we know where the numbers come from
-  const useMaxDuringExpedition = party.status === "started";
-  const displayHearts = useMaxDuringExpedition
-    ? (m.maxHearts ?? charFromList?.maxHearts ?? undefined)
-    : (typeof m.currentHearts === "number" ? m.currentHearts : (typeof charFromList?.currentHearts === "number" ? charFromList.currentHearts : charFromList?.maxHearts));
-  const displayStamina = useMaxDuringExpedition
-    ? (m.maxStamina ?? charFromList?.maxStamina ?? undefined)
-    : (typeof m.currentStamina === "number" ? m.currentStamina : (typeof charFromList?.currentStamina === "number" ? charFromList.currentStamina : charFromList?.maxStamina));
+  // Party view always shows max hearts/stamina only (pool is party total; per-slot we show each member's capacity).
+  const displayHearts = m.maxHearts ?? charFromList?.maxHearts ?? undefined;
+  const displayStamina = m.maxStamina ?? charFromList?.maxStamina ?? undefined;
   const isCurrentTurn = party.status === "started" && (party.currentTurn ?? 0) === index;
   return { displayIcon, displayHearts, displayStamina, isCurrentTurn };
 }
@@ -2781,7 +2776,7 @@ export default function ExplorePartyPage() {
                             <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
                               {index + 1}
                             </span>
-                            <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined} heartsStaminaLabel={party.status === "started" ? "max" : undefined} />
+                            <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined} heartsStaminaLabel="max" />
                           </span>
                         );
                       })}
@@ -2793,7 +2788,7 @@ export default function ExplorePartyPage() {
                             </svg>
                           </span>
                           <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
-                          <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.currentHearts ?? selectedCharacter?.maxHearts} stamina={selectedCharacter?.currentStamina ?? selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" />
+                          <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.maxHearts} stamina={selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" heartsStaminaLabel="max" />
                         </span>
                       )}
                     </div>
@@ -2855,7 +2850,7 @@ export default function ExplorePartyPage() {
                       items={m.items}
                       isYou={userId === m.userId}
                       label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined}
-                      heartsStaminaLabel={party.status === "started" ? "max" : undefined}
+                      heartsStaminaLabel="max"
                     />
                   </div>
                 );
@@ -2868,11 +2863,12 @@ export default function ExplorePartyPage() {
                   <PartySlotCard
                     name={selectedCharacter?.name ?? "Your character"}
                     icon={selectedCharacter?.icon ?? null}
-                    hearts={selectedCharacter?.currentHearts ?? selectedCharacter?.maxHearts}
-                    stamina={selectedCharacter?.currentStamina ?? selectedCharacter?.maxStamina}
+                    hearts={selectedCharacter?.maxHearts}
+                    stamina={selectedCharacter?.maxStamina}
                     items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))}
                     isYou
                     label="(preview)"
+                    heartsStaminaLabel="max"
                   />
                 </div>
               )}

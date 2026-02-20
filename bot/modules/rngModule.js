@@ -252,7 +252,7 @@ function calculateFinalValue(character, diceRoll) {
   if (character?.gearArmor?.chest?.name) armorParts.push(String(character.gearArmor.chest.name).trim());
   if (character?.gearArmor?.legs?.name) armorParts.push(String(character.gearArmor.legs.name).trim());
   const armorDesc = armorParts.length > 0 ? armorParts.join(', ') : 'none';
-  logger.info('EXPLORE', `[rngModule.js] Gear trigger: atk=${rawAttack} (weapon: ${weaponName}) weaponChance=${(weaponChance * 100).toFixed(1)}% triggered=${weaponApplies} → effectiveAtk=${effectiveAttack} | def=${rawDefense} (armor: ${armorDesc}) armorChance=${(armorChance * 100).toFixed(1)}% triggered=${armorApplies} → effectiveDef=${effectiveDefense}`);
+  logger.info('EXPLORE', `gear atk=${rawAttack}(${weaponApplies ? '✓' : '✗'})→${effectiveAttack} def=${rawDefense}(${armorApplies ? '✓' : '✗'})→${effectiveDefense}`);
 
   const adjustedRandomValue = applyBuffs(
     finalDiceRoll,
