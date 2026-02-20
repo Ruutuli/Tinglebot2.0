@@ -50,10 +50,6 @@ const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap } = require('@/utils
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig.js');
-/** During active expedition (or testing), hearts/stamina live only in party model; character DB is updated at end (production). */
-function usePartyOnlyForHeartsStamina(party) {
-  return EXPLORATION_TESTING_MODE || (party && party.status === "started");
-}
 const { generateGrottoMaze, getPathCellAt, getNeighbourCoords, getCellBeyondWall } = require('@/utils/grottoMazeGenerator.js');
 const { renderMazeToBuffer } = require('@/utils/grottoMazeRenderer.js');
 const logger = require("@/utils/logger.js");
@@ -100,22 +96,35 @@ const RELIC_EMBED_BORDER_URL = "https://storage.googleapis.com/tinglebot/Graphic
 // ------------------- Constants & Configuration -------------------
 // ============================================================================
 
-// ------------------- appendExploreStat ------------------
-// Append roll debug line to exploreStats.txt
-function appendExploreStat(line) {
- const filePath = path.join(__dirname, "..", "..", "exploreStats.txt");
- try {
-  fs.appendFileSync(filePath, line + "\n");
- } catch (e) {
-  logger.warn("EXPLORE", `[explore.js]⚠️ exploreStats write failed: ${e?.message || e}`);
- }
-}
-
 // ============================================================================
 // ------------------- Helper Functions -------------------
 // ============================================================================
 
-/** Consistent "next turn" ping for exploration. next: { userId?, name? }. */
+// ------------------- usePartyOnlyForHeartsStamina ------------------
+// During active expedition (or testing), hearts/stamina live only in party model; character DB updated at end -
+function usePartyOnlyForHeartsStamina(party) {
+  return EXPLORATION_TESTING_MODE || (party && party.status === "started");
+}
+
+// ------------------- appendExploreStat ------------------
+// Append roll debug line to exploreStats.txt -
+function appendExploreStat(line) {
+  const filePath = path.join(__dirname, "..", "..", "exploreStats.txt");
+  try {
+    fs.appendFileSync(filePath, line + "\n");
+  } catch (e) {
+    logger.warn("EXPLORE", `[explore.js]⚠️ exploreStats write failed: ${e?.message || e}`);
+  }
+}
+
+// ------------------- disableMessageButtonsOnTimeout ------------------
+// When a collector ends by time with no collection, disable buttons on the message -
+function disableMessageButtonsOnTimeout(message, disabledRow) {
+  if (message?.editable) message.edit({ components: [disabledRow] }).catch(() => {});
+}
+
+// ------------------- getExplorationNextTurnContent ------------------
+// Consistent "next turn" ping for exploration. next: { userId?, name? } -
 function getExplorationNextTurnContent(next) {
   if (!next) return null;
   const line = "**you're up next.** Use `/explore roll` or `/explore item` to continue.";
@@ -124,7 +133,7 @@ function getExplorationNextTurnContent(next) {
 }
 
 // ------------------- resolveExplorationMonsterLoot ------------------
-// Chuchu loot: Chuchu Jelly (or elemental variant) instead of Chuchu Egg
+// Chuchu loot: Chuchu Jelly (or elemental variant) instead of Chuchu Egg -
 async function resolveExplorationMonsterLoot(monsterName, rawLootedItem) {
   if (!rawLootedItem) return null;
   if (!monsterName.includes("Chuchu")) {
@@ -147,7 +156,7 @@ async function resolveExplorationMonsterLoot(monsterName, rawLootedItem) {
 }
 
 // ------------------- buildCostsForLog ------------------
-// Build stamina/hearts cost object for progress log from pay result
+// Build stamina/hearts cost object for progress log from pay result -
 function buildCostsForLog(payResult) {
   if (!payResult) return {};
   const o = {};
@@ -157,7 +166,7 @@ function buildCostsForLog(payResult) {
 }
 
 // ------------------- getTargetPracticeModifiers ------------------
-// Modifiers from bow/slingshot, Hunter/Scout, weapon quality
+// Modifiers from bow/slingshot, Hunter/Scout, weapon quality -
 function getTargetPracticeModifiers(character) {
   let failReduction = 0;
   let missReduction = 0;
@@ -201,10 +210,10 @@ const PAVING_BUNDLES = {
 
 const DISABLE_EXPLORATION_RAIDS = false; // TODO: remove when done testing
 
-/** Chance (0–1) that camping is interrupted by a monster attack. Explored/unexplored = 25%; secured = 5%. */
+// CAMP_ATTACK_CHANCE_* - Chance (0–1) that camping is interrupted by a monster attack. Explored/unexplored = 25%; secured = 5%.
 const CAMP_ATTACK_CHANCE_UNSECURED = 0.25;
 const CAMP_ATTACK_CHANCE_SECURED = 0.05;
-/** Extra chance when party has 0 stamina (exhausted camp = easier target). Added to unsecured chance, capped at CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP. */
+// CAMP_ATTACK_BONUS_* - Extra chance when party has 0 stamina (exhausted camp = easier target). Added to unsecured chance, capped at CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP.
 const CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA = 0.15;
 const CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP = 0.5;
 
@@ -271,7 +280,7 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
   const id = party.partyId ?? "?";
   const action = options.action ?? "pay";
   const cost = (staminaPaid > 0 ? `−${staminaPaid}🟩` : "") + (heartsPaid > 0 ? `−${heartsPaid}❤` : "") || "0";
-  logger.info("EXPLORE", `id=${id} ${action} ❤${totalHearts} 🟩${totalStamina} ${cost} → ❤${afterHearts} 🟩${afterStamina}`);
+  logger.info("EXPLORE", `[explore.js] id=${id} ${action} ❤${totalHearts} 🟩${totalStamina} ${cost} → ❤${afterHearts} 🟩${afterStamina}`);
 
   party.totalStamina = afterStamina;
   party.totalHearts = afterHearts;
@@ -891,7 +900,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  }
  const freshParty = await Party.findActiveByPartyId(expeditionId);
  if (!freshParty) {
-  logger.warn("EXPLORE", `expedition not found id=${expeditionId}`);
+  logger.warn("EXPLORE", `[explore.js]⚠️ Expedition not found: id=${expeditionId}`);
   await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
   return;
  }
@@ -1262,7 +1271,10 @@ function getAdjacentQuadrants(currentSquare, currentQuadrant) {
  }
 }
 
+// ============================================================================
 // ------------------- Expedition Command Definition -------------------
+// ============================================================================
+
 module.exports = {
  data: new SlashCommandBuilder()
   .setName("explore")
@@ -1462,7 +1474,8 @@ module.exports = {
     )
   ),
 
- // ------------------- Command Execution Logic -------------------
+// ------------------- Command Execution Logic ------------------
+// execute - main entry for /explore subcommands -
  async execute(interaction) {
   try {
    await interaction.deferReply();
@@ -2105,13 +2118,15 @@ module.exports = {
         addExplorationStandardFields(enterEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: mazeCmd });
         await i.editReply({ embeds: [enterEmbed], components: [disabledRow], files: enterFiles }).catch(() => {});
        }
+       bypassCollector.stop();
       });
       bypassCollector.on("end", (collected, reason) => {
        if (collected.size === 0 && reason === "time") {
-        bypassMsg.edit({ components: [new ActionRowBuilder().addComponents(
+        const timeoutRow = new ActionRowBuilder().addComponents(
          new ButtonBuilder().setCustomId(`grotto_maze_bypass_yes|${expeditionId}|${grotto._id}`).setLabel("Bypass maze (Lens of Truth)").setStyle(ButtonStyle.Primary).setDisabled(true),
          new ButtonBuilder().setCustomId(`grotto_maze_bypass_no|${expeditionId}|${grotto._id}`).setLabel("Enter the maze").setStyle(ButtonStyle.Secondary).setDisabled(true)
-        )] }).catch(() => {});
+        );
+        disableMessageButtonsOnTimeout(bypassMsg, timeoutRow);
        }
       });
       return;
@@ -2995,7 +3010,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
-    logger.info("EXPLORE", `id=${expeditionId ?? "?"} roll char=${characterName ?? "?"} ❤${party.totalHearts ?? 0} 🟩${party.totalStamina ?? 0}`);
+    logger.info("EXPLORE", `[explore.js] id=${expeditionId ?? "?"} roll char=${characterName ?? "?"} ❤${party.totalHearts ?? 0} 🟩${party.totalStamina ?? 0}`);
 
      // Sync quadrant state from map so stamina cost matches canonical explored/secured status.
      // Roll cost is from PARTY quadrant state only: 2 (unexplored), 1 (explored), 0 (secured). Never use character stamina.
@@ -3025,7 +3040,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         party.totalStamina = Math.min(caps.maxStamina, poolStam + add);
         party.markModified("totalStamina");
         ruinRestRecovered = (party.totalStamina ?? 0) - poolStam;
-        logger.info("EXPLORE", `id=${party.partyId ?? "?"} ruin_rest 🟩${poolStam} +${ruinRestRecovered} → 🟩${party.totalStamina ?? 0}`);
+        logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} ruin_rest 🟩${poolStam} +${ruinRestRecovered} → 🟩${party.totalStamina ?? 0}`);
         await party.save();
         const locationRuinRest = `${party.square} ${party.quadrant}`;
         pushProgressLog(party, character.name, "ruin_rest", `Known ruin-rest spot in ${locationRuinRest}: +${add} stamina.`, undefined, { staminaRecovered: add });
@@ -3209,9 +3224,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
                 }
               );
               if (updateResult.modifiedCount > 0) {
-                logger.info("EXPLORE", `id=${party.partyId ?? "?"} map ${exactSquareId} ${exactQuadrantId} → explored`);
+                logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} map ${exactSquareId} ${exactQuadrantId} → explored`);
               } else if (updateResult.matchedCount === 0) {
-                logger.warn("EXPLORE", `map update no match ${exactSquareId} ${exactQuadrantId}`);
+                logger.warn("EXPLORE", `[explore.js]⚠️ Map update no match: ${exactSquareId} ${exactQuadrantId}`);
               }
             } else {
               logger.warn("EXPLORE", `[explore.js]⚠️ Map update: quadrant not found in square ${party.square} ${party.quadrant}`);
@@ -3340,7 +3355,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        party.totalStamina = Math.min(campCaps.maxStamina, Math.max(0, beforeStamina + campStaminaRecovered));
        party.markModified("totalHearts");
        party.markModified("totalStamina");
-       logger.info("EXPLORE", `id=${party.partyId ?? "?"} camp_outcome 🟩${beforeStamina} +${campStaminaRecovered} → 🟩${party.totalStamina ?? 0}`);
+       logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} camp_outcome 🟩${beforeStamina} +${campStaminaRecovered} → 🟩${party.totalStamina ?? 0}`);
       }
 
       let chosenMapOldMap = null;
@@ -3828,7 +3843,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
             });
            } catch (err) {
             handleInteractionError(err, i, { source: "explore.js ruins blight finalize" });
-            logger.warn("EXPLORE", `[explore.js] Ruins blight finalizeBlightApplication: ${err?.message || err}`);
+            logger.warn("EXPLORE", `[explore.js]⚠️ Ruins blight finalizeBlightApplication: ${err?.message || err}`);
            }
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. They've been blighted! You can be healed by **Oracles, Sages & Dragons**. [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
@@ -3909,6 +3924,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(errEmbed, { party: fp || {}, expeditionId, location, nextCharacter: fp?.characters?.[fp.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(fp?.square, fp?.quadrant) });
               await resultMsg.edit({ embeds: [errEmbed], components: [chestDisabledRow] }).catch(() => {});
+              chestCollector.stop();
               return;
              }
              if (result.notEnoughStamina) {
@@ -3920,6 +3936,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
                .setImage(regionImages[fp?.region] || EXPLORATION_IMAGE_FALLBACK);
               addExplorationStandardFields(noStamEmbed, { party: fp, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(fp.square, fp.quadrant) });
               await resultMsg.edit({ embeds: [noStamEmbed], components: [chestDisabledRow] }).catch(() => {});
+              chestCollector.stop();
               return;
              }
             if (result?.lootEmbed) {
@@ -3945,10 +3962,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
              addExplorationStandardFields(skipEmbed, { party: finalParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(finalParty.square, finalParty.quadrant) });
              await resultMsg.edit({ embeds: [skipEmbed], components: [chestDisabledRow] }).catch(() => {});
             }
+            chestCollector.stop();
            });
            chestCollector.on("end", (collected, reason) => {
-            if (reason === "time" && collected.size === 0 && resultMsg.editable) {
-             resultMsg.edit({ components: [chestDisabledRow] }).catch(() => {});
+            if (reason === "time" && collected.size === 0) {
+             disableMessageButtonsOnTimeout(resultMsg, chestDisabledRow);
             }
            });
           }
@@ -4275,8 +4293,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           content: `**${character.name}** decided not to explore the ruins! ${getExplorationNextTurnContent(nextForChoiceEmbed) || `<@${nextForChoiceEmbed.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`}`,
          }).catch(() => {});
         }
+        collector.stop();
         } catch (collectErr) {
          logger.error("EXPLORE", `[explore.js]❌ Collector collect handler error: ${collectErr?.message || collectErr}`);
+         collector.stop();
          if (i && !i.replied && !i.deferred) {
           await i.reply({ content: "❌ Something went wrong processing your choice. Try /explore roll again.", flags: 64 }).catch(() => {});
          } else if (i?.followUp) {
@@ -4285,12 +4305,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         }
        });
        collector.on("end", async (collected, reason) => {
-        if (reason === "time" && collected.size === 0 && msg.editable) {
+        if (reason === "time" && collected.size === 0) {
          const fp = await Party.findActiveByPartyId(expeditionId);
          if (fp) {
           if (outcomeType === "monster_camp") {
            pushProgressLog(fp, character.name, "monster_camp_skipped", `Found a monster camp in ${location}; choice timed out (not marked).`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined, new Date());
-           msg.edit({ components: [createDisabledMonsterCampRow(expeditionId, characterIndex)] }).catch(() => {});
+           disableMessageButtonsOnTimeout(msg, createDisabledMonsterCampRow(expeditionId, characterIndex));
           } else if (outcomeType === "ruins") {
            pushProgressLog(fp, character.name, "ruins_skipped", `Found ruins in ${location}; choice timed out (left for later).`, undefined, undefined, new Date());
           } else if (outcomeType === "grotto") {
@@ -4300,11 +4320,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            await fp.save();
           }
          }
-         if (outcomeType === "monster_camp") {
-          // Already edited in monster_camp block above
-         } else {
-         const timeoutLabels = outcomeType === "grotto" ? { yes: "Open", no: "Mark on map" } : { yes: "Yes", no: "No" };
-         msg.edit({ components: [createDisabledYesNoRow(outcomeType, expeditionId, characterIndex, timeoutLabels)] }).catch(() => {});
+         if (outcomeType !== "monster_camp") {
+          const timeoutLabels = outcomeType === "grotto" ? { yes: "Open", no: "Mark on map" } : { yes: "Yes", no: "No" };
+          disableMessageButtonsOnTimeout(msg, createDisabledYesNoRow(outcomeType, expeditionId, characterIndex, timeoutLabels));
          }
         }
        });
@@ -4400,7 +4418,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}`);
 
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
-       logger.info("EXPLORE", `id=${party.partyId ?? "?"} raid start ${selectedMonster.name} T${selectedMonster.tier}`);
+       logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} raid start ${selectedMonster.name} T${selectedMonster.tier}`);
        try {
         const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
         const raidResult = await triggerRaid(
@@ -4523,7 +4541,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         defenseSuccess,
        } = calculateFinalValue(character, diceRoll);
 
-       logger.info("EXPLORE", `id=${party.partyId ?? "?"} encounter ${character.name} vs ${selectedMonster.name} T${selectedMonster.tier} roll=${diceRoll} adj=${adjustedRandomValue}`);
+       logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} encounter ${character.name} vs ${selectedMonster.name} T${selectedMonster.tier} roll=${diceRoll} adj=${adjustedRandomValue}`);
 
        const outcome = await getEncounterOutcome(
         character,
@@ -4538,9 +4556,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        if (outcome.hearts > 0) {
         party.totalHearts = Math.max(0, (party.totalHearts ?? 0) - outcome.hearts);
         party.markModified("totalHearts");
-        logger.info("EXPLORE", `id=${party.partyId ?? "?"} encounter result=${outcome.result} −${outcome.hearts}❤ pool→❤${party.totalHearts} loot=${!!outcome.canLoot}`);
+        logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} encounter result=${outcome.result} −${outcome.hearts}❤ pool→❤${party.totalHearts} loot=${!!outcome.canLoot}`);
        } else {
-        logger.info("EXPLORE", `id=${party.partyId ?? "?"} encounter result=${outcome.result} no damage loot=${!!outcome.canLoot}`);
+        logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} encounter result=${outcome.result} no damage loot=${!!outcome.canLoot}`);
        }
 
        if (party.totalHearts <= 0) {
@@ -4899,6 +4917,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         })(),
        });
        await i.editReply({ embeds: [cancelledEmbed], components: [disabledRow] }).catch(() => {});
+       collector.stop();
        return;
       }
 
@@ -4906,15 +4925,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const freshParty = await Party.findActiveByPartyId(expeditionId);
       if (!freshParty) {
        await i.followUp({ content: "Expedition not found. No changes made.", ephemeral: true }).catch(() => {});
+       collector.stop();
        return;
       }
       const freshCharIndex = freshParty.characters.findIndex((c) => c.userId === i.user.id);
       if (freshCharIndex === -1 || freshParty.currentTurn !== freshCharIndex) {
        await i.followUp({ content: "It’s not your turn or you’re not in this expedition. No changes made.", ephemeral: true }).catch(() => {});
+       collector.stop();
        return;
       }
       if (freshParty.quadrantState !== "explored") {
        await i.followUp({ content: "This quadrant is no longer in a state that can be secured. No changes made.", ephemeral: true }).catch(() => {});
+       collector.stop();
        return;
       }
       const freshHasResources = requiredResources.every((resource) =>
@@ -4924,6 +4946,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       );
       if (!freshHasResources) {
        await i.followUp({ content: "Party no longer has Wood and Eldin Ore. No changes made.", ephemeral: true }).catch(() => {});
+       collector.stop();
        return;
       }
 
@@ -4961,6 +4984,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         })(),
        });
        await i.editReply({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
+       collector.stop();
        return;
       }
 
@@ -5073,8 +5097,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       await i.followUp({
        content: `**Next:** Camp, Item, or Move. ${getExplorationNextTurnContent(nextCharacterSecure)}`,
       }).catch(() => {});
+      collector.stop();
      } catch (err) {
       logger.error("EXPLORE", `[explore.js]❌ Secure confirm: ${err?.message || err}`);
+      collector.stop();
       await i.followUp({ content: "Something went wrong. Please try /explore secure again.", ephemeral: true }).catch(() => {});
      }
     });
@@ -5536,7 +5562,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     if (stamina > 0) {
      party.totalStamina = Math.min(itemCaps.maxStamina, Math.max(0, beforeStaminaItem + stamina));
      party.markModified("totalStamina");
-     logger.info("EXPLORE", `id=${party.partyId ?? "?"} item ${partyChar?.name ?? "?"} ${itemName ?? "?"} 🟩${beforeStaminaItem} +${stamina} → 🟩${party.totalStamina ?? 0}`);
+     logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} item ${partyChar?.name ?? "?"} ${itemName ?? "?"} 🟩${beforeStaminaItem} +${stamina} → 🟩${party.totalStamina ?? 0}`);
     }
 
     // Always remove from party loadout so it appears used (testing: still no DB change to character inventory)
@@ -5548,7 +5574,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     try {
       await advanceRaidTurnOnItemUse(character._id);
     } catch (raidErr) {
-      logger.warn("EXPLORE", `[explore.js] advanceRaidTurnOnItemUse: ${raidErr?.message || raidErr}`);
+      logger.warn("EXPLORE", `[explore.js]⚠️ advanceRaidTurnOnItemUse: ${raidErr?.message || raidErr}`);
     }
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
@@ -6099,7 +6125,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          return;
         }
        } catch (raidErr) {
-        logger.warn("EXPLORE", `[explore.js] Camp attack raid failed: ${raidErr?.message || raidErr}`);
+        logger.warn("EXPLORE", `[explore.js]⚠️ Camp attack raid failed: ${raidErr?.message || raidErr}`);
        }
       }
       // Tier 1–4 or raid disabled: resolve encounter inline (no rest)
@@ -6200,7 +6226,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     party.markModified("totalHearts");
     party.markModified("totalStamina");
     if (totalStaminaRecovered > 0 || staminaCost > 0) {
-     logger.info("EXPLORE", `id=${party.partyId ?? "?"} camp ${character?.name ?? "?"} 🟩${campStaminaBefore} cost=${staminaCost} +${totalStaminaRecovered} → 🟩${party.totalStamina ?? 0}`);
+     logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} camp ${character?.name ?? "?"} 🟩${campStaminaBefore} cost=${staminaCost} +${totalStaminaRecovered} → 🟩${party.totalStamina ?? 0}`);
     }
 
     const locationCamp = `${party.square} ${party.quadrant}`;
