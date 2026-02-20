@@ -642,16 +642,7 @@ async function birthdayAnnouncements(client, _data = {}) {
       return;
     }
     
-    // Build announcement content
-    let description = '**@everyone**\n\n';
-    
-    // User birthdays (with rewards)
-    if (birthdayUsers.length > 0) {
-      const userMentions = birthdayUsers.map(user => `<@${user.discordId}>`).join(' ');
-      description += `🎂 **User Birthdays:**\n${userMentions}\n\n🎁 **It's your birthday!** Use \`/birthday claim\` to get your rewards!\n\n**Choose one:**\n• 💰 1500 tokens\n• 🛍️ 75% shop discount\n\n`;
-    }
-    
-    // Character birthdays: single source for embed copy, blessing, random gift (cakes or 1% Spirit Orb)
+    // Character birthday config: blessing text and random gift (cakes or 1% Spirit Orb)
     const characterBirthdayConfig = {
       cakes: ['Carrot Cake', 'Fruit Cake', 'Monster Cake', 'Nut Cake'],
       blessings: [
@@ -661,37 +652,55 @@ async function birthdayAnnouncements(client, _data = {}) {
       ],
       line: (blessing) => `🎂 **Happy birthday!** *${blessing}* Here's a cake! 🎂`
     };
-    const characterGiftLines = [];
+
+    const embeds = [];
+
+    // User birthdays: one embed (with rewards info)
+    if (birthdayUsers.length > 0) {
+      const userMentions = birthdayUsers.map(user => `<@${user.discordId}>`).join(' ');
+      const userDescription = `**@everyone**\n\n🎂 **User Birthdays:**\n${userMentions}\n\n🎁 **It's your birthday!** Use \`/birthday claim\` to get your rewards!\n\n**Choose one:**\n• 💰 1500 tokens\n• 🛍️ 75% shop discount`;
+      const userEmbed = new EmbedBuilder()
+        .setColor(0xff69b4)
+        .setTitle('🎂 Happy Birthday! 🎉')
+        .setDescription(userDescription)
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+        .setTimestamp();
+      embeds.push(userEmbed);
+    }
+
+    // Character birthdays: one embed per character
     if (birthdayCharacters.length > 0) {
-      const blessing = characterBirthdayConfig.blessings[Math.floor(Math.random() * characterBirthdayConfig.blessings.length)];
       for (const char of birthdayCharacters) {
+        const blessing = characterBirthdayConfig.blessings[Math.floor(Math.random() * characterBirthdayConfig.blessings.length)];
         const isSpiritOrb = Math.random() < 0.01;
         const itemName = isSpiritOrb ? 'Spirit Orb' : characterBirthdayConfig.cakes[Math.floor(Math.random() * characterBirthdayConfig.cakes.length)];
         try {
           await addItemInventoryDatabase(char._id, itemName, 1, null, 'Character Birthday');
-          characterGiftLines.push(`**${char.name}** received **${itemName}**`);
         } catch (err) {
           logger.error('SCHEDULED', `birthday-announcements: Failed to add ${itemName} to ${char.name}: ${err.message}`);
-          characterGiftLines.push(`**${char.name}** — gift could not be delivered`);
         }
+        const receivedLine = `**${char.name}** received **${itemName}**`;
+        const charDescription = `${characterBirthdayConfig.line(blessing)}\n\n${receivedLine}`;
+        const charEmbed = new EmbedBuilder()
+          .setColor(0xff69b4)
+          .setTitle(`🎂 Happy Birthday, ${char.name}! 🎉`)
+          .setDescription(charDescription)
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+          .setTimestamp();
+        if (char.icon) {
+          charEmbed.setThumbnail(char.icon);
+        }
+        embeds.push(charEmbed);
       }
-      const characterNames = birthdayCharacters.map(c => `**${c.name}**`).join(', ');
-      description += `🎭 **Character Birthdays:**\n${characterNames}\n\n`;
-      description += characterBirthdayConfig.line(blessing) + '\n\n';
-      description += characterGiftLines.join('\n');
     }
-    
-    const embed = new EmbedBuilder()
-      .setColor(0xff69b4)
-      .setTitle('🎂 Happy Birthday! 🎉')
-      .setDescription(description.trim())
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-      .setTimestamp();
-    if (birthdayCharacters.length > 0 && birthdayCharacters[0].icon) {
-      embed.setThumbnail(birthdayCharacters[0].icon);
+
+    // Discord allows max 10 embeds per message; send in chunks
+    const EMBEDS_PER_MESSAGE = 10;
+    for (let i = 0; i < embeds.length; i += EMBEDS_PER_MESSAGE) {
+      const chunk = embeds.slice(i, i + EMBEDS_PER_MESSAGE);
+      const content = i === 0 ? '@everyone' : null;
+      await channel.send({ content, embeds: chunk });
     }
-    
-    await channel.send({ content: '@everyone', embeds: [embed] });
     logger.success('SCHEDULED', `birthday-announcements: Posted announcement for ${birthdayUsers.length} user(s) and ${birthdayCharacters.length} character(s)`);
   } catch (err) {
     logger.error('SCHEDULED', `birthday-announcements: ${err.message}`);

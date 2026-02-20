@@ -521,6 +521,9 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       };
 
       await syncToInventoryDatabase(character, formattedItem, interaction);
+      if (travelContext && typeof travelContext === 'object') {
+        travelContext.travelGatherOccurred = true;
+      }
       try {
         const interactionUrl = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
         await logItemAcquisitionToDatabase(character, formattedItem, {

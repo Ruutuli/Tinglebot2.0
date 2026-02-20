@@ -725,7 +725,7 @@ module.exports = {
       }
       
       const craftedAt = new Date();
-      await addItemInventoryDatabase(character._id, item.itemName, craftedQuantity, interaction, 'Crafting', craftedAt, fortuneTellerBoostTag);
+      await addItemInventoryDatabase(character._id, item.itemName, craftedQuantity, interaction, 'Crafting', { craftedAt, fortuneTellerBoost: fortuneTellerBoostTag === 'Fortune Teller' });
       
       // Note: Google Sheets sync is handled by addItemInventoryDatabase
 

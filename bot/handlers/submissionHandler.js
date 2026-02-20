@@ -756,14 +756,11 @@ async function handleSubmitAction(interaction) {
       const submissionTitle = submission.title || submission.fileName;
       const submissionUrl = submission.fileUrl;
       
-      // Get tokensPerPerson from tokenCalculation breakdown if available
-      // Otherwise, use finalTokenAmount (for backward compatibility with old submissions)
-      let tokensPerPerson = submission.finalTokenAmount;
-      if (submission.tokenCalculation && typeof submission.tokenCalculation === 'object') {
-        tokensPerPerson = submission.tokenCalculation.tokensPerPerson || 
-                          submission.tokenCalculation.finalTotal || 
-                          submission.finalTokenAmount;
-      }
+      // Prefer finalTokenAmount (includes boost e.g. Research Stipend); fall back to tokenCalculation
+      const tokensPerPerson = submission.finalTokenAmount ?? 
+        (submission.tokenCalculation && typeof submission.tokenCalculation === 'object'
+          ? (submission.tokenCalculation.tokensPerPerson ?? submission.tokenCalculation.finalTotal)
+          : null) ?? 0;
       
       // If a collaboration exists, give each person their tokensPerPerson amount
       if (submission.collab && ((Array.isArray(submission.collab) && submission.collab.length > 0) || typeof submission.collab === 'string')) {

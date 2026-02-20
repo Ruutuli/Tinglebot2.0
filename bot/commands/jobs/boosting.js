@@ -1026,7 +1026,8 @@ const commandMention = BOOSTING_ACCEPT_COMMAND_MENTION;
 
 await safeReply({
  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run ${commandMention} within 24 hours.`,
- embeds: [embed]
+ embeds: [embed],
+ ephemeral: false
 });
 
  // Save the message ID to TempData for later updates
@@ -1106,6 +1107,21 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
+ // Village check on accept: both characters must still be in the same village
+ const targetCharacterForAccept = await fetchCharacterByName(requestData.targetCharacter);
+ if (targetCharacterForAccept) {
+  const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID || interaction.channel?.parentId === TESTING_CHANNEL_ID;
+  const villageValidation = validateVillageCompatibility(targetCharacterForAccept, booster, isTestingChannel);
+  if (!villageValidation.valid) {
+   logger.debug('BOOST', '[Accept] Village mismatch - characters no longer in same village.');
+   await interaction.reply({
+    content: villageValidation.error,
+    ephemeral: true,
+   });
+   return;
+  }
+ }
+
  // For Gathering boosts: ensure the target can actually gather at least one item
  // so we don't consume the booster's stamina or the target's daily roll for nothing
  if (requestData.category === 'Gathering') {
@@ -1120,7 +1136,7 @@ async function handleBoostAccept(interaction) {
    const regionKey = villageRegion ? villageRegion.toLowerCase() : (gatheringVillage && gatheringVillage.toLowerCase());
    if (regionKey) {
     const items = await fetchAllItems();
-    const job = targetCharacter.job;
+    const job = (targetCharacter.jobVoucher && targetCharacter.jobVoucherJob) ? targetCharacter.jobVoucherJob : targetCharacter.job;
     const normalizedInputJob = normalizeJobName(job);
     // ItemModel: gathering (Boolean), allJobs ([String]), region keys (e.g. eldin, faron, lanayru)
     const availableItems = items.filter((item) => {
@@ -2781,6 +2797,13 @@ async function clearBoostAfterUse(character, options = {}) {
           // Update the 'Boost Applied' embed if we have its reference
           if (typeof module.exports.updateBoostAppliedMessage === 'function') {
             await module.exports.updateBoostAppliedMessage(client, activeBoost);
+          }
+          // Ping the boosted character's owner when boost is fulfilled
+          if (activeBoost.channelId && character.userId) {
+            const ch = await client.channels.fetch(activeBoost.channelId).catch(() => null);
+            if (ch) {
+              await ch.send(`🔔 <@${character.userId}> Your boost from **${activeBoost.boostingCharacter}** has been used.`).catch((e) => logger.warn('BOOST', `Could not send fulfillment ping: ${e.message}`));
+            }
           }
         } catch (embedErr) {
           logger.error('BOOST', `Failed to update request embed to fulfilled: ${embedErr.message}`);

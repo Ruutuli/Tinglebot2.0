@@ -2857,7 +2857,7 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
     }
     
     const craftedAt = new Date();
-    await addItemInventoryDatabase(freshCharacter._id, continueData.itemName, craftedQuantity, interaction, 'Crafting', craftedAt, fortuneTellerBoostTag);
+    await addItemInventoryDatabase(freshCharacter._id, continueData.itemName, craftedQuantity, interaction, 'Crafting', { craftedAt, fortuneTellerBoost: fortuneTellerBoostTag === 'Fortune Teller' });
 
     // ------------------- Clear Boost After Use -------------------
     await clearBoostAfterUse(freshCharacter, {

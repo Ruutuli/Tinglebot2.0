@@ -257,8 +257,10 @@ async function removeNegativeQuantityEntries(inventoryCollection) {
 
 // ---- Function: addItemInventoryDatabase ----
 // Adds a single item to inventory database. Never leaves negative quantity; after $inc deletes if qty <= 0.
-async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "") {
+// options: optional { craftedAt: Date, fortuneTellerBoost: boolean } for Crafting (Foresight in Sales tag).
+async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", options = {}) {
   try {
+    const { craftedAt = null, fortuneTellerBoost = false } = options;
     const allowedNullInteractionObtain = ['Trade', 'Character Birthday'];
     if (!interaction && !allowedNullInteractionObtain.includes(obtain)) {
       throw new Error("Interaction object is undefined.");
@@ -321,9 +323,15 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       // Item exists with same name AND same obtain method - increment quantity
       logger.info('INVENTORY', `📊 Found ${inventoryItem.quantity} ${itemName} (obtain: "${obtainValue}") in ${character.name}'s inventory`);
       logger.info('INVENTORY', `➕ [ADD] ${character.name}: +${quantity} ${itemName} (source: ${obtain})`);
+      const updateOp = { $inc: { quantity: quantity } };
+      if (fortuneTellerBoost || craftedAt) {
+        updateOp.$set = {};
+        if (fortuneTellerBoost) updateOp.$set.fortuneTellerBoost = true;
+        if (craftedAt) updateOp.$set.craftedAt = craftedAt;
+      }
       await inventoryCollection.updateOne(
         { characterId, itemName: inventoryItem.itemName, obtain: obtainValue },
-        { $inc: { quantity: quantity } }
+        updateOp
       );
       const updated = await inventoryCollection.findOne({
         characterId,
@@ -352,6 +360,8 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         date: new Date(),
         obtain: obtainValue,
       };
+      if (fortuneTellerBoost) newItem.fortuneTellerBoost = true;
+      if (craftedAt) newItem.craftedAt = craftedAt;
       await inventoryCollection.insertOne(newItem);
       logger.success('INVENTORY', `Created new inventory entry for ${itemName} with obtain method "${obtainValue}"`);
     }

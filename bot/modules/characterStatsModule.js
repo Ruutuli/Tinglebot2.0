@@ -125,7 +125,8 @@ const updateCurrentStamina = async (characterId, stamina, updateUsageDate = fals
 // ------------------- Recover Hearts -------------------
 // Recovers hearts for a character. If the character is KO, it validates the healer
 // and revives the character with the specified number of hearts.
-const recoverHearts = async (characterId, hearts, healerId = null) => {
+// allowOneOverflow: when true and reviving from KO, allows up to maxHearts+1 (e.g. Entertainer Song of Healing).
+const recoverHearts = async (characterId, hearts, healerId = null, allowOneOverflow = false) => {
   try {
     // Check if this is a mod character first
     const modCharacter = await ModCharacter.findById(characterId);
@@ -133,7 +134,7 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
       console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - heart recovery skipped (mod characters have unlimited hearts)`);
       return createSimpleCharacterEmbed(modCharacter, `❤️ Mod character - no heart recovery needed`);
     }
-    
+
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
@@ -152,7 +153,8 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
 
       console.log(`[characterStatsModule.js]: 🔄 Reviving character ${character.name} with healer ${healer.name}.`);
       character.ko = false; // Revive the character
-      character.currentHearts = Math.min(hearts, character.maxHearts);
+      const maxAllowed = allowOneOverflow ? character.maxHearts + 1 : character.maxHearts;
+      character.currentHearts = Math.min(hearts, maxAllowed);
     } else {
       character.currentHearts = Math.min(character.currentHearts + hearts, character.maxHearts);
     }

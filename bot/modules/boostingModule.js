@@ -196,7 +196,7 @@ const boostingEffects = {
  Scholar: {
   Crafting: {
    name: "Resource Optimization",
-   description: "Resource ledgers trim material needs by 30% on recipes requiring more than one total unit, with sensible rounding.",
+   description: "Resource ledgers trim material needs by 20% on recipes requiring more than one total unit, with sensible rounding.",
   },
   // Exploring: {
   //  name: "Historical Discovery",
@@ -257,7 +257,7 @@ const BOOST_MULTIPLIERS = {
  PRIEST_JAIL_TIME: 0.5,
  PRIEST_TRAVEL_HEALING: 2,
  PRIEST_VENDING_BONUS: 20,
- SCHOLAR_CRAFTING: 0.7, // 30% reduction
+ SCHOLAR_CRAFTING: 0.8, // 20% reduction (Resource Optimization)
  SCHOLAR_TOKENS: 1.5,
  SCHOLAR_TRAVEL_BONUS: 1,
 };
@@ -697,8 +697,8 @@ function applyTeacherTravelingBoost(roadGathers) {
 
   const firstRarity = firstRoll.rarity || firstRoll.itemRarity || 0;
   const secondRarity = secondRoll.rarity || secondRoll.itemRarity || 0;
-
-  return firstRarity > secondRarity ? firstRoll : secondRoll;
+  // Tie-break: keep first so we don't always keep the second when rarities are equal
+  return firstRarity >= secondRarity ? firstRoll : secondRoll;
  }
  return roadGathers;
 }
@@ -912,27 +912,30 @@ function applyEntertainerOtherBoost(villageData) {
 // ------------------- Scholar Boost Functions -------------------
 // ============================================================================
 
-function applyScholarCraftingBoost(materialCosts, craftQuantity = 1) {
+function applyScholarCraftingBoost(materialCosts, additionalData) {
+ // Router passes (data, additionalData); extract craftQuantity from additionalData
+ const craftQuantity = (additionalData && typeof additionalData.craftQuantity === 'number') ? additionalData.craftQuantity : 1;
+
  // Only process if materialCosts is an array (materials)
  // If it's not an array (e.g., stamina cost or quantity), return unchanged
  if (!Array.isArray(materialCosts)) {
   return materialCosts;
  }
- 
+
  const { info, success } = require('@/utils/logger');
- 
+
  // Only apply reduction if total material needed (per-item quantity * craft quantity) is more than 1
  const result = materialCosts.map((material) => {
-  const originalQuantity = material.quantity;
+  const originalQuantity = typeof material.quantity === 'number' && !isNaN(material.quantity) ? material.quantity : 0;
   const totalNeeded = originalQuantity * craftQuantity;
-  
+
   // If total needed is 1 or less, don't apply reduction
   if (totalNeeded <= 1) {
    info('BOOST', `Scholar boost: ${material.itemName} - total needed ${totalNeeded} (≤ 1), no reduction applied`);
    return material;
   }
-  
-  // Apply 30% reduction to the TOTAL needed
+
+  // Apply 20% reduction to the TOTAL needed (multiplier 0.8)
   const reducedTotal = Math.floor(totalNeeded * BOOST_MULTIPLIERS.SCHOLAR_CRAFTING);
   
   // Ensure reduced total is at least 1 (but less than original if reduction applied)
@@ -956,14 +959,15 @@ function applyScholarCraftingBoost(materialCosts, craftQuantity = 1) {
    finalQuantity = Math.max(1, finalQuantity);
   }
   
-  const savings = totalNeeded - (finalQuantity * craftQuantity);
+  const actualUsed = finalQuantity * craftQuantity;
+  const savings = Math.max(0, totalNeeded - actualUsed);
   if (savings > 0) {
-   success('BOOST', `Scholar boost: ${material.itemName} - saved ${savings} (from ${totalNeeded} to ${finalQuantity * craftQuantity})`);
+   success('BOOST', `Scholar boost: ${material.itemName} - saved ${savings} (from ${totalNeeded} to ${actualUsed})`);
   }
-  
+
   return {
    ...material,
-   quantity: finalQuantity,
+   quantity: Number(finalQuantity),
    originalQuantity: originalQuantity, // Store original for savings calculation
    savings: savings, // Store savings amount
   };

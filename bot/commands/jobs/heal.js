@@ -31,7 +31,8 @@ const {
 const { applyBoostEffect, boostingEffects } = require('../../modules/boostingModule');
 const { 
   retrieveBoostingRequestFromTempDataByCharacter,
-  isBoostActive
+  isBoostActive,
+  clearBoostAfterUse
 } = require('./boosting');
 const logger = require('@/utils/logger');
 
@@ -892,8 +893,9 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
-    await recoverHearts(characterToHeal._id, heartsToHeal, healerCharacter._id);
-    
+    const allowOneOverflow = wasKO && heartsToHeal > healingRequest.heartsToHeal; // Entertainer Song of Healing +1
+    await recoverHearts(characterToHeal._id, heartsToHeal, healerCharacter._id, allowOneOverflow);
+
     // ============================================================================
     // ------------------- Apply Post-Healing Boosts -------------------
     // ============================================================================
@@ -1016,11 +1018,14 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     }
     
     // ============================================================================
-    // ------------------- Boost Persistence -------------------
+    // ------------------- Consume Healer Boost After Use -------------------
     // ============================================================================
-    // Healing boosts persist for the full 24 hours and can be used multiple times
-    // Do NOT clear the boost after healing - it remains active until it expires
-    // The boost will be automatically cleared when it expires (handled in boosting.js)
+    if (healerCharacter.boostedBy) {
+      await clearBoostAfterUse(healerCharacter, {
+        client: interaction.client,
+        context: 'healing'
+      });
+    }
 
     // Deactivate job voucher if needed
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {
@@ -1261,8 +1266,9 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
       await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
-    await recoverHearts(characterToHeal._id, finalHeartsToHeal, healerCharacter._id);
-    
+    const allowOneOverflowHealAid = wasKO && finalHeartsToHeal > heartsToHeal; // Entertainer Song of Healing +1
+    await recoverHearts(characterToHeal._id, finalHeartsToHeal, healerCharacter._id, allowOneOverflowHealAid);
+
     // ============================================================================
     // ------------------- Apply Post-Healing Boosts -------------------
     // ============================================================================
@@ -1385,11 +1391,14 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
     }
     
     // ============================================================================
-    // ------------------- Boost Persistence -------------------
+    // ------------------- Consume Healer Boost After Use -------------------
     // ============================================================================
-    // Healing boosts persist for the full 24 hours and can be used multiple times
-    // Do NOT clear the boost after healing - it remains active until it expires
-    // The boost will be automatically cleared when it expires (handled in boosting.js)
+    if (healerCharacter.boostedBy) {
+      await clearBoostAfterUse(healerCharacter, {
+        client: interaction.client,
+        context: 'healing'
+      });
+    }
 
     // Deactivate job voucher if needed
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {

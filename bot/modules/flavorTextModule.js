@@ -961,9 +961,9 @@ const BOOST_FLAVOR_MESSAGES = {
       ];
     },
     Crafting: [
-      "📚 Resource Optimization shaves roughly 30% off the materials, rounded smartly so nothing essential is lost.",
-      "🎓 Ledger math trims the recipe by a third, leaving your stores noticeably heavier after the build.",
-      "🔍 Research-backed plans pare material costs down by 30%, with sensible rounding to keep the work tidy."
+      "📚 Resource Optimization shaves roughly 20% off the materials, rounded smartly so nothing essential is lost.",
+      "🎓 Ledger math trims the recipe by a fifth, leaving your stores noticeably heavier after the build.",
+      "🔍 Research-backed plans pare material costs down by 20%, with sensible rounding to keep the work tidy."
     ],
     Exploring: [
       "📚 Lecture notes whisper of hidden lore—there’s a one-in-four chance the find flips into a story-rich discovery.",
@@ -1161,14 +1161,11 @@ const BOOST_FLAVOR_MESSAGES = {
       "✨ Prophetic price-setting bumps the eventual sale value by a fifth.",
       "🌟 The vision locks in a 20% token premium for every item you craft today."
     ],
-    Gathering: (options = {}) => {
-      const region = options?.targetRegion || "that distant region";
-      return [
-        `📚 Cross-Region Insight swaps the gather list—you pull treasures normally found in ${region}.`,
-        `🎓 Scholarly foresight drags ${region}'s table onto your map without the travel time.`,
-        `🔍 Destiny redraws the chart so ${region}'s rarities fall into your satchel here and now.`
-      ];
-    },
+    Gathering: [
+      "🔮 Rarity Reversal bends the odds—high-rarity finds surface far more often in your haul.",
+      "✨ Destiny weights the table so rarer treasures answer the call.",
+      "🌟 The vision tilts the roll toward rarity 8–10; the best finds find you."
+    ],
     Healers: [
       "🔮 Predictive Healing halves the stamina cost (rounded up) before you even lay out the bandages.",
       "✨ Prophetic timing slices the stamina bill by 50%, rounded to the nearest mercy.",

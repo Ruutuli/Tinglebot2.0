@@ -1127,7 +1127,8 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
  }
 
  const latestCharacter = await Character.findById(character._id);
- const updatedStamina = latestCharacter ? latestCharacter.currentStamina : remainingStamina;
+ const rawStamina = latestCharacter ? latestCharacter.currentStamina : remainingStamina;
+ const updatedStamina = Math.max(0, Number(rawStamina) ?? 0);
 
  // Build stamina cost field with savings info if Priest boost was active
  let staminaCostValue = `> ${staminaCost}`;
@@ -3243,11 +3244,12 @@ const createBoostAppliedEmbed = (boostData) => {
   expiresAt.setHours(expiresAt.getHours() + 24);
   const expiresIn = `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`;
 
-  // Format stamina and hearts display
-  const boosterStamina = boostData.boosterStamina || 0;
+  // Format stamina and hearts display (never show negative stamina)
+  const boosterStamina = Math.max(0, Number(boostData.boosterStamina) || 0);
   const boosterMaxStamina = boostData.boosterMaxStamina || 0;
   const boosterHearts = boostData.boosterHearts || 0;
   const boosterMaxHearts = boostData.boosterMaxHearts || 0;
+  const staminaAfter = Math.max(0, boosterStamina - 1);
 
   const appliedFields = [
     {
@@ -3272,7 +3274,7 @@ const createBoostAppliedEmbed = (boostData) => {
     },
     {
       name: '💚 **Booster Stamina**',
-      value: `> ${boosterStamina} → ${boosterStamina - 1}`,
+      value: `> ${boosterStamina} → ${staminaAfter}`,
       inline: true
     },
     {

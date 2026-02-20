@@ -965,8 +965,11 @@ module.exports = {
           const cancelHint = character.boostedBy
             ? `\n\nYou can cancel the boost with \`/boosting cancel\` (use the request ID from your boost message, or pick it from autocomplete) to gather without the boost.`
             : '';
+          const entertainerNote = isEntertainerBoost
+            ? ` This refers to the main gather table for your job and region; Minuet of Forest's bonus item is only added when the main gather succeeds.`
+            : '';
           await safeReply({
-            content: `⚠️ **No items available to gather here with the current boost and job combination.** Your daily gather roll was not used.${cancelHint}`,
+            content: `⚠️ **No items available to gather here with the current boost and job combination.** Your daily gather roll was not used.${entertainerNote}${cancelHint}`,
           });
           return;
         }
