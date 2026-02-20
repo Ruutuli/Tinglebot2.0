@@ -203,7 +203,10 @@ export async function POST(
       .filter(Boolean)
       .join(" ");
 
-    const threadName = `📍 | Expedition ${partyId}`.slice(0, 100);
+    const characterNames = characters.map((c) => String(c.name)).join(", ");
+    const threadName = (characterNames
+      ? `📍 | Expedition ${partyId} | ${characterNames}`
+      : `📍 | Expedition ${partyId}`).slice(0, 100);
     const existingThreadId = typeof p.discordThreadId === "string" ? p.discordThreadId.trim() : null;
 
     let threadId: string;
