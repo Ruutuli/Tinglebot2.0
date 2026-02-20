@@ -247,13 +247,15 @@ function createStuckInWildEmbed(party, location) {
 const EXPLORE_STRUGGLE_CONTEXT = { commandName: "explore", operation: "struggle" };
 
 // ------------------- payStaminaOrStruggle ------------------
-// Pay cost from party pool: stamina first, then hearts (struggle) for shortfall. Pool-only during expedition.
+// Pay cost from PARTY pool only: stamina first, then hearts (struggle) for shortfall.
+// During a started expedition the pool (party.totalStamina / party.totalHearts) is authoritative;
+// we never deduct from character.currentStamina or character.currentHearts for the cost.
 async function payStaminaOrStruggle(party, characterIndex, staminaCost, options = {}) {
   if (!party || !party.characters || party.characters.length === 0) {
     return { ok: false, reason: "not_enough" };
   }
-  const totalStamina = Math.max(0, party.totalStamina ?? 0);
-  const totalHearts = Math.max(0, party.totalHearts ?? 0);
+  const totalStamina = Math.max(0, Number(party.totalStamina) || 0);
+  const totalHearts = Math.max(0, Number(party.totalHearts) || 0);
   const shortfall = Math.max(0, staminaCost - totalStamina);
 
   if (shortfall > 0 && totalHearts < shortfall) {
@@ -263,8 +265,18 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
   const staminaPaid = Math.min(staminaCost, totalStamina);
   const heartsPaid = shortfall;
 
-  party.totalStamina = Math.max(0, totalStamina - staminaPaid);
-  party.totalHearts = Math.max(0, totalHearts - heartsPaid);
+  const afterStamina = Math.max(0, totalStamina - staminaPaid);
+  const afterHearts = Math.max(0, totalHearts - heartsPaid);
+
+  logger.info(
+    "EXPLORE",
+    `[explore.js] Expedition stamina: partyId=${party.partyId ?? "?"} action=${options.action ?? "pay"} ` +
+    `beforeStamina=${totalStamina} beforeHearts=${totalHearts} costStamina=${staminaPaid} costHearts=${heartsPaid} ` +
+    `afterStamina=${afterStamina} afterHearts=${afterHearts}`
+  );
+
+  party.totalStamina = afterStamina;
+  party.totalHearts = afterHearts;
   party.markModified("totalHearts");
   party.markModified("totalStamina");
   await party.save();
@@ -410,7 +422,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  const character = await Character.findById(partyChar._id);
  if (!character) return null;
 
- const chestPayResult = await payStaminaOrStruggle(party, openerIndex, 1, { order: "openerFirst", openerIndex });
+ const chestPayResult = await payStaminaOrStruggle(party, openerIndex, 1, { order: "openerFirst", openerIndex, action: "chest" });
  if (!chestPayResult.ok) return { notEnoughStamina: true };
 
  party.currentTurn = (party.currentTurn + 1) % n;
@@ -885,7 +897,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
   return;
  }
- const grottoPayResult = await payStaminaOrStruggle(freshParty, characterIndex, 1, { order: "currentFirst" });
+ const grottoPayResult = await payStaminaOrStruggle(freshParty, characterIndex, 1, { order: "currentFirst", action: "grotto" });
  if (!grottoPayResult.ok) {
   const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
   const partyTotalHearts = Math.max(0, freshParty.totalHearts ?? 0);
@@ -1666,7 +1678,7 @@ module.exports = {
       return interaction.editReply("Character is not in this expedition party.");
      }
      const TARGET_PRACTICE_STAMINA_COST = 1;
-     const payResult = await payStaminaOrStruggle(party, characterIndex, TARGET_PRACTICE_STAMINA_COST, { order: "currentFirst" });
+     const payResult = await payStaminaOrStruggle(party, characterIndex, TARGET_PRACTICE_STAMINA_COST, { order: "currentFirst", action: "grotto_target_practice" });
      if (!payResult.ok) {
       const partyTotalStamina = Math.max(0, party.totalStamina ?? 0);
       const partyTotalHearts = Math.max(0, party.totalHearts ?? 0);
@@ -2159,7 +2171,7 @@ module.exports = {
        await party.save();
       }
       if (outcome.staminaCost > 0) {
-       const payResult = await payStaminaOrStruggle(party, party.currentTurn, outcome.staminaCost);
+       const payResult = await payStaminaOrStruggle(party, party.currentTurn, outcome.staminaCost, { action: "grotto_maze" });
        if (!payResult.ok) {
         return interaction.editReply(`Not enough stamina or hearts for maze cost (${outcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
        }
@@ -2410,7 +2422,7 @@ module.exports = {
        await party.save();
       }
       if (trapOutcome.staminaCost > 0) {
-       const payResult = await payStaminaOrStruggle(party, party.currentTurn, trapOutcome.staminaCost);
+       const payResult = await payStaminaOrStruggle(party, party.currentTurn, trapOutcome.staminaCost, { action: "grotto_maze_trap" });
        if (!payResult.ok) {
         return interaction.editReply(`Not enough stamina or hearts for trap cost (${trapOutcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
        }
@@ -2562,7 +2574,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       return interaction.editReply("No grotto found at that location. The grotto must exist (cleansed or marked) at that square and quadrant.");
      }
     const totalCost = 1;
-    const payResult = await payStaminaOrStruggle(party, party.currentTurn, totalCost);
+    const payResult = await payStaminaOrStruggle(party, party.currentTurn, totalCost, { action: "grotto_travel" });
     if (!payResult.ok) {
      return interaction.editReply(`Not enough stamina or hearts to travel to the grotto. Need ${totalCost} 🟩; party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
     }
@@ -2783,7 +2795,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        "No party member has a Goddess Plume in their expedition loadout to cleanse this grotto. Add one to your loadout before departing, or use </explore roll> and when you get a grotto here choose **Yes** to cleanse with a plume."
       );
      }
-     const grottoPayResult = await payStaminaOrStruggle(party, plumeHolder.characterIndex, 1, { order: "currentFirst" });
+     const grottoPayResult = await payStaminaOrStruggle(party, plumeHolder.characterIndex, 1, { order: "currentFirst", action: "grotto_plume" });
      if (!grottoPayResult.ok) {
       const partyTotalStamina = Math.max(0, party.totalStamina ?? 0);
       const partyTotalHearts = Math.max(0, party.totalHearts ?? 0);
@@ -2985,8 +2997,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
+    logger.info(
+      "EXPLORE",
+      `[explore.js] Expedition roll starting: partyId=${expeditionId ?? "?"} character=${characterName ?? "?"} ` +
+      `partyStamina=${party.totalStamina ?? 0} partyHearts=${party.totalHearts ?? 0}`
+    );
+
      // Sync quadrant state from map so stamina cost matches canonical explored/secured status.
-     // Cost: 2 stamina (unexplored), 1 (explored), 0 (secured). Compute from canonical state.
+     // Roll cost is from PARTY quadrant state only: 2 (unexplored), 1 (explored), 0 (secured). Never use character stamina.
      const mapSquare = await Square.findOne({ squareId: party.square });
      let ruinRestRecovered = 0;
      let rollStaminaCost = party.quadrantState === "unexplored" ? 2 : party.quadrantState === "explored" ? 1 : 0;
@@ -3013,6 +3031,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         party.totalStamina = Math.min(caps.maxStamina, poolStam + add);
         party.markModified("totalStamina");
         ruinRestRecovered = (party.totalStamina ?? 0) - poolStam;
+        logger.info("EXPLORE", `[explore.js] Expedition stamina recovery (ruin_rest): partyId=${party.partyId ?? "?"} beforeStamina=${poolStam} added=${ruinRestRecovered} afterStamina=${party.totalStamina ?? 0}`);
         await party.save();
         const locationRuinRest = `${party.square} ${party.quadrant}`;
         pushProgressLog(party, character.name, "ruin_rest", `Known ruin-rest spot in ${locationRuinRest}: +${add} stamina.`, undefined, { staminaRecovered: add });
@@ -3057,7 +3076,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       return interaction.editReply({ embeds: [securedNoRollEmbed] });
      }
 
-     const payResult = await payStaminaOrStruggle(party, characterIndex, rollStaminaCost, { order: "currentFirst" });
+     const payResult = await payStaminaOrStruggle(party, characterIndex, rollStaminaCost, { order: "currentFirst", action: "roll" });
      if (!payResult.ok) {
       const location = `${party.square} ${party.quadrant}`;
       return interaction.editReply({
@@ -3067,8 +3086,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const rollCostsForLog = buildCostsForLog(payResult);
      const n = (party.characters || []).length;
      if (party.status === "started" && n > 0) {
-      character.currentHearts = Math.floor((party.totalHearts ?? 0) / n);
-      character.currentStamina = Math.floor((party.totalStamina ?? 0) / n);
+      // Use party pool only; keep in-memory character and party slot in sync with pool share for display.
+      const poolHearts = Math.max(0, party.totalHearts ?? 0);
+      const poolStamina = Math.max(0, party.totalStamina ?? 0);
+      const shareHearts = Math.floor(poolHearts / n);
+      const shareStamina = Math.floor(poolStamina / n);
+      character.currentHearts = shareHearts;
+      character.currentStamina = shareStamina;
+      if (party.characters[characterIndex]) {
+       party.characters[characterIndex].currentHearts = shareHearts;
+       party.characters[characterIndex].currentStamina = shareStamina;
+       party.markModified("characters");
+      }
      } else {
       character.currentStamina = party.characters[characterIndex].currentStamina;
       character.currentHearts = party.characters[characterIndex].currentHearts;
@@ -3311,10 +3340,13 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        campHeartsRecovered = Math.floor(Math.random() * 3) + 1;
        campStaminaRecovered = Math.floor(Math.random() * 3) + 1;
        const campCaps = await getPartyPoolCaps(party);
-       party.totalHearts = Math.min(campCaps.maxHearts, Math.max(0, (party.totalHearts ?? 0) + campHeartsRecovered));
-       party.totalStamina = Math.min(campCaps.maxStamina, Math.max(0, (party.totalStamina ?? 0) + campStaminaRecovered));
+       const beforeHearts = party.totalHearts ?? 0;
+       const beforeStamina = party.totalStamina ?? 0;
+       party.totalHearts = Math.min(campCaps.maxHearts, Math.max(0, beforeHearts + campHeartsRecovered));
+       party.totalStamina = Math.min(campCaps.maxStamina, Math.max(0, beforeStamina + campStaminaRecovered));
        party.markModified("totalHearts");
        party.markModified("totalStamina");
+       logger.info("EXPLORE", `[explore.js] Expedition stamina recovery (camp outcome): partyId=${party.partyId ?? "?"} beforeStamina=${beforeStamina} added=${campStaminaRecovered} afterStamina=${party.totalStamina ?? 0}`);
       }
 
       let chosenMapOldMap = null;
@@ -3607,7 +3639,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           return;
          }
          const ruinsStaminaCost = 3;
-         const ruinsPayResult = await payStaminaOrStruggle(freshParty, ruinsCharIndex, ruinsStaminaCost, { order: "currentFirst" });
+         const ruinsPayResult = await payStaminaOrStruggle(freshParty, ruinsCharIndex, ruinsStaminaCost, { order: "currentFirst", action: "ruins" });
          if (!ruinsPayResult.ok) {
           const partyTotalStamina = Math.max(0, freshParty.totalStamina ?? 0);
           const partyTotalHearts = Math.max(0, freshParty.totalHearts ?? 0);
@@ -3656,7 +3688,6 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          if (ruinsOutcome === "camp") {
           await pushDiscoveryToMap(freshParty, "ruins", ruinsAt, i.user?.id);
          }
-         pushProgressLog(freshParty, ruinsCharacter.name, "ruins", `Explored ruins in ${location}.`, undefined, ruinsCostsForLog, ruinsAt);
          if (ruinsOutcome === "chest") {
           resultDescription = summaryLine + `**${ruinsCharacter.name}** explored the ruins and found a chest!\n\nOpen chest? Costs 1 stamina.\n\n**Yes** — Open the chest (1 item per party member, relics possible).\n**No** — Continue exploring with </explore roll:${getExploreCommandId()}>.`;
           progressMsg += "Found a chest (open for 1 stamina).";
@@ -3792,6 +3823,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           lootForLog = { itemName: "Star Fragment", emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
          } else if (ruinsOutcome === "blight") {
+          progressMsg += `Found blight; ${ruinsCharacter.name} is now blighted.`;
           if (!EXPLORATION_TESTING_MODE) {
            try {
             await finalizeBlightApplication(ruinsCharacter, ruinsCharacter.userId, {
@@ -3806,7 +3838,6 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            }
           }
           resultDescription = summaryLine + `**${ruinsCharacter.name}** found… **BLIGHT** in the ruins. They've been blighted! You can be healed by **Oracles, Sages & Dragons**. [Learn more about blight stages and healing](https://rootsofthewild.com/world/blight)\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
-          progressMsg += "Found blight; character is now blighted.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else {
           // goddess_plume
@@ -4730,7 +4761,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
 
     const staminaCost = 5;
-    const securePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst" });
+    const securePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst", action: "secure" });
     if (!securePayResult.ok) {
      return interaction.editReply(
       `Not enough stamina or hearts to secure (need ${staminaCost} total). Party has ${party.totalStamina ?? 0} stamina and ${party.totalHearts ?? 0} hearts. **Camp** to recover stamina, or use hearts to **Struggle** (1 heart = 1 stamina).`
@@ -4904,7 +4935,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
 
       const staminaCost = 5;
-      const securePayResult = await payStaminaOrStruggle(freshParty, freshCharIndex, staminaCost, { order: "currentFirst" });
+      const securePayResult = await payStaminaOrStruggle(freshParty, freshCharIndex, staminaCost, { order: "currentFirst", action: "secure_confirm" });
       if (!securePayResult.ok) {
        const noStaminaEmbed = new EmbedBuilder()
         .setTitle("Not enough stamina or hearts")
@@ -5228,7 +5259,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const staminaCost = destinationQuadrantState === "secured" ? 0 : destinationQuadrantState === "unexplored" ? 2 : 1;
     let movePayResult = null;
     if (staminaCost > 0) {
-     movePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst" });
+     movePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst", action: "move" });
      if (!movePayResult.ok) {
       const location = `${party.square} ${party.quadrant}`;
       return interaction.editReply({
@@ -5503,13 +5534,16 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
     // Pool-only: add item hearts/stamina to party pool; cap at combined party max
     const itemCaps = await getPartyPoolCaps(party);
+    const beforeHeartsItem = party.totalHearts ?? 0;
+    const beforeStaminaItem = party.totalStamina ?? 0;
     if (hearts > 0) {
-     party.totalHearts = Math.min(itemCaps.maxHearts, Math.max(0, (party.totalHearts ?? 0) + hearts));
+     party.totalHearts = Math.min(itemCaps.maxHearts, Math.max(0, beforeHeartsItem + hearts));
      party.markModified("totalHearts");
     }
     if (stamina > 0) {
-     party.totalStamina = Math.min(itemCaps.maxStamina, Math.max(0, (party.totalStamina ?? 0) + stamina));
+     party.totalStamina = Math.min(itemCaps.maxStamina, Math.max(0, beforeStaminaItem + stamina));
      party.markModified("totalStamina");
+     logger.info("EXPLORE", `[explore.js] Expedition stamina recovery (item): partyId=${party.partyId ?? "?"} character=${partyChar?.name ?? "?"} item=${itemName ?? "?"} beforeStamina=${beforeStaminaItem} added=${stamina} afterStamina=${party.totalStamina ?? 0}`);
     }
 
     // Always remove from party loadout so it appears used (testing: still no DB change to character inventory)
@@ -5878,7 +5912,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      });
     }
 
-    const retreatPayResult = await payStaminaOrStruggle(party, characterIndex, 1, { order: "currentFirst" });
+    const retreatPayResult = await payStaminaOrStruggle(party, characterIndex, 1, { order: "currentFirst", action: "retreat" });
     if (!retreatPayResult.ok) {
      return interaction.editReply(
       "Not enough stamina or hearts. A retreat attempt costs **1** (stamina or heart). The party has " + (party.totalStamina ?? 0) + " stamina and " + (party.totalHearts ?? 0) + " hearts. **Camp** to recover, or use hearts to **Struggle**."
@@ -6003,20 +6037,20 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
 
     const isSecured = party.quadrantState === "secured";
-    // Camp costs 1 stamina (same as one roll in explored quad); secured = 0; stuck in wild = 0
-    let staminaCost = isSecured ? 0 : 1;
+    // Camp cost: unexplored = 3, explored = 2, secured = 0. When party can't pay (stuck in wild), cost = 0 but higher monster attack chance.
+    let staminaCost = party.quadrantState === "secured" ? 0 : party.quadrantState === "explored" ? 2 : 3;
     // Recovery: up to 25% of max hearts/stamina unsecured, 50% if quadrant is secured
     let heartsPct = isSecured ? 0.5 : 0.25;
     const staminaPct = isSecured ? 0.5 : 0.25;
-    const stuckInWild = staminaCost > 0 && party.totalStamina < staminaCost;
+    const stuckInWild = staminaCost > 0 && (party.totalStamina ?? 0) < staminaCost;
     if (stuckInWild) {
      staminaCost = 0;
      heartsPct = 0.25;
     }
 
-    // Chance of monster attack when camping: explored/unexplored 25%, secured 5%. When party has 0 stamina (exhausted), higher chance but capped at 50%.
+    // Chance of monster attack when camping: explored/unexplored 25%, secured 5%. When no stamina or stuck in wild (camp costs 0), higher chance but capped at 50%.
     let campAttackChance = isSecured ? CAMP_ATTACK_CHANCE_SECURED : CAMP_ATTACK_CHANCE_UNSECURED;
-    if (!isSecured && (party.totalStamina === 0 || (typeof party.totalStamina === "number" && party.totalStamina < 1))) {
+    if (stuckInWild || (!isSecured && (party.totalStamina === 0 || (typeof party.totalStamina === "number" && party.totalStamina < 1)))) {
      campAttackChance = Math.min(CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP, campAttackChance + CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA);
     }
     const canBeAttackedAtCamp = !(character.blighted && character.blightStage >= 3) && Math.random() < campAttackChance;
@@ -6130,8 +6164,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
 
     // Only charge stamina when camp succeeds (no interrupt). If camp was interrupted by a monster we returned above — never charge for a failed attempt.
+    const campStaminaBefore = party.totalStamina ?? 0;
     if (!canBeAttackedAtCamp && staminaCost > 0) {
-     party.totalStamina = Math.max(0, (party.totalStamina ?? 0) - staminaCost);
+     party.totalStamina = Math.max(0, campStaminaBefore - staminaCost);
      party.markModified("totalStamina");
     }
 
@@ -6150,16 +6185,21 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      totalHeartsRecovered += heartsRecovered;
     }
     if (totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < sumMaxHearts) totalHeartsRecovered = 1;
-    // Stamina: random up to staminaPct of party max (25% unsecured, 50% secured)
+    // Stamina: random up to staminaPct of party max (25% unsecured, 50% secured).
+    // When stuck in the wild (0 stamina), always recover at least 1 so the party can continue.
     const poolStam = party.totalStamina ?? 0;
     const staminaRoom = Math.max(0, sumMaxStamina - poolStam);
     const staminaCap = Math.floor(sumMaxStamina * staminaPct);
-    const staminaMaxRecover = Math.min(staminaRoom, staminaCap);
-    const totalStaminaRecovered = staminaMaxRecover > 0 ? Math.floor(Math.random() * (staminaMaxRecover + 1)) : 0;
+    const staminaMaxRecover = Math.min(staminaRoom, Math.max(staminaCap, stuckInWild ? 1 : 0));
+    let totalStaminaRecovered = staminaMaxRecover > 0 ? Math.floor(Math.random() * (staminaMaxRecover + 1)) : 0;
+    if (stuckInWild && totalStaminaRecovered < 1 && staminaRoom >= 1) totalStaminaRecovered = 1;
     party.totalHearts = Math.min(sumMaxHearts, Math.max(0, (party.totalHearts ?? 0) + totalHeartsRecovered));
     party.totalStamina = Math.min(sumMaxStamina, Math.max(0, (party.totalStamina ?? 0) + totalStaminaRecovered));
     party.markModified("totalHearts");
     party.markModified("totalStamina");
+    if (totalStaminaRecovered > 0 || staminaCost > 0) {
+     logger.info("EXPLORE", `[explore.js] Expedition stamina (camp subcommand): partyId=${party.partyId ?? "?"} character=${character?.name ?? "?"} beforeStamina=${campStaminaBefore} cost=${staminaCost} recovered=${totalStaminaRecovered} afterStamina=${party.totalStamina ?? 0}`);
+    }
 
     const locationCamp = `${party.square} ${party.quadrant}`;
     const costsForLog = staminaCost > 0
@@ -6172,7 +6212,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      party,
      character.name,
      "camp",
-     `Camped at ${locationCamp}. Party recovered hearts (${Math.round(heartsPct * 100)}% of max).${campLogStamina}`,
+     `Camped at ${locationCamp}. Party recovered hearts.${campLogStamina}`,
      undefined,
      costsForLog
     );

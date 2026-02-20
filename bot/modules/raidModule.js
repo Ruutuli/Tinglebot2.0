@@ -785,23 +785,26 @@ async function scheduleRaidTurnSkip(raidId) {
 // ---- Function: notifyExpeditionRaidOver ----
 // When a raid was triggered from an expedition: update party progressLog and send "continue expedition" to thread
 // For result === 'fled' (retreat): do NOT fetch/save party — explore retreat handler owns that save to avoid double-dip on stamina.
-async function notifyExpeditionRaidOver(raid, client, result) {
+// finalBlowCharacter: when result === 'defeated', the character who dealt the killing blow (for progress log).
+async function notifyExpeditionRaidOver(raid, client, result, finalBlowCharacter = null) {
   if (!raid.expeditionId || !client) return;
   try {
     if (result !== 'fled') {
       const Party = require('@/models/PartyModel');
       const party = await Party.findActiveByPartyId(raid.expeditionId);
       if (!party) return;
-      if (!party.progressLog) party.progressLog = [];
-      const msg = result === 'defeated'
-        ? `Raid defeated ${raid.monster?.name || 'monster'}! Continue the expedition.`
-        : `Raid timed out. Continue the expedition.`;
-      party.progressLog.push({
-        at: new Date(),
-        characterName: 'Raid',
-        outcome: 'raid_over',
-        message: msg,
-      });
+      // When defeated, raid_over is pushed from raid.js after raid_turn so progress log order is correct (damage then raid over)
+      if (result !== 'defeated') {
+        if (!party.progressLog) party.progressLog = [];
+        const monsterName = raid.monster?.name || 'monster';
+        const msg = `Raid timed out. Continue the expedition.`;
+        party.progressLog.push({
+          at: new Date(),
+          characterName: 'Raid',
+          outcome: 'raid_over',
+          message: msg,
+        });
+      }
       // Advance turn so the next party member can /explore roll (we didn't advance when raid started)
       if (party.characters?.length > 0) {
         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
@@ -1083,7 +1086,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           await syncExpeditionPartyPoolFromRaid(raid);
           await raid.completeRaid('defeated');
           if (raid.expeditionId && interaction?.client) {
-            await notifyExpeditionRaidOver(raid, interaction.client, 'defeated');
+            await notifyExpeditionRaidOver(raid, interaction.client, 'defeated', character);
           }
         } else {
           // Reload character from database to get the latest state (hearts were saved in processRaidBattle)
@@ -1147,7 +1150,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error(`Failed to update raid after ${maxRaidRetries} retries`);
     }
 
-    // When raid was triggered from exploration, keep party pool in sync: sum all participants' hearts/stamina from DB (party.characters slots can be stale)
+    // When raid was triggered from exploration, keep party pool in sync: sum all participants' hearts/stamina.
+    // Use battleResult for the character who just took the turn (so party hearts reflect raid damage immediately).
     if (raid.expeditionId && raid.participants?.length) {
       try {
         const Party = require('@/models/PartyModel');
@@ -1157,18 +1161,26 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
         if (party && party.status === 'started') {
           let sumHearts = 0;
           let sumStamina = 0;
+          const actingCharacterId = character?._id?.toString();
           for (const p of raid.participants) {
             if (!p.characterId) continue;
-            const char = (await Character.findById(p.characterId).lean()) || (await ModCharacter.findById(p.characterId).lean());
-            if (char) {
-              sumHearts += (char.currentHearts ?? 0);
-              sumStamina += (char.currentStamina ?? 0);
-              // Keep party.characters slots in sync for dashboard/display
-              const slotIdx = party.characters?.findIndex((c) => c._id && c._id.toString() === p.characterId.toString());
-              if (slotIdx !== -1 && party.characters[slotIdx]) {
-                party.characters[slotIdx].currentHearts = char.currentHearts ?? 0;
-                party.characters[slotIdx].currentStamina = char.currentStamina ?? 0;
-              }
+            const pIdStr = p.characterId.toString();
+            let currentHearts;
+            let currentStamina;
+            if (actingCharacterId && pIdStr === actingCharacterId) {
+              currentHearts = battleResult.playerHearts?.current ?? character.currentHearts ?? 0;
+              currentStamina = character.currentStamina ?? 0;
+            } else {
+              const char = (await Character.findById(p.characterId).lean()) || (await ModCharacter.findById(p.characterId).lean());
+              currentHearts = char ? (char.currentHearts ?? 0) : 0;
+              currentStamina = char ? (char.currentStamina ?? 0) : 0;
+            }
+            sumHearts += currentHearts;
+            sumStamina += currentStamina;
+            const slotIdx = party.characters?.findIndex((c) => c._id && c._id.toString() === pIdStr);
+            if (slotIdx !== -1 && party.characters[slotIdx]) {
+              party.characters[slotIdx].currentHearts = currentHearts;
+              party.characters[slotIdx].currentStamina = currentStamina;
             }
           }
           party.totalHearts = Math.max(0, sumHearts);

@@ -322,6 +322,8 @@ export async function POST(
       }
     );
 
+    console.log(`[explore/parties/start] Expedition started: partyId=${partyId} totalHearts=${totalHeartsSum} totalStamina=${totalStaminaSum}`);
+
     const threadUrl = `https://discord.com/channels/${process.env.GUILD_ID ?? ""}/${threadId}`;
     return NextResponse.json({
       ok: true,

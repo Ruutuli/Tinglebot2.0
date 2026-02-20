@@ -602,15 +602,28 @@ module.exports = {
       // Create embed for the turn result using the updated raid data from turnResult
       const { embed, koCharacters } = await createRaidTurnEmbed(character, raidId, turnResult, turnResult.raidData);
 
-      // Expedition raids: log raid turn to party progress (concise for dashboard)
+      // Expedition raids: log raid turn to party progress (concise for dashboard), then raid_over if defeated (order: damage then raid over)
       if (turnResult.raidData.expeditionId) {
         try {
           const party = await Party.findActiveByPartyId(turnResult.raidData.expeditionId);
           if (party) {
             const br = turnResult.battleResult;
             const monsterName = turnResult.raidData.monster?.name || 'monster';
-            const logMessage = `Raid vs ${monsterName}: ${br.hearts} heart${br.hearts !== 1 ? 's' : ''} dealt.`;
-            pushProgressLog(party, character.name, 'raid_turn', logMessage, undefined, { heartsDealt: br.hearts, roll: br.originalRoll, adjustedRoll: Math.round(br.adjustedRandomValue) }, new Date());
+            const dealt = br.hearts ?? 0;
+            const before = br.characterHeartsBefore;
+            const after = br.playerHearts?.current;
+            const received = (typeof before === 'number' && typeof after === 'number' && before > after) ? before - after : 0;
+            let logMessage = `Raid vs ${monsterName}: ${dealt} heart${dealt !== 1 ? 's' : ''} dealt.`;
+            if (received > 0) logMessage += ` ${received} heart${received !== 1 ? 's' : ''} received.`;
+            if (!logMessage || !logMessage.trim()) logMessage = `Raid vs ${monsterName}: turn completed.`;
+            const logCosts = { heartsDealt: br.hearts, roll: br.originalRoll, adjustedRoll: Math.round(br.adjustedRandomValue) };
+            if (received > 0) logCosts.heartsReceived = received;
+            pushProgressLog(party, character.name || 'Unknown', 'raid_turn', logMessage, undefined, logCosts, new Date());
+            const monsterDefeated = turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed';
+            if (monsterDefeated) {
+              const raidOverMsg = `Raid defeated ${monsterName}! ${character.name || 'Party'} dealt the final blow. Continue the expedition.`;
+              pushProgressLog(party, character.name || 'Raid', 'raid_over', raidOverMsg, undefined, undefined, new Date());
+            }
             await party.save();
           }
         } catch (logErr) {

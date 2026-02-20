@@ -332,13 +332,15 @@ module.exports = {
 
 async function handleViewCharacter(interaction) {
  try {
+  await interaction.deferReply({ flags: 64 });
+
   const characterName = interaction.options.getString("charactername");
   const userId = interaction.user.id;
 
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
 
   if (!character) {
-   await interaction.reply({
+   await interaction.editReply({
     embeds: [new EmbedBuilder()
       .setColor('#FF0000')
       .setTitle('❌ Character Not Found')
@@ -478,14 +480,22 @@ async function handleViewCharacter(interaction) {
    embeds.push(mountEmbed);
   }
 
-  await interaction.reply({ embeds, flags: 64 });
+  await interaction.editReply({ embeds, flags: 64 });
  } catch (error) {
   handleInteractionError(error, interaction, { source: "character.js" });
   console.error("Error executing viewcharacter command:", error);
-  await interaction.reply({
-   content: "❌ An error occurred while fetching the character.",
-   flags: 64
-  });
+  if (!interaction.replied && !interaction.deferred) {
+   await interaction.reply({
+    content: "❌ An error occurred while fetching the character.",
+    flags: 64
+   }).catch(() => {});
+  } else if (interaction.deferred) {
+   await interaction.editReply({
+    content: "❌ An error occurred while fetching the character.",
+    embeds: [],
+    flags: 64
+   }).catch(() => {});
+  }
  }
 }
 
@@ -549,10 +559,12 @@ async function handleViewCharacterList(interaction) {
   await interaction.reply({ embeds: [embed], components: rows, flags: 64 });
  } catch (error) {
   handleInteractionError(error, interaction, { source: "character.js" });
-  await interaction.reply({
-   content: `❌ Error retrieving character list.`,
-   flags: 64
-  });
+  if (!interaction.replied && !interaction.deferred) {
+   await interaction.reply({
+    content: `❌ Error retrieving character list.`,
+    flags: 64
+   }).catch(() => {});
+  }
  }
 }
 
