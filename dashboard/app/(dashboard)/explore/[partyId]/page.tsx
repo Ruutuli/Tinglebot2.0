@@ -434,7 +434,9 @@ export default function ExplorePartyPage() {
   const params = useParams();
   const router = useRouter();
   const partyId = (params?.partyId as string) ?? "";
-  const { user, loading: sessionLoading } = useSession();
+  const { user, isAdmin, isModerator, loading: sessionLoading } = useSession();
+  const canToggleFog = isAdmin || isModerator;
+  const [hideFog, setHideFog] = useState(false);
   const userId = user?.id ?? null;
 
   // ------------------- Component: state declarations ------------------
@@ -1381,9 +1383,22 @@ export default function ExplorePartyPage() {
             )}
             {squarePreview && squarePreview.layers.length > 0 && party.status !== "started" && party.status !== "completed" && (
               <div className="border-t border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/60 px-3 py-2.5 sm:px-4 sm:py-3">
-                <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)] sm:text-xs">
-                  Map · {party.square} {party.quadrant}
-                </p>
+                <div className="mb-1.5 flex flex-wrap items-center justify-center gap-2 text-center">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)] sm:text-xs">
+                    Map · {party.square} {party.quadrant}
+                  </p>
+                  {canToggleFog && (
+                    <label className="inline-flex cursor-pointer select-none items-center gap-1 text-[10px] text-[var(--totk-grey-200)]">
+                      <input
+                        type="checkbox"
+                        checked={hideFog}
+                        onChange={(e) => setHideFog(e.target.checked)}
+                        className="h-3 w-3 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]/50"
+                      />
+                      <span>Hide fog</span>
+                    </label>
+                  )}
+                </div>
                 <div className="relative mx-auto max-w-[18rem] overflow-hidden rounded border border-[var(--totk-dark-ocher)]/50 shadow-lg sm:max-w-[22rem]" style={{ aspectRatio: "2400/1666" }}>
                   {squarePreview.layers
                     .filter((layer) => layer.name !== "MAP_0001_hidden-areas")
@@ -1398,6 +1413,7 @@ export default function ExplorePartyPage() {
                       />
                     ))}
                   {(() => {
+                    if (canToggleFog && hideFog) return null;
                     const fogLayer = squarePreview.layers.find((l) => l.name === "MAP_0001_hidden-areas");
                     if (!fogLayer) return null;
                     // Prefer party.quadrantStatuses (includes exploredQuadrantsThisRun) so "explored" shows even if map DB wasn't updated
@@ -2397,9 +2413,22 @@ export default function ExplorePartyPage() {
                           )}
                         </div>
                       )}
-                      <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">
-                        {isPlacing ? `Place marker — ${placingForDiscovery!.label} · ${displaySquare} ${displayQuadrant}` : `Map · ${party.square} ${party.quadrant}`}
-                      </h2>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                          {isPlacing ? `Place marker — ${placingForDiscovery!.label} · ${displaySquare} ${displayQuadrant}` : `Map · ${party.square} ${party.quadrant}`}
+                        </h2>
+                        {canToggleFog && (
+                          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-[10px] text-[var(--totk-grey-200)]">
+                            <input
+                              type="checkbox"
+                              checked={hideFog}
+                              onChange={(e) => setHideFog(e.target.checked)}
+                              className="h-3.5 w-3.5 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]/50"
+                            />
+                            <span>Hide fog (admin)</span>
+                          </label>
+                        )}
+                      </div>
                       {showMap ? (
                         <>
                         <div
@@ -2451,6 +2480,7 @@ export default function ExplorePartyPage() {
                               />
                             ))}
                           {(() => {
+                            if (canToggleFog && hideFog) return null;
                             const fogLayer = displayPreview!.layers.find((l) => l.name === "MAP_0001_hidden-areas");
                             if (!fogLayer) return null;
                             const statuses = displayPreview!.quadrantStatuses ?? party.quadrantStatuses ?? {};
