@@ -84,8 +84,10 @@ export async function POST(
         return NextResponse.json({ error: "Expedition expired" }, { status: 404 });
       }
     }
-    if (String(p.leaderId) !== currentUserId) {
-      return NextResponse.json({ error: "Only the expedition leader can start it" }, { status: 403 });
+    const partyCharacters = (p.characters as PartyMemberDoc[]) ?? [];
+    const isPartyMember = partyCharacters.some((c) => String(c.userId) === currentUserId);
+    if (!isPartyMember) {
+      return NextResponse.json({ error: "Only party members can start the expedition" }, { status: 403 });
     }
 
     if (String(p.status) === "started") {

@@ -602,13 +602,16 @@ function sanitizeEmbedField(field) {
   return { name, value, inline: field.inline === true };
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0 }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
+ const heartsDisplay = maxHearts > 0 ? `${party?.totalHearts ?? 0}/${maxHearts}` : String(party?.totalHearts ?? 0);
+ const staminaDisplay = maxStamina > 0 ? `${party?.totalStamina ?? 0}/${maxStamina}` : String(party?.totalStamina ?? 0);
  const fields = [
-  { name: "❤️ **__Party Hearts__**", value: String(party?.totalHearts ?? 0), inline: true },
-  { name: "🟩 **__Party Stamina__**", value: String(party?.totalStamina ?? 0), inline: true },
+  { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
+  { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },
+  ...(actionCost != null ? [{ name: "⚡ **__Action Cost__**", value: actionCost.staminaCost > 0 ? `−${actionCost.staminaCost} 🟩` : (actionCost.heartsCost > 0 ? `−${actionCost.heartsCost} ❤️ (struggle)` : "Free"), inline: true }] : []),
   ...extraFields,
   ...(ruinRestRecovered > 0 ? [{ name: "🟩 **__Ruin rest__**", value: `Recognized a safe spot from your earlier ruins exploration here — **+${ruinRestRecovered} stamina** recovered this roll.`, inline: false }] : []),
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
@@ -632,7 +635,6 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
    if (isAtStartQuadrant) commandsValue += ` · ${cmdEnd}`;
    commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
-   if ((party?.totalStamina ?? 0) === 0) commandsValue += `\n⚠️ 0 stamina: Camp or Item to recover.`;
   } else {
    const cmdItem = `</explore item:${cmdId}>`;
    const cmdCamp = `</explore camp:${cmdId}>`;
@@ -640,7 +642,6 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    commandsValue += `${cmdRoll} · ${cmdItem} · ${cmdCamp}`;
    if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
    commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
-   if ((party?.totalStamina ?? 0) === 0) commandsValue += `\n⚠️ 0 stamina: Camp or Item to recover.`;
   }
   if (!commandsLast) {
    fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
@@ -648,6 +649,10 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  }
  const safeFields = fields.map(sanitizeEmbedField);
  embed.addFields(...safeFields);
+ // Set footer with struggle mode warning when stamina is 0
+ if ((party?.totalStamina ?? 0) === 0) {
+  embed.setFooter({ text: "⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover." });
+ }
  return embed;
 };
 
@@ -674,7 +679,6 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   commandsValue += `${cmdMove} · ${cmdItem} · ${cmdCamp}`;
   if (isAtStartQuadrant) commandsValue += ` · ${cmdEnd}`;
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
-  if ((party?.totalStamina ?? 0) === 0) commandsValue += `\n⚠️ 0 stamina: Camp or Item to recover.`;
  } else if (showFairyRollOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
   commandsValue += `${cmdRoll} · ${cmdItem}\nid: \`${expId || "—"}\` char: **${nextName}**`;
@@ -689,7 +693,6 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
   if (isAtStartQuadrant) commandsValue += ` · ${cmdEnd}`;
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
-  if ((party?.totalStamina ?? 0) === 0) commandsValue += `\n⚠️ 0 stamina: Camp or Item to recover.`;
  } else {
   const cmdItem = `</explore item:${cmdId}>`;
   const cmdCamp = `</explore camp:${cmdId}>`;
@@ -697,10 +700,13 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   commandsValue += `${cmdRoll} · ${cmdItem} · ${cmdCamp}`;
   if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
-  if ((party?.totalStamina ?? 0) === 0) commandsValue += `\n⚠️ 0 stamina: Camp or Item to recover.`;
  }
  const commandsField = sanitizeEmbedField({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
  embed.addFields(commandsField);
+ // Set footer with struggle mode warning when stamina is 0
+ if ((party?.totalStamina ?? 0) === 0) {
+  embed.setFooter({ text: "⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover." });
+ }
  return embed;
 };
 
@@ -717,7 +723,10 @@ const createExplorationItemEmbed = (
  nextCharacter = null,
  showNextAndCommands = true,
  ruinRestRecovered = 0,
- hasDiscoveriesInQuadrant = false
+ hasDiscoveriesInQuadrant = false,
+ actionCost = null,
+ maxHearts = 0,
+ maxStamina = 0
 ) => {
  const embed = new EmbedBuilder()
   .setTitle(`🗺️ **Expedition: ${character.name} Found an Item!**`)
@@ -738,6 +747,9 @@ const createExplorationItemEmbed = (
   showRestSecureMove: false,
   ruinRestRecovered,
   hasDiscoveriesInQuadrant,
+  actionCost,
+  maxHearts,
+  maxStamina,
  });
  const rarity = item.itemRarity ?? 1;
  embed.setFooter({ text: `Rarity: ${rarity}` });
@@ -757,7 +769,10 @@ const createExplorationMonsterEmbed = (
  nextCharacter = null,
  showNextAndCommands = true,
  ruinRestRecovered = 0,
- hasDiscoveriesInQuadrant = false
+ hasDiscoveriesInQuadrant = false,
+ actionCost = null,
+ maxHearts = 0,
+ maxStamina = 0
 ) => {
  const monsterImage =
   monster.image ||
@@ -784,6 +799,9 @@ const createExplorationMonsterEmbed = (
   commandsLast: true,
   ruinRestRecovered,
   hasDiscoveriesInQuadrant,
+  actionCost,
+  maxHearts,
+  maxStamina,
  });
  const tier = monster.tier ?? 1;
  embed.setFooter({ text: `Tier: ${tier}` });

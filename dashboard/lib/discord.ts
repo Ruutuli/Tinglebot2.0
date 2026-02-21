@@ -6,6 +6,10 @@
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
+// Cache for userHasGuildRole results to avoid rate limiting
+const roleCheckCache = new Map<string, { hasRole: boolean; expiresAt: number }>();
+const ROLE_CHECK_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 async function fetchOneUser(
   userId: string,
   token: string
@@ -53,6 +57,7 @@ export async function fetchDiscordUsernames(
  * Check if a user has a specific role in a guild.
  * Uses DISCORD_TOKEN (bot). Bot must be in the guild; Guild Members intent required.
  * Returns false if user not in guild or API fails.
+ * Results are cached for 5 minutes to avoid rate limiting.
  */
 export async function userHasGuildRole(
   guildId: string,
@@ -67,6 +72,14 @@ export async function userHasGuildRole(
       );
     }
     return false;
+  }
+
+  // Check cache first
+  const cacheKey = `${guildId}:${userId}:${roleId}`;
+  const now = Date.now();
+  const cached = roleCheckCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.hasRole;
   }
 
   try {
@@ -103,7 +116,8 @@ export async function userHasGuildRole(
           retries++;
           continue;
         } else {
-          // Max retries reached
+          // Max retries reached - cache a short negative result to avoid hammering
+          roleCheckCache.set(cacheKey, { hasRole: false, expiresAt: now + 30_000 });
           if (process.env.NODE_ENV === "development") {
             console.error(
               `[userHasGuildRole] Rate limited, max retries (${maxRetries}) reached for user ${userId}`
@@ -148,13 +162,19 @@ export async function userHasGuildRole(
         );
       }
       
-      // Return false for any error
+      // Cache negative result for errors (shorter TTL for transient errors)
+      roleCheckCache.set(cacheKey, { hasRole: false, expiresAt: now + 60_000 });
       return false;
     }
     
     const data = (await res.json()) as { roles?: string[] };
     const roles = data.roles ?? [];
-    return roles.includes(roleId);
+    const hasRole = roles.includes(roleId);
+    
+    // Cache the result
+    roleCheckCache.set(cacheKey, { hasRole, expiresAt: now + ROLE_CHECK_CACHE_TTL_MS });
+    
+    return hasRole;
   } catch (error) {
     console.error(
       `[userHasGuildRole] Exception checking role for user ${userId} in guild ${guildId}:\n` +
@@ -163,6 +183,23 @@ export async function userHasGuildRole(
       `  Stack: ${error instanceof Error ? error.stack : "N/A"}`
     );
     return false;
+  }
+}
+
+/**
+ * Invalidate cached role check for a user (call when roles change).
+ * If no roleId specified, clears all cached role checks for that user in that guild.
+ */
+export function invalidateRoleCache(guildId: string, userId: string, roleId?: string): void {
+  if (roleId) {
+    roleCheckCache.delete(`${guildId}:${userId}:${roleId}`);
+  } else {
+    const prefix = `${guildId}:${userId}:`;
+    for (const key of roleCheckCache.keys()) {
+      if (key.startsWith(prefix)) {
+        roleCheckCache.delete(key);
+      }
+    }
   }
 }
 

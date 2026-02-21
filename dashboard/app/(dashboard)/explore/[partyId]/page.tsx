@@ -435,8 +435,6 @@ export default function ExplorePartyPage() {
   const router = useRouter();
   const partyId = (params?.partyId as string) ?? "";
   const { user, isAdmin, isModerator, loading: sessionLoading } = useSession();
-  const canToggleFog = isAdmin || isModerator;
-  const [hideFog, setHideFog] = useState(false);
   const userId = user?.id ?? null;
 
   // ------------------- Component: state declarations ------------------
@@ -456,6 +454,8 @@ export default function ExplorePartyPage() {
   const [joining, setJoining] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [editingItems, setEditingItems] = useState(false);
   const [editItems, setEditItems] = useState<string[]>([]);
   const [editInventoryWithQuantity, setEditInventoryWithQuantity] = useState<Array<{ itemName: string; quantity: number }>>([]);
@@ -1010,6 +1010,31 @@ export default function ExplorePartyPage() {
     }
   }, [partyId, fetchParty]);
 
+  const removeMember = useCallback(async (targetUserId: string, targetName: string) => {
+    if (!partyId) return;
+    if (!window.confirm(`Remove ${targetName} from the expedition? Their items will be refunded.`)) return;
+    setRemovingMemberId(targetUserId);
+    setRemoveError(null);
+    try {
+      const res = await fetch(`/api/explore/parties/${encodeURIComponent(partyId)}/remove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: targetUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRemoveError(data.error ?? "Failed to remove member");
+        return;
+      }
+      await fetchParty();
+    } catch (e) {
+      console.error("[page.tsx]❌ Remove member request failed:", e);
+      setRemoveError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setRemovingMemberId(null);
+    }
+  }, [partyId, fetchParty]);
+
   const copyShareLink = useCallback(() => {
     const url = typeof window !== "undefined" ? `${window.location.origin}/explore/${partyId}` : "";
     void navigator.clipboard.writeText(url);
@@ -1194,6 +1219,8 @@ export default function ExplorePartyPage() {
     isYou,
     label,
     heartsStaminaLabel,
+    onRemove,
+    removing,
   }: {
     name: string;
     icon?: string | null;
@@ -1204,6 +1231,10 @@ export default function ExplorePartyPage() {
     label?: string;
     /** When set (e.g. "max"), shown next to hearts/stamina so we don't imply current during expedition */
     heartsStaminaLabel?: string;
+    /** If provided, shows a remove button */
+    onRemove?: () => void;
+    /** True when this member is being removed */
+    removing?: boolean;
   }) {
     return (
       <div
@@ -1287,6 +1318,26 @@ export default function ExplorePartyPage() {
             );
           })}
         </div>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={removing}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-500/40 bg-red-950/20 px-3 py-1.5 text-xs font-medium text-red-300 transition-colors hover:border-red-500/60 hover:bg-red-950/40 disabled:opacity-50"
+          >
+            {removing ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin text-[10px]" aria-hidden />
+                Removing…
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-user-minus text-[10px]" aria-hidden />
+                Remove from party
+              </>
+            )}
+          </button>
+        )}
       </div>
     );
   }
@@ -1387,17 +1438,6 @@ export default function ExplorePartyPage() {
                   <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)] sm:text-xs">
                     Map · {party.square} {party.quadrant}
                   </p>
-                  {canToggleFog && (
-                    <label className="inline-flex cursor-pointer select-none items-center gap-1 text-[10px] text-[var(--totk-grey-200)]">
-                      <input
-                        type="checkbox"
-                        checked={hideFog}
-                        onChange={(e) => setHideFog(e.target.checked)}
-                        className="h-3 w-3 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]/50"
-                      />
-                      <span>Hide fog</span>
-                    </label>
-                  )}
                 </div>
                 <div className="relative mx-auto max-w-[18rem] overflow-hidden rounded border border-[var(--totk-dark-ocher)]/50 shadow-lg sm:max-w-[22rem]" style={{ aspectRatio: "2400/1666" }}>
                   {squarePreview.layers
@@ -1413,7 +1453,6 @@ export default function ExplorePartyPage() {
                       />
                     ))}
                   {(() => {
-                    if (canToggleFog && hideFog) return null;
                     const fogLayer = squarePreview.layers.find((l) => l.name === "MAP_0001_hidden-areas");
                     if (!fogLayer) return null;
                     // Prefer party.quadrantStatuses (includes exploredQuadrantsThisRun) so "explored" shows even if map DB wasn't updated
@@ -1525,7 +1564,7 @@ export default function ExplorePartyPage() {
                   )}
                 </>
               )}
-              {party.isLeader && party.status === "open" && (
+              {party.currentUserJoined && party.status === "open" && (
                 <>
                   <button
                     type="button"
@@ -2417,17 +2456,6 @@ export default function ExplorePartyPage() {
                         <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--totk-grey-200)]">
                           {isPlacing ? `Place marker — ${placingForDiscovery!.label} · ${displaySquare} ${displayQuadrant}` : `Map · ${party.square} ${party.quadrant}`}
                         </h2>
-                        {canToggleFog && (
-                          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-[10px] text-[var(--totk-grey-200)]">
-                            <input
-                              type="checkbox"
-                              checked={hideFog}
-                              onChange={(e) => setHideFog(e.target.checked)}
-                              className="h-3.5 w-3.5 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)]/50"
-                            />
-                            <span>Hide fog (admin)</span>
-                          </label>
-                        )}
                       </div>
                       {showMap ? (
                         <>
@@ -2480,7 +2508,6 @@ export default function ExplorePartyPage() {
                               />
                             ))}
                           {(() => {
-                            if (canToggleFog && hideFog) return null;
                             const fogLayer = displayPreview!.layers.find((l) => l.name === "MAP_0001_hidden-areas");
                             if (!fogLayer) return null;
                             const statuses = displayPreview!.quadrantStatuses ?? party.quadrantStatuses ?? {};
@@ -2857,9 +2884,13 @@ export default function ExplorePartyPage() {
                 </span>
               </span>
             </div>
+            {removeError && (
+              <p className="mb-3 text-sm text-red-400">{removeError}</p>
+            )}
             <div className="space-y-4">
               {party.members.map((m, index) => {
                 const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
+                const canRemove = party.status === "open" && party.currentUserJoined && userId !== m.userId;
                 return (
                   <div key={m.characterId} className="flex items-start gap-3">
                     <span
@@ -2881,6 +2912,8 @@ export default function ExplorePartyPage() {
                       isYou={userId === m.userId}
                       label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined}
                       heartsStaminaLabel="max"
+                      onRemove={canRemove ? () => removeMember(m.userId, m.name) : undefined}
+                      removing={removingMemberId === m.userId}
                     />
                   </div>
                 );

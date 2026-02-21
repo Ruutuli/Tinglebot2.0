@@ -1,4 +1,4 @@
-// POST /api/explore/parties/[partyId]/cancel — cancel an open expedition (leader only)
+// POST /api/explore/parties/[partyId]/cancel — cancel an open expedition (any party member)
 
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
@@ -36,10 +36,11 @@ export async function POST(
 
     const p = party as Record<string, unknown>;
     const status = typeof p.status === "string" ? p.status : "open";
-    const leaderId = typeof p.leaderId === "string" ? p.leaderId : "";
+    const partyCharacters = (p.characters as Array<{ userId: string }>) ?? [];
+    const isPartyMember = partyCharacters.some((c) => String(c.userId) === user.id);
 
-    if (leaderId !== user.id) {
-      return NextResponse.json({ error: "Only the expedition leader can cancel it" }, { status: 403 });
+    if (!isPartyMember) {
+      return NextResponse.json({ error: "Only party members can cancel the expedition" }, { status: 403 });
     }
     if (status !== "open") {
       return NextResponse.json(

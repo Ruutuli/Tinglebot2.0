@@ -127,9 +127,8 @@ function disableMessageButtonsOnTimeout(message, disabledRow) {
 // Consistent "next turn" ping for exploration. next: { userId?, name? } -
 function getExplorationNextTurnContent(next) {
   if (!next) return null;
-  const line = "**you're up next.** Use `/explore roll` or `/explore item` to continue.";
-  if (next.userId) return `<@${next.userId}> — ${line}`;
-  return `**${next.name || "Next"}** — ${line}`;
+  if (next.userId) return `<@${next.userId}> — **you're up next.**`;
+  return `**${next.name || "Next"}** — **you're up next.**`;
 }
 
 // ------------------- resolveExplorationMonsterLoot ------------------
@@ -246,8 +245,7 @@ function createStuckInWildEmbed(party, location) {
     .setTitle("🏕️ Stuck in the wild — camp to recover")
     .setColor(getExploreOutcomeColor("explored", regionColors[party?.region] || "#8B4513"))
     .setDescription(
-      `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp recovers a random amount of stamina instead of costing.\n\n` +
-      `**Camp costs:** 3🟩 unexplored, 2🟩 explored, 0🟩 secured. At 0 stamina, camp is free but has higher monster attack chance.\n\n` +
+      `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp is free and recovers up to 50% of your max stamina (but has higher monster attack chance).\n\n` +
       `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
     )
     .setImage(EXPLORATION_IMAGE_FALLBACK)
@@ -551,7 +549,9 @@ const DISCOVERY_REDUCE_CHANCE_WHEN_ANY = 0.25; // 75% less chance when square ha
 
 // One find per expedition (grotto, ruins, or monster_camp); progressLog outcomes that consume the find
 const FIND_OUTCOMES_ROLL = ["grotto", "ruins", "monster_camp"];
-const FIND_OUTCOMES_LOGGED = ["grotto_found", "ruins_found", "monster_camp", "monster_camp_found"];
+// Note: monster_camp_found removed - we now only log when user makes a choice (mark/fight/leave)
+// monster_camp_skipped does NOT consume the find - user can still find another discovery after skipping
+const FIND_OUTCOMES_LOGGED = ["grotto_found", "ruins_found", "monster_camp", "monster_camp_fight"];
 function partyHasFindThisExpedition(party) {
   return (party.progressLog || []).some((e) => FIND_OUTCOMES_LOGGED.includes(String(e.outcome || "")));
 }
@@ -1171,10 +1171,12 @@ const EXPLORATION_KO_DEBUFF_DAYS = 7;
 
 // ------------------- handleExpeditionFailed ------------------
 // Full party KO: reset to start, apply debuff, reset explored quadrants
-async function handleExpeditionFailed(party, interaction) {
+// useFollowUp: if true, use followUp instead of editReply (when showing after another embed)
+async function handleExpeditionFailed(party, interaction, useFollowUp = false) {
  const start = START_POINTS_BY_REGION[party.region];
  if (!start) {
-  await interaction.editReply("Expedition failed but could not resolve start location for region.");
+  const replyFn = useFollowUp ? interaction.followUp.bind(interaction) : interaction.editReply.bind(interaction);
+  await replyFn("Expedition failed but could not resolve start location for region.");
   return;
  }
 
@@ -1255,7 +1257,8 @@ async function handleExpeditionFailed(party, interaction) {
   showNextAndCommands: false,
   showRestSecureMove: false,
  });
- await interaction.editReply({ embeds: [embed] });
+ const replyFn = useFollowUp ? interaction.followUp.bind(interaction) : interaction.editReply.bind(interaction);
+ await replyFn({ embeds: [embed] });
 }
 
 // ------------------- getAdjacentQuadrants ------------------
@@ -3102,6 +3105,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
      }
      const rollCostsForLog = buildCostsForLog(payResult);
+     const poolCaps = await getPartyPoolCaps(party);
      const n = (party.characters || []).length;
      if (party.status === "started" && n > 0) {
       // Use party pool only; keep in-memory character and party slot in sync with pool share for display.
@@ -3189,9 +3193,31 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      }
 
      if (outcomeType === "explored") {
+      // Lucky find: if quadrant was ALREADY explored before this roll, 25% chance to refund stamina and recover 1-2 stamina
+      let luckyFindRecovery = 0;
+      const quadrantWasExplored = party.quadrantState === "explored";
+      if (quadrantWasExplored && Math.random() < 0.25) {
+       // Refund the stamina cost
+       const refundAmount = payResult?.staminaPaid ?? 0;
+       if (refundAmount > 0) {
+        party.totalStamina = Math.min(poolCaps.maxStamina, (party.totalStamina ?? 0) + refundAmount);
+        party.markModified("totalStamina");
+       }
+       // Recover 1-2 additional stamina
+       luckyFindRecovery = Math.floor(Math.random() * 2) + 1;
+       party.totalStamina = Math.min(poolCaps.maxStamina, (party.totalStamina ?? 0) + luckyFindRecovery);
+       party.markModified("totalStamina");
+       logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} lucky_find refund=${refundAmount} +recovery=${luckyFindRecovery} → 🟩${party.totalStamina ?? 0}`);
+      }
+
       party.quadrantState = "explored";
       party.markModified("quadrantState");
-      pushProgressLog(party, character.name, "explored", `Explored the quadrant (${location}). Party can now Secure, Roll again, or Move.`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
+      const exploredLogCosts = luckyFindRecovery > 0
+       ? { staminaRecovered: (payResult?.staminaPaid ?? 0) + luckyFindRecovery }
+       : (Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
+      pushProgressLog(party, character.name, "explored", luckyFindRecovery > 0
+       ? `Lucky find! Explored the quadrant (${location}) and found a shortcut. No stamina cost, +${luckyFindRecovery} stamina recovered.`
+       : `Explored the quadrant (${location}). Party can now Secure, Roll again, or Move.`, undefined, exploredLogCosts);
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
@@ -3260,11 +3286,26 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const nextCharacter = party.characters[party.currentTurn];
       const startPoint = START_POINTS_BY_REGION[party.region];
       const isAtStartQuadrant = startPoint && String(party.square || "").toUpperCase() === String(startPoint.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
+
+      // Lucky find: different title and description
+      const embedTitle = luckyFindRecovery > 0
+       ? `🍀 **Expedition: Lucky Find!**`
+       : `🗺️ **Expedition: Quadrant Explored!**`;
+      const embedDesc = luckyFindRecovery > 0
+       ? `**${character.name}** found a shortcut in **${location}**! No stamina cost, and recovered **+${luckyFindRecovery} 🟩** stamina.`
+       : `**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or secure, or move.`;
+
       const embed = new EmbedBuilder()
-       .setTitle(`🗺️ **Expedition: Quadrant Explored!**`)
-       .setDescription(`**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or secure, or move.`)
+       .setTitle(embedTitle)
+       .setDescription(embedDesc)
 .setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
   .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+
+      // For lucky find, show recovery instead of cost
+      const exploredActionCost = luckyFindRecovery > 0
+       ? { staminaCost: 0, heartsCost: 0 }
+       : { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 };
+
       addExplorationStandardFields(embed, {
         party,
         expeditionId,
@@ -3275,7 +3316,16 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         isAtStartQuadrant: !!isAtStartQuadrant,
         ruinRestRecovered,
         hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        actionCost: exploredActionCost,
+        maxHearts: poolCaps.maxHearts,
+        maxStamina: poolCaps.maxStamina,
       });
+
+      // Add recovery field for lucky find
+      if (luckyFindRecovery > 0) {
+       embed.addFields({ name: "🍀 **__Lucky Find Recovery__**", value: `+${(payResult?.staminaPaid ?? 0) + luckyFindRecovery} 🟩 stamina (refund + bonus)`, inline: true });
+      }
+
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacter) });
       return;
@@ -3313,6 +3363,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         commandsLast: true,
         ruinRestRecovered,
         hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        actionCost: { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
+        maxHearts: poolCaps.maxHearts,
+        maxStamina: poolCaps.maxStamina,
       });
        fairyEmbed.addFields(
         { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
@@ -3320,7 +3373,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        if ((party.totalStamina ?? 0) < 1) {
         fairyEmbed.addFields({
          name: "⚠️ **Out of stamina**",
-         value: `The party has **0 stamina**. Roll, move, secure, etc. will **cost hearts** instead (1 heart = 1 stamina). Or use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp recovers a random amount of stamina instead of costing.`,
+         value: `The party has **0 stamina**. Roll, move, secure, etc. will **cost hearts** instead (1 heart = 1 stamina). Or use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp is free and recovers up to 50% of your max stamina.`,
          inline: false,
         });
        }
@@ -3334,7 +3387,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const nextChar = party.characters[party.currentTurn];
-      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered, await hasDiscoveriesInQuadrant(party.square, party.quadrant));
+      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered, await hasDiscoveriesInQuadrant(party.square, party.quadrant), { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 }, poolCaps.maxHearts, poolCaps.maxStamina);
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
       await interaction.editReply({ embeds: [embed] });
@@ -3484,17 +3537,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         chestRuinsCosts,
         at
        );
-      } else if (outcomeType === "ruins" || outcomeType === "monster_camp") {
+      } else if (outcomeType === "ruins") {
        pushProgressLog(
         party,
         character.name,
-        outcomeType === "ruins" ? "ruins_found" : "monster_camp_found",
+        "ruins_found",
         progressMessages[outcomeType] || `Found something in ${location}.`,
         undefined,
         chestRuinsCosts,
         at
        );
       }
+      // Note: monster_camp does NOT log here - it logs when the user chooses (mark/fight/leave)
       // Choice outcomes: don't advance until they choose; "Next" and ping = roller. Non-choice: advance now.
       let nextCharacter;
       if (outcomeType === "monster_camp" || outcomeType === "chest" || outcomeType === "ruins" || outcomeType === "grotto") {
@@ -3533,7 +3587,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        description =
         `**${character.name}** found some ruins in **${location}**!\n\n` +
         "**Yes** — Explore the ruins (cost 3 stamina; counts toward discovery limit).\n" +
-        `**No** — Leave for later. Won't be recorded as a discovery. Use </explore roll:${getExploreCommandId()}> to continue.`;
+        `**No** — Ignore it. Won't be recorded as a discovery. Use </explore roll:${getExploreCommandId()}> to continue.`;
       } else if (outcomeType === "relic") {
        title = `🗺️ **Expedition: Relic found!**`;
        description =
@@ -3569,6 +3623,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         showRestSecureMove: false,
         ruinRestRecovered,
         hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        actionCost: { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
+        maxHearts: poolCaps.maxHearts,
+        maxStamina: poolCaps.maxStamina,
       });
 
       const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest";
@@ -3680,13 +3737,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          }
          const ruinsCostsForLog = buildCostsForLog(ruinsPayResult);
 
-         // Weighted roll: chest 7, camp 3, landmark 3, relic 1, old_map 2, star_fragment 2, blight 1, goddess_plume 1 (total 20)
+         // Weighted roll: chest 8, camp 4, relic 1, old_map 3, star_fragment 2, blight 1, goddess_plume 1 (total 20)
          const roll = Math.random() * 20;
          let ruinsOutcome;
-         if (roll < 7) ruinsOutcome = "chest";
-         else if (roll < 10) ruinsOutcome = "camp";
-         else if (roll < 13) ruinsOutcome = "landmark";
-         else if (roll < 14) ruinsOutcome = "relic";
+         if (roll < 8) ruinsOutcome = "chest";
+         else if (roll < 12) ruinsOutcome = "camp";
+         else if (roll < 13) ruinsOutcome = "relic";
          else if (roll < 16) ruinsOutcome = "old_map";
          else if (roll < 18) ruinsOutcome = "star_fragment";
          else if (roll < 19) ruinsOutcome = "blight";
@@ -3701,7 +3757,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          let ruinsFailedNotifyEmbed = null;
 
          if (ruinsOutcome === "relic" && (await characterAlreadyFoundRelicThisExpedition(freshParty, ruinsCharacter.name, ruinsCharacter._id))) {
-          ruinsOutcome = "landmark";
+          ruinsOutcome = "camp";
          }
          const ruinsAt = new Date();
          // Only mark ruins on the map when it's a rest spot (camp); other outcomes don't add a pin
@@ -3749,10 +3805,6 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           progressMsg += "Found a camp spot; recovered 1 stamina.";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, { ...ruinsCostsForLog, staminaRecovered: recover });
           pushProgressLog(freshParty, ruinsCharacter.name, "ruin_rest", `Found a ruin rest spot in ${location}.`, undefined, undefined, ruinsAt);
-         } else if (ruinsOutcome === "landmark") {
-          resultDescription = summaryLine + `**${ruinsCharacter.name}** found nothing special in the ruins—just an interesting landmark with no mechanical value. Not marked on the map.\n\n↳ **Continue** ➾ </explore roll:${getExploreCommandId()}> — id: \`${expeditionId}\` charactername: **${nextCharacter?.name ?? "—"}**`;
-          progressMsg += "Found an interesting landmark (no mechanical value; not marked).";
-          pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else if (ruinsOutcome === "relic") {
           let ruinsSavedRelic = null;
           if (!EXPLORATION_TESTING_MODE) {
@@ -3877,6 +3929,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          // Persist progress log (incl. "ruins" entry for Report to town hall) before showing embed/buttons
          await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
          const finalParty = await Party.findActiveByPartyId(expeditionId);
+         const ruinsPoolCaps = await getPartyPoolCaps(finalParty);
          const resultEmbed = new EmbedBuilder()
           .setTitle(resultTitle)
           .setDescription(resultDescription)
@@ -3891,6 +3944,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           showRestSecureMove: false,
           ruinRestRecovered,
           hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(finalParty.square, finalParty.quadrant),
+          actionCost: { staminaCost: ruinsPayResult?.staminaPaid ?? 0, heartsCost: ruinsPayResult?.heartsPaid ?? 0 },
+          maxHearts: ruinsPoolCaps.maxHearts,
+          maxStamina: ruinsPoolCaps.maxStamina,
         });
          // Only prompt to set a pin when ruins yielded a rest spot (camp); other outcomes are not placed on the map
          if (ruinsOutcome === "camp") {
@@ -4216,7 +4272,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
           if (nextAfterChoice?.userId) {
            await i.followUp({
-            content: `**${character.name}** chose to ignore the monster camp. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`}`,
+            content: `**${character.name}** chose to ignore the monster camp. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.**`}`,
            }).catch(() => {});
           }
           return;
@@ -4260,7 +4316,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           .setDescription(`**${character.name}** marked the grotto on the map for later. Continue with </explore roll:${getExploreCommandId()}>.`);
          await i.followUp({ embeds: [decisionEmbed] }).catch(() => {});
          if (nextAfterChoice?.userId) {
-          await i.followUp({ content: `**${character.name}** marked it on the map. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`}` }).catch(() => {});
+          await i.followUp({ content: `**${character.name}** marked it on the map. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.**`}` }).catch(() => {});
          }
          return;
         }
@@ -4308,7 +4364,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         await msg.edit({ embeds: [choiceEmbed], components: [disabledRow] }).catch(() => {});
         if (outcomeType === "ruins" && !isYes && nextForChoiceEmbed?.userId) {
          await i.followUp({
-          content: `**${character.name}** decided not to explore the ruins! ${getExplorationNextTurnContent(nextForChoiceEmbed) || `<@${nextForChoiceEmbed.userId}> — **you're up next.** Use \`/explore roll\` or \`/explore item\` to continue.`}`,
+          content: `**${character.name}** decided not to explore the ruins! ${getExplorationNextTurnContent(nextForChoiceEmbed) || `<@${nextForChoiceEmbed.userId}> — **you're up next.**`}`,
          }).catch(() => {});
         }
         collector.stop();
@@ -4385,7 +4441,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        nextCharacter ?? null,
        true,
        ruinRestRecovered,
-       await hasDiscoveriesInQuadrant(party.square, party.quadrant)
+       await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+       { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
+       poolCaps.maxHearts,
+       poolCaps.maxStamina
       );
 
       if (!party.gatheredItems) {
@@ -4489,7 +4548,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          nextCharacterRaid ?? null,
          true,
          ruinRestRecovered,
-         await hasDiscoveriesInQuadrant(party.square, party.quadrant)
+         await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+         { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
+         poolCaps.maxHearts,
+         poolCaps.maxStamina
         );
 
         embed.addFields(
@@ -4579,10 +4641,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} encounter result=${outcome.result} no damage loot=${!!outcome.canLoot}`);
        }
 
-       if (party.totalHearts <= 0) {
-        await handleExpeditionFailed(party, interaction);
-        return;
-       }
+       const partyKOd = party.totalHearts <= 0;
 
        let lootedItem = null;
        if (outcome.canLoot) {
@@ -4614,7 +4673,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         nextCharacterTier ?? null,
         true,
         ruinRestRecovered,
-        await hasDiscoveriesInQuadrant(party.square, party.quadrant)
+        await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
+        poolCaps.maxHearts,
+        poolCaps.maxStamina
        );
 
        const hasEquippedWeapon = !!(character?.gearWeapon?.name);
@@ -4688,17 +4750,27 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         });
        }
 
-       addExplorationCommandsField(embed, {
-        party,
-        expeditionId,
-        location,
-        nextCharacter: nextCharacterTier ?? null,
-        showNextAndCommands: true,
-        showRestSecureMove: false,
-        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
-       });
+       // If party is KO'd, don't show commands - just show the battle result
+       if (!partyKOd) {
+        addExplorationCommandsField(embed, {
+         party,
+         expeditionId,
+         location,
+         nextCharacter: nextCharacterTier ?? null,
+         showNextAndCommands: true,
+         showRestSecureMove: false,
+         hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        });
+       }
 
        await interaction.editReply({ embeds: [embed] });
+
+       // If party KO'd, show the failure embed as a follow-up after the monster encounter
+       if (partyKOd) {
+        await handleExpeditionFailed(party, interaction, true);
+        return;
+       }
+
        await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterTier) });
       }
      }
@@ -6139,7 +6211,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       party.totalHearts = Math.max(0, (party.totalHearts ?? 0) - 1);
       party.markModified("totalHearts");
       if (party.totalHearts <= 0) {
-       await handleExpeditionFailed(party, interaction);
+       // Show a brief struggle message before the failure embed
+       const struggleEmbed = new EmbedBuilder()
+        .setTitle(`🏕️ **Camp attempt failed!**`)
+        .setColor(0x8b0000)
+        .setDescription(`**${character.name}** tried to set up camp at 0 stamina, costing **1 heart** (struggle). The party had no hearts left to spare.\n\n💀 **Party KO'd**`)
+        .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+       await interaction.editReply({ embeds: [struggleEmbed] });
+       await handleExpeditionFailed(party, interaction, true);
        return;
       }
      }
@@ -6191,10 +6270,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        party.markModified("totalHearts");
        logger.info("EXPLORE", `[explore.js] Camp-attack applying damage: pool -${outcome.hearts} hearts`);
       }
-      if (party.totalHearts <= 0) {
-       await handleExpeditionFailed(party, interaction);
-       return;
-      }
+      const campPartyKOd = party.totalHearts <= 0;
       let lootedItem = null;
       if (outcome.canLoot) {
        const items = await fetchItemsByMonster(selectedMonster.name);
@@ -6234,8 +6310,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const battleOutcomeDisplay = outcome.hearts > 0 ? generateDamageMessage(outcome.hearts) : (outcome.defenseSuccess ? generateDefenseBuffMessage(outcome.defenseSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedArmor) : (outcome.attackSuccess ? generateAttackBuffMessage(outcome.attackSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedWeapon) : generateVictoryMessage(outcome.adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess)));
       embed.addFields({ name: "⚔️ __Battle Outcome__", value: battleOutcomeDisplay, inline: false });
       if (outcome.canLoot && lootedItem) embed.addFields({ name: "🎉 __Loot__", value: `${lootedItem.emoji || ""} **${lootedItem.itemName}**${(lootedItem.quantity ?? 1) > 1 ? ` x${lootedItem.quantity}` : ""}`, inline: false });
-      addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+      // If party is KO'd, don't show commands
+      if (!campPartyKOd) {
+       addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+      } else {
+       embed.addFields({ name: "💀 __Party KO'd__", value: `The party lost all hearts. The expedition has failed.`, inline: false });
+      }
       await interaction.editReply({ embeds: [embed] });
+      // If party KO'd, show the failure embed as a follow-up
+      if (campPartyKOd) {
+       await handleExpeditionFailed(party, interaction, true);
+       return;
+      }
       if (getExplorationNextTurnContent(nextChar)) await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) });
       return;
      }
@@ -6266,12 +6352,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // When stamina is 0 and camping (camp in the wild), only recover stamina — no hearts.
     if (stuckInWild) totalHeartsRecovered = 0;
     // Stamina: random up to staminaPct of party max (25% unsecured, 50% secured).
-    // When stuck in the wild (0 stamina), always recover at least 1 so the party can continue.
+    // When stuck in the wild (0 stamina), recover up to 50% of max so the party can continue.
     const poolStam = party.totalStamina ?? 0;
     const staminaRoom = Math.max(0, sumMaxStamina - poolStam);
-    const staminaCap = Math.floor(sumMaxStamina * staminaPct);
+    const stuckInWildStaminaPct = 0.5; // 50% recovery when at 0 stamina
+    const effectiveStaminaPct = stuckInWild ? stuckInWildStaminaPct : staminaPct;
+    const staminaCap = Math.floor(sumMaxStamina * effectiveStaminaPct);
     const staminaMaxRecover = Math.min(staminaRoom, Math.max(staminaCap, stuckInWild ? 1 : 0));
-    let totalStaminaRecovered = staminaMaxRecover > 0 ? Math.floor(Math.random() * (staminaMaxRecover + 1)) : 0;
+    let totalStaminaRecovered = staminaMaxRecover > 0 ? (1 + Math.floor(Math.random() * staminaMaxRecover)) : 0;
     if (stuckInWild && totalStaminaRecovered < 1 && staminaRoom >= 1) totalStaminaRecovered = 1;
     party.totalHearts = Math.min(sumMaxHearts, Math.max(0, (party.totalHearts ?? 0) + totalHeartsRecovered));
     party.totalStamina = Math.min(sumMaxStamina, Math.max(0, (party.totalStamina ?? 0) + totalStaminaRecovered));
@@ -6314,12 +6402,15 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const quadrantStateLabel = isSecured ? "secured" : (party.quadrantState === "explored" ? "explored" : "unexplored");
     const costNote = staminaCost > 0 
      ? ` (-${staminaCost}🟩 in ${quadrantStateLabel} quadrant)` 
-     : (stuckInWild ? " (no cost — camp in the wild, higher monster chance)" : " (0🟩 in secured quadrant)");
+     : (stuckInWild ? "" : " (0🟩 in secured quadrant)");
+    const campTitle = stuckInWild 
+     ? `🗺️ **Expedition: Party set up camp due to no stamina!**`
+     : `🗺️ **Expedition: Camp at ${locationCamp}**`;
     const embed = new EmbedBuilder()
-     .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
+     .setTitle(campTitle)
      .setColor(getExploreOutcomeColor("camp", regionColors[party.region] || "#4CAF50"))
      .setDescription(
-      `${character.name} set up camp.${costNote}\n\n\`\`\`\n${campFlavor}\n\`\`\`\n\n**Camp costs:** 3🟩 unexplored · 2🟩 explored · 0🟩 secured`
+      `${character.name} set up camp.${costNote}\n\n\`\`\`\n${campFlavor}\n\`\`\``
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     const hasDiscCamp = await hasDiscoveriesInQuadrant(party.square, party.quadrant);

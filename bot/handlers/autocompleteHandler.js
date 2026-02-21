@@ -3477,22 +3477,9 @@ async function handleExploreRollCharacterAutocomplete(
    ]);
   }
 
-  const charByName = new Map(userCharacters.map((c) => [c.name, c]));
-  const currentTurnCharacter = party.characters[party.currentTurn];
-
   const choices = userPartyCharacters.map((char) => {
-   const full = charByName.get(char.name);
-   const village = full?.currentVillage ? capitalize(full.currentVillage) : '';
-   const job = full?.job ? capitalize(full.job) : '';
-   const hearts = char.currentHearts ?? 0;
-   const stamina = char.currentStamina ?? 0;
-   const parts = [char.name];
-   if (village) parts.push(village);
-   if (job) parts.push(job);
-   parts.push(`❤️ ${hearts}`);
-   parts.push(`🟩 ${stamina}`);
    return {
-    name: parts.join(' | '),
+    name: char.name,
     value: char.name,
    };
   });
@@ -3588,7 +3575,7 @@ async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
 
   const value = (focusedOption.value || "").toLowerCase();
   const choices = healing.map((i) => {
-   const name = `${i.emoji || "🔹"} ${i.itemName} — ❤️ ${i.modifierHearts || 0} | 🟩 ${i.staminaRecovered || 0}`;
+   const name = `${i.itemName} — ❤️ ${i.modifierHearts || 0} | 🟩 ${i.staminaRecovered || 0}`;
    return { name: name.length > 100 ? name.slice(0, 97) + "..." : name, value: i.itemName };
   });
   const filtered = value
