@@ -1299,8 +1299,31 @@ async function helpWantedBoardCheck(client, _data = {}) {
             continue;
           }
           
+          // Check if escort quest needs regeneration due to travel blocking
+          let questToPost = freshQuest;
+          if (freshQuest.type === 'escort') {
+            const { isTravelBlockedForEscort, regenerateEscortQuest } = require('@/modules/helpWantedModule');
+            const blockStatus = await isTravelBlockedForEscort(freshQuest.village);
+            if (blockStatus.blocked) {
+              logger.info('SCHEDULED', `help-wanted-board-check: regenerating escort quest ${freshQuest.questId} due to ${blockStatus.reason}`);
+              try {
+                await regenerateEscortQuest(freshQuest);
+                // Re-fetch the quest after regeneration
+                const regeneratedQuest = await HelpWantedQuest.findById(quest._id);
+                if (regeneratedQuest) {
+                  questToPost = regeneratedQuest;
+                  logger.info('SCHEDULED', `help-wanted-board-check: quest ${freshQuest.questId} regenerated as ${regeneratedQuest.type}`);
+                }
+              } catch (regenErr) {
+                logger.error('SCHEDULED', `help-wanted-board-check: failed to regenerate escort quest ${freshQuest.questId}: ${regenErr.message}`);
+                errorCount++;
+                continue;
+              }
+            }
+          }
+          
           // Post the quest to Discord
-          const message = await postQuestToDiscord(client, freshQuest);
+          const message = await postQuestToDiscord(client, questToPost);
           if (message) {
             postedCount++;
             logger.info('SCHEDULED', `help-wanted-board-check: posted quest ${freshQuest.questId} for ${freshQuest.village}`);
@@ -1496,14 +1519,37 @@ async function postUnpostedQuestsOnStartup(client) {
             continue;
           }
           
+          // Check if escort quest needs regeneration due to travel blocking
+          let questToPost = freshQuest;
+          if (freshQuest.type === 'escort') {
+            const { isTravelBlockedForEscort, regenerateEscortQuest } = require('@/modules/helpWantedModule');
+            const blockStatus = await isTravelBlockedForEscort(freshQuest.village);
+            if (blockStatus.blocked) {
+              logger.info('STARTUP', `postUnpostedQuestsOnStartup: regenerating escort quest ${freshQuest.questId} due to ${blockStatus.reason}`);
+              try {
+                await regenerateEscortQuest(freshQuest);
+                // Re-fetch the quest after regeneration
+                const regeneratedQuest = await HelpWantedQuest.findById(quest._id);
+                if (regeneratedQuest) {
+                  questToPost = regeneratedQuest;
+                  logger.info('STARTUP', `postUnpostedQuestsOnStartup: quest ${freshQuest.questId} regenerated as ${regeneratedQuest.type}`);
+                }
+              } catch (regenErr) {
+                logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to regenerate escort quest ${freshQuest.questId}: ${regenErr.message}`);
+                errorCount++;
+                continue;
+              }
+            }
+          }
+          
           // Post the quest to Discord
-          const message = await postQuestToDiscord(client, freshQuest);
+          const message = await postQuestToDiscord(client, questToPost);
           if (message) {
             postedCount++;
-            logger.info('STARTUP', `postUnpostedQuestsOnStartup: posted quest ${freshQuest.questId} for ${freshQuest.village}`);
+            logger.info('STARTUP', `postUnpostedQuestsOnStartup: posted quest ${questToPost.questId} for ${questToPost.village}`);
           } else {
             errorCount++;
-            logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${freshQuest.questId}`);
+            logger.error('STARTUP', `postUnpostedQuestsOnStartup: failed to post quest ${questToPost.questId}`);
           }
         } catch (err) {
           errorCount++;

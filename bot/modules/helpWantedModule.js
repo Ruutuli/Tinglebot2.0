@@ -239,6 +239,49 @@ async function isTravelBlockedByWeatherCached(village, cache = new Map()) {
   return false;
 }
 
+// ------------------- Function: isTravelBlockedByVillageDamage -------------------
+// Checks if travel is blocked because the village is damaged (health = 0)
+async function isTravelBlockedByVillageDamage(village) {
+  try {
+    const { checkVillageStatus } = require('./villageModule');
+    const status = await checkVillageStatus(village);
+    const isBlocked = status === 'damaged';
+    
+    if (isBlocked) {
+      logger.info('QUEST', `Travel blocked in ${village} due to village damage`);
+    }
+    
+    return isBlocked;
+  } catch (error) {
+    logger.error('QUEST', `Error checking village status for ${village}`, error);
+    return false; // Default to allowing travel if status check fails
+  }
+}
+
+// ------------------- Function: isTravelBlockedForEscort -------------------
+// Checks if travel is blocked for escort quests (by weather OR village damage)
+// Returns an object with blocked status and reason
+async function isTravelBlockedForEscort(village) {
+  try {
+    // Check weather first
+    const weatherBlocked = await isTravelBlockedByWeather(village);
+    if (weatherBlocked) {
+      return { blocked: true, reason: 'weather' };
+    }
+    
+    // Check village damage
+    const villageBlocked = await isTravelBlockedByVillageDamage(village);
+    if (villageBlocked) {
+      return { blocked: true, reason: 'village damage' };
+    }
+    
+    return { blocked: false, reason: null };
+  } catch (error) {
+    logger.error('QUEST', `Error checking travel block status for ${village}`, error);
+    return { blocked: false, reason: null }; // Default to allowing travel on error
+  }
+}
+
 // ------------------- Function: getAvailableQuestTypes -------------------
 // Returns available quest types based on time, weather, and exclusions
 function getAvailableQuestTypes(isAfterNoon = false, travelBlocked = false, excludeTypes = []) {
@@ -3430,6 +3473,8 @@ module.exports = {
   checkAndCompleteQuestFromSubmission,
   isTravelBlockedByWeather,
   isTravelBlockedByWeatherCached,
+  isTravelBlockedByVillageDamage,
+  isTravelBlockedForEscort,
   regenerateEscortQuest,
   regenerateArtWritingQuest,
   getRandomNPCName,
