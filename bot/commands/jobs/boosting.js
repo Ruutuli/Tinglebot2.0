@@ -226,6 +226,27 @@ function getEffectiveJob(character) {
   return (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
 }
 
+/**
+ * Normalizes a region name to match ItemModel field names.
+ * ItemModel uses camelCase for region fields (e.g., centralHyrule, pathOfScarletLeaves).
+ * This mapping ensures region lookups work correctly.
+ */
+function normalizeRegionKey(regionName) {
+  if (!regionName) return null;
+  const regionMapping = {
+    'eldin': 'eldin',
+    'lanayru': 'lanayru',
+    'faron': 'faron',
+    'centralhyrule': 'centralHyrule',
+    'gerudo': 'gerudo',
+    'hebra': 'hebra',
+    'pathofscarletleaves': 'pathOfScarletLeaves',
+    'leafdewway': 'leafDewWay'
+  };
+  const lowered = regionName.toLowerCase();
+  return regionMapping[lowered] || lowered;
+}
+
 // ------------------- Formatting Helpers -------------------
 function formatDuration(durationMs) {
   if (!durationMs || durationMs <= 0) {
@@ -440,13 +461,22 @@ async function validateActiveBoost(targetCharacter) {
  * Validates village compatibility between characters
  */
 function validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel) {
- if (
-   targetCharacter.currentVillage.toLowerCase() !== boosterCharacter.currentVillage.toLowerCase() &&
-   !isTestingChannel
- ) {
+ // Get village names with null safety
+ const targetVillage = targetCharacter?.currentVillage?.toLowerCase()?.trim() || '';
+ const boosterVillage = boosterCharacter?.currentVillage?.toLowerCase()?.trim() || '';
+ 
+ // Log for debugging cross-village issues
+ logger.info('BOOST', `Village validation: target ${targetCharacter?.name} in "${targetVillage}", booster ${boosterCharacter?.name} in "${boosterVillage}", testing: ${isTestingChannel}`);
+ 
+ // If either village is empty, that's a data issue - warn but allow (safer to err on side of allowing)
+ if (!targetVillage || !boosterVillage) {
+   logger.warn('BOOST', `Village data missing - target: "${targetVillage}", booster: "${boosterVillage}"`);
+ }
+ 
+ if (targetVillage !== boosterVillage && !isTestingChannel) {
    return {
      valid: false,
-     error: "❌ **Village Mismatch**\n\nBoth characters must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!"
+     error: `❌ **Village Mismatch**\n\n**${targetCharacter.name}** is in **${targetCharacter.currentVillage || 'Unknown'}** but **${boosterCharacter.name}** is in **${boosterCharacter.currentVillage || 'Unknown'}**. Both characters must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!`
    };
  }
 
@@ -1027,7 +1057,8 @@ const commandMention = BOOSTING_ACCEPT_COMMAND_MENTION;
 await safeReply({
  content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run ${commandMention} within 24 hours.`,
  embeds: [embed],
- ephemeral: false
+ ephemeral: false,
+ allowedMentions: { users: [boosterOwnerId] }
 });
 
  // Save the message ID to TempData for later updates
@@ -1133,11 +1164,14 @@ async function handleBoostAccept(interaction) {
      : targetCharacter.currentVillage;
    const { getVillageRegionByName } = require('../../modules/locationsModule');
    const villageRegion = gatheringVillage ? getVillageRegionByName(gatheringVillage) : null;
-   const regionKey = villageRegion ? villageRegion.toLowerCase() : (gatheringVillage && gatheringVillage.toLowerCase());
+   const rawRegionKey = villageRegion || gatheringVillage;
+   const regionKey = normalizeRegionKey(rawRegionKey);
    if (regionKey) {
     const items = await fetchAllItems();
-    const job = (targetCharacter.jobVoucher && targetCharacter.jobVoucherJob) ? targetCharacter.jobVoucherJob : targetCharacter.job;
+    // Use getEffectiveJob to properly handle job voucher scenarios
+    const job = getEffectiveJob(targetCharacter);
     const normalizedInputJob = normalizeJobName(job);
+    logger.info('BOOST', `Gathering boost validation for ${targetCharacter.name}: effective job = ${job} (base: ${targetCharacter.job}, voucher: ${targetCharacter.jobVoucherJob || 'none'})`);
     // ItemModel: gathering (Boolean), allJobs ([String]), region keys (e.g. eldin, faron, lanayru)
     const availableItems = items.filter((item) => {
      if (item.gathering !== true) return false;
@@ -1154,17 +1188,36 @@ async function handleBoostAccept(interaction) {
      });
      return;
     }
+    
+    // Entertainer-specific validation: check if there are entertainer bonus items available
+    if (boosterJob === 'Entertainer') {
+     const entertainerBonusItems = availableItems.filter((item) => item.entertainerItems === true);
+     if (entertainerBonusItems.length === 0) {
+      // Warn but don't block - Entertainer boost still works, just no bonus item
+      logger.warn('BOOST', `Entertainer Gathering boost accepted but no entertainerItems available in ${gatheringVillage} for ${job}. Main gather will work, but no Minuet of Forest bonus item.`);
+     }
+    }
    }
   }
  }
 
  // Teacher Crafting: both vouchers are manually activated by the booster (no automatic removal at accept)
 
+ // Re-fetch booster character to ensure we have the latest stamina value (prevent race conditions)
+ const freshBooster = await fetchCharacterByNameWithFallback(booster.name);
+ if (!freshBooster) {
+  await interaction.reply({
+   content: `❌ Could not verify **${booster.name}**'s stamina. Please try again.`,
+   ephemeral: true,
+  });
+  return;
+ }
+ 
  // Pre-check: booster must have at least 1 stamina to provide a boost
- const available = Math.max(0, Number(booster.currentStamina) || 0);
+ const available = Math.max(0, Number(freshBooster.currentStamina) || 0);
  if (available < 1) {
   await interaction.reply({
-   content: `❌ **${booster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others.`,
+   content: `❌ **${freshBooster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others. (Current: ${available} stamina)`,
    ephemeral: true,
   });
   return;
@@ -1172,18 +1225,20 @@ async function handleBoostAccept(interaction) {
 
  // Deduct 1 stamina from the booster character
  try {
-  const staminaResult = await useStamina(booster._id, 1);
+  const staminaResult = await useStamina(freshBooster._id, 1);
   if (staminaResult.exhausted) {
    await interaction.reply({
-    content: `❌ **${booster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others.`,
+    content: `❌ **${freshBooster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others.`,
     ephemeral: true,
    });
    return;
   }
+  // Update the local booster reference with the new stamina value
+  booster.currentStamina = freshBooster.currentStamina - 1;
  } catch (error) {
-  logger.error('BOOST', `Error deducting stamina from ${booster.name}: ${error.message}`);
+  logger.error('BOOST', `Error deducting stamina from ${freshBooster.name}: ${error.message}`);
   await interaction.reply({
-   content: `❌ Error processing stamina cost for **${booster.name}**. Please try again.`,
+   content: `❌ Error processing stamina cost for **${freshBooster.name}**. Please try again.`,
    ephemeral: true,
   });
   return;
@@ -1199,6 +1254,7 @@ async function handleBoostAccept(interaction) {
  requestData.boostExpiresAt = boostExpiresAt;
   // Ensure embed update has all required fields
   requestData.boosterJob = boosterJob;
+  requestData.boosterOwnerId = booster.userId; // Store booster's Discord user ID for fulfillment pings
   requestData.requestedByIcon = (await fetchCharacterByName(requestData.targetCharacter))?.icon;
   requestData.boosterIcon = booster.icon;
 
@@ -2802,7 +2858,21 @@ async function clearBoostAfterUse(character, options = {}) {
           if (activeBoost.channelId && character.userId) {
             const ch = await client.channels.fetch(activeBoost.channelId).catch(() => null);
             if (ch) {
-              await ch.send(`🔔 <@${character.userId}> Your boost from **${activeBoost.boostingCharacter}** has been used.`).catch((e) => logger.warn('BOOST', `Could not send fulfillment ping: ${e.message}`));
+              await ch.send({
+                content: `🔔 <@${character.userId}> Your boost from **${activeBoost.boostingCharacter}** has been used.`,
+                allowedMentions: { users: [character.userId] }
+              }).catch((e) => logger.warn('BOOST', `Could not send fulfillment ping: ${e.message}`));
+            }
+          }
+          
+          // Also notify the booster that their boost was used
+          if (activeBoost.channelId && activeBoost.boosterOwnerId) {
+            const ch = await client.channels.fetch(activeBoost.channelId).catch(() => null);
+            if (ch) {
+              await ch.send({
+                content: `🔔 <@${activeBoost.boosterOwnerId}> Your boost for **${character.name}** (boosted by **${activeBoost.boostingCharacter}**) has been fulfilled!`,
+                allowedMentions: { users: [activeBoost.boosterOwnerId] }
+              }).catch((e) => logger.warn('BOOST', `Could not send booster fulfillment ping: ${e.message}`));
             }
           }
         } catch (embedErr) {

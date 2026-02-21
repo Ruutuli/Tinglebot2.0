@@ -1087,7 +1087,10 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
  
  // Add Teacher stamina split information if Teacher boost was active
  if (teacherBoostInfo) {
-  const teacherInfo = `⚡ **Stamina Split:** ${teacherBoostInfo.teacherName} used ${teacherBoostInfo.teacherStaminaUsed} stamina, ${character.name} used ${teacherBoostInfo.crafterStaminaUsed} stamina (Total: ${teacherBoostInfo.totalStaminaCost})`;
+  const teacherRemainingDisplay = typeof teacherBoostInfo.teacherRemainingStamina === 'number' 
+    ? ` | ${teacherBoostInfo.teacherName}'s remaining stamina: ${Math.max(0, teacherBoostInfo.teacherRemainingStamina)}`
+    : '';
+  const teacherInfo = `⚡ **Stamina Split:** ${teacherBoostInfo.teacherName} used ${teacherBoostInfo.teacherStaminaUsed} stamina, ${character.name} used ${teacherBoostInfo.crafterStaminaUsed} stamina (Total: ${teacherBoostInfo.totalStaminaCost})${teacherRemainingDisplay}`;
   if (enhancedBoostInfo) {
    // Combine with existing boost info
    enhancedBoostInfo = {
@@ -1643,6 +1646,14 @@ const createGatherEmbed = async (character, randomItem, bonusItem = null, isDivi
     };
     console.log(`[embeds.js]: ✅ New Scholar boost flavor text: ${boostInfo.boostFlavorText}`);
   }
+  // For Fortune Teller boosts, ensure Rarity Reversal text is used (not Scholar Cross-Region Insight)
+  if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'fortune teller') {
+    console.log(`[embeds.js]: 🔮 Fortune Teller Gathering boost - ensuring Rarity Reversal text`);
+    boostInfo = {
+      ...boostInfo,
+      boostFlavorText: generateBoostFlavorText('Fortune Teller', 'Gathering')
+    };
+  }
   // For Priest boosts, only add boost flavor text if we haven't already used it as the main flavor text
   // (i.e., only add it when there's a divine item, since noDivine is already the main text)
   if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'priest') {
@@ -1904,7 +1915,9 @@ const createMonsterEncounterEmbed = async (
  entertainerBoostUnused = false,
  entertainerDamageReduction = 0,
   blightAdjustedRoll = null,
-  boostUnused = false
+  boostUnused = false,
+  fortuneRerollInfo = null,
+  teacherCombatInsightInfo = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1969,7 +1982,31 @@ if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'fortune teller' && boo
       ...boostInfo,
       boostFlavorText: generateUnusedBoostFlavorText('Fortune Teller', 'Looting')
     };
+  } else if (fortuneRerollInfo) {
+    // Clear Fated Reroll comparison for the user
+    const improved = fortuneRerollInfo.improved;
+    const keptText = improved ? '✅ Kept reroll (better)' : '⚪ Kept original (better or same)';
+    const comparisonText = `🔮 **Fated Reroll Triggered!**\n` +
+      `> Original: ${fortuneRerollInfo.originalDamage} ❤️ damage (roll: ${fortuneRerollInfo.originalRoll})\n` +
+      `> Reroll: ${fortuneRerollInfo.rerollDamage} ❤️ damage (roll: ${fortuneRerollInfo.rerollRoll})\n` +
+      `> ${keptText}`;
+    boostInfo = {
+      ...boostInfo,
+      boostFlavorText: comparisonText
+    };
+    console.log(`[embeds.js]: 🔮 Fortune Teller Fated Reroll - ${improved ? 'improved' : 'kept original'}`);
   }
+}
+
+// Add flavor for Teacher Combat Insight showing the roll improvement
+if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'teacher' && boostInfo.category === 'Looting' && teacherCombatInsightInfo) {
+  const insightText = `🎓 **Combat Insight Applied!**\n` +
+    `> Roll: ${teacherCombatInsightInfo.originalRoll} → **${teacherCombatInsightInfo.boostedRoll}** (+${teacherCombatInsightInfo.improvement} points, +${teacherCombatInsightInfo.percentImprovement}%)`;
+  boostInfo = {
+    ...boostInfo,
+    boostFlavorText: insightText
+  };
+  console.log(`[embeds.js]: 🎓 Teacher Combat Insight - roll boosted by ${teacherCombatInsightInfo.percentImprovement}%`);
 }
 
  // Add progress indicator if provided

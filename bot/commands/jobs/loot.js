@@ -985,10 +985,24 @@ async function processLootingLogic(
   const rollBeforeBoost = adjustedRandomValue;
   adjustedRandomValue = await applyLootingBoost(character.name, adjustedRandomValue);
   
+  // Track Teacher Combat Insight boost for embed display
+  let teacherCombatInsightInfo = null;
+  
   // Log boost if applied
   if (adjustedRandomValue > rollBeforeBoost) {
     const improvement = adjustedRandomValue - rollBeforeBoost;
     logger.info('LOOT', `📚 Boost applied to ${character.name} - Roll enhanced from ${rollBeforeBoost} to ${adjustedRandomValue} (+${improvement} points)`);
+    
+    // Check if this was a Teacher Combat Insight boost
+    const boostStatusForCombatInsight = await getCharacterBoostStatus(character.name);
+    if (boostStatusForCombatInsight && boostStatusForCombatInsight.boosterJob === 'Teacher' && boostStatusForCombatInsight.category === 'Looting') {
+      teacherCombatInsightInfo = {
+        originalRoll: rollBeforeBoost,
+        boostedRoll: adjustedRandomValue,
+        improvement: improvement,
+        percentImprovement: Math.round((improvement / rollBeforeBoost) * 100)
+      };
+    }
   }
 
   // Determine job for createWeightedItemList (use jobVoucherJob if active, otherwise default job)
@@ -1020,6 +1034,7 @@ async function processLootingLogic(
   // Track whether a Fortune Teller reroll occurred and whether it improved the outcome
   let fortuneRerollTriggered = false;
   let fortuneRerollImproved = false;
+  let fortuneRerollInfo = null; // Store original vs reroll comparison for embed display
 
   // ------------------- Fortune Teller: Fated Reroll (if damage taken) -------------------
   try {
@@ -1028,6 +1043,10 @@ async function processLootingLogic(
     if (hasFortuneTellerLootBoost && outcome.hearts && outcome.hearts > 0) {
       logger.info('BOOST', `🔮 Fortune Teller Fated Reroll triggered for ${character.name} (damage=${outcome.hearts})`);
       fortuneRerollTriggered = true;
+      
+      // Store original outcome values for comparison display
+      const originalDamage = outcome.hearts || 0;
+      const originalRollValue = outcome.adjustedRandomValue || adjustedRandomValue;
 
       // Snapshot hearts before reroll (get fresh from DB to capture prior deductions)
       let heartsBeforeReroll = null;
@@ -1091,6 +1110,16 @@ async function processLootingLogic(
       if (isRerollBetter) {
         logger.info('BOOST', `🔮 Fated Reroll improved outcome for ${character.name}: damage ${outcome.hearts || 0} → ${rerollOutcome.hearts || 0}, roll ${outcome.adjustedRandomValue} → ${adjustedRandomValueReroll}`);
         fortuneRerollImproved = true;
+        
+        // Store comparison info for embed display
+        fortuneRerollInfo = {
+          originalDamage: originalDamage,
+          rerollDamage: rerollOutcome.hearts || 0,
+          originalRoll: originalRollValue,
+          rerollRoll: adjustedRandomValueReroll,
+          improved: true,
+          keptResult: 'reroll'
+        };
 
         // Hearts reconciliation: initial outcome already applied hearts. Restore, then apply final reroll hearts.
         try {
@@ -1138,6 +1167,17 @@ async function processLootingLogic(
         rollDisplay += ` → ${adjustedRandomValue}`;
       } else {
         logger.info('BOOST', `🔮 Fated Reroll did not improve outcome for ${character.name}; keeping original.`);
+        
+        // Store comparison info for embed display (even when not improved)
+        fortuneRerollInfo = {
+          originalDamage: originalDamage,
+          rerollDamage: rerollOutcome.hearts || 0,
+          originalRoll: originalRollValue,
+          rerollRoll: adjustedRandomValueReroll,
+          improved: false,
+          keptResult: 'original'
+        };
+        
         // Undo any hearts applied by the reroll so we keep the original damage only
         try {
           if (rerollAppliedHearts > 0) {
@@ -1559,7 +1599,9 @@ async function processLootingLogic(
      entertainerBoostUnused, // Pass flag indicating boost was active but unused
     entertainerDamageReduction, // Pass amount of damage reduced by Entertainer boost
     blightAdjustedRoll, // Keep param order in sync
-    boostUnused // Fortune Teller unused flag
+    boostUnused, // Fortune Teller unused flag
+    fortuneRerollInfo, // Fortune Teller Fated Reroll comparison info
+    teacherCombatInsightInfo // Teacher Combat Insight roll boost info
     );
     
     // Update timestamp and clear boost only if damage was taken

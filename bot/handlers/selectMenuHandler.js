@@ -33,7 +33,7 @@ const {
 } = require('@/utils/storage');
 const { fetchCharacterByNameAndUserId, fetchCharacterByName, fetchCharactersByUserId, fetchModCharactersByUserId } = require('@/database/db');
 const { applyTeacherTokensBoost, applyScholarTokensBoost } = require('../modules/boostingModule');
-const { clearBoostAfterUse } = require('../commands/jobs/boosting');
+const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter } = require('../commands/jobs/boosting');
 
 // Menu utilities to generate select menus for the submission process
 const {
@@ -327,18 +327,26 @@ async function handleSelectMenuInteraction(interaction) {
           booster.job === 'Scholar' &&
           !processedBoosts.has('scholar_tokens')
         ) {
-          const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
-          const tokenIncrease = boostedTokens - finalTokenAmount;
-          if (tokenIncrease > 0) {
-            finalTokenAmount = boostedTokens;
-            boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
-            processedBoosts.add('scholar_tokens');
-            boostFulfillmentTargets.push(character.name);
-            try {
-              await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
-            } catch (clearErr) {
-              console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+          // Verify the boost category is 'Tokens' (Research Stipend) before applying
+          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+          const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens';
+          
+          if (isTokensBoost) {
+            const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+            const tokenIncrease = boostedTokens - finalTokenAmount;
+            if (tokenIncrease > 0) {
+              finalTokenAmount = boostedTokens;
+              boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
+              processedBoosts.add('scholar_tokens');
+              boostFulfillmentTargets.push(character.name);
+              try {
+                await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
+              } catch (clearErr) {
+                console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+              }
             }
+          } else {
+            console.log(`[selectMenuHandler.js]: 📚 Scholar ${booster.name} boost active but category is not Tokens (is: ${activeBoost?.category || 'none'}), skipping Research Stipend`);
           }
         }
       }
@@ -393,19 +401,27 @@ async function handleSelectMenuInteraction(interaction) {
               booster.job === 'Scholar' &&
               !processedBoosts.has('scholar_tokens')
             ) {
-              const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
-              const tokenIncrease = boostedTokens - finalTokenAmount;
-              if (tokenIncrease > 0) {
-                finalTokenAmount = boostedTokens;
-                boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
-                processedBoosts.add('scholar_tokens');
-                boostFulfillmentTargets.push(character.name);
-                console.log(`[selectMenuHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens) from user character ${character.name}`);
-                try {
-                  await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
-                } catch (clearErr) {
-                  console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+              // Verify the boost category is 'Tokens' (Research Stipend) before applying
+              const activeBoostForUser = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+              const isTokensBoostForUser = activeBoostForUser && activeBoostForUser.status === 'accepted' && activeBoostForUser.category === 'Tokens';
+              
+              if (isTokensBoostForUser) {
+                const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+                const tokenIncrease = boostedTokens - finalTokenAmount;
+                if (tokenIncrease > 0) {
+                  finalTokenAmount = boostedTokens;
+                  boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
+                  processedBoosts.add('scholar_tokens');
+                  boostFulfillmentTargets.push(character.name);
+                  console.log(`[selectMenuHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens) from user character ${character.name}`);
+                  try {
+                    await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
+                  } catch (clearErr) {
+                    console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
+                  }
                 }
+              } else {
+                console.log(`[selectMenuHandler.js]: 📚 Scholar ${booster.name} boost active for ${character.name} but category is not Tokens (is: ${activeBoostForUser?.category || 'none'}), skipping Research Stipend`);
               }
             }
           }

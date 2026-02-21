@@ -1020,7 +1020,13 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     // ============================================================================
     // ------------------- Consume Healer Boost After Use -------------------
     // ============================================================================
-    if (healerCharacter.boostedBy) {
+    // Check TempData directly since boostedBy field may be out of sync
+    const activeHealerBoost = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
+    const hasActiveHealerBoost = activeHealerBoost && 
+      activeHealerBoost.status === 'accepted' && 
+      activeHealerBoost.category === 'Healers';
+    
+    if (healerCharacter.boostedBy || hasActiveHealerBoost) {
       await clearBoostAfterUse(healerCharacter, {
         client: interaction.client,
         context: 'healing'
@@ -1393,7 +1399,13 @@ async function handleDirectHealing(interaction, healerName, targetCharacterName,
     // ============================================================================
     // ------------------- Consume Healer Boost After Use -------------------
     // ============================================================================
-    if (healerCharacter.boostedBy) {
+    // Check TempData directly since boostedBy field may be out of sync
+    const activeHealerBoostDirect = await retrieveBoostingRequestFromTempDataByCharacter(healerCharacter.name);
+    const hasActiveHealerBoostDirect = activeHealerBoostDirect && 
+      activeHealerBoostDirect.status === 'accepted' && 
+      activeHealerBoostDirect.category === 'Healers';
+    
+    if (healerCharacter.boostedBy || hasActiveHealerBoostDirect) {
       await clearBoostAfterUse(healerCharacter, {
         client: interaction.client,
         context: 'healing'

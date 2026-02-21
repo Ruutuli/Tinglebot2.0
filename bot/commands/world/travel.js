@@ -1198,12 +1198,21 @@ async function processTravelDay(day, context) {
 
         // ------------------- Clear Boost After Travel -------------------
         // Only consume Traveling boost when a road gather actually occurred (not on monster-only travel)
-        if (character.boostedBy) {
-          const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter } = require('../jobs/boosting');
-          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+        const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter } = require('../jobs/boosting');
+        const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+        const hasActiveBoost = character.boostedBy || (activeBoost && activeBoost.status === 'accepted');
+        
+        if (hasActiveBoost) {
           const isTravelingBoost = activeBoost?.category === 'Traveling';
           const gatherOccurred = context.travelGatherOccurred === true;
-          if (!isTravelingBoost || gatherOccurred) {
+          const boosterJob = activeBoost?.boosterJob?.toLowerCase() || '';
+          
+          // Teacher/Scholar Traveling boosts should only be consumed when gather occurs
+          // Other boosts are consumed normally
+          if (isTravelingBoost && !gatherOccurred) {
+            // Preserve the Traveling boost since no gather opportunity occurred
+            console.log(`[travel.js]: 📚 Preserving ${boosterJob} Traveling boost for ${character.name} - no gather occurred during this trip`);
+          } else {
             await clearBoostAfterUse(character, {
               client: interaction?.client,
               context: 'travel'

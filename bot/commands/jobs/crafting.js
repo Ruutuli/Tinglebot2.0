@@ -683,7 +683,8 @@ module.exports = {
               teacherName: boosterCharacter.name,
               teacherStaminaUsed: teacherStaminaContribution,
               crafterStaminaUsed: crafterStaminaCost,
-              totalStaminaCost: staminaCost
+              totalStaminaCost: staminaCost,
+              teacherRemainingStamina: Math.max(0, teacherUpdatedStamina ?? boosterCharacter.currentStamina ?? 0)
             };
           }
         }
@@ -712,15 +713,21 @@ module.exports = {
       }
 
       // ------------------- Add Crafted Item to Inventory -------------------
-      
-      // Check for Fortune Teller boost to tag items
+
+      // Check for Fortune Teller Crafting boost (Foresight in Sales) to tag items for 20% sale bonus
       let fortuneTellerBoostTag = null;
       if (freshCharacter.boostedBy) {
         const { fetchCharacterByName } = require('@/database/db');
         const boosterCharacter = await fetchCharacterByName(freshCharacter.boostedBy);
         if (boosterCharacter && getEffectiveJob(boosterCharacter) === 'Fortune Teller') {
-          fortuneTellerBoostTag = 'Fortune Teller';
-          info('CRFT', `Fortune Teller boost active: Tagging ${craftedQuantity} ${itemName} with fortuneTellerBoost tag`);
+          // Verify the boost category is 'Crafting' (Foresight in Sales)
+          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(freshCharacter.name);
+          if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Crafting') {
+            fortuneTellerBoostTag = 'Fortune Teller';
+            info('CRFT', `Fortune Teller Crafting boost (Foresight in Sales) active: Tagging ${craftedQuantity} ${itemName} with fortuneTellerBoost tag for 20% sale bonus`);
+          } else {
+            info('CRFT', `Fortune Teller boost active but category is not Crafting (is: ${activeBoost?.category || 'none'}), skipping Foresight in Sales tag`);
+          }
         }
       }
       

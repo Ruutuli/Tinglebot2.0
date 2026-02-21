@@ -475,9 +475,21 @@ async function getMonstersByPath(path) {
 
 // ------------------- Get Monsters by Region -------------------
 // Retrieves monsters based on a given region.
+// Normalizes region key to match MonsterModel field names (camelCase).
 async function getMonstersByRegion(region) {
   try {
-    const query = { [region]: true };
+    const regionMapping = {
+      'eldin': 'eldin',
+      'lanayru': 'lanayru',
+      'faron': 'faron',
+      'centralhyrule': 'centralHyrule',
+      'gerudo': 'gerudo',
+      'hebra': 'hebra',
+      'pathofscarletleaves': 'pathOfScarletLeaves',
+      'leafdewway': 'leafDewWay'
+    };
+    const normalizedRegion = regionMapping[region?.toLowerCase()] || region;
+    const query = { [normalizedRegion]: true };
     const monsters = await Monster.find(query);
     return monsters;
   } catch (error) {

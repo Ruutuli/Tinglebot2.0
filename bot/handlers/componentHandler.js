@@ -2809,7 +2809,8 @@ async function continueCraftingProcess(interaction, character, materialsUsed, co
             teacherName: boosterCharacter.name,
             teacherStaminaUsed: continueData.teacherStaminaContribution,
             crafterStaminaUsed: continueData.crafterStaminaCost,
-            totalStaminaCost: continueData.staminaCost
+            totalStaminaCost: continueData.staminaCost,
+            teacherRemainingStamina: Math.max(0, teacherUpdatedStamina ?? boosterCharacter.currentStamina ?? 0)
           };
         }
       }

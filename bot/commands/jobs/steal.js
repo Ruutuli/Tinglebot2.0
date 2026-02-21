@@ -1694,6 +1694,8 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
     // ============================================================================
     // ------------------- Apply Job-Specific Stealing Boosts -------------------
     // ============================================================================
+    let scholarCalculatedGrabApplied = false;
+    let scholarBoosterName = null;
     if (thiefCharacter.boostedBy) {
         const { fetchCharacterByName } = require('@/database/db');
         const boosterChar = await fetchCharacterByName(thiefCharacter.boostedBy);
@@ -1702,7 +1704,9 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             // Scholar: Calculated Grab (+1 extra item)
             if (boosterChar.job === 'Scholar') {
                 finalQuantity += 1;
-                logger.info('BOOST', '📚 Scholar boost - Calculated Grab (+1 extra item)');
+                scholarCalculatedGrabApplied = true;
+                scholarBoosterName = boosterChar.name;
+                logger.info('BOOST', `📚 Scholar boost - Calculated Grab (+1 extra item) by ${boosterChar.name}`);
             }
         }
     }
@@ -1787,6 +1791,17 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             embed.addFields({
                 name: `⚡ ${boostName}`,
                 value: boostValue,
+                inline: false,
+            });
+        }
+        
+        // Add Scholar Calculated Grab flavor text if boost was applied
+        if (scholarCalculatedGrabApplied) {
+            const originalQuantity = finalQuantity - 1;
+            const scholarFlavorText = `📚 **Calculated Grab:** ${scholarBoosterName}'s meticulous notes revealed an extra opportunity! Stole ${originalQuantity} → **${finalQuantity}** items (+1 bonus item)`;
+            embed.addFields({
+                name: '📚 Calculated Grab',
+                value: scholarFlavorText,
                 inline: false,
             });
         }

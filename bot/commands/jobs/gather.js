@@ -82,6 +82,26 @@ const villageChannels = {
 // ------------------- Helper Functions -------------------
 // ============================================================================
 
+/**
+ * Normalizes a region name to match ItemModel field names.
+ * ItemModel uses camelCase for region fields (e.g., centralHyrule, pathOfScarletLeaves).
+ */
+function normalizeRegionKey(regionName) {
+  if (!regionName) return null;
+  const regionMapping = {
+    'eldin': 'eldin',
+    'lanayru': 'lanayru',
+    'faron': 'faron',
+    'centralhyrule': 'centralHyrule',
+    'gerudo': 'gerudo',
+    'hebra': 'hebra',
+    'pathofscarletleaves': 'pathOfScarletLeaves',
+    'leafdewway': 'leafDewWay'
+  };
+  const lowered = regionName.toLowerCase();
+  return regionMapping[lowered] || lowered;
+}
+
 // ------------------- Daily Roll Functions ------------------
 // Check if a daily roll is available for a specific activity
 function canUseDailyRoll(character, activity, userId) {
@@ -678,8 +698,9 @@ module.exports = {
           // Continue with gathering instead of monster encounter
         } else {
           const allMonsters = await fetchAllMonsters();
+          const monsterRegionKey = normalizeRegionKey(region);
           const monstersByRegion = allMonsters.filter(
-            monster => monster[region.toLowerCase()] && monster.tier >= 1 && monster.tier <= 4
+            monster => monster[monsterRegionKey] && monster.tier >= 1 && monster.tier <= 4
           );
           if (monstersByRegion.length > 0) {
             const encounteredMonster = monstersByRegion[Math.floor(Math.random() * monstersByRegion.length)];
@@ -726,7 +747,7 @@ module.exports = {
               if (isEntertainerBoost) {
                 const itemsForBonus = await fetchAllItems();
                 const jobNormalized = normalizeJobName(job);
-                const regionKeyForBonus = region.toLowerCase();
+                const regionKeyForBonus = normalizeRegionKey(region);
 
                 // ItemModel: gathering (Boolean), allJobs ([String]), region keys (e.g. eldin, faron, lanayru)
                 const availableForBonus = itemsForBonus.filter(item => {
@@ -883,13 +904,8 @@ module.exports = {
         }
         
         // Convert village name to region for proper item filtering (only once)
-        let regionKey = gatheringRegion.toLowerCase();
-        const { getVillageRegionByName } = require('../../modules/locationsModule');
         const villageRegion = getVillageRegionByName(gatheringRegion);
-        if (villageRegion) {
-          regionKey = villageRegion.toLowerCase();
-
-        }
+        const regionKey = normalizeRegionKey(villageRegion || gatheringRegion);
         
         // ItemModel: gathering (Boolean), allJobs ([String]), region keys (e.g. eldin, faron, lanayru)
         const availableItems = items.filter(item => {
@@ -1103,6 +1119,7 @@ module.exports = {
         }
         
         // Handle Entertainer bonus item: only items with entertainerItems === true
+        let entertainerBonusUnavailable = false;
         if (isEntertainerBoost) {
           const entertainerItems = await applyGatheringBoost(character.name, availableItems);
           let entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
@@ -1113,7 +1130,10 @@ module.exports = {
             // Select a random entertainer item as bonus
             const bonusIndex = Math.floor(Math.random() * entertainerBonusPool.length);
             bonusItem = entertainerBonusPool[bonusIndex];
-
+          } else {
+            // No entertainer items available in this region/job combination
+            entertainerBonusUnavailable = true;
+            logger.warn('GATHER', `Entertainer boost active for ${character.name} but no entertainerItems available in ${region} for ${job}. Main gather proceeds without bonus.`);
           }
         }
         
@@ -1165,6 +1185,10 @@ module.exports = {
         const messages = [];
         if (blightRainMessage) messages.push(blightRainMessage);
         if (lightningStrikeMessage) messages.push(lightningStrikeMessage);
+        // Add note when Entertainer bonus item wasn't available in this region/job
+        if (entertainerBonusUnavailable) {
+          messages.push(`🎭 **Minuet of Forest:** No performance-themed items are available for ${job} in ${region}. The main gather succeeded, but no bonus item was added.`);
+        }
         const content = messages.length > 0 ? messages.join('\n\n') : undefined;
         await safeReply({ content, embeds: [embed] });
         

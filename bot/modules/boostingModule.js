@@ -914,7 +914,11 @@ function applyEntertainerOtherBoost(villageData) {
 
 function applyScholarCraftingBoost(materialCosts, additionalData) {
  // Router passes (data, additionalData); extract craftQuantity from additionalData
- const craftQuantity = (additionalData && typeof additionalData.craftQuantity === 'number') ? additionalData.craftQuantity : 1;
+ // Ensure craftQuantity is a valid positive integer
+ let craftQuantity = 1;
+ if (additionalData && typeof additionalData.craftQuantity === 'number' && !isNaN(additionalData.craftQuantity) && additionalData.craftQuantity > 0) {
+  craftQuantity = Math.floor(additionalData.craftQuantity);
+ }
 
  // Only process if materialCosts is an array (materials)
  // If it's not an array (e.g., stamina cost or quantity), return unchanged
@@ -922,11 +926,28 @@ function applyScholarCraftingBoost(materialCosts, additionalData) {
   return materialCosts;
  }
 
- const { info, success } = require('@/utils/logger');
+ const { info, success, warn } = require('@/utils/logger');
 
  // Only apply reduction if total material needed (per-item quantity * craft quantity) is more than 1
  const result = materialCosts.map((material) => {
-  const originalQuantity = typeof material.quantity === 'number' && !isNaN(material.quantity) ? material.quantity : 0;
+  // Robust quantity parsing - handle undefined, null, NaN, strings, etc.
+  let originalQuantity = 0;
+  if (material && material.quantity !== undefined && material.quantity !== null) {
+   const parsed = Number(material.quantity);
+   if (!isNaN(parsed) && isFinite(parsed) && parsed >= 0) {
+    originalQuantity = Math.floor(parsed);
+   }
+  }
+  
+  // Safety check: if originalQuantity is still invalid, return material unchanged
+  if (originalQuantity <= 0) {
+   warn('BOOST', `Scholar boost: ${material?.itemName || 'Unknown'} - invalid quantity (${material?.quantity}), skipping reduction`);
+   return {
+    ...material,
+    quantity: originalQuantity > 0 ? originalQuantity : 1
+   };
+  }
+  
   const totalNeeded = originalQuantity * craftQuantity;
 
   // If total needed is 1 or less, don't apply reduction
@@ -944,19 +965,23 @@ function applyScholarCraftingBoost(materialCosts, additionalData) {
   // Calculate per-item quantity from reduced total
   // For multiple items, we distribute the reduced total evenly
   // If reduced total would result in less than 1 per item, keep it at 1 per item
-  // This ensures all items have the material requirement, though full savings may not be realized
-  // in cases where reduced total < craft quantity
   let finalQuantity;
   if (craftQuantity === 1) {
    // Single item crafting: use the reduced total directly
    finalQuantity = finalTotal;
   } else {
    // Multiple items: calculate per-item requirement
-   // Round up to ensure proper distribution (may result in slight overshoot when reducedTotal < craftQuantity)
+   // Round up to ensure proper distribution
    const perItemFraction = finalTotal / craftQuantity;
    finalQuantity = Math.ceil(perItemFraction);
    // But ensure it's at least 1 per item
    finalQuantity = Math.max(1, finalQuantity);
+  }
+  
+  // Final NaN guard - if anything went wrong, default to original quantity
+  if (isNaN(finalQuantity) || !isFinite(finalQuantity) || finalQuantity <= 0) {
+   warn('BOOST', `Scholar boost: ${material.itemName} - calculation resulted in invalid quantity (${finalQuantity}), using original (${originalQuantity})`);
+   finalQuantity = originalQuantity;
   }
   
   const actualUsed = finalQuantity * craftQuantity;
@@ -967,9 +992,9 @@ function applyScholarCraftingBoost(materialCosts, additionalData) {
 
   return {
    ...material,
-   quantity: Number(finalQuantity),
-   originalQuantity: originalQuantity, // Store original for savings calculation
-   savings: savings, // Store savings amount
+   quantity: Math.floor(finalQuantity),
+   originalQuantity: originalQuantity,
+   savings: savings,
   };
  });
  

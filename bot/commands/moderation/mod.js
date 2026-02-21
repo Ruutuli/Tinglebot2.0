@@ -260,9 +260,20 @@ function getMonsterRegion(monster) {
 
 // ------------------- Function: isMonsterInRegion -------------------
 // Checks if a monster belongs to a specific region
+// Normalizes region key to match MonsterModel field names (camelCase).
 function isMonsterInRegion(monster, region) {
-  const regionLower = region.toLowerCase();
-  return monster[regionLower] === true;
+  const regionMapping = {
+    'eldin': 'eldin',
+    'lanayru': 'lanayru',
+    'faron': 'faron',
+    'centralhyrule': 'centralHyrule',
+    'gerudo': 'gerudo',
+    'hebra': 'hebra',
+    'pathofscarletleaves': 'pathOfScarletLeaves',
+    'leafdewway': 'leafDewWay'
+  };
+  const normalizedRegion = regionMapping[region?.toLowerCase()] || region?.toLowerCase();
+  return monster[normalizedRegion] === true;
 }
 
 // ------------------- Embed Footer Update Helper -------------------

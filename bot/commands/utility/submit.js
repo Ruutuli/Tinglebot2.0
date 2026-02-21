@@ -644,27 +644,35 @@ module.exports = {
             boosterChar.job === 'Scholar' &&
             !processedBoostTypes.has('scholar_tokens')
           ) {
-            const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
-            const tokenIncrease = boostedTokens - finalTokenAmount;
-            if (tokenIncrease > 0) {
-              console.log(`[submit.js]: 📚 Scholar boost - Research Stipend applied for ${character.name} by ${boosterChar.name} (+${tokenIncrease} tokens)`);
-              finalTokenAmount = boostedTokens;
-              boostEffects.push(`📚 **Research Stipend:** ${boosterChar.name} added 🪙 ${tokenIncrease}.`);
-              processedBoostTypes.add('scholar_tokens');
-              boostedCharacters.set(normalizedCharacterName, character);
-              const metadataKey = `${boosterChar.job.toLowerCase()}_${boosterChar.name.toLowerCase()}`;
-              if (!boostMetadataMap.has(metadataKey)) {
-                boostMetadataMap.set(metadataKey, {
-                  boostType: 'scholar_tokens',
-                  boosterJob: boosterChar.job,
-                  boosterName: boosterChar.name,
-                  targets: new Set(),
-                  tokenIncrease: 0
-                });
+            // Verify the boost category is 'Tokens' (Research Stipend) before applying
+            const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+            const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens';
+            
+            if (isTokensBoost) {
+              const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
+              const tokenIncrease = boostedTokens - finalTokenAmount;
+              if (tokenIncrease > 0) {
+                console.log(`[submit.js]: 📚 Scholar boost - Research Stipend applied for ${character.name} by ${boosterChar.name} (+${tokenIncrease} tokens)`);
+                finalTokenAmount = boostedTokens;
+                boostEffects.push(`📚 **Research Stipend:** ${boosterChar.name} added 🪙 ${tokenIncrease}.`);
+                processedBoostTypes.add('scholar_tokens');
+                boostedCharacters.set(normalizedCharacterName, character);
+                const metadataKey = `${boosterChar.job.toLowerCase()}_${boosterChar.name.toLowerCase()}`;
+                if (!boostMetadataMap.has(metadataKey)) {
+                  boostMetadataMap.set(metadataKey, {
+                    boostType: 'scholar_tokens',
+                    boosterJob: boosterChar.job,
+                    boosterName: boosterChar.name,
+                    targets: new Set(),
+                    tokenIncrease: 0
+                  });
+                }
+                const metadataRecord = boostMetadataMap.get(metadataKey);
+                metadataRecord.targets.add(character.name);
+                metadataRecord.tokenIncrease += tokenIncrease;
               }
-              const metadataRecord = boostMetadataMap.get(metadataKey);
-              metadataRecord.targets.add(character.name);
-              metadataRecord.tokenIncrease += tokenIncrease;
+            } else {
+              console.log(`[submit.js]: 📚 Scholar ${boosterChar.name} boost active for ${character.name} but category is not Tokens (is: ${activeBoost?.category || 'none'}), skipping Research Stipend`);
             }
           }
         }

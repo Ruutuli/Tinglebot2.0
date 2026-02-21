@@ -678,6 +678,13 @@ function normalizeJobName(job) {
     return typeof job === 'string' ? job.trim().toLowerCase() : '';
 }
 
+/**
+ * Gets the effective job for a character, using jobVoucherJob if a voucher is active, otherwise the regular job.
+ */
+function getEffectiveJob(character) {
+    return (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+}
+
 async function buildQuestRewardContext(quest, participants = []) {
     const context = {};
     context.entertainerBonus = await detectEntertainerBonus(participants);
@@ -737,12 +744,14 @@ async function detectEntertainerBonus(participants = []) {
                 return;
             }
 
-            const jobName = normalizeJobName(character.job);
+            const effectiveJob = getEffectiveJob(character);
+            const jobName = normalizeJobName(effectiveJob);
             if (jobName === 'entertainer') {
                 entertainers.push({
                     userId: participant.userId,
                     characterName: participant.characterName
                 });
+                console.log(`[questRewardModule.js] 🎭 Detected Entertainer: ${participant.characterName} (job: ${character.job}, effectiveJob: ${effectiveJob}, jobVoucher: ${character.jobVoucher || false})`);
             }
         } else {
             console.error(`[questRewardModule.js] ❌ Error fetching character for Entertainer bonus check (${participant?.characterName || 'Unknown'}):`, result.reason);
