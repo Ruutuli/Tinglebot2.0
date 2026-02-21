@@ -5,10 +5,10 @@
 
 
 class MapToggles {
-    constructor(config, layers) {
+    constructor(config, layers, isAdmin = false) {
         this.config = config;
         this.layers = layers;
-        this.isAdmin = false;
+        this.isAdmin = isAdmin;
         
         // Toggle state (defaults from config)
         this.state = { ...this.config.LAYER_DEFAULTS };
@@ -72,7 +72,7 @@ class MapToggles {
                 { key: 'village-markers', label: 'Village Markers', icon: '🏛️' },
                 { key: 'region-names', label: 'Region Names', icon: '🏷️' },
                 { key: 'blight', label: 'Blight Areas', icon: '💀' },
-                { key: 'fog', label: 'Fog Layer (Admin)', icon: '🌫️', adminOnly: true },
+                { key: 'fog', label: 'Fog Layer', icon: '🌫️', adminOnly: true },
                 { key: 'exploration', label: 'Exploration Markers', icon: '🗺️' }
             ]
         },
@@ -220,8 +220,8 @@ class MapToggles {
     }
     
     /**
-     * Check if current user is admin
-     * @returns {boolean} True if user is admin
+     * Check if current user is admin or moderator
+     * @returns {boolean} True if user is admin or mod
      */
     _isAdmin() {
         // Check instance admin status first
@@ -229,9 +229,11 @@ class MapToggles {
             return true;
         }
         
-        // Check if we have admin status from the global user data
-        if (typeof window !== 'undefined' && window.currentUser && window.currentUser.isAdmin) {
-            return true;
+        // Check if we have admin or mod status from the global user data
+        if (typeof window !== 'undefined' && window.currentUser) {
+            if (window.currentUser.isAdmin || window.currentUser.isMod) {
+                return true;
+            }
         }
         
         // Check if we have admin status from the map system

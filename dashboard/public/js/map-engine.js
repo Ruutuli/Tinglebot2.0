@@ -132,11 +132,9 @@ class MapEngine {
     _initializeModules() {
         this.layers = new MapLayers(this.config, this.geometry);
         this.layers.initialize(this.map);
-        this.toggles = new MapToggles(this.config, this.layers);
         
-        if (this.isAdmin) {
-            this.toggles.isAdmin = true;
-        }
+        // Pass admin status to toggles before initialization
+        this.toggles = new MapToggles(this.config, this.layers, this.isAdmin);
         
         this.loader = new MapLoader(this.config, this.geometry, this.manifest, this.layers, this.metadata);
         this.loader.initialize();

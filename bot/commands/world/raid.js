@@ -172,6 +172,16 @@ module.exports = {
       });
     }
 
+    // Block individual leave for expedition raids — party must retreat together
+    const raid = await Raid.findOne({ raidId });
+    if (raid && raid.expeditionId) {
+      const cmdRetreat = getExploreCommandId() ? `</explore retreat:${getExploreCommandId()}>` : '`/explore retreat`';
+      return interaction.editReply({
+        content: `❌ **Cannot leave individually.** This raid is part of an expedition. The entire party must retreat together using ${cmdRetreat} with the expedition ID and your character name.`,
+        ephemeral: true
+      });
+    }
+
     try {
       const result = await leaveRaid(character, raidId, { client: interaction.client });
       const embed = new EmbedBuilder()

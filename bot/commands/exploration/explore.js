@@ -4796,6 +4796,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      return interaction.editReply("This expedition is not active. You can only Secure during an active expedition.");
     }
 
+    // Block securing if there's an active raid for this expedition (must defeat or retreat first)
+    const activeRaidSecure = await Raid.findOne({ expeditionId, status: "active" });
+    if (activeRaidSecure) {
+     return interaction.editReply(
+      `**Complete the raid first.** You cannot use \`/explore secure\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidSecure.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
+     );
+    }
+
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
@@ -6142,6 +6150,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
+    }
+
+    // Block camping if there's an active raid for this expedition (must defeat or retreat first)
+    const activeRaidCamp = await Raid.findOne({ expeditionId, status: "active" });
+    if (activeRaidCamp) {
+     return interaction.editReply(
+      `**Complete the raid first.** You cannot use \`/explore camp\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidCamp.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
+     );
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);

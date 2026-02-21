@@ -32,7 +32,7 @@ let pinVisibilityHandlerRef = null;
 // ============================================================================
 
 // ------------------- Map init ------------------
-// checkAdminStatus -
+// checkAdminStatus - Returns true if user is admin or mod
 async function checkAdminStatus() {
     try {
         const response = await fetch('/api/user', {
@@ -43,19 +43,23 @@ async function checkAdminStatus() {
         
         if (response.ok) {
             const userData = await response.json();
-            if (userData.isAuthenticated && userData.isAdmin) {
+            const isAdminOrMod = userData.isAuthenticated && (userData.isAdmin || userData.isMod);
+            if (isAdminOrMod) {
                 // Set admin status on map engine
                 if (mapEngine) {
                     mapEngine.isAdmin = true;
                 }
                 // Also set it globally for toggles to access
                 window.currentUser = userData.user;
-                window.currentUser.isAdmin = true;
+                window.currentUser.isAdmin = userData.isAdmin;
+                window.currentUser.isMod = userData.isMod;
+                return true;
             }
         }
     } catch (error) {
         console.error('[map.js]❌ Error checking admin status:', error);
     }
+    return false;
 }
 
 // ------------------- Map init ------------------
@@ -92,8 +96,11 @@ async function initializeMap() {
         updateLoadingProgress(15, 'Creating map engine...', 1);
         mapEngine = new MapEngine(MAP_CONFIG);
 
-        // Check admin status in parallel with init
-        checkAdminStatus();
+        // Check admin/mod status BEFORE initializing so toggles show correctly
+        const isAdminOrMod = await checkAdminStatus();
+        if (isAdminOrMod) {
+            mapEngine.isAdmin = true;
+        }
 
         // Step 3: Initialize the engine (loads manifest, layers, triggers tile loading)
         updateLoadingProgress(25, 'Loading map manifest...', 2);
