@@ -247,6 +247,7 @@ function createStuckInWildEmbed(party, location) {
     .setColor(getExploreOutcomeColor("explored", regionColors[party?.region] || "#8B4513"))
     .setDescription(
       `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp recovers a random amount of stamina instead of costing.\n\n` +
+      `**Camp costs:** 3🟩 unexplored, 2🟩 explored, 0🟩 secured. At 0 stamina, camp is free but has higher monster attack chance.\n\n` +
       `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
     )
     .setImage(EXPLORATION_IMAGE_FALLBACK)
@@ -2990,6 +2991,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       );
      }
 
+     // Block rolling if there's an active raid for this expedition (must defeat or retreat first)
+     const activeRaid = await Raid.findOne({ expeditionId, status: "active" });
+     if (activeRaid) {
+      return interaction.editReply(
+       `**Complete the raid first.** You cannot use \`/explore roll\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaid.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
+      );
+     }
+
      const characterIndex = party.characters.findIndex(
       (char) => char.name === characterName
      );
@@ -3239,11 +3248,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         }
       }
 
+      // Check for blight from database quadrant.blighted field
       const mapSquareForBlight = await Square.findOne({ squareId: party.square });
       const quadBlight = mapSquareForBlight?.quadrants?.find(
        (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
       );
-      if (quadBlight && quadBlight.blighted) {
+      if (quadBlight && quadBlight.blighted === true) {
        await applyBlightExposure(party, party.square, party.quadrant, "reveal", character.name);
       }
 
@@ -3421,7 +3431,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        }
        if (!party.gatheredItems) party.gatheredItems = [];
        party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
-       const relicUserIds = [...new Set((party.characters || []).map((c) => c.userId).filter(Boolean))];
+       // Only DM the discoverer, not all party members
+       const relicUserIds = [character.userId].filter(Boolean);
        const relicIdStr = savedRelic?.relicId ? `\`${savedRelic.relicId}\`` : '—';
        const relicDmEmbed = createRelicDmEmbed(character.name, location, relicIdStr, expeditionId);
        if (interaction.client) {
@@ -3765,7 +3776,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           progressMsg += "Found a relic (take to Artist/Researcher to appraise).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
           pushProgressLog(freshParty, ruinsCharacter.name, "relic", `Found a relic in ${location}; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
-          const relicUserIds = [...new Set((freshParty.characters || []).map((c) => c.userId).filter(Boolean))];
+          // Only DM the discoverer, not all party members
+          const relicUserIds = [ruinsCharacter.userId].filter(Boolean);
           const relicDmEmbed = createRelicDmEmbed(ruinsCharacter.name, location, ruinsRelicIdStr, expeditionId);
           if (i.client) {
            ruinsFailedNotifyEmbed = relicDmEmbed;
@@ -3971,6 +3983,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            });
           }
          } else {
+          // Ruins exploration complete (non-chest outcomes) - advance turn now
+          const ruinsFinalParty = await Party.findActiveByPartyId(expeditionId);
+          if (ruinsFinalParty && ruinsFinalParty.characters?.length > 0) {
+           ruinsFinalParty.currentTurn = (ruinsFinalParty.currentTurn + 1) % ruinsFinalParty.characters.length;
+           await ruinsFinalParty.save();
+          }
+          const ruinsNextChar = ruinsFinalParty?.characters?.[ruinsFinalParty.currentTurn] ?? null;
+
           await i.followUp({ embeds: [resultEmbed] }).catch(() => {});
           if (ruinsFailedNotifyUserIds.length > 0 && ruinsFailedNotifyEmbed) {
            await i.followUp({
@@ -3978,10 +3998,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
             embeds: [ruinsFailedNotifyEmbed],
            }).catch(() => {});
           }
-          const nextUserId = nextCharacter?.userId;
-          const nextName = nextCharacter?.name ?? "Next player";
           await i.followUp({
-            content: getExplorationNextTurnContent(nextCharacter),
+            content: getExplorationNextTurnContent(ruinsNextChar),
           }).catch(() => {});
          }
          return;
@@ -4815,20 +4833,17 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      return interaction.editReply({ embeds: [embed] });
     }
 
+    // Validate party has enough stamina/hearts to secure (5 total) - DO NOT deduct yet, only on confirmation
     const staminaCost = 5;
-    const securePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst", action: "secure" });
-    if (!securePayResult.ok) {
+    const totalStamina = Math.max(0, Number(party.totalStamina) || 0);
+    const totalHearts = Math.max(0, Number(party.totalHearts) || 0);
+    const shortfall = Math.max(0, staminaCost - totalStamina);
+    logger.info("EXPLORE", `[explore.js] Secure pre-check: partyId=${expeditionId} ❤${totalHearts} 🟩${totalStamina} need=${staminaCost} shortfall=${shortfall}`);
+    if (shortfall > 0 && totalHearts < shortfall) {
+     logger.info("EXPLORE", `[explore.js] Secure BLOCKED (not enough): partyId=${expeditionId} ❤${totalHearts} 🟩${totalStamina} shortfall=${shortfall} — NO HEARTS CONSUMED`);
      return interaction.editReply(
-      `Not enough stamina or hearts to secure (need ${staminaCost} total). Party has ${party.totalStamina ?? 0} stamina and ${party.totalHearts ?? 0} hearts. **Camp** to recover stamina, or use hearts to **Struggle** (1 heart = 1 stamina).`
+      `Not enough stamina or hearts to secure (need ${staminaCost} total). Party has ${totalStamina} stamina and ${totalHearts} hearts. **Camp** to recover stamina, or use hearts to **Struggle** (1 heart = 1 stamina).`
      );
-    }
-    const n = (party.characters || []).length;
-    if (party.status === "started" && n > 0) {
-     character.currentHearts = Math.floor((party.totalHearts ?? 0) / n);
-     character.currentStamina = Math.floor((party.totalStamina ?? 0) / n);
-    } else {
-     character.currentStamina = party.characters[characterIndex].currentStamina;
-     character.currentHearts = party.characters[characterIndex].currentHearts;
     }
 
     // Confirmation: securing means no more rolls / items in this quadrant; grottos/ruins here that haven't been visited won't be explorable
@@ -4951,8 +4966,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
 
       const staminaCost = 5;
+      const secureBeforeHearts = freshParty.totalHearts ?? 0;
+      const secureBeforeStamina = freshParty.totalStamina ?? 0;
+      logger.info("EXPLORE", `[explore.js] Secure confirm: partyId=${expeditionId} BEFORE ❤${secureBeforeHearts} 🟩${secureBeforeStamina} need=${staminaCost}`);
       const securePayResult = await payStaminaOrStruggle(freshParty, freshCharIndex, staminaCost, { order: "currentFirst", action: "secure_confirm" });
       if (!securePayResult.ok) {
+       logger.info("EXPLORE", `[explore.js] Secure FAILED (payStaminaOrStruggle returned not ok): partyId=${expeditionId} ❤${freshParty.totalHearts ?? 0} 🟩${freshParty.totalStamina ?? 0} — payStaminaOrStruggle should NOT have consumed anything`);
        const noStaminaEmbed = new EmbedBuilder()
         .setTitle("Not enough stamina or hearts")
         .setColor(getExploreOutcomeColor("secure", regionColors[freshParty.region] || "#FF9800"))
@@ -5164,7 +5183,20 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      );
     }
 
+    // Block moving if there's an active raid for this expedition (must defeat or retreat first)
+    const activeRaidMove = await Raid.findOne({ expeditionId, status: "active" });
+    if (activeRaidMove) {
+     return interaction.editReply(
+      `**Complete the raid first.** You cannot use \`/explore move\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidMove.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
+     );
+    }
+
     // Sync quadrant state from map (exploringMap / Square model) — secured/explored on map means Move is allowed
+    // DESIGN NOTE: Exploration state is SHARED across all expeditions via the map database.
+    // - If a PREVIOUS expedition secured a quadrant, the current party can move through it freely (0 stamina).
+    // - If a PREVIOUS expedition explored a quadrant, the current party sees it as explored (1 stamina to move).
+    // - This is intentional: securing benefits all future expeditions, and exploration progress persists.
+    // - The move command costs: 2 stamina (unexplored) → 1 stamina (explored) → 0 stamina (secured).
     const moveSquareId = String(party.square || "").trim();
     const moveSquareIdRegex = moveSquareId ? new RegExp(`^${moveSquareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") : null;
     const mapSquareForMove = moveSquareIdRegex ? await Square.findOne({ squareId: moveSquareIdRegex }) : null;
@@ -5276,29 +5308,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
     const moveWasReveal = destinationQuadrantState === "unexplored";
     const staminaCost = destinationQuadrantState === "secured" ? 0 : destinationQuadrantState === "unexplored" ? 2 : 1;
-    let movePayResult = null;
-    if (staminaCost > 0) {
-     movePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst", action: "move" });
-     if (!movePayResult.ok) {
-      const location = `${party.square} ${party.quadrant}`;
-      return interaction.editReply({
-       embeds: [createStuckInWildEmbed(party, location)],
-      });
-     }
-     const n = (party.characters || []).length;
-     if (party.status === "started" && n > 0) {
-      character.currentHearts = Math.floor((party.totalHearts ?? 0) / n);
-      character.currentStamina = Math.floor((party.totalStamina ?? 0) / n);
-     } else {
-      character.currentStamina = party.characters[characterIndex].currentStamina;
-      character.currentHearts = party.characters[characterIndex].currentHearts;
-     }
-    }
-    const moveCostsForLog = staminaCost > 0 && movePayResult
-     ? buildCostsForLog(movePayResult)
-     : undefined;
+
     // Block leaving the square until all quadrants (except inaccessible) are explored or secured
     // Exception: allow moving to the starting square (where they can end the expedition) even if current square isn't fully explored
+    // IMPORTANT: This check happens BEFORE stamina is deducted so failed moves don't cost stamina
     const targetSquareNorm = String(newLocation.square || "").trim().toUpperCase();
     const currentSquareNorm = String(currentSquare || "").trim().toUpperCase();
     const startPoint = START_POINTS_BY_REGION[party.region];
@@ -5351,6 +5364,29 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
      }
     }
+
+    // Now that we've validated the move is allowed, deduct stamina
+    let movePayResult = null;
+    if (staminaCost > 0) {
+     movePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst", action: "move" });
+     if (!movePayResult.ok) {
+      const location = `${party.square} ${party.quadrant}`;
+      return interaction.editReply({
+       embeds: [createStuckInWildEmbed(party, location)],
+      });
+     }
+     const n = (party.characters || []).length;
+     if (party.status === "started" && n > 0) {
+      character.currentHearts = Math.floor((party.totalHearts ?? 0) / n);
+      character.currentStamina = Math.floor((party.totalStamina ?? 0) / n);
+     } else {
+      character.currentStamina = party.characters[characterIndex].currentStamina;
+      character.currentHearts = party.characters[characterIndex].currentHearts;
+     }
+    }
+    const moveCostsForLog = staminaCost > 0 && movePayResult
+     ? buildCostsForLog(movePayResult)
+     : undefined;
 
     // When leaving a square, clear reportable discoveries in that square that were NOT pinned (not in reportedDiscoveryKeys). Marked discoveries are kept.
     const leavingSquare = String(currentSquare || "").trim().toUpperCase();
@@ -5422,7 +5458,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
-    if (destQ && destQ.blighted) {
+    // Check for blight from database quadrant.blighted field
+    if (destQ && destQ.blighted === true) {
      await applyBlightExposure(
       party,
       newLocation.square,
@@ -6062,6 +6099,21 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
+    // Sync quadrant state from map so stamina cost matches canonical explored/secured status
+    const campMapSquare = await Square.findOne({ squareId: party.square });
+    if (campMapSquare && campMapSquare.quadrants && campMapSquare.quadrants.length) {
+     const campQuad = campMapSquare.quadrants.find(
+      (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
+     );
+     if (campQuad && (campQuad.status === "explored" || campQuad.status === "secured")) {
+      if (party.quadrantState !== campQuad.status) {
+       logger.info("EXPLORE", `[explore.js] Camp: synced quadrantState from map: ${party.quadrantState} → ${campQuad.status}`);
+       party.quadrantState = campQuad.status;
+       party.markModified("quadrantState");
+      }
+     }
+    }
+
     const isSecured = party.quadrantState === "secured";
     // Camp cost: unexplored = 3, explored = 2, secured = 0. When party can't pay (stuck in wild), cost = 0 but higher monster attack chance.
     let staminaCost = party.quadrantState === "secured" ? 0 : party.quadrantState === "explored" ? 2 : 3;
@@ -6259,12 +6311,15 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      : [`Party: +${totalHeartsRecovered} ❤️`, ...(totalStaminaRecovered > 0 ? [`+${totalStaminaRecovered} 🟩`] : [])];
     const recoveryValue = recoveryParts.length > 0 ? recoveryParts.join(" ") : (stuckInWild ? "No stamina recovered." : "");
     const campFlavor = getRandomCampFlavor();
-    const costNote = staminaCost > 0 ? ` (-${staminaCost} stamina)` : (stuckInWild ? " (no cost — camp in the wild)" : "");
+    const quadrantStateLabel = isSecured ? "secured" : (party.quadrantState === "explored" ? "explored" : "unexplored");
+    const costNote = staminaCost > 0 
+     ? ` (-${staminaCost}🟩 in ${quadrantStateLabel} quadrant)` 
+     : (stuckInWild ? " (no cost — camp in the wild, higher monster chance)" : " (0🟩 in secured quadrant)");
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Camp at ${locationCamp}**`)
      .setColor(getExploreOutcomeColor("camp", regionColors[party.region] || "#4CAF50"))
      .setDescription(
-      `${character.name} set up camp.${costNote}\n\n\`\`\`\n${campFlavor}\n\`\`\``
+      `${character.name} set up camp.${costNote}\n\n\`\`\`\n${campFlavor}\n\`\`\`\n\n**Camp costs:** 3🟩 unexplored · 2🟩 explored · 0🟩 secured`
      )
      .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
     const hasDiscCamp = await hasDiscoveriesInQuadrant(party.square, party.quadrant);

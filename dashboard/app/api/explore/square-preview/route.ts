@@ -43,14 +43,24 @@ const PSL_SQUARES = ["G6", "H5", "H6", "H7", "H8"];
 const LDW_SQUARES = ["F10", "F11", "F9", "G10", "G11", "G8", "G9", "H10", "H11", "H8", "H9"];
 const OTHER_PATHS_SQUARES = ["H4", "H5", "H7", "H8", "I8"];
 
-const VILLAGE_CIRCLE_LAYERS = [
-  "MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN",
-  "MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK",
-  "MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN",
-  "MAP_0002s_0001s_0001_CIRCLE-VHINTL-PINK",
-  "MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN",
-  "MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK",
-];
+/** Village circle layers - only certain squares have these assets (matching map-loader.js logic) */
+const INARIKO_CIRCLE_SQUARES = ["G8", "H8"];
+const VHINTL_CIRCLE_SQUARES = ["F9", "F10"];
+const RUDANIA_CIRCLE_SQUARES = ["H5"];
+
+function getVillageCircleLayersForSquare(squareId: string): string[] {
+  const layers: string[] = [];
+  if (INARIKO_CIRCLE_SQUARES.includes(squareId)) {
+    layers.push("MAP_0002s_0000s_0000_CIRCLE-INARIKO-CYAN", "MAP_0002s_0000s_0001_CIRCLE-INARIKO-PINK");
+  }
+  if (VHINTL_CIRCLE_SQUARES.includes(squareId)) {
+    layers.push("MAP_0002s_0001s_0000_CIRCLE-VHINTL-CYAN", "MAP_0002s_0001s_0001_CIRCLE-VHINTL-PINK");
+  }
+  if (RUDANIA_CIRCLE_SQUARES.includes(squareId)) {
+    layers.push("MAP_0002s_0002s_0000_CIRCLE-RUDANIA-CYAN", "MAP_0002s_0002s_0001_CIRCLE-RUDANIA-PINK");
+  }
+  return layers;
+}
 
 /** Quadrant status from DB; used to skip hidden/fog for explored/secured quads */
 type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
@@ -60,6 +70,9 @@ type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
  * Fog: quadrants that are unexplored or inaccessible, EXCEPT the party's current quadrant.
  * The quadrant the party has moved into is "revealed" (no fog) even though it stays unexplored until they get the "Quadrant Explored!" prompt.
  */
+/** Squares that contain village start points - circles should always be visible */
+const VILLAGE_SQUARES = [...INARIKO_CIRCLE_SQUARES, ...VHINTL_CIRCLE_SQUARES, ...RUDANIA_CIRCLE_SQUARES];
+
 function getLayersForSquare(
   squareId: string,
   options?: { quadrantStatuses?: Record<string, QuadrantStatus>; revealedQuadrant?: string }
@@ -67,6 +80,8 @@ function getLayersForSquare(
   const layers: string[] = [];
 
   // 1. Mask/fog — unexplored/inaccessible quads only; exclude party's current quadrant (revealed when they move there)
+  // Skip fog entirely on village squares so safe perimeter circles are always visible
+  const isVillageSquare = VILLAGE_SQUARES.includes(squareId);
   const statuses = options?.quadrantStatuses ?? {};
   const revealed = options?.revealedQuadrant ? String(options.revealedQuadrant).trim().toUpperCase() : null;
   const fogQuadrants = (["Q1", "Q2", "Q3", "Q4"] as const).filter((q) => {
@@ -75,7 +90,7 @@ function getLayersForSquare(
     const isCurrentQuadrant = revealed && q === revealed;
     return isUnexploredOrInaccessible && !isCurrentQuadrant;
   });
-  if (fogQuadrants.length > 0) {
+  if (fogQuadrants.length > 0 && !isVillageSquare) {
     layers.push("MAP_0001_hidden-areas");
   }
 
@@ -90,13 +105,13 @@ function getLayersForSquare(
   // 4. Region borders
   layers.push("MAP_0001s_0003_Region-Borders");
 
-  // 5. Village circles (may not exist for all squares – loader adds all, some may 404)
-  layers.push(...VILLAGE_CIRCLE_LAYERS);
-
-  // 6. Path layers (square-specific)
+  // 5. Path layers (square-specific) - before circles so circles render on top
   if (PSL_SQUARES.includes(squareId)) layers.push("MAP_0003s_0000_PSL");
   if (LDW_SQUARES.includes(squareId)) layers.push("MAP_0003s_0001_LDW");
   if (OTHER_PATHS_SQUARES.includes(squareId)) layers.push("MAP_0003s_0002_Other-Paths");
+
+  // 6. Village circles (only for squares that have those assets) - LAST so they render on top of everything
+  layers.push(...getVillageCircleLayersForSquare(squareId));
 
   // Region names layer omitted so they don't cover map content
 

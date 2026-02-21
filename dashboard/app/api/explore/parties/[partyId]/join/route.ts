@@ -188,6 +188,30 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // Block if character is already in another active expedition (open or started)
+    // Check both ObjectId and string representations to handle type mismatches
+    const charObjectId = new mongoose.Types.ObjectId(characterId);
+    const charIdStr = String(characterId);
+    const existingParty = await Party.findOne({
+      partyId: { $ne: partyId },
+      status: { $in: ["open", "started"] },
+      $or: [
+        { "characters._id": charObjectId },
+        { "characters._id": charIdStr },
+      ],
+    }).lean();
+    if (existingParty) {
+      const existingPartyObj = existingParty as Record<string, unknown>;
+      console.log(`[EXPLORE JOIN] Blocked: ${characterName} already in expedition ${existingPartyObj.partyId}`);
+      return NextResponse.json(
+        {
+          error: `${characterName} is already in another active expedition (${existingPartyObj.partyId}). Leave that expedition first.`,
+        },
+        { status: 400 }
+      );
+    }
+
     const db = await getInventoriesDb();
     const collectionName = characterName.toLowerCase();
     const collection = db.collection(collectionName);
@@ -329,6 +353,11 @@ export async function POST(
       })),
     };
 
+    // Log before state for debugging stat accumulation
+    const partyBefore = await Party.findOne({ partyId }).lean() as Record<string, unknown> | null;
+    const beforeHearts = Number(partyBefore?.totalHearts) || 0;
+    const beforeStamina = Number(partyBefore?.totalStamina) || 0;
+
     await Party.updateOne(
       { partyId },
       {
@@ -336,6 +365,9 @@ export async function POST(
         $inc: { totalHearts: currentHearts, totalStamina: currentStamina },
       }
     );
+
+    // Log after state for debugging stat accumulation
+    console.log(`[EXPLORE JOIN] partyId=${partyId} char=${characterName} hearts=${currentHearts} stamina=${currentStamina} | before: ❤${beforeHearts} 🟩${beforeStamina} | after: ❤${beforeHearts + currentHearts} 🟩${beforeStamina + currentStamina}`);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

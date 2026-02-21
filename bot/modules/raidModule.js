@@ -867,8 +867,14 @@ async function advanceRaidTurnOnItemUse(characterId) {
 
 // ---- Function: syncExpeditionPartyPoolFromRaid ----
 // When an expedition raid ends, set party pool to sum of all participants' currentHearts/currentStamina.
+// In testing mode, skip sync — party pool is the source of truth and character DB isn't updated.
 async function syncExpeditionPartyPoolFromRaid(raid) {
   if (!raid?.expeditionId || !raid.participants?.length) return;
+  const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
+  if (EXPLORATION_TESTING_MODE) {
+    logger.info('RAID', `Skipping pool sync for raid ${raid.raidId} (testing mode — party pool is source of truth)`);
+    return;
+  }
   try {
     const Party = require('@/models/PartyModel');
     const Character = require('@/models/CharacterModel');
@@ -1618,6 +1624,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
             const heartsRem = poolHearts % n;
             const staminaPer = Math.floor(poolStamina / n);
             const staminaRem = poolStamina % n;
+            const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
             for (let i = 0; i < n; i++) {
               const p = refreshed.participants[i];
               if (!p?.characterId) continue;
@@ -1630,10 +1637,13 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
                 const maxS = char.maxStamina ?? 0;
                 char.currentHearts = Math.min(maxH, heartShare);
                 char.currentStamina = Math.min(maxS, staminaShare);
-                await char.save();
+                // Only persist character stats in production mode; testing mode uses party pool only
+                if (!EXPLORATION_TESTING_MODE) {
+                  await char.save();
+                }
               }
             }
-            console.log(`[raidModule.js]: 🗺️ Assigned expedition pool to raid participants: ${poolHearts} ❤, ${poolStamina} 🟩`);
+            console.log(`[raidModule.js]: 🗺️ Assigned expedition pool to raid participants: ${poolHearts} ❤, ${poolStamina} 🟩${EXPLORATION_TESTING_MODE ? ' (testing mode — not persisted to Character DB)' : ''}`);
           }
         }
       } catch (e) {

@@ -190,11 +190,20 @@ export async function POST(
       }
     }
 
-    // Pooled model: leave pool unchanged when someone leaves (remaining members keep the full pool)
+    // Log before state for debugging stat accumulation
+    const beforeHearts = Number(partyObj.totalHearts) || 0;
+    const beforeStamina = Number(partyObj.totalStamina) || 0;
+
+    // When leaving an OPEN expedition, decrement totalHearts/totalStamina by the leaving character's contribution
+    // This prevents the join/leave/rejoin exploit that multiplies stats
     const updatePayload: Record<string, unknown> = {
       $pull: { characters: { userId: user.id } },
       $set: {
         currentTurn: newCurrentTurn,
+      },
+      $inc: {
+        totalHearts: -currentHearts,
+        totalStamina: -currentStamina,
       },
     };
     if (newLeaderId !== undefined) {
@@ -202,6 +211,7 @@ export async function POST(
     }
 
     await Party.updateOne({ partyId }, updatePayload);
+    console.log(`[EXPLORE LEAVE] partyId=${partyId} char=${me.name} hearts=${currentHearts} stamina=${currentStamina} | before: ❤${beforeHearts} 🟩${beforeStamina} | after: ❤${beforeHearts - currentHearts} 🟩${beforeStamina - currentStamina}`);
 
     return NextResponse.json({ ok: true });
   } catch (err) {
