@@ -6066,6 +6066,13 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     );
     }
 
+    // Block ending if the current quadrant hasn't been explored yet (must get "Quadrant Explored!" prompt first)
+    if (party.quadrantState !== "explored" && party.quadrantState !== "secured") {
+     return interaction.editReply(
+      "You must **explore this quadrant** before ending the expedition. Use </explore roll:" + getExploreCommandId() + "> until you get the **Quadrant Explored!** prompt, then you can end the expedition."
+     );
+    }
+
     const regionToVillage = {
      eldin: "rudania",
      lanayru: "inariko",

@@ -216,3 +216,7 @@ When `EXPLORATION_TESTING_MODE=true` is set in the bot's environment, exploratio
 - The bot service includes a health check endpoint that monitors memory usage
 - Both services support graceful shutdown on SIGTERM/SIGINT
 - Railway automatically handles port assignment via the `PORT` environment variable
+
+
+cd bot
+node scripts/resetMapQuadrants.js

@@ -223,7 +223,7 @@ function parseTimestamp(ts) {
 // ------------------- Main -------------------
 async function main() {
   const listChars = process.argv.includes('--list-characters');
-  const csvPath = path.join(projectRoot, 'ROTW_relic_turn_in_form_2024_responses - Form Responses 1.csv');
+  const csvPath = path.join(projectRoot, 'docs', 'ROTW_relic_turn_in_form_2024_responses - Form Responses 1.csv');
   if (!fs.existsSync(csvPath)) {
     console.error(`❌ CSV not found: ${csvPath}`);
     process.exit(1);
