@@ -218,7 +218,7 @@ module.exports = {
         .addStringOption(option =>
           option
             .setName('collab')
-            .setDescription('Collaborator username if this is a collaboration')
+            .setDescription('Collaborators (mention multiple users separated by spaces)')
             .setRequired(false)
         )
         .addStringOption(option =>
