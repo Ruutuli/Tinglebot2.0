@@ -1917,7 +1917,8 @@ const createMonsterEncounterEmbed = async (
   blightAdjustedRoll = null,
   boostUnused = false,
   fortuneRerollInfo = null,
-  teacherCombatInsightInfo = null
+  teacherCombatInsightInfo = null,
+  elementalCombatInfo = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -2060,6 +2061,24 @@ if (boostInfo && boostInfo.boosterJob?.toLowerCase() === 'teacher' && boostInfo.
      elixirHelpText += `\n\n🧪 **${elixirBuffInfo.elixirName} helped!** Elixir buff improved encounter performance!`;
    }
    outcomeWithBoost += elixirHelpText;
+ }
+
+ // Add elemental combat information if available
+ if (elementalCombatInfo && (elementalCombatInfo.hasAdvantage || elementalCombatInfo.hasDisadvantage)) {
+   const elementEmojis = {
+     fire: '🔥', ice: '❄️', electric: '⚡', water: '💧', 
+     wind: '🌪️', earth: '🪨', undead: '💀', light: '✨', tech: '⚙️', none: '⚪'
+   };
+   const weaponEmoji = elementEmojis[elementalCombatInfo.weaponElement] || '⚔️';
+   const monsterEmoji = elementEmojis[elementalCombatInfo.monsterElement] || '👹';
+   
+   if (elementalCombatInfo.hasAdvantage) {
+     const rollImprovement = elementalCombatInfo.rollAfter - elementalCombatInfo.rollBefore;
+     outcomeWithBoost += `\n\n${weaponEmoji} **Elemental Advantage!** Your ${elementalCombatInfo.weaponName} (${elementalCombatInfo.weaponElement}) is strong against ${monsterEmoji} ${elementalCombatInfo.monsterElement} enemies! Roll: ${elementalCombatInfo.rollBefore} → **${elementalCombatInfo.rollAfter}** (+${rollImprovement})`;
+   } else if (elementalCombatInfo.hasDisadvantage) {
+     const rollPenalty = elementalCombatInfo.rollBefore - elementalCombatInfo.rollAfter;
+     outcomeWithBoost += `\n\n${weaponEmoji} **Elemental Disadvantage!** Your ${elementalCombatInfo.weaponName} (${elementalCombatInfo.weaponElement}) is weak against ${monsterEmoji} ${elementalCombatInfo.monsterElement} enemies! Roll: ${elementalCombatInfo.rollBefore} → **${elementalCombatInfo.rollAfter}** (-${rollPenalty})`;
+   }
  }
 
  // Add blight boost information if available (use blightAdjustedRoll if provided, otherwise fallback to actualRoll)

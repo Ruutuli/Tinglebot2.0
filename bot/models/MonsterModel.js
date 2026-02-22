@@ -9,6 +9,11 @@ const MonsterSchema = new Schema({
   image: { type: String, default: 'No Image' },
   species: { type: String, default: 'Unknown' },
   type: { type: String, default: 'Unknown' },
+  element: { 
+    type: String, 
+    enum: ['none', 'fire', 'ice', 'electric', 'water', 'earth', 'undead', 'wind'],
+    default: 'none' 
+  }, // Elemental type for elixir resistance matching
   tier: { type: Number, default: 1 },
   hearts: { type: Number, default: 0 },
   dmg: { type: Number, default: 0 },

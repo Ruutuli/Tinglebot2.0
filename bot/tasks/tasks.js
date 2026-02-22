@@ -24,6 +24,7 @@ const Pet = require('@/models/PetModel');
 const Quest = require('@/models/QuestModel');
 const Village = require('@/models/VillageModel');
 const Raid = require('@/models/RaidModel');
+const Party = require('@/models/PartyModel');
 const HelpWantedQuest = require('@/models/HelpWantedQuestModel');
 const TempData = require('@/models/TempDataModel');
 const TokenTransaction = require('@/models/TokenTransactionModel');
@@ -2118,6 +2119,59 @@ async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
   }
 }
 
+// ------------------- stale-exploration-cleanup (Every hour: cancel started explorations inactive for 6+ hours) -------------------
+const STALE_EXPLORATION_HOURS = 6;
+
+async function staleExplorationCleanup(_client, _data = {}) {
+  try {
+    logger.info('SCHEDULED', 'stale-exploration-cleanup: starting');
+    
+    const now = Date.now();
+    const cutoffMs = STALE_EXPLORATION_HOURS * 60 * 60 * 1000; // 6 hours in milliseconds
+    
+    const startedParties = await Party.find({ status: 'started' });
+    
+    let cancelledCount = 0;
+    
+    for (const party of startedParties) {
+      try {
+        let lastActivityTime = party.createdAt;
+        
+        if (party.progressLog && party.progressLog.length > 0) {
+          const sortedLog = party.progressLog
+            .filter(entry => entry.at)
+            .sort((a, b) => new Date(b.at) - new Date(a.at));
+          
+          if (sortedLog.length > 0) {
+            lastActivityTime = new Date(sortedLog[0].at);
+          }
+        }
+        
+        const timeSinceLastActivity = now - new Date(lastActivityTime).getTime();
+        
+        if (timeSinceLastActivity >= cutoffMs) {
+          party.status = 'cancelled';
+          await party.save();
+          cancelledCount++;
+          
+          const hoursInactive = Math.round(timeSinceLastActivity / (60 * 60 * 1000) * 10) / 10;
+          logger.info('SCHEDULED', `stale-exploration-cleanup: Cancelled party ${party.partyId} (inactive for ${hoursInactive}h)`);
+        }
+      } catch (err) {
+        logger.error('SCHEDULED', `stale-exploration-cleanup: Failed for party ${party.partyId}: ${err.message}`);
+      }
+    }
+    
+    if (cancelledCount > 0) {
+      logger.success('SCHEDULED', `stale-exploration-cleanup: done (cancelled ${cancelledCount} stale exploration(s))`);
+    } else {
+      logger.debug('SCHEDULED', 'stale-exploration-cleanup: done (no stale explorations found)');
+    }
+  } catch (err) {
+    logger.error('SCHEDULED', `stale-exploration-cleanup: ${err.message}`);
+  }
+}
+
 // ------------------- maze-images-cleanup (Daily: delete maze PNGs older than 1 week) -------------------
 const MAZE_IMAGES_DIR = path.join(__dirname, '..', 'scripts', 'example-mazes');
 const MAZE_IMAGES_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -2224,7 +2278,10 @@ const TASKS = [
   { name: 'maze-images-cleanup', cron: '0 6 * * *', handler: mazeImagesCleanup }, // Daily 6am UTC
 
   // Map Appraisal: send coordinates DM for approved requests (e.g. NPC on dashboard)
-  { name: 'map-appraisal-send-coordinates-dm', cron: '*/10 * * * *', handler: mapAppraisalSendCoordinatesDm } // Every 10 minutes
+  { name: 'map-appraisal-send-coordinates-dm', cron: '*/10 * * * *', handler: mapAppraisalSendCoordinatesDm }, // Every 10 minutes
+
+  // Exploration Cleanup: cancel started explorations inactive for 6+ hours
+  { name: 'stale-exploration-cleanup', cron: '0 * * * *', handler: staleExplorationCleanup } // Every hour
 ];
 
 /**

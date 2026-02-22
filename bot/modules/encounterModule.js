@@ -39,7 +39,7 @@ function logBattleDetails(tier, characterName, monsterName, roll, damage, monste
 }
 
 // ------------------- Calculate Damage Function -------------------
-// Calculates damage with resistance considerations for electric enemies
+// Calculates damage with resistance considerations for elemental enemies
 function calculateDamage(attacker, defender) {
     try {
         let baseDamage = 1; // Base damage is 1 heart
@@ -49,24 +49,50 @@ function calculateDamage(attacker, defender) {
             const { getActiveBuffEffects } = require('./elixirModule');
             const buffEffects = getActiveBuffEffects(defender);
             
+            // Helper function to check monster element (supports both element field and name-based detection)
+            const hasElement = (monster, elementType) => {
+                // First check the element field on the monster
+                if (monster.element === elementType) return true;
+                
+                // Fallback to name-based detection for backwards compatibility
+                switch (elementType) {
+                    case 'electric':
+                        return monster.name && (monster.name.includes('Electric') || monster.name.includes('Thunder'));
+                    case 'fire':
+                        return monster.name && (monster.name.includes('Fire') || monster.name.includes('Igneo') || monster.name.includes('Meteo'));
+                    case 'ice':
+                        return monster.name && (monster.name.includes('Ice') || monster.name.includes('Frost') || monster.name.includes('Blizzard') || monster.name.includes('Snow'));
+                    case 'water':
+                        return monster.name && monster.name.includes('Water');
+                    case 'earth':
+                        return monster.name && (monster.name.includes('Stone') || monster.name.includes('Rock'));
+                    case 'undead':
+                        return monster.name && (monster.name.includes('Cursed') || monster.name.includes('Stal') || monster.name.includes('Gloom') || monster.name.includes('Gibdo'));
+                    case 'wind':
+                        return monster.name && (monster.name.includes('Sky') || monster.name.includes('Forest'));
+                    default:
+                        return false;
+                }
+            };
+            
             // Check if monster is electric type and character has electric resistance
-            if (attacker.name && attacker.name.includes('Electric') && buffEffects && buffEffects.electricResistance > 0) {
+            if (hasElement(attacker, 'electric') && buffEffects && buffEffects.electricResistance > 0) {
                 // Electric resistance reduces damage by 50% per level
                 const resistanceReduction = buffEffects.electricResistance * 0.5;
                 baseDamage = Math.max(0, baseDamage - resistanceReduction);
+                console.log(`[encounterModule.js]: ⚡ Electric resistance: damage reduced to ${baseDamage} hearts`);
                 
                 // Consume electro elixir after use
                 const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
                 if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
                     consumeElixirBuff(defender);
                 } else if (defender.buff?.active) {
-                    // Log when elixir is not used due to conditions not met
                     console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type}`);
                 }
             }
             
             // Check if monster is fire type and character has fire resistance
-            if (attacker.name && attacker.name.includes('Fire') && buffEffects && buffEffects.fireResistance > 0) {
+            if (hasElement(attacker, 'fire') && buffEffects && buffEffects.fireResistance > 0) {
                 // Fire resistance reduces damage by 50% per level
                 const resistanceReduction = buffEffects.fireResistance * 0.5;
                 baseDamage = Math.max(0, baseDamage - resistanceReduction);
@@ -77,7 +103,38 @@ function calculateDamage(attacker, defender) {
                 if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
                     consumeElixirBuff(defender);
                 } else if (defender.buff?.active) {
-                    // Log when elixir is not used due to conditions not met
+                    console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type}`);
+                }
+            }
+            
+            // Check if monster is ice type and character has cold resistance (Spicy Elixir)
+            if (hasElement(attacker, 'ice') && buffEffects && buffEffects.coldResistance > 0) {
+                // Cold resistance reduces damage by 50% per level
+                const resistanceReduction = buffEffects.coldResistance * 0.5;
+                baseDamage = Math.max(0, baseDamage - resistanceReduction);
+                console.log(`[encounterModule.js]: ❄️ Cold resistance: damage reduced to ${baseDamage} hearts`);
+                
+                // Consume spicy elixir after use
+                const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+                if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
+                    consumeElixirBuff(defender);
+                } else if (defender.buff?.active) {
+                    console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type}`);
+                }
+            }
+            
+            // Check if monster is water type and character has water resistance (Chilly Elixir)
+            if (hasElement(attacker, 'water') && buffEffects && buffEffects.waterResistance > 0) {
+                // Water resistance reduces damage by 50% per level
+                const resistanceReduction = buffEffects.waterResistance * 0.5;
+                baseDamage = Math.max(0, baseDamage - resistanceReduction);
+                console.log(`[encounterModule.js]: 💧 Water resistance: damage reduced to ${baseDamage} hearts`);
+                
+                // Consume chilly elixir after use
+                const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+                if (shouldConsumeElixir(defender, 'combat', { monster: attacker })) {
+                    consumeElixirBuff(defender);
+                } else if (defender.buff?.active) {
                     console.log(`[encounterModule.js]: 🧪 Elixir not used for ${defender.name} - conditions not met. Active buff: ${defender.buff.type}`);
                 }
             }

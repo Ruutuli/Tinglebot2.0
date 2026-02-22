@@ -33,6 +33,7 @@ const ItemSchema = new Schema(
     type: { type: [String], default: ['Unknown'] },    // e.g., ['Material', 'Food']
     subtype: { type: [String], default: ['None'] },    // e.g., ['Head', 'Bow']
     recipeTag: { type: [String], default: ['#Not Craftable'] },
+    element: { type: String, default: 'none' },        // e.g., 'fire', 'ice', 'electric', 'tech', 'none'
 
     // ------------------- Economics -------------------
     buyPrice: { type: Number, default: 0 },

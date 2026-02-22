@@ -971,6 +971,40 @@ async function processLootingLogic(
   // Store the blight-adjusted roll (before other boosts)
   const blightAdjustedRoll = adjustedRandomValue;
 
+  // ------------------- Apply Elemental Combat Bonus -------------------
+  // Check if character's weapon element has advantage/disadvantage against monster
+  const { calculateElementalCombatBonus } = require('../../modules/elixirModule');
+  let elementalCombatInfo = null;
+  
+  try {
+    const elementalResult = calculateElementalCombatBonus(character, encounteredMonster);
+    
+    if (elementalResult.bonus !== 0) {
+      const rollBeforeElemental = adjustedRandomValue;
+      const elementalModifier = Math.round(adjustedRandomValue * elementalResult.bonus);
+      adjustedRandomValue = Math.max(1, Math.min(100, adjustedRandomValue + elementalModifier));
+      
+      elementalCombatInfo = {
+        weaponElement: elementalResult.weaponElement,
+        monsterElement: elementalResult.monsterElement,
+        weaponName: elementalResult.weaponName,
+        hasAdvantage: elementalResult.hasAdvantage,
+        hasDisadvantage: elementalResult.hasDisadvantage,
+        rollBefore: rollBeforeElemental,
+        rollAfter: adjustedRandomValue,
+        modifier: elementalModifier
+      };
+      
+      if (elementalResult.hasAdvantage) {
+        logger.info('ELEMENTAL', `⚔️ ${character.name}'s ${elementalResult.weaponName} (${elementalResult.weaponElement}) is STRONG vs ${encounteredMonster.name} (${elementalResult.monsterElement}) - Roll: ${rollBeforeElemental} → ${adjustedRandomValue} (+${elementalModifier})`);
+      } else if (elementalResult.hasDisadvantage) {
+        logger.info('ELEMENTAL', `⚔️ ${character.name}'s ${elementalResult.weaponName} (${elementalResult.weaponElement}) is WEAK vs ${encounteredMonster.name} (${elementalResult.monsterElement}) - Roll: ${rollBeforeElemental} → ${adjustedRandomValue} (${elementalModifier})`);
+      }
+    }
+  } catch (elementalError) {
+    logger.warn('ELEMENTAL', `Warning - Elemental combat calculation failed: ${elementalError.message}`);
+  }
+
 
 
   // Log blight boost if applied
@@ -1009,18 +1043,26 @@ async function processLootingLogic(
   const jobForWeighting = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
   let weightedItems = createWeightedItemList(items, adjustedRandomValue, jobForWeighting, villageLevel);
   
-  // Build roll display showing progression: original → blight → boost
+  // Build roll display showing progression: original → blight → elemental → boost
   let rollDisplay = `${originalRoll}`;
   if (blightAdjustedRoll > originalRoll) {
     rollDisplay += ` → ${blightAdjustedRoll}`;
   }
-  if (adjustedRandomValue > blightAdjustedRoll) {
+  if (elementalCombatInfo) {
+    const elementSymbol = elementalCombatInfo.hasAdvantage ? '⚔️' : '⚠️';
+    rollDisplay += ` → ${elementalCombatInfo.rollAfter}${elementSymbol}`;
+  }
+  if (adjustedRandomValue > blightAdjustedRoll && (!elementalCombatInfo || adjustedRandomValue !== elementalCombatInfo.rollAfter)) {
     rollDisplay += ` → ${adjustedRandomValue}`;
-  } else if (adjustedRandomValue > originalRoll && blightAdjustedRoll === originalRoll) {
+  } else if (adjustedRandomValue > originalRoll && blightAdjustedRoll === originalRoll && !elementalCombatInfo) {
     rollDisplay += ` → ${adjustedRandomValue}`;
   }
   
-  logger.info('LOOT', `${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
+  // Include elemental matchup in log if present
+  const elementalInfo = elementalCombatInfo 
+    ? ` | Element: ${elementalCombatInfo.weaponElement} vs ${elementalCombatInfo.monsterElement}` 
+    : '';
+  logger.info('LOOT', `${character.name} vs ${encounteredMonster.name} | Roll: ${rollDisplay}/100 | Damage: ${damageValue}${elementalInfo} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
 
   const outcome = await getEncounterOutcome(
    character,
@@ -1219,7 +1261,7 @@ async function processLootingLogic(
           damageReduced: 0
         };
       }
-      if (activeBuff.coldResistance > 0 && encounteredMonster.name.includes('Ice')) {
+      if (activeBuff.coldResistance > 0 && (encounteredMonster.name.includes('Ice') || encounteredMonster.name.includes('Frost') || encounteredMonster.name.includes('Blizzard'))) {
         logger.info('ELIXIR', `❄️ Spicy Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.coldResistance} cold res)`);
         elixirBuffInfo = {
           helped: true,
@@ -1236,6 +1278,16 @@ async function processLootingLogic(
           elixirName: 'Electro Elixir',
           elixirType: 'electro',
           encounterType: 'electric',
+          damageReduced: 0
+        };
+      }
+      if (activeBuff.waterResistance > 0 && encounteredMonster.name.includes('Water')) {
+        logger.info('ELIXIR', `💧 Chilly Elixir active: ${character.name} vs ${encounteredMonster.name} (+${activeBuff.waterResistance} water res)`);
+        elixirBuffInfo = {
+          helped: true,
+          elixirName: 'Chilly Elixir',
+          elixirType: 'chilly',
+          encounterType: 'water',
           damageReduced: 0
         };
       }
@@ -1392,6 +1444,78 @@ async function processLootingLogic(
         elixirBuffInfo.damageReduced = damageReduced;
         outcome.hearts = boostedOutcome.hearts;
         logger.info('ELIXIR', `❄️ Spicy Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
+      }
+    } else if (elixirBuffInfo.encounterType === 'water' && elixirBuffInfo.elixirType === 'chilly') {
+      // Chilly elixir provides 1.5x roll multiplier against water monsters (higher roll = less damage)
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.5));
+      logger.info('ELIXIR', `💧 Chilly Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      
+      // Store original damage for comparison
+      const originalDamage = outcome.hearts;
+      
+      // Recalculate outcome using the boosted roll value
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      
+      if (boostedOutcome.hearts < originalDamage) {
+        const damageReduced = originalDamage - boostedOutcome.hearts;
+        elixirBuffInfo.damageReduced = damageReduced;
+        outcome.hearts = boostedOutcome.hearts;
+        logger.info('ELIXIR', `💧 Chilly Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
+      }
+    } else if (elixirBuffInfo.elixirType === 'mighty' && elixirBuffInfo.encounterType === 'general') {
+      // Mighty elixir provides 1.25x roll multiplier for combat (higher roll = better outcome)
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.25));
+      logger.info('ELIXIR', `⚔️ Mighty Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      
+      // Store original damage for comparison
+      const originalDamage = outcome.hearts;
+      
+      // Recalculate outcome using the boosted roll value
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      
+      if (boostedOutcome.hearts < originalDamage) {
+        const damageReduced = originalDamage - boostedOutcome.hearts;
+        elixirBuffInfo.damageReduced = damageReduced;
+        outcome.hearts = boostedOutcome.hearts;
+        logger.info('ELIXIR', `⚔️ Mighty Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
+      }
+    } else if (elixirBuffInfo.elixirType === 'tough' && elixirBuffInfo.encounterType === 'general') {
+      // Tough elixir provides 1.25x roll multiplier for defense (higher roll = less damage)
+      outcome.adjustedRandomValue = Math.min(100, Math.ceil(originalRoll * 1.25));
+      logger.info('ELIXIR', `🛡️ Tough Elixir boosted roll from ${originalRoll} to ${outcome.adjustedRandomValue}`);
+      
+      // Store original damage for comparison
+      const originalDamage = outcome.hearts;
+      
+      // Recalculate outcome using the boosted roll value
+      const boostedOutcome = await getEncounterOutcome(
+        character,
+        encounteredMonster,
+        damageValue,
+        outcome.adjustedRandomValue,
+        attackSuccess,
+        defenseSuccess
+      );
+      
+      if (boostedOutcome.hearts < originalDamage) {
+        const damageReduced = originalDamage - boostedOutcome.hearts;
+        elixirBuffInfo.damageReduced = damageReduced;
+        outcome.hearts = boostedOutcome.hearts;
+        logger.info('ELIXIR', `🛡️ Tough Elixir reduced damage from ${originalDamage} to ${outcome.hearts} (-${damageReduced})`);
       }
     }
   }
@@ -1601,7 +1725,8 @@ async function processLootingLogic(
     blightAdjustedRoll, // Keep param order in sync
     boostUnused, // Fortune Teller unused flag
     fortuneRerollInfo, // Fortune Teller Fated Reroll comparison info
-    teacherCombatInsightInfo // Teacher Combat Insight roll boost info
+    teacherCombatInsightInfo, // Teacher Combat Insight roll boost info
+    elementalCombatInfo // Elemental weapon vs monster advantage/disadvantage
     );
     
     // Update timestamp and clear boost only if damage was taken
@@ -1664,7 +1789,10 @@ async function processLootingLogic(
    entertainerBoostUnused, // Pass flag indicating boost was active but unused
    entertainerDamageReduction, // Pass amount of damage reduced by Entertainer boost
    blightAdjustedRoll, // Pass blightAdjustedRoll for blight boost detection
-   boostUnused // Fortune Teller unused flag
+   boostUnused, // Fortune Teller unused flag
+   fortuneRerollInfo, // Fortune Teller Fated Reroll comparison info
+   teacherCombatInsightInfo, // Teacher Combat Insight roll boost info
+   elementalCombatInfo // Elemental weapon vs monster advantage/disadvantage
    );
   
   // Update request embed to Fulfilled BEFORE clearing the boost

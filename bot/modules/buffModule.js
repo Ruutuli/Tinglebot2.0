@@ -164,6 +164,25 @@ function getDamageResistance(character, damageType) {
         console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
       }
       break;
+    case 'water':
+      resistance = buffEffects?.waterResistance || 0;
+      // Consume chilly elixir after use
+      if (resistance > 0 && shouldConsumeElixir(character, 'combat')) {
+        consumeElixirBuff(character);
+      } else if (character.buff?.active) {
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+      }
+      break;
+    case 'ice':
+      // Ice is an alias for cold resistance (Spicy Elixir)
+      resistance = buffEffects?.coldResistance || 0;
+      // Consume spicy elixir after use
+      if (resistance > 0 && shouldConsumeElixir(character, 'combat')) {
+        consumeElixirBuff(character);
+      } else if (character.buff?.active) {
+        console.log(`[buffModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
+      }
+      break;
     default:
       resistance = 0;
   }

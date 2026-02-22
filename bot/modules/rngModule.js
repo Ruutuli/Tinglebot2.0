@@ -528,7 +528,19 @@ async function attemptFlee(character, monster, options = {}) {
     const originalFailedAttempts = character.failedFleeAttempts || 0;
     const baseFleeChance = 0.5;
     const bonusFleeChance = originalFailedAttempts * 0.05;
-    const fleeChance = Math.min(baseFleeChance + bonusFleeChance, 0.95);
+    
+    // Apply Sneaky Elixir flee boost
+    const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
+    const buffEffects = getActiveBuffEffects(character);
+    let elixirFleeBonus = 0;
+    let sneakyElixirUsed = false;
+    if (buffEffects && buffEffects.fleeBoost > 0) {
+      elixirFleeBonus = buffEffects.fleeBoost * 0.15; // +15% per level
+      sneakyElixirUsed = true;
+      console.log(`[rngModule.js]: 👻 Sneaky Elixir flee boost: +${(elixirFleeBonus * 100).toFixed(0)}%`);
+    }
+    
+    const fleeChance = Math.min(baseFleeChance + bonusFleeChance + elixirFleeBonus, 0.95);
 
     const rollSucceeds = () => Math.random() < fleeChance;
 
@@ -544,14 +556,22 @@ async function attemptFlee(character, monster, options = {}) {
     }
 
     if (success) {
-      console.log(`[rngModule.js]: 🏃 ${character.name} fled from ${monster.name} (attempts: ${attemptsMade})`);
+      console.log(`[rngModule.js]: 🏃 ${character.name} fled from ${monster.name} (attempts: ${attemptsMade})${sneakyElixirUsed ? ' [Sneaky Elixir helped!]' : ''}`);
+      
+      // Consume Sneaky Elixir after successful flee if it was used
+      if (sneakyElixirUsed && shouldConsumeElixir(character, 'travel')) {
+        consumeElixirBuff(character);
+        console.log(`[rngModule.js]: 🧪 Sneaky Elixir consumed after successful flee`);
+      }
+      
       character.failedFleeAttempts = 0;
       await character.save();
       return {
         success: true,
-        message: "You successfully fled!",
+        message: sneakyElixirUsed ? "Your stealth helped you escape! You successfully fled!" : "You successfully fled!",
         attempts: attemptsMade,
-        advantageApplied: advantageAttempts > 1
+        advantageApplied: advantageAttempts > 1,
+        sneakyElixirUsed: sneakyElixirUsed
       };
     }
 

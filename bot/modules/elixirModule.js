@@ -10,9 +10,10 @@
 const ELIXIR_EFFECTS = {
   'Chilly Elixir': {
     type: 'chilly',
-    description: 'Provides resistance to water attacks from wet enemies',
+    description: 'Provides resistance to water attacks and reduces blight rain infection chance',
     effects: {
-      waterResistance: 1.5
+      waterResistance: 1.5,
+      blightResistance: 1
     }
   },
   'Spicy Elixir': {
@@ -121,9 +122,42 @@ const applyImmediateEffects = (character, elixirName) => {
   const elixir = ELIXIR_EFFECTS[elixirName];
   
   switch (elixirName) {
-    // Hearty Elixir, Enduring Elixir, Energizing Elixir, and other elixirs now rely on database item consumption
-    // for immediate effects (staminaRecovered, modifierHearts, etc.)
-    // The hardcoded code only handles special effects like temporary stamina capacity and extra hearts
+    case 'Energizing Elixir':
+      // Restore stamina when consumed
+      if (elixir && elixir.effects && elixir.effects.staminaRecovery) {
+        const staminaToRestore = elixir.effects.staminaRecovery;
+        const previousStamina = character.currentStamina || 0;
+        character.currentStamina = Math.min(
+          character.maxStamina || 3, 
+          previousStamina + staminaToRestore
+        );
+        console.log(`[elixirModule.js]: ⚡ Energizing Elixir restored ${staminaToRestore} stamina for ${character.name} (${previousStamina} → ${character.currentStamina})`);
+      }
+      break;
+      
+    case 'Enduring Elixir':
+      // Temporarily extend stamina wheel
+      if (elixir && elixir.effects && elixir.effects.staminaBoost) {
+        const staminaBoost = elixir.effects.staminaBoost;
+        character.maxStamina = (character.maxStamina || 3) + staminaBoost;
+        character.currentStamina = (character.currentStamina || 0) + staminaBoost;
+        console.log(`[elixirModule.js]: 🏃 Enduring Elixir extended stamina by +${staminaBoost} for ${character.name}`);
+      }
+      break;
+      
+    case 'Hearty Elixir':
+      // Add extra temporary hearts
+      if (elixir && elixir.effects && elixir.effects.extraHearts) {
+        const extraHearts = elixir.effects.extraHearts;
+        character.maxHearts = (character.maxHearts || 3) + extraHearts;
+        character.currentHearts = (character.currentHearts || 3) + extraHearts;
+        console.log(`[elixirModule.js]: ❤️ Hearty Elixir added +${extraHearts} temporary hearts for ${character.name}`);
+      }
+      break;
+      
+    default:
+      // Other elixirs don't have immediate effects - they apply during activities
+      break;
   }
 };
 
@@ -325,6 +359,178 @@ const getAllElixirTypes = () => {
   return Object.keys(ELIXIR_EFFECTS);
 };
 
+// ------------------- Get Monster Element -------------------
+// Determines a monster's element from its element field or name
+const getMonsterElement = (monster) => {
+  if (!monster) return 'none';
+  
+  // First check the element field on the monster
+  if (monster.element && monster.element !== 'none') {
+    return monster.element;
+  }
+  
+  // Fallback to name-based detection for backwards compatibility
+  const name = monster.name || '';
+  
+  // Fire elements
+  if (/fire|igneo|meteo/i.test(name)) return 'fire';
+  
+  // Ice elements
+  if (/ice|frost|blizzard|snow/i.test(name)) return 'ice';
+  
+  // Electric elements
+  if (/electric|thunder/i.test(name)) return 'electric';
+  
+  // Water elements
+  if (/water/i.test(name)) return 'water';
+  
+  // Earth elements
+  if (/stone|rock|moldug/i.test(name)) return 'earth';
+  
+  // Undead elements
+  if (/cursed|stal(?!k)|gloom|gibdo/i.test(name)) return 'undead';
+  
+  // Wind elements
+  if (/sky|forest/i.test(name)) return 'wind';
+  
+  return 'none';
+};
+
+// ------------------- Get Resistance For Element -------------------
+// Maps element types to the resistance buff needed to counter them
+const getResistanceForElement = (element) => {
+  switch (element) {
+    case 'fire': return 'fireResistance';
+    case 'ice': return 'coldResistance';
+    case 'electric': return 'electricResistance';
+    case 'water': return 'waterResistance';
+    case 'earth': return null; // No elixir currently counters earth
+    case 'undead': return 'blightResistance'; // Chilly elixir provides some undead resistance
+    case 'wind': return null; // No elixir currently counters wind
+    default: return null;
+  }
+};
+
+// ------------------- Check Elixir Counters Element -------------------
+// Checks if character's active elixir provides resistance against a monster's element
+const elixirCountersMonster = (character, monster) => {
+  const buffEffects = getActiveBuffEffects(character);
+  if (!buffEffects) return false;
+  
+  const monsterElement = getMonsterElement(monster);
+  const resistanceKey = getResistanceForElement(monsterElement);
+  
+  if (!resistanceKey) return false;
+  
+  return buffEffects[resistanceKey] > 0;
+};
+
+// ============================================================================
+// ------------------- Elemental Combat System -------------------
+// ============================================================================
+
+// Elemental advantage matrix: element -> list of elements it's strong against
+const ELEMENTAL_ADVANTAGES = {
+  fire: ['ice', 'wind'],           // Fire melts ice, burns through wind
+  ice: ['water', 'electric'],      // Ice freezes water, insulates electricity
+  electric: ['water', 'wind'],     // Electric shocks water, disrupts wind
+  water: ['fire', 'earth'],        // Water extinguishes fire, erodes earth
+  wind: ['earth', 'undead'],       // Wind scatters earth, blows away undead
+  earth: ['electric', 'fire'],     // Earth grounds electric, smothers fire
+  undead: ['ice', 'water'],        // Undead resist cold, function in water
+  light: ['undead'],               // Light banishes undead
+  tech: ['earth', 'wind'],         // Tech overcomes nature
+};
+
+// Elemental weakness matrix: element -> list of elements it's weak to
+const ELEMENTAL_WEAKNESSES = {
+  fire: ['water', 'earth'],
+  ice: ['fire'],
+  electric: ['earth'],
+  water: ['electric', 'ice'],
+  wind: ['fire', 'electric'],
+  earth: ['water', 'wind'],
+  undead: ['light', 'fire', 'wind'],
+  light: [],  // Light has no elemental weaknesses
+  tech: ['electric', 'water'],
+};
+
+// Roll bonus percentages
+const ELEMENTAL_ADVANTAGE_BONUS = 0.15;   // +15% roll bonus when weapon is strong vs monster
+const ELEMENTAL_WEAKNESS_PENALTY = 0.10;  // -10% roll penalty when weapon is weak vs monster
+
+// ------------------- Get Weapon Element -------------------
+// Extracts element from a weapon item (checks element field or falls back to name)
+const getWeaponElement = (weapon) => {
+  if (!weapon) return 'none';
+  
+  // Check the element field first
+  if (weapon.element && weapon.element !== 'none') {
+    return weapon.element;
+  }
+  
+  // Fallback to name-based detection
+  const name = weapon.name || weapon.itemName || '';
+  
+  if (/fire|flame|igneo|meteo|volcanic|blazing|inferno|ember/i.test(name)) return 'fire';
+  if (/ice|frost|frozen|blizzard|glacial|frigid|snow|cold/i.test(name)) return 'ice';
+  if (/electric|thunder|lightning|shock|volt|storm/i.test(name)) return 'electric';
+  if (/water|aqua|ocean|sea|tidal/i.test(name)) return 'water';
+  if (/wind|gust|cyclone|tornado|aerial/i.test(name)) return 'wind';
+  if (/stone|rock|earth|boulder|quake/i.test(name)) return 'earth';
+  if (/cursed|dark|shadow|gloom|demon/i.test(name)) return 'undead';
+  if (/light|radiant|luminous|divine|holy|sacred/i.test(name)) return 'light';
+  if (/ancient|sheikah|guardian/i.test(name)) return 'tech';
+  
+  return 'none';
+};
+
+// ------------------- Check Elemental Advantage -------------------
+// Returns the advantage relationship between weapon and monster elements
+const getElementalAdvantage = (weaponElement, monsterElement) => {
+  if (weaponElement === 'none' || monsterElement === 'none') {
+    return { hasAdvantage: false, hasDisadvantage: false, bonus: 0 };
+  }
+  
+  const advantages = ELEMENTAL_ADVANTAGES[weaponElement] || [];
+  const weaknesses = ELEMENTAL_WEAKNESSES[weaponElement] || [];
+  
+  if (advantages.includes(monsterElement)) {
+    return { 
+      hasAdvantage: true, 
+      hasDisadvantage: false, 
+      bonus: ELEMENTAL_ADVANTAGE_BONUS 
+    };
+  }
+  
+  if (weaknesses.includes(monsterElement)) {
+    return { 
+      hasAdvantage: false, 
+      hasDisadvantage: true, 
+      bonus: -ELEMENTAL_WEAKNESS_PENALTY 
+    };
+  }
+  
+  return { hasAdvantage: false, hasDisadvantage: false, bonus: 0 };
+};
+
+// ------------------- Calculate Elemental Combat Bonus -------------------
+// Main function to calculate combat bonus based on weapon vs monster elements
+const calculateElementalCombatBonus = (character, monster) => {
+  const weapon = character?.gearWeapon;
+  const weaponElement = getWeaponElement(weapon);
+  const monsterElement = getMonsterElement(monster);
+  
+  const result = getElementalAdvantage(weaponElement, monsterElement);
+  
+  return {
+    weaponElement,
+    monsterElement,
+    ...result,
+    weaponName: weapon?.name || weapon?.itemName || 'Unarmed'
+  };
+};
+
 // ============================================================================
 // ------------------- Export Functions -------------------
 // ============================================================================
@@ -341,6 +547,14 @@ module.exports = {
   getBuffDuration,
   calculateBuffedStats,
   getElixirInfo,
-  getAllElixirTypes
+  getAllElixirTypes,
+  getMonsterElement,
+  getResistanceForElement,
+  elixirCountersMonster,
+  getWeaponElement,
+  getElementalAdvantage,
+  calculateElementalCombatBonus,
+  ELEMENTAL_ADVANTAGE_BONUS,
+  ELEMENTAL_WEAKNESS_PENALTY
 };
 

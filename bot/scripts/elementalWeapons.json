@@ -1,0 +1,1632 @@
+{
+  "totalWeapons": 177,
+  "updated": 42,
+  "skipped": 135,
+  "elementCounts": {
+    "tech": 18,
+    "none": 135,
+    "ice": 6,
+    "undead": 1,
+    "fire": 6,
+    "electric": 6,
+    "light": 2,
+    "water": 1,
+    "earth": 1,
+    "wind": 1
+  },
+  "elementalWeapons": {
+    "tech": [
+      {
+        "name": "Ancient Arrow",
+        "subtype": [
+          "Arrow"
+        ],
+        "rarity": 5,
+        "attack": 4,
+        "emoji": "<:AncientArrow:1251932742506119292>"
+      },
+      {
+        "name": "Ancient Battle Axe",
+        "subtype": [
+          "Axe"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Ancient_Battle_Axe:938167738004815953>"
+      },
+      {
+        "name": "Ancient Battle Axe+",
+        "subtype": [
+          "Axe"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Ancient_Battle_Axe:938167738055143505>"
+      },
+      {
+        "name": "Ancient Battle Axe++",
+        "subtype": [
+          "Axe"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Ancient_Battle_Axe:938167740957589504>"
+      },
+      {
+        "name": "Ancient Bladesaw",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 4,
+        "emoji": "<:Ancient_Bladesaw:938167742278811688>"
+      },
+      {
+        "name": "Ancient Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Ancient_Bow:938196686860329020>"
+      },
+      {
+        "name": "Ancient Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Ancient_Shield:935378246831312946>"
+      },
+      {
+        "name": "Ancient Short Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Ancient_Short_Sword:938234769756553239>"
+      },
+      {
+        "name": "Ancient Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Ancient_Spear:938162360160505917>"
+      },
+      {
+        "name": "Guardian Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Guardian_Shield:935378242964185139>"
+      },
+      {
+        "name": "Guardian Shield+",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Guardian_Shield:935378242997743676>"
+      },
+      {
+        "name": "Guardian Shield++",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Guardian_Shield:935378243438141500>"
+      },
+      {
+        "name": "Guardian Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 6,
+        "attack": 1,
+        "emoji": "<:Guardian_Spear:938162362131832842>"
+      },
+      {
+        "name": "Guardian Spear+",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Guardian_Spear:938162362136010752>"
+      },
+      {
+        "name": "Guardian Spear++",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Guardian_Spear:938162362328940634>"
+      },
+      {
+        "name": "Guardian Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Guardian_Sword:938167620266504274>"
+      },
+      {
+        "name": "Guardian Sword+",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Guardian_Sword:938167620513964063>"
+      },
+      {
+        "name": "Guardian Sword++",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Guardian_Sword:938167620870492251>"
+      }
+    ],
+    "none": [
+      {
+        "name": "Arrow",
+        "subtype": [
+          "Arrow"
+        ],
+        "rarity": 4,
+        "attack": 0,
+        "emoji": "<:Arrow:1171546462035914782>"
+      },
+      {
+        "name": "Boat Oar",
+        "subtype": [
+          "Polearm"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Boat_Oar:938162360592515072>"
+      },
+      {
+        "name": "Boko Bat",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Boko_Bat:938167738608791593>"
+      },
+      {
+        "name": "Boko Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Boko_Bow:938196686860341299>"
+      },
+      {
+        "name": "Boko Club",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Boko_Club:938167619138224140>"
+      },
+      {
+        "name": "Boko Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Boko_Shield:935378244373463060>"
+      },
+      {
+        "name": "Boko Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Boko_Spear:938162360714162186>"
+      },
+      {
+        "name": "Bokoblin Arm",
+        "subtype": [
+          "Arm"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Bokoblin_Arm:938167619373125632>"
+      },
+      {
+        "name": "Bomb Arrow",
+        "subtype": [
+          "Arrow"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:BombArrow:1171546508760449044>"
+      },
+      {
+        "name": "Boomerang",
+        "subtype": [
+          "Boomerang"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Boomerang:938167619469590578>"
+      },
+      {
+        "name": "Cobble Crusher",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Cobble_Crusher:938167738734624788>"
+      },
+      {
+        "name": "Double Axe",
+        "subtype": [
+          "Axe"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Double_Axe:938167738864635964>"
+      },
+      {
+        "name": "Dragon Bone Boko Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Dragon_Bone_Boko_Bow:938196687535632404>"
+      },
+      {
+        "name": "Dragonbone Boko Bat",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Dragonbone_Boko_Bat:938167742303985674>"
+      },
+      {
+        "name": "Dragonbone Boko Club",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Dragonbone_Boko_Club:938167623634522122>"
+      },
+      {
+        "name": "Dragonbone Boko Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Dragonbone_Boko_Shield:935378246499991572>"
+      },
+      {
+        "name": "Dragonbone Boko Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 6,
+        "attack": 1,
+        "emoji": "<:Dragonbone_Boko_Spear:938162360919670824>"
+      },
+      {
+        "name": "Dragonbone Moblin Club",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Dragonbone_Moblin_Club:938235391205601310>"
+      },
+      {
+        "name": "Dragonbone Moblin Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Dragonbone_Moblin_Spear:938162363759222825>"
+      },
+      {
+        "name": "Drillshaft",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Drillshaft:938162361158754335>"
+      },
+      {
+        "name": "Duplex Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Duplex_Bow:938196687204257812>"
+      },
+      {
+        "name": "Edge of Duality",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Edge_of_Duality:938167738973712454>"
+      },
+      {
+        "name": "Eightfold Blade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Eightfold_Blade:938167619817717791>"
+      },
+      {
+        "name": "Eightfold Longblade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Eightfold_Longblade:938167738977910785>"
+      },
+      {
+        "name": "Emblazoned Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Emblazoned_Shield:935378245610786847>"
+      },
+      {
+        "name": "Enhanced Lizal Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 6,
+        "attack": 1,
+        "emoji": "<:Enhanced_Lizal_Spear:938162361276178442>"
+      },
+      {
+        "name": "Falcon Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Falcon_Bow:938196687195889704>"
+      },
+      {
+        "name": "Farmer's Pitchfork",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Farmers_Pitchfork:938162361414615060>"
+      },
+      {
+        "name": "Farming Hoe",
+        "subtype": [
+          "Polearm"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Farming_Hoe:938162361095815229>"
+      },
+      {
+        "name": "Feathered Edge",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Feathered_Edge:938167620472012840>"
+      },
+      {
+        "name": "Feathered Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Feathered_Spear:938162361041293384>"
+      },
+      {
+        "name": "Fisherman's Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 4,
+        "attack": 1,
+        "emoji": "<:Fishermans_Shield:935378245589794827>"
+      },
+      {
+        "name": "Fishing Harpoon",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 4,
+        "attack": 1,
+        "emoji": "<:Fishing_Harpoon:938162361280364546>"
+      },
+      {
+        "name": "Forest Dweller's Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Forest_Dwellers_Bow:938196687527227492>"
+      },
+      {
+        "name": "Forest Dweller's Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Forest_Dwellers_Shield:935378245262651512>"
+      },
+      {
+        "name": "Forest Dweller's Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Forest_Dwellers_Spear:938162361855004732>"
+      },
+      {
+        "name": "Forest Dweller's Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Forest_Dwellers_Sword:938167620270698516>"
+      },
+      {
+        "name": "Forked Lizal Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 6,
+        "attack": 1,
+        "emoji": "<:Forked_Lizal_Spear:938162361846599801>"
+      },
+      {
+        "name": "Gerudo Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Gerudo_Bow:1199961107335479346>"
+      },
+      {
+        "name": "Gerudo Claymore",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Gerudo_Claymore_Intact:1199965342739472414>"
+      },
+      {
+        "name": "Gerudo Scimitar",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 1,
+        "emoji": "<:Gerudo_Scimitar:938167623659704360>"
+      },
+      {
+        "name": "Gerudo Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 9,
+        "attack": 2,
+        "emoji": "<:Gerudo_Shield:935378246957137970>"
+      },
+      {
+        "name": "Gerudo Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Gerudo_Spear:938162362102468658>"
+      },
+      {
+        "name": "Giant Boomerang",
+        "subtype": [
+          "Boomerang"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Giant_Boomerang:938167739229569034>"
+      },
+      {
+        "name": "Hunter's Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Hunters_Shield:935378245816295434>"
+      },
+      {
+        "name": "Iron Sledgehammer",
+        "subtype": [
+          "Hammer"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Iron_Sledgehammer:938167739841921025>"
+      },
+      {
+        "name": "Kite Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Kite_Shield:935378244767719475>"
+      },
+      {
+        "name": "Knight's Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Knights_Bow:938196688978452551>"
+      },
+      {
+        "name": "Knight's Broadsword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Knights_Broadsword:938167620954370058>"
+      },
+      {
+        "name": "Knight's Claymore",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Knights_Claymore:938167739963539526>"
+      },
+      {
+        "name": "Knight's Halberd",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Knights_Halberd:938162362505125958>"
+      },
+      {
+        "name": "Knight's Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Knights_Shield:935378245493350430>"
+      },
+      {
+        "name": "Korok Leaf",
+        "subtype": [
+          "Leaf"
+        ],
+        "rarity": 3,
+        "attack": 0,
+        "emoji": "<:Korok_Leaf:938167742203314227>"
+      },
+      {
+        "name": "Lizal Boomerang",
+        "subtype": [
+          "Boomerang"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Lizal_Boomerang:938167623701655632>"
+      },
+      {
+        "name": "Lizal Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Lizal_Bow:938196687405609041>"
+      },
+      {
+        "name": "Lizal Forked Boomerang",
+        "subtype": [
+          "Boomerang"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Lizal_Forked_Boomerang:938167621172494386>"
+      },
+      {
+        "name": "Lizal Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Lizal_Shield:935376264007671889>"
+      },
+      {
+        "name": "Lizal Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Lizal_Spear:938162362094075986>"
+      },
+      {
+        "name": "Lizal Tri-Boomerang",
+        "subtype": [
+          "Boomerang"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Lizal_TriBoomerang:938167623881998426>"
+      },
+      {
+        "name": "Lizalfos Arm",
+        "subtype": [
+          "Arm"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Lizalfos_Arm:938167620933410939>"
+      },
+      {
+        "name": "Lynel Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Lynel_Bow:938196687661436958>"
+      },
+      {
+        "name": "Lynel Crusher",
+        "subtype": [
+          "Crusher"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Lynel_Crusher:938167741888749590>"
+      },
+      {
+        "name": "Lynel Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Lynel_Shield:935378242498613249>"
+      },
+      {
+        "name": "Lynel Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 6,
+        "attack": 1,
+        "emoji": "<:Lynel_Spear:938162362547044354>"
+      },
+      {
+        "name": "Lynel Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Lynel_Sword:938167621562564688>"
+      },
+      {
+        "name": "Mighty Lynel Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 7,
+        "attack": 2,
+        "emoji": "<:Mighty_Lynel_Bow:938196688970063972>"
+      },
+      {
+        "name": "Mighty Lynel Crusher",
+        "subtype": [
+          "Crusher"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Mighty_Lynel_Crusher:938167742253645854>"
+      },
+      {
+        "name": "Mighty Lynel Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Mighty_Lynel_Shield:935378246097305621>"
+      },
+      {
+        "name": "Mighty Lynel Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Mighty_Lynel_Spear:938162362412838933>"
+      },
+      {
+        "name": "Mighty Lynel Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Mighty_Lynel_Sword:938167623772934194>"
+      },
+      {
+        "name": "Moblin Arm",
+        "subtype": [
+          "Arm"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Moblin_Arm:938167740986978304>"
+      },
+      {
+        "name": "Moblin Club",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Moblin_Club:938167741133766686>"
+      },
+      {
+        "name": "Moblin Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Moblin_Spear:938162362995847168>"
+      },
+      {
+        "name": "Phrenic Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 8,
+        "attack": 2,
+        "emoji": "<:Phrenic_Bow:938196687871164416>"
+      },
+      {
+        "name": "Pot Lid",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Pot_Lid:935378246118301746>"
+      },
+      {
+        "name": "Reinforced Lizal Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Reinforced_Lizal_Shield:935378243534602321>"
+      },
+      {
+        "name": "Royal Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Royal_Bow:938196687921491988>"
+      },
+      {
+        "name": "Royal Broadsword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 3,
+        "emoji": "<:Royal_Broadsword:938167621826773163>"
+      },
+      {
+        "name": "Royal Claymore",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 3,
+        "emoji": "<:Royal_Claymore:938167741217640498>"
+      },
+      {
+        "name": "Royal Guard's Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Royal_Guards_Bow:938196688114446428>"
+      },
+      {
+        "name": "Royal Guard's Claymore",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Royal_Guards_Claymore:938167741108609075>"
+      },
+      {
+        "name": "Royal Guard's Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Royal_Guards_Shield:935378243941433345>"
+      },
+      {
+        "name": "Royal Guard's Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Royal_Guards_Spear:938162363666944081>"
+      },
+      {
+        "name": "Royal Guard's Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 4,
+        "emoji": "<:Royal_Guards_Sword:938167622040698941>"
+      },
+      {
+        "name": "Royal Halberd",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Royal_Halberd:938162364098969650>"
+      },
+      {
+        "name": "Royal Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Royal_Shield:935378245443014706>"
+      },
+      {
+        "name": "Rusty Broadsword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Rusty_Broadsword:938167622418186250>"
+      },
+      {
+        "name": "Rusty Claymore",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Rusty_Claymore:938167741473493032>"
+      },
+      {
+        "name": "Rusty Halberd",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Rusty_Halberd:938162363016826910>"
+      },
+      {
+        "name": "Rusty Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Rusty_Shield:935378244407033916>"
+      },
+      {
+        "name": "Savage Lynel Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Savage_Lynel_Bow:938196689070727248>"
+      },
+      {
+        "name": "Savage Lynel Crusher",
+        "subtype": [
+          "Crusher"
+        ],
+        "rarity": 9,
+        "attack": 4,
+        "emoji": "<:Savage_Lynel_Crusher:938167742257848330>"
+      },
+      {
+        "name": "Savage Lynel Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 9,
+        "attack": 4,
+        "emoji": "<:Savage_Lynel_Shield:935378236660154409>"
+      },
+      {
+        "name": "Savage Lynel Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 9,
+        "attack": 4,
+        "emoji": "<:Savage_Lynel_Spear:938162362987474965>"
+      },
+      {
+        "name": "Savage Lynel Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 4,
+        "emoji": "<:Savage_Lynel_Sword:938167623689056297>"
+      },
+      {
+        "name": "Serpentine Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Serpentine_Spear:938162363314630706>"
+      },
+      {
+        "name": "Shield of the Mind's Eye",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Shield_of_the_Minds_Eye:935378244679663657>"
+      },
+      {
+        "name": "Silver Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Silver_Bow:938196688340934712>"
+      },
+      {
+        "name": "Silver Longsword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Silver_Longsword:938167741523836938>"
+      },
+      {
+        "name": "Silver Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Silver_Shield:935378245174587412>"
+      },
+      {
+        "name": "Silverscale Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Silverscale_Spear:938162363390115970>"
+      },
+      {
+        "name": "Soldier's Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Soldiers_Bow:938196688298987551>"
+      },
+      {
+        "name": "Soldier's Broadsword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Soldiers_Broadsword:938167622548226048>"
+      },
+      {
+        "name": "Soldier's Claymore",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Soldiers_Claymore:938167741175709777>"
+      },
+      {
+        "name": "Soldier's Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Soldiers_Shield:935378245229101098>"
+      },
+      {
+        "name": "Soldier's Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Soldiers_Spear:938162363432054784>"
+      },
+      {
+        "name": "Soup Ladle",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Soup_Ladle:938167622866985041>"
+      },
+      {
+        "name": "Spiked Boko Bat",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Spiked_Boko_Bat:938167742429802516>"
+      },
+      {
+        "name": "Spiked Boko Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Spiked_Boko_Bow:938196688542261298>"
+      },
+      {
+        "name": "Spiked Boko Club",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Spiked_Boko_Club:938167623861026857>"
+      },
+      {
+        "name": "Spiked Boko Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Spiked_Boko_Shield:935378246512570429>"
+      },
+      {
+        "name": "Spiked Boko Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Spiked_Boko_Spear:938162363499184178>"
+      },
+      {
+        "name": "Spiked Moblin Club",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Spiked_Moblin_Club:938167742249459732>"
+      },
+      {
+        "name": "Spiked Moblin Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Spiked_Moblin_Spear:938162363868274708>"
+      },
+      {
+        "name": "Spring-Loaded Hammer",
+        "subtype": [
+          "Hammer"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:SpringLoaded_Hammer:938167623923945482>"
+      },
+      {
+        "name": "Steel Lizal Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Steel_Lizal_Bow:938196689305624666>"
+      },
+      {
+        "name": "Steel Lizal Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Steel_Lizal_Shield:935378246390939668>"
+      },
+      {
+        "name": "Strengthened Lizal Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Strengthened_Lizal_Bow:938196688529670156>"
+      },
+      {
+        "name": "Swallow Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Swallow_Bow:938196689146232882>"
+      },
+      {
+        "name": "Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 7,
+        "attack": 2,
+        "emoji": "<:Sword:938167622590148700>"
+      },
+      {
+        "name": "Throwing Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Throwing_Spear:938162363574665296>"
+      },
+      {
+        "name": "Torch",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Torch:938167623206711316>"
+      },
+      {
+        "name": "Traveler's Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Travelers_Bow:938196688873594950>"
+      },
+      {
+        "name": "Traveler's Claymore",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Travelers_Claymore:938167741737734145>"
+      },
+      {
+        "name": "Traveler's Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Travelers_Shield:935378246286082098>"
+      },
+      {
+        "name": "Traveler's Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Travelers_Spear:938162363746635816>"
+      },
+      {
+        "name": "Traveler's Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Travelers_Sword:938167623445782598>"
+      },
+      {
+        "name": "Tree Branch",
+        "subtype": [
+          "Club"
+        ],
+        "rarity": 3,
+        "attack": 1,
+        "emoji": "<:Tree_Branch:938167623919747122>"
+      },
+      {
+        "name": "Vicious Sickle",
+        "subtype": [
+          "Sickle"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Vicious_Sickle:938167623504498688>"
+      },
+      {
+        "name": "Woodcutter's Axe",
+        "subtype": [
+          "Axe"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Woodcutters_Axe:938167742295597127>"
+      },
+      {
+        "name": "Wooden Bow",
+        "subtype": [
+          "Bow"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Wooden_Bow:938196688655507468>"
+      },
+      {
+        "name": "Wooden Mop",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Wooden_Mop:938162363968929813>"
+      },
+      {
+        "name": "Wooden Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Wooden_Shield:935378246197989506>"
+      },
+      {
+        "name": "Zora Spear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 5,
+        "attack": 2,
+        "emoji": "<:Zora_Spear:938162364086366279>"
+      },
+      {
+        "name": "Zora Sword",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Zora_Sword:938167623156371457>"
+      }
+    ],
+    "ice": [
+      {
+        "name": "Blizzard Rod",
+        "subtype": [
+          "Rod"
+        ],
+        "rarity": 7,
+        "attack": 2,
+        "emoji": "<:Blizzard_Rod:938167619150835832>"
+      },
+      {
+        "name": "Frostblade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Frostblade:938167620182609980>"
+      },
+      {
+        "name": "Frostspear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Frostspear:938162361913716816>"
+      },
+      {
+        "name": "Great Frostblade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 3,
+        "emoji": "<:Great_Frostblade:938167739510558800>"
+      },
+      {
+        "name": "Ice Arrow",
+        "subtype": [
+          "Arrow"
+        ],
+        "rarity": 7,
+        "attack": 1,
+        "emoji": "<:IceArrow:1171546611453792276>"
+      },
+      {
+        "name": "Ice Rod",
+        "subtype": [
+          "Rod"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Ice_Rod:938167620526567446>"
+      }
+    ],
+    "undead": [
+      {
+        "name": "Demon Carver",
+        "subtype": [
+          "Carver"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Demon_Carver:938167623630352414>"
+      }
+    ],
+    "fire": [
+      {
+        "name": "Fire Arrow",
+        "subtype": [
+          "Arrow"
+        ],
+        "rarity": 7,
+        "attack": 1,
+        "emoji": "<:FireArrow:1171546565127721060>"
+      },
+      {
+        "name": "Fire Rod",
+        "subtype": [
+          "Rod"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Fire_Rod:938167619985481789>"
+      },
+      {
+        "name": "Flameblade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Flameblade:938167619968729159>"
+      },
+      {
+        "name": "Flamespear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Flamespear:938162361615921224>"
+      },
+      {
+        "name": "Great Flameblade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 3,
+        "emoji": "<:Great_Flameblade:938167739414093854>"
+      },
+      {
+        "name": "Meteor Rod",
+        "subtype": [
+          "Rod"
+        ],
+        "rarity": 7,
+        "attack": 2,
+        "emoji": "<:Meteor_Rod:938167623349305347>"
+      }
+    ],
+    "electric": [
+      {
+        "name": "Great Thunderblade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 3,
+        "emoji": "<:Great_Thunderblade:938167739749646386>"
+      },
+      {
+        "name": "Lightning Rod",
+        "subtype": [
+          "Rod"
+        ],
+        "rarity": 5,
+        "attack": 1,
+        "emoji": "<:Lightning_Rod:938167620723683339>"
+      },
+      {
+        "name": "Shock Arrow",
+        "subtype": [
+          "Arrow"
+        ],
+        "rarity": 6,
+        "attack": 1,
+        "emoji": "<:ShockArrow:1171546662683033630>"
+      },
+      {
+        "name": "Thunderblade",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Thunderblade:938167622711795793>"
+      },
+      {
+        "name": "Thunderspear",
+        "subtype": [
+          "Spear"
+        ],
+        "rarity": 10,
+        "attack": 2,
+        "emoji": "<:Thunderspear:938162363834703893>"
+      },
+      {
+        "name": "Thunderstorm Rod",
+        "subtype": [
+          "Rod"
+        ],
+        "rarity": 7,
+        "attack": 2,
+        "emoji": "<:Thunderstorm_Rod:938167623542276137>"
+      }
+    ],
+    "light": [
+      {
+        "name": "Moonlight Scimitar",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 9,
+        "attack": 3,
+        "emoji": "<:Moonlight_Scimitar:938167621860331540>"
+      },
+      {
+        "name": "Radiant Shield",
+        "subtype": [
+          "Shield"
+        ],
+        "rarity": 10,
+        "attack": 3,
+        "emoji": "<:Radiant_Shield:935378244847407104>"
+      }
+    ],
+    "water": [
+      {
+        "name": "Sea-Breeze Boomerang",
+        "subtype": [
+          "Boomerang"
+        ],
+        "rarity": 7,
+        "attack": 2,
+        "emoji": "<:SeaBreeze_Boomerang:938167622443339846>"
+      }
+    ],
+    "earth": [
+      {
+        "name": "Stone Smasher",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 6,
+        "attack": 2,
+        "emoji": "<:Stone_Smasher:938167741653852321>"
+      }
+    ],
+    "wind": [
+      {
+        "name": "Windcleaver",
+        "subtype": [
+          "Sword"
+        ],
+        "rarity": 8,
+        "attack": 3,
+        "emoji": "<:Windcleaver:938167742136188978>"
+      }
+    ]
+  }
+}
