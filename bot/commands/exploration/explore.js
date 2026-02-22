@@ -75,6 +75,7 @@ const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
 // ------------------- Image URLs ------------------
 const EXPLORATION_IMAGE_FALLBACK = "https://via.placeholder.com/100x100";
+const QUADRANT_MILESTONE_IMAGE = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const GROTTO_MAZE_LEGEND = "🟫 Entrance | 🟩 Exit | 🟦 Chest | 🟨 Trap | 🔴 Scrying Wall | ✖️ Used (trap/chest/wall) | 🟧 You are here | ⬜ Path | ⬛ Wall — Unexplored areas stay dark until you enter them.";
 // Map maze embed outcome type to progress-log outcome for consistent color (see getExploreOutcomeColor in embeds.js)
 const MAZE_OUTCOME_FOR_EMBED = {
@@ -3497,18 +3498,19 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const isAtStartQuadrant = startPoint && String(party.square || "").toUpperCase() === String(startPoint.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
 
       // Lucky find: different title and description
+      // Quadrant Explored uses gold color + border image to stand out as a milestone prompt
       const embedTitle = luckyFindRecovery > 0
        ? `🍀 **Expedition: Lucky Find!**`
-       : `🗺️ **Expedition: Quadrant Explored!**`;
+       : `✨ **Quadrant Explored!** ✨`;
       const embedDesc = luckyFindRecovery > 0
        ? `**${character.name}** found a shortcut in **${location}**! No stamina cost, and recovered **+${luckyFindRecovery} 🟩** stamina.`
-       : `**${character.name}** has explored this area (**${location}**). Use the commands below to take your turn, or secure, or move.`;
+       : `**${character.name}** has explored **${location}**!\n\n🔓 **New options unlocked:** You can now **Secure** this quadrant or **Move** to a new one.`;
 
       const embed = new EmbedBuilder()
        .setTitle(embedTitle)
        .setDescription(embedDesc)
-.setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
-  .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+       .setColor("#FFD700")
+       .setImage(QUADRANT_MILESTONE_IMAGE);
 
       // For lucky find, show recovery instead of cost
       const exploredActionCost = luckyFindRecovery > 0
@@ -5806,8 +5808,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
     const nextCharacterMove = party.characters[party.currentTurn];
     const moveToUnexplored = moveWasReveal;
+    // Move to unexplored quadrant uses gold color + border image as a milestone prompt
     let moveDescription = moveToUnexplored
-     ? `Moved to a new location!`
+     ? `The party has arrived at **${locationMove}**!\n\n📍 **New quadrant — use /explore roll to continue!**`
      : `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
     if (clearedCount > 0) {
      moveDescription += `\n\n⚠️ **${clearedCount} unmarked discovery(ies) in ${currentSquare} were forgotten.** Place pins on the dashboard before moving to keep them on the map.`;
@@ -5834,11 +5837,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
     }
 
+    // Move to unexplored quadrant: gold color + border image to stand out as milestone
+    const moveEmbedColor = moveToUnexplored ? "#FFD700" : getExploreOutcomeColor("move", regionColors[party.region] || "#2196F3");
+    const moveEmbedImage = moveToUnexplored ? QUADRANT_MILESTONE_IMAGE : (regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+    const moveEmbedTitle = moveToUnexplored
+     ? `📍 **New Quadrant: ${newLocation.square} ${newLocation.quadrant}**`
+     : `🗺️ **Expedition: Moved to ${newLocation.square} ${newLocation.quadrant}**`;
+
     const embed = new EmbedBuilder()
-     .setTitle(`🗺️ **Expedition: Moved to ${newLocation.square} ${newLocation.quadrant}**`)
-     .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#2196F3"))
+     .setTitle(moveEmbedTitle)
+     .setColor(moveEmbedColor)
      .setDescription(moveDescription)
-     .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
+     .setImage(moveEmbedImage);
     const moveToSecured = destinationQuadrantState === "secured";
     const moveIsAtStart = (() => {
      const start = START_POINTS_BY_REGION[party.region];

@@ -283,6 +283,7 @@ type GatheredItem = {
   itemName: string;
   quantity: number;
   emoji?: string;
+  image?: string;
 };
 
 type ProgressEntry = {
@@ -1221,6 +1222,7 @@ export default function ExplorePartyPage() {
     heartsStaminaLabel,
     onRemove,
     removing,
+    collectedItems,
   }: {
     name: string;
     icon?: string | null;
@@ -1235,6 +1237,8 @@ export default function ExplorePartyPage() {
     onRemove?: () => void;
     /** True when this member is being removed */
     removing?: boolean;
+    /** Items collected during expedition */
+    collectedItems?: Array<{ itemName: string; quantity: number; emoji?: string; image?: string }>;
   }) {
     return (
       <div
@@ -1318,6 +1322,48 @@ export default function ExplorePartyPage() {
             );
           })}
         </div>
+        {collectedItems && collectedItems.length > 0 && (
+          <div className="mt-3 border-t border-[var(--totk-dark-ocher)]/30 pt-3">
+            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-light-green)]">
+              <i className="fa-solid fa-gem text-[8px] opacity-80" aria-hidden />
+              Collected
+            </p>
+            <div className="space-y-1.5">
+              {collectedItems.map((g, idx) => {
+                const imgUrl = g.image ? formatItemImageUrl(g.image) : null;
+                return (
+                  <div
+                    key={`${g.itemName}-${idx}`}
+                    className="flex items-center gap-2 rounded-lg border border-[var(--totk-light-green)]/30 bg-[var(--botw-warm-black)]/60 px-2 py-1.5"
+                  >
+                    <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded border border-[var(--totk-light-green)]/40">
+                      {imgUrl ? (
+                        <Image
+                          src={imgUrl}
+                          alt=""
+                          width={28}
+                          height={28}
+                          className="h-full w-full object-cover"
+                          unoptimized={imgUrl.startsWith("http") || imgUrl.startsWith("/api/")}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[10px] text-[var(--totk-grey-200)]">
+                          <i className="fa-solid fa-cube" aria-hidden />
+                        </div>
+                      )}
+                    </div>
+                    <span className="min-w-0 flex-1 truncate text-xs text-[var(--totk-ivory)]">{g.itemName}</span>
+                    {g.quantity > 1 && (
+                      <span className="flex-shrink-0 rounded bg-[var(--totk-light-green)]/20 px-1.5 py-0.5 text-[10px] font-medium text-[var(--totk-light-green)]">
+                        ×{g.quantity}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {onRemove && (
           <button
             type="button"
@@ -2804,33 +2850,34 @@ export default function ExplorePartyPage() {
                     </span>
                   </div>
                   <div className="w-full overflow-x-auto">
-                    <div className="flex w-full flex-nowrap items-stretch gap-2 sm:flex-wrap">
+                    <div className="flex w-full flex-nowrap items-start gap-2 sm:flex-wrap">
                       {party.members.map((m, index) => {
                         const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
+                        const memberCollected = (party.gatheredItems ?? []).filter((g) => g.characterId === m.characterId);
                         return (
-                          <span key={m.characterId} className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[160px]">
+                          <span key={m.characterId} className="flex min-w-0 flex-1 items-start gap-2 sm:min-w-[160px]">
                             {index > 0 && (
-                              <span className="flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
+                              <span className="mt-4 flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
                                 <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="opacity-70">
                                   <path d="M1 6h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                               </span>
                             )}
-                            <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
+                            <span className={`mt-4 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
                               {index + 1}
                             </span>
-                            <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined} heartsStaminaLabel="max" />
+                            <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined} heartsStaminaLabel="max" collectedItems={memberCollected} />
                           </span>
                         );
                       })}
                       {showYourSlotPreview && (
-                        <span className="flex min-w-0 flex-1 items-center gap-2 sm:min-w-[160px]">
-                          <span className="flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
+                        <span className="flex min-w-0 flex-1 items-start gap-2 sm:min-w-[160px]">
+                          <span className="mt-4 flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
                             <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="opacity-70">
                               <path d="M1 6h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </span>
-                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
+                          <span className="mt-4 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
                           <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.maxHearts} stamina={selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" heartsStaminaLabel="max" />
                         </span>
                       )}
@@ -2877,6 +2924,7 @@ export default function ExplorePartyPage() {
               {party.members.map((m, index) => {
                 const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
                 const canRemove = party.status === "open" && party.currentUserJoined && userId !== m.userId;
+                const memberCollected = (party.gatheredItems ?? []).filter((g) => g.characterId === m.characterId);
                 return (
                   <div key={m.characterId} className="flex items-start gap-3">
                     <span
@@ -2900,6 +2948,7 @@ export default function ExplorePartyPage() {
                       heartsStaminaLabel="max"
                       onRemove={canRemove ? () => removeMember(m.userId, m.name) : undefined}
                       removing={removingMemberId === m.userId}
+                      collectedItems={memberCollected}
                     />
                   </div>
                 );

@@ -121,15 +121,36 @@ export async function GET(
         ? `https://discord.com/channels/${guildId}/${discordThreadId}`
         : null;
 
-    const gatheredItems = Array.isArray(p.gatheredItems)
-      ? (p.gatheredItems as Array<Record<string, unknown>>).map((g) => ({
-          characterId: String(g.characterId),
-          characterName: String(g.characterName ?? ""),
-          itemName: String(g.itemName ?? ""),
-          quantity: typeof g.quantity === "number" ? g.quantity : 1,
-          emoji: typeof g.emoji === "string" ? g.emoji : undefined,
-        }))
+    // Fetch item images for gathered items
+    const rawGatheredItems = Array.isArray(p.gatheredItems)
+      ? (p.gatheredItems as Array<Record<string, unknown>>)
       : [];
+    const gatheredItemNames = [...new Set(rawGatheredItems.map((g) => String(g.itemName ?? "")).filter(Boolean))];
+    let itemImageMap = new Map<string, string>();
+    if (gatheredItemNames.length > 0) {
+      const Item =
+        mongoose.models.Item ??
+        ((await import("@/models/ItemModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+      const escaped = gatheredItemNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      const itemDocs = await Item.find({
+        $or: escaped.map((e) => ({ itemName: new RegExp(`^${e}$`, "i") })),
+      })
+        .select("itemName image")
+        .lean();
+      for (const doc of itemDocs as Array<{ itemName?: string; image?: string }>) {
+        if (doc.itemName && doc.image) {
+          itemImageMap.set(doc.itemName.toLowerCase(), doc.image);
+        }
+      }
+    }
+    const gatheredItems = rawGatheredItems.map((g) => ({
+      characterId: String(g.characterId),
+      characterName: String(g.characterName ?? ""),
+      itemName: String(g.itemName ?? ""),
+      quantity: typeof g.quantity === "number" ? g.quantity : 1,
+      emoji: typeof g.emoji === "string" ? g.emoji : undefined,
+      image: itemImageMap.get(String(g.itemName ?? "").toLowerCase()) ?? undefined,
+    }));
 
     const progressLog = Array.isArray(p.progressLog)
       ? (p.progressLog as Array<Record<string, unknown>>).map((e) => {
