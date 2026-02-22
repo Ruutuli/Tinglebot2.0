@@ -65,6 +65,7 @@ export default function AdminDatabasePage() {
     type: string[];
     categoryGear: string[];
     subtype: string[];
+    element: string[];
   }>(FIELD_OPTIONS);
   const [filterOptions, setFilterOptions] = useState<Record<string, (string | number)[]>>({});
   const [filters, setFilters] = useState<Record<string, (string | number | boolean)[]>>({});
@@ -412,6 +413,7 @@ export default function AdminDatabasePage() {
             type: (response.filterOptions.type || []) as string[],
             categoryGear: (response.filterOptions.categoryGear || []) as string[],
             subtype: (response.filterOptions.subtype || []) as string[],
+            element: FIELD_OPTIONS.element,
           });
         }
       }

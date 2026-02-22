@@ -27,6 +27,7 @@ type Item = {
   type?: string[];
   subtype?: string[];
   recipeTag?: string[];
+  element?: string;
   buyPrice?: number;
   sellPrice?: number;
   modifierHearts?: number;
@@ -205,6 +206,7 @@ type ItemEditorFormProps = {
     type: string[];
     categoryGear: string[];
     subtype: string[];
+    element: string[];
   };
   onSave: (itemId: string, updates: Partial<ItemFormData>) => Promise<void>;
   saving: boolean;
@@ -225,7 +227,7 @@ const TABS: Array<{ value: TabValue; label: string; icon: string }> = [
   { value: "monsters", label: "Monsters", icon: "fa-dragon" },
 ];
 
-export function ItemEditorForm({ item, items = [], fieldOptions = { category: [], type: [], categoryGear: [], subtype: [] }, onSave, saving, onClose }: ItemEditorFormProps) {
+export function ItemEditorForm({ item, items = [], fieldOptions = { category: [], type: [], categoryGear: [], subtype: [], element: ["none", "fire", "ice", "electric", "tech"] }, onSave, saving, onClose }: ItemEditorFormProps) {
   const [activeTab, setActiveTab] = useState<TabValue>("basics");
   const [formData, setFormData] = useState<ItemFormData>(() => ({
     itemName: item.itemName || "",
@@ -238,6 +240,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
     type: item.type || [],
     subtype: item.subtype || [],
     recipeTag: item.recipeTag || [],
+    element: item.element || "none",
     buyPrice: item.buyPrice ?? 0,
     sellPrice: item.sellPrice ?? 0,
     modifierHearts: item.modifierHearts ?? 0,
@@ -523,6 +526,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
       type: "Type",
       subtype: "Subtype",
       recipeTag: "Recipe Tag",
+      element: "Element",
       buyPrice: "Buy Price",
       sellPrice: "Sell Price",
       modifierHearts: "Hearts Restored",
@@ -739,6 +743,14 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
               onChange={(v) => handleFieldChange("subtype", v)}
               helpText="Item subtypes (e.g., Head, Bow)"
               isChanged={!!changes.subtype}
+            />
+            <SelectField
+              label="Element"
+              value={formData.element || "none"}
+              options={fieldOptions.element}
+              onChange={(v) => handleFieldChange("element", v)}
+              helpText="Elemental type for weapons/armor (fire, ice, electric, tech, none)"
+              isChanged={!!changes.element}
             />
             <ArrayFieldInput
               label="Recipe Tag"

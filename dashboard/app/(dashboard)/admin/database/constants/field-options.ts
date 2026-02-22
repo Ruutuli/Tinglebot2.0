@@ -98,4 +98,14 @@ export const FIELD_OPTIONS = {
     "electric",
     "tech"
   ],
+  monsterElement: [
+    "none",
+    "fire",
+    "ice",
+    "electric",
+    "water",
+    "earth",
+    "undead",
+    "wind"
+  ],
 };

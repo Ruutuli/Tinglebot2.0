@@ -33,14 +33,20 @@ export function FieldRenderer({
   items = [],
   ...extraProps
 }: FieldRendererProps) {
+  // Build the data object for showIf/getLabel/getHelpText functions
+  // If formData is passed, spread it so field conditions can access values directly
+  const dataForConditions = extraProps.formData 
+    ? { ...(extraProps.formData as Record<string, unknown>), [field.key]: value }
+    : { ...extraProps, [field.key]: value };
+
   // Check if field should be shown
-  if (field.showIf && !field.showIf({ ...extraProps, [field.key]: value })) {
+  if (field.showIf && !field.showIf(dataForConditions)) {
     return null;
   }
 
   // Get dynamic label/helpText if provided
-  const label = field.getLabel ? field.getLabel({ ...extraProps, [field.key]: value }) : field.label;
-  const helpText = field.getHelpText ? field.getHelpText({ ...extraProps, [field.key]: value }) : field.helpText;
+  const label = field.getLabel ? field.getLabel(dataForConditions) : field.label;
+  const helpText = field.getHelpText ? field.getHelpText(dataForConditions) : field.helpText;
 
   switch (field.type) {
     case "text":
