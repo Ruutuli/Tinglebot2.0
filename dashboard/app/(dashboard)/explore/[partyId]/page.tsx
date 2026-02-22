@@ -1458,17 +1458,10 @@ export default function ExplorePartyPage() {
                     // Prefer party.quadrantStatuses (includes exploredQuadrantsThisRun) so "explored" shows even if map DB wasn't updated
                     const statuses = party.quadrantStatuses ?? squarePreview.quadrantStatuses ?? {};
                     const fogQuadrants: number[] = [];
-                    const currentQuadrant = party.quadrant ? String(party.quadrant).trim().toUpperCase() : null;
-                    const currentSquareNorm = party.square ? String(party.square).trim().toUpperCase() : "";
-                    const visitedHere = (party.visitedQuadrantsThisRun ?? []).filter(
-                      (v) => String(v.squareId ?? "").trim().toUpperCase() === currentSquareNorm
-                    );
-                    const visitedQuadrantIds = new Set(visitedHere.map((v) => String(v.quadrantId ?? "").trim().toUpperCase()));
+                    // Only remove fog when quadrant is actually explored or secured - not just because party is standing there
                     (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
                       const s = (statuses[qId] ?? "unexplored").toLowerCase();
-                      const isCurrentQuadrant = currentQuadrant && qId === currentQuadrant;
-                      const wasVisited = visitedQuadrantIds.has(qId);
-                      if ((s === "unexplored" || s === "inaccessible") && !isCurrentQuadrant && !wasVisited) fogQuadrants.push(i + 1);
+                      if (s !== "explored" && s !== "secured") fogQuadrants.push(i + 1);
                     });
                     if (fogQuadrants.length === 0) return null;
                     return (
@@ -2512,17 +2505,10 @@ export default function ExplorePartyPage() {
                             if (!fogLayer) return null;
                             const statuses = displayPreview!.quadrantStatuses ?? party.quadrantStatuses ?? {};
                             const fogQuadrants: number[] = [];
-                            const currentQuadrantDisplay = party.quadrant ? String(party.quadrant).trim().toUpperCase() : null;
-                            const currentSquareNormDisplay = party.square ? String(party.square).trim().toUpperCase() : "";
-                            const visitedHereDisplay = (party.visitedQuadrantsThisRun ?? []).filter(
-                              (v) => String(v.squareId ?? "").trim().toUpperCase() === currentSquareNormDisplay
-                            );
-                            const visitedQuadrantIdsDisplay = new Set(visitedHereDisplay.map((v) => String(v.quadrantId ?? "").trim().toUpperCase()));
+                            // Only remove fog when quadrant is actually explored or secured - not just because party is standing there
                             (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
                               const s = (statuses[qId] ?? "unexplored").toLowerCase();
-                              const isCurrentQuadrant = currentQuadrantDisplay && qId === currentQuadrantDisplay;
-                              const wasVisited = visitedQuadrantIdsDisplay.has(qId);
-                              if ((s === "unexplored" || s === "inaccessible") && !isCurrentQuadrant && !wasVisited) fogQuadrants.push(i + 1);
+                              if (s !== "explored" && s !== "secured") fogQuadrants.push(i + 1);
                             });
                             if (fogQuadrants.length === 0) return null;
                             return (
