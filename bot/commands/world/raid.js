@@ -855,7 +855,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     },
     ...(raidData.expeditionId && expeditionPartyHearts != null
       ? [{
-          name: '❤️ __Party hearts__',
+          name: '❤️ **__Party Hearts__**',
           value: `**${expeditionPartyHearts}** ❤ · **${expeditionPartyStamina ?? 0}** 🟩 stamina`,
           inline: false
         }]

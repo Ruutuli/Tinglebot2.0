@@ -268,10 +268,10 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
                 "**Recovery debuff:** For **" + EXPLORATION_KO_DEBUFF_DAYS + " days**, characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. They must recover their strength."
             )
             .addFields(
-                { name: '❤️ Party Hearts', value: '0', inline: true },
-                { name: '🟩 Party Stamina', value: '0', inline: true },
-                { name: '📍 Location', value: locationStr, inline: true },
-                { name: '🆔 Expedition ID', value: expeditionId, inline: true }
+                { name: '❤️ **__Party Hearts__**', value: '0', inline: true },
+                { name: '🟩 **__Party Stamina__**', value: '0', inline: true },
+                { name: '📍 **__Quadrant__**', value: locationStr, inline: true },
+                { name: '🆔 **__Expedition ID__**', value: expeditionId, inline: true }
             )
             .setTimestamp();
         

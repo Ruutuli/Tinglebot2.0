@@ -1282,7 +1282,31 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
       wave = finalWave;
     }
 
-    // Check if all participants are KO'd after this turn
+    // For expedition waves: apply damage to party pool FIRST, THEN check for KO.
+    // This ensures the KO check uses the updated party hearts value.
+    if (wave.expeditionId && battleResult) {
+      try {
+        const Party = require('@/models/PartyModel');
+        const party = await Party.findActiveByPartyId(wave.expeditionId);
+        if (party) {
+          // Calculate damage taken this turn from battleResult
+          const heartsBefore = battleResult.characterHeartsBefore ?? characterHeartsBefore ?? party.totalHearts ?? 0;
+          const heartsAfter = battleResult.playerHearts?.current ?? heartsBefore;
+          const damageTaken = Math.max(0, heartsBefore - heartsAfter);
+          
+          // Apply damage to current party pool
+          const newPartyHearts = Math.max(0, (party.totalHearts ?? 0) - damageTaken);
+          party.totalHearts = newPartyHearts;
+          party.markModified('totalHearts');
+          await party.save();
+          console.log(`[waveModule.js]: 🗺️ Expedition wave turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
+        }
+      } catch (syncErr) {
+        logger.warn('WAVE', `Failed to update expedition party hearts after wave turn: ${syncErr?.message || syncErr}`);
+      }
+    }
+
+    // Check if all participants are KO'd after this turn (now uses updated party pool value)
     const allKO = await checkAllParticipantsKO(wave);
     if (allKO && wave.status === 'active') {
       console.log(`[waveModule.js]: 💀 All participants KO'd in wave ${waveId}, failing wave`);
@@ -1312,32 +1336,6 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
     // Save updated wave data (if not already saved by failWave)
     if (wave.status === 'active') {
       await wave.save();
-    }
-
-    // When wave is from expedition: apply damage from this turn to party pool.
-    // IMPORTANT: For expeditions, the party pool is the source of truth.
-    // Calculate damage taken this turn and subtract from current pool (don't overwrite with battleResult.playerHearts.current
-    // in case the pool changed between when we read it and now).
-    if (wave.expeditionId && battleResult) {
-      try {
-        const Party = require('@/models/PartyModel');
-        const party = await Party.findActiveByPartyId(wave.expeditionId);
-        if (party) {
-          // Calculate damage taken this turn from battleResult
-          const heartsBefore = battleResult.characterHeartsBefore ?? characterHeartsBefore ?? party.totalHearts ?? 0;
-          const heartsAfter = battleResult.playerHearts?.current ?? heartsBefore;
-          const damageTaken = Math.max(0, heartsBefore - heartsAfter);
-          
-          // Apply damage to current party pool
-          const newPartyHearts = Math.max(0, (party.totalHearts ?? 0) - damageTaken);
-          party.totalHearts = newPartyHearts;
-          party.markModified('totalHearts');
-          await party.save();
-          console.log(`[waveModule.js]: 🗺️ Expedition wave turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
-        }
-      } catch (syncErr) {
-        logger.warn('WAVE', `Failed to update expedition party hearts after wave turn: ${syncErr?.message || syncErr}`);
-      }
     }
 
     return {

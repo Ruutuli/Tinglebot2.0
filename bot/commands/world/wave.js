@@ -680,9 +680,9 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
         inline: false
       },
       {
-        name: waveData.expeditionId ? `__Party Hearts__` : `__${character.name} Status__`,
+        name: waveData.expeditionId ? `❤️ **__Party Hearts__**` : `__${character.name} Status__`,
         value: waveData.expeditionId
-          ? `❤️ **Party pool:** ${battleResult.playerHearts.current}/${battleResult.characterHeartsBefore ?? battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`
+          ? `**Party pool:** ${battleResult.playerHearts.current}/${battleResult.characterHeartsBefore ?? battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`
           : `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage Taken This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`,
         inline: false
       },

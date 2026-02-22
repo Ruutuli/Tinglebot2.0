@@ -767,7 +767,11 @@ const createExplorationItemEmbed = (
   maxStamina,
  });
  const rarity = item.itemRarity ?? 1;
- embed.setFooter({ text: `Rarity: ${rarity}` });
+ const isStruggleMode = (party?.totalStamina ?? 0) === 0;
+ const footerText = isStruggleMode
+  ? `Rarity: ${rarity}  •  ⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover.`
+  : `Rarity: ${rarity}`;
+ embed.setFooter({ text: footerText });
  return embed;
 };
 
@@ -819,7 +823,11 @@ const createExplorationMonsterEmbed = (
   maxStamina,
  });
  const tier = monster.tier ?? 1;
- embed.setFooter({ text: `Tier: ${tier}` });
+ const isStruggleMode = (party?.totalStamina ?? 0) === 0;
+ const footerText = isStruggleMode
+  ? `Tier: ${tier}  •  ⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover.`
+  : `Tier: ${tier}`;
+ embed.setFooter({ text: footerText });
  return embed;
 };
 

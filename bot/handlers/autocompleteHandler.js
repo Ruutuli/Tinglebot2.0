@@ -599,7 +599,8 @@ async function handleAutocompleteInternal(interaction, commandName, focusedOptio
             if (focusedOption.name === "id") {
               await handleWaveIdAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "charactername") {
-              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "wave");
+              // Show only wave participants, not all user characters
+              await handleWaveCharacterAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -7096,6 +7097,76 @@ async function handleWaveIdAutocomplete(interaction, focusedOption) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleWaveIdAutocomplete]: Error:", error);
     await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleWaveCharacterAutocomplete -------------------
+// Shows only characters that are participants in the wave (not all user's characters)
+async function handleWaveCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const Wave = require('@/models/WaveModel');
+    const userId = interaction.user.id;
+    
+    // Get the wave ID from the interaction options
+    const waveId = interaction.options.getString('id') || "";
+    const searchQuery = (focusedOption.value || "").toLowerCase().trim();
+    
+    let wave = null;
+    if (waveId) {
+      // Find the specific wave by ID
+      wave = await Wave.findOne({ waveId, status: 'active' });
+    }
+    
+    if (!wave) {
+      // If no specific wave, try to find any active wave with user's characters
+      const allActiveWaves = await Wave.find({ status: 'active' });
+      for (const w of allActiveWaves) {
+        const userParticipant = (w.participants || []).find(p => p.odUserId === userId);
+        if (userParticipant) {
+          wave = w;
+          break;
+        }
+      }
+    }
+    
+    if (!wave || !wave.participants || wave.participants.length === 0) {
+      // Fall back to showing user's characters if no wave found
+      return await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "wave");
+    }
+    
+    // Filter participants to only show those owned by this user
+    const userParticipants = wave.participants.filter(p => p.odUserId === userId);
+    
+    if (userParticipants.length === 0) {
+      // User has no characters in this wave
+      return await interaction.respond([]);
+    }
+    
+    // Build choices from wave participants
+    const choices = userParticipants.map(p => {
+      const name = p.name || "Unknown";
+      return {
+        name: `${name} (Wave: ${wave.waveId})`,
+        value: name,
+      };
+    });
+    
+    // Filter by search query
+    const filteredChoices = choices.filter(c =>
+      c.name.toLowerCase().includes(searchQuery) ||
+      c.value.toLowerCase().includes(searchQuery)
+    );
+    
+    await interaction.respond(filteredChoices.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleWaveCharacterAutocomplete]: Error:", error);
+    // Fall back to default character handler on error
+    try {
+      await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "wave");
+    } catch (e) {
+      await safeRespondWithError(interaction);
+    }
   }
 }
 

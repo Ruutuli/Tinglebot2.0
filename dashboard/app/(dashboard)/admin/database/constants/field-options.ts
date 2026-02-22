@@ -91,4 +91,11 @@ export const FIELD_OPTIONS = {
     "Uniform",
     "Veil"
   ],
+  element: [
+    "none",
+    "fire",
+    "ice",
+    "electric",
+    "tech"
+  ],
 };

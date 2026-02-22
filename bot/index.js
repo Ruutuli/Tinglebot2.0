@@ -552,7 +552,7 @@ async function initializeClient() {
           const expeditionRaids = await Raid.find({ status: 'active', expeditionId: { $ne: null, $exists: true } });
           const expeditionIdsToClose = new Set();
           for (const raid of expeditionRaids) {
-            const party = await Party.findOne({ partyId: raid.expeditionId });
+            const party = await Party.findOne({ partyId: { $regex: new RegExp(`^${raid.expeditionId}$`, 'i') } });
             if (!party || party.status === 'completed' || party.status === 'cancelled') {
               expeditionIdsToClose.add(raid.expeditionId);
             }

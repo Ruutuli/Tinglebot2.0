@@ -147,6 +147,19 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             helpText: "Item subtypes",
             options: FIELD_OPTIONS.subtype.map(st => ({ value: st, label: st })),
           },
+          {
+            key: "element",
+            label: "Element",
+            type: "select",
+            helpText: "Elemental type for weapons/armor (fire, ice, electric, tech, none)",
+            options: FIELD_OPTIONS.element.map(el => ({ value: el, label: el.charAt(0).toUpperCase() + el.slice(1) })),
+            showIf: (data) => {
+              const categoryGear = Array.isArray(data.categoryGear) 
+                ? data.categoryGear[0] 
+                : data.categoryGear;
+              return categoryGear === "Armor" || categoryGear === "Weapon";
+            },
+          },
         ],
       },
       {

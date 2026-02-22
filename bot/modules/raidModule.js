@@ -822,7 +822,7 @@ async function notifyExpeditionRaidOver(raid, client, result, finalBlowCharacter
       .setColor(result === 'defeated' ? 0x4CAF50 : result === 'fled' ? 0x9C27B0 : 0xFF9800)
       .setTitle('🗺️ **Raid over — continue your expedition**')
       .setDescription(desc)
-      .addFields({ name: '🆔 **Expedition ID**', value: raid.expeditionId, inline: true })
+      .addFields({ name: '🆔 **__Expedition ID__**', value: raid.expeditionId, inline: true })
       .setTimestamp();
 
     if (raid.threadId) {
@@ -899,7 +899,7 @@ async function endExplorationRaidAsRetreat(raid, client) {
 async function closeRaidsForExpedition(expeditionId) {
   if (!expeditionId) return;
   try {
-    const raids = await Raid.find({ expeditionId, status: 'active' });
+    const raids = await Raid.find({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: 'active' });
     for (const raid of raids) {
       try {
         await cancelRaidTurnSkip(raid.raidId);
@@ -1162,6 +1162,35 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           party.markModified('totalHearts');
           await party.save();
           logger.info('RAID', `Expedition raid turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
+          
+          // Check if party pool hit 0 — trigger immediate expedition failure
+          if (newPartyHearts <= 0 && raid.status === 'active') {
+            logger.info('RAID', `Expedition raid ${raid.raidId} — party hearts hit 0, triggering expedition failure`);
+            
+            // Close the raid first (mark as fled since party was KO'd, not monster defeated)
+            await cancelRaidTurnSkip(raid.raidId);
+            await raid.completeRaid('fled');
+            
+            // Trigger expedition failure
+            const { handleExpeditionFailedFromWave } = require('./exploreModule');
+            const failResult = await handleExpeditionFailedFromWave(raid.expeditionId, interaction?.client);
+            if (failResult.success) {
+              logger.info('RAID', `Expedition ${raid.expeditionId} failed from raid — party KO'd`);
+              // Send the failure embed to the raid thread
+              if (failResult.embed && raid.threadId && interaction?.client) {
+                try {
+                  const thread = await interaction.client.channels.fetch(raid.threadId);
+                  if (thread) {
+                    await thread.send({ embeds: [failResult.embed] });
+                  }
+                } catch (threadErr) {
+                  logger.warn('RAID', `Could not send expedition failure embed to raid thread: ${threadErr.message}`);
+                }
+              }
+            } else {
+              logger.warn('RAID', `handleExpeditionFailedFromWave returned error: ${failResult.error}`);
+            }
+          }
         }
       } catch (syncErr) {
         logger.warn('RAID', `Failed to sync expedition party hearts after raid turn: ${syncErr?.message || syncErr}`);
@@ -1437,7 +1466,7 @@ async function createRaidEmbed(raid, monsterImage) {
         const hearts = typeof party.totalHearts === 'number' ? party.totalHearts : 0;
         const stamina = typeof party.totalStamina === 'number' ? party.totalStamina : 0;
         embed.addFields({
-          name: '❤️ __Party hearts__',
+          name: '❤️ **__Party Hearts__**',
           value: `**${hearts}** ❤ · **${stamina}** 🟩 stamina`,
           inline: true
         });
@@ -1591,26 +1620,11 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
             const heartsRem = poolHearts % n;
             const staminaPer = Math.floor(poolStamina / n);
             const staminaRem = poolStamina % n;
-            const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
-            for (let i = 0; i < n; i++) {
-              const p = refreshed.participants[i];
-              if (!p?.characterId) continue;
-              const heartShare = heartsPer + (i < heartsRem ? 1 : 0);
-              const staminaShare = staminaPer + (i < staminaRem ? 1 : 0);
-              let char = await Character.findById(p.characterId);
-              if (!char) char = await ModCharacter.findById(p.characterId);
-              if (char) {
-                const maxH = char.maxHearts ?? 0;
-                const maxS = char.maxStamina ?? 0;
-                char.currentHearts = Math.min(maxH, heartShare);
-                char.currentStamina = Math.min(maxS, staminaShare);
-                // Only persist character stats in production mode; testing mode uses party pool only
-                if (!EXPLORATION_TESTING_MODE) {
-                  await char.save();
-                }
-              }
-            }
-            console.log(`[raidModule.js]: 🗺️ Assigned expedition pool to raid participants: ${poolHearts} ❤, ${poolStamina} 🟩${EXPLORATION_TESTING_MODE ? ' (testing mode — not persisted to Character DB)' : ''}`);
+            // For expedition raids, do NOT write pool shares to Character DB.
+            // The party pool is the single source of truth during expeditions.
+            // Character DB values are stale during expeditions and only updated when the expedition ends.
+            // We only need to log the pool assignment for debugging purposes.
+            console.log(`[raidModule.js]: 🗺️ Expedition raid started — using party pool: ${poolHearts} ❤, ${poolStamina} 🟩 (not writing to Character DB)`);
           }
         }
       } catch (e) {

@@ -606,20 +606,25 @@ raidSchema.methods.failRaid = async function(client = null) {
     this.participants = [];
   }
   
-  // KO all participants
-  const Character = require('./CharacterModel');
-  for (const participant of this.participants) {
-    try {
-      const character = await Character.findById(participant.characterId);
-      if (character) {
-        character.ko = true;
-        character.currentHearts = 0;
-        await character.save();
-        console.log(`[RaidModel.js]: 💀 KO'd participant ${character.name} in failed raid ${this.raidId}`);
+  // KO all participants (skip for expedition raids — we use party hearts only, never individual character hearts)
+  // Expedition raids use the party pool; individual KO is handled by handleExpeditionFailed when party.totalHearts hits 0
+  if (!this.expeditionId) {
+    const Character = require('./CharacterModel');
+    for (const participant of this.participants) {
+      try {
+        const character = await Character.findById(participant.characterId);
+        if (character) {
+          character.ko = true;
+          character.currentHearts = 0;
+          await character.save();
+          console.log(`[RaidModel.js]: 💀 KO'd participant ${character.name} in failed raid ${this.raidId}`);
+        }
+      } catch (error) {
+        console.error(`[RaidModel.js]: ❌ Error KO'ing participant ${participant.name}:`, error);
       }
-    } catch (error) {
-      console.error(`[RaidModel.js]: ❌ Error KO'ing participant ${participant.name}:`, error);
     }
+  } else {
+    console.log(`[RaidModel.js]: 🗺️ Skipping individual KO for exploration raid ${this.raidId} (expedition ${this.expeditionId}) — party pool is source of truth`);
   }
   
   // Apply village damage (only for Tier 5-10 village raids; never for exploration raids)
