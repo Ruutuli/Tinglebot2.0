@@ -606,8 +606,10 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
- const heartsDisplay = maxHearts > 0 ? `${party?.totalHearts ?? 0}/${maxHearts}` : String(party?.totalHearts ?? 0);
- const staminaDisplay = maxStamina > 0 ? `${party?.totalStamina ?? 0}/${maxStamina}` : String(party?.totalStamina ?? 0);
+ const effectiveMaxHearts = maxHearts > 0 ? maxHearts : (party?.maxHearts ?? 0);
+ const effectiveMaxStamina = maxStamina > 0 ? maxStamina : (party?.maxStamina ?? 0);
+ const heartsDisplay = effectiveMaxHearts > 0 ? `${party?.totalHearts ?? 0}/${effectiveMaxHearts}` : String(party?.totalHearts ?? 0);
+ const staminaDisplay = effectiveMaxStamina > 0 ? `${party?.totalStamina ?? 0}/${effectiveMaxStamina}` : String(party?.totalStamina ?? 0);
  const fields = [
   { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
   { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },

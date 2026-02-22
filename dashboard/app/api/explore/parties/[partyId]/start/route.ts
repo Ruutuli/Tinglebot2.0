@@ -106,10 +106,12 @@ export async function POST(
     const quadrant = String(p.quadrant ?? "");
     const regionInfo = REGIONS[region];
 
-    // Calculate fresh totalHearts/totalStamina from Character documents BEFORE building embed
+    // Calculate fresh totalHearts/totalStamina and maxHearts/maxStamina from Character documents BEFORE building embed
     // This ensures the embed shows accurate values, not accumulated increments from join
     let totalHeartsSum = 0;
     let totalStaminaSum = 0;
+    let maxHeartsSum = 0;
+    let maxStaminaSum = 0;
     const charactersToSet = (p.characters as PartyMemberDoc[]) ?? [];
     const updatedCharacters: PartyMemberDoc[] = [];
     for (const c of charactersToSet) {
@@ -121,13 +123,19 @@ export async function POST(
       const ch = charDoc as Record<string, unknown> | null;
       const h = typeof ch?.currentHearts === "number" ? (ch.currentHearts as number) : (typeof ch?.maxHearts === "number" ? (ch.maxHearts as number) : 0);
       const s = typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : (typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0);
+      const mh = typeof ch?.maxHearts === "number" ? (ch.maxHearts as number) : 0;
+      const ms = typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0;
       const updated = { ...c, currentHearts: h, currentStamina: s };
       updatedCharacters.push(updated);
       totalHeartsSum += h;
       totalStaminaSum += s;
+      maxHeartsSum += mh;
+      maxStaminaSum += ms;
     }
     const totalHearts = totalHeartsSum;
     const totalStamina = totalStaminaSum;
+    const maxHearts = maxHeartsSum;
+    const maxStamina = maxStaminaSum;
     const regionLabel = regionInfo?.label ?? region;
     const village = regionInfo?.village ?? "";
 
@@ -139,20 +147,10 @@ export async function POST(
     const bannerFilename = region ? REGION_BANNER_FILES[region] : null;
 
     const memberBlocks: string[] = [];
-    for (let i = 0; i < characters.length; i++) {
-      const c = characters[i];
-      let hearts: number | string = typeof c.currentHearts === "number" ? c.currentHearts : NaN;
-      let stamina: number | string = typeof c.currentStamina === "number" ? c.currentStamina : NaN;
-      if (Number.isNaN(hearts) || Number.isNaN(stamina)) {
-        const charId = c._id instanceof mongoose.Types.ObjectId ? c._id : new mongoose.Types.ObjectId(String(c._id));
-        let charDoc = await Character.findById(charId).select("currentHearts maxHearts currentStamina maxStamina").lean();
-        if (!charDoc) {
-          charDoc = await ModCharacter.findById(charId).select("currentHearts maxHearts currentStamina maxStamina").lean();
-        }
-        const ch = charDoc as Record<string, unknown> | null;
-        if (Number.isNaN(hearts)) hearts = typeof ch?.currentHearts === "number" ? ch.currentHearts : typeof ch?.maxHearts === "number" ? ch.maxHearts : "?";
-        if (Number.isNaN(stamina)) stamina = typeof ch?.currentStamina === "number" ? ch.currentStamina : typeof ch?.maxStamina === "number" ? ch.maxStamina : "?";
-      }
+    for (let i = 0; i < updatedCharacters.length; i++) {
+      const c = updatedCharacters[i];
+      const hearts = c.currentHearts ?? 0;
+      const stamina = c.currentStamina ?? 0;
       const itemsStr =
         Array.isArray(c.items) && c.items.length > 0
           ? c.items.map((it) => it.itemName).join(", ")
@@ -325,11 +323,13 @@ export async function POST(
           characters: updatedCharacters,
           totalHearts: totalHeartsSum,
           totalStamina: totalStaminaSum,
+          maxHearts: maxHeartsSum,
+          maxStamina: maxStaminaSum,
         },
       }
     );
 
-    console.log(`[explore/parties/start] Expedition started: partyId=${partyId} totalHearts=${totalHeartsSum} totalStamina=${totalStaminaSum}`);
+    console.log(`[explore/parties/start] Expedition started: partyId=${partyId} totalHearts=${totalHeartsSum}/${maxHeartsSum} totalStamina=${totalStaminaSum}/${maxStaminaSum}`);
 
     const threadUrl = `https://discord.com/channels/${process.env.GUILD_ID ?? ""}/${threadId}`;
     return NextResponse.json({

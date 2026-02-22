@@ -2727,9 +2727,10 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
     }
 
     // Get items from the village's shop using ShopStock model
+    const escapedValue = focusedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const villageShopItems = await ShopStock.find({
       stock: { $gt: 0 },
-      itemName: { $regex: new RegExp(focusedValue, 'i') }
+      itemName: { $regex: new RegExp(escapedValue, 'i') }
     }).sort({ itemName: 1 }).limit(25);
 
     if (villageShopItems.length === 0) {
