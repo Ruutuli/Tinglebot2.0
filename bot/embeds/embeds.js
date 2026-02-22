@@ -606,14 +606,27 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
- const effectiveMaxHearts = maxHearts > 0 ? maxHearts : (party?.maxHearts ?? 0);
- const effectiveMaxStamina = maxStamina > 0 ? maxStamina : (party?.maxStamina ?? 0);
+ // Calculate effective max values: prefer passed params, then party-level, then sum from characters array
+ let effectiveMaxHearts = maxHearts > 0 ? maxHearts : (party?.maxHearts ?? 0);
+ let effectiveMaxStamina = maxStamina > 0 ? maxStamina : (party?.maxStamina ?? 0);
+ // Fallback: compute from party.characters if they have maxHearts/maxStamina stored
+ if (effectiveMaxHearts === 0 && party?.characters?.length) {
+  effectiveMaxHearts = party.characters.reduce((sum, c) => sum + (c.maxHearts ?? 0), 0);
+ }
+ if (effectiveMaxStamina === 0 && party?.characters?.length) {
+  effectiveMaxStamina = party.characters.reduce((sum, c) => sum + (c.maxStamina ?? 0), 0);
+ }
  const heartsDisplay = effectiveMaxHearts > 0 ? `${party?.totalHearts ?? 0}/${effectiveMaxHearts}` : String(party?.totalHearts ?? 0);
  const staminaDisplay = effectiveMaxStamina > 0 ? `${party?.totalStamina ?? 0}/${effectiveMaxStamina}` : String(party?.totalStamina ?? 0);
  const fields = [
   { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
   { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },
-  ...(actionCost != null ? [{ name: "⚡ **__Action Cost__**", value: actionCost.staminaCost > 0 ? `−${actionCost.staminaCost} 🟩` : (actionCost.heartsCost > 0 ? `−${actionCost.heartsCost} ❤️ (struggle)` : "Free"), inline: true }] : []),
+  ...(actionCost != null ? [{ name: "⚡ **__Action Cost__**", value: (() => {
+   const parts = [];
+   if (actionCost.staminaCost > 0) parts.push(`−${actionCost.staminaCost} 🟩`);
+   if (actionCost.heartsCost > 0) parts.push(`−${actionCost.heartsCost} ❤️ (struggle)`);
+   return parts.length > 0 ? parts.join(" ") : "Free";
+  })(), inline: true }] : []),
   ...extraFields,
   ...(ruinRestRecovered > 0 ? [{ name: "🟩 **__Ruin rest__**", value: `Recognized a safe spot from your earlier ruins exploration here — **+${ruinRestRecovered} stamina** recovered this roll.`, inline: false }] : []),
   { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },

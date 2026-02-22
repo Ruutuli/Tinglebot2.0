@@ -344,6 +344,8 @@ export async function POST(
       name: character.name,
       currentHearts,
       currentStamina,
+      maxHearts,
+      maxStamina,
       icon,
       items: foundItems.map((it) => ({
         itemName: it.itemName,
@@ -362,7 +364,7 @@ export async function POST(
       { partyId },
       {
         $push: { characters: characterData },
-        $inc: { totalHearts: currentHearts, totalStamina: currentStamina },
+        $inc: { totalHearts: currentHearts, totalStamina: currentStamina, maxHearts, maxStamina },
       }
     );
 

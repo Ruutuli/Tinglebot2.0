@@ -31,6 +31,7 @@ const Pin = require('@/models/PinModel.js');
 const Grotto = require('@/models/GrottoModel.js');
 const MonsterCamp = require('@/models/MonsterCampModel.js');
 const Relic = require('@/models/RelicModel.js');
+const Wave = require('@/models/WaveModel.js');
 
 // ------------------- Modules ------------------
 const { calculateFinalValue, getMonstersByRegion, getExplorationMonsterFromList, createWeightedItemList } = require("../../modules/rngModule.js");
@@ -38,7 +39,7 @@ const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const { generateVictoryMessage, generateDamageMessage, generateDefenseBuffMessage, generateAttackBuffMessage, generateFinalOutcomeMessage, generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
 const { handleKO, healKoCharacter, useHearts } = require("../../modules/characterStatsModule.js");
 const { triggerRaid, endExplorationRaidAsRetreat, closeRaidsForExpedition, advanceRaidTurnOnItemUse } = require("../../modules/raidModule.js");
-const { startWave, joinWave } = require("../../modules/waveModule.js");
+const { startWave, joinWave, advanceWaveTurnOnItemUse } = require("../../modules/waveModule.js");
 const MapModule = require('@/modules/mapModule.js');
 const { pushProgressLog, hasDiscoveriesInQuadrant, updateDiscoveryGrottoStatus, markGrottoCleared } = require("../../modules/exploreModule.js");
 const { finalizeBlightApplication } = require("../../handlers/blightHandler.js");
@@ -215,6 +216,9 @@ const CAMP_ATTACK_CHANCE_SECURED = 0.05;
 // CAMP_ATTACK_BONUS_* - Extra chance when party has 0 stamina (exhausted camp = easier target). Added to unsecured chance, capped at CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP.
 const CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA = 0.15;
 const CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP = 0.5;
+// CAMP_ATTACK_PROTECTION_* - Protection against consecutive camp attacks at 0 stamina to prevent quick party KO
+const CAMP_ATTACK_PROTECTION_LOOKBACK = 2; // Check last N camp attempts
+const CAMP_ATTACK_PROTECTION_THRESHOLD = 1; // If N or more were attacks, guarantee safe camp
 
 const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 
@@ -330,6 +334,49 @@ async function getPartyPoolCaps(party) {
   }
  }
  return { maxHearts, maxStamina };
+}
+
+// ------------------- ensurePartyMaxValues ------------------
+// Backfill party.maxHearts/maxStamina and per-character max values if missing (for expeditions started before this feature).
+// Also populates character-level maxHearts/maxStamina for embed fallback computation.
+async function ensurePartyMaxValues(party, poolCaps) {
+ if (!party || !poolCaps) return;
+ let needsSave = false;
+ // Backfill party-level max values
+ if (!party.maxHearts || party.maxHearts === 0) {
+  party.maxHearts = poolCaps.maxHearts;
+  party.markModified("maxHearts");
+  needsSave = true;
+ }
+ if (!party.maxStamina || party.maxStamina === 0) {
+  party.maxStamina = poolCaps.maxStamina;
+  party.markModified("maxStamina");
+  needsSave = true;
+ }
+ // Backfill per-character max values
+ if (party.characters?.length) {
+  for (let i = 0; i < party.characters.length; i++) {
+   const pc = party.characters[i];
+   if (!pc.maxHearts || pc.maxHearts === 0 || !pc.maxStamina || pc.maxStamina === 0) {
+    const char = await Character.findById(pc._id).select("maxHearts maxStamina").lean();
+    if (char) {
+     if (!pc.maxHearts || pc.maxHearts === 0) {
+      party.characters[i].maxHearts = char.maxHearts ?? 0;
+      needsSave = true;
+     }
+     if (!pc.maxStamina || pc.maxStamina === 0) {
+      party.characters[i].maxStamina = char.maxStamina ?? 0;
+      needsSave = true;
+     }
+    }
+   }
+  }
+  if (needsSave) party.markModified("characters");
+ }
+ if (needsSave) {
+  await party.save();
+  logger.info("EXPLORE", `[explore.js] Backfilled max values for party ${party.partyId}: maxHearts=${party.maxHearts} maxStamina=${party.maxStamina}`);
+ }
 }
 
 // ------------------- getExplorePageUrl ------------------
@@ -687,6 +734,27 @@ function getLastProgressOutcomeForLocation(party, square, quadrant) {
 // ------------------- normalizeSquareId ------------------
 function normalizeSquareId(square) {
  return String(square || "").trim().toUpperCase();
+}
+
+// ------------------- countRecentCampAttacks ------------------
+// Count how many of the last N camp attempts resulted in monster attacks.
+// Used to prevent consecutive camp attacks at 0 stamina from KOing the party too easily.
+function countRecentCampAttacks(party, lookback = CAMP_ATTACK_PROTECTION_LOOKBACK) {
+ const log = party.progressLog;
+ if (!log || !log.length) return 0;
+ let campCount = 0;
+ let attackCount = 0;
+ for (let i = log.length - 1; i >= 0 && campCount < lookback; i--) {
+  const e = log[i];
+  if (e.outcome === "camp" || e.outcome === "safe_space") {
+   campCount++;
+   const msg = (e.message || "").toLowerCase();
+   if (msg.includes("interrupted") || msg.includes("attacked") || (e.heartsLost && e.heartsLost > 0)) {
+    attackCount++;
+   }
+  }
+ }
+ return attackCount;
 }
 
 // ------------------- findExactMapSquareAndQuadrant ------------------
@@ -1708,6 +1776,15 @@ module.exports = {
        ],
       });
      }
+     
+     // Check if party is KO'd after paying (hearts reached 0 via struggle)
+     if ((party.totalHearts ?? 0) <= 0 && payResult.heartsPaid > 0) {
+      pushProgressLog(party, character.name, "ko", `Party KO'd after paying ${payResult.heartsPaid} heart(s) for target practice (struggle mode).`, undefined, { heartsLost: payResult.heartsPaid });
+      await party.save();
+      await handleExpeditionFailed(party, interaction);
+      return;
+     }
+     
      const { failReduction, missReduction } = getTargetPracticeModifiers(character);
      const failThreshold = Math.max(0.04, BASE_FAIL - failReduction);
      const missThreshold = Math.max(0.10, BASE_MISS - missReduction);
@@ -2186,11 +2263,27 @@ module.exports = {
        party.totalHearts = Math.max(0, (party.totalHearts ?? 0) - outcome.heartsLost);
        party.markModified("totalHearts");
        await party.save();
+       
+       // Check if party is KO'd after losing hearts in maze
+       if ((party.totalHearts ?? 0) <= 0) {
+        pushProgressLog(party, character.name, "ko", `Party KO'd after losing ${outcome.heartsLost} heart(s) in grotto maze.`, undefined, { heartsLost: outcome.heartsLost });
+        await party.save();
+        await handleExpeditionFailed(party, interaction);
+        return;
+       }
       }
       if (outcome.staminaCost > 0) {
        const payResult = await payStaminaOrStruggle(party, party.currentTurn, outcome.staminaCost, { action: "grotto_maze" });
        if (!payResult.ok) {
         return interaction.editReply(`Not enough stamina or hearts for maze cost (${outcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
+       }
+       
+       // Check if party is KO'd after paying (hearts reached 0 via struggle)
+       if ((party.totalHearts ?? 0) <= 0 && payResult.heartsPaid > 0) {
+        pushProgressLog(party, character.name, "ko", `Party KO'd after paying ${payResult.heartsPaid} heart(s) in grotto maze (struggle mode).`, undefined, { heartsLost: payResult.heartsPaid });
+        await party.save();
+        await handleExpeditionFailed(party, interaction);
+        return;
        }
       }
       if (outcome.type === 'collapse' || outcome.type === 'faster_path_open') {
@@ -2437,11 +2530,27 @@ module.exports = {
        party.totalHearts = Math.max(0, (party.totalHearts ?? 0) - trapOutcome.heartsLost);
        party.markModified("totalHearts");
        await party.save();
+       
+       // Check if party is KO'd after losing hearts in trap
+       if ((party.totalHearts ?? 0) <= 0) {
+        pushProgressLog(party, character.name, "ko", `Party KO'd after losing ${trapOutcome.heartsLost} heart(s) in grotto maze trap.`, undefined, { heartsLost: trapOutcome.heartsLost });
+        await party.save();
+        await handleExpeditionFailed(party, interaction);
+        return;
+       }
       }
       if (trapOutcome.staminaCost > 0) {
        const payResult = await payStaminaOrStruggle(party, party.currentTurn, trapOutcome.staminaCost, { action: "grotto_maze_trap" });
        if (!payResult.ok) {
         return interaction.editReply(`Not enough stamina or hearts for trap cost (${trapOutcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
+       }
+       
+       // Check if party is KO'd after paying (hearts reached 0 via struggle)
+       if ((party.totalHearts ?? 0) <= 0 && payResult.heartsPaid > 0) {
+        pushProgressLog(party, character.name, "ko", `Party KO'd after paying ${payResult.heartsPaid} heart(s) in grotto maze trap (struggle mode).`, undefined, { heartsLost: payResult.heartsPaid });
+        await party.save();
+        await handleExpeditionFailed(party, interaction);
+        return;
        }
       }
       const heartsLost = trapOutcome.heartsLost ?? 0;
@@ -2595,6 +2704,15 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     if (!payResult.ok) {
      return interaction.editReply(`Not enough stamina or hearts to travel to the grotto. Need ${totalCost} 🟩; party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
     }
+    
+    // Check if party is KO'd after paying (hearts reached 0 via struggle)
+    if ((party.totalHearts ?? 0) <= 0 && payResult.heartsPaid > 0) {
+     pushProgressLog(party, character.name, "ko", `Party KO'd after paying ${payResult.heartsPaid} heart(s) to travel to grotto (struggle mode).`, undefined, { heartsLost: payResult.heartsPaid });
+     await party.save();
+     await handleExpeditionFailed(party, interaction);
+     return;
+    }
+    
     party.square = normSquare;
      party.quadrant = normQuad;
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
@@ -2733,8 +2851,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      }
      const waveEmbed = createWaveEmbed(waveData);
      const joinNote = joinedNames.length > 0 ? `**All party members** (${joinedNames.join(", ")}) must fight. ` : "";
+     const firstCharNameRevisit = joinedNames[0] || null;
+     const firstCharSlotRevisit = firstCharNameRevisit ? party.characters.find(c => c.name === firstCharNameRevisit) : null;
+     const turnOrderNoteRevisit = joinedNames.length > 1
+      ? `\n\n**Turn order:** ${joinedNames.map((n, i) => i === 0 ? `**${n}** (first)` : n).join(" → ")}`
+      : "";
+     const firstUpPingRevisit = firstCharSlotRevisit?.userId ? `\n\n<@${firstCharSlotRevisit.userId}> — **${firstCharNameRevisit}**, you're up first!` : "";
      await interaction.channel.send({
-      content: `🌊 **MONSTER CAMP WAVE!** — Revisiting a camp at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!\n\n**Mark this camp on the map** from the expedition thread if you haven't already (so you can revisit it later).`,
+      content: `🌊 **MONSTER CAMP WAVE!** — Revisiting a camp at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!${turnOrderNoteRevisit}${firstUpPingRevisit}\n\n**Mark this camp on the map** from the expedition thread if you haven't already (so you can revisit it later).`,
       embeds: [waveEmbed],
      });
      if (failedJoins.length > 0) {
@@ -3002,6 +3126,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       );
      }
 
+     // Block rolling if there's an active wave for this expedition (must complete wave first)
+     const activeWave = await Wave.findOne({ expeditionId, status: "active" });
+     if (activeWave) {
+      return interaction.editReply(
+       `**Complete the wave first.** You cannot use \`/explore roll\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWave.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
+      );
+     }
+
      const characterIndex = party.characters.findIndex(
       (char) => char.name === characterName
      );
@@ -3104,8 +3236,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         embeds: [createStuckInWildEmbed(party, location)],
       });
      }
+     
+     // Check if party is KO'd after paying (hearts reached 0 via struggle)
+     if ((party.totalHearts ?? 0) <= 0 && payResult.heartsPaid > 0) {
+      pushProgressLog(party, character.name, "ko", `Party KO'd after paying ${payResult.heartsPaid} heart(s) to roll (struggle mode).`, undefined, { heartsLost: payResult.heartsPaid });
+      await party.save();
+      await handleExpeditionFailed(party, interaction);
+      return;
+     }
+     
      const rollCostsForLog = buildCostsForLog(payResult);
      const poolCaps = await getPartyPoolCaps(party);
+     await ensurePartyMaxValues(party, poolCaps);
      const n = (party.characters || []).length;
      if (party.status === "started" && n > 0) {
       // Use party pool only; keep in-memory character and party slot in sync with pool share for display.
@@ -3155,6 +3297,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
        const reason = "explored twice in a row at this location (blocked by rule)";
+       outcomeType = rollOutcome();
+       continue;
+      }
+      // Don't allow "explored" as the first roll after moving to a new quadrant (must have a meaningful outcome first)
+      if (outcomeType === "explored" && (lastOutcomeHere === "move" || lastOutcomeHere === null)) {
        outcomeType = rollOutcome();
        continue;
       }
@@ -3412,6 +3559,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        campHeartsRecovered = Math.floor(Math.random() * 3) + 1;
        campStaminaRecovered = Math.floor(Math.random() * 3) + 1;
        const campCaps = await getPartyPoolCaps(party);
+       await ensurePartyMaxValues(party, campCaps);
        const beforeHearts = party.totalHearts ?? 0;
        const beforeStamina = party.totalStamina ?? 0;
        party.totalHearts = Math.min(campCaps.maxHearts, Math.max(0, beforeHearts + campHeartsRecovered));
@@ -4234,8 +4382,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           const joinNote = joinedNames.length > 0
            ? `**All party members** (${joinedNames.join(", ")}) must fight. `
            : "";
+          const firstCharName = joinedNames[0] || null;
+          const firstCharSlot = firstCharName ? freshParty.characters.find(c => c.name === firstCharName) : null;
+          const turnOrderNote = joinedNames.length > 1
+           ? `\n\n**Turn order:** ${joinedNames.map((n, i) => i === 0 ? `**${n}** (first)` : n).join(" → ")}`
+           : "";
+          const firstUpPing = firstCharSlot?.userId ? `\n\n<@${firstCharSlot.userId}> — **${firstCharName}**, you're up first!` : "";
           await i.channel.send({
-           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!\n\n**Mark this camp on the map** from the expedition thread if you haven't already (so you can revisit it later).`,
+           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!${turnOrderNote}${firstUpPing}\n\n**Mark this camp on the map** from the expedition thread if you haven't already (so you can revisit it later).`,
            embeds: [waveEmbed],
           });
           if (failedJoins.length > 0) {
@@ -4804,6 +4958,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      );
     }
 
+    // Block securing if there's an active wave for this expedition (must complete wave first)
+    const activeWaveSecure = await Wave.findOne({ expeditionId, status: "active" });
+    if (activeWaveSecure) {
+     return interaction.editReply(
+      `**Complete the wave first.** You cannot use \`/explore secure\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveSecure.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
+     );
+    }
+
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
@@ -5087,6 +5249,16 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        return;
       }
 
+      // Check if party is KO'd after paying (hearts reached 0 via struggle)
+      if ((freshParty.totalHearts ?? 0) <= 0 && securePayResult.heartsPaid > 0) {
+       const character = await findCharacterByNameAndUser(freshParty.characters[freshCharIndex].name, i.user.id);
+       pushProgressLog(freshParty, character?.name || 'Party', "ko", `Party KO'd after paying ${securePayResult.heartsPaid} heart(s) to secure (struggle mode).`, undefined, { heartsLost: securePayResult.heartsPaid });
+       await freshParty.save();
+       await handleExpeditionFailed(freshParty, interaction);
+       collector.stop();
+       return;
+      }
+
       const character = await findCharacterByNameAndUser(freshParty.characters[freshCharIndex].name, i.user.id);
       if (character) {
        character.currentStamina = freshParty.characters[freshCharIndex].currentStamina;
@@ -5268,6 +5440,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     if (activeRaidMove) {
      return interaction.editReply(
       `**Complete the raid first.** You cannot use \`/explore move\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidMove.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
+     );
+    }
+
+    // Block moving if there's an active wave for this expedition (must complete wave first)
+    const activeWaveMove = await Wave.findOne({ expeditionId, status: "active" });
+    if (activeWaveMove) {
+     return interaction.editReply(
+      `**Complete the wave first.** You cannot use \`/explore move\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveMove.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
      );
     }
 
@@ -5455,6 +5635,15 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        embeds: [createStuckInWildEmbed(party, location)],
       });
      }
+     
+     // Check if party is KO'd after paying (hearts reached 0 via struggle)
+     if ((party.totalHearts ?? 0) <= 0 && movePayResult.heartsPaid > 0) {
+      pushProgressLog(party, character.name, "ko", `Party KO'd after paying ${movePayResult.heartsPaid} heart(s) to move (struggle mode).`, undefined, { heartsLost: movePayResult.heartsPaid });
+      await party.save();
+      await handleExpeditionFailed(party, interaction);
+      return;
+     }
+     
      const n = (party.characters || []).length;
      if (party.status === "started" && n > 0) {
       character.currentHearts = Math.floor((party.totalHearts ?? 0) / n);
@@ -5693,6 +5882,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     } catch (raidErr) {
       logger.warn("EXPLORE", `[explore.js]⚠️ advanceRaidTurnOnItemUse: ${raidErr?.message || raidErr}`);
     }
+    // If in an expedition wave, item use also counts as wave turn
+    try {
+      await advanceWaveTurnOnItemUse(character._id);
+    } catch (waveErr) {
+      logger.warn("EXPLORE", `[explore.js]⚠️ advanceWaveTurnOnItemUse: ${waveErr?.message || waveErr}`);
+    }
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
@@ -5749,6 +5944,22 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
+    }
+
+    // Block ending if there's an active raid for this expedition (must defeat or retreat first)
+    const activeRaidEnd = await Raid.findOne({ expeditionId, status: "active" });
+    if (activeRaidEnd) {
+     return interaction.editReply(
+      `**Complete the raid first.** You cannot use \`/explore end\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidEnd.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
+     );
+    }
+
+    // Block ending if there's an active wave for this expedition (must complete wave first)
+    const activeWaveEnd = await Wave.findOne({ expeditionId, status: "active" });
+    if (activeWaveEnd) {
+     return interaction.editReply(
+      `**Complete the wave first.** You cannot use \`/explore end\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveEnd.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
+     );
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
@@ -6160,6 +6371,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      );
     }
 
+    // Block camping if there's an active wave for this expedition (must complete wave first)
+    const activeWaveCamp = await Wave.findOne({ expeditionId, status: "active" });
+    if (activeWaveCamp) {
+     return interaction.editReply(
+      `**Complete the wave first.** You cannot use \`/explore camp\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveCamp.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
+     );
+    }
+
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply(
@@ -6218,6 +6437,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     let campAttackChance = isSecured ? CAMP_ATTACK_CHANCE_SECURED : CAMP_ATTACK_CHANCE_UNSECURED;
     if (stuckInWild || (!isSecured && (party.totalStamina === 0 || (typeof party.totalStamina === "number" && party.totalStamina < 1)))) {
      campAttackChance = Math.min(CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP, campAttackChance + CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA);
+    }
+    // Protection: if party is at 0 stamina and has been attacked at camp recently, guarantee safe camp to prevent easy KO
+    const recentCampAttacks = countRecentCampAttacks(party);
+    if (stuckInWild && recentCampAttacks >= CAMP_ATTACK_PROTECTION_THRESHOLD) {
+     campAttackChance = 0;
+     logger.info("EXPLORE", `[explore.js] Camp protection: party at 0 stamina with ${recentCampAttacks} recent camp attack(s), guaranteeing safe camp`);
     }
     const canBeAttackedAtCamp = !(character.blighted && character.blightStage >= 3) && Math.random() < campAttackChance;
     if (canBeAttackedAtCamp) {
@@ -6358,12 +6583,30 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const char = await Character.findById(party.characters[i]._id);
      if (!char) continue;
      const maxHrt = char.maxHearts ?? 0;
+     const maxStam = char.maxStamina ?? 0;
      sumMaxHearts += maxHrt;
-     sumMaxStamina += char.maxStamina ?? 0;
+     sumMaxStamina += maxStam;
+     // Backfill per-character max values if missing
+     if (!party.characters[i].maxHearts || party.characters[i].maxHearts === 0) {
+      party.characters[i].maxHearts = maxHrt;
+     }
+     if (!party.characters[i].maxStamina || party.characters[i].maxStamina === 0) {
+      party.characters[i].maxStamina = maxStam;
+     }
      const heartsCap = Math.floor(maxHrt * heartsPct);
      const heartsRecovered = heartsCap > 0 ? Math.floor(Math.random() * (heartsCap + 1)) : 0;
      totalHeartsRecovered += heartsRecovered;
     }
+    // Backfill party-level max values if missing
+    if (!party.maxHearts || party.maxHearts === 0) {
+     party.maxHearts = sumMaxHearts;
+     party.markModified("maxHearts");
+    }
+    if (!party.maxStamina || party.maxStamina === 0) {
+     party.maxStamina = sumMaxStamina;
+     party.markModified("maxStamina");
+    }
+    party.markModified("characters");
     if (totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < sumMaxHearts) totalHeartsRecovered = 1;
     // When stamina is 0 and camping (camp in the wild), only recover stamina — no hearts.
     if (stuckInWild) totalHeartsRecovered = 0;

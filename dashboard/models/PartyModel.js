@@ -16,6 +16,8 @@ const PartySchema = new Schema({
       name: { type: String, required: true },
       currentHearts: { type: Number, default: 0 },
       currentStamina: { type: Number, default: 0 },
+      maxHearts: { type: Number, default: 0 },
+      maxStamina: { type: Number, default: 0 },
       icon: { type: String },
       items: [
         {

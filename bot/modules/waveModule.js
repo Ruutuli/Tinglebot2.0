@@ -1314,19 +1314,26 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
       await wave.save();
     }
 
-    // When wave is from expedition: use party hearts only — apply damage to party pool (never character DB)
+    // When wave is from expedition: apply damage from this turn to party pool.
+    // IMPORTANT: For expeditions, the party pool is the source of truth.
+    // Calculate damage taken this turn and subtract from current pool (don't overwrite with battleResult.playerHearts.current
+    // in case the pool changed between when we read it and now).
     if (wave.expeditionId && battleResult) {
       try {
         const Party = require('@/models/PartyModel');
         const party = await Party.findActiveByPartyId(wave.expeditionId);
-        const newPartyHearts = battleResult.playerHearts && typeof battleResult.playerHearts.current === 'number'
-          ? Math.max(0, battleResult.playerHearts.current)
-          : 0;
         if (party) {
+          // Calculate damage taken this turn from battleResult
+          const heartsBefore = battleResult.characterHeartsBefore ?? characterHeartsBefore ?? party.totalHearts ?? 0;
+          const heartsAfter = battleResult.playerHearts?.current ?? heartsBefore;
+          const damageTaken = Math.max(0, heartsBefore - heartsAfter);
+          
+          // Apply damage to current party pool
+          const newPartyHearts = Math.max(0, (party.totalHearts ?? 0) - damageTaken);
           party.totalHearts = newPartyHearts;
           party.markModified('totalHearts');
           await party.save();
-          console.log(`[waveModule.js]: 🗺️ Expedition wave turn — party hearts: ${party.totalHearts} ❤`);
+          console.log(`[waveModule.js]: 🗺️ Expedition wave turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
         }
       } catch (syncErr) {
         logger.warn('WAVE', `Failed to update expedition party hearts after wave turn: ${syncErr?.message || syncErr}`);
@@ -1406,6 +1413,26 @@ async function failWave(waveId) {
   }
 }
 
+// ---- Function: advanceWaveTurnOnItemUse ----
+// When a character uses a healing item during their expedition wave turn, advance the wave turn.
+// Called from /explore item command after successful healing so items count as a turn.
+async function advanceWaveTurnOnItemUse(characterId) {
+  if (!characterId) return;
+  const charIdStr = characterId.toString();
+  const waves = await Wave.find({ status: 'active', 'participants.characterId': characterId });
+  for (const wave of waves) {
+    // Only apply to expedition waves (have expeditionId set)
+    if (!wave.expeditionId) continue;
+    
+    const currentParticipant = wave.participants[wave.currentTurn];
+    if (currentParticipant && currentParticipant.characterId && currentParticipant.characterId.toString() === charIdStr) {
+      await wave.advanceTurn();
+      console.log(`[waveModule.js]: 🧪 Item use by ${currentParticipant.name} advanced wave ${wave.waveId} turn`);
+      break;
+    }
+  }
+}
+
 // ============================================================================
 // ---- Export ----
 // ============================================================================
@@ -1418,6 +1445,7 @@ module.exports = {
   generateWaveMonsters,
   createWaveThread,
   checkAllParticipantsKO,
+  advanceWaveTurnOnItemUse,
   WAVE_DIFFICULTY_GROUPS
 };
 

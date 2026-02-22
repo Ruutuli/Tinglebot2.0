@@ -38,6 +38,8 @@ type PartyMemberDoc = {
   name: string;
   currentHearts?: number;
   currentStamina?: number;
+  maxHearts?: number;
+  maxStamina?: number;
   items?: Array<{ itemName: string }>;
 };
 
@@ -125,7 +127,7 @@ export async function POST(
       const s = typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : (typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0);
       const mh = typeof ch?.maxHearts === "number" ? (ch.maxHearts as number) : 0;
       const ms = typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0;
-      const updated = { ...c, currentHearts: h, currentStamina: s };
+      const updated = { ...c, currentHearts: h, currentStamina: s, maxHearts: mh, maxStamina: ms };
       updatedCharacters.push(updated);
       totalHeartsSum += h;
       totalStaminaSum += s;

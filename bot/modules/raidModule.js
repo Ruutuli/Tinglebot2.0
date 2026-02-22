@@ -866,40 +866,14 @@ async function advanceRaidTurnOnItemUse(characterId) {
 }
 
 // ---- Function: syncExpeditionPartyPoolFromRaid ----
-// When an expedition raid ends, set party pool to sum of all participants' currentHearts/currentStamina.
-// In testing mode, skip sync — party pool is the source of truth and character DB isn't updated.
+// For expedition raids, the party pool is the single source of truth throughout the expedition.
+// Damage is applied to the party pool after each turn (in processRaidTurn).
+// This function is a no-op for expeditions — we don't want to overwrite the pool with character DB values.
+// Character DB values are stale during expeditions (they're only updated when the expedition ends).
 async function syncExpeditionPartyPoolFromRaid(raid) {
-  if (!raid?.expeditionId || !raid.participants?.length) return;
-  const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
-  if (EXPLORATION_TESTING_MODE) {
-    logger.info('RAID', `Skipping pool sync for raid ${raid.raidId} (testing mode — party pool is source of truth)`);
-    return;
-  }
-  try {
-    const Party = require('@/models/PartyModel');
-    const Character = require('@/models/CharacterModel');
-    const ModCharacter = require('@/models/ModCharacterModel');
-    const party = await Party.findActiveByPartyId(raid.expeditionId);
-    if (!party || party.status !== 'started') return;
-    let sumHearts = 0;
-    let sumStamina = 0;
-    for (const p of raid.participants) {
-      if (!p.characterId) continue;
-      const char = (await Character.findById(p.characterId).lean()) || (await ModCharacter.findById(p.characterId).lean());
-      if (char) {
-        sumHearts += (char.currentHearts ?? 0);
-        sumStamina += (char.currentStamina ?? 0);
-      }
-    }
-    party.totalHearts = Math.max(0, sumHearts);
-    party.totalStamina = Math.max(0, sumStamina);
-    party.markModified('totalHearts');
-    party.markModified('totalStamina');
-    await party.save();
-    logger.info('RAID', `Synced expedition pool from raid ${raid.raidId}: ${party.totalHearts} ❤, ${party.totalStamina} 🟩`);
-  } catch (err) {
-    logger.warn('RAID', `syncExpeditionPartyPoolFromRaid: ${err?.message || err}`);
-  }
+  if (!raid?.expeditionId) return;
+  // For expeditions, party pool is always the source of truth. Don't sync from character DB.
+  logger.info('RAID', `Skipping pool sync for raid ${raid.raidId} (expedition — party pool is source of truth)`);
 }
 
 // ---- Function: endExplorationRaidAsRetreat ----
@@ -1044,13 +1018,26 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     diceRoll = Math.max(1, Math.floor(diceRoll - totalPenalty));
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateRaidFinalValue(character, diceRoll);
 
-    // Capture character hearts before battle
-    const characterHeartsBefore = character.currentHearts;
+    // For expedition raids, use party pool as the source of truth (not character DB)
+    // This mirrors how waveModule handles expedition waves
+    let characterHeartsBefore = character.currentHearts;
+    let battleCharacter = character;
+    
+    if (raid.expeditionId) {
+      const Party = require('@/models/PartyModel');
+      const party = await Party.findActiveByPartyId(raid.expeditionId);
+      if (party) {
+        characterHeartsBefore = Math.max(0, party.totalHearts ?? 0);
+        const plainChar = character.toObject ? character.toObject() : { ...character };
+        battleCharacter = { ...plainChar, currentHearts: characterHeartsBefore, maxHearts: characterHeartsBefore };
+        logger.info('RAID', `Expedition raid turn — using party pool: ${characterHeartsBefore} ❤`);
+      }
+    }
     
     // Process the raid battle turn
     const skipPersist = !!(raid.expeditionId && EXPLORATION_TESTING_MODE);
     const battleResult = await processRaidBattle(
-      character,
+      battleCharacter,
       raid.monster,
       diceRoll,
       damageValue,
@@ -1058,7 +1045,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       attackSuccess,
       defenseSuccess,
       characterHeartsBefore,
-      { skipPersist }
+      { skipPersist: skipPersist || !!raid.expeditionId }
     );
 
     if (!battleResult) {
@@ -1156,45 +1143,25 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error(`Failed to update raid after ${maxRaidRetries} retries`);
     }
 
-    // When raid was triggered from exploration, keep party pool in sync: sum all participants' hearts/stamina.
-    // Use battleResult for the character who just took the turn (so party hearts reflect raid damage immediately).
-    if (raid.expeditionId && raid.participants?.length) {
+    // When raid was triggered from exploration, apply damage from this turn to party pool.
+    // IMPORTANT: For expeditions, the party pool is the source of truth — do NOT sum from character DB.
+    // Only apply the damage dealt this turn (battleResult) to the existing party pool.
+    if (raid.expeditionId && battleResult) {
       try {
         const Party = require('@/models/PartyModel');
-        const Character = require('@/models/CharacterModel');
-        const ModCharacter = require('@/models/ModCharacterModel');
         const party = await Party.findActiveByPartyId(raid.expeditionId);
         if (party && party.status === 'started') {
-          let sumHearts = 0;
-          let sumStamina = 0;
-          const actingCharacterId = character?._id?.toString();
-          for (const p of raid.participants) {
-            if (!p.characterId) continue;
-            const pIdStr = p.characterId.toString();
-            let currentHearts;
-            let currentStamina;
-            if (actingCharacterId && pIdStr === actingCharacterId) {
-              currentHearts = battleResult.playerHearts?.current ?? character.currentHearts ?? 0;
-              currentStamina = character.currentStamina ?? 0;
-            } else {
-              const char = (await Character.findById(p.characterId).lean()) || (await ModCharacter.findById(p.characterId).lean());
-              currentHearts = char ? (char.currentHearts ?? 0) : 0;
-              currentStamina = char ? (char.currentStamina ?? 0) : 0;
-            }
-            sumHearts += currentHearts;
-            sumStamina += currentStamina;
-            const slotIdx = party.characters?.findIndex((c) => c._id && c._id.toString() === pIdStr);
-            if (slotIdx !== -1 && party.characters[slotIdx]) {
-              party.characters[slotIdx].currentHearts = currentHearts;
-              party.characters[slotIdx].currentStamina = currentStamina;
-            }
-          }
-          party.totalHearts = Math.max(0, sumHearts);
-          party.totalStamina = Math.max(0, sumStamina);
+          // Calculate damage taken this turn from battleResult
+          const heartsBefore = battleResult.characterHeartsBefore ?? battleResult.playerHearts?.max ?? party.totalHearts ?? 0;
+          const heartsAfter = battleResult.playerHearts?.current ?? heartsBefore;
+          const damageTaken = Math.max(0, heartsBefore - heartsAfter);
+          
+          // Apply damage to party pool (don't sum from character DB - that would overwrite pool with stale values)
+          const newPartyHearts = Math.max(0, (party.totalHearts ?? 0) - damageTaken);
+          party.totalHearts = newPartyHearts;
           party.markModified('totalHearts');
-          party.markModified('totalStamina');
-          if (party.characters?.length) party.markModified('characters');
           await party.save();
+          logger.info('RAID', `Expedition raid turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
         }
       } catch (syncErr) {
         logger.warn('RAID', `Failed to sync expedition party hearts after raid turn: ${syncErr?.message || syncErr}`);

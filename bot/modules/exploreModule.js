@@ -170,6 +170,120 @@ async function markGrottoCleared(grotto) {
     }
 }
 
+// ------------------- handleExpeditionFailedFromWave ------------------
+// Called when an expedition wave fails (party pool hits 0) — ends the expedition with KO status
+// Similar to handleExpeditionFailed in explore.js but callable from waveModule
+const EXPLORATION_KO_DEBUFF_DAYS = 7;
+const REGION_TO_VILLAGE_LOWER = { eldin: "rudania", lanayru: "inariko", faron: "vhintl" };
+const START_POINTS_BY_REGION = {
+    eldin: { square: "H5", quadrant: "Q3" },
+    lanayru: { square: "E8", quadrant: "Q2" },
+    faron: { square: "H11", quadrant: "Q1" },
+};
+
+async function handleExpeditionFailedFromWave(expeditionId, client) {
+    if (!expeditionId) return { success: false, error: 'No expeditionId provided' };
+    
+    const { handleKO } = require('./characterStatsModule.js');
+    const { closeRaidsForExpedition } = require('./raidModule.js');
+    const Grotto = require('@/models/GrottoModel');
+    const { EmbedBuilder } = require('discord.js');
+    const logger = require('@/utils/logger');
+    
+    try {
+        const party = await Party.findActiveByPartyId(expeditionId);
+        if (!party) return { success: false, error: 'Party not found' };
+        
+        const start = START_POINTS_BY_REGION[party.region];
+        if (!start) return { success: false, error: 'Could not resolve start location for region' };
+        
+        const targetVillage = REGION_TO_VILLAGE_LOWER[party.region] || "rudania";
+        const debuffEndDate = new Date(Date.now() + EXPLORATION_KO_DEBUFF_DAYS * 24 * 60 * 60 * 1000);
+        
+        if (!EXPLORATION_TESTING_MODE) {
+            for (const partyChar of party.characters) {
+                const char = await Character.findById(partyChar._id);
+                if (char) {
+                    await handleKO(char._id);
+                    char.currentStamina = 0;
+                    char.currentVillage = targetVillage;
+                    char.debuff = char.debuff || {};
+                    char.debuff.active = true;
+                    char.debuff.endDate = debuffEndDate;
+                    await char.save();
+                }
+            }
+        }
+        
+        // Reset explored quadrants
+        const exploredThisRun = party.exploredQuadrantsThisRun || [];
+        if (exploredThisRun.length > 0) {
+            for (const { squareId, quadrantId } of exploredThisRun) {
+                if (squareId && quadrantId) {
+                    await Square.updateOne(
+                        { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": new RegExp(`^${quadrantId}$`, 'i') },
+                        { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+                        { arrayFilters: [{ "q.quadrantId": new RegExp(`^${quadrantId}$`, 'i') }] }
+                    ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
+                }
+            }
+        }
+        
+        // Delete grottos and close raids
+        await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Grotto delete on fail: ${err?.message}`));
+        await closeRaidsForExpedition(party.partyId);
+        
+        // Update party status
+        party.square = start.square;
+        party.quadrant = start.quadrant;
+        party.status = "completed";
+        party.totalHearts = 0;
+        party.totalStamina = 0;
+        party.gatheredItems = [];
+        party.exploredQuadrantsThisRun = [];
+        party.visitedQuadrantsThisRun = [];
+        party.ruinRestQuadrants = [];
+        party.blightExposure = 0;
+        for (const c of party.characters) {
+            c.currentHearts = 0;
+            c.currentStamina = 0;
+            c.items = [];
+        }
+        pushProgressLog(party, 'Party', 'expedition_failed', "Expedition failed — party was KO'd during monster camp wave.", undefined, undefined, new Date());
+        await party.save();
+        
+        // Build KO embed
+        const villageLabel = (targetVillage || "").charAt(0).toUpperCase() + (targetVillage || "").slice(1);
+        const regionLabel = (party.region || "").charAt(0).toUpperCase() + (party.region || "").slice(1);
+        const locationStr = `${start.square} ${start.quadrant} (${regionLabel} start)`;
+        
+        const embed = new EmbedBuilder()
+            .setTitle("💀 **Expedition: Expedition Failed — Party KO'd**")
+            .setColor(0x8b0000)
+            .setDescription(
+                "The party lost all collective hearts during a monster camp wave. The expedition has failed.\n\n" +
+                "**Return:** Party wakes in **" + villageLabel + "** (the village you began from) with 0 hearts and 0 stamina.\n\n" +
+                "**Items:** All items brought on the expedition and any found during the expedition are lost.\n\n" +
+                "**Map:** Any quadrants this expedition had marked as Explored return to Unexplored status.\n\n" +
+                "**Recovery debuff:** For **" + EXPLORATION_KO_DEBUFF_DAYS + " days**, characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. They must recover their strength."
+            )
+            .addFields(
+                { name: '❤️ Party Hearts', value: '0', inline: true },
+                { name: '🟩 Party Stamina', value: '0', inline: true },
+                { name: '📍 Location', value: locationStr, inline: true },
+                { name: '🆔 Expedition ID', value: expeditionId, inline: true }
+            )
+            .setTimestamp();
+        
+        return { success: true, embed, party, villageLabel };
+        
+    } catch (err) {
+        const logger = require('@/utils/logger');
+        logger.error('EXPLORE', `handleExpeditionFailedFromWave: ${err.message}`);
+        return { success: false, error: err.message };
+    }
+}
+
 module.exports = {
     getCharacterItems,
     formatCharacterItems,
@@ -179,5 +293,6 @@ module.exports = {
     pushProgressLog,
     hasDiscoveriesInQuadrant,
     updateDiscoveryGrottoStatus,
-    markGrottoCleared
+    markGrottoCleared,
+    handleExpeditionFailedFromWave
 };

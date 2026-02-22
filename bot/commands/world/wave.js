@@ -6,6 +6,7 @@ const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
 const { joinWave, processWaveTurn } = require('../../modules/waveModule');
 const Wave = require('@/models/WaveModel');
+const { handleExpeditionFailedFromWave } = require('../../modules/exploreModule');
 
 // ============================================================================
 // ---- Command Definition ----
@@ -93,8 +94,26 @@ module.exports = {
       }
 
       if (waveData.status !== 'active') {
+        const waveInactiveEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle(`❌ Wave ${waveId} is no longer active!`)
+          .addFields(
+            { name: 'Status', value: waveData.status.charAt(0).toUpperCase() + waveData.status.slice(1), inline: true },
+            { 
+              name: 'Possible reasons', 
+              value: '• The wave has been completed by other players\n• The wave has failed (all participants KO\'d)\n• The wave was manually ended by a moderator', 
+              inline: false 
+            },
+            { 
+              name: 'To join a new wave', 
+              value: '• Wait for a new wave announcement\n• Check the village town hall for active waves\n• Use the wave ID from the most recent announcement', 
+              inline: false 
+            }
+          )
+          .setFooter({ text: `Wave ID: ${waveId}` })
+          .setTimestamp();
         return interaction.editReply({
-          content: `❌ **Wave ${waveId} is no longer active!**\n\n**Status:** ${waveData.status}\n\n**Possible reasons:**\n• The wave has been completed by other players\n• The wave has failed (all participants KO'd)\n• The wave was manually ended by a moderator\n\n**To join a new wave:**\n• Wait for a new wave announcement\n• Check the village town hall for active waves\n• Use the wave ID from the most recent announcement`,
+          embeds: [waveInactiveEmbed],
           ephemeral: true
         });
       }
@@ -211,15 +230,20 @@ module.exports = {
       const isModInWave = myParticipant?.isModCharacter || character.isModCharacter;
       const currentTurnParticipant = updatedWaveData.getCurrentTurnParticipant();
       const Character = require('@/models/CharacterModel');
+      
+      // For expedition waves, skip individual KO checks — we use party pool only
+      const isExpeditionWave = !!updatedWaveData.expeditionId;
+      
       let currentTurnIsKO = false;
-      if (currentTurnParticipant) {
+      if (currentTurnParticipant && !isExpeditionWave) {
         const currentTurnChar = await Character.findById(currentTurnParticipant.characterId);
         currentTurnIsKO = currentTurnChar?.ko ?? false;
       }
       const isMyTurn = currentTurnParticipant && currentTurnParticipant.characterId.toString() === character._id.toString();
 
       // KO'd member's turn: prompt to use a fairy (don't process a roll)
-      if (!isModInWave && isMyTurn && character.ko) {
+      // Skip for expedition waves — no individual KO, use party pool
+      if (!isExpeditionWave && !isModInWave && isMyTurn && character.ko) {
         const { getItemCommandId, getWaveCommandId, getExploreCommandId } = require('../../embeds/embeds.js');
         const isMonsterCampWave = updatedWaveData?.source === 'monster_camp' && updatedWaveData?.expeditionId;
         const healCmd = isMonsterCampWave ? `</explore item:${getExploreCommandId()}>` : `</item:${getItemCommandId()}>`;
@@ -228,7 +252,7 @@ module.exports = {
           .setTitle('💀 KO\'d — it\'s your turn')
           .setDescription('You\'re knocked out and cannot attack.')
           .addFields(
-            { name: 'What to do', value: `Use ${healCmd} with a fairy to revive, then use </wave:${getWaveCommandId()}> to take your turn.`, inline: false },
+            { name: 'What to do', value: `Use ${healCmd} with a fairy to revive, then use </wave:${getExploreCommandId()}> to take your turn.`, inline: false },
             { name: 'Wave ID', value: `\`\`\`${waveId}\`\`\``, inline: false }
           )
           .setFooter({ text: `Wave ID: ${waveId}` })
@@ -242,7 +266,7 @@ module.exports = {
         const isMonsterCampWave = updatedWaveData?.source === 'monster_camp' && updatedWaveData?.expeditionId;
         const healCmd = isMonsterCampWave ? `</explore item:${getExploreCommandId()}>` : `</item:${getItemCommandId()}>`;
         const whoseTurnBody = currentTurnParticipant
-          ? currentTurnIsKO
+          ? (currentTurnIsKO && !isExpeditionWave)
             ? `It's **${currentTurnParticipant.name}**'s turn (KO'd — please use a fairy with ${healCmd} first).`
             : `It's **${currentTurnParticipant.name}**'s turn. Use </wave:${getWaveCommandId()}> to take your turn.`
           : 'No valid turn order.';
@@ -312,14 +336,16 @@ module.exports = {
       
       // Check if wave failed (all participants KO'd)
       if (turnResult.waveData.status === 'failed') {
+        // Send the final turn embed first
+        await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
+        
+        // For expedition waves: end the expedition with KO status
         if (isMonsterCampWave && turnResult.waveData.expeditionId) {
-          const party = await Party.findActiveByPartyId(turnResult.waveData.expeditionId);
-          if (party) {
-            pushProgressLog(party, 'Party', 'monster_camp_failed', "Monster camp wave failed — party was KO'd.", undefined, undefined, new Date());
-            await party.save();
+          const failResult = await handleExpeditionFailedFromWave(turnResult.waveData.expeditionId, interaction.client);
+          if (failResult.success && failResult.embed) {
+            await interaction.followUp({ embeds: [failResult.embed] });
           }
         }
-        await interaction.editReply({ content: waveCommandContent, embeds: [embed] });
         return;
       }
       
@@ -373,16 +399,25 @@ module.exports = {
             const turnOrderLines = [];
             const Character = require('@/models/CharacterModel');
             
+            // For expedition waves, skip individual KO checks — we use party pool
+            const isExpeditionWaveDefeat = !!turnResult.waveData.expeditionId;
+            
             for (let idx = 0; idx < participants.length; idx++) {
               const p = participants[idx];
-              // Get current character state from database
-              const currentCharacter = await Character.findById(p.characterId);
-              const isKO = currentCharacter?.ko || false;
               
-              if (isKO) {
-                turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
-              } else {
+              if (isExpeditionWaveDefeat) {
+                // Expedition waves: no individual KO, just list names
                 turnOrderLines.push(`${idx + 1}. ${p.name}`);
+              } else {
+                // Get current character state from database
+                const currentCharacter = await Character.findById(p.characterId);
+                const isKO = currentCharacter?.ko || false;
+                
+                if (isKO) {
+                  turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
+                } else {
+                  turnOrderLines.push(`${idx + 1}. ${p.name}`);
+                }
               }
             }
             
@@ -438,7 +473,12 @@ module.exports = {
               .setTimestamp();
             
             console.log(`[wave.js]: ✅ Defeat embed created for ${defeatedMonster.name} (defeated by ${defeatedByName}), sending follow-up message`);
+            // Send defeat embed first (with command hint only)
             await interaction.followUp({ content: waveCommandContent, embeds: [monsterDefeatedEmbed] });
+            // Then ping next player AFTER the embed
+            if (yourTurnMention) {
+              await interaction.channel.send(`${yourTurnMention}**${defeatedMonster.name}** defeated! You're up next against the next monster.`);
+            }
             console.log(`[wave.js]: ✅ Defeat embed sent successfully`);
           } else {
             console.log(`[wave.js]: ⚠️ Defeat embed - Monster at index ${defeatedMonsterIndex} has no name, skipping embed`);
@@ -531,6 +571,9 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
   const turnOrderLines = [];
   const koCharacters = [];
   
+  // For expedition waves, we use party pool — no individual KO tracking
+  const isExpeditionWave = !!waveData.expeditionId;
+  
   // Get current character states from database
   const Character = require('@/models/CharacterModel');
   
@@ -542,17 +585,22 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
     const p = participants[idx];
     const isEffectiveCurrentTurn = idx === effectiveCurrentTurnIndex;
     
-    // Get current character state from database
-    const currentCharacter = await Character.findById(p.characterId);
-    const isKO = currentCharacter?.ko || false;
-    
-    if (isKO) {
-      koCharacters.push(p.name);
-      turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
-    } else if (isEffectiveCurrentTurn) {
+    // For expedition waves, skip individual KO checks — use party pool only
+    if (isExpeditionWave) {
       turnOrderLines.push(`${idx + 1}. ${p.name}`);
     } else {
-      turnOrderLines.push(`${idx + 1}. ${p.name}`);
+      // Get current character state from database
+      const currentCharacter = await Character.findById(p.characterId);
+      const isKO = currentCharacter?.ko || false;
+      
+      if (isKO) {
+        koCharacters.push(p.name);
+        turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
+      } else if (isEffectiveCurrentTurn) {
+        turnOrderLines.push(`${idx + 1}. ${p.name}`);
+      } else {
+        turnOrderLines.push(`${idx + 1}. ${p.name}`);
+      }
     }
   }
   
@@ -567,8 +615,9 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
   const progress = `Monster ${currentMonsterNumber} of ${totalMonsters}`;
 
   // Determine embed color based on outcome
+  // For expedition waves, don't show red for individual "KO" — we use party pool
   let color = '#00FF00'; // Green for success
-  if (battleResult.playerHearts.current <= 0) {
+  if (!isExpeditionWave && battleResult.playerHearts.current <= 0) {
     color = '#FF0000'; // Red for KO
   } else if (battleResult.hearts <= 0) {
     color = '#FFFF00'; // Yellow for no damage
@@ -604,7 +653,12 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
   
   // Use the flavor text from battleResult.outcome (which comes from processRaidBattle)
   if (battleResult.outcome) {
-    outcomeDescription += battleResult.outcome;
+    let outcomeText = battleResult.outcome;
+    // For expedition waves, strip out individual "has been defeated by" messages — we use party pool
+    if (isExpeditionWave) {
+      outcomeText = outcomeText.replace(/\n.*has been defeated by the.*$/gi, '');
+    }
+    outcomeDescription += outcomeText;
     // Add separator line after damage flavor text
     outcomeDescription += `\n${'─'.repeat(50)}\n`;
   } else {
@@ -668,8 +722,8 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
     .setFooter({ text: `Wave ID: ${waveId}` })
     .setTimestamp();
 
-  // Add KO warning if character is down
-  if (battleResult.playerHearts.current <= 0) {
+  // Add KO warning if character is down (skip for expedition waves — we use party pool)
+  if (!isExpeditionWave && battleResult.playerHearts.current <= 0) {
     embed.addFields({
       name: 'KO',
       value: `💥 **${character.name} has been knocked out and cannot continue!**`,
