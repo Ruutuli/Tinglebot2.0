@@ -136,7 +136,7 @@ const specialWeights = {
   "Lightning Storm": 0.12,
   "Meteor Shower": 0.12,
   "Muggy": 0.3,
-  "Rock Slide": 0.02
+  "Rock Slide": 0.005
 };
 
 // ============================================================================

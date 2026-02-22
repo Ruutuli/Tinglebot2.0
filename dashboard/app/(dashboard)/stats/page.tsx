@@ -122,6 +122,14 @@ type StatsData = {
     topCharactersByItems: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }>;
     topItemsByTotalQuantity: Array<{ itemName: string; totalQuantity: number }>;
   };
+  tokens: {
+    totalTokens: number;
+    averageTokens: number;
+    maxTokens: number;
+    minTokens: number;
+    userCount: number;
+    topHolders: Array<{ discordId: string; tokens: number; username: string | null }>;
+  };
 }
 
 type CharacterBreakdown = {
@@ -185,6 +193,7 @@ const SECTION_ACCENT_COLORS: Record<string, string> = {
   stealStats: "var(--stats-accent-steal)",
   minigames: "var(--totk-light-green)",
   inventory: "var(--botw-blue)",
+  tokens: "var(--totk-light-ocher)",
 };
 
 /** Hex fallbacks for bar fills so SVG charts don't rely on CSS variables. */
@@ -200,6 +209,7 @@ const SECTION_ACCENT_HEX: Record<string, string> = {
   raids: "#b99f65",
   stealStats: "#b494e3",
   minigames: "#49d59c",
+  tokens: "#f5c842",
 };
 
 const VILLAGE_COLORS: Record<string, string> = {
@@ -615,6 +625,9 @@ export default function StatsPage() {
 
         {/* Inventory Statistics */}
         {statsData.inventory && <InventoryStatsSection data={statsData.inventory} onBreakdownClick={handleBreakdownClick} />}
+
+        {/* Token Statistics */}
+        {statsData.tokens && <TokenStatsSection data={statsData.tokens} />}
       </div>
 
       {/* Breakdown Modal */}
@@ -1494,6 +1507,65 @@ function InventoryStatsSection({ data, onBreakdownClick }: { data: StatsData["in
           )}
         </div>
       </SectionCard>
+    </div>
+  );
+}
+
+/* ============================================================================ */
+/* ------------------- Token Statistics Section ------------------- */
+/* ============================================================================ */
+
+function TokenStatsSection({ data }: { data: StatsData["tokens"] }) {
+  if (data.userCount === 0) return null;
+
+  return (
+    <div className="space-y-6">
+      <SectionCard title="Token Statistics" icon="fa-coins" accentColor={SECTION_ACCENT_COLORS.tokens}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Metric label="Total Tokens" value={data.totalTokens.toLocaleString()} accent="ocher" />
+          <Metric label="Users with Tokens" value={data.userCount.toLocaleString()} accent="green" />
+          <Metric label="Average Tokens" value={data.averageTokens.toLocaleString()} accent="blue" />
+          <Metric label="Highest Balance" value={data.maxTokens.toLocaleString()} accent="ocher" />
+        </div>
+      </SectionCard>
+
+      {data.topHolders.length > 0 && (
+        <SectionCard title="Top Token Holders" icon="fa-trophy" accentColor={SECTION_ACCENT_COLORS.tokens}>
+          <p className="mb-4 text-sm text-[var(--botw-pale)]">
+            Users with the most tokens in the game.
+          </p>
+          <div className="space-y-1.5 sm:space-y-2">
+            {data.topHolders.map((holder, index) => (
+              <div
+                key={holder.discordId}
+                className="flex min-h-[44px] min-w-0 w-full items-center justify-between gap-2 rounded-lg border border-[var(--totk-dark-ocher)]/30 bg-[var(--totk-grey-400)]/20 px-3 py-2 sm:px-4"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-bold text-sm ${
+                      index === 0
+                        ? "bg-yellow-500/20 text-yellow-400"
+                        : index === 1
+                          ? "bg-gray-300/20 text-gray-300"
+                          : index === 2
+                            ? "bg-amber-600/20 text-amber-500"
+                            : "bg-[var(--totk-grey-400)]/30 text-[var(--totk-grey-200)]"
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 truncate font-medium text-[var(--botw-pale)]">
+                    {holder.username || "Unknown User"}
+                  </span>
+                </div>
+                <span className="shrink-0 tabular-nums font-semibold text-[var(--totk-light-ocher)] sm:text-base">
+                  {holder.tokens.toLocaleString()} tokens
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }

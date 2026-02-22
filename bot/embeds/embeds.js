@@ -1201,7 +1201,7 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
    { name: "⚡ **__Stamina Cost__**", value: staminaCostValue, inline: true },
    { name: "💚 **__Remaining Stamina__**", value: `> ${updatedStamina}`, inline: true }
   )
-  .setThumbnail(item.image || 'https://via.placeholder.com/150')
+  .setThumbnail(isValidImageUrl(item.image) ? item.image : 'https://via.placeholder.com/150')
   .setImage(DEFAULT_IMAGE_URL)
   .setFooter({ 
     text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorTextParam}` : 

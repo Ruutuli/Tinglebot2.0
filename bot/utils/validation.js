@@ -343,9 +343,12 @@ function validateCharacterInventory(inventory) {
 // ============================================================================
 // Image Validation Functions
 // ------------------- Validate Image URL -------------------
-// Checks if a URL is a valid image URL (supports jpeg, jpg, gif, and png).
+// Checks if a URL is a valid image URL (supports jpeg, jpg, gif, png, and webp).
 const isValidImageUrl = (url) => {
-    return /\.(jpeg|jpg|gif|png)$/.test(url);
+    if (!url || typeof url !== 'string') return false;
+    if (url === 'No Image' || url === 'No Image Type') return false;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+    return /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
 };
 
 

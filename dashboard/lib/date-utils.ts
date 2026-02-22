@@ -13,7 +13,6 @@ export function getNextSundayMidnightEST(): Date {
   // Get current UTC day of week (0 = Sunday, 6 = Saturday)
   const currentDay = now.getUTCDay();
   const currentHour = now.getUTCHours();
-  const currentMinute = now.getUTCMinutes();
   
   // Calculate days until next Sunday
   let daysUntilSunday = 7 - currentDay;
@@ -21,10 +20,10 @@ export function getNextSundayMidnightEST(): Date {
   // If it's already Sunday, check if we've passed 05:00 UTC
   if (currentDay === 0) {
     // If it's before 05:00 UTC on Sunday, next rotation is today
-    if (currentHour < 5 || (currentHour === 5 && currentMinute === 0)) {
+    if (currentHour < 5) {
       daysUntilSunday = 0;
     } else {
-      // If it's after 05:00 UTC on Sunday, next rotation is next Sunday
+      // If it's 05:00 UTC or later on Sunday, next rotation is next Sunday
       daysUntilSunday = 7;
     }
   }

@@ -1506,3 +1506,519 @@ textarea::placeholder {
 .grotto-pin-wrap.grotto-gold img.h-8 {
   filter: drop-shadow(0 0 6px rgba(245, 200, 80, 0.9)) drop-shadow(0 0 12px rgba(255, 215, 0, 0.6));
 }
+
+/* ============================================================================ */
+/* Suggestion Box Styles                                                        */
+/* ============================================================================ */
+
+.suggestion-box-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.suggestion-form-wrapper {
+  background: var(--glass-bg);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--totk-dark-ocher);
+  backdrop-filter: blur(10px);
+}
+
+.suggestion-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.suggestion-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.suggestion-form .form-group label {
+  font-weight: 600;
+  color: var(--totk-ivory);
+  font-size: 0.95rem;
+}
+
+.suggestion-form .form-group input,
+.suggestion-form .form-group select,
+.suggestion-form .form-group textarea {
+  padding: 0.75rem;
+  border: 2px solid var(--totk-dark-ocher);
+  border-radius: 8px;
+  font-size: 1rem;
+  background: rgba(26, 22, 21, 0.9);
+  color: var(--botw-pale);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.suggestion-form .form-group select option {
+  background: var(--botw-black);
+  color: var(--botw-pale);
+}
+
+.suggestion-form .form-group input:focus,
+.suggestion-form .form-group select:focus,
+.suggestion-form .form-group textarea:focus {
+  outline: none;
+  border-color: var(--totk-light-green);
+  box-shadow: 0 0 0 3px rgba(73, 213, 156, 0.2);
+}
+
+.suggestion-form .form-group textarea {
+  min-height: 150px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.suggestion-form .char-count {
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--totk-grey-200);
+  margin-top: 0.25rem;
+}
+
+.suggestion-form .form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.submit-suggestion-btn,
+.reset-form-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.submit-suggestion-btn {
+  background: var(--totk-light-green);
+  color: var(--totk-black);
+}
+
+.submit-suggestion-btn:hover:not(:disabled) {
+  background: var(--totk-green);
+  color: var(--totk-ivory);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(73, 213, 156, 0.3);
+}
+
+.submit-suggestion-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.reset-form-btn {
+  background: var(--glass-bg);
+  color: var(--botw-pale);
+  border: 1px solid var(--totk-dark-ocher);
+}
+
+.reset-form-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--totk-light-green);
+}
+
+.suggestion-error-inline {
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid rgba(231, 76, 60, 0.5);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #e74c3c;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.suggestion-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.suggestion-info .info-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--totk-dark-ocher);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.suggestion-info .info-card h3 {
+  color: var(--totk-light-green);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.suggestion-info .info-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestion-info .info-card li {
+  padding: 0.5rem 0;
+  color: var(--botw-pale);
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.suggestion-info .info-card li::before {
+  content: "•";
+  color: var(--totk-light-green);
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+}
+
+.suggestion-login-prompt {
+  background: linear-gradient(135deg, rgba(88, 101, 242, 0.1), rgba(88, 101, 242, 0.05));
+  border: 2px solid rgba(88, 101, 242, 0.3);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  backdrop-filter: blur(10px);
+}
+
+.login-prompt-content {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.login-prompt-icon {
+  font-size: 3rem;
+  color: #5865F2;
+  margin-bottom: 1rem;
+}
+
+.login-prompt-content h3 {
+  color: var(--totk-ivory);
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.login-prompt-content p {
+  color: var(--botw-pale);
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.discord-login-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #5865F2;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 1.5rem 0;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(88, 101, 242, 0.3);
+}
+
+.discord-login-btn:hover {
+  background: #4752C4;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(88, 101, 242, 0.4);
+  color: white;
+  text-decoration: none;
+}
+
+.login-benefits {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(88, 101, 242, 0.2);
+}
+
+.login-benefits h4 {
+  color: var(--totk-ivory);
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.login-benefits ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: inline-block;
+  text-align: left;
+}
+
+.login-benefits li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--botw-pale);
+}
+
+.login-benefits li i {
+  color: var(--totk-light-green);
+  font-size: 0.9rem;
+}
+
+.suggestion-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.suggestion-modal.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.suggestion-modal .modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.suggestion-modal .modal-content {
+  position: relative;
+  background: var(--botw-warm-black);
+  border-radius: 16px;
+  padding: 0;
+  max-width: 90vw;
+  width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--totk-dark-ocher);
+  backdrop-filter: blur(10px);
+  transform: scale(0.9) translateY(20px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.suggestion-modal.show .modal-content {
+  transform: scale(1) translateY(0);
+  animation: modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalSlideIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.suggestion-modal .modal-header {
+  background: linear-gradient(135deg, var(--totk-light-green), var(--totk-green));
+  color: var(--totk-black);
+  padding: 1.5rem 1.5rem 1rem;
+  text-align: center;
+  position: relative;
+}
+
+.suggestion-modal .modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.suggestion-modal .modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  color: var(--totk-black);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.suggestion-modal .modal-close:hover {
+  background: rgba(0, 0, 0, 0.3);
+  transform: scale(1.1);
+}
+
+.suggestion-modal .modal-body {
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.suggestion-modal .modal-icon {
+  margin-bottom: 1rem;
+}
+
+.suggestion-modal .modal-icon i {
+  font-size: 3rem;
+  color: var(--totk-light-green);
+  animation: modalIconPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalIconPop {
+  0% {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(0deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.suggestion-modal .modal-body p {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--totk-ivory);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.suggestion-modal .modal-footer {
+  padding: 0 1.5rem 1.5rem;
+  text-align: center;
+}
+
+.suggestion-modal .modal-ok-btn {
+  background: var(--totk-light-green);
+  color: var(--totk-black);
+  border: none;
+  border-radius: 10px;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  box-shadow: 0 4px 12px rgba(73, 213, 156, 0.3);
+}
+
+.suggestion-modal .modal-ok-btn:hover {
+  background: var(--totk-green);
+  color: var(--totk-ivory);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(73, 213, 156, 0.4);
+}
+
+@media (max-width: 1024px) {
+  .suggestion-box-container {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .suggestion-form-wrapper {
+    padding: 1.5rem;
+  }
+
+  .suggestion-info .info-card {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .suggestion-box-container {
+    margin-top: 0.5rem;
+    gap: 1rem;
+  }
+
+  .suggestion-form-wrapper {
+    padding: 1.25rem;
+  }
+
+  .suggestion-form {
+    gap: 1.25rem;
+  }
+
+  .suggestion-form .form-group input,
+  .suggestion-form .form-group select,
+  .suggestion-form .form-group textarea {
+    padding: 0.875rem;
+    font-size: 16px;
+  }
+
+  .suggestion-form .form-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .submit-suggestion-btn,
+  .reset-form-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 1rem 1.5rem;
+  }
+
+  .suggestion-modal .modal-content {
+    width: 90vw;
+    max-width: 350px;
+  }
+
+  .login-prompt-content h3 {
+    font-size: 1.25rem;
+  }
+
+  .discord-login-btn {
+    font-size: 1rem;
+    padding: 10px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .suggestion-form-wrapper {
+    padding: 1rem;
+  }
+
+  .suggestion-form {
+    gap: 1rem;
+  }
+
+  .suggestion-info .info-card {
+    padding: 1rem;
+  }
+
+  .suggestion-info .info-card h3 {
+    font-size: 1rem;
+  }
+
+  .suggestion-modal .modal-content {
+    width: 95vw;
+    max-width: 300px;
+  }
+}

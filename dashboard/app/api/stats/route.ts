@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect, getInventoriesDb } from "@/lib/db";
 import { logger } from "@/utils/logger";
+import { fetchDiscordUsernames } from "@/lib/discord";
 import type { PipelineStage } from "mongoose";
 
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
@@ -34,6 +35,10 @@ export async function GET() {
     const Raid = RaidModule.default || RaidModule;
     const StealStats = StealStatsModule.default || StealStatsModule;
     const Minigame = MinigameModule.default || MinigameModule;
+
+    const UserModule = await import("@/models/UserModel.js");
+    const User = UserModule.default || UserModule;
+
 
     // ------------------- Character Statistics -------------------
     // Only count accepted characters
@@ -535,6 +540,32 @@ export async function GET() {
       ]),
     ]);
 
+    // ------------------- Token Statistics -------------------
+    const [
+      tokenStats,
+      topTokenHolders,
+    ] = await Promise.all([
+      User.aggregate([
+        { $match: { tokens: { $exists: true, $gt: 0 } } },
+        {
+          $group: {
+            _id: null,
+            totalTokens: { $sum: "$tokens" },
+            avgTokens: { $avg: "$tokens" },
+            maxTokens: { $max: "$tokens" },
+            minTokens: { $min: "$tokens" },
+            userCount: { $sum: 1 },
+          },
+        },
+      ]),
+      User.aggregate([
+        { $match: { tokens: { $exists: true, $gt: 0 } } },
+        { $sort: { tokens: -1 } },
+        { $limit: 15 },
+        { $project: { discordId: 1, tokens: 1, username: 1 } },
+      ]),
+    ]);
+
     // ------------------- Inventory Statistics -------------------
     let topCharactersByItems: Array<{ characterName: string; slug: string; totalItems: number; uniqueItems: number }> = [];
     let topItemsByTotalQuantity: Array<{ itemName: string; totalQuantity: number }> = [];
@@ -774,6 +805,23 @@ export async function GET() {
         topCharactersByItems,
         topItemsByTotalQuantity,
       },
+      tokens: await (async () => {
+        const holdersWithoutUsername = topTokenHolders.filter((u) => !u.username);
+        const discordIds = holdersWithoutUsername.map((u) => u.discordId as string).filter(Boolean);
+        const usernameMap = discordIds.length > 0 ? await fetchDiscordUsernames(discordIds) : {};
+        return {
+          totalTokens: tokenStats[0]?.totalTokens ?? 0,
+          averageTokens: Math.round((tokenStats[0]?.avgTokens ?? 0) * 100) / 100,
+          maxTokens: tokenStats[0]?.maxTokens ?? 0,
+          minTokens: tokenStats[0]?.minTokens ?? 0,
+          userCount: tokenStats[0]?.userCount ?? 0,
+          topHolders: topTokenHolders.map((u) => ({
+            discordId: u.discordId as string,
+            tokens: u.tokens as number,
+            username: (u.username as string) || usernameMap[u.discordId as string] || null,
+          })),
+        };
+      })(),
     };
 
     const nextResponse = NextResponse.json(response);
