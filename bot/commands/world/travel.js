@@ -470,10 +470,17 @@ module.exports = {
 
       if (characterBlightRequest) {
         const timeLeft = Math.ceil((new Date(characterBlightRequest.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-        await interaction.editReply({
-          content: `❌ **${characterName}** cannot travel while they have an active blight healing request from **${characterBlightRequest.healerName}**.\n\n` +
-            `The request will expire in ${timeLeft} days. Please complete the healing request before traveling.`
-        });
+        const blightRequestEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Cannot Travel')
+          .setDescription(`**${characterName}** cannot travel while they have an active blight healing request from **${characterBlightRequest.healerName}**.`)
+          .addFields({
+            name: 'Request Expires',
+            value: `In ${timeLeft} day${timeLeft !== 1 ? 's' : ''}`,
+            inline: true
+          })
+          .setFooter({ text: 'Please complete the healing request before traveling.' });
+        await interaction.editReply({ embeds: [blightRequestEmbed] });
         return;
       }
 

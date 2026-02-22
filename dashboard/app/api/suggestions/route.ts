@@ -5,7 +5,7 @@ import { discordApiRequest } from "@/lib/discord";
 export const dynamic = "force-dynamic";
 
 const SUGGESTION_CHANNEL_ID = "981223207770144768";
-const SUGGESTION_PING_USER_ID = "606128760655183882";
+const SUGGESTION_PING_ROLE_ID = "606128760655183882";
 const GUILD_ID = process.env.GUILD_ID;
 
 const LINK_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/gi;
@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
       `/channels/${SUGGESTION_CHANNEL_ID}/messages`,
       "POST",
       {
-        content: `<@${SUGGESTION_PING_USER_ID}>`,
+        content: `<@&${SUGGESTION_PING_ROLE_ID}>`,
         embeds: [embed],
       }
     );

@@ -115,6 +115,53 @@ module.exports = {
         return;
       }
 
+      // ------------------- Channel Restriction Check -------------------
+      // Items command can only be used in townhall channels, community board, or their threads
+      const COMMUNITY_BOARD_CHANNEL_ID = process.env.COMMUNITY_BOARD_CHANNEL_ID || '651614266046152705';
+      const TOWNHALL_CHANNELS = [
+        process.env.RUDANIA_TOWNHALL,
+        process.env.INARIKO_TOWNHALL,
+        process.env.VHINTL_TOWNHALL
+      ].filter(Boolean);
+      const ALLOWED_CHANNELS = [COMMUNITY_BOARD_CHANNEL_ID, ...TOWNHALL_CHANNELS];
+      const TESTING_CHANNEL_ID = '1391812848099004578';
+      
+      const channelId = interaction.channelId;
+      const parentId = interaction.channel?.parentId;
+      
+      const isAllowedChannel = ALLOWED_CHANNELS.includes(channelId);
+      const isThreadInAllowedChannel = parentId && ALLOWED_CHANNELS.includes(parentId);
+      const isTestingChannel = channelId === TESTING_CHANNEL_ID || parentId === TESTING_CHANNEL_ID;
+      
+      if (!isAllowedChannel && !isThreadInAllowedChannel && !isTestingChannel) {
+        const channelMentions = ALLOWED_CHANNELS.map(id => `<#${id}>`).join(', ');
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Wrong Channel',
+            description: `The \`/item\` command can only be used in townhall channels or the community board.`,
+            fields: [
+              {
+                name: 'Allowed Channels',
+                value: channelMentions
+              },
+              {
+                name: 'Threads',
+                value: 'You can also use this command in threads within these channels.'
+              }
+            ],
+            image: {
+              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+            },
+            footer: {
+              text: 'Channel Validation'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
+
       // Clean the itemName to remove emoji prefixes and quantity suffixes
       // Handles formats like:
       // - "📦 Fairy - Qty: 1" -> "Fairy"

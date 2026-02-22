@@ -176,7 +176,7 @@ export default function SuggestionBoxPage() {
           </div>
         ) : (
           /* Logged In - Show Form and Info side by side */
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-6" style={{ minHeight: "500px" }}>
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-6">
             {/* Form Section - 3/4 width */}
             <div
               className="rounded-xl p-6 backdrop-blur-sm flex flex-col h-full"
@@ -337,7 +337,7 @@ export default function SuggestionBoxPage() {
             >
               {/* How It Works */}
               <div className="mb-6">
-                <h3 className="flex items-center gap-2 text-lg font-semibold text-totk-light-green mb-4">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-totk-light-green mb-3">
                   <i className="fas fa-info-circle" />
                   How It Works
                 </h3>
@@ -365,62 +365,25 @@ export default function SuggestionBoxPage() {
 
               {/* Divider */}
               <div
-                className="border-t my-2"
-                style={{ borderColor: "var(--totk-dark-ocher)" }}
-              />
-
-              {/* Tips */}
-              <div className="mt-4">
-                <h3 className="flex items-center gap-2 text-lg font-semibold text-totk-light-green mb-4">
-                  <i className="fas fa-lightbulb" />
-                  Tips for Great Suggestions
-                </h3>
-                <ul className="space-y-3">
-                  <li className="flex items-start gap-3 text-botw-pale">
-                    <span className="text-totk-light-green mt-0.5">
-                      <i className="fas fa-star" />
-                    </span>
-                    <span>Be specific about what you&apos;d like to see</span>
-                  </li>
-                  <li className="flex items-start gap-3 text-botw-pale">
-                    <span className="text-totk-light-green mt-0.5">
-                      <i className="fas fa-star" />
-                    </span>
-                    <span>Explain why it would benefit the community</span>
-                  </li>
-                  <li className="flex items-start gap-3 text-botw-pale">
-                    <span className="text-totk-light-green mt-0.5">
-                      <i className="fas fa-star" />
-                    </span>
-                    <span>Frame feedback as collaboration, not accusation</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Divider */}
-              <div
                 className="border-t my-4"
                 style={{ borderColor: "var(--totk-dark-ocher)" }}
               />
 
               {/* A Note From The Team */}
-              <div className="mt-2 flex-1">
+              <div className="mt-4">
                 <h3 className="flex items-center gap-2 text-lg font-semibold text-totk-light-green mb-3">
                   <i className="fas fa-heart" />
                   A Note From The Team
                 </h3>
-                <div className="space-y-3 text-sm text-botw-pale">
+                <div className="space-y-3 text-botw-pale">
                   <p>
-                    We understand that frustration can come from a place of caring about the community, and we truly appreciate that passion.
+                    We understand frustration can come from caring about the community—and we appreciate that passion.
                   </p>
                   <p>
-                    Roots is run entirely by volunteers who dedicate their free time to making this group special. While we do our best, we can&apos;t always perfectly cater to every member&apos;s needs.
-                  </p>
-                  <p>
-                    We love receiving suggestions and feedback! We just ask that it&apos;s worded constructively—as collaboration rather than accusation. It helps us work toward solutions together.
+                    Roots is run entirely by volunteers in their free time. We love receiving feedback, but ask that it&apos;s worded constructively to help us work toward solutions together.
                   </p>
                   <p className="font-medium text-totk-ivory">
-                    All we ask is for respect and patience. 💚
+                    All we ask is respect and patience. 💚
                   </p>
                 </div>
               </div>
