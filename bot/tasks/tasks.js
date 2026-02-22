@@ -2119,6 +2119,46 @@ async function mapAppraisalSendCoordinatesDm(client, _data = {}) {
   }
 }
 
+// ------------------- open-eparty-cleanup (Every hour: cancel open e-parties not started within 12 hours) -------------------
+const OPEN_EPARTY_MAX_HOURS = 12;
+
+async function openEpartyCleanup(_client, _data = {}) {
+  try {
+    logger.info('SCHEDULED', 'open-eparty-cleanup: starting');
+    
+    const cutoffMs = OPEN_EPARTY_MAX_HOURS * 60 * 60 * 1000; // 12 hours in milliseconds
+    const cutoffDate = new Date(Date.now() - cutoffMs);
+    
+    const staleOpenParties = await Party.find({
+      status: 'open',
+      createdAt: { $lt: cutoffDate }
+    });
+    
+    let cancelledCount = 0;
+    
+    for (const party of staleOpenParties) {
+      try {
+        party.status = 'cancelled';
+        await party.save();
+        cancelledCount++;
+        
+        const hoursOld = Math.round((Date.now() - new Date(party.createdAt).getTime()) / (60 * 60 * 1000) * 10) / 10;
+        logger.info('SCHEDULED', `open-eparty-cleanup: Cancelled open party ${party.partyId} (created ${hoursOld}h ago, never started)`);
+      } catch (err) {
+        logger.error('SCHEDULED', `open-eparty-cleanup: Failed for party ${party.partyId}: ${err.message}`);
+      }
+    }
+    
+    if (cancelledCount > 0) {
+      logger.success('SCHEDULED', `open-eparty-cleanup: done (cancelled ${cancelledCount} stale open e-party/parties)`);
+    } else {
+      logger.debug('SCHEDULED', 'open-eparty-cleanup: done (no stale open e-parties found)');
+    }
+  } catch (err) {
+    logger.error('SCHEDULED', `open-eparty-cleanup: ${err.message}`);
+  }
+}
+
 // ------------------- stale-exploration-cleanup (Every hour: cancel started explorations inactive for 6+ hours) -------------------
 const STALE_EXPLORATION_HOURS = 6;
 
@@ -2281,7 +2321,10 @@ const TASKS = [
   { name: 'map-appraisal-send-coordinates-dm', cron: '*/10 * * * *', handler: mapAppraisalSendCoordinatesDm }, // Every 10 minutes
 
   // Exploration Cleanup: cancel started explorations inactive for 6+ hours
-  { name: 'stale-exploration-cleanup', cron: '0 * * * *', handler: staleExplorationCleanup } // Every hour
+  { name: 'stale-exploration-cleanup', cron: '0 * * * *', handler: staleExplorationCleanup }, // Every hour
+
+  // E-Party Cleanup: cancel open e-parties not started within 12 hours
+  { name: 'open-eparty-cleanup', cron: '0 * * * *', handler: openEpartyCleanup } // Every hour
 ];
 
 /**

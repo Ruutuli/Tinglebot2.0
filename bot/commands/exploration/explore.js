@@ -258,6 +258,25 @@ function createStuckInWildEmbed(party, location) {
 
 const EXPLORE_STRUGGLE_CONTEXT = { commandName: "explore", operation: "struggle" };
 
+// ------------------- createRaidBlockEmbed ------------------
+// Embed shown when an explore action is blocked by an active raid
+function createRaidBlockEmbed(party, raidId, blockedAction, location) {
+  const cmdId = getExploreCommandId();
+  return new EmbedBuilder()
+    .setTitle("⚔️ Complete the Raid First")
+    .setColor("#FF4444")
+    .setDescription(
+      `You cannot use \`/explore ${blockedAction}\` until the raid is complete.`
+    )
+    .addFields(
+      { name: "🆔 **__Raid ID__**", value: `\`${raidId}\``, inline: true },
+      { name: "📍 **__Location__**", value: location || "Unknown", inline: true },
+      { name: "📋 **__Commands__**", value: `</raid:1470659276287774734> — Fight the monster\n</explore retreat:${cmdId}> — Attempt to escape`, inline: false }
+    )
+    .setImage(regionImages[party?.region] || EXPLORATION_IMAGE_FALLBACK)
+    .setFooter({ text: "Defeat the monster or retreat to continue exploring." });
+}
+
 // ------------------- payStaminaOrStruggle ------------------
 // Pay cost from PARTY pool only: stamina first, then hearts (struggle) for shortfall.
 // During a started expedition the pool (party.totalStamina / party.totalHearts) is authoritative;
@@ -1576,9 +1595,7 @@ module.exports = {
      if (subcommand === "continue" && isTestOfPowerRaid) {
       // Allow continue - it will show the Test of Power raid info
      } else {
-      return interaction.editReply(
-       `**Complete the raid first.** You cannot use \`/explore grotto ${subcommand}\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidGrotto.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
-      );
+      return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidGrotto.raidId, `grotto ${subcommand}`, location)] });
      }
     }
 
@@ -2747,7 +2764,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       .setColor(getExploreOutcomeColor("grotto_travel", regionColors[party.region] || "#00ff99"))
       .setDescription(`Party paid 1 🟩 and arrived at the grotto in **${travelSquare} ${travelQuadrant}**.\n\nIf the grotto is sealed, cleanse it. If unsealed, use </explore grotto continue:${getExploreCommandId()}> to enter the trial.`)
       .setImage(regionImages[party.region] || EXPLORATION_IMAGE_FALLBACK);
-     addExplorationStandardFields(embed, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
+     addExplorationStandardFields(embed, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), actionCost: { staminaCost: payResult.staminaPaid ?? 0, heartsCost: payResult.heartsPaid ?? 0 } });
      return interaction.editReply({ embeds: [embed] });
     }
 
@@ -2772,9 +2789,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block discovery command if there's an active raid for this expedition
     const activeRaidDiscovery = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeRaidDiscovery) {
-     return interaction.editReply(
-      `**Complete the raid first.** You cannot use \`/explore discovery\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidDiscovery.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
-     );
+     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidDiscovery.raidId, "discovery", `${party.square} ${party.quadrant}`)] });
     }
 
     // Block discovery command if there's an active wave for this expedition
@@ -3165,9 +3180,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      // Block rolling if there's an active raid for this expedition (must defeat or retreat first)
      const activeRaid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
      if (activeRaid) {
-      return interaction.editReply(
-       `**Complete the raid first.** You cannot use \`/explore roll\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaid.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
-      );
+      return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaid.raidId, "roll", location)] });
      }
 
      // Block rolling if there's an active wave for this expedition (must complete wave first)
@@ -5002,9 +5015,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block securing if there's an active raid for this expedition (must defeat or retreat first)
     const activeRaidSecure = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeRaidSecure) {
-     return interaction.editReply(
-      `**Complete the raid first.** You cannot use \`/explore secure\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidSecure.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
-     );
+     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidSecure.raidId, "secure", `${party.square} ${party.quadrant}`)] });
     }
 
     // Block securing if there's an active wave for this expedition (must complete wave first)
@@ -5390,6 +5401,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        showNextAndCommands: true,
        showRestSecureMove: false,
        commandsLast: true,
+       actionCost: { staminaCost: securePayResult.staminaPaid ?? 0, heartsCost: securePayResult.heartsPaid ?? 0 },
       });
       const explorePageUrlSecure = getExplorePageUrl(expeditionId);
       embed.addFields({
@@ -5487,9 +5499,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block moving if there's an active raid for this expedition (must defeat or retreat first)
     const activeRaidMove = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeRaidMove) {
-     return interaction.editReply(
-      `**Complete the raid first.** You cannot use \`/explore move\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidMove.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
-     );
+     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidMove.raidId, "move", `${party.square} ${party.quadrant}`)] });
     }
 
     // Block moving if there's an active wave for this expedition (must complete wave first)
@@ -5844,6 +5854,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       showRestSecureMove: false,
       commandsLast: true,
       hasDiscoveriesInQuadrant: hasDiscMove,
+      actionCost: movePayResult ? { staminaCost: movePayResult.staminaPaid ?? 0, heartsCost: movePayResult.heartsPaid ?? 0 } : null,
     });
     addExplorationCommandsField(embed, {
       party,
@@ -5952,10 +5963,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       } catch (raidErr) {
         logger.warn("EXPLORE", `[explore.js]⚠️ advanceRaidTurnOnItemUse: ${raidErr?.message || raidErr}`);
       }
-    } else {
-      // No active wave/raid — advance expedition turn normally
-      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     }
+    // No active wave/raid — do NOT advance expedition turn.
+    // Using an item from loadout is a free action; the player already took their turn with roll/move/etc.
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
@@ -6017,9 +6027,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block ending if there's an active raid for this expedition (must defeat or retreat first)
     const activeRaidEnd = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeRaidEnd) {
-     return interaction.editReply(
-      `**Complete the raid first.** You cannot use \`/explore end\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidEnd.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
-     );
+     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidEnd.raidId, "end", `${party.square} ${party.quadrant}`)] });
     }
 
     // Block ending if there's an active wave for this expedition (must complete wave first)
@@ -6381,6 +6389,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       showNextAndCommands: true,
       showRestSecureMove: false,
       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      actionCost: { staminaCost: retreatPayResult.staminaPaid ?? 0, heartsCost: retreatPayResult.heartsPaid ?? 0 },
      });
      await interaction.editReply({ embeds: [embed] });
      // Ping next player after successful retreat
@@ -6424,6 +6433,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       nextCharacter,
       showNextAndCommands: false,
       showRestSecureMove: false,
+      actionCost: { staminaCost: retreatPayResult.staminaPaid ?? 0, heartsCost: retreatPayResult.heartsPaid ?? 0 },
     });
     retreatFailedEmbed.addFields({
       name: "📋 **__Commands__**",
@@ -6432,7 +6442,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         `You're still in battle. You can only:\n\n` +
         `• **Retreat** — ${cmdRetreat}\n> Try again to escape. (Costs 1 stamina or 1 heart.) Use id: \`${expeditionId}\` and charactername: **${nextName}**\n\n` +
         `• **Item** — ${cmdItem}\n> Use a healing item from your expedition loadout. Restores hearts and/or stamina.\n\n` +
-        `• **Keep fighting** — </raid> with Raid ID **${raidIdDisplay}**\n> Return to the battle.`,
+        `• **Keep fighting** — </raid:1470659276287774734> with Raid ID **${raidIdDisplay}**\n> Return to the battle.`,
       inline: false,
     });
     return interaction.editReply({ embeds: [retreatFailedEmbed] });
@@ -6451,9 +6461,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block camping if there's an active raid for this expedition (must defeat or retreat first)
     const activeRaidCamp = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeRaidCamp) {
-     return interaction.editReply(
-      `**Complete the raid first.** You cannot use \`/explore camp\` until the raid is complete. Use </raid:${getExploreCommandId()}> with Raid ID **${activeRaidCamp.raidId}** to fight, or </explore retreat:${getExploreCommandId()}> to attempt escape.`
-     );
+     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidCamp.raidId, "camp", `${party.square} ${party.quadrant}`)] });
     }
 
     // Block camping if there's an active wave for this expedition (must complete wave first)
@@ -6567,9 +6575,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          const battleId = raidResult.raidId;
          const raidData = raidResult.raidData || {};
          const monsterHearts = raidData.monster ? { current: raidData.monster.currentHearts, max: raidData.monster.maxHearts } : { current: selectedMonster.hearts, max: selectedMonster.hearts };
-         const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, character, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant));
+         const campRaidActionCost = stuckInWild ? { staminaCost: 0, heartsCost: 1 } : { staminaCost: 0, heartsCost: 0 };
+         const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, character, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), campRaidActionCost);
          embed.setTitle(`🏕️ **Camp interrupted!** — ${selectedMonster.name}`);
-         embed.setDescription(`**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest — fight with </raid>.${stuckInWild ? " **−1 ❤ (struggle)** for attempting to camp at 0 stamina." : ""}`);
+         embed.setDescription(`**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest — fight with </raid:1470659276287774734>.${stuckInWild ? " **−1 ❤ (struggle)** for attempting to camp at 0 stamina." : ""}`);
          embed.addFields(
           { name: "💙 __Monster Hearts__", value: `${monsterHearts.current}/${monsterHearts.max}`, inline: true },
           { name: "🆔 **__Raid ID__**", value: battleId, inline: true },
@@ -6630,7 +6639,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save();
       const nextChar = party.characters[party.currentTurn];
-      const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, nextChar ?? null, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant));
+      const campInterruptActionCost = stuckInWild ? { staminaCost: 0, heartsCost: 1 } : { staminaCost: 0, heartsCost: 0 };
+      const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, nextChar ?? null, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), campInterruptActionCost);
       embed.setTitle(`🏕️ **Camp interrupted!** — ${selectedMonster.name}`);
       const campInterruptDesc = `**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest.${stuckInWild ? " **−1 ❤ (struggle)** for attempting to camp at 0 stamina." : ""}\n\n${outcome.result || "Battle resolved."}`;
       embed.setDescription(campInterruptDesc);
@@ -6725,7 +6735,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     party.markModified("totalHearts");
     party.markModified("totalStamina");
     if (totalStaminaRecovered > 0 || staminaCost > 0) {
-     logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} camp ${character?.name ?? "?"} 🟩${campStaminaBefore} cost=${staminaCost} +${totalStaminaRecovered} → 🟩${party.totalStamina ?? 0}`);
+     logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} camp ${character?.name ?? "?"} 🟩${poolStam} cost=${staminaCost} +${totalStaminaRecovered} → 🟩${party.totalStamina ?? 0}`);
     }
 
     const locationCamp = `${party.square} ${party.quadrant}`;
@@ -6782,6 +6792,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       showRestSecureMove: false,
       commandsLast: true,
       hasDiscoveriesInQuadrant: hasDiscCamp,
+      actionCost: campPayResult ? { staminaCost: campPayResult.staminaPaid ?? 0, heartsCost: campPayResult.heartsPaid ?? 0 } : (staminaCost > 0 ? { staminaCost: staminaCost, heartsCost: 0 } : null),
     });
     embed.addFields({
       name: "📋 **__Recovery__**",
