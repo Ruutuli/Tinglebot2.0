@@ -263,6 +263,50 @@ const RETREAT_BASE_CHANCE = 0.5;
 const RETREAT_BONUS_PER_FAIL = 0.05;
 const RETREAT_CHANCE_CAP = 0.95;
 
+// ------------------- calculateDistanceFromStart ------------------
+// Calculates the distance (in squares) from current location to region starting location.
+// Uses Manhattan distance (|Δcol| + |Δrow|) for simplicity and meaningful game progression.
+// Square format: letter + number (e.g., H8, A1). Letter = column (A-J), Number = row (1-12).
+function calculateDistanceFromStart(party) {
+  if (!party?.region || !party?.square) {
+    return 0;
+  }
+
+  const startPoint = START_POINTS_BY_REGION[party.region];
+  if (!startPoint?.square) {
+    return 0;
+  }
+
+  const startSquare = startPoint.square.toUpperCase();
+  const currentSquare = (party.square || "").toUpperCase();
+
+  // Parse square coordinates (e.g., "H8" -> col=7, row=8)
+  const startCol = startSquare.charCodeAt(0) - 65; // A=0, B=1, etc.
+  const startRow = parseInt(startSquare.slice(1), 10) || 0;
+  const currentCol = currentSquare.charCodeAt(0) - 65;
+  const currentRow = parseInt(currentSquare.slice(1), 10) || 0;
+
+  // Manhattan distance in squares
+  return Math.abs(currentCol - startCol) + Math.abs(currentRow - startRow);
+}
+
+// ------------------- calculateDangerLevel ------------------
+// Calculates danger scaling based on distance from starting point (in squares).
+// Danger increases as party travels further from home, decreases as they return.
+// Used to increase monster encounters, monster tier, and camp attack chances.
+function calculateDangerLevel(party) {
+  const distance = calculateDistanceFromStart(party);
+
+  // Distance factor: +5% danger per square from start (max +25%)
+  // 0 squares = 0%, 1 square = 5%, 2 squares = 10%, 3 squares = 15%, 4 squares = 20%, 5+ squares = 25%
+  const dangerBonus = Math.min(0.25, distance * 0.05);
+
+  return {
+    distance,
+    dangerBonus, // max +25%
+  };
+}
+
 // ------------------- createStuckInWildEmbed ------------------
 // Party out of stamina; recovery via /explore camp
 function createStuckInWildEmbed(party, location) {
@@ -3359,18 +3403,44 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
      const location = `${party.square} ${party.quadrant}`;
 
+     // Calculate danger level based on distance from start
+     const dangerLevel = calculateDangerLevel(party);
+
      // Single outcome per roll: one of monster, item, explored, fairy, chest, old_map, ruins, relic, camp, monster_camp, grotto (chances in EXPLORATION_OUTCOME_CHANCES)
      // Reroll if: explored twice in a row; or special (ruins/relic/camp/monster_camp/grotto) and square has 3 discoveries; or grotto and square already has grotto; or special and discovery-reduce roll fails
+     // Monster chance is boosted based on distance from start (dangerBonus added to monster chance, taken from item/explored)
      function rollOutcome() {
+      // Build adjusted chances based on danger level
+      const baseMonster = EXPLORATION_OUTCOME_CHANCES.monster;
+      const baseItem = EXPLORATION_OUTCOME_CHANCES.item;
+      const baseExplored = EXPLORATION_OUTCOME_CHANCES.explored;
+
+      // Boost monster chance by dangerBonus, proportionally reduce item and explored
+      const monsterBoost = dangerLevel.dangerBonus;
+      const adjustedMonster = baseMonster + monsterBoost;
+      // Reduce item and explored proportionally to maintain total = 1
+      const reductionPool = baseItem + baseExplored;
+      const itemReduction = reductionPool > 0 ? (baseItem / reductionPool) * monsterBoost : monsterBoost / 2;
+      const exploredReduction = reductionPool > 0 ? (baseExplored / reductionPool) * monsterBoost : monsterBoost / 2;
+      const adjustedItem = Math.max(0.05, baseItem - itemReduction);
+      const adjustedExplored = Math.max(0.05, baseExplored - exploredReduction);
+
+      const adjustedChances = {
+       ...EXPLORATION_OUTCOME_CHANCES,
+       monster: adjustedMonster,
+       item: adjustedItem,
+       explored: adjustedExplored,
+      };
+
       const r = Math.random();
       let cum = 0;
       let outcome;
-      for (const [name, chance] of Object.entries(EXPLORATION_OUTCOME_CHANCES)) {
+      for (const [name, chance] of Object.entries(adjustedChances)) {
        cum += chance;
        if (r < cum) { outcome = name; break; }
       }
-      if (!outcome) outcome = Object.keys(EXPLORATION_OUTCOME_CHANCES).pop();
-      appendExploreStat(`${new Date().toISOString()}\troll\tr=${r.toFixed(4)}\t${outcome}\t${location}`);
+      if (!outcome) outcome = Object.keys(adjustedChances).pop();
+      appendExploreStat(`${new Date().toISOString()}\troll\tr=${r.toFixed(4)}\t${outcome}\tdist=${dangerLevel.distance}\tbonus=${(dangerLevel.dangerBonus * 100).toFixed(0)}%\t${location}`);
       return outcome;
      }
      let outcomeType = rollOutcome();
@@ -3608,13 +3678,6 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        fairyEmbed.addFields(
         { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
        );
-       if ((party.totalStamina ?? 0) < 1) {
-        fairyEmbed.addFields({
-         name: "⚠️ **Out of stamina**",
-         value: `The party has **0 stamina**. Roll, move, secure, etc. will **cost hearts** instead (1 heart = 1 stamina). Or use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp is free and recovers up to 50% of your max stamina.`,
-         inline: false,
-        });
-       }
        addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showFairyRollOnly: true });
        await interaction.editReply({ embeds: [fairyEmbed] });
        await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) });
@@ -4764,8 +4827,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        return interaction.editReply("No monsters available for this region.");
       }
 
-      const selectedMonster = getExplorationMonsterFromList(monsters);
-      appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}`);
+      const selectedMonster = getExplorationMonsterFromList(monsters, dangerLevel.dangerBonus);
+      appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}\tdist=${dangerLevel.distance}\tbonus=${(dangerLevel.dangerBonus * 100).toFixed(0)}%`);
 
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
        logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} raid start ${selectedMonster.name} T${selectedMonster.tier}`);
@@ -6650,8 +6713,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const staminaPct = (isSecured || stuckInWild) ? 0.5 : 0.25;
     const staminaCost = baseCampCost;
 
+    // Calculate danger level based on distance from start
+    const campDangerLevel = calculateDangerLevel(party);
+
     // Chance of monster attack when camping: explored/unexplored 25%, secured 5%. When no stamina or stuck in wild (camp costs 0), higher chance but capped at 50%.
+    // Danger bonus adds to the camp attack chance (further from home = more dangerous camps)
     let campAttackChance = isSecured ? CAMP_ATTACK_CHANCE_SECURED : CAMP_ATTACK_CHANCE_UNSECURED;
+    // Add danger bonus to camp attack chance (at max distance, adds up to 25% more chance)
+    campAttackChance += campDangerLevel.dangerBonus;
     if (stuckInWild || (!isSecured && (party.totalStamina === 0 || (typeof party.totalStamina === "number" && party.totalStamina < 1)))) {
      campAttackChance = Math.min(CAMP_ATTACK_CHANCE_ZERO_STAMINA_CAP, campAttackChance + CAMP_ATTACK_BONUS_WHEN_ZERO_STAMINA);
     }
@@ -6690,7 +6759,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const campAttackStruggleHearts = campAttackPayResult?.heartsPaid ?? 0;
      const monsters = await getMonstersByRegion(party.region?.toLowerCase() || "");
      if (monsters && monsters.length > 0) {
-      const selectedMonster = getExplorationMonsterFromList(monsters);
+      const selectedMonster = getExplorationMonsterFromList(monsters, campDangerLevel.dangerBonus);
+      logger.info("EXPLORE", `[explore.js] Camp attack: monster=${selectedMonster.name} tier=${selectedMonster.tier} dist=${campDangerLevel.distance} bonus=${(campDangerLevel.dangerBonus * 100).toFixed(0)}%`);
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
        try {
         const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
@@ -6814,6 +6884,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
 
     // Pool-only: recovery is random, up to heartsPct/staminaPct of max (25% unsecured, 50% secured)
+    // If hearts were paid to camp (struggle), skip heart recovery - only stamina is recovered
+    const paidHeartsToStruggle = (campPayResult?.heartsPaid ?? 0) > 0;
     let totalHeartsRecovered = 0;
     let sumMaxHearts = 0;
     let sumMaxStamina = 0;
@@ -6831,9 +6903,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      if (!party.characters[i].maxStamina || party.characters[i].maxStamina === 0) {
       party.characters[i].maxStamina = maxStam;
      }
-     const heartsCap = Math.floor(maxHrt * heartsPct);
-     const heartsRecovered = heartsCap > 0 ? Math.floor(Math.random() * (heartsCap + 1)) : 0;
-     totalHeartsRecovered += heartsRecovered;
+     // Skip heart recovery if struggle was used (paid hearts to camp)
+     if (!paidHeartsToStruggle) {
+      const heartsCap = Math.floor(maxHrt * heartsPct);
+      const heartsRecovered = heartsCap > 0 ? Math.floor(Math.random() * (heartsCap + 1)) : 0;
+      totalHeartsRecovered += heartsRecovered;
+     }
     }
     // Backfill party-level max values if missing
     if (!party.maxHearts || party.maxHearts === 0) {
@@ -6845,7 +6920,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      party.markModified("maxStamina");
     }
     party.markModified("characters");
-    if (totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < sumMaxHearts) totalHeartsRecovered = 1;
+    if (!paidHeartsToStruggle && totalHeartsRecovered < 1 && (party.totalHearts ?? 0) < sumMaxHearts) totalHeartsRecovered = 1;
     // Stamina: random up to staminaPct of party max (25% unsecured, 50% secured).
     const poolStam = party.totalStamina ?? 0;
     const staminaRoom = Math.max(0, sumMaxStamina - poolStam);
@@ -6872,7 +6947,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      ? ` (-${struggleHeartsPaid} ❤ struggle${campPayResult?.staminaPaid > 0 ? `, -${campPayResult.staminaPaid} stamina` : ""})` 
      : (campPayResult?.staminaPaid > 0 ? ` (-${campPayResult.staminaPaid} stamina)` : "");
     const campLogStamina = campCostDisplay + (totalStaminaRecovered > 0 ? ` (+${totalStaminaRecovered} stamina)` : "");
-    const campLogMessage = `Camped at ${locationCamp}. Party recovered hearts.${campLogStamina}`;
+    const campLogMessage = paidHeartsToStruggle
+     ? `Camped at ${locationCamp}. Party recovered stamina only (no hearts due to struggle).${campLogStamina}`
+     : `Camped at ${locationCamp}. Party recovered hearts.${campLogStamina}`;
     pushProgressLog(
      party,
      character.name,
@@ -6886,8 +6963,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     const nextCharacterCamp = party.characters[party.currentTurn];
-    const recoveryParts = [`Party: +${totalHeartsRecovered} ❤️`, ...(totalStaminaRecovered > 0 ? [`+${totalStaminaRecovered} 🟩`] : [])];
-    const recoveryValue = recoveryParts.length > 0 ? recoveryParts.join(" ") : "";
+    const recoveryParts = [
+     ...(totalHeartsRecovered > 0 ? [`+${totalHeartsRecovered} ❤️`] : []),
+     ...(totalStaminaRecovered > 0 ? [`+${totalStaminaRecovered} 🟩`] : [])
+    ];
+    const recoveryValue = recoveryParts.length > 0 ? `Party: ${recoveryParts.join(" ")}` : (paidHeartsToStruggle ? "Stamina only (no ❤️ recovery due to struggle)" : "");
     const campFlavor = getRandomCampFlavor();
     const quadrantStateLabel = isSecured ? "secured" : (party.quadrantState === "explored" ? "explored" : "unexplored");
     const costNote = struggleHeartsPaid > 0

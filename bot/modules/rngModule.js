@@ -361,7 +361,11 @@ function getRandomBloodMoonEncounter() {
 // Monster Encounter Functions
 // ------------------- Get Exploration Monster from List (tier-weighted; tier 5+ rarer) -------------------
 // Picks one monster from the list using explorationTierWeights so tier 5+ appear less often.
-function getExplorationMonsterFromList(monsters) {
+// Optional dangerBonus (0-1) shifts selection toward higher tiers:
+// - At 0% bonus: uses base weights (lower tiers more common)
+// - At 25% bonus: weights are adjusted so higher tiers are ~2x more likely
+// Works by reducing lower tier weights proportionally while boosting higher tier weights
+function getExplorationMonsterFromList(monsters, dangerBonus = 0) {
   if (!monsters || monsters.length === 0) return null;
   const byTier = {};
   for (const m of monsters) {
@@ -369,12 +373,31 @@ function getExplorationMonsterFromList(monsters) {
     if (!byTier[t]) byTier[t] = [];
     byTier[t].push(m);
   }
+
+  // Apply danger bonus to tier weights
+  // Higher danger = lower tiers get reduced weight, higher tiers get boosted weight
+  // At max danger (0.25), tier 1 weight is halved, tier 5+ weights are doubled
+  const adjustedTierWeights = {};
+  for (let tier = 1; tier <= 10; tier++) {
+    const baseWeight = explorationTierWeights[tier] ?? 0;
+    if (tier <= 2) {
+      // Lower tiers: reduce weight as danger increases (min 25% of original)
+      adjustedTierWeights[tier] = baseWeight * Math.max(0.25, 1 - dangerBonus * 3);
+    } else if (tier <= 4) {
+      // Mid tiers: slight reduction (min 50% of original)
+      adjustedTierWeights[tier] = baseWeight * Math.max(0.5, 1 - dangerBonus * 1.5);
+    } else {
+      // Higher tiers (5+): boost weight as danger increases (up to 3x at max danger)
+      adjustedTierWeights[tier] = baseWeight * (1 + dangerBonus * 8);
+    }
+  }
+
   let totalWeight = 0;
   const tierWeights = [];
   for (let tier = 1; tier <= 10; tier++) {
     const list = byTier[tier];
     if (!list || list.length === 0) continue;
-    const w = (explorationTierWeights[tier] ?? 0) * list.length;
+    const w = (adjustedTierWeights[tier] ?? 0) * list.length;
     if (w > 0) {
       totalWeight += w;
       tierWeights.push({ tier, weight: totalWeight, list });
