@@ -780,6 +780,8 @@ function normalizeSquareId(square) {
 // Count consecutive camp attacks (interrupted camps) going backwards from most recent.
 // Stops counting once a successful (non-attacked) camp is found, effectively "resetting" after a safe camp.
 // Used to prevent consecutive camp attacks at 0 stamina from KOing the party too easily.
+// NOTE: Only check message text for "interrupted"/"attacked" - do NOT check heartsLost,
+// because heartsLost can be from struggle mode payment (paying hearts to camp), not from monster damage.
 function countRecentCampAttacks(party, lookback = CAMP_ATTACK_PROTECTION_LOOKBACK) {
  const log = party.progressLog;
  if (!log || !log.length) return 0;
@@ -790,7 +792,7 @@ function countRecentCampAttacks(party, lookback = CAMP_ATTACK_PROTECTION_LOOKBAC
   if (e.outcome === "camp" || e.outcome === "safe_space") {
    campCount++;
    const msg = (e.message || "").toLowerCase();
-   const wasAttacked = msg.includes("interrupted") || msg.includes("attacked") || (e.heartsLost && e.heartsLost > 0);
+   const wasAttacked = msg.includes("interrupted") || msg.includes("attacked");
    if (wasAttacked) {
     attackCount++;
    } else {

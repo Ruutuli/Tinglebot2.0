@@ -8,6 +8,14 @@ export const dynamic = "force-dynamic";
 const GRID_COLS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const GCS_IMAGES_PATH = "maps/squares/";
 
+// In-memory cache for layer images (persists across requests in the same server instance)
+const imageCache = new Map<string, { buffer: Buffer; timestamp: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Pre-generated grid overlays (generated once and reused)
+let cachedGridLines: { vertLine: Buffer; horizLine: Buffer } | null = null;
+const cachedLabels = new Map<string, Buffer>(); // key: "Q1_white", "Q1_green", etc.
+
 function parseSquareId(squareId: string): boolean {
   const m = String(squareId).trim().match(/^([A-J])(1[0-2]|[1-9])$/);
   if (!m) return false;
@@ -59,10 +67,28 @@ function getVillageCircleLayersForSquare(squareId: string): string[] {
 type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
 
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+  // Check cache first
+  const cached = imageCache.get(url);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.buffer;
+  }
+  
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url);
     if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
+    const buffer = Buffer.from(await res.arrayBuffer());
+    // Cache the result
+    imageCache.set(url, { buffer, timestamp: Date.now() });
+    // Cleanup old cache entries periodically (keep cache size reasonable)
+    if (imageCache.size > 200) {
+      const now = Date.now();
+      for (const [key, value] of imageCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL_MS) {
+          imageCache.delete(key);
+        }
+      }
+    }
+    return buffer;
   } catch {
     return null;
   }
@@ -125,97 +151,114 @@ export async function GET(request: NextRequest) {
 
     const compositeInputs: sharp.OverlayOptions[] = [];
 
+    // Build list of all layer URLs to fetch in parallel
+    const layerFetches: Array<{ key: string; url: string }> = [];
+    
     const baseUrl = pathImageUrl || getLayerImageUrl(square, BASE_LAYER);
-    const baseBuf = await fetchImageBuffer(baseUrl);
-    if (!baseBuf) {
+    layerFetches.push({ key: "base", url: baseUrl });
+    
+    if (BLIGHT_SQUARES.includes(square)) {
+      layerFetches.push({ key: "blight", url: getLayerImageUrl(square, "MAP_0000_BLIGHT") });
+    }
+    layerFetches.push({ key: "border", url: getLayerImageUrl(square, "MAP_0001s_0003_Region-Borders") });
+    
+    if (PSL_SQUARES.includes(square)) {
+      layerFetches.push({ key: "psl", url: getLayerImageUrl(square, "MAP_0003s_0000_PSL") });
+    }
+    if (LDW_SQUARES.includes(square)) {
+      layerFetches.push({ key: "ldw", url: getLayerImageUrl(square, "MAP_0003s_0001_LDW") });
+    }
+    if (OTHER_PATHS_SQUARES.includes(square)) {
+      layerFetches.push({ key: "other", url: getLayerImageUrl(square, "MAP_0003s_0002_Other-Paths") });
+    }
+    
+    for (const layer of getVillageCircleLayersForSquare(square)) {
+      layerFetches.push({ key: `circle_${layer}`, url: getLayerImageUrl(square, layer) });
+    }
+    
+    if (!noMask && fogQuadrants.length > 0) {
+      layerFetches.push({ key: "fog", url: getLayerImageUrl(square, "MAP_0001_hidden-areas") });
+    }
+
+    // Fetch all layers in parallel
+    const fetchResults = await Promise.all(
+      layerFetches.map(async ({ key, url }) => ({
+        key,
+        buffer: await fetchImageBuffer(url),
+      }))
+    );
+    
+    const layers: Record<string, Buffer | null> = {};
+    for (const { key, buffer } of fetchResults) {
+      layers[key] = buffer;
+    }
+
+    if (!layers.base) {
       return NextResponse.json({ error: "Failed to load base map image" }, { status: 502 });
     }
 
-    let composite = sharp(baseBuf).resize(SQUARE_W, SQUARE_H);
+    let composite = sharp(layers.base).resize(SQUARE_W, SQUARE_H);
 
-    if (BLIGHT_SQUARES.includes(square)) {
-      const blightBuf = await fetchImageBuffer(getLayerImageUrl(square, "MAP_0000_BLIGHT"));
-      if (blightBuf) compositeInputs.push({ input: blightBuf });
-    }
-
-    const borderBuf = await fetchImageBuffer(getLayerImageUrl(square, "MAP_0001s_0003_Region-Borders"));
-    if (borderBuf) compositeInputs.push({ input: borderBuf });
-
-    if (PSL_SQUARES.includes(square)) {
-      const pslBuf = await fetchImageBuffer(getLayerImageUrl(square, "MAP_0003s_0000_PSL"));
-      if (pslBuf) compositeInputs.push({ input: pslBuf });
-    }
-    if (LDW_SQUARES.includes(square)) {
-      const ldwBuf = await fetchImageBuffer(getLayerImageUrl(square, "MAP_0003s_0001_LDW"));
-      if (ldwBuf) compositeInputs.push({ input: ldwBuf });
-    }
-    if (OTHER_PATHS_SQUARES.includes(square)) {
-      const otherBuf = await fetchImageBuffer(getLayerImageUrl(square, "MAP_0003s_0002_Other-Paths"));
-      if (otherBuf) compositeInputs.push({ input: otherBuf });
-    }
-
+    if (layers.blight) compositeInputs.push({ input: layers.blight });
+    if (layers.border) compositeInputs.push({ input: layers.border });
+    if (layers.psl) compositeInputs.push({ input: layers.psl });
+    if (layers.ldw) compositeInputs.push({ input: layers.ldw });
+    if (layers.other) compositeInputs.push({ input: layers.other });
+    
     for (const layer of getVillageCircleLayersForSquare(square)) {
-      const circleBuf = await fetchImageBuffer(getLayerImageUrl(square, layer));
+      const circleBuf = layers[`circle_${layer}`];
       if (circleBuf) compositeInputs.push({ input: circleBuf });
     }
 
-    if (!noMask && fogQuadrants.length > 0) {
-      const fogBuf = await fetchImageBuffer(getLayerImageUrl(square, "MAP_0001_hidden-areas"));
-      if (fogBuf) {
-        const halfW = Math.floor(SQUARE_W / 2);
-        const halfH = Math.floor(SQUARE_H / 2);
-        for (const q of fogQuadrants) {
-          let left = 0, top = 0;
-          if (q === "Q2" || q === "Q4") left = halfW;
-          if (q === "Q3" || q === "Q4") top = halfH;
-          const quadrantFog = await sharp(fogBuf)
-            .extract({ left, top, width: halfW, height: halfH })
-            .toBuffer();
-          compositeInputs.push({ input: quadrantFog, left, top });
-        }
+    if (!noMask && fogQuadrants.length > 0 && layers.fog) {
+      const halfW = Math.floor(SQUARE_W / 2);
+      const halfH = Math.floor(SQUARE_H / 2);
+      for (const q of fogQuadrants) {
+        let left = 0, top = 0;
+        if (q === "Q2" || q === "Q4") left = halfW;
+        if (q === "Q3" || q === "Q4") top = halfH;
+        const quadrantFog = await sharp(layers.fog)
+          .extract({ left, top, width: halfW, height: halfH })
+          .toBuffer();
+        compositeInputs.push({ input: quadrantFog, left, top });
       }
     }
 
-    // Add grid lines and quadrant labels
+    // Add grid lines and quadrant labels (using cached versions when possible)
     const halfW = Math.floor(SQUARE_W / 2);
     const halfH = Math.floor(SQUARE_H / 2);
     const gridLineWidth = 8;
     const labelPadding = 25;
     
-    // Create grid lines using raw pixel data (vertical line) - WHITE, fully opaque
-    const vertLinePixels = Buffer.alloc(gridLineWidth * SQUARE_H * 4);
-    for (let i = 0; i < gridLineWidth * SQUARE_H; i++) {
-      vertLinePixels[i * 4] = 255;     // R
-      vertLinePixels[i * 4 + 1] = 255; // G
-      vertLinePixels[i * 4 + 2] = 255; // B
-      vertLinePixels[i * 4 + 3] = 200; // A (mostly opaque)
+    // Generate and cache grid lines (only once per server lifetime)
+    if (!cachedGridLines) {
+      const vertLinePixels = Buffer.alloc(gridLineWidth * SQUARE_H * 4);
+      for (let i = 0; i < gridLineWidth * SQUARE_H; i++) {
+        vertLinePixels[i * 4] = 255;
+        vertLinePixels[i * 4 + 1] = 255;
+        vertLinePixels[i * 4 + 2] = 255;
+        vertLinePixels[i * 4 + 3] = 200;
+      }
+      const vertLine = await sharp(vertLinePixels, {
+        raw: { width: gridLineWidth, height: SQUARE_H, channels: 4 }
+      }).png().toBuffer();
+      
+      const horizLinePixels = Buffer.alloc(SQUARE_W * gridLineWidth * 4);
+      for (let i = 0; i < SQUARE_W * gridLineWidth; i++) {
+        horizLinePixels[i * 4] = 255;
+        horizLinePixels[i * 4 + 1] = 255;
+        horizLinePixels[i * 4 + 2] = 255;
+        horizLinePixels[i * 4 + 3] = 200;
+      }
+      const horizLine = await sharp(horizLinePixels, {
+        raw: { width: SQUARE_W, height: gridLineWidth, channels: 4 }
+      }).png().toBuffer();
+      
+      cachedGridLines = { vertLine, horizLine };
     }
-    const vertLineBuf = await sharp(vertLinePixels, {
-      raw: { width: gridLineWidth, height: SQUARE_H, channels: 4 }
-    }).png().toBuffer();
-    compositeInputs.push({ input: vertLineBuf, left: halfW - Math.floor(gridLineWidth / 2), top: 0 });
     
-    // Horizontal line - WHITE, fully opaque
-    const horizLinePixels = Buffer.alloc(SQUARE_W * gridLineWidth * 4);
-    for (let i = 0; i < SQUARE_W * gridLineWidth; i++) {
-      horizLinePixels[i * 4] = 255;     // R
-      horizLinePixels[i * 4 + 1] = 255; // G
-      horizLinePixels[i * 4 + 2] = 255; // B
-      horizLinePixels[i * 4 + 3] = 200; // A
-    }
-    const horizLineBuf = await sharp(horizLinePixels, {
-      raw: { width: SQUARE_W, height: gridLineWidth, channels: 4 }
-    }).png().toBuffer();
-    compositeInputs.push({ input: horizLineBuf, left: 0, top: halfH - Math.floor(gridLineWidth / 2) });
-
-    // Create quadrant labels using SVG paths (no text/font rendering required)
-    // These are hand-crafted SVG paths that draw "Q1", "Q2", "Q3", "Q4"
-    const quadrantLabelConfigs: Array<{ num: string; left: number; top: number; isCurrentQuadrant: boolean }> = [
-      { num: "1", left: labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q1" },
-      { num: "2", left: halfW + labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q2" },
-      { num: "3", left: labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q3" },
-      { num: "4", left: halfW + labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q4" },
-    ];
+    compositeInputs.push({ input: cachedGridLines.vertLine, left: halfW - Math.floor(gridLineWidth / 2), top: 0 });
+    compositeInputs.push({ input: cachedGridLines.horizLine, left: 0, top: halfH - Math.floor(gridLineWidth / 2) });
 
     // SVG paths for Q and digits 1-4 (simplified blocky style that doesn't need fonts)
     const qPath = "M10,5 L35,5 L40,10 L40,35 L35,40 L25,40 L30,50 L20,50 L15,40 L10,40 L5,35 L5,10 L10,5 Z M15,15 L15,30 L30,30 L30,15 Z";
@@ -226,24 +269,41 @@ export async function GET(request: NextRequest) {
       "4": "M50,5 L60,5 L60,20 L65,20 L65,5 L75,5 L75,50 L65,50 L65,30 L50,30 Z",
     };
 
+    // Generate and cache label images
+    const quadrantLabelConfigs: Array<{ num: string; left: number; top: number; isCurrentQuadrant: boolean }> = [
+      { num: "1", left: labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q1" },
+      { num: "2", left: halfW + labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q2" },
+      { num: "3", left: labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q3" },
+      { num: "4", left: halfW + labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q4" },
+    ];
+
     for (const { num, left, top, isCurrentQuadrant } of quadrantLabelConfigs) {
-      const fillColor = isCurrentQuadrant ? "#00FF88" : "#FFFFFF";
-      const strokeColor = "#000000";
-      const digitPath = digitPaths[num] || "";
+      const colorKey = isCurrentQuadrant ? "green" : "white";
+      const cacheKey = `Q${num}_${colorKey}`;
       
-      const svgLabel = Buffer.from(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="55" viewBox="0 0 80 55">` +
-        `<path d="${qPath}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>` +
-        `<path d="${digitPath}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>` +
-        `</svg>`
-      );
-      
-      try {
-        const labelBuf = await sharp(svgLabel).png().toBuffer();
-        compositeInputs.push({ input: labelBuf, left, top });
-      } catch (svgErr) {
-        console.error("[square-image] SVG path label failed for Q" + num + ":", svgErr);
+      let labelBuf = cachedLabels.get(cacheKey);
+      if (!labelBuf) {
+        const fillColor = isCurrentQuadrant ? "#00FF88" : "#FFFFFF";
+        const strokeColor = "#000000";
+        const digitPath = digitPaths[num] || "";
+        
+        const svgLabel = Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="55" viewBox="0 0 80 55">` +
+          `<path d="${qPath}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>` +
+          `<path d="${digitPath}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>` +
+          `</svg>`
+        );
+        
+        try {
+          labelBuf = await sharp(svgLabel).png().toBuffer();
+          cachedLabels.set(cacheKey, labelBuf);
+        } catch (svgErr) {
+          console.error("[square-image] SVG path label failed for Q" + num + ":", svgErr);
+          continue;
+        }
       }
+      
+      compositeInputs.push({ input: labelBuf, left, top });
     }
 
     // Add highlight border on current quadrant
@@ -298,9 +358,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(new Uint8Array(outputBuffer), {
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0",
+        "Cache-Control": "public, max-age=60, s-maxage=120",
       },
     });
   } catch (err) {
