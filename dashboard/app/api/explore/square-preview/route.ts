@@ -70,9 +70,6 @@ type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
  * Fog: quadrants that are unexplored or inaccessible, EXCEPT the party's current quadrant.
  * The quadrant the party has moved into is "revealed" (no fog) even though it stays unexplored until they get the "Quadrant Explored!" prompt.
  */
-/** Squares that contain village start points - circles should always be visible */
-const VILLAGE_SQUARES = [...INARIKO_CIRCLE_SQUARES, ...VHINTL_CIRCLE_SQUARES, ...RUDANIA_CIRCLE_SQUARES];
-
 function getLayersForSquare(
   squareId: string,
   options?: { quadrantStatuses?: Record<string, QuadrantStatus>; revealedQuadrant?: string }
@@ -80,8 +77,7 @@ function getLayersForSquare(
   const layers: string[] = [];
 
   // 1. Mask/fog — unexplored/inaccessible quads only; exclude party's current quadrant (revealed when they move there)
-  // Skip fog entirely on village squares so safe perimeter circles are always visible
-  const isVillageSquare = VILLAGE_SQUARES.includes(squareId);
+  // Village circles render on top of fog (added last in layer stack), so fog can still be included for village squares
   const statuses = options?.quadrantStatuses ?? {};
   const revealed = options?.revealedQuadrant ? String(options.revealedQuadrant).trim().toUpperCase() : null;
   const fogQuadrants = (["Q1", "Q2", "Q3", "Q4"] as const).filter((q) => {
@@ -90,7 +86,7 @@ function getLayersForSquare(
     const isCurrentQuadrant = revealed && q === revealed;
     return isUnexploredOrInaccessible && !isCurrentQuadrant;
   });
-  if (fogQuadrants.length > 0 && !isVillageSquare) {
+  if (fogQuadrants.length > 0) {
     layers.push("MAP_0001_hidden-areas");
   }
 

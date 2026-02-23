@@ -1185,8 +1185,9 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
       const party = await Party.findActiveByPartyId(wave.expeditionId);
       if (party) {
         characterHeartsBefore = Math.max(0, party.totalHearts ?? 0);
+        const partyMaxHearts = Math.max(1, party.maxHearts ?? characterHeartsBefore);
         const plainChar = character.toObject ? character.toObject() : { ...character };
-        battleCharacter = { ...plainChar, currentHearts: characterHeartsBefore, maxHearts: characterHeartsBefore };
+        battleCharacter = { ...plainChar, currentHearts: characterHeartsBefore, maxHearts: partyMaxHearts };
       }
     }
 

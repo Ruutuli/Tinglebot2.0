@@ -150,6 +150,31 @@ const regionImages = {
  hebra: "https://storage.googleapis.com/tinglebot/Graphics/Hebra-Region.png",
 };
 
+// ------------------- Explore Map Image URL ------------------
+// Generates a URL to the dashboard's square-image API for dynamic map rendering.
+// Falls back to regionImages if square/quadrant not available.
+const EXPLORE_MAP_IMAGE_BASE = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/api/explore/square-image`;
+
+function getExploreMapImageUrl(party, options = {}) {
+  const square = party?.square;
+  const quadrant = party?.quadrant;
+  if (!square || !/^[A-Ja-j](1[0-2]|[1-9])$/.test(square)) {
+    return regionImages[party?.region] || "https://storage.googleapis.com/tinglebot/Graphics/border.png";
+  }
+  const params = new URLSearchParams();
+  params.set("square", square.toUpperCase());
+  if (quadrant && /^Q[1-4]$/i.test(quadrant)) {
+    params.set("quadrant", quadrant.toUpperCase());
+  }
+  if (options.highlight) {
+    params.set("highlight", "1");
+  }
+  if (options.noMask) {
+    params.set("noMask", "1");
+  }
+  return `${EXPLORE_MAP_IMAGE_BASE}?${params.toString()}`;
+}
+
 // ------------------- Travel Path Images ------------------
 const PATH_IMAGES = {
  pathOfScarletLeaves: "https://storage.googleapis.com/tinglebot/psl.png",
@@ -662,11 +687,26 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    fields.push({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
   }
  }
+ // Add prominent struggle mode warning field when stamina is 0
+ if ((party?.totalStamina ?? 0) === 0) {
+  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
+  if (heartCost > 0) {
+   fields.push({
+    name: "⚠️ **__STRUGGLE MODE__**",
+    value: `**0 stamina!** All actions cost **${heartCost}❤️** in this ${party?.quadrantState ?? "unexplored"} quadrant.\nUse **Camp** or **Item** to recover stamina.`,
+    inline: false,
+   });
+  }
+ }
  const safeFields = fields.map(sanitizeEmbedField);
  embed.addFields(...safeFields);
  // Set footer with struggle mode warning when stamina is 0
  if ((party?.totalStamina ?? 0) === 0) {
-  embed.setFooter({ text: "⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover." });
+  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
+  const footerText = heartCost > 0
+   ? `⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant. Use Camp or Item to recover.`
+   : "⚠️ 0 stamina — Secured quadrant: actions are free.";
+  embed.setFooter({ text: footerText });
  }
  return embed;
 };
@@ -716,11 +756,27 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
  }
- const commandsField = sanitizeEmbedField({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
- embed.addFields(commandsField);
- // Set footer with struggle mode warning when stamina is 0
- if ((party?.totalStamina ?? 0) === 0) {
-  embed.setFooter({ text: "⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover." });
+const commandsField = sanitizeEmbedField({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
+// Add prominent struggle mode warning field before commands when stamina is 0
+if ((party?.totalStamina ?? 0) === 0) {
+  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
+  if (heartCost > 0) {
+   const struggleField = sanitizeEmbedField({
+    name: "⚠️ **__STRUGGLE MODE__**",
+    value: `**0 stamina!** All actions cost **${heartCost}❤️** in this ${party?.quadrantState ?? "unexplored"} quadrant.\nUse **Camp** or **Item** to recover stamina.`,
+    inline: false,
+   });
+   embed.addFields(struggleField);
+  }
+ }
+embed.addFields(commandsField);
+// Set footer with struggle mode warning when stamina is 0
+if ((party?.totalStamina ?? 0) === 0) {
+  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
+  const footerText = heartCost > 0
+   ? `⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant. Use Camp or Item to recover.`
+   : "⚠️ 0 stamina — Secured quadrant: actions are free.";
+  embed.setFooter({ text: footerText });
  }
  return embed;
 };
@@ -752,7 +808,7 @@ const createExplorationItemEmbed = (
   )
   .setColor(getExploreOutcomeColor("item", regionColors[party.region] || "#00ff99"))
   .setThumbnail(item.image || "https://via.placeholder.com/100x100")
-  .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100");
+  .setImage(getExploreMapImageUrl(party, { highlight: true }));
  addExplorationStandardFields(embed, {
   party,
   expeditionId,
@@ -766,13 +822,17 @@ const createExplorationItemEmbed = (
   maxHearts,
   maxStamina,
  });
- const rarity = item.itemRarity ?? 1;
- const isStruggleMode = (party?.totalStamina ?? 0) === 0;
- const footerText = isStruggleMode
-  ? `Rarity: ${rarity}  •  ⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover.`
-  : `Rarity: ${rarity}`;
- embed.setFooter({ text: footerText });
- return embed;
+const rarity = item.itemRarity ?? 1;
+const isStruggleMode = (party?.totalStamina ?? 0) === 0;
+let footerText = `Rarity: ${rarity}`;
+if (isStruggleMode) {
+ const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
+ footerText = heartCost > 0
+  ? `Rarity: ${rarity}  •  ⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant.`
+  : `Rarity: ${rarity}  •  ⚠️ 0 stamina — Secured quadrant: actions are free.`;
+}
+embed.setFooter({ text: footerText });
+return embed;
 };
 
 // ------------------- Function: createExplorationMonsterEmbed -------------------
@@ -807,7 +867,7 @@ const createExplorationMonsterEmbed = (
   )
   .setColor(getExploreOutcomeColor("monster", regionColors[party.region] || "#00ff99"))
   .setThumbnail(monsterImage)
-  .setImage(regionImages[party.region] || "https://via.placeholder.com/100x100");
+  .setImage(getExploreMapImageUrl(party, { highlight: true }));
  addExplorationStandardFields(embed, {
   party,
   expeditionId,
@@ -822,13 +882,17 @@ const createExplorationMonsterEmbed = (
   maxHearts,
   maxStamina,
  });
- const tier = monster.tier ?? 1;
- const isStruggleMode = (party?.totalStamina ?? 0) === 0;
- const footerText = isStruggleMode
-  ? `Tier: ${tier}  •  ⚠️ 0 stamina — Struggle mode! All actions cost 1❤️ instead. Use Camp or Item to recover.`
-  : `Tier: ${tier}`;
- embed.setFooter({ text: footerText });
- return embed;
+const tier = monster.tier ?? 1;
+const isStruggleMode = (party?.totalStamina ?? 0) === 0;
+let footerText = `Tier: ${tier}`;
+if (isStruggleMode) {
+ const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
+ footerText = heartCost > 0
+  ? `Tier: ${tier}  •  ⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant.`
+  : `Tier: ${tier}  •  ⚠️ 0 stamina — Secured quadrant: actions are free.`;
+}
+embed.setFooter({ text: footerText });
+return embed;
 };
 
 // ------------------- Function: createSetupInstructionsEmbed -------------------
@@ -3673,6 +3737,7 @@ module.exports = {
  getHealCommandId,
  setHealCommandId,
  PATH_IMAGES,
+ getExploreMapImageUrl,
  villageEmojis,
  pathEmojis,
  

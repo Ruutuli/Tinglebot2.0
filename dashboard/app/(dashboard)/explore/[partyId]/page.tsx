@@ -2849,15 +2849,17 @@ export default function ExplorePartyPage() {
                       <span className="flex items-center gap-1"><i className="fa-solid fa-bolt text-[10px] text-[var(--totk-light-green)]/90" aria-hidden />{party.totalStamina}</span>
                     </span>
                   </div>
-                  <div className="w-full overflow-x-auto">
-                    <div className="flex w-full flex-nowrap items-start gap-2 sm:flex-wrap">
+                  <div className="w-full">
+                    {/* Mobile: vertical stack (default), md+: horizontal with wrapping */}
+                    <div className="flex w-full flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:gap-2">
                       {party.members.map((m, index) => {
                         const { displayIcon, displayHearts, displayStamina, isCurrentTurn } = getMemberDisplay(m, characters, party, index);
                         const memberCollected = (party.gatheredItems ?? []).filter((g) => g.characterId === m.characterId);
                         return (
-                          <span key={m.characterId} className="flex min-w-0 flex-1 items-start gap-2 sm:min-w-[160px]">
+                          <div key={m.characterId} className="flex w-full items-start gap-2 md:w-auto md:min-w-[200px] md:flex-1">
+                            {/* Arrow separator - hidden on mobile, visible on md+ for non-first items */}
                             {index > 0 && (
-                              <span className="mt-4 flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
+                              <span className="mt-4 hidden flex-shrink-0 text-[var(--totk-dark-ocher)] md:block" aria-hidden>
                                 <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="opacity-70">
                                   <path d="M1 6h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
@@ -2866,20 +2868,25 @@ export default function ExplorePartyPage() {
                             <span className={`mt-4 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isCurrentTurn ? "bg-[var(--totk-light-green)]/60 text-[var(--botw-warm-black)]" : "bg-[var(--totk-dark-ocher)]/70 text-[var(--totk-ivory)]"}`}>
                               {index + 1}
                             </span>
-                            <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined} heartsStaminaLabel="max" collectedItems={memberCollected} />
-                          </span>
+                            <div className="min-w-0 flex-1">
+                              <PartySlotCard name={m.name} icon={displayIcon} hearts={displayHearts} stamina={displayStamina} items={m.items} isYou={userId === m.userId} label={[isCurrentTurn && "Current turn", userId === m.userId && "you"].filter(Boolean).join(" ") || undefined} heartsStaminaLabel="max" collectedItems={memberCollected} />
+                            </div>
+                          </div>
                         );
                       })}
                       {showYourSlotPreview && (
-                        <span className="flex min-w-0 flex-1 items-start gap-2 sm:min-w-[160px]">
-                          <span className="mt-4 flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
+                        <div className="flex w-full items-start gap-2 md:w-auto md:min-w-[200px] md:flex-1">
+                          {/* Arrow separator - hidden on mobile */}
+                          <span className="mt-4 hidden flex-shrink-0 text-[var(--totk-dark-ocher)] md:block" aria-hidden>
                             <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="opacity-70">
                               <path d="M1 6h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </span>
                           <span className="mt-4 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[var(--totk-light-green)]/70 bg-[var(--totk-light-green)]/10 text-[10px] font-bold text-[var(--totk-light-green)]">{party.members.length + 1}</span>
-                          <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.maxHearts} stamina={selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" heartsStaminaLabel="max" />
-                        </span>
+                          <div className="min-w-0 flex-1">
+                            <PartySlotCard name={selectedCharacter?.name ?? "Your character"} icon={selectedCharacter?.icon ?? null} hearts={selectedCharacter?.maxHearts} stamina={selectedCharacter?.maxStamina} items={selectedItems.map((itemName) => ({ itemName: itemName || "" }))} isYou label="(preview)" heartsStaminaLabel="max" />
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>

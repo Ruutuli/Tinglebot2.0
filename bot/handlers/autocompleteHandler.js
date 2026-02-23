@@ -7113,19 +7113,21 @@ async function handleWaveCharacterAutocomplete(interaction, focusedOption) {
     
     let wave = null;
     if (waveId) {
-      // Find the specific wave by ID
-      wave = await Wave.findOne({ waveId, status: 'active' });
+      // Find the specific wave by ID (use lean() for faster query)
+      wave = await Wave.findOne({ waveId, status: 'active' }).lean();
     }
     
     if (!wave) {
       // If no specific wave, try to find any active wave with user's characters
-      const allActiveWaves = await Wave.find({ status: 'active' });
-      for (const w of allActiveWaves) {
-        const userParticipant = (w.participants || []).find(p => p.odUserId === userId);
-        if (userParticipant) {
-          wave = w;
-          break;
-        }
+      // Optimization: Query with participant filter directly instead of fetching all waves
+      // Use lean() for faster query, limit to first match
+      const wavesWithUser = await Wave.find({
+        status: 'active',
+        'participants.userId': userId
+      }).lean().limit(5);
+      
+      if (wavesWithUser.length > 0) {
+        wave = wavesWithUser[0];
       }
     }
     
@@ -7135,11 +7137,11 @@ async function handleWaveCharacterAutocomplete(interaction, focusedOption) {
     }
     
     // Filter participants to only show those owned by this user
-    const userParticipants = wave.participants.filter(p => p.odUserId === userId);
+    const userParticipants = wave.participants.filter(p => p.userId === userId);
     
     if (userParticipants.length === 0) {
-      // User has no characters in this wave
-      return await interaction.respond([]);
+      // User has no characters in this wave, fall back to default handler
+      return await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "wave");
     }
     
     // Build choices from wave participants

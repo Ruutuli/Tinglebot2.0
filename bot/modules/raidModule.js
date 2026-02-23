@@ -1028,9 +1028,10 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       const party = await Party.findActiveByPartyId(raid.expeditionId);
       if (party) {
         characterHeartsBefore = Math.max(0, party.totalHearts ?? 0);
+        const partyMaxHearts = Math.max(1, party.maxHearts ?? characterHeartsBefore);
         const plainChar = character.toObject ? character.toObject() : { ...character };
-        battleCharacter = { ...plainChar, currentHearts: characterHeartsBefore, maxHearts: characterHeartsBefore };
-        logger.info('RAID', `Expedition raid turn — using party pool: ${characterHeartsBefore} ❤`);
+        battleCharacter = { ...plainChar, currentHearts: characterHeartsBefore, maxHearts: partyMaxHearts };
+        logger.info('RAID', `Expedition raid turn — using party pool: ${characterHeartsBefore}/${partyMaxHearts} ❤`);
       }
     }
     

@@ -760,6 +760,19 @@ async function handleWaveVictory(interaction, waveData) {
     const Character = require('@/models/CharacterModel');
     const User = require('@/models/UserModel');
     
+    // For expedition waves, fetch party to update gatheredItems (dashboard pockets display)
+    let expeditionParty = null;
+    if (waveData.expeditionId) {
+      try {
+        expeditionParty = await Party.findActiveByPartyId(waveData.expeditionId);
+        if (expeditionParty && !expeditionParty.gatheredItems) {
+          expeditionParty.gatheredItems = [];
+        }
+      } catch (partyErr) {
+        console.error(`[wave.js]: ⚠️ Failed to fetch party for expedition ${waveData.expeditionId}:`, partyErr?.message || partyErr);
+      }
+    }
+    
     // Track which participants got loot (for summary)
     const participantsWhoGotLoot = new Set();
     // Track which monsters each participant defeated
@@ -870,6 +883,17 @@ async function handleWaveVictory(interaction, waveData) {
             }
             console.log(`[wave.js]: ✅ [${i + 1}/${defeatedMonsters.length}] Successfully added ${lootedItem.itemName} to ${character.name}'s inventory`);
             
+            // For expedition waves, also add to party.gatheredItems for dashboard pockets display
+            if (expeditionParty) {
+              expeditionParty.gatheredItems.push({
+                characterId: character._id,
+                characterName: character.name,
+                itemName: lootedItem.itemName,
+                quantity: lootedItem.quantity,
+                emoji: lootedItem.emoji || ''
+              });
+            }
+            
             // Determine loot quality indicator based on damage
             let qualityIndicator = '';
             if (participantDamage >= 10) {
@@ -903,6 +927,17 @@ async function handleWaveVictory(interaction, waveData) {
               monster: monster.name
             });
             
+            // Still add to gatheredItems for dashboard display even if inventory sync failed
+            if (expeditionParty) {
+              expeditionParty.gatheredItems.push({
+                characterId: character._id,
+                characterName: character.name,
+                itemName: lootedItem.itemName,
+                quantity: lootedItem.quantity,
+                emoji: lootedItem.emoji || ''
+              });
+            }
+            
             // Determine loot quality indicator based on damage
             let qualityIndicator = '';
             if (participantDamage >= 10) {
@@ -917,8 +952,20 @@ async function handleWaveVictory(interaction, waveData) {
             participantsWhoGotLoot.add(character.name);
           }
         } else {
-          // Character doesn't have valid inventory, but still show loot
+          // Character doesn't have valid inventory, but still show loot and add to dashboard
           console.log(`[wave.js]: ⚠️ [${i + 1}/${defeatedMonsters.length}] ${character.name} has no valid inventory link, but loot will still be shown`);
+          
+          // Add to gatheredItems for dashboard display
+          if (expeditionParty) {
+            expeditionParty.gatheredItems.push({
+              characterId: character._id,
+              characterName: character.name,
+              itemName: lootedItem.itemName,
+              quantity: lootedItem.quantity,
+              emoji: lootedItem.emoji || ''
+            });
+          }
+          
           let qualityIndicator = '';
           if (participantDamage >= 10) {
             qualityIndicator = ' 🔥';
@@ -971,6 +1018,16 @@ async function handleWaveVictory(interaction, waveData) {
           if (!(waveData.expeditionId && EXPLORATION_TESTING_MODE)) {
             await addItemInventoryDatabase(char._id, randomItem.itemName, 1, interaction, "Wave Victory Chest");
           }
+          // For expedition waves, also add chest reward to party.gatheredItems for dashboard pockets display
+          if (expeditionParty) {
+            expeditionParty.gatheredItems.push({
+              characterId: char._id,
+              characterName: participant.name,
+              itemName: randomItem.itemName,
+              quantity: 1,
+              emoji: randomItem.emoji || '📦'
+            });
+          }
           const emoji = randomItem.emoji || '📦';
           lootResults.push(`**${participant.name}** 📦 opened a chest and found ${emoji} **${randomItem.itemName}**!`);
           participantsWhoGotLoot.add(participant.name);
@@ -978,6 +1035,17 @@ async function handleWaveVictory(interaction, waveData) {
           console.error(`[wave.js]: ⚠️ Chest reward failed for ${participant.name}:`, chestErr?.message || chestErr);
           lootResults.push(`**${participant.name}** 📦 opened a chest but something went wrong.`);
         }
+      }
+    }
+    
+    // Save expedition party with updated gatheredItems for dashboard pockets display
+    if (expeditionParty) {
+      try {
+        expeditionParty.markModified('gatheredItems');
+        await expeditionParty.save();
+        console.log(`[wave.js]: 💾 Saved expedition party ${waveData.expeditionId} with ${expeditionParty.gatheredItems.length} gathered items`);
+      } catch (partySaveErr) {
+        console.error(`[wave.js]: ⚠️ Failed to save party gatheredItems for expedition ${waveData.expeditionId}:`, partySaveErr?.message || partySaveErr);
       }
     }
     
@@ -1245,6 +1313,11 @@ async function handleWaveVictory(interaction, waveData) {
       const party = await Party.findActiveByPartyId(waveData.expeditionId);
       if (party) {
         const location = party.square && party.quadrant ? `${party.square} ${party.quadrant}` : 'Unknown';
+        // Advance expedition turn so the roll that triggered this wave is properly "consumed"
+        // (consistent with how raids advance expedition turn in notifyExpeditionRaidOver)
+        if (party.characters && party.characters.length > 0) {
+          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+        }
         const nextCharacter = party.characters?.[party.currentTurn] ?? null;
         victoryEmbed = new EmbedBuilder()
           .setColor(regionColors[party.region] || '#00ff99')

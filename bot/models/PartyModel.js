@@ -91,4 +91,27 @@ PartySchema.statics.findActiveByPartyId = function (partyId) {
   });
 };
 
+/**
+ * Advance to the next turn in the expedition.
+ * Wraps around to the first character after the last one.
+ * Unlike raids/waves, expedition characters share a heart pool so there's no KO-skipping logic.
+ * @param {boolean} [save=true] - Whether to save the document after advancing. Set to false if caller will save.
+ * @returns {Promise<{previousTurn: number, newTurn: number, nextCharacter: object|null}>}
+ */
+PartySchema.methods.advanceTurn = async function (save = true) {
+  if (!this.characters || this.characters.length === 0) {
+    return { previousTurn: this.currentTurn, newTurn: 0, nextCharacter: null };
+  }
+  const previousTurn = this.currentTurn ?? 0;
+  this.currentTurn = (previousTurn + 1) % this.characters.length;
+  if (save) {
+    await this.save();
+  }
+  return {
+    previousTurn,
+    newTurn: this.currentTurn,
+    nextCharacter: this.characters[this.currentTurn] ?? null,
+  };
+};
+
 module.exports = mongoose.model('Party', PartySchema);
