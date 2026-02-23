@@ -3401,19 +3401,28 @@ async function handleExploreIdAutocomplete(interaction, focusedOption) {
   const userId = interaction.user.id;
   const value = (focusedOption.value || '').toString().toLowerCase();
   const openExpiryCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const subcommand = interaction.options.getSubcommand(false);
+
+  // For roll subcommand, only show started expeditions
+  const statusFilter = subcommand === "roll"
+   ? { status: "started" }
+   : { status: { $nin: ["completed", "cancelled"] } };
 
   const parties = await Party.find({
-   status: { $nin: ["completed", "cancelled"] },
+   ...statusFilter,
    $or: [
     { leaderId: userId },
     { 'characters.userId': userId },
    ],
-   $and: [
-    { $or: [
-      { status: { $ne: "open" } },
-      { createdAt: { $gte: openExpiryCutoff } },
-    ] },
-   ],
+   // Only apply open expiry filter when not filtering to started-only
+   ...(subcommand !== "roll" && {
+    $and: [
+     { $or: [
+       { status: { $ne: "open" } },
+       { createdAt: { $gte: openExpiryCutoff } },
+     ] },
+    ],
+   }),
   })
    .select('partyId region status square quadrant')
    .lean()
