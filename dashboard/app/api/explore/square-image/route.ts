@@ -176,37 +176,67 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Add grid lines and quadrant labels as a single SVG overlay
+    // Add grid lines and quadrant labels
     const halfW = Math.floor(SQUARE_W / 2);
     const halfH = Math.floor(SQUARE_H / 2);
-    const gridLineWidth = 4;
-    const labelFontSize = 72;
-    const labelPadding = 30;
+    const gridLineWidth = 6;
+    const labelFontSize = 80;
+    const labelPadding = 40;
     
-    // Build quadrant labels with positioning
-    const quadrantLabels = [
-      { label: "Q1", x: labelPadding, y: labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q1" },
-      { label: "Q2", x: halfW + labelPadding, y: labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q2" },
-      { label: "Q3", x: labelPadding, y: halfH + labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q3" },
-      { label: "Q4", x: halfW + labelPadding, y: halfH + labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q4" },
+    // Create grid lines using raw pixel data (vertical line)
+    const vertLineWidth = gridLineWidth;
+    const vertLinePixels = Buffer.alloc(vertLineWidth * SQUARE_H * 4);
+    for (let i = 0; i < vertLineWidth * SQUARE_H; i++) {
+      vertLinePixels[i * 4] = 255;     // R
+      vertLinePixels[i * 4 + 1] = 255; // G
+      vertLinePixels[i * 4 + 2] = 255; // B
+      vertLinePixels[i * 4 + 3] = 160; // A (semi-transparent)
+    }
+    const vertLineBuf = await sharp(vertLinePixels, {
+      raw: { width: vertLineWidth, height: SQUARE_H, channels: 4 }
+    }).png().toBuffer();
+    compositeInputs.push({ input: vertLineBuf, left: halfW - Math.floor(vertLineWidth / 2), top: 0 });
+    
+    // Horizontal line
+    const horizLineHeight = gridLineWidth;
+    const horizLinePixels = Buffer.alloc(SQUARE_W * horizLineHeight * 4);
+    for (let i = 0; i < SQUARE_W * horizLineHeight; i++) {
+      horizLinePixels[i * 4] = 255;     // R
+      horizLinePixels[i * 4 + 1] = 255; // G
+      horizLinePixels[i * 4 + 2] = 255; // B
+      horizLinePixels[i * 4 + 3] = 160; // A
+    }
+    const horizLineBuf = await sharp(horizLinePixels, {
+      raw: { width: SQUARE_W, height: horizLineHeight, channels: 4 }
+    }).png().toBuffer();
+    compositeInputs.push({ input: horizLineBuf, left: 0, top: halfH - Math.floor(horizLineHeight / 2) });
+
+    // Create quadrant labels using text overlay with SVG
+    // Use a simpler SVG approach with explicit dimensions
+    const quadrantLabels: Array<{ label: string; left: number; top: number; isCurrentQuadrant: boolean }> = [
+      { label: "Q1", left: labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q1" },
+      { label: "Q2", left: halfW + labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q2" },
+      { label: "Q3", left: labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q3" },
+      { label: "Q4", left: halfW + labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q4" },
     ];
 
-    const labelElements = quadrantLabels.map(({ label, x, y, isCurrentQuadrant }) => {
-      const fillColor = isCurrentQuadrant ? "#64ff96" : "rgba(255,255,255,0.85)";
-      return `<text x="${x}" y="${y}" font-family="Arial, sans-serif" font-size="${labelFontSize}" font-weight="bold" fill="${fillColor}" stroke="#000000" stroke-width="4" paint-order="stroke">${label}</text>`;
-    }).join("\n        ");
-
-    const overlaySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SQUARE_W}" height="${SQUARE_H}" viewBox="0 0 ${SQUARE_W} ${SQUARE_H}">
-        <line x1="${halfW}" y1="0" x2="${halfW}" y2="${SQUARE_H}" stroke="rgba(255,255,255,0.6)" stroke-width="${gridLineWidth}"/>
-        <line x1="0" y1="${halfH}" x2="${SQUARE_W}" y2="${halfH}" stroke="rgba(255,255,255,0.6)" stroke-width="${gridLineWidth}"/>
-        ${labelElements}
-      </svg>`;
-    
-    const overlaySvgBuf = await sharp(Buffer.from(overlaySvg))
-      .resize(SQUARE_W, SQUARE_H)
-      .png()
-      .toBuffer();
-    compositeInputs.push({ input: overlaySvgBuf, left: 0, top: 0 });
+    for (const { label, left, top, isCurrentQuadrant } of quadrantLabels) {
+      const fillColor = isCurrentQuadrant ? "#64FF96" : "#FFFFFF";
+      const labelWidth = 120;
+      const labelHeight = 100;
+      const svgLabel = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${labelWidth}" height="${labelHeight}">` +
+        `<text x="5" y="${labelFontSize}" font-family="Arial,sans-serif" font-size="${labelFontSize}" font-weight="bold" ` +
+        `fill="${fillColor}" stroke="#000000" stroke-width="5" paint-order="stroke">${label}</text>` +
+        `</svg>`
+      );
+      try {
+        const labelBuf = await sharp(svgLabel).png().toBuffer();
+        compositeInputs.push({ input: labelBuf, left, top });
+      } catch (svgErr) {
+        console.error("[square-image] SVG label error:", svgErr);
+      }
+    }
 
     // Add highlight border on current quadrant
     if (highlight && revealedQuadrant) {
@@ -214,15 +244,41 @@ export async function GET(request: NextRequest) {
       if (revealedQuadrant === "Q2" || revealedQuadrant === "Q4") left = halfW;
       if (revealedQuadrant === "Q3" || revealedQuadrant === "Q4") top = halfH;
 
-      const borderWidth = 10;
-      const highlightSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${halfW}" height="${halfH}" viewBox="0 0 ${halfW} ${halfH}">
-          <rect x="${borderWidth/2}" y="${borderWidth/2}" width="${halfW - borderWidth}" height="${halfH - borderWidth}" fill="none" stroke="rgba(0,200,100,0.95)" stroke-width="${borderWidth}"/>
-        </svg>`;
-      const highlightBuf = await sharp(Buffer.from(highlightSvg))
-        .resize(halfW, halfH)
-        .png()
-        .toBuffer();
-      compositeInputs.push({ input: highlightBuf, left, top });
+      const borderWidth = 12;
+      // Create border using 4 rectangles (top, bottom, left, right edges)
+      const borderColor = { r: 0, g: 200, b: 100, a: 240 };
+      
+      // Top edge
+      const topEdgePixels = Buffer.alloc(halfW * borderWidth * 4);
+      for (let i = 0; i < halfW * borderWidth; i++) {
+        topEdgePixels[i * 4] = borderColor.r;
+        topEdgePixels[i * 4 + 1] = borderColor.g;
+        topEdgePixels[i * 4 + 2] = borderColor.b;
+        topEdgePixels[i * 4 + 3] = borderColor.a;
+      }
+      const topEdgeBuf = await sharp(topEdgePixels, {
+        raw: { width: halfW, height: borderWidth, channels: 4 }
+      }).png().toBuffer();
+      compositeInputs.push({ input: topEdgeBuf, left, top });
+      
+      // Bottom edge
+      compositeInputs.push({ input: topEdgeBuf, left, top: top + halfH - borderWidth });
+      
+      // Left edge
+      const leftEdgePixels = Buffer.alloc(borderWidth * halfH * 4);
+      for (let i = 0; i < borderWidth * halfH; i++) {
+        leftEdgePixels[i * 4] = borderColor.r;
+        leftEdgePixels[i * 4 + 1] = borderColor.g;
+        leftEdgePixels[i * 4 + 2] = borderColor.b;
+        leftEdgePixels[i * 4 + 3] = borderColor.a;
+      }
+      const leftEdgeBuf = await sharp(leftEdgePixels, {
+        raw: { width: borderWidth, height: halfH, channels: 4 }
+      }).png().toBuffer();
+      compositeInputs.push({ input: leftEdgeBuf, left, top });
+      
+      // Right edge
+      compositeInputs.push({ input: leftEdgeBuf, left: left + halfW - borderWidth, top });
     }
 
     if (compositeInputs.length > 0) {

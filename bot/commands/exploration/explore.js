@@ -6629,8 +6629,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
 
     const isSecured = party.quadrantState === "secured";
-    // Camp cost: unexplored = 3, explored = 2, secured = 0.
-    const baseCampCost = party.quadrantState === "secured" ? 0 : party.quadrantState === "explored" ? 2 : 3;
+    // Camp cost: unexplored = 2, explored = 1, secured = 0.
+    const baseCampCost = party.quadrantState === "secured" ? 0 : party.quadrantState === "explored" ? 1 : 2;
     // Recovery: up to 25% of max hearts/stamina unsecured, 50% if quadrant is secured
     const heartsPct = isSecured ? 0.5 : 0.25;
     const staminaPct = isSecured ? 0.5 : 0.25;
