@@ -6730,7 +6730,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      campAttackChance = 0;
      logger.info("EXPLORE", `[explore.js] Camp protection: party at 0 stamina with ${recentCampAttacks} recent camp attack(s), guaranteeing safe camp`);
     }
-    const canBeAttackedAtCamp = !(character.blighted && character.blightStage >= 3) && Math.random() < campAttackChance;
+
+    // Log camp attack chance calculation for debugging
+    const baseChanceForLog = isSecured ? CAMP_ATTACK_CHANCE_SECURED : CAMP_ATTACK_CHANCE_UNSECURED;
+    logger.info("EXPLORE", `[explore.js] id=${party.partyId} camp chance: base=${(baseChanceForLog * 100).toFixed(0)}% +danger=${(campDangerLevel.dangerBonus * 100).toFixed(0)}% (dist=${campDangerLevel.distance}) stuckInWild=${stuckInWild} final=${(campAttackChance * 100).toFixed(0)}% recentAttacks=${recentCampAttacks}`);
+
+    const campRoll = Math.random();
+    const canBeAttackedAtCamp = !(character.blighted && character.blightStage >= 3) && campRoll < campAttackChance;
+    logger.info("EXPLORE", `[explore.js] id=${party.partyId} camp roll: ${(campRoll * 100).toFixed(1)}% < ${(campAttackChance * 100).toFixed(0)}% = ${canBeAttackedAtCamp ? "ATTACKED" : "safe"}`);
     if (canBeAttackedAtCamp) {
      const loc = `${party.square} ${party.quadrant}`;
      // Pay camp cost before monster attack (uses struggle mechanic if stamina is insufficient)
