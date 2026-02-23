@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
 
     const outputBuffer = await composite.png({ compressionLevel: 6 }).toBuffer();
 
-    return new NextResponse(outputBuffer, {
+    return new NextResponse(new Uint8Array(outputBuffer), {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=300, s-maxage=600",
