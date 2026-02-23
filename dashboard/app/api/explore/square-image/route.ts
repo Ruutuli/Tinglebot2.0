@@ -176,9 +176,56 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Add grid lines (vertical and horizontal center lines)
+    const gridLineWidth = 4;
+    const gridLineColor = "rgba(255, 255, 255, 0.5)";
+    const gridSvg = Buffer.from(`
+      <svg width="${SQUARE_W}" height="${SQUARE_H}">
+        <!-- Vertical center line -->
+        <line x1="${SQUARE_W / 2}" y1="0" x2="${SQUARE_W / 2}" y2="${SQUARE_H}" 
+              stroke="${gridLineColor}" stroke-width="${gridLineWidth}"/>
+        <!-- Horizontal center line -->
+        <line x1="0" y1="${SQUARE_H / 2}" x2="${SQUARE_W}" y2="${SQUARE_H / 2}" 
+              stroke="${gridLineColor}" stroke-width="${gridLineWidth}"/>
+      </svg>
+    `);
+    compositeInputs.push({ input: gridSvg, left: 0, top: 0 });
+
+    // Add quadrant labels (Q1, Q2, Q3, Q4)
+    const halfW = Math.floor(SQUARE_W / 2);
+    const halfH = Math.floor(SQUARE_H / 2);
+    const labelFontSize = 72;
+    const labelPadding = 24;
+    const quadrantLabels: Array<{ label: string; x: number; y: number; isCurrentQuadrant: boolean }> = [
+      { label: "Q1", x: labelPadding, y: labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q1" },
+      { label: "Q2", x: halfW + labelPadding, y: labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q2" },
+      { label: "Q3", x: labelPadding, y: halfH + labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q3" },
+      { label: "Q4", x: halfW + labelPadding, y: halfH + labelPadding + labelFontSize, isCurrentQuadrant: revealedQuadrant === "Q4" },
+    ];
+    
+    const labelsSvg = Buffer.from(`
+      <svg width="${SQUARE_W}" height="${SQUARE_H}">
+        <style>
+          .quadrant-label {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: ${labelFontSize}px;
+            font-weight: bold;
+          }
+          .normal { fill: rgba(255, 255, 255, 0.7); }
+          .current { fill: rgba(100, 255, 150, 1); }
+        </style>
+        ${quadrantLabels.map(({ label, x, y, isCurrentQuadrant }) => `
+          <text x="${x}" y="${y}" class="quadrant-label ${isCurrentQuadrant ? 'current' : 'normal'}"
+                stroke="rgba(0,0,0,0.6)" stroke-width="3" paint-order="stroke">
+            ${label}
+          </text>
+        `).join('')}
+      </svg>
+    `);
+    compositeInputs.push({ input: labelsSvg, left: 0, top: 0 });
+
+    // Add highlight border on current quadrant
     if (highlight && revealedQuadrant) {
-      const halfW = Math.floor(SQUARE_W / 2);
-      const halfH = Math.floor(SQUARE_H / 2);
       let left = 0, top = 0;
       if (revealedQuadrant === "Q2" || revealedQuadrant === "Q4") left = halfW;
       if (revealedQuadrant === "Q3" || revealedQuadrant === "Q4") top = halfH;

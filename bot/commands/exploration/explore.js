@@ -4867,6 +4867,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            quantity: qty,
            emoji: lootedItem.emoji || "",
           });
+          party.markModified("gatheredItems");
+          await party.save();
          }
         }
 
@@ -5014,6 +5016,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          quantity: qty,
          emoji: lootedItem.emoji || "",
         });
+        party.markModified("gatheredItems");
+        await party.save();
        }
 
        // If party is KO'd, don't show commands - just show the battle result
