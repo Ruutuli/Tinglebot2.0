@@ -76,6 +76,22 @@ const PartySchema = new Schema({
   ruinRestQuadrants: [{ squareId: { type: String }, quadrantId: { type: String } }],
   /** Square IDs for which a path image was uploaded from this expedition; used to hide "draw path" prompt. */
   pathImageUploadedSquares: [{ type: String }],
+  /** Expedition outcome: 'success' (ended normally), 'failed' (party KO'd), null (still in progress or cancelled). */
+  outcome: { type: String, enum: ['success', 'failed', null], default: null },
+  /** Items lost when expedition failed (KO'd). Preserved for dashboard display. */
+  lostItems: [
+    {
+      characterId: { type: mongoose.Schema.Types.ObjectId },
+      characterName: { type: String },
+      itemName: { type: String },
+      quantity: { type: Number, default: 1 },
+      emoji: { type: String, default: '' },
+    }
+  ],
+  /** Final location when expedition ended (for failed expeditions, where they were KO'd). */
+  finalLocation: { square: { type: String }, quadrant: { type: String } },
+  /** Timestamp when expedition ended. */
+  endedAt: { type: Date },
 });
 
 /** Find party by partyId, excluding cancelled and open parties older than 24h (ghost explores). */

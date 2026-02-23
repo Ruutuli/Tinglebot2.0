@@ -459,10 +459,23 @@ async function regenerateArtWritingQuest(quest) {
   
   logger.info('QUEST', `Regenerating ${quest.type} quest ${quest.questId} for ${quest.village} due to time restriction (after 12pm UTC)`);
   
+  // Check for blocked villages to filter escort destinations
+  const blockedVillages = [];
+  for (const village of VILLAGES) {
+    try {
+      const result = await isTravelBlockedForEscort(village);
+      if (result.blocked) {
+        blockedVillages.push(village);
+      }
+    } catch (error) {
+      logger.warn('QUEST', `Failed to check travel block for ${village} during art/writing regeneration`, error);
+    }
+  }
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Get available quest pools
-      const pools = await getAllQuestPools();
+      // Get available quest pools (with blocked villages filtered from escort destinations)
+      const pools = await getAllQuestPools(blockedVillages);
       
       // Get available NPCs (excluding the current one to avoid duplicates)
       const allNPCs = Object.keys(NPCs);
@@ -1105,9 +1118,10 @@ async function getCraftingQuestPool() {
 }
 
 // ------------------- Function: getEscortQuestPool -------------------
-// Gets all valid escort locations
-function getEscortQuestPool() {
-  return getAllVillages();
+// Gets all valid escort locations, filtering out blocked villages
+function getEscortQuestPool(blockedVillages = []) {
+  const allVillages = getAllVillages();
+  return allVillages.filter(v => !blockedVillages.includes(v));
 }
 
 // ------------------- Function: getArtQuestPool -------------------
@@ -1323,7 +1337,8 @@ async function generateZoomedIconUrl(iconUrl, questIdOrUniqueId) {
 
 // ------------------- Function: getAllQuestPools -------------------
 // Fetches all quest pools in parallel (character-guess pools are per-village)
-async function getAllQuestPools() {
+// blockedVillages: array of village names that are blocked by weather or damage (filters escort destinations)
+async function getAllQuestPools(blockedVillages = []) {
   try {
     const [itemPool, monsterPool, craftingPool, villageShopPool, snippetByVillage, iconByVillage] = await Promise.all([
       getItemQuestPool(),
@@ -1342,7 +1357,7 @@ async function getAllQuestPools() {
       })
     ]);
     
-    const escortPool = getEscortQuestPool();
+    const escortPool = getEscortQuestPool(blockedVillages);
     const artPool = getArtQuestPool();
     const writingPool = getWritingQuestPool();
     
@@ -1937,29 +1952,53 @@ async function generateDailyQuests() {
       }
     }
 
-    // Check weather for all villages upfront (use cached version)
+    // Check weather AND village damage for all villages upfront
+    // This determines both source blocking (no escort quests from that village)
+    // and destination blocking (village removed from escort destination pool)
     const weatherCache = new Map();
     const travelBlockedMap = new Map();
+    const blockedVillages = []; // Villages blocked by weather or damage (for destination filtering)
     
-    logger.info('QUEST', 'Checking weather for all villages...');
+    logger.info('QUEST', 'Checking weather and village damage for all villages...');
     for (const village of VILLAGES) {
       try {
-        const travelBlocked = await isTravelBlockedByWeatherCached(village, weatherCache);
+        // Check weather
+        const weatherBlocked = await isTravelBlockedByWeatherCached(village, weatherCache);
+        
+        // Check village damage
+        let damageBlocked = false;
+        try {
+          damageBlocked = await isTravelBlockedByVillageDamage(village);
+        } catch (damageError) {
+          logger.warn('QUEST', `Village damage check failed for ${village}, assuming not damaged`, damageError);
+        }
+        
+        const travelBlocked = weatherBlocked || damageBlocked;
         travelBlockedMap.set(village, travelBlocked);
+        
         if (travelBlocked) {
-          logger.info('QUEST', `Travel blocked in ${village} - escort quests will be excluded`);
+          blockedVillages.push(village);
+          const reasons = [];
+          if (weatherBlocked) reasons.push('weather');
+          if (damageBlocked) reasons.push('village damage');
+          logger.info('QUEST', `Travel blocked in ${village} (${reasons.join(' + ')}) - escort quests will be excluded`);
         }
       } catch (error) {
-        logger.warn('QUEST', `Weather check failed for ${village}, defaulting to allowing travel`, error);
+        logger.warn('QUEST', `Travel check failed for ${village}, defaulting to allowing travel`, error);
         travelBlockedMap.set(village, false); // Default to allowing travel
-        warnings.push(`Weather check failed for ${village}`);
+        warnings.push(`Travel check failed for ${village}`);
       }
     }
+    
+    // Log blocked villages for escort destination filtering
+    if (blockedVillages.length > 0) {
+      logger.info('QUEST', `Blocked villages (excluded from escort destinations): ${blockedVillages.join(', ')}`);
+    }
 
-    // Get quest pools
+    // Get quest pools, passing blocked villages to filter escort destinations
     let pools;
     try {
-      pools = await getAllQuestPools();
+      pools = await getAllQuestPools(blockedVillages);
     } catch (error) {
       logger.error('QUEST', 'Failed to get quest pools', error);
       throw new Error(`Failed to get quest pools: ${error.message}`);

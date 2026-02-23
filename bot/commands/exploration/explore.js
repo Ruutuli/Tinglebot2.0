@@ -1377,9 +1377,38 @@ async function handleExpeditionFailed(party, interaction, useFollowUp = false) {
 
  await closeRaidsForExpedition(party.partyId);
 
+ // Preserve lost items for dashboard display before clearing
+ const lostItems = [
+  // Items gathered during expedition
+  ...(party.gatheredItems || []).map(item => ({
+   characterId: item.characterId,
+   characterName: item.characterName,
+   itemName: item.itemName,
+   quantity: item.quantity ?? 1,
+   emoji: item.emoji ?? '',
+  })),
+  // Items brought on expedition (from character loadouts)
+  ...(party.characters || []).flatMap(c => 
+   (c.items || []).map(item => ({
+    characterId: c._id,
+    characterName: c.name,
+    itemName: item.itemName,
+    quantity: 1,
+    emoji: item.emoji ?? '',
+   }))
+  ),
+ ];
+
+ // Store final location before resetting
+ const finalLocation = { square: party.square, quadrant: party.quadrant };
+
  party.square = start.square;
  party.quadrant = start.quadrant;
  party.status = "completed";
+ party.outcome = "failed";
+ party.lostItems = lostItems;
+ party.finalLocation = finalLocation;
+ party.endedAt = new Date();
  party.totalHearts = 0;
  party.totalStamina = 0;
  party.gatheredItems = [];
@@ -6414,6 +6443,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     await closeRaidsForExpedition(expeditionId);
 
     party.status = "completed";
+    party.outcome = "success";
+    party.finalLocation = { square: party.square, quadrant: party.quadrant };
+    party.endedAt = new Date();
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     // Stats and highlights from progressLog and gatheredItems (use saved party with "end" entry)
@@ -6708,9 +6740,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // At 0 stamina, camping still costs the normal amount but paid via hearts (struggle mechanic)
     const stuckInWild = (party.totalStamina ?? 0) === 0 && baseCampCost > 0;
     
-    // Recovery: up to 25% unsecured, 50% if secured OR in struggle mode (0 stamina)
-    const heartsPct = (isSecured || stuckInWild) ? 0.5 : 0.25;
-    const staminaPct = (isSecured || stuckInWild) ? 0.5 : 0.25;
+    // Recovery: up to 25% unsecured/struggle, 50% if secured (secured is safe zone with better rest)
+    const heartsPct = isSecured ? 0.5 : 0.25;
+    const staminaPct = isSecured ? 0.5 : 0.25;
     const staminaCost = baseCampCost;
 
     // Calculate danger level based on distance from start
@@ -6773,9 +6805,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
         const raidResult = await triggerRaid(selectedMonster, interaction, village, false, character, false, expeditionId);
         if (raidResult && raidResult.success) {
+         const rollInfo = `(roll ${(campRoll * 100).toFixed(0)}% < ${(campAttackChance * 100).toFixed(0)}% chance, dist=${campDangerLevel.distance})`;
          const raidCampMsg = campAttackStruggleHearts > 0
-           ? `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started. Lost ${campAttackStruggleHearts} heart(s) (struggle).`
-           : `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started.`;
+           ? `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started. Lost ${campAttackStruggleHearts} heart(s) (struggle). ${rollInfo}`
+           : `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started. ${rollInfo}`;
          pushProgressLog(party, character.name, "camp", raidCampMsg, undefined, campAttackStruggleHearts > 0 ? { heartsLost: campAttackStruggleHearts } : undefined, new Date());
          await party.save();
          const battleId = raidResult.raidId;
@@ -6822,7 +6855,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        lootedItem = await resolveExplorationMonsterLoot(selectedMonster.name, rawItem);
       }
       const totalHeartsLost = campAttackStruggleHearts + (outcome.hearts || 0);
-      let campAttackMsg = `Camp at ${loc} interrupted by **${selectedMonster.name}**! ${outcome.result}.`;
+      const rollInfo = `(roll ${(campRoll * 100).toFixed(0)}% < ${(campAttackChance * 100).toFixed(0)}% chance, dist=${campDangerLevel.distance})`;
+      let campAttackMsg = `Camp at ${loc} interrupted by **${selectedMonster.name}**! ${outcome.result}. ${rollInfo}`;
       if (totalHeartsLost > 0) {
        if (campAttackStruggleHearts > 0 && outcome.hearts > 0) campAttackMsg += ` Lost ${campAttackStruggleHearts} heart(s) (struggle) plus ${outcome.hearts} heart(s) from the monster.`;
        else if (campAttackStruggleHearts > 0) campAttackMsg += ` Lost ${campAttackStruggleHearts} heart(s) (struggle).`;

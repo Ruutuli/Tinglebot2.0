@@ -324,6 +324,14 @@ type PartyData = {
   pathImageUploadedSquares?: string[];
   /** Quadrants the party has set foot in this run; fog stays clear for these when they move away. */
   visitedQuadrantsThisRun?: Array<{ squareId?: string; quadrantId?: string }>;
+  /** Expedition outcome: 'success' (ended normally), 'failed' (party KO'd), null (still in progress). */
+  outcome?: 'success' | 'failed' | null;
+  /** Items lost when expedition failed (KO'd). */
+  lostItems?: GatheredItem[];
+  /** Final location when expedition ended. */
+  finalLocation?: { square?: string; quadrant?: string };
+  /** Timestamp when expedition ended. */
+  endedAt?: string;
 };
 
 type Character = {
@@ -1708,7 +1716,7 @@ export default function ExplorePartyPage() {
             </>
           )}
 
-          {party.status === "completed" && (
+          {party.status === "completed" && party.outcome !== "failed" && (
             <section className="mb-6 rounded-2xl border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-dark-ocher)]/20 px-5 py-4 shadow-lg sm:px-6 sm:py-5" role="status" aria-live="polite">
               <div className="flex flex-wrap items-center justify-center gap-3 text-center">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]">
@@ -1723,6 +1731,73 @@ export default function ExplorePartyPage() {
                   </p>
                 </div>
               </div>
+            </section>
+          )}
+
+          {party.status === "completed" && party.outcome === "failed" && (
+            <section className="mb-6 rounded-2xl border-2 border-red-800/60 bg-red-900/20 px-5 py-4 shadow-lg sm:px-6 sm:py-5" role="status" aria-live="polite">
+              <div className="flex flex-wrap items-center justify-center gap-3 text-center">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-800/50 text-red-200">
+                  <i className="fa-solid fa-skull text-lg" aria-hidden />
+                </span>
+                <div>
+                  <h2 className="text-lg font-bold uppercase tracking-wider text-red-200 sm:text-xl">
+                    Expedition Failed — Party KO&apos;d
+                  </h2>
+                  <p className="mt-0.5 text-sm text-red-300/80">
+                    The party lost all hearts.{party.finalLocation?.square && ` KO'd at ${party.finalLocation.square} ${party.finalLocation.quadrant}.`} All items were lost.
+                  </p>
+                </div>
+              </div>
+              {/* Lost Items Section */}
+              {party.lostItems && party.lostItems.length > 0 && (
+                <div className="mt-4 rounded-xl border border-red-800/40 bg-red-950/30 p-4">
+                  <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-300">
+                    <i className="fa-solid fa-box-open text-[10px] opacity-80" aria-hidden />
+                    Items Lost ({party.lostItems.reduce((sum, item) => sum + (item.quantity ?? 1), 0)})
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(() => {
+                      const itemCounts = new Map<string, { emoji?: string; count: number; characterNames: string[] }>();
+                      for (const item of party.lostItems) {
+                        const key = item.itemName;
+                        const existing = itemCounts.get(key);
+                        if (existing) {
+                          existing.count += item.quantity ?? 1;
+                          if (item.characterName && !existing.characterNames.includes(item.characterName)) {
+                            existing.characterNames.push(item.characterName);
+                          }
+                        } else {
+                          itemCounts.set(key, {
+                            emoji: item.emoji,
+                            count: item.quantity ?? 1,
+                            characterNames: item.characterName ? [item.characterName] : [],
+                          });
+                        }
+                      }
+                      return [...itemCounts.entries()].map(([itemName, { emoji, count, characterNames }]) => (
+                        <span
+                          key={itemName}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-800/30 bg-red-950/40 px-2.5 py-1 text-xs text-red-200"
+                          title={characterNames.length > 0 ? `From: ${characterNames.join(", ")}` : undefined}
+                        >
+                          {emoji && <span>{emoji}</span>}
+                          <span>{itemName}</span>
+                          {count > 1 && <span className="text-red-400">×{count}</span>}
+                        </span>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+              {/* Expedition Stats */}
+              {party.progressLog && party.progressLog.length > 0 && (
+                <div className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-red-300/70">
+                  <span><strong>{party.progressLog.length}</strong> actions taken</span>
+                  <span><strong>{party.progressLog.filter(e => e.outcome === "move").length}</strong> moves</span>
+                  <span><strong>{party.progressLog.filter(e => e.outcome === "monster" || e.outcome === "raid").length}</strong> battles</span>
+                </div>
+              )}
             </section>
           )}
 
@@ -2785,6 +2860,8 @@ export default function ExplorePartyPage() {
                       journey.push(currentLoc);
                     }
                     const hasMoves = journey.length > 1;
+                    // Check if current location is the start (for ending display)
+                    const isAtStart = currentLoc === startLoc;
                     return (
                       <div className="-mx-1 overflow-x-auto px-1 pb-2" title={hasMoves ? journey.join(" → ") : undefined}>
                         <div className="flex flex-nowrap items-center gap-2 sm:flex-wrap">
@@ -2829,6 +2906,22 @@ export default function ExplorePartyPage() {
                             </span>
                           );
                         })}
+                        {/* Show ending destination when not at start */}
+                        {!isAtStart && party.status === "started" && (
+                          <>
+                            <span className="flex-shrink-0 text-[var(--totk-dark-ocher)]" aria-hidden>
+                              <svg width="16" height="12" viewBox="0 0 16 12" fill="none" className="opacity-70">
+                                <path d="M1 6h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/30 px-2.5 py-1 text-xs font-medium text-[var(--botw-pale)]/60 sm:text-sm">
+                              <span className="tabular-nums">{startLoc}</span>
+                              <span className="rounded bg-[var(--totk-dark-ocher)]/20 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-[var(--totk-grey-200)]/70">
+                                End
+                              </span>
+                            </span>
+                          </>
+                        )}
                         </div>
                       </div>
                     );
