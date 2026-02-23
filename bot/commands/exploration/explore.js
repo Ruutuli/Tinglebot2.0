@@ -6044,11 +6044,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Track the next turn participant from wave/raid for proper follow-up ping
     let combatNextTurnParticipant = null;
     
+    // Item use ALWAYS advances expedition turn
+    party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+    
     if (activeWaveForItem) {
-      // Wave turn only — expedition turn stays the same
+      // Also advance wave turn during active wave
       try {
         await advanceWaveTurnOnItemUse(character._id);
-        logger.info("EXPLORE", `[explore.js] Item used during wave — advanced wave turn only (expedition turn unchanged)`);
+        logger.info("EXPLORE", `[explore.js] Item used during wave — advanced both expedition and wave turns`);
         // Re-fetch wave to get updated turn order
         const refreshedWave = await Wave.findOne({ waveId: activeWaveForItem.waveId });
         if (refreshedWave && refreshedWave.participants && refreshedWave.participants.length > 0) {
@@ -6059,10 +6062,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         logger.warn("EXPLORE", `[explore.js]⚠️ advanceWaveTurnOnItemUse: ${waveErr?.message || waveErr}`);
       }
     } else if (activeRaidForItem) {
-      // Raid turn only — expedition turn stays the same
+      // Also advance raid turn during active raid
       try {
         await advanceRaidTurnOnItemUse(character._id);
-        logger.info("EXPLORE", `[explore.js] Item used during raid — advanced raid turn only (expedition turn unchanged)`);
+        logger.info("EXPLORE", `[explore.js] Item used during raid — advanced both expedition and raid turns`);
         // Re-fetch raid to get updated turn order
         const refreshedRaid = await Raid.findOne({ raidId: activeRaidForItem.raidId });
         if (refreshedRaid && refreshedRaid.participants && refreshedRaid.participants.length > 0) {
@@ -6072,9 +6075,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       } catch (raidErr) {
         logger.warn("EXPLORE", `[explore.js]⚠️ advanceRaidTurnOnItemUse: ${raidErr?.message || raidErr}`);
       }
+    } else {
+      logger.info("EXPLORE", `[explore.js] Item used outside combat — advanced expedition turn`);
     }
-    // No active wave/raid — do NOT advance expedition turn.
-    // Using an item from loadout is a free action; the player already took their turn with roll/move/etc.
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
