@@ -172,6 +172,8 @@ function getExploreMapImageUrl(party, options = {}) {
   if (options.noMask) {
     params.set("noMask", "1");
   }
+  // Add cache buster to ensure Discord fetches fresh image
+  params.set("t", Date.now().toString());
   return `${EXPLORE_MAP_IMAGE_BASE}?${params.toString()}`;
 }
 
@@ -757,27 +759,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
  }
 const commandsField = sanitizeEmbedField({ name: "📋 **__Commands__**", value: commandsValue, inline: false });
-// Add prominent struggle mode warning field before commands when stamina is 0
-if ((party?.totalStamina ?? 0) === 0) {
-  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
-  if (heartCost > 0) {
-   const struggleField = sanitizeEmbedField({
-    name: "⚠️ **__STRUGGLE MODE__**",
-    value: `**0 stamina!** All actions cost **${heartCost}❤️** in this ${party?.quadrantState ?? "unexplored"} quadrant.\nUse **Camp** or **Item** to recover stamina.`,
-    inline: false,
-   });
-   embed.addFields(struggleField);
-  }
- }
 embed.addFields(commandsField);
-// Set footer with struggle mode warning when stamina is 0
-if ((party?.totalStamina ?? 0) === 0) {
-  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
-  const footerText = heartCost > 0
-   ? `⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant. Use Camp or Item to recover.`
-   : "⚠️ 0 stamina — Secured quadrant: actions are free.";
-  embed.setFooter({ text: footerText });
- }
  return embed;
 };
 

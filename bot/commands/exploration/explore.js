@@ -777,7 +777,8 @@ function normalizeSquareId(square) {
 }
 
 // ------------------- countRecentCampAttacks ------------------
-// Count how many of the last N camp attempts resulted in monster attacks.
+// Count consecutive camp attacks (interrupted camps) going backwards from most recent.
+// Stops counting once a successful (non-attacked) camp is found, effectively "resetting" after a safe camp.
 // Used to prevent consecutive camp attacks at 0 stamina from KOing the party too easily.
 function countRecentCampAttacks(party, lookback = CAMP_ATTACK_PROTECTION_LOOKBACK) {
  const log = party.progressLog;
@@ -789,8 +790,12 @@ function countRecentCampAttacks(party, lookback = CAMP_ATTACK_PROTECTION_LOOKBAC
   if (e.outcome === "camp" || e.outcome === "safe_space") {
    campCount++;
    const msg = (e.message || "").toLowerCase();
-   if (msg.includes("interrupted") || msg.includes("attacked") || (e.heartsLost && e.heartsLost > 0)) {
+   const wasAttacked = msg.includes("interrupted") || msg.includes("attacked") || (e.heartsLost && e.heartsLost > 0);
+   if (wasAttacked) {
     attackCount++;
+   } else {
+    // Successful camp found - stop counting; protection resets after a safe camp
+    break;
    }
   }
  }
@@ -3233,7 +3238,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         .setTitle("⏳ Not Your Turn")
         .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
         .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-        .setImage(getExploreMapImageUrl(party, { highlight: true }));
+        .setImage(QUADRANT_MILESTONE_IMAGE);
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -5103,7 +5108,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(QUADRANT_MILESTONE_IMAGE);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -5527,7 +5532,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(QUADRANT_MILESTONE_IMAGE);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6448,7 +6453,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("retreat", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn to attempt retreat.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(QUADRANT_MILESTONE_IMAGE);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6609,7 +6614,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(QUADRANT_MILESTONE_IMAGE);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6631,12 +6636,13 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const isSecured = party.quadrantState === "secured";
     // Camp cost: unexplored = 2, explored = 1, secured = 0.
     const baseCampCost = party.quadrantState === "secured" ? 0 : party.quadrantState === "explored" ? 1 : 2;
-    // Recovery: up to 25% of max hearts/stamina unsecured, 50% if quadrant is secured
-    const heartsPct = isSecured ? 0.5 : 0.25;
-    const staminaPct = isSecured ? 0.5 : 0.25;
     
     // At 0 stamina, camping still costs the normal amount but paid via hearts (struggle mechanic)
     const stuckInWild = (party.totalStamina ?? 0) === 0 && baseCampCost > 0;
+    
+    // Recovery: up to 25% unsecured, 50% if secured OR in struggle mode (0 stamina)
+    const heartsPct = (isSecured || stuckInWild) ? 0.5 : 0.25;
+    const staminaPct = (isSecured || stuckInWild) ? 0.5 : 0.25;
     const staminaCost = baseCampCost;
 
     // Chance of monster attack when camping: explored/unexplored 25%, secured 5%. When no stamina or stuck in wild (camp costs 0), higher chance but capped at 50%.

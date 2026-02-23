@@ -179,62 +179,73 @@ export async function GET(request: NextRequest) {
     // Add grid lines and quadrant labels
     const halfW = Math.floor(SQUARE_W / 2);
     const halfH = Math.floor(SQUARE_H / 2);
-    const gridLineWidth = 6;
-    const labelFontSize = 80;
-    const labelPadding = 40;
+    const gridLineWidth = 8;
+    const labelPadding = 25;
     
-    // Create grid lines using raw pixel data (vertical line)
-    const vertLineWidth = gridLineWidth;
-    const vertLinePixels = Buffer.alloc(vertLineWidth * SQUARE_H * 4);
-    for (let i = 0; i < vertLineWidth * SQUARE_H; i++) {
+    // Create grid lines using raw pixel data (vertical line) - WHITE, fully opaque
+    const vertLinePixels = Buffer.alloc(gridLineWidth * SQUARE_H * 4);
+    for (let i = 0; i < gridLineWidth * SQUARE_H; i++) {
       vertLinePixels[i * 4] = 255;     // R
       vertLinePixels[i * 4 + 1] = 255; // G
       vertLinePixels[i * 4 + 2] = 255; // B
-      vertLinePixels[i * 4 + 3] = 160; // A (semi-transparent)
+      vertLinePixels[i * 4 + 3] = 200; // A (mostly opaque)
     }
     const vertLineBuf = await sharp(vertLinePixels, {
-      raw: { width: vertLineWidth, height: SQUARE_H, channels: 4 }
+      raw: { width: gridLineWidth, height: SQUARE_H, channels: 4 }
     }).png().toBuffer();
-    compositeInputs.push({ input: vertLineBuf, left: halfW - Math.floor(vertLineWidth / 2), top: 0 });
+    compositeInputs.push({ input: vertLineBuf, left: halfW - Math.floor(gridLineWidth / 2), top: 0 });
     
-    // Horizontal line
-    const horizLineHeight = gridLineWidth;
-    const horizLinePixels = Buffer.alloc(SQUARE_W * horizLineHeight * 4);
-    for (let i = 0; i < SQUARE_W * horizLineHeight; i++) {
+    // Horizontal line - WHITE, fully opaque
+    const horizLinePixels = Buffer.alloc(SQUARE_W * gridLineWidth * 4);
+    for (let i = 0; i < SQUARE_W * gridLineWidth; i++) {
       horizLinePixels[i * 4] = 255;     // R
       horizLinePixels[i * 4 + 1] = 255; // G
       horizLinePixels[i * 4 + 2] = 255; // B
-      horizLinePixels[i * 4 + 3] = 160; // A
+      horizLinePixels[i * 4 + 3] = 200; // A
     }
     const horizLineBuf = await sharp(horizLinePixels, {
-      raw: { width: SQUARE_W, height: horizLineHeight, channels: 4 }
+      raw: { width: SQUARE_W, height: gridLineWidth, channels: 4 }
     }).png().toBuffer();
-    compositeInputs.push({ input: horizLineBuf, left: 0, top: halfH - Math.floor(horizLineHeight / 2) });
+    compositeInputs.push({ input: horizLineBuf, left: 0, top: halfH - Math.floor(gridLineWidth / 2) });
 
-    // Create quadrant labels using text overlay with SVG
-    // Use a simpler SVG approach with explicit dimensions
-    const quadrantLabels: Array<{ label: string; left: number; top: number; isCurrentQuadrant: boolean }> = [
+    // Create quadrant labels as PNG images with text rendered via sharp's text feature
+    // Since SVG text may not work reliably, we'll create simple colored rectangles with text overlays
+    const quadrantLabelConfigs: Array<{ label: string; left: number; top: number; isCurrentQuadrant: boolean }> = [
       { label: "Q1", left: labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q1" },
       { label: "Q2", left: halfW + labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q2" },
       { label: "Q3", left: labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q3" },
       { label: "Q4", left: halfW + labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q4" },
     ];
 
-    for (const { label, left, top, isCurrentQuadrant } of quadrantLabels) {
-      const fillColor = isCurrentQuadrant ? "#64FF96" : "#FFFFFF";
-      const labelWidth = 120;
-      const labelHeight = 100;
-      const svgLabel = Buffer.from(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${labelWidth}" height="${labelHeight}">` +
-        `<text x="5" y="${labelFontSize}" font-family="Arial,sans-serif" font-size="${labelFontSize}" font-weight="bold" ` +
-        `fill="${fillColor}" stroke="#000000" stroke-width="5" paint-order="stroke">${label}</text>` +
-        `</svg>`
-      );
+    // Try creating labels using sharp's text input (requires pango/fontconfig)
+    for (const { label, left, top, isCurrentQuadrant } of quadrantLabelConfigs) {
       try {
-        const labelBuf = await sharp(svgLabel).png().toBuffer();
+        const textColor = isCurrentQuadrant ? "#00FF88" : "#FFFFFF";
+        const labelBuf = await sharp({
+          text: {
+            text: `<span foreground="${textColor}" font_weight="bold">${label}</span>`,
+            font: "Sans Bold 48",
+            rgba: true,
+            dpi: 150,
+          }
+        }).png().toBuffer();
         compositeInputs.push({ input: labelBuf, left, top });
-      } catch (svgErr) {
-        console.error("[square-image] SVG label error:", svgErr);
+      } catch (textErr) {
+        // Fallback: try SVG if text input fails
+        console.log("[square-image] Text input failed, trying SVG for label:", label);
+        try {
+          const fillColor = isCurrentQuadrant ? "#00FF88" : "#FFFFFF";
+          const svgLabel = Buffer.from(
+            `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="70">` +
+            `<text x="5" y="50" font-family="sans-serif" font-size="50" font-weight="bold" ` +
+            `fill="${fillColor}" stroke="#000" stroke-width="3" paint-order="stroke">${label}</text>` +
+            `</svg>`
+          );
+          const labelBuf = await sharp(svgLabel).png().toBuffer();
+          compositeInputs.push({ input: labelBuf, left, top });
+        } catch (svgErr) {
+          console.error("[square-image] Both text and SVG label failed for:", label, svgErr);
+        }
       }
     }
 
@@ -290,7 +301,9 @@ export async function GET(request: NextRequest) {
     return new NextResponse(new Uint8Array(outputBuffer), {
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=300, s-maxage=600",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
       },
     });
   } catch (err) {
