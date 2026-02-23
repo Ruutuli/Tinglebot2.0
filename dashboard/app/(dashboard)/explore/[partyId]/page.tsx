@@ -561,6 +561,18 @@ export default function ExplorePartyPage() {
     fetchParty();
   }, [fetchParty]);
 
+  // Clear cached state when partyId changes to prevent memory accumulation
+  useEffect(() => {
+    return () => {
+      discoveryPreviewFetchedRef.current.clear();
+      setDiscoveryPreviewBySquare({});
+      setReportedDiscoveryKeys(new Set());
+      setExploreItemNames(new Set());
+      setExploreItemStats(new Map());
+      setExploreItemImages(new Map());
+    };
+  }, [partyId]);
+
   // Sync reported-discovery state from server so "already placed" persists across reloads
   useEffect(() => {
     if (party?.reportedDiscoveryKeys && Array.isArray(party.reportedDiscoveryKeys)) {

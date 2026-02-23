@@ -163,6 +163,12 @@ class MapMetrics {
         this.loadTimes.set(squareId, loadTime);
         this.counts.squaresLoaded++;
         
+        // Limit map size to prevent unbounded growth
+        if (this.loadTimes.size > 200) {
+            const firstKey = this.loadTimes.keys().next().value;
+            this.loadTimes.delete(firstKey);
+        }
+        
         if (this.isDevMode) {
             console.log(`[metrics] Square ${squareId} loaded in ${loadTime.toFixed(1)}ms`);
         }
@@ -212,6 +218,12 @@ class MapMetrics {
         });
         this.counts.squaresFailed++;
         
+        // Limit map size to prevent unbounded growth
+        if (this.errors.size > 100) {
+            const firstKey = this.errors.keys().next().value;
+            this.errors.delete(firstKey);
+        }
+        
         console.error(`[metrics] Load error for ${squareId}:`, error);
     }
     
@@ -228,6 +240,12 @@ class MapMetrics {
             timestamp: Date.now()
         });
         this.counts.imagesFailed++;
+        
+        // Limit map size to prevent unbounded growth
+        if (this.layerErrors.size > 100) {
+            const firstKey = this.layerErrors.keys().next().value;
+            this.layerErrors.delete(firstKey);
+        }
         
         console.warn(`[metrics] Layer error for ${squareId}/${layerName}:`, error);
     }

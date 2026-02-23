@@ -9,6 +9,41 @@ const DISCORD_API_BASE = "https://discord.com/api/v10";
 // Cache for userHasGuildRole results to avoid rate limiting
 const roleCheckCache = new Map<string, { hasRole: boolean; expiresAt: number }>();
 const ROLE_CHECK_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const ROLE_CHECK_CACHE_MAX_SIZE = 1000; // Maximum cache entries before forced cleanup
+const ROLE_CHECK_CLEANUP_INTERVAL_MS = 60 * 1000; // Cleanup every minute
+
+let roleCheckCleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+function cleanupRoleCheckCache(): void {
+  const now = Date.now();
+  let deleted = 0;
+  for (const [key, value] of roleCheckCache) {
+    if (value.expiresAt <= now) {
+      roleCheckCache.delete(key);
+      deleted++;
+    }
+  }
+  
+  // If still over max size, remove oldest entries
+  if (roleCheckCache.size > ROLE_CHECK_CACHE_MAX_SIZE) {
+    const entries = Array.from(roleCheckCache.entries())
+      .sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+    const toDelete = entries.slice(0, roleCheckCache.size - ROLE_CHECK_CACHE_MAX_SIZE);
+    for (const [key] of toDelete) {
+      roleCheckCache.delete(key);
+      deleted++;
+    }
+  }
+}
+
+function ensureRoleCheckCleanupTimer(): void {
+  if (roleCheckCleanupTimer) return;
+  roleCheckCleanupTimer = setInterval(cleanupRoleCheckCache, ROLE_CHECK_CLEANUP_INTERVAL_MS);
+  // Unref to prevent the timer from keeping Node.js alive
+  if (typeof roleCheckCleanupTimer === 'object' && 'unref' in roleCheckCleanupTimer) {
+    roleCheckCleanupTimer.unref();
+  }
+}
 
 async function fetchOneUser(
   userId: string,
@@ -72,6 +107,11 @@ export async function userHasGuildRole(
       );
     }
     return false;
+  }
+
+  // Ensure cleanup timer is running (server-side only)
+  if (typeof window === "undefined") {
+    ensureRoleCheckCleanupTimer();
   }
 
   // Check cache first

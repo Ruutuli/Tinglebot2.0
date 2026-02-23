@@ -9,8 +9,40 @@ const GRID_COLS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const GCS_IMAGES_PATH = "maps/squares/";
 
 // In-memory cache for layer images (persists across requests in the same server instance)
+// Each image can be 2-16MB, so keep cache small to stay under 600MB total
 const imageCache = new Map<string, { buffer: Buffer; timestamp: number }>();
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes (reduced from 10)
+const IMAGE_CACHE_MAX_SIZE = 30; // Maximum cached images before forced cleanup (reduced from 150)
+const IMAGE_CACHE_CLEANUP_INTERVAL_MS = 30 * 1000; // Cleanup every 30 seconds (more frequent)
+
+// Periodic cache cleanup timer
+let imageCacheCleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+function cleanupImageCache(): void {
+  const now = Date.now();
+  for (const [key, value] of imageCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL_MS) {
+      imageCache.delete(key);
+    }
+  }
+  // If still over max size, remove oldest entries
+  if (imageCache.size > IMAGE_CACHE_MAX_SIZE) {
+    const entries = Array.from(imageCache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toDelete = entries.slice(0, imageCache.size - IMAGE_CACHE_MAX_SIZE);
+    for (const [key] of toDelete) {
+      imageCache.delete(key);
+    }
+  }
+}
+
+function ensureImageCacheCleanupTimer(): void {
+  if (imageCacheCleanupTimer) return;
+  imageCacheCleanupTimer = setInterval(cleanupImageCache, IMAGE_CACHE_CLEANUP_INTERVAL_MS);
+  if (typeof imageCacheCleanupTimer === 'object' && 'unref' in imageCacheCleanupTimer) {
+    (imageCacheCleanupTimer as NodeJS.Timeout).unref();
+  }
+}
 
 // Pre-generated grid overlays (generated once and reused)
 let cachedGridLines: { vertLine: Buffer; horizLine: Buffer } | null = null;
@@ -67,6 +99,9 @@ function getVillageCircleLayersForSquare(squareId: string): string[] {
 type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
 
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+  // Ensure cleanup timer is running
+  ensureImageCacheCleanupTimer();
+  
   // Check cache first
   const cached = imageCache.get(url);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -79,15 +114,6 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
     const buffer = Buffer.from(await res.arrayBuffer());
     // Cache the result
     imageCache.set(url, { buffer, timestamp: Date.now() });
-    // Cleanup old cache entries periodically (keep cache size reasonable)
-    if (imageCache.size > 200) {
-      const now = Date.now();
-      for (const [key, value] of imageCache.entries()) {
-        if (now - value.timestamp > CACHE_TTL_MS) {
-          imageCache.delete(key);
-        }
-      }
-    }
     return buffer;
   } catch {
     return null;
