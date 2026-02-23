@@ -208,44 +208,41 @@ export async function GET(request: NextRequest) {
     }).png().toBuffer();
     compositeInputs.push({ input: horizLineBuf, left: 0, top: halfH - Math.floor(gridLineWidth / 2) });
 
-    // Create quadrant labels as PNG images with text rendered via sharp's text feature
-    // Since SVG text may not work reliably, we'll create simple colored rectangles with text overlays
-    const quadrantLabelConfigs: Array<{ label: string; left: number; top: number; isCurrentQuadrant: boolean }> = [
-      { label: "Q1", left: labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q1" },
-      { label: "Q2", left: halfW + labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q2" },
-      { label: "Q3", left: labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q3" },
-      { label: "Q4", left: halfW + labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q4" },
+    // Create quadrant labels using SVG paths (no text/font rendering required)
+    // These are hand-crafted SVG paths that draw "Q1", "Q2", "Q3", "Q4"
+    const quadrantLabelConfigs: Array<{ num: string; left: number; top: number; isCurrentQuadrant: boolean }> = [
+      { num: "1", left: labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q1" },
+      { num: "2", left: halfW + labelPadding, top: labelPadding, isCurrentQuadrant: revealedQuadrant === "Q2" },
+      { num: "3", left: labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q3" },
+      { num: "4", left: halfW + labelPadding, top: halfH + labelPadding, isCurrentQuadrant: revealedQuadrant === "Q4" },
     ];
 
-    // Try creating labels using sharp's text input (requires pango/fontconfig)
-    for (const { label, left, top, isCurrentQuadrant } of quadrantLabelConfigs) {
+    // SVG paths for Q and digits 1-4 (simplified blocky style that doesn't need fonts)
+    const qPath = "M10,5 L35,5 L40,10 L40,35 L35,40 L25,40 L30,50 L20,50 L15,40 L10,40 L5,35 L5,10 L10,5 Z M15,15 L15,30 L30,30 L30,15 Z";
+    const digitPaths: Record<string, string> = {
+      "1": "M55,5 L65,5 L65,50 L55,50 L55,15 L50,15 L50,5 Z",
+      "2": "M50,5 L75,5 L75,15 L60,15 L60,22 L75,22 L75,50 L50,50 L50,40 L65,40 L65,32 L50,32 Z",
+      "3": "M50,5 L75,5 L75,50 L50,50 L50,40 L65,40 L65,32 L55,32 L55,22 L65,22 L65,15 L50,15 Z",
+      "4": "M50,5 L60,5 L60,20 L65,20 L65,5 L75,5 L75,50 L65,50 L65,30 L50,30 Z",
+    };
+
+    for (const { num, left, top, isCurrentQuadrant } of quadrantLabelConfigs) {
+      const fillColor = isCurrentQuadrant ? "#00FF88" : "#FFFFFF";
+      const strokeColor = "#000000";
+      const digitPath = digitPaths[num] || "";
+      
+      const svgLabel = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="55" viewBox="0 0 80 55">` +
+        `<path d="${qPath}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>` +
+        `<path d="${digitPath}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>` +
+        `</svg>`
+      );
+      
       try {
-        const textColor = isCurrentQuadrant ? "#00FF88" : "#FFFFFF";
-        const labelBuf = await sharp({
-          text: {
-            text: `<span foreground="${textColor}" font_weight="bold">${label}</span>`,
-            font: "Sans Bold 48",
-            rgba: true,
-            dpi: 150,
-          }
-        }).png().toBuffer();
+        const labelBuf = await sharp(svgLabel).png().toBuffer();
         compositeInputs.push({ input: labelBuf, left, top });
-      } catch (textErr) {
-        // Fallback: try SVG if text input fails
-        console.log("[square-image] Text input failed, trying SVG for label:", label);
-        try {
-          const fillColor = isCurrentQuadrant ? "#00FF88" : "#FFFFFF";
-          const svgLabel = Buffer.from(
-            `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="70">` +
-            `<text x="5" y="50" font-family="sans-serif" font-size="50" font-weight="bold" ` +
-            `fill="${fillColor}" stroke="#000" stroke-width="3" paint-order="stroke">${label}</text>` +
-            `</svg>`
-          );
-          const labelBuf = await sharp(svgLabel).png().toBuffer();
-          compositeInputs.push({ input: labelBuf, left, top });
-        } catch (svgErr) {
-          console.error("[square-image] Both text and SVG label failed for:", label, svgErr);
-        }
+      } catch (svgErr) {
+        console.error("[square-image] SVG path label failed for Q" + num + ":", svgErr);
       }
     }
 
