@@ -2295,7 +2295,8 @@ async function submissionModReminder(client, _data = {}) {
 // ------------------- mod-todo-reminder (Every 30 minutes) -------------------
 // Sends channel reminders for mod tasks that are overdue or due soon
 // Posts in the original channel (replying to original message) or fallback channel
-const MOD_TODO_FALLBACK_CHANNEL = '658148069212422194';
+// Falls back to MOD_QUEUE_CHANNEL_ID if no source channel, or hardcoded default
+const MOD_TODO_FALLBACK_CHANNEL = process.env.MOD_QUEUE_CHANNEL_ID || '658148069212422194';
 
 async function modTodoReminder(client, _data = {}) {
   if (!client) {
@@ -2340,25 +2341,25 @@ async function modTodoReminder(client, _data = {}) {
     }
     
     for (const task of tasksNeedingReminders) {
-      // Skip tasks with no assignees
-      if (!task.assignees || task.assignees.length === 0) {
-        continue;
-      }
-      
       const isOverdue = task.dueDate < now;
       const dueDateTimestamp = Math.floor(task.dueDate.getTime() / 1000);
       
-      // Build mentions string for all assignees
-      const mentions = task.assignees.map(a => `<@${a.discordId}>`).join(' ');
+      // Build mentions string for assignees (may be empty if no assignees)
+      const hasAssignees = task.assignees && task.assignees.length > 0;
+      const mentions = hasAssignees 
+        ? task.assignees.map(a => `<@${a.discordId}>`).join(' ')
+        : '';
       
       // Build the embed
+      const dashboardUrl = `https://hyrule.tinglebot.com/admin/todo?task=${task._id}`;
       const embed = new EmbedBuilder()
         .setTitle(isOverdue ? '⚠️ Overdue Task Reminder' : '⏰ Task Due Soon')
         .setDescription(task.title)
         .setColor(isOverdue ? 0xff4444 : 0xffaa00)
         .addFields(
           { name: 'Due', value: `<t:${dueDateTimestamp}:R>`, inline: true },
-          { name: 'Priority', value: task.priority.charAt(0).toUpperCase() + task.priority.slice(1), inline: true }
+          { name: 'Priority', value: task.priority.charAt(0).toUpperCase() + task.priority.slice(1), inline: true },
+          { name: 'View Task', value: `[Open in Dashboard](${dashboardUrl})`, inline: true }
         )
         .setTimestamp()
         .setFooter({ text: 'Mod Todo List' });
@@ -2402,11 +2403,18 @@ async function modTodoReminder(client, _data = {}) {
       }
       
       try {
-        // Send the reminder with mentions
+        // Send the reminder - only include content if we have mentions
         const messageOptions = {
-          content: mentions,
           embeds: [embed]
         };
+        
+        // Add mentions if there are assignees, otherwise add a note to the embed
+        if (mentions) {
+          messageOptions.content = mentions;
+        } else {
+          // No assignees - add a warning to the embed
+          embed.addFields({ name: '⚠️ Unassigned', value: 'This task has no assignees!', inline: false });
+        }
         
         // Reply to original message if we have it
         if (replyToMessageId) {
