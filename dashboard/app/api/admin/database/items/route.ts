@@ -220,6 +220,13 @@ export async function GET(req: NextRequest) {
         const { Village } = await import("@/models/VillageModel.js");
         Model = Village as unknown as Model<unknown>;
       }
+    } else if (modelName === "ExploringMap") {
+      if (mongoose.models.Square) {
+        Model = mongoose.models.Square;
+      } else {
+        const mapModel = await import("@/models/mapModel.js");
+        Model = (mapModel.default || mapModel) as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${modelName}" is not supported` },
@@ -410,6 +417,19 @@ export async function GET(req: NextRequest) {
       });
 
       filterOptions.region = Array.from(regionSet).sort();
+    } else if (modelName === "ExploringMap") {
+      // Extract distinct values for Exploring Map filters
+      const regionSet = new Set<string>();
+      const statusSet = new Set<string>();
+
+      convertedRecords.forEach((record) => {
+        const r = record as { region?: string; status?: string };
+        if (r.region) regionSet.add(r.region);
+        if (r.status) statusSet.add(r.status);
+      });
+
+      filterOptions.region = Array.from(regionSet).sort();
+      filterOptions.status = Array.from(statusSet).sort();
     }
 
     // ------------------- Return Response -------------------
@@ -634,6 +654,13 @@ export async function PUT(req: NextRequest) {
         const { Village } = await import("@/models/VillageModel.js");
         Model = Village as unknown as Model<unknown>;
       }
+    } else if (model === "ExploringMap") {
+      if (mongoose.models.Square) {
+        Model = mongoose.models.Square;
+      } else {
+        const mapModel = await import("@/models/mapModel.js");
+        Model = (mapModel.default || mapModel) as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },
@@ -707,6 +734,15 @@ export async function PUT(req: NextRequest) {
       "mothGibdo", "littleFrox", "yigaBlademaster", "yigaFootsoldier",
       "normalBokoblin", "normalGibdo", "normalHinox", "normalHorriblin",
       "normalKeese", "normalLizalfos", "normalLynel", "normalMoblin",
+      ];
+    } else if (model === "ExploringMap") {
+      allowedFields = [
+        "squareId", "region", "status", "image", "pathImageUrl", "quadrants",
+        "mapCoordinates", "displayProperties", "createdAt", "updatedAt",
+        "displayProperties.visible", "displayProperties.opacity", "displayProperties.zIndex",
+        "mapCoordinates.center.lat", "mapCoordinates.center.lng",
+        "mapCoordinates.bounds.north", "mapCoordinates.bounds.south",
+        "mapCoordinates.bounds.east", "mapCoordinates.bounds.west",
       ];
     } else {
       // For other models, allow all fields (can be refined per model later)
@@ -975,6 +1011,13 @@ export async function DELETE(req: NextRequest) {
     } else if (model === "Village") {
       const { Village } = await import("@/models/VillageModel.js");
       Model = Village as unknown as Model<unknown>;
+    } else if (model === "ExploringMap") {
+      if (mongoose.models.Square) {
+        Model = mongoose.models.Square;
+      } else {
+        const mapModel = await import("@/models/mapModel.js");
+        Model = (mapModel.default || mapModel) as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },

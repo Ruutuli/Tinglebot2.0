@@ -1952,6 +1952,170 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       },
     ],
   },
+  ExploringMap: {
+    name: "ExploringMap",
+    displayName: "Exploring Map",
+    icon: "fa-map",
+    collection: "exploringMap",
+    nameField: "squareId",
+    sortField: "squareId",
+    filterKeys: ["region", "status"],
+    tabs: [
+      {
+        id: "basics",
+        label: "Basics",
+        icon: "fa-tag",
+        gridColumns: 2,
+        fields: [
+          {
+            key: "squareId",
+            label: "Square ID",
+            type: "text",
+            helpText: "Grid square identifier (e.g. A1, B2)",
+            required: true,
+          },
+          {
+            key: "region",
+            label: "Region",
+            type: "text",
+            helpText: "Map region for this square",
+            required: true,
+          },
+          {
+            key: "status",
+            label: "Status",
+            type: "select",
+            helpText: "Square accessibility status",
+            options: [
+              { value: "inaccessible", label: "Inaccessible" },
+              { value: "explorable", label: "Explorable" },
+            ],
+          },
+          {
+            key: "image",
+            label: "Image URL",
+            type: "text",
+            helpText: "Base map image URL for this square",
+            required: true,
+          },
+          {
+            key: "pathImageUrl",
+            label: "Path Image URL",
+            type: "text",
+            helpText: "User-drawn path image URL (from expeditions)",
+          },
+        ],
+      },
+      {
+        id: "quadrants",
+        label: "Quadrants",
+        icon: "fa-th",
+        gridColumns: 1,
+        fields: [
+          {
+            key: "quadrants",
+            label: "Quadrants",
+            type: "array",
+            helpText: "Quadrant data (Q1–Q4): status, blighted, discoveries, exploredBy, exploredAt, oldMapNumber, oldMapLeadsTo, ruinRestStamina",
+            readOnly: false,
+          },
+        ],
+      },
+      {
+        id: "display",
+        label: "Display",
+        icon: "fa-eye",
+        gridColumns: 2,
+        fields: [
+          {
+            key: "displayProperties.visible",
+            label: "Visible",
+            type: "boolean",
+            helpText: "Whether this square is visible on the map",
+          },
+          {
+            key: "displayProperties.opacity",
+            label: "Opacity",
+            type: "number",
+            helpText: "Display opacity (0–1)",
+            min: 0,
+            max: 1,
+          },
+          {
+            key: "displayProperties.zIndex",
+            label: "Z-Index",
+            type: "number",
+            helpText: "Layer order for map display",
+            min: 0,
+          },
+        ],
+      },
+      {
+        id: "coordinates",
+        label: "Coordinates",
+        icon: "fa-map-location-dot",
+        gridColumns: 2,
+        fields: [
+          {
+            key: "mapCoordinates.center.lat",
+            label: "Center Lat",
+            type: "number",
+            helpText: "Center latitude",
+          },
+          {
+            key: "mapCoordinates.center.lng",
+            label: "Center Lng",
+            type: "number",
+            helpText: "Center longitude",
+          },
+          {
+            key: "mapCoordinates.bounds.north",
+            label: "Bounds North",
+            type: "number",
+            helpText: "Northern bound",
+          },
+          {
+            key: "mapCoordinates.bounds.south",
+            label: "Bounds South",
+            type: "number",
+            helpText: "Southern bound",
+          },
+          {
+            key: "mapCoordinates.bounds.east",
+            label: "Bounds East",
+            type: "number",
+            helpText: "Eastern bound",
+          },
+          {
+            key: "mapCoordinates.bounds.west",
+            label: "Bounds West",
+            type: "number",
+            helpText: "Western bound",
+          },
+        ],
+      },
+      {
+        id: "dates",
+        label: "Dates",
+        icon: "fa-calendar",
+        gridColumns: 2,
+        fields: [
+          {
+            key: "createdAt",
+            label: "Created At",
+            type: "date",
+            helpText: "When this square was created",
+          },
+          {
+            key: "updatedAt",
+            label: "Updated At",
+            type: "date",
+            helpText: "Last update time",
+          },
+        ],
+      },
+    ],
+  },
 };
 
 // Helper function to get model config
