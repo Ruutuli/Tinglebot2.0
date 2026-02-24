@@ -1576,16 +1576,17 @@ export default function ExplorePartyPage() {
                     {(["Q1", "Q2", "Q3", "Q4"] as const).map((qId) => {
                       const status = party.quadrantStatuses?.[qId] ?? "unexplored";
                       const color = QUADRANT_STATUS_COLORS[status] ?? QUADRANT_STATUS_COLORS.unexplored;
+                      const isCurrentQuadrant = party.quadrant?.toUpperCase() === qId;
                       return (
                         <div
                           key={qId}
-                          className="flex items-center justify-center p-1 text-2xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-3xl"
+                          className={`flex items-center justify-center p-1 text-2xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-3xl ${isCurrentQuadrant ? "ring-4 ring-[#00c864] ring-inset" : ""}`}
                           style={{
                             color,
                             WebkitTextStroke: "2px white",
                             paintOrder: "stroke fill",
                           } as React.CSSProperties}
-                          title={`${qId}: ${status}`}
+                          title={`${qId}: ${status}${isCurrentQuadrant ? " (current)" : ""}`}
                         >
                           {qId}
                         </div>
@@ -2774,8 +2775,9 @@ export default function ExplorePartyPage() {
                             {(["Q1", "Q2", "Q3", "Q4"] as const).map((qId) => {
                               const status = displayPreview!.quadrantStatuses?.[qId] ?? party.quadrantStatuses?.[qId] ?? "unexplored";
                               const color = QUADRANT_STATUS_COLORS[status] ?? QUADRANT_STATUS_COLORS.unexplored;
+                              const isCurrentQuadrant = displayQuadrant?.toUpperCase() === qId;
                               return (
-                                <div key={qId} className="flex items-center justify-center p-1 text-xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-2xl" style={{ color, WebkitTextStroke: "2px white", paintOrder: "stroke fill" } as React.CSSProperties}>
+                                <div key={qId} className={`flex items-center justify-center p-1 text-xl font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-2xl ${isCurrentQuadrant ? "ring-4 ring-[#00c864] ring-inset" : ""}`} style={{ color, WebkitTextStroke: "2px white", paintOrder: "stroke fill" } as React.CSSProperties} title={`${qId}: ${status}${isCurrentQuadrant ? " (current)" : ""}`}>
                                   {qId}
                                 </div>
                               );

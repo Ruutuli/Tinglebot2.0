@@ -1301,28 +1301,94 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
 }
 
 // ------------------- applyBlightExposure ------------------
-// Increment blight exposure when revealing/traveling blighted quadrant
-async function applyBlightExposure(party, square, quadrant, reason, characterName) {
+// Roll blight chance for each party member when revealing/traveling through blighted quadrant.
+// Base chance: 15% per party member who isn't already blighted.
+// Returns: { blightedMembers: [{ name, roll }], safeMembers: [{ name, roll }] }
+const BLIGHT_EXPOSURE_CHANCE = 0.15; // 15% chance to contract blight
+
+async function applyBlightExposure(party, square, quadrant, reason, characterName, client = null, guild = null) {
  const location = `${square} ${quadrant}`;
  const prev = typeof party.blightExposure === "number" ? party.blightExposure : 0;
  const displayTotal = prev + 1;
- if (EXPLORATION_TESTING_MODE) {
-  pushProgressLog(party, characterName || "Party", "blight_exposure",
-   `Blight exposure +1 (${reason}) at ${location}. Total exposure: ${displayTotal}.`,
-   undefined, undefined);
-  return; // No persist in testing mode
+ 
+ const blightedMembers = [];
+ const safeMembers = [];
+ 
+ // Roll for each party member
+ for (const partyChar of party.characters) {
+  // Fetch the actual character document to check blight status
+  let charDoc = null;
+  try {
+   charDoc = await Character.findById(partyChar._id);
+   if (!charDoc) {
+    charDoc = await ModCharacter.findById(partyChar._id);
+   }
+  } catch (err) {
+   logger.warn("EXPLORE", `[explore.js] Could not fetch character ${partyChar.name} for blight check: ${err.message}`);
+  }
+  
+  // Skip if character is already blighted
+  if (charDoc?.blighted && charDoc?.blightStage > 0) {
+   continue;
+  }
+  
+  // Roll for blight (1-100, need to roll above threshold to be safe)
+  const roll = Math.random();
+  const contracted = roll < BLIGHT_EXPOSURE_CHANCE;
+  const rollDisplay = Math.floor(roll * 100) + 1;
+  
+  if (contracted && charDoc) {
+   blightedMembers.push({ name: partyChar.name, roll: rollDisplay });
+   
+   if (!EXPLORATION_TESTING_MODE) {
+    // Apply blight to this character
+    try {
+     await finalizeBlightApplication(charDoc, charDoc.userId, {
+      client,
+      guild,
+      source: `Blighted quadrant (${location})`,
+      alreadySaved: false
+     });
+     logger.info("EXPLORE", `[explore.js] ${partyChar.name} contracted blight from ${location} (roll: ${rollDisplay})`);
+    } catch (blightErr) {
+     logger.error("EXPLORE", `[explore.js] Failed to apply blight to ${partyChar.name}: ${blightErr.message}`);
+    }
+   }
+  } else {
+   safeMembers.push({ name: partyChar.name, roll: rollDisplay });
+  }
  }
+ 
+ // Increment exposure counter
+ if (EXPLORATION_TESTING_MODE) {
+  const blightedNames = blightedMembers.map(m => `${m.name} (rolled ${m.roll})`).join(", ");
+  const safeNames = safeMembers.map(m => `${m.name} (rolled ${m.roll})`).join(", ");
+  const logMsg = blightedMembers.length > 0
+   ? `Blight exposure at ${location}! **CONTRACTED:** ${blightedNames}. Safe: ${safeNames || "none"}.`
+   : `Blight exposure at ${location}. All safe: ${safeNames || "none"}.`;
+  pushProgressLog(party, characterName || "Party", "blight_exposure", logMsg, undefined, undefined);
+  return { blightedMembers, safeMembers }; // No persist in testing mode
+ }
+ 
  party.blightExposure = displayTotal;
  party.markModified("blightExposure");
+ 
+ const blightedNames = blightedMembers.map(m => `${m.name} (rolled ${m.roll})`).join(", ");
+ const safeNames = safeMembers.map(m => `${m.name} (rolled ${m.roll})`).join(", ");
+ const logMsg = blightedMembers.length > 0
+  ? `Blight exposure at ${location}! **CONTRACTED:** ${blightedNames}. Safe: ${safeNames || "none"}.`
+  : `Blight exposure at ${location}. All safe: ${safeNames || "none"}.`;
+ 
  pushProgressLog(
   party,
   characterName || "Party",
   "blight_exposure",
-  `Blight exposure +1 (${reason}) at ${location}. Total exposure: ${party.blightExposure}.`,
+  logMsg,
   undefined,
   undefined
  );
- await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+ await party.save();
+ return { blightedMembers, safeMembers };
 }
 
 const REGION_TO_VILLAGE_LOWER = { eldin: "rudania", lanayru: "inariko", faron: "vhintl" };
@@ -3615,8 +3681,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const quadBlight = mapSquareForBlight?.quadrants?.find(
        (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
       );
+      let revealBlightResult = null;
       if (quadBlight && quadBlight.blighted === true) {
-       await applyBlightExposure(party, party.square, party.quadrant, "reveal", character.name);
+       revealBlightResult = await applyBlightExposure(party, party.square, party.quadrant, "reveal", character.name, interaction.client, interaction.guild);
       }
 
       const nextCharacter = party.characters[party.currentTurn];
@@ -3628,9 +3695,22 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const embedTitle = luckyFindRecovery > 0
        ? `🍀 **Expedition: Lucky Find!**`
        : `✨ **Quadrant Explored!** ✨`;
-      const embedDesc = luckyFindRecovery > 0
+      let embedDesc = luckyFindRecovery > 0
        ? `**${character.name}** found a shortcut in **${location}**! No stamina cost, and recovered **+${luckyFindRecovery} 🟩** stamina.`
        : `**${character.name}** has explored **${location}**!\n\n🔓 **New options unlocked:** You can now **Secure** this quadrant or **Move** to a new one.`;
+      
+      // Add blight exposure warning if in blighted quadrant
+      if (quadBlight && quadBlight.blighted === true) {
+       embedDesc += `\n\n☠️ **Blighted Area!** This quadrant is corrupted by malice.`;
+       if (revealBlightResult) {
+        if (revealBlightResult.blightedMembers.length > 0) {
+         const blightedNames = revealBlightResult.blightedMembers.map(m => `**${m.name}**`).join(", ");
+         embedDesc += `\n\n💀 **BLIGHT CONTRACTED!** ${blightedNames} ${revealBlightResult.blightedMembers.length === 1 ? "has" : "have"} been infected by the corruption! Use \`/blight status\` to check their condition.`;
+        } else if (revealBlightResult.safeMembers.length > 0) {
+         embedDesc += ` The party resisted the corruption this time.`;
+        }
+       }
+      }
 
       const embed = new EmbedBuilder()
        .setTitle(embedTitle)
@@ -5947,13 +6027,16 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     // Check for blight from database quadrant.blighted field
+    let blightResult = null;
     if (destQ && destQ.blighted === true) {
-     await applyBlightExposure(
+     blightResult = await applyBlightExposure(
       party,
       newLocation.square,
       newLocation.quadrant,
       moveWasReveal ? "reveal" : "travel",
-      character.name
+      character.name,
+      interaction.client,
+      interaction.guild
      );
     }
 
@@ -5963,6 +6046,19 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     let moveDescription = moveToUnexplored
      ? `The party has arrived at **${locationMove}**!\n\n📍 **New quadrant — use /explore roll to continue!**`
      : `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
+    
+    // Add blight exposure warning if entering blighted quadrant
+    if (destQ && destQ.blighted === true) {
+     moveDescription += `\n\n☠️ **Blighted Area!** This quadrant is corrupted by malice.`;
+     if (blightResult) {
+      if (blightResult.blightedMembers.length > 0) {
+       const blightedNames = blightResult.blightedMembers.map(m => `**${m.name}**`).join(", ");
+       moveDescription += `\n\n💀 **BLIGHT CONTRACTED!** ${blightedNames} ${blightResult.blightedMembers.length === 1 ? "has" : "have"} been infected by the corruption! Use \`/blight status\` to check their condition.`;
+      } else if (blightResult.safeMembers.length > 0) {
+       moveDescription += ` The party resisted the corruption this time.`;
+      }
+     }
+    }
     if (clearedCount > 0) {
      moveDescription += `\n\n⚠️ **${clearedCount} unmarked discovery(ies) in ${currentSquare} were forgotten.** Place pins on the dashboard before moving to keep them on the map.`;
     }
