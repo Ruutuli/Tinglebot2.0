@@ -120,6 +120,10 @@ const raidSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
+    hasTakenActionThisTurn: {
+      type: Boolean,
+      default: false
+    },
     characterState: {
         currentHearts: Number,
         maxHearts: Number,
@@ -440,6 +444,13 @@ raidSchema.methods.advanceTurn = async function(maxRetries = 3) {
         nextTurn = (this.currentTurn + 1) % this.participants.length;
       }
       this.currentTurn = nextTurn;
+      
+      // Clear the action flag for the new current turn participant so they can take their turn
+      const newCurrentParticipant = this.participants[this.currentTurn];
+      if (newCurrentParticipant) {
+        newCurrentParticipant.hasTakenActionThisTurn = false;
+      }
+      
       return await this.save();
     } catch (error) {
       if (error.name === 'VersionError' && retries < maxRetries - 1) {

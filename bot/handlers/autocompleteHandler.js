@@ -3858,6 +3858,23 @@ async function handleExploreMoveQuadrantAutocomplete(interaction, focusedOption)
    return await interaction.respond([]);
   }
 
+  // Filter out inaccessible quadrants (edge of map) so users don't see them as options
+  const Square = require("../models/mapModel.js");
+  const filteredAdjacent = [];
+  for (const a of adjacent) {
+   try {
+    const squareDoc = await Square.findOne({ squareId: new RegExp(`^${a.square}$`, "i") });
+    if (squareDoc && squareDoc.quadrants) {
+     const q = squareDoc.quadrants.find((qu) => String(qu.quadrantId).toUpperCase() === a.quadrant);
+     if (q && q.status === "inaccessible") continue;
+    }
+    filteredAdjacent.push(a);
+   } catch {
+    filteredAdjacent.push(a);
+   }
+  }
+  adjacent = filteredAdjacent;
+
   const value = (focusedOption.value || "").toLowerCase();
   const choices = adjacent.map((a) => {
    const loc = `${a.square} - ${a.quadrant}`;

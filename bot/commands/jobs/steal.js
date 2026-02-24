@@ -1863,10 +1863,18 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         if (isNPC) {
             await interaction.editReply({ embeds: [embed] });
         } else {
-            await interaction.editReply({
-                content: `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!`,
-                embeds: [embed]
-            });
+            await interaction.editReply({ embeds: [embed] });
+            // Send a separate ping to notify the victim they were stolen from
+            if (targetCharacter.userId && interaction.channel) {
+                try {
+                    await interaction.channel.send({
+                        content: `⚠️ <@${targetCharacter.userId}> Your character **${targetCharacter.name}** was stolen from by **${thiefCharacter.name}**!`,
+                        allowedMentions: { users: [targetCharacter.userId] }
+                    });
+                } catch (e) {
+                    logger.warn('JOB', `Could not send steal victim ping: ${e.message}`);
+                }
+            }
         }
     } catch (error) {
         // Call global error handler for tracking

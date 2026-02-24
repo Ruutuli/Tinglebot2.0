@@ -214,7 +214,7 @@ export async function GET(
         const q = String(v.quadrantId ?? "").trim().toUpperCase();
         if (s === currentSquareNorm && (q === "Q1" || q === "Q2" || q === "Q3" || q === "Q4")) {
           if (quadrantStatuses[q] !== "secured") quadrantStatuses[q] = "explored";
-          if (q === quadrantId) quadrantState = "explored";
+          if (q === quadrantId && quadrantState !== "secured") quadrantState = "explored";
         }
       }
       // When party is in "explored" state (just got "Quadrant Explored!" prompt), current quadrant must show as explored

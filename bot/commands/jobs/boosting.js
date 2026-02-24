@@ -1049,17 +1049,27 @@ async function handleBoostRequest(interaction) {
 
  // Get the owner of the booster character and send reply
  const boosterOwnerId = boosterCharacter.userId;
- const boosterOwnerMention = `<@${boosterOwnerId}>`;
 
 // HARDCODE the slash command mention so it's always clickable
 const commandMention = BOOSTING_ACCEPT_COMMAND_MENTION;
 
 await safeReply({
- content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run ${commandMention} within 24 hours.`,
+ content: `Boost request created.`,
  embeds: [embed],
- ephemeral: false,
- allowedMentions: { users: [boosterOwnerId] }
+ ephemeral: false
 });
+
+// Send a separate ping message to ensure the booster gets notified
+if (boosterOwnerId && interaction.channel) {
+ try {
+  await interaction.channel.send({
+   content: `🔔 <@${boosterOwnerId}> (**${boosterCharacter.name}**), you have a boost request! Run ${commandMention} within 24 hours.`,
+   allowedMentions: { users: [boosterOwnerId] }
+  });
+ } catch (e) {
+  logger.warn('BOOST', `Could not send boost request ping: ${e.message}`);
+ }
+}
 
  // Save the message ID to TempData for later updates
  try {
@@ -1314,6 +1324,18 @@ async function handleBoostAccept(interaction) {
    await saveBoostingRequestToTempData(requestId, requestData);
  } catch (e) {
    logger.warn('BOOST', `Could not persist applied embed message reference for ${requestId}: ${e.message}`);
+ }
+
+ // Send a separate ping to notify the requester that their boost was accepted
+ if (requestData.requesterUserId && interaction.channel) {
+   try {
+     await interaction.channel.send({
+       content: `🔔 <@${requestData.requesterUserId}> Your boost request for **${requestData.targetCharacter}** has been accepted by **${booster.name}**! The boost is now active for 24 hours or until used.`,
+       allowedMentions: { users: [requestData.requesterUserId] }
+     });
+   } catch (e) {
+     logger.warn('BOOST', `Could not send boost accept ping: ${e.message}`);
+   }
  }
 }
 

@@ -73,7 +73,7 @@ const PartySchema = new Schema({
   /** Quadrants the party has set foot in this run; fog stays clear for these when they move away. */
   visitedQuadrantsThisRun: [{ squareId: { type: String }, quadrantId: { type: String } }],
   /** Quadrants where this expedition found a ruin-rest camp spot (ruins exploration → camp outcome); ruin-rest only applies if this expedition discovered it. */
-  ruinRestQuadrants: [{ squareId: { type: String }, quadrantId: { type: String } }],
+  ruinRestQuadrants: [{ squareId: { type: String }, quadrantId: { type: String }, stamina: { type: Number, default: 1 } }],
   /** Square IDs for which a path image was uploaded from this expedition; used to hide "draw path" prompt. */
   pathImageUploadedSquares: [{ type: String }],
   /** Expedition outcome: 'success' (ended normally), 'failed' (party KO'd), null (still in progress or cancelled). */

@@ -634,9 +634,10 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
   // Calculate total damage to current monster (from all participants)
   const totalMonsterDamage = updatedMonsterMaxHearts - updatedMonsterCurrentHearts;
   
-  // Calculate character damage taken this turn
-  const characterHeartsBefore = battleResult.characterHeartsBefore || battleResult.playerHearts.max;
-  const characterDamageTaken = characterHeartsBefore - battleResult.playerHearts.current;
+  // Calculate character damage taken this turn (for expedition waves, this is party pool damage)
+  // Use ?? to handle 0 correctly; fallback to current (not max) to avoid inflated damage display
+  const characterHeartsBefore = battleResult.characterHeartsBefore ?? battleResult.playerHearts.current;
+  const characterDamageTaken = Math.max(0, characterHeartsBefore - battleResult.playerHearts.current);
   
   // Determine if monster was defeated
   const monsterDefeated = updatedMonsterCurrentHearts <= 0;
@@ -682,7 +683,7 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
       {
         name: waveData.expeditionId ? `❤️ **__Party Hearts__**` : `__${character.name} Status__`,
         value: waveData.expeditionId
-          ? `**Party pool:** ${battleResult.playerHearts.current}/${battleResult.characterHeartsBefore ?? battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`
+          ? `**Party pool:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`
           : `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage Taken This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`,
         inline: false
       },

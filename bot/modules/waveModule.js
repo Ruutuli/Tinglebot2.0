@@ -1185,7 +1185,16 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
       const party = await Party.findActiveByPartyId(wave.expeditionId);
       if (party) {
         characterHeartsBefore = Math.max(0, party.totalHearts ?? 0);
-        const partyMaxHearts = Math.max(1, party.maxHearts ?? characterHeartsBefore);
+        // Ensure maxHearts is valid - if 0 or unset, compute from party.characters array
+        let partyMaxHearts = party.maxHearts;
+        if (!partyMaxHearts || partyMaxHearts === 0) {
+          // Fallback: sum character maxHearts from party.characters array (snapshot at expedition start)
+          partyMaxHearts = (party.characters || []).reduce((sum, c) => sum + (c.maxHearts || 0), 0);
+          // If still 0, use totalHearts as last resort (shouldn't happen but safety net)
+          if (partyMaxHearts === 0) {
+            partyMaxHearts = Math.max(1, characterHeartsBefore);
+          }
+        }
         const plainChar = character.toObject ? character.toObject() : { ...character };
         battleCharacter = { ...plainChar, currentHearts: characterHeartsBefore, maxHearts: partyMaxHearts };
       }

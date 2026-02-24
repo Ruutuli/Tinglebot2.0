@@ -307,6 +307,44 @@ function calculateDangerLevel(party) {
   };
 }
 
+// ------------------- shouldBlockItemForBalance ------------------
+// Checks if this character should be blocked from getting an item due to
+// having too many items compared to the party member with the fewest.
+// Threshold: ±3 items difference triggers reroll to a different outcome.
+const ITEM_BALANCE_THRESHOLD = 3;
+
+function shouldBlockItemForBalance(party, rollingCharacter) {
+  if (!party.gatheredItems || party.gatheredItems.length === 0 || !party.characters || party.characters.length <= 1) {
+    return false;
+  }
+
+  // Count items per character
+  const itemCounts = {};
+  for (const pc of party.characters) {
+    itemCounts[pc.name] = 0;
+  }
+  for (const item of party.gatheredItems) {
+    const name = item.characterName;
+    if (itemCounts[name] !== undefined) {
+      itemCounts[name] += item.quantity || 1;
+    }
+  }
+
+  const rollerCount = itemCounts[rollingCharacter.name] ?? 0;
+  
+  // Find the minimum item count among party members
+  let minCount = Infinity;
+  for (const pc of party.characters) {
+    const count = itemCounts[pc.name] ?? 0;
+    if (count < minCount) {
+      minCount = count;
+    }
+  }
+
+  // Block item if roller has more than threshold items above the minimum
+  return (rollerCount - minCount) > ITEM_BALANCE_THRESHOLD;
+}
+
 // ------------------- createStuckInWildEmbed ------------------
 // Party out of stamina; recovery via /explore camp
 function createStuckInWildEmbed(party, location) {
@@ -3401,11 +3439,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
       // Quadrant stays unexplored until roll outcome "explored" (see DESIGN NOTE at top of file). Do NOT mark explored here.
       // Known ruin-rest spot: auto-recover stamina when rolling here again — only if THIS expedition found a camp here
-      const restStamina = typeof q?.ruinRestStamina === "number" && q.ruinRestStamina > 0 ? q.ruinRestStamina : 0;
-      const partyFoundRuinRestHere = (party.ruinRestQuadrants || []).some(
+      // Primary source: party.ruinRestQuadrants (stores stamina value); fallback: Square DB
+      const ruinRestEntry = (party.ruinRestQuadrants || []).find(
        (r) => String(r?.squareId || "").toUpperCase() === String(party.square || "").toUpperCase() && String(r?.quadrantId || "").toUpperCase() === String(party.quadrant || "").toUpperCase()
       );
-      if (restStamina > 0 && partyFoundRuinRestHere && character) {
+      const restStamina = ruinRestEntry?.stamina ?? (typeof q?.ruinRestStamina === "number" && q.ruinRestStamina > 0 ? q.ruinRestStamina : 0);
+      if (restStamina > 0 && ruinRestEntry && character) {
        const add = restStamina;
        if (add > 0) {
         const caps = await getPartyPoolCaps(party);
@@ -3557,6 +3596,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
       // Don't allow "explored" as the first roll after moving to a new quadrant (must have a meaningful outcome first)
       if (outcomeType === "explored" && (lastOutcomeHere === "move" || lastOutcomeHere === null)) {
+       outcomeType = rollOutcome();
+       continue;
+      }
+      // Item balance: if this character has 3+ more items than the party member with fewest, reroll
+      if (outcomeType === "item" && shouldBlockItemForBalance(party, character)) {
        outcomeType = rollOutcome();
        continue;
       }
@@ -4190,7 +4234,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           progressMsg += "Found a chest (open for 1 stamina).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else if (ruinsOutcome === "camp") {
-          const recover = 1;
+          const recover = Math.floor(Math.random() * 2) + 1; // 1 or 2 stamina
           const ruinCaps = await getPartyPoolCaps(freshParty);
           freshParty.totalStamina = Math.min(ruinCaps.maxStamina, Math.max(0, (freshParty.totalStamina ?? 0) + recover));
           freshParty.markModified("totalStamina");
@@ -4202,7 +4246,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
             (r) => String(r?.squareId || "").toUpperCase() === mapSquareId.toUpperCase() && String(r?.quadrantId || "").toUpperCase() === mapQuadrantId
            );
            if (!alreadyHas) {
-            freshParty.ruinRestQuadrants.push({ squareId: mapSquareId, quadrantId: mapQuadrantId });
+            freshParty.ruinRestQuadrants.push({ squareId: mapSquareId, quadrantId: mapQuadrantId, stamina: recover });
             freshParty.markModified("ruinRestQuadrants");
            }
           }
@@ -5854,6 +5898,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      destQ = destMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
      );
+     // Block movement to inaccessible quadrants (edge of map)
+     if (destQ && destQ.status === "inaccessible") {
+      return interaction.editReply(
+       `**${newLocation.square} ${newLocation.quadrant}** is inaccessible (edge of map). Choose a different quadrant.`
+      );
+     }
      if (destQ && (destQ.status === "explored" || destQ.status === "secured")) {
       destinationQuadrantState = destQ.status;
      }
@@ -7119,6 +7169,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      )
      .setImage(getExploreMapImageUrl(party, { highlight: true }));
     const hasDiscCamp = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
+    const campIsAtStart = (() => {
+      const start = START_POINTS_BY_REGION[party.region];
+      return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+    })();
     addExplorationStandardFields(embed, {
       party,
       expeditionId,
@@ -7126,8 +7180,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       nextCharacter: nextCharacterCamp ?? null,
       showNextAndCommands: true,
       showRestSecureMove: false,
+      showSecuredQuadrantOnly: isSecured,
       commandsLast: true,
       hasDiscoveriesInQuadrant: hasDiscCamp,
+      isAtStartQuadrant: campIsAtStart,
       actionCost: campPayResult ? { staminaCost: campPayResult.staminaPaid ?? 0, heartsCost: campPayResult.heartsPaid ?? 0 } : (staminaCost > 0 ? { staminaCost: staminaCost, heartsCost: 0 } : null),
     });
     embed.addFields({
@@ -7142,7 +7198,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       nextCharacter: nextCharacterCamp ?? null,
       showNextAndCommands: true,
       showRestSecureMove: false,
+      showSecuredQuadrantOnly: isSecured,
       hasDiscoveriesInQuadrant: hasDiscCamp,
+      isAtStartQuadrant: campIsAtStart,
     });
 
     await interaction.editReply({ embeds: [embed] });

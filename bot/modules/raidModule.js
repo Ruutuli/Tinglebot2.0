@@ -217,11 +217,13 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
         
         // Format outcome to match tier 5+ format
         // Mark that damage was already saved so processRaidBattle doesn't save again
+        // For expedition waves (skipPersist=true), getEncounterOutcome doesn't update character.currentHearts,
+        // so we calculate current hearts manually from characterHeartsBefore - characterDamage
         outcome = {
           result: outcomeText,
           hearts: monsterDamage, // Damage dealt to monster (used for tracking)
           playerHearts: {
-            current: character.currentHearts, // Already updated by getEncounterOutcome
+            current: skipPersist ? Math.max(0, characterHeartsBefore - characterDamage) : character.currentHearts,
             max: character.maxHearts
           },
           monsterHearts: {
@@ -576,6 +578,17 @@ async function joinRaid(character, raidId, options = {}) {
         const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
         throw new Error(`Only members of expedition **${raid.expeditionId}** can join this raid. This raid was triggered during that expedition. Use ${cmdRoll} with id \`${raid.expeditionId}\` and your character if you're in the party.`);
       }
+    } else {
+      // This is NOT an expedition raid - check if the character is currently in an active expedition
+      // Characters on expeditions cannot join village raids; they must use raids triggered during their expedition
+      const Party = require('@/models/PartyModel');
+      const activeParty = await Party.findOne({
+        status: 'started',
+        'characters._id': character._id
+      });
+      if (activeParty) {
+        throw new Error(`**${character.name}** is currently on expedition **${activeParty.partyId}**. Characters on active expeditions cannot join village raids. Complete or end your expedition first, or wait for a raid to trigger during your exploration.`);
+      }
     }
 
     // Check if character is in the same village
@@ -856,6 +869,18 @@ async function advanceRaidTurnOnItemUse(characterId) {
     const current = raid.getCurrentTurnParticipant();
     if (current && current.characterId && current.characterId.toString() === charIdStr) {
       if (current.isModCharacter) return; // Mod characters don't affect turn order
+      
+      // Check if this participant already took an action this turn (e.g., attacked then healed)
+      // If so, skip advancing the turn again to prevent double-advancement
+      if (current.hasTakenActionThisTurn) {
+        logger.info('RAID', `Item use by ${current.name} — turn already advanced this cycle, skipping`);
+        return;
+      }
+      
+      // Mark that this participant has taken their action this turn
+      current.hasTakenActionThisTurn = true;
+      await raid.save();
+      
       await cancelRaidTurnSkip(raid.raidId);
       await raid.advanceTurn();
       await scheduleRaidTurnSkip(raid.raidId);
@@ -1006,6 +1031,11 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error('Character is not in this raid');
     }
 
+    // Prevent double turn advancement: if participant already took action this turn, reject
+    if (participant.hasTakenActionThisTurn) {
+      throw new Error('You have already taken your turn this round. Please wait for your next turn.');
+    }
+
     // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
 
     // Generate random roll and apply raid difficulty penalty before calculating final value
@@ -1028,7 +1058,16 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       const party = await Party.findActiveByPartyId(raid.expeditionId);
       if (party) {
         characterHeartsBefore = Math.max(0, party.totalHearts ?? 0);
-        const partyMaxHearts = Math.max(1, party.maxHearts ?? characterHeartsBefore);
+        // Ensure maxHearts is valid - if 0 or unset, compute from party.characters array
+        let partyMaxHearts = party.maxHearts;
+        if (!partyMaxHearts || partyMaxHearts === 0) {
+          // Fallback: sum character maxHearts from party.characters array (snapshot at expedition start)
+          partyMaxHearts = (party.characters || []).reduce((sum, c) => sum + (c.maxHearts || 0), 0);
+          // If still 0, use totalHearts as last resort (shouldn't happen but safety net)
+          if (partyMaxHearts === 0) {
+            partyMaxHearts = Math.max(1, characterHeartsBefore);
+          }
+        }
         const plainChar = character.toObject ? character.toObject() : { ...character };
         battleCharacter = { ...plainChar, currentHearts: characterHeartsBefore, maxHearts: partyMaxHearts };
         logger.info('RAID', `Expedition raid turn — using party pool: ${characterHeartsBefore}/${partyMaxHearts} ❤`);
@@ -1102,6 +1141,9 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
             console.log(`[raidModule.js]: 🎭 Boost cleared for ${character.name} after raid turn`);
           }
           
+          // Mark that this participant has taken their action this turn (prevents double advancement)
+          participant.hasTakenActionThisTurn = true;
+          
           // Advance turn and schedule 1-minute skip only for non-mod turns (mod characters don't affect turn order)
           if (!isModTurn) {
             await raid.advanceTurn();
@@ -1153,7 +1195,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
         const party = await Party.findActiveByPartyId(raid.expeditionId);
         if (party && party.status === 'started') {
           // Calculate damage taken this turn from battleResult
-          const heartsBefore = battleResult.characterHeartsBefore ?? battleResult.playerHearts?.max ?? party.totalHearts ?? 0;
+          // Use party.totalHearts as fallback, NOT playerHearts.max (which could be wrong if maxHearts was miscalculated)
+          const heartsBefore = battleResult.characterHeartsBefore ?? party.totalHearts ?? 0;
           const heartsAfter = battleResult.playerHearts?.current ?? heartsBefore;
           const damageTaken = Math.max(0, heartsBefore - heartsAfter);
           
