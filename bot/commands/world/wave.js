@@ -211,8 +211,36 @@ module.exports = {
         const existingCharacterName = existingParticipant.name;
         if (existingParticipant.characterId.toString() !== character._id.toString()) {
           // Different character - user already has another character in the wave
+          const isExpeditionWaveAlready = !!waveData.expeditionId;
+          const alreadyInWaveEmbed = new EmbedBuilder()
+            .setColor(0xbe2e2e)
+            .setTitle('❌ Already in this wave')
+            .setDescription(
+              isExpeditionWaveAlready
+                ? `This wave is part of an **expedition**. You're in the wave as **${existingCharacterName}** — use that character to take your turn. You can't switch to another character mid-wave.`
+                : `You already have a character in this wave. You can only have one character per wave.`
+            )
+            .addFields(
+              {
+                name: 'Your character in this wave',
+                value: `**${existingCharacterName}**`,
+                inline: true
+              },
+              {
+                name: 'Character you tried to use',
+                value: `**${character.name}**`,
+                inline: true
+              },
+              {
+                name: 'What to do',
+                value: `Use **${existingCharacterName}** with </wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to take your turn.`,
+                inline: false
+              }
+            )
+            .setFooter({ text: `Wave ID: ${waveId}` })
+            .setTimestamp();
           return interaction.editReply({
-            content: `❌ **You already have a character in this wave!**\n\n**Your character in this wave:** ${existingCharacterName}\n**Character you tried to join with:** ${character.name}\n\n**Note:** You can only have one character per wave. Use the character that's already participating to take your turn.`,
+            embeds: [alreadyInWaveEmbed],
             ephemeral: true
           });
         }
@@ -294,7 +322,9 @@ module.exports = {
       const { getWaveCommandId, getItemCommandId, getExploreCommandId } = require('../../embeds/embeds.js');
       const isMonsterCampWave = turnResult.waveData?.source === 'monster_camp' && turnResult.waveData?.expeditionId;
       const healCmd = isMonsterCampWave ? `</explore item:${getExploreCommandId()}>` : `</item:${getItemCommandId()}>`;
-      const waveCommandContent = `</wave:${getWaveCommandId()}> to join • ${healCmd} to heal`;
+      const waveCommandContent = isExpeditionWave
+        ? `</wave:${getWaveCommandId()}> to take your turn • ${healCmd} to heal`
+        : `</wave:${getWaveCommandId()}> to join • ${healCmd} to heal`;
 
       // Monster camp waves: log each turn to expedition progress log
       if (isMonsterCampWave && turnResult.waveData.expeditionId) {
@@ -311,7 +341,8 @@ module.exports = {
           let turnMsg = `${character.name} dealt ${damageDealt} heart${damageDealt !== 1 ? 's' : ''} to ${monsterName}.`;
           if (damageTaken > 0) turnMsg += ` Took ${damageTaken} heart${damageTaken !== 1 ? 's' : ''} damage.`;
           if (br.playerHearts?.current <= 0) turnMsg = `${character.name} was KO'd during the monster camp wave.`;
-          pushProgressLog(party, character.name, 'monster_camp_turn', turnMsg, undefined, undefined, new Date());
+          const turnCosts = damageTaken > 0 ? { heartsLost: damageTaken } : undefined;
+          pushProgressLog(party, character.name, 'monster_camp_turn', turnMsg, undefined, turnCosts, new Date());
           await party.save();
         }
       }
@@ -461,11 +492,15 @@ module.exports = {
                   value: `\`\`\`${waveId}\`\`\``,
                   inline: false
                 },
-                {
-                  name: 'Want to join in?',
-                  value: `Use </wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join!`,
-                  inline: false
-                }
+                ...(turnResult.waveData?.expeditionId
+                  ? []
+                  : [
+                      {
+                        name: 'Want to join in?',
+                        value: `Use </wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join!`,
+                        inline: false
+                      }
+                    ])
               )
               .setThumbnail(monsterImage)
               .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
@@ -646,77 +681,48 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
     : `💙 **Hearts:** ${updatedMonsterCurrentHearts}/${updatedMonsterMaxHearts}`;
   
   // Use battleResult.outcome which contains the flavor text from processRaidBattle
-  // Only add monster defeat message if needed
   let outcomeDescription = '';
   if (monsterDefeated) {
-    outcomeDescription = `✅ **${monsterToDisplay.name} has been defeated!**\n\n`;
+    outcomeDescription = `✅ **${monsterToDisplay.name} defeated!**\n\n`;
   }
-  
-  // Use the flavor text from battleResult.outcome (which comes from processRaidBattle)
   if (battleResult.outcome) {
     let outcomeText = battleResult.outcome;
-    // For expedition waves, strip out individual "has been defeated by" messages — we use party pool
     if (isExpeditionWave) {
       outcomeText = outcomeText.replace(/\n.*has been defeated by the.*$/gi, '');
     }
     outcomeDescription += outcomeText;
-    // Add separator line after damage flavor text
-    outcomeDescription += `\n${'─'.repeat(50)}\n`;
+    outcomeDescription += `\n${'─'.repeat(36)}\n`;
   } else {
-    outcomeDescription += 'Battle completed';
+    outcomeDescription += 'Battle completed\n';
   }
-  
-  // Build full description with wave number at top (use the calculated currentMonsterNumber)
-  const fullDescription = `🌊 **MONSTER WAVE ${currentMonsterNumber}/${totalMonsters}**\n\n${outcomeDescription}\n🌊 **Wave Battle:** Fight through multiple monsters in sequence! Like raids, but with waves of monsters.`;
-  
+
+  const waveNum = `${currentMonsterNumber}/${totalMonsters}`;
+  const monsterLine = monsterDefeated ? `💀 DEFEATED` : `💙 ${updatedMonsterCurrentHearts}/${updatedMonsterMaxHearts} · T${monsterToDisplay.tier} · ${totalMonsterDamage} dmg`;
+  const partyLine = waveData.expeditionId
+    ? `Pool: ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? ` (−${characterDamageTaken})` : ''}`
+    : `❤️ ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? ` (−${characterDamageTaken})` : ''}`;
+  const damageLine = totalDamageDealt > 0
+    ? `⚔️ ${battleResult.hearts} this turn · **${totalDamageDealt}** total`
+    : `⚔️ ${battleResult.hearts} dealt`;
+  const rollLine = `🎲 ${battleResult.originalRoll}→${Math.round(battleResult.adjustedRandomValue)}${battleResult.attackSuccess && battleResult.attackStat > 0 ? ` · ATK+${Math.round(battleResult.attackStat * 1.8)}` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? ` DEF+${Math.round(battleResult.defenseStat * 0.7)}` : ''}`;
+  const turnOrderShort = (waveData.participants || []).map(p => p.name).join(' → ') || '—';
+  const progressLine = `🌊 ${waveData.defeatedMonsters?.length || 0}/${waveData.monsters.length} monsters · ${turnOrderShort}`;
+
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`⚔️ ${character.name}'s Wave Turn`)
+    .setTitle(`⚔️ ${character.name}'s Wave Turn · ${waveNum}`)
     .setAuthor({ name: character.name, iconURL: characterIcon })
-    .setDescription(fullDescription)
+    .setDescription(outcomeDescription)
     .addFields(
+      { name: `${monsterToDisplay.name}`, value: monsterLine, inline: true },
+      { name: waveData.expeditionId ? '❤️ Party' : '❤️ Status', value: partyLine, inline: true },
+      { name: 'Damage', value: damageLine, inline: true },
+      { name: 'Roll', value: rollLine || '—', inline: true },
       {
-        name: `__${progress} - ${monsterToDisplay.name} Status__`,
-        value: `${monsterStatusText}\n⭐ **Tier:** ${monsterToDisplay.tier}\n📊 **Total Damage Taken:** ${totalMonsterDamage}/${updatedMonsterMaxHearts} hearts`,
+        name: 'Wave',
+        value: progressLine + (isExpeditionWave ? '' : `\n</wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join`),
         inline: false
-      },
-      {
-        name: waveData.expeditionId ? `❤️ **__Party Hearts__**` : `__${character.name} Status__`,
-        value: waveData.expeditionId
-          ? `**Party pool:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`
-          : `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}${characterDamageTaken > 0 ? `\n💔 **Damage Taken This Turn:** ${characterDamageTaken} heart${characterDamageTaken > 1 ? 's' : ''}` : ''}`,
-        inline: false
-      },
-      {
-        name: `__Damage to Monster This Turn__`,
-        value: `⚔️ **${battleResult.hearts}** heart${battleResult.hearts !== 1 ? 's' : ''} dealt${totalDamageDealt > 0 ? `\n📈 **Your Total Damage (All Monsters):** ${totalDamageDealt} hearts` : ''}`,
-        inline: false
-      },
-      {
-        name: `__Roll Details__`,
-        value: `🎲 **Roll:** ${battleResult.originalRoll} → ${Math.round(battleResult.adjustedRandomValue)}\n${battleResult.attackSuccess && battleResult.attackStat > 0 ? `⚔️ **ATK +${Math.round(battleResult.attackStat * 1.8)} (${battleResult.attackStat} attack)` : ''}${battleResult.defenseSuccess && battleResult.defenseStat > 0 ? `${battleResult.attackSuccess && battleResult.attackStat > 0 ? ' | ' : ''}🛡️ **DEF +${Math.round(battleResult.defenseStat * 0.7)} (${battleResult.defenseStat} defense)` : ''}`,
-        inline: false
-      },
-      {
-        name: `__Wave Progress__`,
-        value: `🌊 **Monsters Defeated:** ${waveData.defeatedMonsters?.length || 0}/${waveData.monsters.length}\n👥 **Participants:** ${participants.length}`,
-        inline: false
-      },
-      {
-        name: `__Turn Order__`,
-        value: turnOrder || 'No participants',
-        inline: false
-      },
-      {
-        name: 'Wave ID',
-        value: `\`\`\`${waveId}\`\`\``,
-        inline: false
-      },
-      {
-        name: 'Want to join in?',
-        value: `Use </wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join!`,
-        inline: false
-      },
+      }
     )
     .setThumbnail(monsterImage)
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')

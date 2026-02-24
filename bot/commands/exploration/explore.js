@@ -380,6 +380,29 @@ function createRaidBlockEmbed(party, raidId, blockedAction, location) {
     .setFooter({ text: "Defeat the monster or retreat to continue exploring." });
 }
 
+// ------------------- createWaveBlockEmbed ------------------
+// Embed shown when an explore action is blocked by an active wave
+function createWaveBlockEmbed(party, waveId, blockedAction) {
+  const waveCmdId = getWaveCommandId();
+  const exploreCmdId = getExploreCommandId();
+  return new EmbedBuilder()
+    .setTitle("🌊 Complete the Wave First")
+    .setColor("#2196F3")
+    .setDescription(
+      `You cannot use \`/explore ${blockedAction}\` until the wave is complete.`
+    )
+    .addFields(
+      { name: "🆔 **__Wave ID__**", value: `\`${waveId}\``, inline: true },
+      {
+        name: "📋 **__Commands__**",
+        value: `</wave:${waveCmdId}> — id: \`${waveId}\` — Fight through the wave\n</explore item:${exploreCmdId}> — Heal from party loadout`,
+        inline: false
+      }
+    )
+    .setImage(getExploreMapImageUrl(party, { highlight: true }))
+    .setFooter({ text: "Finish the wave or use /explore item to heal, then continue." });
+}
+
 // ------------------- payStaminaOrStruggle ------------------
 // Pay cost from PARTY pool only: stamina first, then hearts (struggle) for shortfall.
 // During a started expedition the pool (party.totalStamina / party.totalHearts) is authoritative;
@@ -1860,9 +1883,7 @@ module.exports = {
      status: "active"
     });
     if (activeWaveGrotto) {
-     return interaction.editReply(
-      `**Complete the wave first.** You cannot use \`/explore grotto ${subcommand}\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveGrotto.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
-     );
+     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveGrotto.waveId, `grotto ${subcommand}`)] });
     }
 
     if (subcommand === "continue") {
@@ -3053,9 +3074,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      status: "active"
     });
     if (activeWaveDiscovery) {
-     return interaction.editReply(
-      `**Complete the wave first.** You cannot use \`/explore discovery\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveDiscovery.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
-     );
+     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveDiscovery.waveId, "discovery")] });
     }
 
     const squareId = (party.square && String(party.square).trim()) || "";
@@ -3446,9 +3465,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      });
      if (activeWave) {
       logger.info("EXPLORE", `[explore.js] Blocked roll: active wave ${activeWave.waveId} for expedition ${expeditionId}`);
-      return interaction.editReply(
-       `**Complete the wave first.** You cannot use \`/explore roll\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWave.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
-      );
+      return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWave.waveId, "roll")] });
      }
 
      const characterIndex = party.characters.findIndex(
@@ -5349,9 +5366,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block securing if there's an active wave for this expedition (must complete wave first)
     const activeWaveSecure = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeWaveSecure) {
-     return interaction.editReply(
-      `**Complete the wave first.** You cannot use \`/explore secure\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveSecure.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
-     );
+     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveSecure.waveId, "secure")] });
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
@@ -5890,9 +5905,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block moving if there's an active wave for this expedition (must complete wave first)
     const activeWaveMove = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeWaveMove) {
-     return interaction.editReply(
-      `**Complete the wave first.** You cannot use \`/explore move\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveMove.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
-     );
+     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveMove.waveId, "move")] });
     }
 
     // Sync quadrant state from map (exploringMap / Square model) — secured/explored on map means Move is allowed
@@ -6546,9 +6559,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block ending if there's an active wave for this expedition (must complete wave first)
     const activeWaveEnd = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeWaveEnd) {
-     return interaction.editReply(
-      `**Complete the wave first.** You cannot use \`/explore end\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveEnd.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
-     );
+     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveEnd.waveId, "end")] });
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
@@ -6991,9 +7002,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Block camping if there's an active wave for this expedition (must complete wave first)
     const activeWaveCamp = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
     if (activeWaveCamp) {
-     return interaction.editReply(
-      `**Complete the wave first.** You cannot use \`/explore camp\` until the wave is complete. Use </wave:${getWaveCommandId()}> with Wave ID **${activeWaveCamp.waveId}** to fight, or </explore item:${getExploreCommandId()}> to heal.`
-     );
+     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveCamp.waveId, "camp")] });
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
