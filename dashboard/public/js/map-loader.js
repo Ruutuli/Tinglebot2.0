@@ -279,8 +279,8 @@ class MapLoader {
                 layersToLoad.push('MAP_0002_Map-Base');
             }
             
-            // Add region borders layer only for squares that have the asset (avoids 404s)
-            if ((layers.includes('MAP_0001s_0003_Region-Borders') || layers.includes('region-borders')) && this._shouldHaveRegionBorders(squareId)) {
+            // Add region borders layer when manifest lists it for this square
+            if (layers.includes('MAP_0001s_0003_Region-Borders') || layers.includes('region-borders')) {
                 layersToLoad.push('MAP_0001s_0003_Region-Borders');
             }
             // Add region names layer (only for squares that have region name images)
