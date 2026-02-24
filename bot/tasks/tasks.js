@@ -2317,6 +2317,8 @@ async function modTodoReminder(client, _data = {}) {
     const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     
+    logger.info('SCHEDULED', `mod-todo-reminder: now=${now.toISOString()}, checking tasks due before ${twoHoursFromNow.toISOString()}`);
+    
     // Find tasks that need reminders:
     // - Not done
     // - Has a due date that's within 2 hours OR overdue
@@ -2330,14 +2332,22 @@ async function modTodoReminder(client, _data = {}) {
       ]
     });
     
+    logger.info('SCHEDULED', `mod-todo-reminder: found ${tasksNeedingReminders.length} tasks needing reminders`);
+    
+    // Log each task found for debugging
+    for (const t of tasksNeedingReminders) {
+      logger.info('SCHEDULED', `mod-todo-reminder: task "${t.title}" due=${t.dueDate?.toISOString()} assignees=${t.assignees?.length || 0} lastReminder=${t.lastReminderSent?.toISOString() || 'never'}`);
+    }
+    
     let remindersSent = 0;
     
     // Get fallback channel
     let fallbackChannel = null;
     try {
       fallbackChannel = await client.channels.fetch(MOD_TODO_FALLBACK_CHANNEL);
+      logger.info('SCHEDULED', `mod-todo-reminder: fallback channel fetched successfully: ${MOD_TODO_FALLBACK_CHANNEL}`);
     } catch (err) {
-      logger.warn('SCHEDULED', `mod-todo-reminder: Could not fetch fallback channel: ${err.message}`);
+      logger.warn('SCHEDULED', `mod-todo-reminder: Could not fetch fallback channel ${MOD_TODO_FALLBACK_CHANNEL}: ${err.message}`);
     }
     
     for (const task of tasksNeedingReminders) {
@@ -2422,13 +2432,16 @@ async function modTodoReminder(client, _data = {}) {
           try {
             const originalMessage = await targetChannel.messages.fetch(replyToMessageId);
             await originalMessage.reply(messageOptions);
+            logger.info('SCHEDULED', `mod-todo-reminder: sent reminder for "${task.title}" (replied to original message)`);
           } catch (replyErr) {
             // If we can't reply (message deleted?), just send normally
             logger.warn('SCHEDULED', `mod-todo-reminder: Could not reply to message ${replyToMessageId}, sending normally`);
             await targetChannel.send(messageOptions);
+            logger.info('SCHEDULED', `mod-todo-reminder: sent reminder for "${task.title}" (fallback send)`);
           }
         } else {
           await targetChannel.send(messageOptions);
+          logger.info('SCHEDULED', `mod-todo-reminder: sent reminder for "${task.title}" to channel ${targetChannel.id}`);
         }
         
         remindersSent++;
@@ -2745,7 +2758,7 @@ const TASKS = [
   { name: 'cleanup-boost-expirations', cron: '0 * * * *', handler: cleanupBoostExpirations }, // Every hour
   { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings }, // Every 6 hours
   { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder }, // Every hour - @mods if art/writing pending 12+ hours
-  { name: 'mod-todo-reminder', cron: '*/30 * * * *', handler: modTodoReminder }, // Every 30 minutes - DM reminders for overdue/due-soon mod tasks
+  { name: 'mod-todo-reminder', cron: '*/5 * * * *', handler: modTodoReminder }, // Every 5 minutes (TESTING) - channel reminders for overdue/due-soon mod tasks
 
   // Relic Deadline Tasks
   { name: 'relic-appraisal-deadline', cron: '0 6 * * *', handler: relicAppraisalDeadline }, // Daily 6am UTC: deteriorate unappraised relics past 7 days
