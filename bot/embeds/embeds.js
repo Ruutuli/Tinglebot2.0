@@ -701,7 +701,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   if (heartCost > 0) {
    fields.push({
     name: "⚠️ **__STRUGGLE MODE__**",
-    value: `**0 stamina!** All actions cost **${heartCost}❤️** in this ${party?.quadrantState ?? "unexplored"} quadrant.\nUse **Camp** or **Item** to recover stamina.`,
+    value: `**0 stamina!** Each **next** Roll, Move, or Camp in this ${party?.quadrantState ?? "unexplored"} quadrant costs **${heartCost}❤️** (until you recover stamina).\nUse **Camp** or **Item** to recover.`,
     inline: false,
    });
   }
@@ -712,7 +712,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  if ((party?.totalStamina ?? 0) === 0) {
   const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
   const footerText = heartCost > 0
-   ? `⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant. Use Camp or Item to recover.`
+   ? `⚠️ 0 stamina — Next actions cost ${heartCost}❤️ here. Use Camp or Item to recover.`
    : "⚠️ 0 stamina — Secured quadrant: actions are free.";
   embed.setFooter({ text: footerText });
  }
@@ -824,7 +824,7 @@ let footerText = `Rarity: ${rarity}`;
 if (isStruggleMode) {
  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
  footerText = heartCost > 0
-  ? `Rarity: ${rarity}  •  ⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant.`
+  ? `Rarity: ${rarity}  •  ⚠️ 0 stamina — Next actions cost ${heartCost}❤️ here. Use Camp or Item to recover.`
   : `Rarity: ${rarity}  •  ⚠️ 0 stamina — Secured quadrant: actions are free.`;
 }
 embed.setFooter({ text: footerText });
@@ -884,7 +884,7 @@ let footerText = `Tier: ${tier}`;
 if (isStruggleMode) {
  const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
  footerText = heartCost > 0
-  ? `Tier: ${tier}  •  ⚠️ 0 stamina — Struggle mode! Actions cost ${heartCost}❤️ in this ${party?.quadrantState ?? "unexplored"} quadrant.`
+  ? `Tier: ${tier}  •  ⚠️ 0 stamina — Next actions cost ${heartCost}❤️ here. Use Camp or Item to recover.`
   : `Tier: ${tier}  •  ⚠️ 0 stamina — Secured quadrant: actions are free.`;
 }
 embed.setFooter({ text: footerText });

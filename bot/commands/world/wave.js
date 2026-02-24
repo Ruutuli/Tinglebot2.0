@@ -714,14 +714,13 @@ async function createWaveTurnEmbed(character, waveId, turnResult, waveData) {
     .setAuthor({ name: character.name, iconURL: characterIcon })
     .setDescription(outcomeDescription)
     .addFields(
-      { name: `${monsterToDisplay.name}`, value: monsterLine, inline: true },
-      { name: waveData.expeditionId ? '❤️ Party' : '❤️ Status', value: partyLine, inline: true },
-      { name: 'Damage', value: damageLine, inline: true },
-      { name: 'Roll', value: rollLine || '—', inline: true },
+      { name: `${monsterToDisplay.name}`, value: monsterLine },
+      { name: waveData.expeditionId ? '❤️ Party' : '❤️ Status', value: partyLine },
+      { name: 'Damage', value: damageLine },
+      { name: 'Roll', value: rollLine || '—' },
       {
         name: 'Wave',
-        value: progressLine + (isExpeditionWave ? '' : `\n</wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join`),
-        inline: false
+        value: progressLine + (isExpeditionWave ? '' : `\n</wave:${require('../../embeds/embeds.js').getWaveCommandId()}> to join`)
       }
     )
     .setThumbnail(monsterImage)

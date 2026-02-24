@@ -7395,7 +7395,6 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       showNextAndCommands: true,
       showRestSecureMove: false,
       showSecuredQuadrantOnly: isSecured,
-      hideCampCommand: true,
       hasDiscoveriesInQuadrant: hasDiscCamp,
       isAtStartQuadrant: campIsAtStart,
     });
