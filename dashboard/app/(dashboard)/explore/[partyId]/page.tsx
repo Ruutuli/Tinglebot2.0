@@ -2881,8 +2881,11 @@ export default function ExplorePartyPage() {
                         <div className="flex flex-nowrap items-center gap-2 sm:flex-wrap">
                         {journey.map((loc: string, i: number) => {
                           const isStart = i === 0;
+                          const isLast = i === journey.length - 1;
                           const isCurrent = loc === currentLoc;
                           const isOnly = journey.length === 1;
+                          const isCompleted = party.status === "completed";
+                          const showAsEnd = isCompleted && isLast;
                           return (
                             <span key={`${loc}-${i}`} className="flex items-center gap-2">
                               {i > 0 && (
@@ -2895,15 +2898,20 @@ export default function ExplorePartyPage() {
                               <span
                                 className={[
                                   "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium sm:text-sm",
-                                  isCurrent
+                                  isCurrent || showAsEnd
                                     ? "border-[var(--totk-light-green)]/50 bg-[var(--totk-dark-green)]/30 text-[var(--totk-ivory)]"
                                     : "border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/60 text-[var(--botw-pale)]",
                                 ].join(" ")}
                               >
                                 <span className="tabular-nums">{loc}</span>
-                                {isOnly && (
+                                {isOnly && !isCompleted && (
                                   <span className="rounded bg-[var(--totk-grey-200)]/20 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-[var(--totk-grey-200)]">
                                     Start & current
+                                  </span>
+                                )}
+                                {isOnly && isCompleted && (
+                                  <span className="rounded bg-[var(--totk-dark-ocher)]/30 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-[var(--totk-grey-200)]">
+                                    Start & end
                                   </span>
                                 )}
                                 {!isOnly && isStart && (
@@ -2911,7 +2919,12 @@ export default function ExplorePartyPage() {
                                     Start
                                   </span>
                                 )}
-                                {!isOnly && isCurrent && !isStart && (
+                                {!isOnly && showAsEnd && (
+                                  <span className="rounded bg-[var(--totk-dark-ocher)]/30 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-[var(--totk-grey-200)]">
+                                    End
+                                  </span>
+                                )}
+                                {!isOnly && isCurrent && !isStart && !showAsEnd && (
                                   <span className="rounded bg-[var(--totk-light-green)]/25 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-[var(--totk-light-green)]">
                                     Current
                                   </span>
