@@ -2435,14 +2435,13 @@ function createWrongVillageEmbed(character, questVillage, isEscort = false, dest
       { name: '💡 Need to travel?', value: 'Use `/travel` to move between villages.', inline: false }
     ];
   } else {
-    title = '❌ Wrong Village!';
-    description = `**${character.name}** is currently in **${villageEmoji} ${capitalizeFirstLetter(character.currentVillage)}**, but this quest is for **${questVillageEmoji} ${capitalizeFirstLetter(questVillage)}**.`;
+    title = '❌ Not a Native!';
+    description = `**${character.name}** is from **${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}**, but this quest is only for characters native to **${questVillageEmoji} ${capitalizeFirstLetter(questVillage)}**.`;
     
     fields = [
       { name: '🏠 Home Village', value: `${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}`, inline: true },
-      { name: '📍 Current Location', value: `${villageEmoji} ${capitalizeFirstLetter(character.currentVillage)}`, inline: true },
       { name: '🎯 Quest Village', value: `${questVillageEmoji} ${capitalizeFirstLetter(questVillage)}`, inline: true },
-      { name: '💡 Need to travel?', value: 'Use `/travel` to move between villages.', inline: false }
+      { name: '💡 Tip', value: 'Only characters whose home village matches the quest village can complete Help Wanted quests.', inline: false }
     ];
   }
   
@@ -2452,7 +2451,7 @@ function createWrongVillageEmbed(character, questVillage, isEscort = false, dest
     .addFields(fields)
     .setColor(0xFF0000)
     .setFooter({
-      text: isEscort ? 'For escort quests, characters must travel to the destination village to complete the quest.' : 'Characters must be in their home village to complete Help Wanted quests.'
+      text: isEscort ? 'For escort quests, characters must travel to the destination village to complete the quest.' : 'Only characters native to the quest village can complete Help Wanted quests.'
     })
     .setTimestamp();
 

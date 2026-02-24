@@ -352,6 +352,7 @@ async function initializeClient() {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.DirectMessages,
       ],
       partials: [
         Partials.Message,
@@ -716,6 +717,45 @@ async function initializeClient() {
     // ------------------- Message Event Handlers -------------------
     // ============================================================================
 
+    // ------------------- DM Forwarding Handler ------------------
+    const DM_FORWARD_CHANNEL_ID = '795747760691216384';
+    client.on("messageCreate", async (message) => {
+      try {
+        // Only handle DMs (no guild means it's a DM)
+        if (message.guild) return;
+        // Skip bot messages
+        if (message.author.bot) return;
+        
+        // Get the channel to forward to
+        const forwardChannel = await client.channels.fetch(DM_FORWARD_CHANNEL_ID).catch(() => null);
+        if (!forwardChannel) {
+          logger.warn('DM_FORWARD', `Could not find DM forward channel (${DM_FORWARD_CHANNEL_ID})`);
+          return;
+        }
+        
+        // Build the embed
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setAuthor({
+            name: `${message.author.tag} (${message.author.id})`,
+            iconURL: message.author.displayAvatarURL({ dynamic: true })
+          })
+          .setDescription(message.content || '*No text content*')
+          .setTimestamp();
+        
+        // Add attachments info if any
+        if (message.attachments.size > 0) {
+          const attachmentList = message.attachments.map(a => `[${a.name}](${a.url})`).join('\n');
+          dmEmbed.addFields({ name: 'Attachments', value: attachmentList });
+        }
+        
+        // Forward the message
+        await forwardChannel.send({ embeds: [dmEmbed] });
+        logger.info('DM_FORWARD', `Forwarded DM from ${message.author.tag} to mod channel`);
+      } catch (error) {
+        logger.error('DM_FORWARD', `Error forwarding DM: ${error.message}`);
+      }
+    });
 
     // ------------------- Wishlist Channel Handler ------------------
     // Shared handler for wishlist and new channel

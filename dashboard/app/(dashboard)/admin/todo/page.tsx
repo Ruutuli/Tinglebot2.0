@@ -594,6 +594,21 @@ function renderInlineMarkdown(text: string): React.ReactNode {
       continue;
     }
     
+    // Auto-link bare URLs (https://, http://, www.)
+    const urlMatch = remaining.match(/^(.*?)(https?:\/\/[^\s<>]+|www\.[^\s<>]+)(.*)$/);
+    if (urlMatch) {
+      if (urlMatch[1]) parts.push(urlMatch[1]);
+      const url = urlMatch[2].startsWith('www.') ? `https://${urlMatch[2]}` : urlMatch[2];
+      parts.push(
+        <a key={key++} href={url} target="_blank" rel="noopener noreferrer"
+           className="text-[var(--totk-light-green)] underline hover:text-[var(--botw-pale)]">
+          {urlMatch[2]}
+        </a>
+      );
+      remaining = urlMatch[3];
+      continue;
+    }
+    
     // No more matches, add remaining text
     parts.push(remaining);
     break;
