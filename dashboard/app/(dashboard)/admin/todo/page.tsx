@@ -659,6 +659,50 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
   const checklistDone = checklist.filter((c) => c.checked).length;
   const checklistPercent = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
 
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    if (isNew) {
+      // For new tasks, any content is "unsaved"
+      return title.trim() !== "" || description.trim() !== "" || checklist.length > 0 || comments.length > 0;
+    }
+    // For existing tasks, compare against original values
+    if (!task) return false;
+    
+    const originalDueDate = task.dueDate ? (() => {
+      const d = new Date(task.dueDate);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    })() : "";
+    
+    return (
+      title !== (task.title ?? "") ||
+      description !== (task.description ?? "") ||
+      column !== task.column ||
+      priority !== task.priority ||
+      dueDate !== originalDueDate ||
+      isRepeating !== task.isRepeating ||
+      frequency !== (task.repeatConfig?.frequency ?? "weekly") ||
+      JSON.stringify(assignees) !== JSON.stringify(task.assignees ?? []) ||
+      JSON.stringify(checklist) !== JSON.stringify(task.checklist ?? []) ||
+      JSON.stringify(comments) !== JSON.stringify(task.comments ?? [])
+    );
+  }, [isNew, task, title, description, column, priority, dueDate, isRepeating, frequency, assignees, checklist, comments]);
+
+  // Handle close with confirmation if there are unsaved changes
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      if (window.confirm("You have unsaved changes. Are you sure you want to close without saving?")) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -741,7 +785,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
     : checklist;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 pt-16" onClick={onClose}>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 pt-16" onClick={handleClose}>
       <div className="flex min-h-full items-start justify-center px-4 pb-8 pt-4">
         <div
           className="max-h-[calc(100vh-6rem)] w-full max-w-5xl overflow-y-auto rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-xl"
@@ -773,7 +817,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
               )}
             </div>
           </div>
-          <button onClick={onClose} className="ml-4 text-[var(--botw-pale)] hover:text-[var(--totk-light-ocher)]">
+          <button onClick={handleClose} className="ml-4 text-[var(--botw-pale)] hover:text-[var(--totk-light-ocher)]">
             <i className="fa-solid fa-xmark text-xl" />
           </button>
         </div>
