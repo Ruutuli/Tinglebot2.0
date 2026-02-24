@@ -2351,7 +2351,7 @@ async function modTodoReminder(client, _data = {}) {
         : '';
       
       // Build the embed
-      const dashboardUrl = `https://hyrule.tinglebot.com/admin/todo?task=${task._id}`;
+      const dashboardUrl = `https://tinglebot.xyz/admin/todo?task=${task._id}`;
       const embed = new EmbedBuilder()
         .setTitle(isOverdue ? '⚠️ Overdue Task Reminder' : '⏰ Task Due Soon')
         .setDescription(task.title)
@@ -2408,11 +2408,12 @@ async function modTodoReminder(client, _data = {}) {
           embeds: [embed]
         };
         
-        // Add mentions if there are assignees, otherwise add a note to the embed
+        // Add mentions if there are assignees, otherwise @ the mod role
         if (mentions) {
           messageOptions.content = mentions;
         } else {
-          // No assignees - add a warning to the embed
+          // No assignees - @ the mod role instead
+          messageOptions.content = `<@&${MOD_ROLE_ID}>`;
           embed.addFields({ name: '⚠️ Unassigned', value: 'This task has no assignees!', inline: false });
         }
         
