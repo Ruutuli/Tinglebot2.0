@@ -9,6 +9,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
@@ -327,8 +328,14 @@ interface ColumnProps {
 }
 
 function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: column.id,
+  });
+
   return (
-    <div className="flex max-h-[calc(100vh-12rem)] min-w-[200px] flex-1 flex-col rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50">
+    <div className={`flex max-h-[calc(100vh-12rem)] min-w-[200px] flex-1 flex-col rounded-xl border-2 bg-[var(--botw-black)]/50 transition-colors ${
+      isOver ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10" : "border-[var(--totk-dark-ocher)]"
+    }`}>
       {/* Column Header */}
       <div className="flex flex-shrink-0 items-center justify-between border-b-2 border-[var(--totk-dark-ocher)] px-4 py-3">
         <div className="flex items-center gap-2">
@@ -348,7 +355,7 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
       </div>
 
       {/* Task List */}
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      <div ref={setNodeRef} className="flex-1 space-y-2 overflow-y-auto p-3" style={{ minHeight: "100px" }}>
         <SortableContext items={tasks.map((t) => t._id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <SortableTaskCard key={task._id} task={task} onClick={() => onTaskClick(task)} />
@@ -359,6 +366,135 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
             No tasks
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Table View Component
+// ============================================================================
+
+interface TableViewProps {
+  tasks: Task[];
+  onTaskClick: (task: Task) => void;
+}
+
+const COLUMN_LABELS: Record<Column, string> = {
+  repeating: "Repeating",
+  todo: "To Do",
+  in_progress: "In Progress",
+  pending: "Pending",
+  done: "Done",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  low: "bg-blue-500/20 text-blue-300 border-blue-500/50",
+  medium: "bg-yellow-500/20 text-yellow-300 border-yellow-500/50",
+  high: "bg-orange-500/20 text-orange-300 border-orange-500/50",
+  urgent: "bg-red-500/20 text-red-300 border-red-500/50",
+};
+
+function TableView({ tasks, onTaskClick }: TableViewProps) {
+  const sortedTasks = useMemo(() => {
+    return [...tasks].sort((a, b) => {
+      // Sort by column order, then by task order
+      const colOrder = COLUMNS.findIndex((c) => c.id === a.column) - COLUMNS.findIndex((c) => c.id === b.column);
+      if (colOrder !== 0) return colOrder;
+      return a.order - b.order;
+    });
+  }, [tasks]);
+
+  const getAssigneeNames = (assignees: Assignee[]) => {
+    if (!assignees || assignees.length === 0) return "—";
+    return assignees.map((a) => a.username).join(", ");
+  };
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const isOverdue = (task: Task) => {
+    if (!task.dueDate || task.column === "done") return false;
+    return new Date(task.dueDate) < new Date();
+  };
+
+  if (tasks.length === 0) {
+    return (
+      <div className="rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50 p-8 text-center text-[var(--botw-pale)]">
+        <i className="fa-solid fa-clipboard-list mb-2 text-3xl opacity-50" />
+        <p>No tasks found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/80 text-[var(--totk-light-ocher)]">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Title</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold">Priority</th>
+              <th className="px-4 py-3 font-semibold">Assigned To</th>
+              <th className="px-4 py-3 font-semibold">Due Date</th>
+              <th className="px-4 py-3 font-semibold">Checklist</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--totk-dark-ocher)]/50">
+            {sortedTasks.map((task) => (
+              <tr
+                key={task._id}
+                onClick={() => onTaskClick(task)}
+                className="cursor-pointer transition-colors hover:bg-[var(--totk-dark-ocher)]/30"
+              >
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {task.discordSource?.messageUrl && (
+                      <svg className="h-4 w-4 flex-shrink-0 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                      </svg>
+                    )}
+                    <span className="font-medium text-[var(--botw-pale)]">{task.title}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--totk-dark-ocher)]/50 px-2.5 py-1 text-xs text-[var(--botw-pale)]">
+                    <i className={`fa-solid ${COLUMNS.find((c) => c.id === task.column)?.icon || "fa-circle"} text-[var(--totk-light-green)]`} />
+                    {COLUMN_LABELS[task.column]}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`inline-block rounded border px-2 py-0.5 text-xs capitalize ${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}`}>
+                    {task.priority}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-[var(--botw-pale)]">
+                  {getAssigneeNames(task.assignees)}
+                </td>
+                <td className={`px-4 py-3 ${isOverdue(task) ? "text-red-400" : "text-[var(--botw-pale)]"}`}>
+                  {isOverdue(task) && <i className="fa-solid fa-exclamation-triangle mr-1" />}
+                  {formatDate(task.dueDate)}
+                </td>
+                <td className="px-4 py-3 text-[var(--botw-pale)]">
+                  {task.checklist && task.checklist.length > 0 ? (
+                    <span className="text-xs">
+                      {task.checklist.filter((i) => i.checked).length}/{task.checklist.length}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -951,8 +1087,18 @@ export default function AdminTodoPage() {
   const [modalTask, setModalTask] = useState<Task | null>(null);
   const [isNewTask, setIsNewTask] = useState(false);
   const [newTaskColumn, setNewTaskColumn] = useState<Column>("todo");
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [showMyTasksOnly, setShowMyTasksOnly] = useState(false);
 
   const canAccess = isAdmin || isModerator;
+
+  // Filter tasks based on "My Tasks" toggle
+  const filteredTasks = useMemo(() => {
+    if (!showMyTasksOnly || !user) return tasks;
+    return tasks.filter((task) => 
+      task.assignees.some((a) => a.discordId === user.id)
+    );
+  }, [tasks, showMyTasksOnly, user]);
 
   // Group tasks by column
   const tasksByColumn = useMemo(() => {
@@ -963,7 +1109,7 @@ export default function AdminTodoPage() {
       pending: [],
       done: [],
     };
-    for (const task of tasks) {
+    for (const task of filteredTasks) {
       if (grouped[task.column]) {
         grouped[task.column].push(task);
       }
@@ -973,7 +1119,7 @@ export default function AdminTodoPage() {
       grouped[col].sort((a, b) => a.order - b.order);
     }
     return grouped;
-  }, [tasks]);
+  }, [filteredTasks]);
 
   // Sensors for drag and drop
   const sensors = useSensors(
@@ -1220,6 +1366,57 @@ export default function AdminTodoPage() {
         <img src="/Side=Right.svg" alt="" className="h-4 w-auto sm:h-6" aria-hidden />
       </div>
 
+      {/* Toolbar */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-black)]/30 px-4 py-3">
+        {/* View Toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-[var(--botw-pale)]">View:</span>
+          <div className="flex rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50">
+            <button
+              onClick={() => setViewMode("kanban")}
+              className={`flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 text-sm transition-colors ${
+                viewMode === "kanban"
+                  ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
+                  : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
+              }`}
+            >
+              <i className="fa-solid fa-columns" />
+              Board
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`flex items-center gap-1.5 rounded-r-lg px-3 py-1.5 text-sm transition-colors ${
+                viewMode === "table"
+                  ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
+                  : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
+              }`}
+            >
+              <i className="fa-solid fa-table-list" />
+              Table
+            </button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex items-center gap-4">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--botw-pale)]">
+            <input
+              type="checkbox"
+              checked={showMyTasksOnly}
+              onChange={(e) => setShowMyTasksOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)] focus:ring-offset-0"
+            />
+            <span>My Tasks Only</span>
+          </label>
+          
+          {showMyTasksOnly && (
+            <span className="text-xs text-[var(--botw-pale)] opacity-70">
+              Showing {filteredTasks.length} of {tasks.length} tasks
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Success Banner */}
       {success && (
         <div className="mx-auto mb-4 max-w-3xl rounded-lg border-2 border-[var(--totk-light-green)]/50 bg-[var(--totk-light-green)]/20 px-4 py-3 text-center text-[var(--totk-light-green)]">
@@ -1246,7 +1443,7 @@ export default function AdminTodoPage() {
         <div className="flex min-h-[300px] items-center justify-center">
           <Loading message="Loading tasks..." variant="inline" size="lg" />
         </div>
-      ) : (
+      ) : viewMode === "kanban" ? (
         /* Kanban Board */
         <DndContext
           sensors={sensors}
@@ -1276,6 +1473,12 @@ export default function AdminTodoPage() {
             )}
           </DragOverlay>
         </DndContext>
+      ) : (
+        /* Table View */
+        <TableView
+          tasks={filteredTasks}
+          onTaskClick={handleTaskClick}
+        />
       )}
 
       {/* Task Modal */}

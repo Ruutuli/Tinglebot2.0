@@ -63,29 +63,38 @@ async function getUserInfo(user, guild) {
 }
 
 /**
- * Create a title from message content
+ * Create a title from message content (first 7 words)
  */
 function createTaskTitle(message) {
-    let title = message.content || '';
+    let content = message.content || '';
     
     // If no content, check for embeds
-    if (!title && message.embeds.length > 0) {
-        title = message.embeds[0].title || message.embeds[0].description || '';
+    if (!content && message.embeds.length > 0) {
+        content = message.embeds[0].title || message.embeds[0].description || '';
     }
     
     // If still no content, check for attachments
-    if (!title && message.attachments.size > 0) {
-        title = `Attachment from ${message.author.username}`;
-    }
-    
-    // Truncate to 200 chars
-    if (title.length > 200) {
-        title = title.substring(0, 197) + '...';
+    if (!content && message.attachments.size > 0) {
+        return `Attachment from ${message.author.username}`;
     }
     
     // Default title if empty
-    if (!title.trim()) {
-        title = `Message from ${message.author.username}`;
+    if (!content.trim()) {
+        return `Message from ${message.author.username}`;
+    }
+    
+    // Get first 7 words
+    const words = content.trim().split(/\s+/).slice(0, 7);
+    let title = words.join(' ');
+    
+    // Add ellipsis if there were more words
+    if (content.trim().split(/\s+/).length > 7) {
+        title += '...';
+    }
+    
+    // Truncate to 200 chars (safety)
+    if (title.length > 200) {
+        title = title.substring(0, 197) + '...';
     }
     
     return title;
