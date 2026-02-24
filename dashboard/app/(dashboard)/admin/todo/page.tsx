@@ -84,6 +84,8 @@ interface Task {
   };
   checklist?: ChecklistItem[];
   comments?: Comment[];
+  completedBy?: Assignee | null;
+  completedAt?: string | null;
 }
 
 interface ModInfo {
@@ -234,10 +236,16 @@ function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
         </div>
       )}
 
-      {/* Footer: Due Date, Comments & Assignees */}
+      {/* Footer: Due Date, Completion, Comments & Assignees */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {task.dueDate && (
+          {/* Show completion info for done tasks */}
+          {task.column === "done" && task.completedBy ? (
+            <span className="text-xs text-green-400" title={`Completed ${task.completedAt ? new Date(task.completedAt).toLocaleString() : ""}`}>
+              <i className="fa-solid fa-circle-check mr-1" />
+              {task.completedBy.username}
+            </span>
+          ) : task.dueDate ? (
             <span
               className={`text-xs ${
                 overdue
@@ -251,7 +259,7 @@ function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
               {formatDate(task.dueDate)}
               {overdue && " (Overdue)"}
             </span>
-          )}
+          ) : null}
           {(task.comments?.length ?? 0) > 0 && (
             <span className="text-xs text-[var(--botw-pale)] opacity-70">
               <i className="fa-solid fa-comment mr-1" />
@@ -449,6 +457,7 @@ function TableView({ tasks, onTaskClick }: TableViewProps) {
               <th className="px-4 py-3 font-semibold">Priority</th>
               <th className="px-4 py-3 font-semibold">Assigned To</th>
               <th className="px-4 py-3 font-semibold">Due Date</th>
+              <th className="px-4 py-3 font-semibold">Completed By</th>
               <th className="px-4 py-3 font-semibold">Checklist</th>
             </tr>
           </thead>
@@ -491,6 +500,16 @@ function TableView({ tasks, onTaskClick }: TableViewProps) {
                 <td className={`px-4 py-3 ${isOverdue(task) ? "text-red-400" : "text-[var(--botw-pale)]"}`}>
                   {isOverdue(task) && <i className="fa-solid fa-exclamation-triangle mr-1" />}
                   {formatDate(task.dueDate)}
+                </td>
+                <td className="px-4 py-3 text-[var(--botw-pale)]">
+                  {task.completedBy ? (
+                    <span className="text-xs text-green-400" title={task.completedAt ? new Date(task.completedAt).toLocaleString() : ""}>
+                      <i className="fa-solid fa-circle-check mr-1" />
+                      {task.completedBy.username}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-4 py-3 text-[var(--botw-pale)]">
                   {task.checklist && task.checklist.length > 0 ? (
@@ -817,8 +836,19 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
               placeholder="Task title..."
               maxLength={200}
             />
-            <div className="mt-1 flex items-center gap-2 text-xs text-[var(--botw-pale)]">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--botw-pale)]">
               <span>in list <strong>{COLUMNS.find((c) => c.id === column)?.label}</strong></span>
+              {task?.completedBy && (
+                <span className="flex items-center gap-1 text-green-400">
+                  <i className="fa-solid fa-circle-check" />
+                  Completed by <strong>{task.completedBy.username}</strong>
+                  {task.completedAt && (
+                    <span className="opacity-70">
+                      on {new Date(task.completedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </span>
+              )}
               {task?.discordSource?.messageUrl && (
                 <a
                   href={toDiscordAppUrl(task.discordSource.messageUrl)}

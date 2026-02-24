@@ -83,6 +83,17 @@ type MonthlyQuestItem = {
   fullDetails?: DetailedQuestItem;
 };
 
+/* [page.tsx]🧷 Member stats from Discord roles - */
+type MemberStatsData = {
+  rudania: number;
+  inariko: number;
+  vhintl: number;
+  traveler: number;
+  resident: number;
+  inactive: number;
+  totalMembers: number;
+};
+
 /* ============================================================================ */
 /* ------------------- Constants ------------------- */
 /* ============================================================================ */
@@ -1171,6 +1182,10 @@ export default function HomePage() {
   const [isLoadingQuests, setIsLoadingQuests] = useState(true);
   const [questsError, setQuestsError] = useState<string | null>(null);
 
+  const [memberStats, setMemberStats] = useState<MemberStatsData | null>(null);
+  const [isLoadingMemberStats, setIsLoadingMemberStats] = useState(true);
+  const [memberStatsError, setMemberStatsError] = useState<string | null>(null);
+
   useEffect(() => {
     // Update immediately on mount to sync with client time
     setCurrentTime(new Date());
@@ -1308,6 +1323,33 @@ export default function HomePage() {
     return () => abortController.abort();
   }, []);
 
+  useEffect(() => {
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    async function fetchMemberStats() {
+      try {
+        setIsLoadingMemberStats(true);
+        setMemberStatsError(null);
+        const res = await fetch("/api/member-stats", { signal });
+        if (signal.aborted) return;
+        if (!res.ok) throw new Error("Failed to fetch member stats");
+        const data: MemberStatsData = await res.json();
+        if (signal.aborted) return;
+        setMemberStats(data);
+      } catch (e) {
+        if (signal.aborted) return;
+        setMemberStatsError(e instanceof Error ? e.message : "Failed to load member stats");
+        setMemberStats(null);
+      } finally {
+        if (!signal.aborted) {
+          setIsLoadingMemberStats(false);
+        }
+      }
+    }
+    fetchMemberStats();
+    return () => abortController.abort();
+  }, []);
+
   return (
     <div className="min-h-screen overflow-x-hidden p-4 sm:p-6 md:p-8 lg:p-10">
       <div className="mx-auto max-w-[1400px] space-y-6 sm:space-y-8">
@@ -1320,6 +1362,51 @@ export default function HomePage() {
           />
         )}
         <SectionHeader as="h1" title="Welcome to Tinglebot" variant="welcome" />
+
+        {/* Member Stats - Compact row below welcome */}
+        {isLoadingMemberStats ? (
+          <div className="flex items-center justify-center py-2">
+            <i className="fa-solid fa-spinner fa-spin text-[var(--totk-light-green)]" />
+            <span className="ml-2 text-sm text-[var(--totk-grey-200)]">Loading member stats...</span>
+          </div>
+        ) : memberStats ? (
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 md:gap-4">
+            {/* Village counts */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 px-2.5 py-1.5 sm:px-3 sm:py-2">
+              <span className="text-sm sm:text-base">🔥</span>
+              <span className="text-xs font-medium text-[var(--totk-grey-200)] sm:text-sm">Rudania</span>
+              <span className="text-sm font-bold text-[var(--village-rudania)] sm:text-base">{memberStats.rudania}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 px-2.5 py-1.5 sm:px-3 sm:py-2">
+              <span className="text-sm sm:text-base">💧</span>
+              <span className="text-xs font-medium text-[var(--totk-grey-200)] sm:text-sm">Inariko</span>
+              <span className="text-sm font-bold text-[var(--village-inariko)] sm:text-base">{memberStats.inariko}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 px-2.5 py-1.5 sm:px-3 sm:py-2">
+              <span className="text-sm sm:text-base">🌱</span>
+              <span className="text-xs font-medium text-[var(--totk-grey-200)] sm:text-sm">Vhintl</span>
+              <span className="text-sm font-bold text-[var(--village-vhintl)] sm:text-base">{memberStats.vhintl}</span>
+            </div>
+            {/* Divider */}
+            <div className="hidden h-6 w-px bg-[var(--totk-dark-ocher)]/50 sm:block" />
+            {/* Status counts */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 px-2.5 py-1.5 sm:px-3 sm:py-2">
+              <span className="text-sm sm:text-base">🗺️</span>
+              <span className="text-xs font-medium text-[var(--totk-grey-200)] sm:text-sm">Travelers</span>
+              <span className="text-sm font-bold text-[var(--totk-light-green)] sm:text-base">{memberStats.traveler}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 px-2.5 py-1.5 sm:px-3 sm:py-2">
+              <i className="fa-solid fa-house-user text-xs text-[var(--botw-blue)] sm:text-sm" />
+              <span className="text-xs font-medium text-[var(--totk-grey-200)] sm:text-sm">Residents</span>
+              <span className="text-sm font-bold text-[var(--botw-blue)] sm:text-base">{memberStats.resident}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/60 px-2.5 py-1.5 sm:px-3 sm:py-2">
+              <i className="fa-solid fa-moon text-xs text-[var(--totk-grey-200)] sm:text-sm" />
+              <span className="text-xs font-medium text-[var(--totk-grey-200)] sm:text-sm">Inactive</span>
+              <span className="text-sm font-bold text-[var(--totk-grey-200)] sm:text-base">{memberStats.inactive}</span>
+            </div>
+          </div>
+        ) : null}
 
         <Divider />
 

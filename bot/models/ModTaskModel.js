@@ -120,6 +120,12 @@ const ModTaskSchema = new Schema({
     },
     // Reminder tracking
     lastReminderSent: { type: Date, default: null },
+    // Completion tracking
+    completedBy: {
+        type: AssigneeSchema,
+        default: null
+    },
+    completedAt: { type: Date, default: null },
     // Checklist items
     checklist: {
         type: [ChecklistItemSchema],

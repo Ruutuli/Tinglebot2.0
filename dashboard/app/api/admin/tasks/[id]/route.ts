@@ -260,6 +260,22 @@ export async function PUT(
           .lean() as { order?: number } | null;
         updates.order = maxTask?.order != null ? maxTask.order + 1 : 0;
       }
+
+      // Track who completed the task when moving to done
+      if (body.column === "done" && oldColumn !== "done") {
+        updates.completedBy = {
+          discordId: user.id,
+          username: user.username || "Unknown",
+          avatar: user.avatar || null,
+        };
+        updates.completedAt = new Date();
+      }
+      
+      // Clear completion info if moving out of done
+      if (body.column !== "done" && oldColumn === "done") {
+        updates.completedBy = null;
+        updates.completedAt = null;
+      }
     }
 
     // Priority

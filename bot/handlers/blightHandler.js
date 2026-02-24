@@ -1089,11 +1089,11 @@ function createBlightSubmissionErrorEmbed(errorMessage) {
   
   if (errorMessage.includes('Invalid Discord message link format')) {
     title = '❌ Invalid Link Format';
-    description = 'The link you provided is not a valid Discord message link.';
+    description = 'The link you provided is not a valid Discord message link. You cannot use external links (Google Docs, Imgur, etc.) directly.';
     fields = [
-      { name: '📝 What Happened?', value: 'The link format is incorrect. Please provide a valid Discord message link.' },
-      { name: '💡 How to Fix', value: '1. Right-click on your submission message\n2. Select "Copy Message Link"\n3. Use that link with the healing command' },
-      { name: '📌 Important', value: 'The link must be from a Discord message, not a general channel link.' }
+      { name: '📝 What Happened?', value: 'The link format is incorrect. Blight healing requires a Discord message link from an approved submission.' },
+      { name: '💡 How to Fix', value: '1. First, use the `/submit` command to submit your art/writing\n2. Wait for a moderator to approve your submission (checkmark emoji)\n3. Once approved, right-click on your submission message\n4. Select "Copy Message Link"\n5. Use that Discord link with `/blight submit`' },
+      { name: '📌 Important', value: 'You must use the `/submit` command first and get it approved before using `/blight submit`. The link must be a Discord message link, not an external link.' }
     ];
     footerText = 'Link Format Error';
   } else if (errorMessage.includes('submissions channel')) {
