@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   DndContext,
@@ -1430,7 +1430,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
 // Main Page Component
 // ============================================================================
 
-export default function AdminTodoPage() {
+function AdminTodoPageContent() {
   const { user, isAdmin, isModerator, loading: sessionLoading } = useSession();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -1877,5 +1877,17 @@ export default function AdminTodoPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function AdminTodoPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loading message="Loading..." variant="inline" size="lg" />
+      </div>
+    }>
+      <AdminTodoPageContent />
+    </Suspense>
   );
 }
