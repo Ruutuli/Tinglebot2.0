@@ -2413,8 +2413,8 @@ async function modTodoReminder(client, _data = {}) {
           messageOptions.content = mentions;
         } else {
           // No assignees - @ the mod role instead
-          messageOptions.content = `<@&${MOD_ROLE_ID}>`;
-          embed.addFields({ name: '⚠️ Unassigned', value: 'This task has no assignees!', inline: false });
+          messageOptions.content = `<@&${MOD_ROLE_ID}> Someone needs to claim this task!`;
+          embed.addFields({ name: '⚠️ Unassigned', value: 'Please assign yourself to this task and set an appropriate due date.', inline: false });
         }
         
         // Reply to original message if we have it
