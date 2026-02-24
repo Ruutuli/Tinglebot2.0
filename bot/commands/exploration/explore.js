@@ -5894,6 +5894,14 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const destSquareIdNorm = String(newLocation.square || "").trim();
     const destSquareIdRegex = destSquareIdNorm ? new RegExp(`^${destSquareIdNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") : null;
     const destMapSquare = destSquareIdRegex ? await Square.findOne({ squareId: destSquareIdRegex }) : null;
+    
+    // Block movement if destination square is not in the database (uncharted territory)
+    if (!destMapSquare) {
+     return interaction.editReply(
+      `**${newLocation.square}** is not a valid map square. Choose a different quadrant.`
+     );
+    }
+    
     if (destMapSquare && destMapSquare.quadrants && destMapSquare.quadrants.length) {
      destQ = destMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
@@ -5902,6 +5910,23 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      if (destQ && destQ.status === "inaccessible") {
       return interaction.editReply(
        `**${newLocation.square} ${newLocation.quadrant}** is inaccessible (edge of map). Choose a different quadrant.`
+      );
+     }
+     // Block movement to squares outside allowed regions (only eldin, lanayru, faron are explorable)
+     const destRegion = (destMapSquare.region || "").toLowerCase();
+     const allowedRegions = ["eldin", "lanayru", "faron"];
+     if (!allowedRegions.includes(destRegion)) {
+      return interaction.editReply(
+       `**${newLocation.square} ${newLocation.quadrant}** is outside the explorable regions. Only Eldin, Lanayru, and Faron can be explored right now.`
+      );
+     }
+     // Block movement to squares in a different region than the party's current region
+     const partyRegion = (party.region || "").toLowerCase();
+     if (destRegion !== partyRegion) {
+      const regionLabel = destRegion.charAt(0).toUpperCase() + destRegion.slice(1);
+      const partyRegionLabel = partyRegion.charAt(0).toUpperCase() + partyRegion.slice(1);
+      return interaction.editReply(
+       `**${newLocation.square} ${newLocation.quadrant}** is in **${regionLabel}**, but your expedition started in **${partyRegionLabel}**. You cannot cross region boundaries during an expedition.`
       );
      }
      if (destQ && (destQ.status === "explored" || destQ.status === "secured")) {
