@@ -151,30 +151,33 @@ const regionImages = {
 };
 
 // ------------------- Explore Map Image URL ------------------
-// Generates a URL to the dashboard's square-image API for dynamic map rendering.
-// Falls back to regionImages if square/quadrant not available.
-const EXPLORE_MAP_IMAGE_BASE = `${(process.env.DASHBOARD_URL || process.env.APP_URL || "https://tinglebot.xyz").replace(/\/$/, "")}/api/explore/square-image`;
+// Returns a random static banner image based on the party's region.
+// Replaces dynamic map generation for performance reasons.
+const regionBannerImages = {
+  eldin: [
+    "https://storage.googleapis.com/tinglebot/Banners/Rudania1.png",
+    "https://storage.googleapis.com/tinglebot/Banners/Rudania2.png",
+    "https://storage.googleapis.com/tinglebot/Banners/Rudania3.png",
+  ],
+  lanayru: [
+    "https://storage.googleapis.com/tinglebot/Banners/Inariko1.png",
+    "https://storage.googleapis.com/tinglebot/Banners/Inariko2.png",
+    "https://storage.googleapis.com/tinglebot/Banners/Inariko3.png",
+  ],
+  faron: [
+    "https://storage.googleapis.com/tinglebot/Banners/Vhintl1.png",
+    "https://storage.googleapis.com/tinglebot/Banners/Vhintl2.png",
+    "https://storage.googleapis.com/tinglebot/Banners/Vhintl3.png",
+  ],
+};
 
 function getExploreMapImageUrl(party, options = {}) {
-  const square = party?.square;
-  const quadrant = party?.quadrant;
-  if (!square || !/^[A-Ja-j](1[0-2]|[1-9])$/.test(square)) {
-    return regionImages[party?.region] || "https://storage.googleapis.com/tinglebot/Graphics/border.png";
+  const region = party?.region;
+  const banners = regionBannerImages[region];
+  if (banners && banners.length > 0) {
+    return banners[Math.floor(Math.random() * banners.length)];
   }
-  const params = new URLSearchParams();
-  params.set("square", square.toUpperCase());
-  if (quadrant && /^Q[1-4]$/i.test(quadrant)) {
-    params.set("quadrant", quadrant.toUpperCase());
-  }
-  if (options.highlight) {
-    params.set("highlight", "1");
-  }
-  if (options.noMask) {
-    params.set("noMask", "1");
-  }
-  // Add cache buster to ensure Discord fetches fresh image
-  params.set("t", Date.now().toString());
-  return `${EXPLORE_MAP_IMAGE_BASE}?${params.toString()}`;
+  return regionImages[region] || "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 }
 
 // ------------------- Travel Path Images ------------------
