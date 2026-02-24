@@ -148,6 +148,72 @@ async function postCommentToDiscord(
   }
 }
 
+/**
+ * Post a checklist item completion to Discord
+ */
+async function postChecklistUpdateToDiscord(
+  channelId: string,
+  messageId: string | null,
+  itemText: string,
+  username: string,
+  userAvatar: string | null,
+  taskTitle: string,
+  taskId: string,
+  checklistProgress: { done: number; total: number }
+): Promise<boolean> {
+  try {
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tinglebot.xyz").replace(/\/$/, "");
+    const taskUrl = `${baseUrl}/admin/todo?task=${taskId}`;
+    const percent = checklistProgress.total > 0 
+      ? Math.round((checklistProgress.done / checklistProgress.total) * 100) 
+      : 0;
+
+    const embed = {
+      title: `📋 ${taskTitle}`,
+      url: taskUrl,
+      description: `✅ **${username}** checked off:\n> ${itemText}`,
+      color: 0x49d59c, // Green accent
+      fields: [
+        {
+          name: "Progress",
+          value: `${checklistProgress.done}/${checklistProgress.total} (${percent}%)`,
+          inline: true,
+        },
+      ],
+      footer: {
+        text: "Click the title to view task",
+        icon_url: userAvatar || undefined,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    const messagePayload: Record<string, unknown> = {
+      embeds: [embed],
+    };
+
+    if (messageId) {
+      messagePayload.message_reference = {
+        message_id: messageId,
+        fail_if_not_exists: false,
+      };
+    }
+
+    const result = await discordApiRequest(
+      `channels/${channelId}/messages`,
+      "POST",
+      messagePayload
+    );
+
+    return result !== null;
+  } catch (error) {
+    logger.error(
+      "tasks-api",
+      `Failed to post checklist update to Discord: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return false;
+  }
+}
+
 // ----------------------------------------------------------------------------
 // GET - Get one task by ID
 // ----------------------------------------------------------------------------
@@ -347,15 +413,36 @@ export async function PUT(
       updates.order = body.order;
     }
 
-    // Checklist
+    // Checklist - track newly checked items to post to Discord
+    const newlyCheckedItems: string[] = [];
     if (body.checklist !== undefined) {
       const checklist: { text: string; checked: boolean }[] = [];
+      
+      // Build a map of existing checklist items by text for comparison
+      const existingChecklistMap = new Map<string, boolean>();
+      if (Array.isArray(existingTask.checklist)) {
+        for (const item of existingTask.checklist) {
+          if (item && typeof item.text === "string") {
+            existingChecklistMap.set(item.text.trim(), Boolean(item.checked));
+          }
+        }
+      }
+      
       if (Array.isArray(body.checklist)) {
         for (const item of body.checklist) {
           if (item && typeof item.text === "string" && item.text.trim()) {
+            const text = item.text.trim().slice(0, 500);
+            const isChecked = Boolean(item.checked);
+            
+            // Check if this item was just checked (wasn't checked before, is checked now)
+            const wasChecked = existingChecklistMap.get(text);
+            if (isChecked && wasChecked === false) {
+              newlyCheckedItems.push(text);
+            }
+            
             checklist.push({
-              text: item.text.trim().slice(0, 500),
-              checked: Boolean(item.checked),
+              text,
+              checked: isChecked,
             });
           }
         }
@@ -477,6 +564,31 @@ export async function PUT(
         }
       }
 
+      // Post checklist updates to Discord (don't await - fire and forget)
+      if (newlyCheckedItems.length > 0) {
+        const channelId = existingTask.discordSource?.channelId || MOD_TODO_FALLBACK_CHANNEL;
+        const messageId = existingTask.discordSource?.messageId || null;
+        const finalChecklist: { text: string; checked: boolean }[] = 
+          Array.isArray(updates.checklist) ? updates.checklist : 
+          Array.isArray(existingTask.checklist) ? existingTask.checklist : [];
+        const checklistProgress = {
+          done: finalChecklist.filter((i) => i.checked).length,
+          total: finalChecklist.length,
+        };
+        for (const itemText of newlyCheckedItems) {
+          postChecklistUpdateToDiscord(
+            channelId,
+            messageId,
+            itemText,
+            user.username || "Unknown",
+            user.avatar || null,
+            existingTask.title,
+            existingTask._id.toString(),
+            checklistProgress
+          ).catch(() => {}); // Ignore errors
+        }
+      }
+
       return NextResponse.json({
         task: updatedTask,
         newTask: newTask.toObject(),
@@ -495,6 +607,31 @@ export async function PUT(
           comment,
           existingTask.title,
           existingTask._id.toString()
+        ).catch(() => {}); // Ignore errors
+      }
+    }
+
+    // Post checklist updates to Discord (don't await - fire and forget)
+    if (newlyCheckedItems.length > 0) {
+      const channelId = existingTask.discordSource?.channelId || MOD_TODO_FALLBACK_CHANNEL;
+      const messageId = existingTask.discordSource?.messageId || null;
+      const finalChecklist: { text: string; checked: boolean }[] = 
+        Array.isArray(updates.checklist) ? updates.checklist : 
+        Array.isArray(existingTask.checklist) ? existingTask.checklist : [];
+      const checklistProgress = {
+        done: finalChecklist.filter((i) => i.checked).length,
+        total: finalChecklist.length,
+      };
+      for (const itemText of newlyCheckedItems) {
+        postChecklistUpdateToDiscord(
+          channelId,
+          messageId,
+          itemText,
+          user.username || "Unknown",
+          user.avatar || null,
+          existingTask.title,
+          existingTask._id.toString(),
+          checklistProgress
         ).catch(() => {}); // Ignore errors
       }
     }
