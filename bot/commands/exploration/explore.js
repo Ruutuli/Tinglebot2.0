@@ -3639,10 +3639,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      }
 
      if (outcomeType === "explored") {
-      // Lucky find: if quadrant was ALREADY explored before this roll, 25% chance to refund stamina and recover 1-2 stamina
+      // Lucky find: if quadrant was ALREADY explored before this roll, 15% chance to refund stamina and recover 1-2 stamina
       let luckyFindRecovery = 0;
       const quadrantWasExplored = party.quadrantState === "explored";
-      if (quadrantWasExplored && Math.random() < 0.25) {
+      if (quadrantWasExplored && Math.random() < 0.15) {
        // Refund the stamina cost
        const refundAmount = payResult?.staminaPaid ?? 0;
        if (refundAmount > 0) {
@@ -3864,7 +3864,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       if (outcomeType === "camp") {
        // Safe space: add recovery to pool only; cap at combined party max
        campHeartsRecovered = Math.floor(Math.random() * 3) + 1;
-       campStaminaRecovered = Math.floor(Math.random() * 3) + 1;
+       campStaminaRecovered = Math.floor(Math.random() * 2) + 1;
        const campCaps = await getPartyPoolCaps(party);
        await ensurePartyMaxValues(party, campCaps);
        const beforeHearts = party.totalHearts ?? 0;
@@ -4234,7 +4234,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           progressMsg += "Found a chest (open for 1 stamina).";
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, undefined, ruinsCostsForLog);
          } else if (ruinsOutcome === "camp") {
-          const recover = Math.floor(Math.random() * 2) + 1; // 1 or 2 stamina
+          const recover = 1; // Always 1 stamina
           const ruinCaps = await getPartyPoolCaps(freshParty);
           freshParty.totalStamina = Math.min(ruinCaps.maxStamina, Math.max(0, (freshParty.totalStamina ?? 0) + recover));
           freshParty.markModified("totalStamina");
@@ -6911,9 +6911,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // At 0 stamina, camping still costs the normal amount but paid via hearts (struggle mechanic)
     const stuckInWild = (party.totalStamina ?? 0) === 0 && baseCampCost > 0;
     
-    // Recovery: up to 25% unsecured/struggle, 50% if secured (secured is safe zone with better rest)
+    // Recovery: up to 25% hearts unsecured/50% secured; stamina reduced to 15% unsecured/35% secured
     const heartsPct = isSecured ? 0.5 : 0.25;
-    const staminaPct = isSecured ? 0.5 : 0.25;
+    const staminaPct = isSecured ? 0.35 : 0.15;
     const staminaCost = baseCampCost;
 
     // Calculate danger level based on distance from start
