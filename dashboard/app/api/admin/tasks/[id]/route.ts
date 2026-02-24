@@ -99,10 +99,16 @@ async function postCommentToDiscord(
   channelId: string,
   messageId: string | null,
   comment: CommentInput,
-  taskTitle: string
+  taskTitle: string,
+  taskId: string
 ): Promise<boolean> {
   try {
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tinglebot.xyz").replace(/\/$/, "");
+    const taskUrl = `${baseUrl}/admin/todo?task=${taskId}`;
+
     const embed = {
+      title: `📋 ${taskTitle}`,
+      url: taskUrl,
       description: comment.text,
       color: 0x49d59c, // Green accent
       author: {
@@ -110,7 +116,7 @@ async function postCommentToDiscord(
         icon_url: comment.author.avatar || undefined,
       },
       footer: {
-        text: `Task: ${taskTitle}`,
+        text: "Click the title to view task",
       },
       timestamp: new Date().toISOString(),
     };
@@ -465,7 +471,8 @@ export async function PUT(
             channelId,
             messageId,
             comment,
-            existingTask.title
+            existingTask.title,
+            existingTask._id.toString()
           ).catch(() => {}); // Ignore errors
         }
       }
@@ -486,7 +493,8 @@ export async function PUT(
           channelId,
           messageId,
           comment,
-          existingTask.title
+          existingTask.title,
+          existingTask._id.toString()
         ).catch(() => {}); // Ignore errors
       }
     }

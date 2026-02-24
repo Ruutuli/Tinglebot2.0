@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -1431,6 +1432,8 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
 
 export default function AdminTodoPage() {
   const { user, isAdmin, isModerator, loading: sessionLoading } = useSession();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [mods, setMods] = useState<ModInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1442,6 +1445,7 @@ export default function AdminTodoPage() {
   const [newTaskColumn, setNewTaskColumn] = useState<Column>("todo");
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [showMyTasksOnly, setShowMyTasksOnly] = useState(false);
+  const [urlTaskHandled, setUrlTaskHandled] = useState(false);
 
   const canAccess = isAdmin || isModerator;
 
@@ -1524,6 +1528,23 @@ export default function AdminTodoPage() {
     fetchTasks();
     fetchMods();
   }, [fetchTasks, fetchMods]);
+
+  // Handle opening task from URL query parameter (?task=taskId)
+  useEffect(() => {
+    if (urlTaskHandled || loading || tasks.length === 0) return;
+    
+    const taskId = searchParams.get("task");
+    if (taskId) {
+      const task = tasks.find((t) => t._id === taskId);
+      if (task) {
+        setModalTask(task);
+        setIsNewTask(false);
+        // Clear the URL parameter without triggering a navigation
+        router.replace("/admin/todo", { scroll: false });
+      }
+      setUrlTaskHandled(true);
+    }
+  }, [searchParams, tasks, loading, urlTaskHandled, router]);
 
   // Drag handlers
   const handleDragStart = (event: DragStartEvent) => {
