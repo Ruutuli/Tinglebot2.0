@@ -245,16 +245,16 @@ const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 
 // ------------------- Roll outcome chances (must sum to 1) ------------------
 const EXPLORATION_OUTCOME_CHANCES = {
-  monster: 0.25,   // more likely: combat encounters
-  item: 0.33,
-  explored: 0.245, // fallback when grotto can't be placed (square has grotto, at cap, etc.); +0.04 from monster_camp reduction
+  monster: 0.20,   // combat encounters
+  item: 0.42,      // finding items (gather) — increased from 0.33
+  explored: 0.205, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
   fairy: 0.05,
   chest: 0.01,     // reduced: chests show up less often
   old_map: 0.01,   // less likely: map finds
   ruins: 0.04,
   relic: 0.005,
-  camp: 0.02,     // safe space: reduced (was 6%)
-  monster_camp: 0.04,  // reduced: monster camps show up less
+  camp: 0.02,      // safe space
+  monster_camp: 0.04,
   grotto: 0.02,
 };
 
@@ -1567,6 +1567,54 @@ function getAdjacentQuadrants(currentSquare, currentQuadrant) {
  }
 }
 
+// ------------------- hasAdjacentSecuredQuadrant ------------------
+// Returns true if at least one quadrant adjacent to (square, quadrant) has status "secured" on the map.
+async function hasAdjacentSecuredQuadrant(square, quadrant) {
+ const adjacents = getAdjacentQuadrants(square, quadrant);
+ if (!adjacents || !adjacents.length) return false;
+ const uniqueSquareIds = [...new Set(adjacents.map((a) => normalizeSquareId(a.square)).filter(Boolean))];
+ if (!uniqueSquareIds.length) return false;
+ const squareDocs = await Square.find({
+  $or: uniqueSquareIds.map((id) => ({ squareId: new RegExp(`^${String(id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") })),
+ });
+ if (!squareDocs || !squareDocs.length) return false;
+ const squareByNorm = {};
+ for (const doc of squareDocs) {
+  const norm = normalizeSquareId(doc.squareId);
+  if (norm) squareByNorm[norm] = doc;
+ }
+ for (const adj of adjacents) {
+  const normSquare = normalizeSquareId(adj.square);
+  const normQuad = String(adj.quadrant || "").trim().toUpperCase();
+  if (!normSquare || !normQuad) continue;
+  const sqDoc = squareByNorm[normSquare];
+  if (!sqDoc || !sqDoc.quadrants || !sqDoc.quadrants.length) continue;
+  const q = sqDoc.quadrants.find((qu) => String(qu.quadrantId || "").toUpperCase() === normQuad);
+  if (q && q.status === "secured") return true;
+ }
+ return false;
+}
+
+// ------------------- ensureStartingSquaresSecured -------------------
+// Ensures all starting squares (H5, H8, F10) have every quadrant status set to "secured".
+// Idempotent; safe to call on every explore. Only updates when a quadrant is not already secured.
+async function ensureStartingSquaresSecured() {
+ const startSquareIds = [...new Set(Object.values(START_POINTS_BY_REGION).map((p) => (p && p.square ? String(p.square).trim().toUpperCase() : null)).filter(Boolean))];
+ if (!startSquareIds.length) return;
+ for (const squareId of startSquareIds) {
+  const square = await Square.findOne({
+   squareId: new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+  });
+  if (!square || !square.quadrants || !square.quadrants.length) continue;
+  const anyNotSecured = square.quadrants.some((q) => String(q.status || "").toLowerCase() !== "secured");
+  if (!anyNotSecured) continue;
+  await Square.updateOne(
+   { _id: square._id },
+   { $set: { "quadrants.$[].status": "secured", updatedAt: new Date() } }
+  );
+ }
+}
+
 // ============================================================================
 // ------------------- Expedition Command Definition -------------------
 // ============================================================================
@@ -1775,6 +1823,8 @@ module.exports = {
  async execute(interaction) {
   try {
    await interaction.deferReply();
+
+   await ensureStartingSquaresSecured();
 
    const subcommandGroup = interaction.options.getSubcommandGroup(false);
    const subcommand = interaction.options.getSubcommand(false);
@@ -5367,6 +5417,51 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      return interaction.editReply({ embeds: [notExploredEmbed] });
     }
 
+    // Require at least one adjacent quadrant to be secured (or party at start quadrant)
+    const isAtStartQuadrantSecure = (() => {
+     const start = START_POINTS_BY_REGION[party.region];
+     return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+    })();
+    if (!isAtStartQuadrantSecure) {
+     const hasAdjacent = await hasAdjacentSecuredQuadrant(party.square, party.quadrant);
+     if (!hasAdjacent) {
+      const locationSecure = `${party.square} ${party.quadrant}`;
+      const nextChar = party.characters[party.currentTurn];
+      const middleOfNowhereEmbed = new EmbedBuilder()
+       .setTitle("🔒 Cannot Secure Here")
+       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
+       .setDescription(
+        `You cannot secure **${locationSecure}** in the middle of nowhere.\n\n` +
+        `At least one quadrant adjacent to this one must already be **secured**. Secure your region's starting quadrant first, then expand from there. Use the commands below for your next action.`
+       )
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+      addExplorationStandardFields(middleOfNowhereEmbed, {
+       party,
+       expeditionId,
+       location: locationSecure,
+       nextCharacter: nextChar ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: true,
+       commandsLast: true,
+       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      });
+      addExplorationCommandsField(middleOfNowhereEmbed, {
+       party,
+       expeditionId,
+       location: locationSecure,
+       nextCharacter: nextChar ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: true,
+       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+       isAtStartQuadrant: (() => {
+        const start = START_POINTS_BY_REGION[party.region];
+        return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+       })(),
+      });
+      return interaction.editReply({ embeds: [middleOfNowhereEmbed] });
+     }
+    }
+
     // Check resources first — don't cost stamina if the party can't secure (no Wood/Eldin Ore)
     const requiredResources = ["Wood", "Eldin Ore"];
     const availableResources = party.characters.flatMap((char) => char.items);
@@ -5532,6 +5627,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        await i.followUp({ content: "This quadrant is no longer in a state that can be secured. No changes made.", ephemeral: true }).catch(() => {});
        collector.stop();
        return;
+      }
+      const isAtStartConfirm = (() => {
+       const start = START_POINTS_BY_REGION[freshParty.region];
+       return start && String(freshParty.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(freshParty.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
+      })();
+      if (!isAtStartConfirm) {
+       const hasAdjacentConfirm = await hasAdjacentSecuredQuadrant(freshParty.square, freshParty.quadrant);
+       if (!hasAdjacentConfirm) {
+        await i.followUp({ content: "This quadrant can no longer be secured (no adjacent secured quadrant). No changes made.", ephemeral: true }).catch(() => {});
+        collector.stop();
+        return;
+       }
       }
       const freshHasResources = requiredResources.every((resource) =>
        (freshParty.characters || []).flatMap((c) => c.items || []).some(
