@@ -745,7 +745,11 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
  } else if (showFairyRollOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
-  commandsValue += `${cmdRoll} · ${cmdItem}\nid: \`${expId || "—"}\` char: **${nextName}**`;
+  const cmdCamp = `</explore camp:${cmdId}>`;
+  const cmdDiscovery = `</explore discovery:${cmdId}>`;
+  commandsValue += hideCampCommand ? `${cmdRoll} · ${cmdItem}` : `${cmdRoll} · ${cmdItem} · ${cmdCamp}`;
+  if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
+  commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
  } else if (showRestSecureMove === true) {
   const cmdCamp = `</explore camp:${cmdId}>`;
   const cmdSecure = `</explore secure:${cmdId}>`;

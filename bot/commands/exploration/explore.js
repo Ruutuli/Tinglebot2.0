@@ -355,7 +355,7 @@ function createStuckInWildEmbed(party, location) {
       `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp is free and recovers up to 50% of your max stamina (but has higher monster attack chance).\n\n` +
       `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
     )
-    .setImage(EXPLORATION_IMAGE_FALLBACK)
+    .setImage(getExploreMapImageUrl(party, { highlight: true }))
     .setFooter({ text: location ? `Current location: ${location}` : "Expedition" });
 }
 
@@ -3467,7 +3467,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         .setTitle("⏳ Not Your Turn")
         .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
         .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-        .setImage(QUADRANT_MILESTONE_IMAGE);
+        .setImage(getExploreMapImageUrl(party, { highlight: true }));
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -3858,6 +3858,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
        const nextChar = party.characters[party.currentTurn];
+       const hasDiscFairy = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
        const fairyEmbed = new EmbedBuilder()
         .setTitle(`🧚 **Expedition: A Fairy Appeared!**`)
         .setDescription(`**${character.name}** encountered a fairy in **${location}**! The fairy swept over the party, restoring everyone to full hearts.`)
@@ -3873,7 +3874,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         showRestSecureMove: true,
         commandsLast: true,
         ruinRestRecovered,
-        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        hasDiscoveriesInQuadrant: hasDiscFairy,
         actionCost: { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
         maxHearts: poolCaps.maxHearts,
         maxStamina: poolCaps.maxStamina,
@@ -3881,7 +3882,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        fairyEmbed.addFields(
         { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
        );
-       addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showFairyRollOnly: true });
+       addExplorationCommandsField(fairyEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showFairyRollOnly: true, hasDiscoveriesInQuadrant: hasDiscFairy });
        await interaction.editReply({ embeds: [fairyEmbed] });
        await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) });
        return;
@@ -5376,7 +5377,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(QUADRANT_MILESTONE_IMAGE);
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -5857,7 +5858,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(QUADRANT_MILESTONE_IMAGE);
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6084,13 +6085,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          `Use the **Move** command again to explore the remaining quadrant(s), then you can move to an adjacent square.`
         )
         .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       const startCantLeave = START_POINTS_BY_REGION[party.region];
+       const isAtStartCantLeave = startCantLeave &&
+        String(party.square || "").toUpperCase() === String(startCantLeave.square || "").toUpperCase() &&
+        String(party.quadrant || "").toUpperCase() === String(startCantLeave.quadrant || "").toUpperCase();
        addExplorationStandardFields(cantLeaveEmbed, {
         party,
         expeditionId,
         location: locationMove,
         nextCharacter: party.characters[party.currentTurn] ?? null,
         showNextAndCommands: true,
-        showMoveToUnexploredOnly: true,
+        showRestSecureMove: true,
+        isAtStartQuadrant: isAtStartCantLeave,
         hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
       });
        return interaction.editReply({ embeds: [cantLeaveEmbed] });
@@ -6264,9 +6270,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       }
     }
 
-    // Move to unexplored quadrant: gold color + border image to stand out as milestone
+    // Move to unexplored quadrant: gold color; use region banner image for all move embeds
     const moveEmbedColor = moveToUnexplored ? "#FFD700" : getExploreOutcomeColor("move", regionColors[party.region] || "#2196F3");
-    const moveEmbedImage = moveToUnexplored ? QUADRANT_MILESTONE_IMAGE : (getExploreMapImageUrl(party, { highlight: true }));
+    const moveEmbedImage = getExploreMapImageUrl(party, { highlight: true });
     const moveEmbedTitle = moveToUnexplored
      ? `📍 **New Quadrant: ${newLocation.square} ${newLocation.quadrant}**`
      : `🗺️ **Expedition: Moved to ${newLocation.square} ${newLocation.quadrant}**`;
@@ -6830,7 +6836,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("retreat", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn to attempt retreat.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(QUADRANT_MILESTONE_IMAGE);
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6991,7 +6997,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        .setTitle("⏳ Not Your Turn")
        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(QUADRANT_MILESTONE_IMAGE);
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
