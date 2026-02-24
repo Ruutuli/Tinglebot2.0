@@ -320,7 +320,8 @@ export async function PUT(
     const newColumn = updates.column ?? existingTask.column;
     const wasRepeating = existingTask.isRepeating;
     const isRepeating = updates.isRepeating ?? wasRepeating;
-    const repeatConfig = updates.repeatConfig ?? existingTask.repeatConfig;
+    const repeatConfig: { frequency?: Frequency } | null | undefined =
+      updates.repeatConfig ?? existingTask.repeatConfig;
 
     // If moving a repeating task to done, handle auto-recreation
     if (
