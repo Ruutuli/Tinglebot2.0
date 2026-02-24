@@ -2320,11 +2320,12 @@ async function modTodoReminder(client, _data = {}) {
     logger.info('SCHEDULED', `mod-todo-reminder: now=${now.toISOString()}, checking tasks due before ${twoHoursFromNow.toISOString()}`);
     
     // Find tasks that need reminders:
-    // - Not done
+    // - Not done and not repeating
     // - Has a due date that's within 2 hours OR overdue
     // - Haven't sent a reminder in the last hour
     const tasksNeedingReminders = await ModTask.find({
-      column: { $nin: ['done'] },
+      column: { $nin: ['done', 'repeating'] },
+      isRepeating: { $ne: true },
       dueDate: { $ne: null, $lte: twoHoursFromNow },
       $or: [
         { lastReminderSent: null },
