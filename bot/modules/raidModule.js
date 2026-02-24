@@ -591,8 +591,8 @@ async function joinRaid(character, raidId, options = {}) {
       }
     }
 
-    // Check if character is in the same village
-    if (character.currentVillage.toLowerCase() !== raid.village.toLowerCase()) {
+    // Check if character is in the same village (skip for expedition raids — character is in the region, raid.village is the region's village)
+    if (!raid.expeditionId && character.currentVillage.toLowerCase() !== raid.village.toLowerCase()) {
       throw new Error('Character must be in the same village as the raid');
     }
 

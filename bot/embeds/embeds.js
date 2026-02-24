@@ -172,7 +172,7 @@ const regionBannerImages = {
 };
 
 function getExploreMapImageUrl(party, options = {}) {
-  const region = party?.region;
+  const region = (party?.region || "").toLowerCase();
   const banners = regionBannerImages[region];
   if (banners && banners.length > 0) {
     return banners[Math.floor(Math.random() * banners.length)];
