@@ -11,6 +11,7 @@ import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
 import { logger } from "@/utils/logger";
+import { discordApiRequest } from "@/lib/discord";
 
 const COLUMNS = ["repeating", "todo", "in_progress", "pending", "done"] as const;
 const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
@@ -86,6 +87,51 @@ function calculateNextDue(frequency: Frequency, fromDate: Date = new Date()): Da
       break;
   }
   return next;
+}
+
+/**
+ * Send a comment as a reply to the original Discord message
+ */
+async function postCommentToDiscord(
+  channelId: string,
+  messageId: string,
+  comment: CommentInput,
+  taskTitle: string
+): Promise<boolean> {
+  try {
+    const embed = {
+      description: comment.text,
+      color: 0x49d59c, // Green accent
+      author: {
+        name: `${comment.author.username} commented`,
+        icon_url: comment.author.avatar || undefined,
+      },
+      footer: {
+        text: `Task: ${taskTitle}`,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    const result = await discordApiRequest(
+      `channels/${channelId}/messages`,
+      "POST",
+      {
+        embeds: [embed],
+        message_reference: {
+          message_id: messageId,
+          fail_if_not_exists: false,
+        },
+      }
+    );
+
+    return result !== null;
+  } catch (error) {
+    logger.error(
+      "tasks-api",
+      `Failed to post comment to Discord: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return false;
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -287,9 +333,14 @@ export async function PUT(
       updates.checklist = checklist;
     }
 
-    // Comments
+    // Comments - track new ones to post to Discord
+    const newCommentsToPost: CommentInput[] = [];
     if (body.comments !== undefined) {
       const comments: CommentInput[] = [];
+      const existingCommentIds = new Set(
+        (existingTask.comments || []).map((c: { _id?: { toString(): string } }) => c._id?.toString())
+      );
+      
       if (Array.isArray(body.comments)) {
         for (const comment of body.comments) {
           if (
@@ -300,7 +351,7 @@ export async function PUT(
             typeof comment.author.discordId === "string" &&
             typeof comment.author.username === "string"
           ) {
-            comments.push({
+            const processedComment: CommentInput = {
               text: comment.text.trim().slice(0, 2000),
               author: {
                 discordId: comment.author.discordId,
@@ -309,7 +360,14 @@ export async function PUT(
               },
               createdAt: comment.createdAt || new Date().toISOString(),
               editedAt: comment.editedAt ?? null,
-            });
+            };
+            
+            // Check if this is a new comment (no _id or _id not in existing)
+            if (!comment._id || !existingCommentIds.has(comment._id)) {
+              newCommentsToPost.push(processedComment);
+            }
+            
+            comments.push(processedComment);
           }
         }
       }
@@ -374,11 +432,35 @@ export async function PUT(
       const newTask = new ModTask(newTaskData);
       await newTask.save();
 
+      // Post new comments to Discord (don't await - fire and forget)
+      if (newCommentsToPost.length > 0 && existingTask.discordSource?.channelId && existingTask.discordSource?.messageId) {
+        for (const comment of newCommentsToPost) {
+          postCommentToDiscord(
+            existingTask.discordSource.channelId,
+            existingTask.discordSource.messageId,
+            comment,
+            existingTask.title
+          ).catch(() => {}); // Ignore errors
+        }
+      }
+
       return NextResponse.json({
         task: updatedTask,
         newTask: newTask.toObject(),
         message: "Repeating task completed and new instance created",
       });
+    }
+
+    // Post new comments to Discord (don't await - fire and forget)
+    if (newCommentsToPost.length > 0 && existingTask.discordSource?.channelId && existingTask.discordSource?.messageId) {
+      for (const comment of newCommentsToPost) {
+        postCommentToDiscord(
+          existingTask.discordSource.channelId,
+          existingTask.discordSource.messageId,
+          comment,
+          existingTask.title
+        ).catch(() => {}); // Ignore errors
+      }
     }
 
     return NextResponse.json(updatedTask);
