@@ -632,7 +632,7 @@ function sanitizeEmbedField(field) {
   return { name, value, inline: field.inline === true };
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
@@ -676,9 +676,10 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    const cmdItem = `</explore item:${cmdId}>`;
    const cmdEnd = `</explore end:${cmdId}>`;
    const cmdDiscovery = `</explore discovery:${cmdId}>`;
+   const movePart = showMoveCommand !== false ? ` · ${cmdMove}` : "";
    commandsValue += hideCampCommand
-    ? `${cmdRoll} · ${cmdItem} · ${cmdSecure} · ${cmdMove}`
-    : `${cmdRoll} · ${cmdItem} · ${cmdCamp} · ${cmdSecure} · ${cmdMove}`;
+    ? `${cmdRoll} · ${cmdItem} · ${cmdSecure}${movePart}`
+    : `${cmdRoll} · ${cmdItem} · ${cmdCamp} · ${cmdSecure}${movePart}`;
    if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
    if (isAtStartQuadrant) commandsValue += ` · ${cmdEnd}`;
    commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
@@ -722,7 +723,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
 // showSecuredQuadrantOnly: true = quadrant is secured, no Roll/Secure — show only Move, Item, Camp (and End if at start)
 // showFairyRollOnly: true = fairy just appeared — only instruct to use /explore roll
 // showMoveToUnexploredOnly: true = just moved to unexplored quadrant — only "use /explore roll"
-const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showSecuredQuadrantOnly = false, showFairyRollOnly = false, showMoveToUnexploredOnly = false, isAtStartQuadrant = false, hasDiscoveriesInQuadrant = false, hideCampCommand = false }) => {
+const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, showSecuredQuadrantOnly = false, showFairyRollOnly = false, showMoveToUnexploredOnly = false, isAtStartQuadrant = false, hasDiscoveriesInQuadrant = false, hideCampCommand = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (!showNextAndCommands || !nextCharacter?.userId || !nextCharacter?.name) return embed;
  const nextName = nextCharacter.name;
@@ -752,9 +753,10 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   const cmdItem = `</explore item:${cmdId}>`;
   const cmdEnd = `</explore end:${cmdId}>`;
   const cmdDiscovery = `</explore discovery:${cmdId}>`;
+  const movePart = showMoveCommand !== false ? ` · ${cmdMove}` : "";
   commandsValue += hideCampCommand
-   ? `${cmdRoll} · ${cmdItem} · ${cmdSecure} · ${cmdMove}`
-   : `${cmdRoll} · ${cmdItem} · ${cmdCamp} · ${cmdSecure} · ${cmdMove}`;
+   ? `${cmdRoll} · ${cmdItem} · ${cmdSecure}${movePart}`
+   : `${cmdRoll} · ${cmdItem} · ${cmdCamp} · ${cmdSecure}${movePart}`;
   if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
   if (isAtStartQuadrant) commandsValue += ` · ${cmdEnd}`;
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;

@@ -5918,16 +5918,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const allowedRegions = ["eldin", "lanayru", "faron"];
      if (!allowedRegions.includes(destRegion)) {
       return interaction.editReply(
-       `**${newLocation.square} ${newLocation.quadrant}** is outside the explorable regions. Only Eldin, Lanayru, and Faron can be explored right now.`
-      );
-     }
-     // Block movement to squares in a different region than the party's current region
-     const partyRegion = (party.region || "").toLowerCase();
-     if (destRegion !== partyRegion) {
-      const regionLabel = destRegion.charAt(0).toUpperCase() + destRegion.slice(1);
-      const partyRegionLabel = partyRegion.charAt(0).toUpperCase() + partyRegion.slice(1);
-      return interaction.editReply(
-       `**${newLocation.square} ${newLocation.quadrant}** is in **${regionLabel}**, but your expedition started in **${partyRegionLabel}**. You cannot cross region boundaries during an expedition.`
+       `**${newLocation.square} ${newLocation.quadrant}** is outside the explorable regions. Expeditions can only travel within Eldin, Lanayru, and Faron.`
       );
      }
      if (destQ && (destQ.status === "explored" || destQ.status === "secured")) {
@@ -6082,6 +6073,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
+    if (destMapSquare && destMapSquare.region) {
+     party.region = destMapSquare.region;
+     party.markModified("region");
+    }
     party.lastCampedAtQuadrant = null;
     party.markModified("lastCampedAtQuadrant");
     // DESIGN: Quadrant stays UNEXPLORED until the party gets the "Quadrant Explored!" prompt (roll outcome "explored").
@@ -6198,6 +6193,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       nextCharacter: nextCharacterMove ?? null,
       showNextAndCommands: true,
       showRestSecureMove: !moveToSecured && !moveToUnexplored,
+      showMoveCommand: moveToSecured,
       showSecuredQuadrantOnly: moveToSecured,
       showMoveToUnexploredOnly: moveToUnexplored,
       hasDiscoveriesInQuadrant: hasDiscMove,
