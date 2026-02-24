@@ -10,7 +10,7 @@ import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 
 const QUEST_TYPES = ["Art", "Writing", "Interactive", "RP", "Art / Writing"] as const;
-const STATUSES = ["draft", "unposted", "active", "completed"] as const;
+const STATUSES = ["draft", "pending", "active", "completed"] as const;
 
 type QuestType = (typeof QUEST_TYPES)[number];
 type Status = (typeof STATUSES)[number];
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     const status = statusRaw === "complete" ? "completed" : statusRaw;
     if (!STATUSES.includes(status as Status)) {
       return NextResponse.json(
-        { error: "Validation failed", message: "status must be draft, unposted, active, or completed" },
+        { error: "Validation failed", message: "status must be draft, pending, active, or completed" },
         { status: 400 }
       );
     }

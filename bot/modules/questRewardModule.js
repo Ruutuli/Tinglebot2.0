@@ -16,7 +16,7 @@ const { EmbedBuilder } = require('discord.js');
 // ------------------- Constants -------------------
 // ============================================================================
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
-const QUEST_CHANNEL_ID = process.env.QUESTS_BOARD || '1305486549252706335';
+const QUEST_CHANNEL_ID = process.env.QUESTS_BOARD || '706880599863853097';
 const RP_SIGNUP_WINDOW_DAYS = 7;
 const ENTERTAINER_BONUS_AMOUNT = 100;
 const QUEST_COLORS = {

@@ -1133,7 +1133,222 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
 }
 
 // ------------------- quest-posting-check (1st of month 12am EST = 05:00 UTC) -------------------
-async function questPostingCheck(_client, _data = {}) {
+// Posts all pending quests whose date matches the current month
+const QUEST_CHANNEL_ID = process.env.QUESTS_BOARD || '706880599863853097';
+const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
+const QUEST_EMBED_COLOR = 0xaa916a;
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const VILLAGE_EMOJIS = {
+  rudania: '<:rudania:899492917452890142>',
+  inariko: '<:inariko:899493009073274920>',
+  vhintl: '<:vhintl:899492879205007450>',
+};
+
+function formatQuestLocation(location) {
+  if (!location?.trim()) return 'Not specified';
+  const l = location.toLowerCase();
+  const parts = [];
+  if (l.includes('rudania')) parts.push(`${VILLAGE_EMOJIS.rudania} Rudania`);
+  if (l.includes('inariko')) parts.push(`${VILLAGE_EMOJIS.inariko} Inariko`);
+  if (l.includes('vhintl')) parts.push(`${VILLAGE_EMOJIS.vhintl} Vhintl`);
+  if (parts.length) return parts.join(', ');
+  return location.trim();
+}
+
+function getQuestEndDate(startYYYYMM, duration) {
+  if (!startYYYYMM || !/^\d{4}-\d{2}$/.test(startYYYYMM)) return null;
+  const [y, m] = startYYYYMM.split('-').map(Number);
+  const start = new Date(y, m - 1, 1);
+  if (isNaN(start.getTime())) return null;
+  const d = String(duration).toLowerCase();
+  let end;
+  const weekMatch = d.match(/(\d+)\s*week/);
+  const monthMatch = d.match(/(\d+)\s*month/);
+  const dayMatch = d.match(/(\d+)\s*day/);
+  if (weekMatch) {
+    end = new Date(start);
+    end.setDate(end.getDate() + parseInt(weekMatch[1], 10) * 7);
+  } else if (monthMatch) {
+    end = new Date(start);
+    end.setMonth(end.getMonth() + parseInt(monthMatch[1], 10));
+  } else if (dayMatch) {
+    end = new Date(start);
+    end.setDate(end.getDate() + parseInt(dayMatch[1], 10));
+  } else {
+    end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+  }
+  return end;
+}
+
+function formatQuestEndDate(d) {
+  const day = d.getDate();
+  const ord = day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th';
+  const month = MONTH_NAMES[d.getMonth()];
+  return `${month} ${day}${ord} 11:59 pm`;
+}
+
+function questDateToYYYYMM(dateStr) {
+  const s = (dateStr ?? '').trim();
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  const monthIdx = MONTH_NAMES.findIndex(m => s.startsWith(m));
+  if (monthIdx < 0) return s;
+  const rest = s.slice(MONTH_NAMES[monthIdx].length).trim();
+  const yearMatch = rest.match(/^\d{4}$/);
+  if (yearMatch) return `${yearMatch[0]}-${String(monthIdx + 1).padStart(2, '0')}`;
+  return s;
+}
+
+function yyyyMmToDisplay(ym) {
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym;
+  const [y, m] = ym.split('-');
+  const monthIdx = parseInt(m, 10) - 1;
+  if (monthIdx < 0 || monthIdx > 11) return ym;
+  return `${MONTH_NAMES[monthIdx]} ${y}`;
+}
+
+function formatQuestTokenReward(raw, collabAllowed = false) {
+  if (!raw?.trim() || raw === 'N/A' || ['None', 'No reward'].includes(raw)) return null;
+  const s = String(raw).trim();
+  const flat = s.match(/flat:(\d+)/i)?.[1];
+  const perUnit = s.match(/per_unit:(\d+)/i)?.[1];
+  const unitQuoted = s.match(/\bunit:"((?:[^"\\]|\\.)*)"/i)?.[1];
+  const unitUnquoted = !unitQuoted ? s.match(/\bunit:(\S+)/i)?.[1] : null;
+  const unit = unitQuoted ? unitQuoted.replace(/\\"/g, '"') : (unitUnquoted ?? null);
+  const max = s.match(/max:(\d+)/i)?.[1];
+  const collab = s.match(/collab_bonus:(\d+)/i)?.[1];
+  const parts = [];
+  if (flat) parts.push(`${flat} tokens base`);
+  if (perUnit) parts.push(max && unit ? `${perUnit} tokens per ${unit} (cap ${max})` : unit ? `${perUnit} tokens per ${unit}` : `${perUnit} tokens per unit`);
+  const showCollab = collab && (collabAllowed === true || (collab !== '0' && collab !== ''));
+  if (showCollab) parts.push(`${collab} tokens collab bonus`);
+  if (parts.length) return parts.join(' + ');
+  return s;
+}
+
+function buildQuestRewardsText(quest) {
+  const parts = [];
+  const tokenReward = quest.tokenReward;
+  if (tokenReward && typeof tokenReward === 'string') {
+    const collabAllowed = quest.collabAllowed === true;
+    const display = formatQuestTokenReward(tokenReward, collabAllowed);
+    if (display) parts.push(display.includes('tokens') ? `💰 ${display}` : `💰 ${display} tokens`);
+  }
+  if (quest.collabAllowed && quest.collabRule) {
+    parts.push(`(${String(quest.collabRule).trim()})`);
+  }
+  const itemRewards = quest.itemRewards;
+  if (Array.isArray(itemRewards) && itemRewards.length > 0) {
+    const items = itemRewards
+      .filter(r => r?.name?.trim())
+      .map(r => `${r.name} x${r.quantity ?? 1}`);
+    if (items.length) parts.push(items.map(i => `> ${i}`).join('\n'));
+  }
+  return parts.length ? parts.join('\n') : '—';
+}
+
+function buildQuestPostEmbed(quest) {
+  const title = quest.title?.trim() || 'Quest';
+  const description = quest.description?.trim() || '';
+  const questType = quest.questType || '—';
+  const questID = quest.questID?.trim() || 'Q000000';
+  const location = quest.location || '';
+  const timeLimit = quest.timeLimit || '—';
+  const dateStr = quest.date?.trim() || '—';
+  const rules = quest.rules?.trim() || '—';
+  const postReq = quest.postRequirement != null && !isNaN(Number(quest.postRequirement))
+    ? Number(quest.postRequirement)
+    : 15;
+  const minRequirements = (quest.minRequirements != null ? String(quest.minRequirements) : '').trim() || '';
+
+  const locationPreview = formatQuestLocation(location);
+  const rewardsText = buildQuestRewardsText(quest);
+
+  const dateYYYYMM = questDateToYYYYMM(dateStr);
+  const durationStr = timeLimit === 'Custom' ? (quest.timeLimitCustom?.trim() || '') : timeLimit;
+  const endDate = dateYYYYMM && durationStr && timeLimit !== 'Custom'
+    ? getQuestEndDate(dateYYYYMM, durationStr)
+    : null;
+  const durationDisplay = endDate
+    ? `${durationStr} | Ends ${formatQuestEndDate(endDate)}`
+    : timeLimit;
+
+  const tableroll = quest.tableroll?.trim() || '';
+  const participantCap = quest.participantCap != null && !isNaN(Number(quest.participantCap))
+    ? Number(quest.participantCap)
+    : null;
+  const participationLines = [];
+  if (participantCap != null) participationLines.push(`👥 Participation cap: ${participantCap}`);
+  if (minRequirements && minRequirements !== '0') participationLines.push(`📝 Participation Requirement: ${minRequirements}`);
+  if (questType === 'RP') participationLines.push(`📝 Post requirement: ${postReq}`);
+  if (tableroll) participationLines.push(`🎲 Table roll: **${tableroll}**`);
+  const participationValue = participationLines.length ? participationLines.join('\n') : '—';
+
+  const detailsLines = [
+    `**Type:** ${questType}`,
+    `**ID:** \`${questID}\``,
+    `**Location:** ${locationPreview}`,
+    `**Duration:** ${durationDisplay}`,
+    `**Date:** ${dateStr.match(/^\d{4}-\d{2}$/) ? yyyyMmToDisplay(dateStr) : dateStr}`,
+  ];
+
+  const desc = description.length > 4096 ? description.slice(0, 4093) + '...' : description;
+  const descriptionBlockquote = desc.trimEnd().split('\n').map(line => (line === '' ? '' : `> ${line}`)).join('\n');
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(descriptionBlockquote)
+    .setColor(QUEST_EMBED_COLOR)
+    .addFields(
+      { name: '**__📋 Details__**', value: detailsLines.join('\n'), inline: false },
+      { name: '**__🏆 Rewards__**', value: rewardsText, inline: false },
+      { name: '**__🗓️ Participation__**', value: participationValue, inline: false },
+      { name: '**__📋 Rules__**', value: rules.length > 1024 ? rules.slice(0, 1021) + '...' : rules, inline: false },
+      { name: '**__🎯 Join This Quest__**', value: `\`/quest join questid:${questID}\``, inline: false },
+      { name: '**__👥 Participants (0)__**', value: 'None', inline: false },
+      { name: '**__📊 Recent Activity__**', value: '—', inline: false }
+    )
+    .setImage(BORDER_IMAGE)
+    .setTimestamp();
+
+  return embed;
+}
+
+async function postQuestToChannel(client, quest) {
+  const channelId = quest.targetChannel || QUEST_CHANNEL_ID;
+  
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      logger.error('SCHEDULED', `quest-posting-check: Could not find channel ${channelId} for quest ${quest.questID}`);
+      return null;
+    }
+
+    const embed = buildQuestPostEmbed(quest);
+    const message = await channel.send({ embeds: [embed] });
+    
+    return message;
+  } catch (err) {
+    logger.error('SCHEDULED', `quest-posting-check: Failed to post quest ${quest.questID} to channel ${channelId}: ${err.message}`);
+    return null;
+  }
+}
+
+function getCurrentMonthFormats() {
+  const now = new Date();
+  const estOffset = -5 * 60;
+  const estTime = new Date(now.getTime() + (estOffset - now.getTimezoneOffset()) * 60000);
+  const year = estTime.getFullYear();
+  const month = estTime.getMonth();
+  
+  const yyyyMm = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const monthName = `${MONTH_NAMES[month]} ${year}`;
+  
+  return { yyyyMm, monthName };
+}
+
+async function questPostingCheck(client, _data = {}) {
   try {
     if (!isFirstOfMonth()) {
       logger.debug('SCHEDULED', 'quest-posting-check: Not first of month, skipping');
@@ -1142,10 +1357,69 @@ async function questPostingCheck(_client, _data = {}) {
     
     logger.info('SCHEDULED', 'quest-posting-check: starting');
     
-    // Quest posting check logic would go here
-    // This can be implemented when quest posting system is ready
+    if (!client?.channels) {
+      logger.error('SCHEDULED', 'quest-posting-check: Discord client not available');
+      return;
+    }
     
-    logger.info('SCHEDULED', 'quest-posting-check: done (quest posting system not yet implemented)');
+    const { yyyyMm, monthName } = getCurrentMonthFormats();
+    logger.info('SCHEDULED', `quest-posting-check: Looking for pending quests for ${monthName} (${yyyyMm})`);
+    
+    const pendingQuests = await Quest.find({
+      status: 'pending',
+      $or: [
+        { date: yyyyMm },
+        { date: monthName },
+        { date: { $regex: new RegExp(`^${MONTH_NAMES[new Date().getMonth()]}\\s+\\d{4}$`, 'i') } }
+      ]
+    });
+    
+    if (!pendingQuests || pendingQuests.length === 0) {
+      logger.info('SCHEDULED', 'quest-posting-check: No pending quests found for this month');
+      return;
+    }
+    
+    logger.info('SCHEDULED', `quest-posting-check: Found ${pendingQuests.length} pending quest(s) to post`);
+    
+    let postedCount = 0;
+    let errorCount = 0;
+    
+    for (const quest of pendingQuests) {
+      try {
+        const message = await postQuestToChannel(client, quest);
+        
+        if (message) {
+          quest.status = 'active';
+          quest.posted = true;
+          quest.postedAt = new Date();
+          quest.messageID = message.id;
+          if (!quest.targetChannel) {
+            quest.targetChannel = message.channelId;
+          }
+          quest.guildId = message.guildId;
+          await quest.save();
+          
+          postedCount++;
+          logger.info('SCHEDULED', `quest-posting-check: Posted quest ${quest.questID} "${quest.title}" to channel ${quest.targetChannel}`);
+        } else {
+          errorCount++;
+          logger.error('SCHEDULED', `quest-posting-check: Failed to post quest ${quest.questID}`);
+        }
+      } catch (err) {
+        errorCount++;
+        logger.error('SCHEDULED', `quest-posting-check: Error posting quest ${quest.questID}: ${err.message}`);
+      }
+    }
+    
+    const summary = [];
+    if (postedCount > 0) summary.push(`posted ${postedCount} quest(s)`);
+    if (errorCount > 0) summary.push(`${errorCount} error(s)`);
+    
+    if (summary.length > 0) {
+      logger.success('SCHEDULED', `quest-posting-check: done (${summary.join(', ')})`);
+    } else {
+      logger.info('SCHEDULED', 'quest-posting-check: done (no changes)');
+    }
   } catch (err) {
     logger.error('SCHEDULED', `quest-posting-check: ${err.message}`);
   }

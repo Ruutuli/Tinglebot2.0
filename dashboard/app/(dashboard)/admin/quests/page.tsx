@@ -97,10 +97,10 @@ const QUEST_TABS: { value: QuestTab; label: string; icon: string }[] = [
 ];
 
 const QUEST_TYPES = ["Art", "Writing", "Interactive", "RP", "Art / Writing"] as const;
-const STATUSES = ["draft", "unposted", "active", "completed"] as const;
+const STATUSES = ["draft", "pending", "active", "completed"] as const;
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "draft", label: "Draft" },
-  { value: "unposted", label: "Unposted" },
+  { value: "pending", label: "Pending" },
   { value: "active", label: "Active" },
   { value: "completed", label: "Complete" },
 ];

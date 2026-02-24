@@ -1101,7 +1101,7 @@ formatQuestCount(count = 0) {
     const statusText = quest.status === 'active' ? '🟢 Active' :
                      quest.status === 'completed' ? '✅ Complete' :
                      quest.status === 'draft' ? '📝 Draft' :
-                     quest.status === 'unposted' ? '📤 Unposted' :
+                     quest.status === 'pending' ? '⏳ Pending' :
                      quest.status === 'cancelled' ? '❌ Cancelled' :
                      quest.status === 'expired' ? '⏰ Expired' : quest.status;
 

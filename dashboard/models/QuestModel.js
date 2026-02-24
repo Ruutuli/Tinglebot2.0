@@ -70,7 +70,7 @@ const integrationFields = {
 
 // ------------------- Quest Status Fields ------------------
 const statusFields = {
-    status: { type: String, enum: ['draft', 'unposted', 'active', 'completed'], default: 'active' },
+    status: { type: String, enum: ['draft', 'pending', 'active', 'completed'], default: 'draft' },
     completionReason: { type: String, default: null },
     completedAt: { type: Date, default: null },
     completionProcessed: { type: Boolean, default: false }, // Prevents duplicate reward processing
