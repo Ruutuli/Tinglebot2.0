@@ -2292,6 +2292,120 @@ async function submissionModReminder(client, _data = {}) {
   }
 }
 
+// ------------------- mod-todo-reminder (Every 30 minutes) -------------------
+// Sends DM reminders for mod tasks that are overdue or due soon
+async function modTodoReminder(client, _data = {}) {
+  if (!client) {
+    logger.error('SCHEDULED', 'mod-todo-reminder: Discord client not available');
+    return;
+  }
+  
+  try {
+    logger.info('SCHEDULED', 'mod-todo-reminder: starting');
+    
+    const { connectToTinglebot } = require('@/database/db');
+    const ModTask = require('@/models/ModTaskModel');
+    const { sendDiscordDM } = require('@/utils/notificationService');
+    
+    await connectToTinglebot();
+    
+    const now = new Date();
+    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    
+    // Find tasks that need reminders:
+    // - Not done
+    // - Has a due date that's within 2 hours OR overdue
+    // - Haven't sent a reminder in the last hour
+    const tasksNeedingReminders = await ModTask.find({
+      column: { $nin: ['done'] },
+      dueDate: { $ne: null, $lte: twoHoursFromNow },
+      $or: [
+        { lastReminderSent: null },
+        { lastReminderSent: { $lt: oneHourAgo } }
+      ]
+    });
+    
+    let remindersSent = 0;
+    
+    for (const task of tasksNeedingReminders) {
+      // Skip tasks with no assignees
+      if (!task.assignees || task.assignees.length === 0) {
+        continue;
+      }
+      
+      const isOverdue = task.dueDate < now;
+      const dueDateTimestamp = Math.floor(task.dueDate.getTime() / 1000);
+      
+      // Build the embed
+      const embed = {
+        title: isOverdue ? '⚠️ Overdue Task Reminder' : '⏰ Task Due Soon',
+        description: task.title,
+        color: isOverdue ? 0xff4444 : 0xffaa00,
+        fields: [
+          {
+            name: 'Due',
+            value: `<t:${dueDateTimestamp}:R>`,
+            inline: true
+          },
+          {
+            name: 'Priority',
+            value: task.priority.charAt(0).toUpperCase() + task.priority.slice(1),
+            inline: true
+          }
+        ],
+        timestamp: new Date().toISOString(),
+        footer: { text: 'Mod Todo List' }
+      };
+      
+      // Add link to original message if available
+      if (task.discordSource?.messageUrl) {
+        embed.fields.push({
+          name: 'Source',
+          value: `[View Message](${task.discordSource.messageUrl})`,
+          inline: true
+        });
+      }
+      
+      // Add description preview if exists
+      if (task.description && task.description.length > 0) {
+        const preview = task.description.length > 200 
+          ? task.description.substring(0, 197) + '...' 
+          : task.description;
+        embed.fields.push({
+          name: 'Description',
+          value: preview,
+          inline: false
+        });
+      }
+      
+      // Send DM to each assignee
+      for (const assignee of task.assignees) {
+        try {
+          await sendDiscordDM(assignee.discordId, embed);
+          remindersSent++;
+          // Small delay between DMs to avoid rate limits
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (err) {
+          logger.warn('SCHEDULED', `mod-todo-reminder: Failed to DM ${assignee.discordId}: ${err.message}`);
+        }
+      }
+      
+      // Update lastReminderSent
+      task.lastReminderSent = now;
+      await task.save();
+    }
+    
+    if (remindersSent > 0) {
+      logger.success('SCHEDULED', `mod-todo-reminder: sent ${remindersSent} reminder(s) for ${tasksNeedingReminders.length} task(s)`);
+    } else {
+      logger.info('SCHEDULED', 'mod-todo-reminder: no reminders needed');
+    }
+  } catch (err) {
+    logger.error('SCHEDULED', `mod-todo-reminder: ${err.message}`);
+  }
+}
+
 // ============================================================================
 // ------------------- Relic Deadline Tasks -------------------
 // ============================================================================
@@ -2583,6 +2697,7 @@ const TASKS = [
   { name: 'cleanup-boost-expirations', cron: '0 * * * *', handler: cleanupBoostExpirations }, // Every hour
   { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings }, // Every 6 hours
   { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder }, // Every hour - @mods if art/writing pending 12+ hours
+  { name: 'mod-todo-reminder', cron: '*/30 * * * *', handler: modTodoReminder }, // Every 30 minutes - DM reminders for overdue/due-soon mod tasks
 
   // Relic Deadline Tasks
   { name: 'relic-appraisal-deadline', cron: '0 6 * * *', handler: relicAppraisalDeadline }, // Daily 6am UTC: deteriorate unappraised relics past 7 days

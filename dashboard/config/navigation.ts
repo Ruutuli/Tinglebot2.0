@@ -58,6 +58,7 @@ export const navItems: NavItem[] = [
     icon: "fa-shield-halved",
     children: [
       { href: "/characters/moderation", label: "Approvals", icon: "fa-check-circle" },
+      { href: "/admin/todo", label: "Todo List", icon: "fa-list-check" },
       { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
       { href: "/admin/quests", label: "Quests", icon: "fa-scroll" },
       { href: "/admin/relic-archives", label: "Relic Archive Requests", icon: "fa-book" },

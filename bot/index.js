@@ -51,6 +51,7 @@ const { handleComponentInteraction } = require("./handlers/componentHandler");
 const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { handleInteraction, initializeReactionHandler } = require('./handlers/interactionHandler');
 const { initializeReactionRolesHandler } = require('./handlers/reactionRolesHandler');
+const { initializeModTodoReactionHandler } = require('./handlers/modTodoReactionHandler');
 
 // ============================================================================
 // ------------------- Scripts & Modules -------------------
@@ -499,6 +500,7 @@ async function initializeClient() {
         // Initialize core systems
         initializeReactionHandler(client);
         initializeReactionRolesHandler(client);
+        initializeModTodoReactionHandler(client);
         logger.info('SYSTEM', 'Reaction handlers initialized');
         
         // Initialize role count channels system
