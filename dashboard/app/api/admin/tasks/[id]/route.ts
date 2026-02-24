@@ -17,6 +17,8 @@ const COLUMNS = ["repeating", "todo", "in_progress", "pending", "done"] as const
 const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 const FREQUENCIES = ["daily", "weekly", "monthly", "quarterly"] as const;
 
+const MOD_TODO_FALLBACK_CHANNEL = "795747760691216384";
+
 type Column = (typeof COLUMNS)[number];
 type Priority = (typeof PRIORITIES)[number];
 type Frequency = (typeof FREQUENCIES)[number];
@@ -90,11 +92,12 @@ function calculateNextDue(frequency: Frequency, fromDate: Date = new Date()): Da
 }
 
 /**
- * Send a comment as a reply to the original Discord message
+ * Send a comment to Discord - either as a reply to the original message,
+ * or as a standalone message in the fallback channel
  */
 async function postCommentToDiscord(
   channelId: string,
-  messageId: string,
+  messageId: string | null,
   comment: CommentInput,
   taskTitle: string
 ): Promise<boolean> {
@@ -112,16 +115,21 @@ async function postCommentToDiscord(
       timestamp: new Date().toISOString(),
     };
 
+    const messagePayload: Record<string, unknown> = {
+      embeds: [embed],
+    };
+
+    if (messageId) {
+      messagePayload.message_reference = {
+        message_id: messageId,
+        fail_if_not_exists: false,
+      };
+    }
+
     const result = await discordApiRequest(
       `channels/${channelId}/messages`,
       "POST",
-      {
-        embeds: [embed],
-        message_reference: {
-          message_id: messageId,
-          fail_if_not_exists: false,
-        },
-      }
+      messagePayload
     );
 
     return result !== null;
@@ -449,11 +457,13 @@ export async function PUT(
       await newTask.save();
 
       // Post new comments to Discord (don't await - fire and forget)
-      if (newCommentsToPost.length > 0 && existingTask.discordSource?.channelId && existingTask.discordSource?.messageId) {
+      if (newCommentsToPost.length > 0) {
+        const channelId = existingTask.discordSource?.channelId || MOD_TODO_FALLBACK_CHANNEL;
+        const messageId = existingTask.discordSource?.messageId || null;
         for (const comment of newCommentsToPost) {
           postCommentToDiscord(
-            existingTask.discordSource.channelId,
-            existingTask.discordSource.messageId,
+            channelId,
+            messageId,
             comment,
             existingTask.title
           ).catch(() => {}); // Ignore errors
@@ -468,11 +478,13 @@ export async function PUT(
     }
 
     // Post new comments to Discord (don't await - fire and forget)
-    if (newCommentsToPost.length > 0 && existingTask.discordSource?.channelId && existingTask.discordSource?.messageId) {
+    if (newCommentsToPost.length > 0) {
+      const channelId = existingTask.discordSource?.channelId || MOD_TODO_FALLBACK_CHANNEL;
+      const messageId = existingTask.discordSource?.messageId || null;
       for (const comment of newCommentsToPost) {
         postCommentToDiscord(
-          existingTask.discordSource.channelId,
-          existingTask.discordSource.messageId,
+          channelId,
+          messageId,
           comment,
           existingTask.title
         ).catch(() => {}); // Ignore errors

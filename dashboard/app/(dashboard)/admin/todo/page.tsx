@@ -346,21 +346,21 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
   });
 
   return (
-    <div className={`flex max-h-[calc(100vh-16rem)] min-w-[200px] flex-1 flex-col rounded-xl border-2 transition-colors ${
+    <div className={`flex max-h-[calc(100vh-14rem)] min-w-[260px] flex-1 flex-col rounded-xl border-2 transition-colors sm:max-h-[calc(100vh-16rem)] sm:min-w-[200px] ${
       isOver ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10" : `${column.borderColor} bg-[var(--botw-black)]/50`
     }`}>
       {/* Column Header */}
-      <div className={`flex flex-shrink-0 items-center justify-between border-b-2 ${column.borderColor} ${column.bgColor} px-4 py-3`}>
-        <div className="flex items-center gap-2">
-          <i className={`fa-solid ${column.icon} ${column.color}`} />
-          <h2 className={`font-semibold ${column.color}`}>{column.label}</h2>
-          <span className={`rounded-full ${column.bgColor} border ${column.borderColor} px-2 py-0.5 text-xs text-[var(--botw-pale)]`}>
+      <div className={`flex flex-shrink-0 items-center justify-between border-b-2 ${column.borderColor} ${column.bgColor} px-3 py-2 sm:px-4 sm:py-3`}>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <i className={`fa-solid ${column.icon} ${column.color} text-sm sm:text-base`} />
+          <h2 className={`text-sm font-semibold sm:text-base ${column.color}`}>{column.label}</h2>
+          <span className={`rounded-full ${column.bgColor} border ${column.borderColor} px-1.5 py-0.5 text-xs text-[var(--botw-pale)] sm:px-2`}>
             {tasks.length}
           </span>
         </div>
         <button
           onClick={() => onAddTask(column.id)}
-          className={`rounded p-1 text-[var(--botw-pale)] transition-colors hover:${column.bgColor} hover:${column.color}`}
+          className={`rounded p-1.5 text-[var(--botw-pale)] transition-colors hover:${column.bgColor} hover:${column.color} sm:p-1`}
           title="Add task"
         >
           <i className="fa-solid fa-plus" />
@@ -368,14 +368,14 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
       </div>
 
       {/* Task List */}
-      <div ref={setNodeRef} className="flex-1 space-y-2 overflow-y-auto p-3" style={{ minHeight: "100px" }}>
+      <div ref={setNodeRef} className="flex-1 space-y-2 overflow-y-auto p-2 sm:p-3" style={{ minHeight: "100px" }}>
         <SortableContext items={tasks.map((t) => t._id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <SortableTaskCard key={task._id} task={task} onClick={() => onTaskClick(task)} />
           ))}
         </SortableContext>
         {tasks.length === 0 && (
-          <p className="py-8 text-center text-sm text-[var(--botw-pale)] opacity-50">
+          <p className="py-6 text-center text-sm text-[var(--botw-pale)] opacity-50 sm:py-8">
             No tasks
           </p>
         )}
@@ -447,85 +447,150 @@ function TableView({ tasks, onTaskClick }: TableViewProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/80 text-[var(--totk-light-ocher)]">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Title</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Priority</th>
-              <th className="px-4 py-3 font-semibold">Assigned To</th>
-              <th className="px-4 py-3 font-semibold">Due Date</th>
-              <th className="px-4 py-3 font-semibold">Completed By</th>
-              <th className="px-4 py-3 font-semibold">Checklist</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--totk-dark-ocher)]/50">
-            {sortedTasks.map((task) => (
-              <tr
-                key={task._id}
-                onClick={() => onTaskClick(task)}
-                className="cursor-pointer transition-colors hover:bg-[var(--totk-dark-ocher)]/30"
-              >
-                <td className="px-4 py-3">
+    <>
+      {/* Mobile Card View */}
+      <div className="space-y-3 md:hidden">
+        {sortedTasks.map((task) => {
+          const col = COLUMNS.find((c) => c.id === task.column);
+          return (
+            <div
+              key={task._id}
+              onClick={() => onTaskClick(task)}
+              className="cursor-pointer rounded-lg border-2 border-l-4 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-3 transition-colors hover:border-[var(--totk-light-ocher)]"
+              style={{ borderLeftColor: col?.leftBorder ? `var(${col.leftBorder.replace('border-l-[', '').replace(']', '')})` : undefined }}
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="flex-1">
                   <div className="flex items-center gap-2">
                     {task.discordSource?.messageUrl && (
-                      <svg className="h-4 w-4 flex-shrink-0 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor">
+                      <svg className="h-3.5 w-3.5 flex-shrink-0 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
                       </svg>
                     )}
-                    <span className="font-medium text-[var(--botw-pale)]">{task.title}</span>
+                    <span className="font-medium text-[var(--botw-pale)] line-clamp-2">{task.title}</span>
                   </div>
-                </td>
-                <td className="px-4 py-3">
-                  {(() => {
-                    const col = COLUMNS.find((c) => c.id === task.column);
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${col?.bgColor || ''} ${col?.borderColor || ''} ${col?.color || 'text-[var(--botw-pale)]'}`}>
-                        <i className={`fa-solid ${col?.icon || "fa-circle"}`} />
-                        {COLUMN_LABELS[task.column]}
-                      </span>
-                    );
-                  })()}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-block rounded border px-2 py-0.5 text-xs capitalize ${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}`}>
-                    {task.priority}
+                </div>
+                <span className={`inline-block flex-shrink-0 rounded border px-2 py-0.5 text-xs capitalize ${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}`}>
+                  {task.priority}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${col?.bgColor || ''} ${col?.borderColor || ''} ${col?.color || 'text-[var(--botw-pale)]'}`}>
+                  <i className={`fa-solid ${col?.icon || "fa-circle"}`} />
+                  {COLUMN_LABELS[task.column]}
+                </span>
+                {task.dueDate && (
+                  <span className={`${isOverdue(task) ? "text-red-400" : "text-[var(--botw-pale)] opacity-70"}`}>
+                    {isOverdue(task) && <i className="fa-solid fa-exclamation-triangle mr-1" />}
+                    <i className="fa-solid fa-calendar-day mr-1" />
+                    {formatDate(task.dueDate)}
                   </span>
-                </td>
-                <td className="px-4 py-3 text-[var(--botw-pale)]">
+                )}
+                {task.checklist && task.checklist.length > 0 && (
+                  <span className="text-[var(--botw-pale)] opacity-70">
+                    <i className="fa-solid fa-square-check mr-1" />
+                    {task.checklist.filter((i) => i.checked).length}/{task.checklist.length}
+                  </span>
+                )}
+                {task.completedBy && (
+                  <span className="text-green-400">
+                    <i className="fa-solid fa-circle-check mr-1" />
+                    {task.completedBy.username}
+                  </span>
+                )}
+              </div>
+              {task.assignees.length > 0 && (
+                <div className="mt-2 flex items-center gap-1 text-xs text-[var(--botw-pale)] opacity-70">
+                  <i className="fa-solid fa-user" />
                   {getAssigneeNames(task.assignees)}
-                </td>
-                <td className={`px-4 py-3 ${isOverdue(task) ? "text-red-400" : "text-[var(--botw-pale)]"}`}>
-                  {isOverdue(task) && <i className="fa-solid fa-exclamation-triangle mr-1" />}
-                  {formatDate(task.dueDate)}
-                </td>
-                <td className="px-4 py-3 text-[var(--botw-pale)]">
-                  {task.completedBy ? (
-                    <span className="text-xs text-green-400" title={task.completedAt ? new Date(task.completedAt).toLocaleString() : ""}>
-                      <i className="fa-solid fa-circle-check mr-1" />
-                      {task.completedBy.username}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="px-4 py-3 text-[var(--botw-pale)]">
-                  {task.checklist && task.checklist.length > 0 ? (
-                    <span className="text-xs">
-                      {task.checklist.filter((i) => i.checked).length}/{task.checklist.length}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-    </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50 md:block">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/80 text-[var(--totk-light-ocher)]">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Title</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Priority</th>
+                <th className="px-4 py-3 font-semibold">Assigned To</th>
+                <th className="px-4 py-3 font-semibold">Due Date</th>
+                <th className="px-4 py-3 font-semibold">Completed By</th>
+                <th className="px-4 py-3 font-semibold">Checklist</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--totk-dark-ocher)]/50">
+              {sortedTasks.map((task) => (
+                <tr
+                  key={task._id}
+                  onClick={() => onTaskClick(task)}
+                  className="cursor-pointer transition-colors hover:bg-[var(--totk-dark-ocher)]/30"
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {task.discordSource?.messageUrl && (
+                        <svg className="h-4 w-4 flex-shrink-0 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                        </svg>
+                      )}
+                      <span className="font-medium text-[var(--botw-pale)]">{task.title}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const col = COLUMNS.find((c) => c.id === task.column);
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${col?.bgColor || ''} ${col?.borderColor || ''} ${col?.color || 'text-[var(--botw-pale)]'}`}>
+                          <i className={`fa-solid ${col?.icon || "fa-circle"}`} />
+                          {COLUMN_LABELS[task.column]}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block rounded border px-2 py-0.5 text-xs capitalize ${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}`}>
+                      {task.priority}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--botw-pale)]">
+                    {getAssigneeNames(task.assignees)}
+                  </td>
+                  <td className={`px-4 py-3 ${isOverdue(task) ? "text-red-400" : "text-[var(--botw-pale)]"}`}>
+                    {isOverdue(task) && <i className="fa-solid fa-exclamation-triangle mr-1" />}
+                    {formatDate(task.dueDate)}
+                  </td>
+                  <td className="px-4 py-3 text-[var(--botw-pale)]">
+                    {task.completedBy ? (
+                      <span className="text-xs text-green-400" title={task.completedAt ? new Date(task.completedAt).toLocaleString() : ""}>
+                        <i className="fa-solid fa-circle-check mr-1" />
+                        {task.completedBy.username}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[var(--botw-pale)]">
+                    {task.checklist && task.checklist.length > 0 ? (
+                      <span className="text-xs">
+                        {task.checklist.filter((i) => i.checked).length}/{task.checklist.length}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -819,31 +884,31 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
     : checklist;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 pt-16" onClick={handleClose}>
-      <div className="flex min-h-full items-start justify-center px-4 pb-8 pt-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 pt-0 sm:pt-8 md:pt-16" onClick={handleClose}>
+      <div className="flex min-h-full items-start justify-center px-0 pb-0 pt-0 sm:px-4 sm:pb-8 sm:pt-4">
         <div
-          className="max-h-[calc(100vh-6rem)] w-full max-w-5xl overflow-y-auto rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-xl"
+          className="max-h-[100vh] w-full max-w-5xl overflow-y-auto border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-xl sm:max-h-[calc(100vh-6rem)] sm:rounded-xl"
           onClick={(e) => e.stopPropagation()}
         >
         {/* Header */}
-        <div className="flex items-start justify-between border-b-2 border-[var(--totk-dark-ocher)] px-6 py-4">
+        <div className="flex items-start justify-between border-b-2 border-[var(--totk-dark-ocher)] px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex-1">
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-transparent text-xl font-bold text-[var(--totk-light-ocher)] focus:outline-none"
+              className="w-full bg-transparent text-lg font-bold text-[var(--totk-light-ocher)] focus:outline-none sm:text-xl"
               placeholder="Task title..."
               maxLength={200}
             />
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--botw-pale)]">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--botw-pale)]">
               <span>in list <strong>{COLUMNS.find((c) => c.id === column)?.label}</strong></span>
               {task?.completedBy && (
                 <span className="flex items-center gap-1 text-green-400">
                   <i className="fa-solid fa-circle-check" />
-                  Completed by <strong>{task.completedBy.username}</strong>
+                  <span className="hidden xs:inline">Completed by</span> <strong>{task.completedBy.username}</strong>
                   {task.completedAt && (
-                    <span className="opacity-70">
+                    <span className="hidden opacity-70 sm:inline">
                       on {new Date(task.completedAt).toLocaleDateString()}
                     </span>
                   )}
@@ -862,16 +927,16 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
               )}
             </div>
           </div>
-          <button onClick={handleClose} className="ml-4 text-[var(--botw-pale)] hover:text-[var(--totk-light-ocher)]">
+          <button onClick={handleClose} className="ml-2 p-2 text-[var(--botw-pale)] hover:text-[var(--totk-light-ocher)] sm:ml-4">
             <i className="fa-solid fa-xmark text-xl" />
           </button>
         </div>
 
-        <div className="flex flex-col gap-6 p-6 lg:flex-row">
+        <div className="flex flex-col gap-4 p-4 sm:gap-6 sm:p-6 lg:flex-row">
           {/* Main Content */}
-          <div className="flex-1 space-y-6">
+          <div className="flex-1 space-y-4 sm:space-y-6">
             {/* Description */}
-            <div className="rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[#1a1615]/50 p-4">
+            <div className="rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[#1a1615]/50 p-3 sm:p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="flex items-center gap-2 text-sm font-semibold text-[var(--totk-light-ocher)]">
                   <i className="fa-solid fa-align-left" /> Description
@@ -1159,7 +1224,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
           </div>
 
           {/* Sidebar */}
-          <div className="w-full space-y-3 lg:w-48">
+          <div className="w-full space-y-3 lg:w-56">
             <h5 className="text-xs font-medium uppercase tracking-wide text-[var(--botw-pale)] opacity-70">
               Add to card
             </h5>
@@ -1304,8 +1369,8 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
 
             <hr className="border-[var(--totk-dark-ocher)]" />
 
-            {/* Actions */}
-            <div className="space-y-2">
+            {/* Actions - hidden on mobile, shown in sidebar on desktop */}
+            <div className="hidden space-y-2 lg:block">
               <button
                 onClick={handleSubmit}
                 disabled={saving || !title.trim()}
@@ -1325,6 +1390,34 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
               )}
             </div>
           </div>
+        </div>
+
+        {/* Mobile Sticky Footer Actions */}
+        <div className="sticky bottom-0 flex gap-2 border-t-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-3 lg:hidden">
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !title.trim()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--totk-light-green)] px-4 py-3 text-sm font-medium text-[var(--totk-brown)] hover:bg-[var(--totk-light-green)]/80 disabled:opacity-50"
+          >
+            <i className="fa-solid fa-check" />
+            {saving ? "Saving..." : isNew ? "Create" : "Save"}
+          </button>
+
+          {!isNew && onDelete && (
+            <button
+              onClick={onDelete}
+              className="flex items-center justify-center gap-2 rounded-lg border-2 border-red-500/50 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/20"
+            >
+              <i className="fa-solid fa-trash-can" />
+            </button>
+          )}
+
+          <button
+            onClick={handleClose}
+            className="flex items-center justify-center gap-2 rounded-lg border-2 border-[var(--totk-dark-ocher)] px-4 py-3 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
+          >
+            <i className="fa-solid fa-xmark" />
+          </button>
         </div>
         </div>
       </div>
@@ -1627,51 +1720,51 @@ export default function AdminTodoPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-black)]/30 px-4 py-3">
+      <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-black)]/30 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:px-4">
         {/* View Toggle */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-[var(--botw-pale)]">View:</span>
-          <div className="flex rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50">
+          <span className="hidden text-sm text-[var(--botw-pale)] sm:inline">View:</span>
+          <div className="flex flex-1 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50 sm:flex-none">
             <button
               onClick={() => setViewMode("kanban")}
-              className={`flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 text-sm transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors sm:flex-none sm:py-1.5 ${
                 viewMode === "kanban"
                   ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
                   : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
               }`}
             >
               <i className="fa-solid fa-columns" />
-              Board
+              <span className="hidden xs:inline">Board</span>
             </button>
             <button
               onClick={() => setViewMode("table")}
-              className={`flex items-center gap-1.5 rounded-r-lg px-3 py-1.5 text-sm transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors sm:flex-none sm:py-1.5 ${
                 viewMode === "table"
                   ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
                   : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
               }`}
             >
               <i className="fa-solid fa-table-list" />
-              Table
+              <span className="hidden xs:inline">Table</span>
             </button>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--botw-pale)]">
             <input
               type="checkbox"
               checked={showMyTasksOnly}
               onChange={(e) => setShowMyTasksOnly(e.target.checked)}
-              className="h-4 w-4 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)] focus:ring-offset-0"
+              className="h-5 w-5 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)] focus:ring-offset-0 sm:h-4 sm:w-4"
             />
-            <span>My Tasks Only</span>
+            <span>My Tasks</span>
           </label>
           
           {showMyTasksOnly && (
             <span className="text-xs text-[var(--botw-pale)] opacity-70">
-              Showing {filteredTasks.length} of {tasks.length} tasks
+              {filteredTasks.length}/{tasks.length}
             </span>
           )}
         </div>
@@ -1704,7 +1797,7 @@ export default function AdminTodoPage() {
           <Loading message="Loading tasks..." variant="inline" size="lg" />
         </div>
       ) : viewMode === "kanban" ? (
-        /* Kanban Board */
+        /* Kanban Board - horizontally scrollable on mobile */
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -1712,16 +1805,18 @@ export default function AdminTodoPage() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex w-full gap-4 pb-4">
-            {COLUMNS.map((column) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                tasks={tasksByColumn[column.id]}
-                onTaskClick={handleTaskClick}
-                onAddTask={handleAddTask}
-              />
-            ))}
+          <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-0 sm:px-0">
+            <div className="flex w-max gap-3 sm:w-full sm:gap-4">
+              {COLUMNS.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  tasks={tasksByColumn[column.id]}
+                  onTaskClick={handleTaskClick}
+                  onAddTask={handleAddTask}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Drag Overlay */}
