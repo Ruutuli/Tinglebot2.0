@@ -5991,7 +5991,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         location: locationMove,
         nextCharacter: party.characters[party.currentTurn] ?? null,
         showNextAndCommands: true,
-        showRestSecureMove: false,
+        showMoveToUnexploredOnly: true,
         hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
       });
        return interaction.editReply({ embeds: [cantLeaveEmbed] });
@@ -6081,6 +6081,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
     party.square = newLocation.square;
     party.quadrant = newLocation.quadrant;
+    party.lastCampedAtQuadrant = null;
+    party.markModified("lastCampedAtQuadrant");
     // DESIGN: Quadrant stays UNEXPLORED until the party gets the "Quadrant Explored!" prompt (roll outcome "explored").
     // Do NOT mark quadrant as explored on move — only the roll outcome "explored" marks it and updates the map. Fog of war is lifted for the current quadrant on the dashboard when the party moves there; status remains unexplored until the prompt.
     party.quadrantState = destinationQuadrantState;
@@ -6758,9 +6760,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      await endExplorationRaidAsRetreat(raid, interaction.client);
      character.failedFleeAttempts = 0;
      if (!EXPLORATION_TESTING_MODE) await character.save();
-     // Add raid_over (notifyExpeditionRaidOver skips party save for 'fled' to avoid double-dip)
-     pushProgressLog(party, "Raid", "raid_over", `The party escaped from ${raid.monster?.name || "the monster"}! Continue the expedition.`, undefined, undefined, new Date());
+     // Log retreat attempt first, then raid_over outcome
      pushProgressLog(party, character.name, "retreat", "Party attempted to retreat and escaped.", undefined, retreatCostsForLog);
+     pushProgressLog(party, "Raid", "raid_over", `The party escaped from ${raid.monster?.name || "the monster"}! Continue the expedition.`, undefined, undefined, new Date());
      party.currentTurn = (party.currentTurn + 1) % (party.characters?.length || 1);
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      const monsterName = raid.monster?.name || "the monster";
@@ -6905,6 +6907,29 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
 
     const isSecured = party.quadrantState === "secured";
+    // In a secured quadrant, only allow one camp per visit; they must move before camping here again.
+    if (isSecured && party.lastCampedAtQuadrant &&
+     String(party.lastCampedAtQuadrant.square || "").toUpperCase() === String(party.square || "").toUpperCase() &&
+     String(party.lastCampedAtQuadrant.quadrant || "").toUpperCase() === String(party.quadrant || "").toUpperCase()) {
+     const locationCampBlock = `${party.square} ${party.quadrant}`;
+     const alreadyCampedEmbed = new EmbedBuilder()
+      .setTitle("🏕️ **Already camped here**")
+      .setColor(getExploreOutcomeColor("camp", regionColors[party.region] || "#4CAF50"))
+      .setDescription(
+       `You've already camped here! It's time to move on.\n\nUse **Move** to go to another quadrant—you can come back and camp here again later.`
+      )
+      .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     addExplorationStandardFields(alreadyCampedEmbed, {
+      party,
+      expeditionId: expeditionId || party.partyId,
+      location: locationCampBlock,
+      nextCharacter: party.characters[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: true,
+      hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+     });
+     return interaction.editReply({ embeds: [alreadyCampedEmbed] });
+    }
     // Camp cost: unexplored = 2, explored = 1, secured = 0.
     const baseCampCost = party.quadrantState === "secured" ? 0 : party.quadrantState === "explored" ? 1 : 2;
     
@@ -7171,6 +7196,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      costsForLog
     );
 
+    if (isSecured) {
+     party.lastCampedAtQuadrant = { square: party.square, quadrant: party.quadrant };
+     party.markModified("lastCampedAtQuadrant");
+    }
     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
     await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 

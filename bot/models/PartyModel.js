@@ -92,6 +92,8 @@ const PartySchema = new Schema({
   finalLocation: { square: { type: String }, quadrant: { type: String } },
   /** Timestamp when expedition ended. */
   endedAt: { type: Date },
+  /** Secured quadrant where the party last camped; used to block consecutive /camp in same quadrant until they move. */
+  lastCampedAtQuadrant: { square: { type: String }, quadrant: { type: String } },
 });
 
 /** Find party by partyId, excluding cancelled and open parties older than 24h (ghost explores). */

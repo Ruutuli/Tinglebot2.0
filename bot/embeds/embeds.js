@@ -730,7 +730,8 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
  if (showMoveToUnexploredOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
   const cmdCamp = `</explore camp:${cmdId}>`;
-  commandsValue += `${cmdRoll} · ${cmdItem} · ${cmdCamp}\nid: \`${expId || "—"}\` char: **${nextName}**`;
+  const cmdMove = `</explore move:${cmdId}>`;
+  commandsValue += `${cmdRoll} · ${cmdItem} · ${cmdCamp} · ${cmdMove}\nid: \`${expId || "—"}\` char: **${nextName}**`;
  } else if (showSecuredQuadrantOnly === true) {
   const cmdCamp = `</explore camp:${cmdId}>`;
   const cmdMove = `</explore move:${cmdId}>`;

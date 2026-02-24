@@ -56,24 +56,24 @@ class MapModule {
                 addSquare(colIndex + 1, rowIndex - 1, 'Q3', '↗ North-east');
                 break;
             case 'Q3':
-                // Bottom-left: same square Q1, Q4, Q2; south = below Q1,Q2; west = left square Q2,Q4; south-west = below-left Q2
+                // Bottom-left: same square Q1, Q4, Q2; south = below Q1,Q2; west = left square Q4; north-west = left Q2; south-west = below-left Q2
                 addSquare(colIndex, rowIndex, 'Q1', '↑ North (same square)');
                 addSquare(colIndex, rowIndex, 'Q4', '→ East (same square)');
                 addSquare(colIndex, rowIndex, 'Q2', '↗ North-east (same square)');
                 addSquare(colIndex, rowIndex + 1, 'Q1', '↓ South');
                 addSquare(colIndex, rowIndex + 1, 'Q2', '↘ South-east');
-                addSquare(colIndex - 1, rowIndex, 'Q2', '← West');
-                addSquare(colIndex - 1, rowIndex, 'Q4', '↙ South-west');
+                addSquare(colIndex - 1, rowIndex, 'Q2', '↖ North-west');
+                addSquare(colIndex - 1, rowIndex, 'Q4', '← West');
                 addSquare(colIndex - 1, rowIndex + 1, 'Q2', '↙ South-west');
                 break;
             case 'Q4':
-                // Bottom-right: same square Q2, Q3, Q1; south = below Q1,Q2; east = right square Q1,Q3; south-east = below-right Q1
+                // Bottom-right: same square Q2, Q3, Q1; south = below Q1,Q2; east = right square Q3; north-east = right Q1; south-east = below-right Q1
                 addSquare(colIndex, rowIndex, 'Q2', '↑ North (same square)');
                 addSquare(colIndex, rowIndex, 'Q3', '← West (same square)');
                 addSquare(colIndex, rowIndex, 'Q1', '↖ North-west (same square)');
                 addSquare(colIndex, rowIndex + 1, 'Q1', '↙ South-west');
                 addSquare(colIndex, rowIndex + 1, 'Q2', '↓ South');
-                addSquare(colIndex + 1, rowIndex, 'Q1', '→ East');
+                addSquare(colIndex + 1, rowIndex, 'Q1', '↗ North-east');
                 addSquare(colIndex + 1, rowIndex, 'Q3', '→ East');
                 addSquare(colIndex + 1, rowIndex + 1, 'Q1', '↘ South-east');
                 break;
