@@ -2423,8 +2423,8 @@ async function modTodoReminder(client, _data = {}) {
           messageOptions.content = mentions;
         } else {
           // No assignees - @ the mod role instead
-          messageOptions.content = `<@&${MOD_ROLE_ID}> Someone needs to claim this task!`;
-          embed.addFields({ name: '⚠️ Unassigned', value: 'Please assign yourself to this task and set an appropriate due date.', inline: false });
+          messageOptions.content = `<@&${MOD_ROLE_ID}> This is an unclaimed task on the dashboard!`;
+          embed.addFields({ name: '⚠️ Unassigned', value: 'Please claim responsibility and take the lead on this task.', inline: false });
         }
         
         // Reply to original message if we have it
@@ -2758,7 +2758,7 @@ const TASKS = [
   { name: 'cleanup-boost-expirations', cron: '0 * * * *', handler: cleanupBoostExpirations }, // Every hour
   { name: 'blight-expiration-warnings', cron: '0 */6 * * *', handler: blightExpirationWarnings }, // Every 6 hours
   { name: 'submission-mod-reminder', cron: '0 * * * *', handler: submissionModReminder }, // Every hour - @mods if art/writing pending 12+ hours
-  { name: 'mod-todo-reminder', cron: '*/5 * * * *', handler: modTodoReminder }, // Every 5 minutes (TESTING) - channel reminders for overdue/due-soon mod tasks
+  { name: 'mod-todo-reminder', cron: '*/30 * * * *', handler: modTodoReminder }, // Every 30 minutes - channel reminders for overdue/due-soon mod tasks
 
   // Relic Deadline Tasks
   { name: 'relic-appraisal-deadline', cron: '0 6 * * *', handler: relicAppraisalDeadline }, // Daily 6am UTC: deteriorate unappraised relics past 7 days

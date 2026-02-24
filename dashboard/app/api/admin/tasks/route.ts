@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
     }
 
     const assignees: Assignee[] = [];
-    if (Array.isArray(body.assignees)) {
+    if (Array.isArray(body.assignees) && body.assignees.length > 0) {
       for (const a of body.assignees) {
         if (a && typeof a.discordId === "string" && typeof a.username === "string") {
           assignees.push({
@@ -195,6 +195,13 @@ export async function POST(req: NextRequest) {
           });
         }
       }
+    } else {
+      // Auto-assign to the creator if no assignees provided
+      assignees.push({
+        discordId: user.id,
+        username: user.username ?? "Unknown",
+        avatar: user.avatar ?? null,
+      });
     }
 
     const isRepeating = Boolean(body.isRepeating);
