@@ -12,6 +12,11 @@ const logger = require('@/utils/logger');
 // Category ID where reactions should be monitored
 const MOD_TODO_CATEGORY_ID = '606126567302627329';
 
+// Additional channel IDs to monitor (outside the category)
+const MONITORED_CHANNEL_IDS = [
+    '606004405128527873'
+];
+
 // Reaction emojis
 const PIN_EMOJI = '📌';
 const COMPLETE_EMOJI = '⭕';
@@ -24,10 +29,15 @@ const DEFAULT_DUE_HOURS = 12;
 // ============================================================================
 
 /**
- * Check if a channel is in the monitored category
+ * Check if a channel is in the monitored category or is a monitored channel
  */
 async function isInMonitoredCategory(channel) {
     if (!channel) return false;
+    
+    // Check if channel is in the explicitly monitored list
+    if (MONITORED_CHANNEL_IDS.includes(channel.id)) {
+        return true;
+    }
     
     // Direct channel in category
     if (channel.parentId === MOD_TODO_CATEGORY_ID) {
@@ -36,6 +46,11 @@ async function isInMonitoredCategory(channel) {
     
     // Thread in a channel that's in the category
     if (channel.isThread() && channel.parent) {
+        // Check if parent channel is in monitored list
+        if (MONITORED_CHANNEL_IDS.includes(channel.parent.id)) {
+            return true;
+        }
+        // Check if parent is in monitored category
         return channel.parent.parentId === MOD_TODO_CATEGORY_ID;
     }
     

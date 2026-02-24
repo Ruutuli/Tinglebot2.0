@@ -501,6 +501,98 @@ function TableView({ tasks, onTaskClick }: TableViewProps) {
 }
 
 // ============================================================================
+// Markdown Rendering Helper
+// ============================================================================
+
+function renderInlineMarkdown(text: string): React.ReactNode {
+  if (!text) return text;
+  
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+  
+  while (remaining.length > 0) {
+    // Links [text](url)
+    const linkMatch = remaining.match(/^(.*?)\[([^\]]+)\]\(([^)]+)\)(.*)$/);
+    if (linkMatch) {
+      if (linkMatch[1]) parts.push(renderInlineMarkdown(linkMatch[1]));
+      parts.push(
+        <a key={key++} href={linkMatch[3]} target="_blank" rel="noopener noreferrer" 
+           className="text-[var(--totk-light-green)] underline hover:text-[var(--botw-pale)]">
+          {linkMatch[2]}
+        </a>
+      );
+      remaining = linkMatch[4];
+      continue;
+    }
+    
+    // Bold **text**
+    const boldMatch = remaining.match(/^(.*?)\*\*([^*]+)\*\*(.*)$/);
+    if (boldMatch) {
+      if (boldMatch[1]) parts.push(boldMatch[1]);
+      parts.push(<strong key={key++} className="font-semibold text-[var(--totk-light-ocher)]">{boldMatch[2]}</strong>);
+      remaining = boldMatch[3];
+      continue;
+    }
+    
+    // Bold __text__
+    const boldMatch2 = remaining.match(/^(.*?)__([^_]+)__(.*)$/);
+    if (boldMatch2) {
+      if (boldMatch2[1]) parts.push(boldMatch2[1]);
+      parts.push(<strong key={key++} className="font-semibold text-[var(--totk-light-ocher)]">{boldMatch2[2]}</strong>);
+      remaining = boldMatch2[3];
+      continue;
+    }
+    
+    // Italic *text*
+    const italicMatch = remaining.match(/^(.*?)\*([^*]+)\*(.*)$/);
+    if (italicMatch && !italicMatch[1].endsWith('*') && !italicMatch[3].startsWith('*')) {
+      if (italicMatch[1]) parts.push(italicMatch[1]);
+      parts.push(<em key={key++} className="italic">{italicMatch[2]}</em>);
+      remaining = italicMatch[3];
+      continue;
+    }
+    
+    // Italic _text_
+    const italicMatch2 = remaining.match(/^(.*?)_([^_]+)_(.*)$/);
+    if (italicMatch2 && !italicMatch2[1].endsWith('_') && !italicMatch2[3].startsWith('_')) {
+      if (italicMatch2[1]) parts.push(italicMatch2[1]);
+      parts.push(<em key={key++} className="italic">{italicMatch2[2]}</em>);
+      remaining = italicMatch2[3];
+      continue;
+    }
+    
+    // Strikethrough ~~text~~
+    const strikeMatch = remaining.match(/^(.*?)~~([^~]+)~~(.*)$/);
+    if (strikeMatch) {
+      if (strikeMatch[1]) parts.push(strikeMatch[1]);
+      parts.push(<span key={key++} className="line-through opacity-60">{strikeMatch[2]}</span>);
+      remaining = strikeMatch[3];
+      continue;
+    }
+    
+    // Inline code `code`
+    const codeMatch = remaining.match(/^(.*?)`([^`]+)`(.*)$/);
+    if (codeMatch) {
+      if (codeMatch[1]) parts.push(codeMatch[1]);
+      parts.push(
+        <code key={key++} className="rounded bg-[var(--totk-dark-ocher)]/50 px-1.5 py-0.5 font-mono text-xs text-[var(--totk-light-green)]">
+          {codeMatch[2]}
+        </code>
+      );
+      remaining = codeMatch[3];
+      continue;
+    }
+    
+    // No more matches, add remaining text
+    parts.push(remaining);
+    break;
+  }
+  
+  return parts.length === 1 ? parts[0] : <>{parts}</>;
+}
+
+// ============================================================================
 // Task Modal Component (Trello-style)
 // ============================================================================
 
@@ -521,7 +613,16 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
   const [editingDescription, setEditingDescription] = useState(isNew);
   const [column, setColumn] = useState<Column>(task?.column ?? defaultColumn ?? "todo");
   const [priority, setPriority] = useState<Priority>(task?.priority ?? "medium");
-  const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split("T")[0] : "");
+  const [dueDate, setDueDate] = useState(() => {
+    if (!task?.dueDate) return "";
+    const d = new Date(task.dueDate);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  });
   const [assignees, setAssignees] = useState<Assignee[]>(task?.assignees ?? []);
   const [isRepeating, setIsRepeating] = useState(task?.isRepeating ?? false);
   const [frequency, setFrequency] = useState<Frequency>(task?.repeatConfig?.frequency ?? "weekly");
@@ -548,7 +649,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
         description: description.trim(),
         column,
         priority,
-        dueDate: dueDate || null,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         assignees,
         isRepeating,
         repeatConfig: isRepeating ? { frequency } : null,
@@ -711,18 +812,69 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                   className="cursor-pointer rounded-lg bg-[#0d0c0b] p-4 transition-colors hover:bg-[var(--totk-dark-ocher)]/20"
                 >
                   {description ? (
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--botw-pale)]">
+                    <div className="prose-sm text-sm leading-relaxed text-[var(--botw-pale)]">
                       {description.split('\n').map((line, i) => {
-                        if (line.startsWith('**') && line.endsWith('**')) {
-                          return <p key={i} className="font-semibold text-[var(--totk-light-ocher)]">{line.replace(/\*\*/g, '')}</p>;
-                        }
-                        if (line.match(/^\d+\.\s/)) {
-                          return <p key={i} className="ml-4 text-[var(--botw-pale)]">{line}</p>;
-                        }
+                        // Empty line = paragraph break
                         if (line.trim() === '') {
                           return <br key={i} />;
                         }
-                        return <p key={i}>{line}</p>;
+                        
+                        // Headers (# ## ###)
+                        const h1Match = line.match(/^#\s+(.+)$/);
+                        if (h1Match) {
+                          return <h3 key={i} className="mt-3 mb-1 text-base font-bold text-[var(--totk-light-ocher)]">{h1Match[1]}</h3>;
+                        }
+                        const h2Match = line.match(/^##\s+(.+)$/);
+                        if (h2Match) {
+                          return <h4 key={i} className="mt-2 mb-1 text-sm font-bold text-[var(--totk-light-ocher)]">{h2Match[1]}</h4>;
+                        }
+                        const h3Match = line.match(/^###\s+(.+)$/);
+                        if (h3Match) {
+                          return <h5 key={i} className="mt-2 mb-1 text-sm font-semibold text-[var(--totk-light-ocher)]">{h3Match[1]}</h5>;
+                        }
+                        
+                        // Full bold line
+                        if (line.startsWith('**') && line.endsWith('**')) {
+                          return <p key={i} className="font-semibold text-[var(--totk-light-ocher)]">{line.slice(2, -2)}</p>;
+                        }
+                        
+                        // Bullet list (- or *)
+                        const bulletMatch = line.match(/^[\-\*]\s+(.+)$/);
+                        if (bulletMatch) {
+                          return <p key={i} className="ml-4 before:content-['•'] before:mr-2 before:text-[var(--totk-light-green)]">{renderInlineMarkdown(bulletMatch[1])}</p>;
+                        }
+                        
+                        // Numbered list
+                        const numMatch = line.match(/^(\d+)\.\s+(.+)$/);
+                        if (numMatch) {
+                          return <p key={i} className="ml-4"><span className="mr-2 text-[var(--totk-light-green)]">{numMatch[1]}.</span>{renderInlineMarkdown(numMatch[2])}</p>;
+                        }
+                        
+                        // Checkbox unchecked [ ]
+                        const uncheckedMatch = line.match(/^\[[\s]\]\s+(.+)$/);
+                        if (uncheckedMatch) {
+                          return <p key={i} className="ml-4 flex items-center gap-2"><span className="text-[var(--botw-pale)] opacity-50">☐</span>{renderInlineMarkdown(uncheckedMatch[1])}</p>;
+                        }
+                        
+                        // Checkbox checked [x]
+                        const checkedMatch = line.match(/^\[[xX]\]\s+(.+)$/);
+                        if (checkedMatch) {
+                          return <p key={i} className="ml-4 flex items-center gap-2 line-through opacity-60"><span className="text-[var(--totk-light-green)]">☑</span>{renderInlineMarkdown(checkedMatch[1])}</p>;
+                        }
+                        
+                        // Blockquote
+                        const quoteMatch = line.match(/^>\s*(.*)$/);
+                        if (quoteMatch) {
+                          return <p key={i} className="ml-2 border-l-2 border-[var(--totk-dark-ocher)] pl-3 italic text-[var(--botw-pale)] opacity-80">{renderInlineMarkdown(quoteMatch[1])}</p>;
+                        }
+                        
+                        // Horizontal rule
+                        if (line.match(/^[-_*]{3,}$/)) {
+                          return <hr key={i} className="my-2 border-[var(--totk-dark-ocher)]" />;
+                        }
+                        
+                        // Regular paragraph with inline markdown
+                        return <p key={i}>{renderInlineMarkdown(line)}</p>;
                       })}
                     </div>
                   ) : (
@@ -961,17 +1113,17 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
               </div>
             )}
 
-            {/* Due Date */}
+            {/* Due Date & Time */}
             <div>
               <label className="mb-1 flex items-center gap-2 text-sm text-[var(--botw-pale)]">
                 <i className="fa-solid fa-clock" />
-                Due Date
+                Due Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none [color-scheme:dark]"
               />
             </div>
 

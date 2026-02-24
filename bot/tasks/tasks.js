@@ -2293,7 +2293,10 @@ async function submissionModReminder(client, _data = {}) {
 }
 
 // ------------------- mod-todo-reminder (Every 30 minutes) -------------------
-// Sends DM reminders for mod tasks that are overdue or due soon
+// Sends channel reminders for mod tasks that are overdue or due soon
+// Posts in the original channel (replying to original message) or fallback channel
+const MOD_TODO_FALLBACK_CHANNEL = '658148069212422194';
+
 async function modTodoReminder(client, _data = {}) {
   if (!client) {
     logger.error('SCHEDULED', 'mod-todo-reminder: Discord client not available');
@@ -2305,7 +2308,7 @@ async function modTodoReminder(client, _data = {}) {
     
     const { connectToTinglebot } = require('@/database/db');
     const ModTask = require('@/models/ModTaskModel');
-    const { sendDiscordDM } = require('@/utils/notificationService');
+    const { EmbedBuilder } = require('discord.js');
     
     await connectToTinglebot();
     
@@ -2328,6 +2331,14 @@ async function modTodoReminder(client, _data = {}) {
     
     let remindersSent = 0;
     
+    // Get fallback channel
+    let fallbackChannel = null;
+    try {
+      fallbackChannel = await client.channels.fetch(MOD_TODO_FALLBACK_CHANNEL);
+    } catch (err) {
+      logger.warn('SCHEDULED', `mod-todo-reminder: Could not fetch fallback channel: ${err.message}`);
+    }
+    
     for (const task of tasksNeedingReminders) {
       // Skip tasks with no assignees
       if (!task.assignees || task.assignees.length === 0) {
@@ -2337,58 +2348,86 @@ async function modTodoReminder(client, _data = {}) {
       const isOverdue = task.dueDate < now;
       const dueDateTimestamp = Math.floor(task.dueDate.getTime() / 1000);
       
-      // Build the embed
-      const embed = {
-        title: isOverdue ? '⚠️ Overdue Task Reminder' : '⏰ Task Due Soon',
-        description: task.title,
-        color: isOverdue ? 0xff4444 : 0xffaa00,
-        fields: [
-          {
-            name: 'Due',
-            value: `<t:${dueDateTimestamp}:R>`,
-            inline: true
-          },
-          {
-            name: 'Priority',
-            value: task.priority.charAt(0).toUpperCase() + task.priority.slice(1),
-            inline: true
-          }
-        ],
-        timestamp: new Date().toISOString(),
-        footer: { text: 'Mod Todo List' }
-      };
+      // Build mentions string for all assignees
+      const mentions = task.assignees.map(a => `<@${a.discordId}>`).join(' ');
       
-      // Add link to original message if available
-      if (task.discordSource?.messageUrl) {
-        embed.fields.push({
-          name: 'Source',
-          value: `[View Message](${task.discordSource.messageUrl})`,
-          inline: true
-        });
-      }
+      // Build the embed
+      const embed = new EmbedBuilder()
+        .setTitle(isOverdue ? '⚠️ Overdue Task Reminder' : '⏰ Task Due Soon')
+        .setDescription(task.title)
+        .setColor(isOverdue ? 0xff4444 : 0xffaa00)
+        .addFields(
+          { name: 'Due', value: `<t:${dueDateTimestamp}:R>`, inline: true },
+          { name: 'Priority', value: task.priority.charAt(0).toUpperCase() + task.priority.slice(1), inline: true }
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Mod Todo List' });
       
       // Add description preview if exists
       if (task.description && task.description.length > 0) {
         const preview = task.description.length > 200 
           ? task.description.substring(0, 197) + '...' 
           : task.description;
-        embed.fields.push({
-          name: 'Description',
-          value: preview,
-          inline: false
-        });
+        embed.addFields({ name: 'Description', value: preview, inline: false });
       }
       
-      // Send DM to each assignee
-      for (const assignee of task.assignees) {
+      // Determine where to send the reminder
+      let targetChannel = null;
+      let replyToMessageId = null;
+      
+      // Try to use the original channel and message
+      if (task.discordSource?.channelId) {
         try {
-          await sendDiscordDM(assignee.discordId, embed);
-          remindersSent++;
-          // Small delay between DMs to avoid rate limits
-          await new Promise(resolve => setTimeout(resolve, 500));
+          targetChannel = await client.channels.fetch(task.discordSource.channelId);
+          if (task.discordSource?.messageId) {
+            replyToMessageId = task.discordSource.messageId;
+          }
         } catch (err) {
-          logger.warn('SCHEDULED', `mod-todo-reminder: Failed to DM ${assignee.discordId}: ${err.message}`);
+          logger.warn('SCHEDULED', `mod-todo-reminder: Could not fetch source channel ${task.discordSource.channelId}: ${err.message}`);
         }
+      }
+      
+      // Fall back to the default channel if no source channel
+      if (!targetChannel) {
+        targetChannel = fallbackChannel;
+        // Add source link if we're posting in fallback but have a message URL
+        if (task.discordSource?.messageUrl) {
+          embed.addFields({ name: 'Source', value: `[View Original Message](${task.discordSource.messageUrl})`, inline: false });
+        }
+      }
+      
+      if (!targetChannel) {
+        logger.warn('SCHEDULED', `mod-todo-reminder: No channel available for task ${task._id}`);
+        continue;
+      }
+      
+      try {
+        // Send the reminder with mentions
+        const messageOptions = {
+          content: mentions,
+          embeds: [embed]
+        };
+        
+        // Reply to original message if we have it
+        if (replyToMessageId) {
+          try {
+            const originalMessage = await targetChannel.messages.fetch(replyToMessageId);
+            await originalMessage.reply(messageOptions);
+          } catch (replyErr) {
+            // If we can't reply (message deleted?), just send normally
+            logger.warn('SCHEDULED', `mod-todo-reminder: Could not reply to message ${replyToMessageId}, sending normally`);
+            await targetChannel.send(messageOptions);
+          }
+        } else {
+          await targetChannel.send(messageOptions);
+        }
+        
+        remindersSent++;
+        
+        // Small delay between messages to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (err) {
+        logger.warn('SCHEDULED', `mod-todo-reminder: Failed to send reminder for task ${task._id}: ${err.message}`);
       }
       
       // Update lastReminderSent
