@@ -92,6 +92,17 @@ function calculateNextDue(frequency: Frequency, fromDate: Date = new Date()): Da
 }
 
 /**
+ * Build a Discord CDN avatar URL from user ID and avatar hash
+ */
+function buildAvatarUrl(userId: string, avatarHash: string | null): string | undefined {
+  if (!avatarHash) return undefined;
+  if (avatarHash.startsWith("http://") || avatarHash.startsWith("https://")) {
+    return avatarHash;
+  }
+  return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png`;
+}
+
+/**
  * Send a comment to Discord - either as a reply to the original message,
  * or as a standalone message in the fallback channel
  */
@@ -106,6 +117,8 @@ async function postCommentToDiscord(
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://tinglebot.xyz").replace(/\/$/, "");
     const taskUrl = `${baseUrl}/admin/todo?task=${taskId}`;
 
+    const avatarUrl = buildAvatarUrl(comment.author.discordId, comment.author.avatar ?? null);
+
     const embed = {
       title: `📋 ${taskTitle}`,
       url: taskUrl,
@@ -113,7 +126,7 @@ async function postCommentToDiscord(
       color: 0x49d59c, // Green accent
       author: {
         name: `${comment.author.username} commented`,
-        icon_url: comment.author.avatar || undefined,
+        icon_url: avatarUrl,
       },
       footer: {
         text: "Click the title to view task",
@@ -155,6 +168,7 @@ async function postChecklistUpdateToDiscord(
   channelId: string,
   messageId: string | null,
   itemText: string,
+  userId: string,
   username: string,
   userAvatar: string | null,
   taskTitle: string,
@@ -167,6 +181,8 @@ async function postChecklistUpdateToDiscord(
     const percent = checklistProgress.total > 0 
       ? Math.round((checklistProgress.done / checklistProgress.total) * 100) 
       : 0;
+
+    const avatarUrl = buildAvatarUrl(userId, userAvatar);
 
     const embed = {
       title: `📋 ${taskTitle}`,
@@ -182,7 +198,7 @@ async function postChecklistUpdateToDiscord(
       ],
       footer: {
         text: "Click the title to view task",
-        icon_url: userAvatar || undefined,
+        icon_url: avatarUrl,
       },
       timestamp: new Date().toISOString(),
     };
@@ -580,6 +596,7 @@ export async function PUT(
             channelId,
             messageId,
             itemText,
+            user.id,
             user.username || "Unknown",
             user.avatar || null,
             existingTask.title,
@@ -627,6 +644,7 @@ export async function PUT(
           channelId,
           messageId,
           itemText,
+          user.id,
           user.username || "Unknown",
           user.avatar || null,
           existingTask.title,

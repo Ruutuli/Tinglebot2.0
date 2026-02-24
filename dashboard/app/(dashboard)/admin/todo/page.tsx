@@ -174,7 +174,7 @@ function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
     <div
       onClick={onClick}
       className={`
-        group cursor-pointer rounded-lg border-2 border-l-4 p-3 transition-all
+        group cursor-pointer overflow-hidden rounded-lg border-2 border-l-4 p-3 transition-all
         ${isDragging ? "opacity-50" : "opacity-100"}
         border-[var(--totk-dark-ocher)] ${columnConfig?.leftBorder || ''} bg-[var(--botw-warm-black)]
         hover:border-[var(--totk-light-ocher)] hover:shadow-lg
@@ -347,21 +347,21 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
   });
 
   return (
-    <div className={`flex max-h-[calc(100vh-14rem)] min-w-[260px] flex-1 flex-col rounded-xl border-2 transition-colors sm:max-h-[calc(100vh-16rem)] sm:min-w-[200px] ${
+    <div className={`flex w-full flex-col rounded-xl border-2 transition-colors md:max-h-[calc(100vh-14rem)] md:min-w-[180px] md:flex-1 ${
       isOver ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10" : `${column.borderColor} bg-[var(--botw-black)]/50`
     }`}>
       {/* Column Header */}
-      <div className={`flex flex-shrink-0 items-center justify-between border-b-2 ${column.borderColor} ${column.bgColor} px-3 py-2 sm:px-4 sm:py-3`}>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <i className={`fa-solid ${column.icon} ${column.color} text-sm sm:text-base`} />
-          <h2 className={`text-sm font-semibold sm:text-base ${column.color}`}>{column.label}</h2>
-          <span className={`rounded-full ${column.bgColor} border ${column.borderColor} px-1.5 py-0.5 text-xs text-[var(--botw-pale)] sm:px-2`}>
+      <div className={`flex flex-shrink-0 items-center justify-between border-b-2 ${column.borderColor} ${column.bgColor} px-3 py-2.5 md:px-4 md:py-3`}>
+        <div className="flex items-center gap-2">
+          <i className={`fa-solid ${column.icon} ${column.color} text-base`} />
+          <h2 className={`text-sm font-semibold md:text-base ${column.color}`}>{column.label}</h2>
+          <span className={`rounded-full ${column.bgColor} border ${column.borderColor} px-2 py-0.5 text-xs text-[var(--botw-pale)]`}>
             {tasks.length}
           </span>
         </div>
         <button
           onClick={() => onAddTask(column.id)}
-          className={`rounded p-1.5 text-[var(--botw-pale)] transition-colors hover:${column.bgColor} hover:${column.color} sm:p-1`}
+          className={`no-min-touch-target rounded p-2 text-[var(--botw-pale)] transition-colors hover:${column.bgColor} hover:${column.color} md:p-1.5`}
           title="Add task"
         >
           <i className="fa-solid fa-plus" />
@@ -369,14 +369,14 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
       </div>
 
       {/* Task List */}
-      <div ref={setNodeRef} className="flex-1 space-y-2 overflow-y-auto p-2 sm:p-3" style={{ minHeight: "100px" }}>
+      <div ref={setNodeRef} className="space-y-2 p-2 md:flex-1 md:space-y-3 md:overflow-y-auto md:p-3" style={{ minHeight: "60px" }}>
         <SortableContext items={tasks.map((t) => t._id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <SortableTaskCard key={task._id} task={task} onClick={() => onTaskClick(task)} />
           ))}
         </SortableContext>
         {tasks.length === 0 && (
-          <p className="py-6 text-center text-sm text-[var(--botw-pale)] opacity-50 sm:py-8">
+          <p className="py-4 text-center text-sm text-[var(--botw-pale)] opacity-50 md:py-8">
             No tasks
           </p>
         )}
@@ -945,7 +945,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                 {!editingDescription && !isNew && description && (
                   <button
                     onClick={() => setEditingDescription(true)}
-                    className="rounded bg-[var(--totk-dark-ocher)]/50 px-3 py-1 text-xs font-medium text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]"
+                    className="rounded-lg bg-[var(--totk-dark-ocher)]/50 px-4 py-2 text-sm font-medium text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)] sm:px-3 sm:py-1 sm:text-xs"
                   >
                     <i className="fa-solid fa-pen mr-1" />
                     Edit
@@ -957,7 +957,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#0d0c0b] px-4 py-3 text-sm leading-relaxed text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#0d0c0b] px-4 py-3 text-base leading-relaxed text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none sm:text-sm"
                     placeholder="Add a more detailed description..."
                     rows={6}
                     maxLength={2000}
@@ -965,7 +965,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                   <div className="mt-3 flex gap-2">
                     <button
                       onClick={() => setEditingDescription(false)}
-                      className="rounded-lg bg-[var(--totk-light-green)] px-4 py-1.5 text-xs font-medium text-[var(--totk-brown)]"
+                      className="rounded-lg bg-[var(--totk-light-green)] px-5 py-2.5 text-sm font-medium text-[var(--totk-brown)] sm:px-4 sm:py-1.5 sm:text-xs"
                     >
                       Save
                     </button>
@@ -974,7 +974,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                         setDescription(task?.description ?? "");
                         setEditingDescription(false);
                       }}
-                      className="rounded-lg px-4 py-1.5 text-xs text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
+                      className="rounded-lg px-5 py-2.5 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50 sm:px-4 sm:py-1.5 sm:text-xs"
                     >
                       Cancel
                     </button>
@@ -1098,11 +1098,11 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                 {displayedChecklist.map((item) => (
                   <div
                     key={item._id}
-                    className="flex items-center gap-2 rounded px-2 py-1 hover:bg-[var(--totk-dark-ocher)]/30"
+                    className="group flex items-center gap-3 rounded px-2 py-2 hover:bg-[var(--totk-dark-ocher)]/30 sm:gap-2 sm:py-1"
                   >
                     <button
                       onClick={() => toggleChecklistItem(item._id)}
-                      className={`flex h-5 w-5 items-center justify-center rounded border-2 ${
+                      className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border-2 sm:h-5 sm:w-5 ${
                         item.checked
                           ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)] text-[var(--totk-brown)]"
                           : "border-[var(--totk-dark-ocher)]"
@@ -1119,28 +1119,28 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                     </span>
                     <button
                       onClick={() => removeChecklistItem(item._id)}
-                      className="text-[var(--botw-pale)] opacity-0 hover:text-red-400 group-hover:opacity-100"
+                      className="rounded p-1 text-[var(--botw-pale)] opacity-100 hover:bg-red-500/20 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100"
                     >
-                      <i className="fa-solid fa-xmark text-xs" />
+                      <i className="fa-solid fa-xmark text-sm sm:text-xs" />
                     </button>
                   </div>
                 ))}
               </div>
 
               {/* Add Checklist Item */}
-              <div className="mt-2 flex gap-2">
+              <div className="mt-3 flex gap-2 sm:mt-2">
                 <input
                   type="text"
                   value={newChecklistItem}
                   onChange={(e) => setNewChecklistItem(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addChecklistItem())}
-                  className="flex-1 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                  className="flex-1 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-3 text-base text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none sm:py-2 sm:text-sm"
                   placeholder="Add an item..."
                 />
                 <button
                   onClick={addChecklistItem}
                   disabled={!newChecklistItem.trim()}
-                  className="rounded-lg bg-[var(--totk-dark-ocher)] px-3 py-2 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/80 disabled:opacity-50"
+                  className="rounded-lg bg-[var(--totk-dark-ocher)] px-4 py-3 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/80 disabled:opacity-50 sm:px-3 sm:py-2"
                 >
                   Add
                 </button>
@@ -1149,17 +1149,17 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
 
             {/* Comments */}
             <div>
-              <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--botw-pale)]">
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--botw-pale)] sm:mb-2">
                 <i className="fa-solid fa-comment" /> Activity
               </h4>
 
               {/* Add Comment */}
-              <div className="mb-4 flex gap-2">
-                <div className="h-8 w-8 overflow-hidden rounded-full bg-[var(--totk-dark-ocher)]">
+              <div className="mb-4 flex gap-3 sm:gap-2">
+                <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-[var(--totk-dark-ocher)] sm:h-8 sm:w-8">
                   {currentUser?.avatar ? (
                     <img src={currentUser.avatar} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-[var(--botw-pale)]">
+                    <div className="flex h-full w-full items-center justify-center text-sm text-[var(--botw-pale)] sm:text-xs">
                       {currentUser?.username?.charAt(0).toUpperCase() ?? "?"}
                     </div>
                   )}
@@ -1168,14 +1168,14 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                   <textarea
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-3 text-base text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none sm:py-2 sm:text-sm"
                     placeholder="Write a comment..."
                     rows={2}
                   />
                   {newComment.trim() && (
                     <button
                       onClick={addComment}
-                      className="mt-2 rounded bg-[var(--totk-light-green)] px-3 py-1 text-xs font-medium text-[var(--totk-brown)]"
+                      className="mt-2 rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-sm font-medium text-[var(--totk-brown)] sm:px-3 sm:py-1 sm:text-xs"
                     >
                       Save
                     </button>
@@ -1184,21 +1184,21 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
               </div>
 
               {/* Comment List */}
-              <div className="space-y-3">
+              <div className="space-y-4 sm:space-y-3">
                 {comments.map((comment) => (
-                  <div key={comment._id} className="group flex gap-2">
-                    <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-[var(--totk-dark-ocher)]">
+                  <div key={comment._id} className="group flex gap-3 sm:gap-2">
+                    <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-[var(--totk-dark-ocher)] sm:h-8 sm:w-8">
                       {comment.author.avatar ? (
                         <img src={comment.author.avatar} alt="" className="h-full w-full object-cover" />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-[var(--botw-pale)]">
+                        <div className="flex h-full w-full items-center justify-center text-sm text-[var(--botw-pale)] sm:text-xs">
                           {comment.author.username.charAt(0).toUpperCase()}
                         </div>
                       )}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                           <span className="text-sm font-medium text-[var(--botw-pale)]">
                             {comment.author.username}
                           </span>
@@ -1208,13 +1208,13 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                         </div>
                         <button
                           onClick={() => deleteComment(comment._id)}
-                          className="rounded p-1 text-[var(--botw-pale)] opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+                          className="rounded p-2 text-[var(--botw-pale)] opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400 sm:p-1 sm:opacity-0 sm:group-hover:opacity-100"
                           title="Delete comment"
                         >
-                          <i className="fa-solid fa-trash-can text-xs" />
+                          <i className="fa-solid fa-trash-can text-sm sm:text-xs" />
                         </button>
                       </div>
-                      <p className="mt-1 rounded bg-[#1a1615] p-2 text-sm text-[var(--botw-pale)]">
+                      <p className="mt-1.5 rounded-lg bg-[#1a1615] p-3 text-sm text-[var(--botw-pale)] sm:mt-1 sm:p-2">
                         {comment.text}
                       </p>
                     </div>
@@ -1234,20 +1234,21 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
             <div className="relative">
               <button
                 onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
-                className="flex w-full items-center gap-2 rounded-lg bg-[var(--totk-dark-ocher)]/50 px-3 py-2 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]"
+                className="flex w-full items-center gap-2 rounded-lg bg-[var(--totk-dark-ocher)]/50 px-3 py-3 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)] sm:py-2"
               >
                 <i className="fa-solid fa-user" />
                 Members
+                <i className={`fa-solid fa-chevron-down ml-auto text-xs transition-transform ${showAssigneeDropdown ? "rotate-180" : ""}`} />
               </button>
               {showAssigneeDropdown && (
-                <div className="absolute left-0 right-0 z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615]">
+                <div className="absolute left-0 right-0 z-10 mt-1 max-h-60 overflow-y-auto rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] sm:max-h-48">
                   {mods.map((mod) => (
                     <button
                       key={mod.discordId}
                       onClick={() => toggleAssignee(mod)}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--totk-dark-ocher)]/50"
+                      className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[var(--totk-dark-ocher)]/50 sm:gap-2 sm:py-2"
                     >
-                      <div className="h-6 w-6 overflow-hidden rounded-full bg-[var(--totk-dark-ocher)]">
+                      <div className="h-8 w-8 overflow-hidden rounded-full bg-[var(--totk-dark-ocher)] sm:h-6 sm:w-6">
                         {mod.avatar ? (
                           <img src={mod.avatar} alt="" className="h-full w-full object-cover" />
                         ) : (
@@ -1268,11 +1269,11 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
 
             {/* Assigned Members Display */}
             {assignees.length > 0 && (
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5 sm:gap-1">
                 {assignees.map((a) => (
                   <div
                     key={a.discordId}
-                    className="h-8 w-8 overflow-hidden rounded-full border-2 border-[var(--botw-warm-black)] bg-[var(--totk-dark-ocher)]"
+                    className="h-10 w-10 overflow-hidden rounded-full border-2 border-[var(--botw-warm-black)] bg-[var(--totk-dark-ocher)] sm:h-8 sm:w-8"
                     title={a.username}
                   >
                     {a.avatar ? (
@@ -1289,7 +1290,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
 
             {/* Due Date & Time */}
             <div>
-              <label className="mb-1 flex items-center gap-2 text-sm text-[var(--botw-pale)]">
+              <label className="mb-1.5 flex items-center gap-2 text-sm text-[var(--botw-pale)] sm:mb-1">
                 <i className="fa-solid fa-clock" />
                 Due Date & Time
               </label>
@@ -1297,53 +1298,57 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                 type="datetime-local"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none [color-scheme:dark]"
+                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-3 text-base text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none sm:py-2 sm:text-sm [color-scheme:dark]"
               />
             </div>
 
-            {/* Column */}
-            <div>
-              <label className="mb-1 flex items-center gap-2 text-sm text-[var(--botw-pale)]">
-                <i className="fa-solid fa-columns" />
-                Column
-              </label>
-              <select
-                value={column}
-                onChange={(e) => setColumn(e.target.value as Column)}
-                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
-              >
-                {COLUMNS.map((col) => (
-                  <option key={col.id} value={col.id}>
-                    {col.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Column & Priority - Side by side on mobile */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-1">
+              {/* Column */}
+              <div>
+                <label className="mb-1.5 flex items-center gap-2 text-sm text-[var(--botw-pale)] sm:mb-1">
+                  <i className="fa-solid fa-columns" />
+                  Column
+                </label>
+                <select
+                  value={column}
+                  onChange={(e) => setColumn(e.target.value as Column)}
+                  className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-3 text-base text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none sm:py-2 sm:text-sm"
+                >
+                  {COLUMNS.map((col) => (
+                    <option key={col.id} value={col.id}>
+                      {col.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Priority */}
-            <div>
-              <label className="mb-1 flex items-center gap-2 text-sm text-[var(--botw-pale)]">
-                <i className="fa-solid fa-flag" />
-                Priority
-              </label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
-              >
-                {(["low", "medium", "high", "urgent"] as Priority[]).map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_CONFIG[p].label}
-                  </option>
-                ))}
-              </select>
+              {/* Priority */}
+              <div>
+                <label className="mb-1.5 flex items-center gap-2 text-sm text-[var(--botw-pale)] sm:mb-1">
+                  <i className="fa-solid fa-flag" />
+                  Priority
+                </label>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as Priority)}
+                  className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-3 text-base text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none sm:py-2 sm:text-sm"
+                >
+                  {(["low", "medium", "high", "urgent"] as Priority[]).map((p) => (
+                    <option key={p} value={p}>
+                      {PRIORITY_CONFIG[p].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Repeating */}
-            <div className="flex items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg px-1 py-2 transition-colors hover:bg-[var(--totk-dark-ocher)]/30 sm:gap-2 sm:px-0 sm:py-0">
               <button
+                type="button"
                 onClick={() => setIsRepeating(!isRepeating)}
-                className={`flex h-5 w-5 items-center justify-center rounded border-2 ${
+                className={`flex h-6 w-6 items-center justify-center rounded border-2 sm:h-5 sm:w-5 ${
                   isRepeating
                     ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)] text-[var(--totk-brown)]"
                     : "border-[var(--totk-dark-ocher)]"
@@ -1352,13 +1357,13 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                 {isRepeating && <i className="fa-solid fa-check text-xs" />}
               </button>
               <span className="text-sm text-[var(--botw-pale)]">Repeating</span>
-            </div>
+            </label>
 
             {isRepeating && (
               <select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as Frequency)}
-                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#1a1615] px-3 py-3 text-base text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none sm:py-2 sm:text-sm"
               >
                 {(["daily", "weekly", "monthly", "quarterly"] as Frequency[]).map((f) => (
                   <option key={f} value={f}>
@@ -1742,52 +1747,62 @@ function AdminTodoPageContent() {
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-black)]/30 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:px-4">
-        {/* View Toggle */}
-        <div className="flex items-center gap-2">
-          <span className="hidden text-sm text-[var(--botw-pale)] sm:inline">View:</span>
-          <div className="flex flex-1 rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50 sm:flex-none">
-            <button
-              onClick={() => setViewMode("kanban")}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors sm:flex-none sm:py-1.5 ${
-                viewMode === "kanban"
-                  ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
-                  : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
-              }`}
-            >
-              <i className="fa-solid fa-columns" />
-              <span className="hidden xs:inline">Board</span>
-            </button>
-            <button
-              onClick={() => setViewMode("table")}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors sm:flex-none sm:py-1.5 ${
-                viewMode === "table"
-                  ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
-                  : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
-              }`}
-            >
-              <i className="fa-solid fa-table-list" />
-              <span className="hidden xs:inline">Table</span>
-            </button>
+        {/* View Toggle & Add Task */}
+        <div className="flex items-center justify-between gap-3 sm:justify-start">
+          <div className="flex items-center gap-2">
+            <span className="hidden text-sm text-[var(--botw-pale)] sm:inline">View:</span>
+            <div className="flex rounded-lg border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)]/50">
+              <button
+                onClick={() => setViewMode("kanban")}
+                className={`no-min-touch-target flex items-center justify-center gap-1.5 rounded-l-lg px-4 py-2.5 text-sm transition-colors sm:px-3 sm:py-1.5 ${
+                  viewMode === "kanban"
+                    ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
+                    : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
+                }`}
+              >
+                <i className="fa-solid fa-columns" />
+                <span className="hidden xs:inline">Board</span>
+              </button>
+              <button
+                onClick={() => setViewMode("table")}
+                className={`no-min-touch-target flex items-center justify-center gap-1.5 rounded-r-lg px-4 py-2.5 text-sm transition-colors sm:px-3 sm:py-1.5 ${
+                  viewMode === "table"
+                    ? "bg-[var(--totk-dark-ocher)] text-[var(--totk-light-ocher)]"
+                    : "text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/50"
+                }`}
+              >
+                <i className="fa-solid fa-table-list" />
+                <span className="hidden xs:inline">Table</span>
+              </button>
+            </div>
           </div>
+          
+          {/* Mobile Add Task Button */}
+          <button
+            onClick={() => handleAddTask("todo")}
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--totk-light-green)] px-3 py-2.5 text-sm font-medium text-[var(--totk-brown)] transition-colors hover:bg-[var(--totk-light-green)]/80 sm:hidden"
+          >
+            <i className="fa-solid fa-plus" />
+            <span>Add</span>
+          </button>
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--botw-pale)]">
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-[var(--botw-pale)] transition-colors hover:bg-[var(--totk-dark-ocher)]/30 sm:px-0 sm:py-0">
             <input
               type="checkbox"
               checked={showMyTasksOnly}
               onChange={(e) => setShowMyTasksOnly(e.target.checked)}
-              className="h-5 w-5 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)] focus:ring-offset-0 sm:h-4 sm:w-4"
+              className="h-5 w-5 rounded border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--totk-light-green)] focus:ring-[var(--totk-light-green)] focus:ring-offset-0"
             />
             <span>My Tasks</span>
+            {showMyTasksOnly && (
+              <span className="text-xs opacity-70">
+                ({filteredTasks.length}/{tasks.length})
+              </span>
+            )}
           </label>
-          
-          {showMyTasksOnly && (
-            <span className="text-xs text-[var(--botw-pale)] opacity-70">
-              {filteredTasks.length}/{tasks.length}
-            </span>
-          )}
         </div>
       </div>
 
@@ -1826,18 +1841,17 @@ function AdminTodoPageContent() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:-mx-0 sm:px-0">
-            <div className="flex w-max gap-3 sm:w-full sm:gap-4">
-              {COLUMNS.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  tasks={tasksByColumn[column.id]}
-                  onTaskClick={handleTaskClick}
-                  onAddTask={handleAddTask}
-                />
-              ))}
-            </div>
+          {/* Columns - vertical stack on mobile, horizontal on desktop */}
+          <div className="flex flex-col gap-4 md:flex-row md:gap-4">
+            {COLUMNS.map((column) => (
+              <KanbanColumn
+                key={column.id}
+                column={column}
+                tasks={tasksByColumn[column.id]}
+                onTaskClick={handleTaskClick}
+                onAddTask={handleAddTask}
+              />
+            ))}
           </div>
 
           {/* Drag Overlay */}

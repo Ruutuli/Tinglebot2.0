@@ -90,6 +90,9 @@
 /* [globals.css]✨ Tailwind CSS v4 theme configuration - */
 /* stylelint-disable-next-line at-rule-no-unknown */
 @theme {
+  /* Custom breakpoints */
+  --breakpoint-xs: 480px;
+
   --color-blight-bg-bottom: var(--blight-bg-bottom);
   --color-blight-bg-top: var(--blight-bg-top);
   --color-blight-border: var(--blight-border);
