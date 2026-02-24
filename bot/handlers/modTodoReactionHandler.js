@@ -78,10 +78,50 @@ async function getUserInfo(user, guild) {
 }
 
 /**
+ * Get forwarded message content if this is a forwarded message
+ */
+function getForwardedContent(message) {
+    // Check for message snapshots (forwarded messages in Discord)
+    if (message.messageSnapshots && message.messageSnapshots.size > 0) {
+        const snapshot = message.messageSnapshots.first();
+        if (snapshot) {
+            return {
+                content: snapshot.content || '',
+                embeds: snapshot.embeds || [],
+                attachments: snapshot.attachments || new Map()
+            };
+        }
+    }
+    
+    // Check for reference snapshots in the message object
+    if (message.reference?.messageId && message.type === 0) {
+        // This might be a forward - check if content is empty but has embeds
+        if (!message.content && message.embeds.length > 0) {
+            const forwardEmbed = message.embeds.find(e => e.description || e.title);
+            if (forwardEmbed) {
+                return {
+                    content: forwardEmbed.description || forwardEmbed.title || '',
+                    embeds: message.embeds,
+                    attachments: message.attachments
+                };
+            }
+        }
+    }
+    
+    return null;
+}
+
+/**
  * Create a title from message content (first 7 words)
  */
 function createTaskTitle(message) {
     let content = message.content || '';
+    
+    // Check for forwarded message content
+    const forwarded = getForwardedContent(message);
+    if (forwarded && forwarded.content) {
+        content = forwarded.content;
+    }
     
     // If no content, check for embeds
     if (!content && message.embeds.length > 0) {
@@ -119,11 +159,61 @@ function createTaskTitle(message) {
  * Create a description from message content
  */
 function createTaskDescription(message) {
-    let description = message.content || '';
+    let description = '';
+    let attachments = message.attachments;
+    
+    // Check for forwarded message content
+    const forwarded = getForwardedContent(message);
+    if (forwarded) {
+        // Add forwarded message indicator
+        description = '**📨 Forwarded Message:**\n' + (forwarded.content || '');
+        
+        // Use forwarded attachments if available
+        if (forwarded.attachments && forwarded.attachments.size > 0) {
+            attachments = forwarded.attachments;
+        }
+        
+        // Add forwarded embeds content
+        if (forwarded.embeds && forwarded.embeds.length > 0) {
+            for (const embed of forwarded.embeds) {
+                if (embed.title) {
+                    description += `\n\n**${embed.title}**`;
+                }
+                if (embed.description && embed.description !== forwarded.content) {
+                    description += `\n${embed.description}`;
+                }
+                if (embed.url) {
+                    description += `\n${embed.url}`;
+                }
+            }
+        }
+        
+        // Add original message content if any
+        if (message.content) {
+            description += '\n\n**Additional context:**\n' + message.content;
+        }
+    } else {
+        description = message.content || '';
+        
+        // Include embed content
+        if (message.embeds.length > 0) {
+            for (const embed of message.embeds) {
+                if (embed.title) {
+                    description += description ? `\n\n**${embed.title}**` : `**${embed.title}**`;
+                }
+                if (embed.description) {
+                    description += description ? `\n${embed.description}` : embed.description;
+                }
+                if (embed.url) {
+                    description += `\n${embed.url}`;
+                }
+            }
+        }
+    }
     
     // Add attachment info
-    if (message.attachments.size > 0) {
-        const attachmentUrls = message.attachments.map(a => a.url).join('\n');
+    if (attachments && attachments.size > 0) {
+        const attachmentUrls = [...attachments.values()].map(a => a.url).join('\n');
         description += description ? '\n\n**Attachments:**\n' + attachmentUrls : attachmentUrls;
     }
     

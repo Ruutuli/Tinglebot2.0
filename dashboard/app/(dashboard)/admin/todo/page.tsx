@@ -96,12 +96,12 @@ interface ModInfo {
 // Constants
 // ============================================================================
 
-const COLUMNS: { id: Column; label: string; icon: string }[] = [
-  { id: "repeating", label: "Repeating", icon: "fa-repeat" },
-  { id: "todo", label: "To Do", icon: "fa-list-check" },
-  { id: "in_progress", label: "In Progress", icon: "fa-spinner" },
-  { id: "pending", label: "Pending", icon: "fa-hourglass-half" },
-  { id: "done", label: "Done", icon: "fa-circle-check" },
+const COLUMNS: { id: Column; label: string; icon: string; color: string; bgColor: string; borderColor: string; leftBorder: string }[] = [
+  { id: "repeating", label: "Repeating", icon: "fa-repeat", color: "text-purple-400", bgColor: "bg-purple-500/20", borderColor: "border-purple-500/50", leftBorder: "border-l-purple-500" },
+  { id: "todo", label: "To Do", icon: "fa-list-check", color: "text-blue-400", bgColor: "bg-blue-500/20", borderColor: "border-blue-500/50", leftBorder: "border-l-blue-500" },
+  { id: "in_progress", label: "In Progress", icon: "fa-spinner", color: "text-yellow-400", bgColor: "bg-yellow-500/20", borderColor: "border-yellow-500/50", leftBorder: "border-l-yellow-500" },
+  { id: "pending", label: "Pending", icon: "fa-hourglass-half", color: "text-orange-400", bgColor: "bg-orange-500/20", borderColor: "border-orange-500/50", leftBorder: "border-l-orange-500" },
+  { id: "done", label: "Done", icon: "fa-circle-check", color: "text-green-400", bgColor: "bg-green-500/20", borderColor: "border-green-500/50", leftBorder: "border-l-green-500" },
 ];
 
 const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; bgColor: string }> = {
@@ -153,6 +153,7 @@ interface TaskCardProps {
 
 function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
   const priorityConfig = PRIORITY_CONFIG[task.priority];
+  const columnConfig = COLUMNS.find((c) => c.id === task.column);
   const overdue = task.column !== "done" && isOverdue(task.dueDate);
   const dueSoon = task.column !== "done" && !overdue && isDueSoon(task.dueDate);
   
@@ -164,9 +165,9 @@ function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
     <div
       onClick={onClick}
       className={`
-        group cursor-pointer rounded-lg border-2 p-3 transition-all
+        group cursor-pointer rounded-lg border-2 border-l-4 p-3 transition-all
         ${isDragging ? "opacity-50" : "opacity-100"}
-        border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]
+        border-[var(--totk-dark-ocher)] ${columnConfig?.leftBorder || ''} bg-[var(--botw-warm-black)]
         hover:border-[var(--totk-light-ocher)] hover:shadow-lg
       `}
     >
@@ -321,7 +322,7 @@ function SortableTaskCard({ task, onClick }: SortableTaskCardProps) {
 // ============================================================================
 
 interface ColumnProps {
-  column: { id: Column; label: string; icon: string };
+  column: { id: Column; label: string; icon: string; color: string; bgColor: string; borderColor: string; leftBorder: string };
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onAddTask: (column: Column) => void;
@@ -333,21 +334,21 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
   });
 
   return (
-    <div className={`flex max-h-[calc(100vh-12rem)] min-w-[200px] flex-1 flex-col rounded-xl border-2 bg-[var(--botw-black)]/50 transition-colors ${
-      isOver ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10" : "border-[var(--totk-dark-ocher)]"
+    <div className={`flex max-h-[calc(100vh-16rem)] min-w-[200px] flex-1 flex-col rounded-xl border-2 transition-colors ${
+      isOver ? "border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10" : `${column.borderColor} bg-[var(--botw-black)]/50`
     }`}>
       {/* Column Header */}
-      <div className="flex flex-shrink-0 items-center justify-between border-b-2 border-[var(--totk-dark-ocher)] px-4 py-3">
+      <div className={`flex flex-shrink-0 items-center justify-between border-b-2 ${column.borderColor} ${column.bgColor} px-4 py-3`}>
         <div className="flex items-center gap-2">
-          <i className={`fa-solid ${column.icon} text-[var(--totk-light-green)]`} />
-          <h2 className="font-semibold text-[var(--totk-light-ocher)]">{column.label}</h2>
-          <span className="rounded-full bg-[var(--totk-dark-ocher)] px-2 py-0.5 text-xs text-[var(--botw-pale)]">
+          <i className={`fa-solid ${column.icon} ${column.color}`} />
+          <h2 className={`font-semibold ${column.color}`}>{column.label}</h2>
+          <span className={`rounded-full ${column.bgColor} border ${column.borderColor} px-2 py-0.5 text-xs text-[var(--botw-pale)]`}>
             {tasks.length}
           </span>
         </div>
         <button
           onClick={() => onAddTask(column.id)}
-          className="rounded p-1 text-[var(--botw-pale)] transition-colors hover:bg-[var(--totk-dark-ocher)] hover:text-[var(--totk-light-green)]"
+          className={`rounded p-1 text-[var(--botw-pale)] transition-colors hover:${column.bgColor} hover:${column.color}`}
           title="Add task"
         >
           <i className="fa-solid fa-plus" />
@@ -465,10 +466,15 @@ function TableView({ tasks, onTaskClick }: TableViewProps) {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--totk-dark-ocher)]/50 px-2.5 py-1 text-xs text-[var(--botw-pale)]">
-                    <i className={`fa-solid ${COLUMNS.find((c) => c.id === task.column)?.icon || "fa-circle"} text-[var(--totk-light-green)]`} />
-                    {COLUMN_LABELS[task.column]}
-                  </span>
+                  {(() => {
+                    const col = COLUMNS.find((c) => c.id === task.column);
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${col?.bgColor || ''} ${col?.borderColor || ''} ${col?.color || 'text-[var(--botw-pale)]'}`}>
+                        <i className={`fa-solid ${col?.icon || "fa-circle"}`} />
+                        {COLUMN_LABELS[task.column]}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-block rounded border px-2 py-0.5 text-xs capitalize ${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}`}>
@@ -614,8 +620,19 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
   const [column, setColumn] = useState<Column>(task?.column ?? defaultColumn ?? "todo");
   const [priority, setPriority] = useState<Priority>(task?.priority ?? "medium");
   const [dueDate, setDueDate] = useState(() => {
-    if (!task?.dueDate) return "";
-    const d = new Date(task.dueDate);
+    // Use existing due date if present
+    if (task?.dueDate) {
+      const d = new Date(task.dueDate);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    // Default to 12 hours from now if no due date (new or existing tasks)
+    const d = new Date();
+    d.setHours(d.getHours() + 12);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
