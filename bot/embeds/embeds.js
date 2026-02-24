@@ -777,6 +777,27 @@ embed.addFields(commandsField);
  return embed;
 };
 
+// ------------------- Function: createExplorationEndOnlyAtStartEmbed -------------------
+// Shown when the party tries to end the expedition but is not at the starting quadrant.
+const createExplorationEndOnlyAtStartEmbed = (party, expeditionId, location, nextCharacter) => {
+ const embed = new EmbedBuilder()
+  .setTitle("📍 End expedition at start only")
+  .setDescription(
+   "You can only end the expedition when at the **starting quadrant** for your region. Use **Move** to return to the start first, then use **End expedition** to return home with your party and items. Use this to finish before running out of hearts/stamina."
+  )
+  .setColor(EXPLORE_OUTCOME_COLORS.move || 0x00CEC9);
+ addExplorationStandardFields(embed, {
+  party,
+  expeditionId,
+  location: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"),
+  nextCharacter,
+  showNextAndCommands: true,
+  showRestSecureMove: false,
+  showMoveCommand: true,
+ });
+ return embed;
+};
+
 // ------------------- Function: createExplorationItemEmbed -------------------
 // Creates an embed for when a character finds an item during exploration
 const createExplorationItemEmbed = (
@@ -3761,6 +3782,7 @@ module.exports = {
  addExplorationStandardFields,
  getExplorationPartyCharacterFields,
  addExplorationCommandsField,
+ createExplorationEndOnlyAtStartEmbed,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
  createSetupInstructionsEmbed,

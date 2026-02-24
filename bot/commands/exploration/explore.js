@@ -90,7 +90,7 @@ const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL }
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 
 // ------------------- Embeds & Handlers ------------------
-const { addExplorationStandardFields, addExplorationCommandsField, createExplorationItemEmbed, createExplorationMonsterEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
+const { addExplorationStandardFields, addExplorationCommandsField, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
 // ------------------- Image URLs ------------------
@@ -3787,15 +3787,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         }
       }
 
-      // Check for blight from database quadrant.blighted field
-      const mapSquareForBlight = await Square.findOne({ squareId: party.square });
-      const quadBlight = mapSquareForBlight?.quadrants?.find(
-       (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
-      );
-      let revealBlightResult = null;
-      if (quadBlight && quadBlight.blighted === true) {
-       revealBlightResult = await applyBlightExposure(party, party.square, party.quadrant, "reveal", character.name, interaction.client, interaction.guild);
-      }
+      // Blight message and exposure only happen when the party *enters* (moves into) a blighted quadrant, not when they explore it.
 
       const nextCharacter = party.characters[party.currentTurn];
       const startPoint = START_POINTS_BY_REGION[party.region];
@@ -3806,22 +3798,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const embedTitle = luckyFindRecovery > 0
        ? `🍀 **Expedition: Lucky Find!**`
        : `✨ **Quadrant Explored!** ✨`;
-      let embedDesc = luckyFindRecovery > 0
+      const embedDesc = luckyFindRecovery > 0
        ? `**${character.name}** found a shortcut in **${location}**! No stamina cost, and recovered **+${luckyFindRecovery} 🟩** stamina.`
        : `**${character.name}** has explored **${location}**!\n\n🔓 **New options unlocked:** You can now **Secure** this quadrant or **Move** to a new one.`;
-      
-      // Add blight exposure warning if in blighted quadrant
-      if (quadBlight && quadBlight.blighted === true) {
-       embedDesc += `\n\n☠️ **Blighted Area!** This quadrant is corrupted by malice.`;
-       if (revealBlightResult) {
-        if (revealBlightResult.blightedMembers.length > 0) {
-         const blightedNames = revealBlightResult.blightedMembers.map(m => `**${m.name}**`).join(", ");
-         embedDesc += `\n\n💀 **BLIGHT CONTRACTED!** ${blightedNames} ${revealBlightResult.blightedMembers.length === 1 ? "has" : "have"} been infected by the corruption! Use \`/blight status\` to check their condition.`;
-        } else if (revealBlightResult.safeMembers.length > 0) {
-         embedDesc += ` The party resisted the corruption this time.`;
-        }
-       }
-      }
 
       const embed = new EmbedBuilder()
        .setTitle(embedTitle)
@@ -6586,9 +6565,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     const isAtStartQuadrant = String(party.square || "").toUpperCase() === String(startPoint.square || "").toUpperCase() &&
      String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
     if (!isAtStartQuadrant) {
-     return interaction.editReply(
-      "You can only end the expedition when at the **starting quadrant** for your region. Use **Move** to return to the start first, then use **End expedition** to return home with your party and items. Use this to finish before running out of hearts/stamina."
-    );
+     const location = `${party.square} ${party.quadrant}`;
+     const nextCharacter = party.characters?.[party.currentTurn] ?? null;
+     const endOnlyAtStartEmbed = createExplorationEndOnlyAtStartEmbed(party, expeditionId, location, nextCharacter);
+     return interaction.editReply({ embeds: [endOnlyAtStartEmbed] });
     }
 
     // Block ending if the current quadrant hasn't been explored yet (must get "Quadrant Explored!" prompt first)
