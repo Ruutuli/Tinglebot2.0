@@ -5837,7 +5837,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
     if (quadrantState === "explored") {
      const lastOutcome = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
-     const moveWasPrompted = lastOutcome === "explored" || lastOutcome === "move";
+     // Only allow move after the "Quadrant Explored!" prompt at THIS location. "move" means we just arrived—we haven't explored here yet.
+     const moveWasPrompted = lastOutcome === "explored";
      if (!moveWasPrompted) {
       const moveBlockedEmbed = new EmbedBuilder()
        .setTitle("🚫 **Move not available**")
@@ -6926,6 +6927,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       nextCharacter: party.characters[party.currentTurn] ?? null,
       showNextAndCommands: true,
       showRestSecureMove: true,
+      hideCampCommand: true,
       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
      });
      return interaction.editReply({ embeds: [alreadyCampedEmbed] });
@@ -7253,6 +7255,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       showNextAndCommands: true,
       showRestSecureMove: false,
       showSecuredQuadrantOnly: isSecured,
+      hideCampCommand: true,
       hasDiscoveriesInQuadrant: hasDiscCamp,
       isAtStartQuadrant: campIsAtStart,
     });
