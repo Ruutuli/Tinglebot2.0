@@ -233,10 +233,35 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
         await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Grotto delete on fail: ${err?.message}`));
         await closeRaidsForExpedition(party.partyId);
         
+        // Build lostItems and final location before resetting (failed = completed + outcome "failed", KO'd in the wilds)
+        const lostItems = [
+            ...(party.gatheredItems || []).map((item) => ({
+                characterId: item.characterId,
+                characterName: item.characterName,
+                itemName: item.itemName,
+                quantity: item.quantity ?? 1,
+                emoji: item.emoji ?? '',
+            })),
+            ...(party.characters || []).flatMap((c) =>
+                (c.items || []).map((item) => ({
+                    characterId: c._id,
+                    characterName: c.name,
+                    itemName: item.itemName,
+                    quantity: 1,
+                    emoji: item.emoji ?? '',
+                }))
+            ),
+        ];
+        const finalLocation = { square: party.square, quadrant: party.quadrant };
+        
         // Update party status
         party.square = start.square;
         party.quadrant = start.quadrant;
-        party.status = "completed";
+        party.status = "failed";
+        party.outcome = "failed";
+        party.lostItems = lostItems;
+        party.finalLocation = finalLocation;
+        party.endedAt = new Date();
         party.totalHearts = 0;
         party.totalStamina = 0;
         party.gatheredItems = [];

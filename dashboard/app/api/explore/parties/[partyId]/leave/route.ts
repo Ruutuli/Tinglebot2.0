@@ -96,7 +96,7 @@ export async function POST(
     if (partyObj.status === "cancelled") {
       return NextResponse.json({ error: "Expedition was cancelled." }, { status: 404 });
     }
-    if (partyObj.status === "started" || partyObj.status === "completed") {
+    if (partyObj.status === "started" || partyObj.status === "completed" || partyObj.status === "failed") {
       return NextResponse.json(
         { error: "You can only leave while the expedition is open, not after it has started." },
         { status: 400 }

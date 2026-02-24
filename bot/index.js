@@ -556,7 +556,7 @@ async function initializeClient() {
           const expeditionIdsToClose = new Set();
           for (const raid of expeditionRaids) {
             const party = await Party.findOne({ partyId: { $regex: new RegExp(`^${raid.expeditionId}$`, 'i') } });
-            if (!party || party.status === 'completed' || party.status === 'cancelled') {
+            if (!party || party.status === 'completed' || party.status === 'failed' || party.status === 'cancelled') {
               expeditionIdsToClose.add(raid.expeditionId);
             }
           }

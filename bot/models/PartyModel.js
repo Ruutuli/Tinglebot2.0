@@ -40,7 +40,7 @@ const PartySchema = new Schema({
   ],
   messageId: { type: String },
   discordThreadId: { type: String },
-  status: { type: String, default: 'open', enum: ['open', 'started', 'completed', 'cancelled'] },
+  status: { type: String, default: 'open', enum: ['open', 'started', 'completed', 'failed', 'cancelled'] },
   createdAt: { type: Date, default: Date.now },
   currentTurn: { type: Number, default: 0 },
   totalHearts: { type: Number, default: 0 },

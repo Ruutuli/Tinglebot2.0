@@ -346,15 +346,21 @@ function shouldBlockItemForBalance(party, rollingCharacter) {
 }
 
 // ------------------- createStuckInWildEmbed ------------------
-// Party out of stamina; recovery via /explore camp
-function createStuckInWildEmbed(party, location) {
+// Party out of stamina; recovery via /explore camp. nextCharacter: { userId?, name? } for "who's next".
+function createStuckInWildEmbed(party, location, nextCharacter = null) {
+  let desc =
+    `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp is free and recovers up to 50% of your max stamina (but has higher monster attack chance).\n\n` +
+    `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`;
+  if (nextCharacter && (nextCharacter.userId || nextCharacter.name)) {
+    const nextLine = nextCharacter.userId
+      ? `**Next:** <@${nextCharacter.userId}> (${nextCharacter.name || "you"}) — use Camp, Roll, or Move to continue.`
+      : `**Next:** ${nextCharacter.name || "—"} — use Camp, Roll, or Move to continue.`;
+    desc += `\n\n${nextLine}`;
+  }
   return new EmbedBuilder()
     .setTitle("🏕️ Stuck in the wild — camp to recover")
     .setColor(getExploreOutcomeColor("explored", regionColors[party?.region] || "#8B4513"))
-    .setDescription(
-      `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp is free and recovers up to 50% of your max stamina (but has higher monster attack chance).\n\n` +
-      `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`
-    )
+    .setDescription(desc)
     .setImage(getExploreMapImageUrl(party, { highlight: true }))
     .setFooter({ text: location ? `Current location: ${location}` : "Expedition" });
 }
@@ -1459,14 +1465,15 @@ const EXPLORATION_KO_DEBUFF_DAYS = 7;
 // Full party KO: reset to start, apply debuff, reset explored quadrants
 // useFollowUp: if true, use followUp instead of editReply (when showing after another embed)
 async function handleExpeditionFailed(party, interaction, useFollowUp = false) {
- const start = START_POINTS_BY_REGION[party.region];
+ const regionKey = (party.region || "").toString().trim().toLowerCase();
+ const start = START_POINTS_BY_REGION[regionKey];
  if (!start) {
   const replyFn = useFollowUp ? interaction.followUp.bind(interaction) : interaction.editReply.bind(interaction);
   await replyFn("Expedition failed but could not resolve start location for region.");
   return;
  }
 
- const targetVillage = REGION_TO_VILLAGE_LOWER[party.region] || "rudania";
+ const targetVillage = REGION_TO_VILLAGE_LOWER[regionKey] || "rudania";
  const debuffEndDate = new Date(Date.now() + EXPLORATION_KO_DEBUFF_DAYS * 24 * 60 * 60 * 1000);
 
  if (!EXPLORATION_TESTING_MODE) {
@@ -1531,7 +1538,7 @@ async function handleExpeditionFailed(party, interaction, useFollowUp = false) {
 
  party.square = start.square;
  party.quadrant = start.quadrant;
- party.status = "completed";
+ party.status = "failed";
  party.outcome = "failed";
  party.lostItems = lostItems;
  party.finalLocation = finalLocation;
@@ -3567,8 +3574,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const payResult = await payStaminaOrStruggle(party, characterIndex, rollStaminaCost, { order: "currentFirst", action: "roll" });
      if (!payResult.ok) {
       const location = `${party.square} ${party.quadrant}`;
+      const nextCharacterStuck = party.characters?.[party.currentTurn] ?? null;
       return interaction.editReply({
-        embeds: [createStuckInWildEmbed(party, location)],
+        embeds: [createStuckInWildEmbed(party, location, nextCharacterStuck)],
       });
      }
      
@@ -4665,6 +4673,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           party.currentTurn = (party.currentTurn + 1) % party.characters.length;
           await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
           const nextAfterChoice = party.characters[party.currentTurn];
+          const explorePageUrlMark = getExplorePageUrl(expeditionId);
           const monsterCampEmbed = new EmbedBuilder()
            .setTitle("🗺️ **Expedition: Monster Camp found!**")
            .setColor(getExploreOutcomeColor("monster_camp", regionColors[party.region] || "#00ff99"))
@@ -4673,6 +4682,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
             `✅ **Marked on map.** You can fight it when you return (or after the next Blood Moon if already cleared). Continue with </explore roll:${getExploreCommandId()}>.`
            )
            .setImage(getExploreMapImageUrl(party, { highlight: true }));
+          monsterCampEmbed.addFields({
+           name: "📍 **__Set pin on map__**",
+           value: `Set a pin for this monster camp on the **explore/${expeditionId}** page so you can revisit it later: ${explorePageUrlMark}`,
+           inline: false,
+          });
           addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
           if (getExplorationNextTurnContent(nextAfterChoice)) await i.followUp({ content: getExplorationNextTurnContent(nextAfterChoice) }).catch(() => {});
@@ -4771,7 +4785,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            : "";
           const firstUpPing = firstCharSlot?.userId ? `\n\n<@${firstCharSlot.userId}> — **${firstCharName}**, you're up first!` : "";
           await i.channel.send({
-           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!${turnOrderNote}${firstUpPing}\n\n**Mark this camp on the map** from the expedition thread if you haven't already (so you can revisit it later).`,
+           content: `🌊 **MONSTER CAMP WAVE!** — A wave has been triggered at **${location}**!\n\n${joinNote}Use </wave:${getWaveCommandId()}> to take your turn (id: \`${waveId}\`). **The expedition pauses until the wave is complete.**\n</explore item:${getExploreCommandId()}> to heal during the wave!${turnOrderNote}${firstUpPing}`,
            embeds: [waveEmbed],
           });
           if (failedJoins.length > 0) {
@@ -4779,6 +4793,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           }
           pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location}; marked on map and started wave ${waveId}. All party members must fight.`, undefined, monsterCampCosts, at);
           await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
+          const explorePageUrlFight = getExplorePageUrl(expeditionId);
           const monsterCampEmbed = new EmbedBuilder()
            .setTitle("🗺️ **Expedition: Monster Camp found!**")
            .setColor(getExploreOutcomeColor("monster_camp_fight", regionColors[freshParty.region] || "#00ff99"))
@@ -4787,6 +4802,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
             `✅ **Marked on map and fighting now!** All party members must fight. Use </wave:${getWaveCommandId()}> to take turns (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**`
            )
            .setImage(getExploreMapImageUrl(freshParty, { highlight: true }));
+          monsterCampEmbed.addFields({
+           name: "📍 **__Set pin on map__**",
+           value: `Set a pin for this monster camp on the **explore/${expeditionId}** page so you can revisit it later: ${explorePageUrlFight}`,
+           inline: false,
+          });
           addExplorationStandardFields(monsterCampEmbed, { party: freshParty, expeditionId, location, nextCharacter: null, showNextAndCommands: false, showRestSecureMove: false, ruinRestRecovered });
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
           return;
@@ -6122,8 +6142,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      movePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst", action: "move" });
      if (!movePayResult.ok) {
       const location = `${party.square} ${party.quadrant}`;
+      const nextCharacterStuckMove = party.characters?.[party.currentTurn] ?? null;
       return interaction.editReply({
-       embeds: [createStuckInWildEmbed(party, location)],
+       embeds: [createStuckInWildEmbed(party, location, nextCharacterStuckMove)],
       });
      }
      

@@ -262,12 +262,40 @@ export async function GET(
         })).filter((v) => v.squareId && v.quadrantId)
       : [];
 
+    // Expedition outcome: use stored value; status "failed" means KO'd; infer for completed (legacy) without outcome
+    let outcome: "success" | "failed" | null = typeof p.outcome === "string" && (p.outcome === "success" || p.outcome === "failed") ? p.outcome : null;
+    if (status === "failed") outcome = "failed";
+    else if (status === "completed" && outcome == null && progressLog.length > 0) {
+      const lastOutcome = String((progressLog[progressLog.length - 1] as Record<string, unknown>)?.outcome ?? "").trim().toLowerCase();
+      outcome = lastOutcome === "ko" || lastOutcome === "expedition_failed" ? "failed" : "success";
+    }
+
+    const lostItems = Array.isArray(p.lostItems)
+      ? (p.lostItems as Array<Record<string, unknown>>).map((g) => ({
+          characterId: String(g.characterId ?? ""),
+          characterName: String(g.characterName ?? ""),
+          itemName: String(g.itemName ?? ""),
+          quantity: typeof g.quantity === "number" ? g.quantity : 1,
+          emoji: typeof g.emoji === "string" ? g.emoji : undefined,
+        }))
+      : [];
+
+    let finalLocation: { square: string; quadrant: string } | undefined =
+      p.finalLocation && typeof p.finalLocation === "object" && (p.finalLocation as Record<string, unknown>).square != null
+        ? { square: String((p.finalLocation as Record<string, unknown>).square ?? ""), quadrant: String((p.finalLocation as Record<string, unknown>).quadrant ?? "") }
+        : undefined;
+    if (outcome === "failed" && !finalLocation && (p.square != null || p.quadrant != null)) {
+      finalLocation = { square: String(p.square ?? ""), quadrant: String(p.quadrant ?? "") };
+    }
+    const endedAt = p.endedAt instanceof Date ? p.endedAt.toISOString() : typeof p.endedAt === "string" ? p.endedAt : undefined;
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
       square: p.square,
       quadrant: p.quadrant,
       status: p.status,
+      outcome,
       totalHearts: p.totalHearts ?? 0,
       totalStamina: p.totalStamina ?? 0,
       leaderId: p.leaderId,
@@ -284,6 +312,9 @@ export async function GET(
       reportedDiscoveryKeys,
       pathImageUploadedSquares,
       visitedQuadrantsThisRun,
+      ...(lostItems.length > 0 ? { lostItems } : {}),
+      ...(finalLocation ? { finalLocation } : {}),
+      ...(endedAt ? { endedAt } : {}),
     });
   } catch (err) {
     console.error("[explore/parties/[partyId] GET]", err);

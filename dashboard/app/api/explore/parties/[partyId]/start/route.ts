@@ -95,6 +95,9 @@ export async function POST(
     if (String(p.status) === "started") {
       return NextResponse.json({ error: "Expedition already started" }, { status: 400 });
     }
+    if (String(p.status) === "completed" || String(p.status) === "failed") {
+      return NextResponse.json({ error: "Expedition has already ended" }, { status: 400 });
+    }
 
     const characters = (p.characters as PartyMemberDoc[]) ?? [];
     if (characters.length < 1) {

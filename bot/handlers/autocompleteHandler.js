@@ -3406,7 +3406,7 @@ async function handleExploreIdAutocomplete(interaction, focusedOption) {
   // For roll subcommand, only show started expeditions
   const statusFilter = subcommand === "roll"
    ? { status: "started" }
-   : { status: { $nin: ["completed", "cancelled"] } };
+   : { status: { $nin: ["completed", "failed", "cancelled"] } };
 
   const parties = await Party.find({
    ...statusFilter,

@@ -1216,7 +1216,8 @@ export default function ExplorePartyPage() {
   // ------------------- Component: main render ------------------
   // header, join section, map + progress, journey, party, sidebar -
 
-  const regionInfo = REGIONS[party.region];
+  const regionKeyForLookup = (party.region || "").toString().trim().toLowerCase();
+  const regionInfo = regionKeyForLookup ? REGIONS[regionKeyForLookup] : undefined;
   const canJoin =
     userId &&
     !party.currentUserJoined &&
@@ -1408,7 +1409,7 @@ export default function ExplorePartyPage() {
     );
   }
 
-  const regionBanner = party.region ? REGION_BANNERS[party.region] : null;
+  const regionBanner = regionKeyForLookup ? REGION_BANNERS[regionKeyForLookup] : null;
 
   return (
     <div className="min-h-full overflow-x-hidden bg-gradient-to-b from-[var(--botw-warm-black)]/30 to-transparent p-4 sm:p-6 md:p-8">
@@ -1466,7 +1467,7 @@ export default function ExplorePartyPage() {
                     <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                     <h1 className="text-lg font-bold tracking-tight text-[var(--totk-ivory)] sm:text-xl md:text-2xl">
                       Expedition {party.partyId}
-                      {party.status === "completed" && (
+                      {(party.status === "completed" || party.status === "failed") && (
                         <span className="ml-2 inline-block rounded-full bg-[var(--totk-dark-ocher)]/60 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
                           Ended
                         </span>
@@ -1475,7 +1476,7 @@ export default function ExplorePartyPage() {
                     <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                   </div>
                   <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
-                    {regionInfo?.label ?? party.region} · {party.status === "completed" ? "Ended at" : "Start"} {party.square} {party.quadrant}
+                    {regionInfo?.label ?? party.region} · {(party.status === "completed" || party.status === "failed") ? "Ended at" : "Start"} {party.square} {party.quadrant}
                   </p>
                 </div>
               </div>
@@ -1485,7 +1486,7 @@ export default function ExplorePartyPage() {
                   <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                   <h1 className="text-lg font-bold tracking-tight text-[var(--totk-ivory)] sm:text-xl md:text-2xl">
                     Expedition {party.partyId}
-                    {party.status === "completed" && (
+                    {(party.status === "completed" || party.status === "failed") && (
                       <span className="ml-2 inline-block rounded-full bg-[var(--totk-dark-ocher)]/60 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">
                         Ended
                       </span>
@@ -1494,11 +1495,11 @@ export default function ExplorePartyPage() {
                   <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                 </div>
                 <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
-                  {regionInfo?.label ?? party.region} · {party.status === "completed" ? "Ended at" : "Start"} {party.square} {party.quadrant}
+                  {regionInfo?.label ?? party.region} · {(party.status === "completed" || party.status === "failed") ? "Ended at" : "Start"} {party.square} {party.quadrant}
                 </p>
               </div>
             )}
-            {squarePreview && squarePreview.layers.length > 0 && party.status !== "started" && party.status !== "completed" && (
+            {squarePreview && squarePreview.layers.length > 0 && party.status !== "started" && party.status !== "completed" && party.status !== "failed" && (
               <div className="border-t border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/60 px-3 py-2.5 sm:px-4 sm:py-3">
                 <div className="mb-1.5 flex flex-wrap items-center justify-center gap-2 text-center">
                   <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)] sm:text-xs">
@@ -1607,7 +1608,7 @@ export default function ExplorePartyPage() {
                 <i className="fa-solid fa-link shrink-0 text-xs opacity-80" aria-hidden />
                 <span className="truncate">Copy link</span>
               </button>
-              {(party.status === "started" || party.status === "completed") && (
+              {(party.status === "started" || party.status === "completed" || party.status === "failed") && (
                 <>
                   {party.discordThreadUrl ? (
                     <a
@@ -1661,7 +1662,7 @@ export default function ExplorePartyPage() {
             </div>
           </header>
 
-          {(party.status === "started" || party.status === "completed") && party.members.length > 0 && (
+          {(party.status === "started" || party.status === "completed" || party.status === "failed") && party.members.length > 0 && (
             <>
               <section className="mb-4 rounded-xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 px-4 py-3 shadow-inner" aria-label="Current turn order">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
@@ -1693,13 +1694,13 @@ export default function ExplorePartyPage() {
               <section className="mb-6 rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/40 p-4 shadow-inner">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5 md:gap-3">
                   <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block truncate text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Last turn" : "Current turn"}</span>
+                    <span className="block truncate text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{(party.status === "completed" || party.status === "failed") ? "Last turn" : "Current turn"}</span>
                     <span className="mt-0.5 block truncate font-semibold text-[var(--totk-ivory)] text-sm">
                       {party.members[party.currentTurn ?? 0]?.name ?? "—"}
                     </span>
                   </div>
                   <div className="min-w-0 rounded-xl border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/50 px-3 py-2">
-                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{party.status === "completed" ? "Quadrant" : "Current quadrant"}</span>
+                    <span className="block text-[10px] uppercase tracking-wider text-[var(--totk-grey-200)]">{(party.status === "completed" || party.status === "failed") ? "Quadrant" : "Current quadrant"}</span>
                     <span className="mt-0.5 block truncate font-semibold text-[var(--totk-ivory)] text-sm">
                       {party.square ?? "—"} {party.quadrant ?? "—"}
                     </span>
@@ -1729,7 +1730,7 @@ export default function ExplorePartyPage() {
             </>
           )}
 
-          {party.status === "completed" && party.outcome !== "failed" && (
+          {(party.status === "completed" && party.outcome !== "failed") && (
             <section className="mb-6 rounded-2xl border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-dark-ocher)]/20 px-5 py-4 shadow-lg sm:px-6 sm:py-5" role="status" aria-live="polite">
               <div className="flex flex-wrap items-center justify-center gap-3 text-center">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-ivory)]">
@@ -1747,7 +1748,7 @@ export default function ExplorePartyPage() {
             </section>
           )}
 
-          {party.status === "completed" && party.outcome === "failed" && (
+          {(party.status === "failed" || party.outcome === "failed") && (
             <section className="mb-6 rounded-2xl border-2 border-red-800/60 bg-red-900/20 px-5 py-4 shadow-lg sm:px-6 sm:py-5" role="status" aria-live="polite">
               <div className="flex flex-wrap items-center justify-center gap-3 text-center">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-800/50 text-red-200">
@@ -2339,7 +2340,7 @@ export default function ExplorePartyPage() {
             </section>
           )}
 
-          {(party.status === "started" || party.status === "completed") && (
+          {(party.status === "started" || party.status === "completed" || party.status === "failed") && (
             <>
               {/* 1. Map | Progress log — side by side */}
               <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -2884,7 +2885,7 @@ export default function ExplorePartyPage() {
                           const isLast = i === journey.length - 1;
                           const isCurrent = loc === currentLoc;
                           const isOnly = journey.length === 1;
-                          const isCompleted = party.status === "completed";
+                          const isCompleted = party.status === "completed" || party.status === "failed";
                           const showAsEnd = isCompleted && isLast;
                           return (
                             <span key={`${loc}-${i}`} className="flex items-center gap-2">
@@ -3017,7 +3018,7 @@ export default function ExplorePartyPage() {
 
         </main>
 
-        {(party.status !== "started" && party.status !== "completed") && (
+        {(party.status !== "started" && party.status !== "completed" && party.status !== "failed") && (
         <aside className="w-full flex-shrink-0 lg:sticky lg:top-6 lg:w-80">
           <section className="rounded-2xl border border-[var(--totk-dark-ocher)]/50 bg-gradient-to-br from-[var(--totk-brown)]/15 to-[var(--botw-warm-black)]/50 p-5 shadow-xl">
             <div className="mb-4 flex items-center gap-2">

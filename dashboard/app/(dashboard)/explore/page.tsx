@@ -256,7 +256,7 @@ export default function ExplorePage() {
               <ul className="space-y-2">
                 {myExpeditions.map((exp) => {
                   const regionLabel = REGIONS.find((r) => r.value === exp.region)?.label ?? exp.region;
-                  const statusLabel = exp.status === "open" ? "Open" : exp.status === "started" ? "In progress" : exp.status === "completed" ? "Ended" : exp.status;
+                  const statusLabel = exp.status === "open" ? "Open" : exp.status === "started" ? "In progress" : exp.status === "completed" ? "Ended" : exp.status === "failed" ? "Failed" : exp.status;
                   return (
                     <li key={exp.partyId}>
                       <Link
