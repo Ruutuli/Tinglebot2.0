@@ -112,6 +112,26 @@ function getForwardedContent(message) {
 }
 
 /**
+ * Try to find a good title from embed fields
+ */
+function getTitleFromEmbed(embed) {
+    // First check for a field named "Title" (common in bot embeds)
+    if (embed.fields && embed.fields.length > 0) {
+        const titleField = embed.fields.find(f => 
+            f.name.toLowerCase().includes('title') || 
+            f.name.toLowerCase() === '📝 title'
+        );
+        if (titleField && titleField.value) {
+            // Remove quotes if present
+            return titleField.value.replace(/^["']|["']$/g, '').trim();
+        }
+    }
+    
+    // Fall back to embed title or description
+    return embed.title || embed.description || '';
+}
+
+/**
  * Create a title from message content (first 7 words)
  */
 function createTaskTitle(message) {
@@ -119,13 +139,23 @@ function createTaskTitle(message) {
     
     // Check for forwarded message content
     const forwarded = getForwardedContent(message);
-    if (forwarded && forwarded.content) {
-        content = forwarded.content;
+    if (forwarded) {
+        // Try to get title from embed fields first
+        if (forwarded.embeds && forwarded.embeds.length > 0) {
+            const embedTitle = getTitleFromEmbed(forwarded.embeds[0]);
+            if (embedTitle) {
+                content = embedTitle;
+            }
+        }
+        // Fall back to forwarded content
+        if (!content && forwarded.content) {
+            content = forwarded.content;
+        }
     }
     
     // If no content, check for embeds
     if (!content && message.embeds.length > 0) {
-        content = message.embeds[0].title || message.embeds[0].description || '';
+        content = getTitleFromEmbed(message.embeds[0]);
     }
     
     // If still no content, check for attachments
@@ -156,6 +186,39 @@ function createTaskTitle(message) {
 }
 
 /**
+ * Extract all content from an embed (title, description, fields, footer)
+ */
+function extractEmbedContent(embed) {
+    let content = '';
+    
+    if (embed.title) {
+        content += `**${embed.title}**\n`;
+    }
+    if (embed.description) {
+        content += `${embed.description}\n`;
+    }
+    
+    // Extract field content - this is where most bot embeds store their data
+    if (embed.fields && embed.fields.length > 0) {
+        for (const field of embed.fields) {
+            if (field.name && field.value) {
+                content += `\n**${field.name}**\n${field.value}\n`;
+            }
+        }
+    }
+    
+    if (embed.footer?.text) {
+        content += `\n_${embed.footer.text}_`;
+    }
+    
+    if (embed.url) {
+        content += `\n${embed.url}`;
+    }
+    
+    return content.trim();
+}
+
+/**
  * Create a description from message content
  */
 function createTaskDescription(message) {
@@ -166,24 +229,24 @@ function createTaskDescription(message) {
     const forwarded = getForwardedContent(message);
     if (forwarded) {
         // Add forwarded message indicator
-        description = '**📨 Forwarded Message:**\n' + (forwarded.content || '');
+        description = '**📨 Forwarded Message:**\n';
+        
+        // Add any text content
+        if (forwarded.content) {
+            description += forwarded.content + '\n';
+        }
         
         // Use forwarded attachments if available
         if (forwarded.attachments && forwarded.attachments.size > 0) {
             attachments = forwarded.attachments;
         }
         
-        // Add forwarded embeds content
+        // Add forwarded embeds content (including fields)
         if (forwarded.embeds && forwarded.embeds.length > 0) {
             for (const embed of forwarded.embeds) {
-                if (embed.title) {
-                    description += `\n\n**${embed.title}**`;
-                }
-                if (embed.description && embed.description !== forwarded.content) {
-                    description += `\n${embed.description}`;
-                }
-                if (embed.url) {
-                    description += `\n${embed.url}`;
+                const embedContent = extractEmbedContent(embed);
+                if (embedContent) {
+                    description += '\n' + embedContent;
                 }
             }
         }
@@ -195,17 +258,12 @@ function createTaskDescription(message) {
     } else {
         description = message.content || '';
         
-        // Include embed content
+        // Include embed content (including fields)
         if (message.embeds.length > 0) {
             for (const embed of message.embeds) {
-                if (embed.title) {
-                    description += description ? `\n\n**${embed.title}**` : `**${embed.title}**`;
-                }
-                if (embed.description) {
-                    description += description ? `\n${embed.description}` : embed.description;
-                }
-                if (embed.url) {
-                    description += `\n${embed.url}`;
+                const embedContent = extractEmbedContent(embed);
+                if (embedContent) {
+                    description += description ? '\n\n' + embedContent : embedContent;
                 }
             }
         }
