@@ -2015,9 +2015,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
           {
             key: "quadrants",
             label: "Quadrants",
-            type: "array",
+            type: "custom",
+            component: "QuadrantsField",
             helpText: "Quadrant data (Q1–Q4): status, blighted, discoveries, exploredBy, exploredAt, oldMapNumber, oldMapLeadsTo, ruinRestStamina",
-            readOnly: false,
           },
         ],
       },

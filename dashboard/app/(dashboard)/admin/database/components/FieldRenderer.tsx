@@ -12,6 +12,7 @@ import { CraftingMaterialsField } from "./CraftingMaterialsField";
 import { VillageMaterialsField } from "./VillageMaterialsField";
 import { VillageContributorsField } from "./VillageContributorsField";
 import { VillageCooldownsField } from "./VillageCooldownsField";
+import { QuadrantsField, type Quadrant } from "./QuadrantsField";
 
 type FieldRendererProps = {
   field: FieldConfig;
@@ -306,6 +307,28 @@ export function FieldRenderer({
           <VillageCooldownsField
             label={label}
             value={cooldownsValue}
+            onChange={(val) => onChange(val)}
+            helpText={helpText || ""}
+            isChanged={isChanged}
+            error={error}
+          />
+        );
+      }
+      if (field.component === "QuadrantsField") {
+        let quadrantsValue: unknown[] = [];
+        if (Array.isArray(value)) {
+          quadrantsValue = value;
+        } else if (value && typeof value === "object") {
+          if (value instanceof Map) {
+            quadrantsValue = Array.from(value.values());
+          } else {
+            quadrantsValue = [];
+          }
+        }
+        return (
+          <QuadrantsField
+            label={label}
+            value={quadrantsValue as Quadrant[]}
             onChange={(val) => onChange(val)}
             helpText={helpText || ""}
             isChanged={isChanged}

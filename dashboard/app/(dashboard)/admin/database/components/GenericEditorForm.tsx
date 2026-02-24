@@ -59,7 +59,8 @@ export function GenericEditorForm({
             if (field.type === "custom" && (
               field.component === "VillageMaterialsField" ||
               field.component === "VillageContributorsField" ||
-              field.component === "VillageCooldownsField"
+              field.component === "VillageCooldownsField" ||
+              field.component === "QuadrantsField"
             )) {
               // Keep as object for custom village components
               if (value instanceof Map) {
@@ -271,7 +272,8 @@ export function GenericEditorForm({
           if (field.type === "custom" && (
             field.component === "VillageMaterialsField" ||
             field.component === "VillageContributorsField" ||
-            field.component === "VillageCooldownsField"
+            field.component === "VillageCooldownsField" ||
+            field.component === "QuadrantsField"
           )) {
             if (changes[key] || JSON.stringify(formValue) !== JSON.stringify(item[key])) {
               updates[key] = formValue;

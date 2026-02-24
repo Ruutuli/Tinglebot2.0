@@ -6017,9 +6017,29 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      );
      // Block movement to inaccessible quadrants (edge of map)
      if (destQ && destQ.status === "inaccessible") {
-      return interaction.editReply(
-       `**${newLocation.square} ${newLocation.quadrant}** is inaccessible (edge of map). Choose a different quadrant.`
-      );
+      const startPointInacc = START_POINTS_BY_REGION[party.region];
+      const isAtStartInacc = startPointInacc &&
+       String(party.square || "").toUpperCase() === String(startPointInacc.square || "").toUpperCase() &&
+       String(party.quadrant || "").toUpperCase() === String(startPointInacc.quadrant || "").toUpperCase();
+      const inaccessibleEmbed = new EmbedBuilder()
+       .setTitle("🚫 **Quadrant inaccessible**")
+       .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#b91c1c"))
+       .setDescription(
+        `**${newLocation.square} ${newLocation.quadrant}** is off the map (edge of the region).\n\n` +
+        `Choose a different quadrant from the **Move** menu to continue your expedition.`
+       )
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+      addExplorationStandardFields(inaccessibleEmbed, {
+       party,
+       expeditionId,
+       location: `${party.square} ${party.quadrant}`,
+       nextCharacter: party.characters[party.currentTurn] ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: true,
+       isAtStartQuadrant: isAtStartInacc,
+       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      });
+      return interaction.editReply({ embeds: [inaccessibleEmbed] });
      }
      // Block movement to squares outside allowed regions (only eldin, lanayru, faron are explorable)
      const destRegion = (destMapSquare.region || "").toLowerCase();
@@ -6284,7 +6304,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      .setImage(moveEmbedImage);
     const moveToSecured = destinationQuadrantState === "secured";
     const moveIsAtStart = (() => {
-     const start = START_POINTS_BY_REGION[party.region];
+     const regionKey = (party.region || "").toLowerCase();
+     const start = START_POINTS_BY_REGION[regionKey];
      return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
     })();
     const hasDiscMove = await hasDiscoveriesInQuadrant(newLocation.square, newLocation.quadrant);
@@ -6546,7 +6567,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      );
     }
 
-    const startPoint = START_POINTS_BY_REGION[party.region];
+    const regionKeyEnd = (party.region || "").toLowerCase();
+    const startPoint = START_POINTS_BY_REGION[regionKeyEnd];
     if (!startPoint) {
      return interaction.editReply("Could not determine the starting quadrant for this region.");
     }
@@ -6570,7 +6592,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      lanayru: "inariko",
      faron: "vhintl",
     };
-    const targetVillage = regionToVillage[party.region];
+    const targetVillage = regionToVillage[regionKeyEnd];
 
     // Divide remaining hearts and stamina evenly among the group (each gets equal share, capped at max)
     const remainingHearts = Math.max(0, party.totalHearts ?? 0);
