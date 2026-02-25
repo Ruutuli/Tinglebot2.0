@@ -659,7 +659,7 @@ async function birthdayAnnouncements(client, _data = {}) {
     // User birthdays: one embed (with rewards info)
     if (birthdayUsers.length > 0) {
       const userMentions = birthdayUsers.map(user => `<@${user.discordId}>`).join(' ');
-      const userDescription = `**@everyone**\n\n🎂 **User Birthdays:**\n${userMentions}\n\n🎁 **It's your birthday!** Use \`/birthday claim\` to get your rewards!\n\n**Choose one:**\n• 💰 1500 tokens\n• 🛍️ 75% shop discount`;
+      const userDescription = `🎂 **User Birthdays:**\n${userMentions}\n\n🎁 **It's your birthday!** Use \`/birthday claim\` to get your rewards!\n\n**Choose one:**\n• 💰 1500 tokens\n• 🛍️ 75% shop discount`;
       const userEmbed = new EmbedBuilder()
         .setColor(0xff69b4)
         .setTitle('🎂 Happy Birthday! 🎉')
@@ -699,7 +699,7 @@ async function birthdayAnnouncements(client, _data = {}) {
     const EMBEDS_PER_MESSAGE = 10;
     for (let i = 0; i < embeds.length; i += EMBEDS_PER_MESSAGE) {
       const chunk = embeds.slice(i, i + EMBEDS_PER_MESSAGE);
-      const content = i === 0 ? '@everyone' : null;
+      const content = null;
       await channel.send({ content, embeds: chunk });
     }
     logger.success('SCHEDULED', `birthday-announcements: Posted announcement for ${birthdayUsers.length} user(s) and ${birthdayCharacters.length} character(s)`);
