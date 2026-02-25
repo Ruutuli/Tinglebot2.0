@@ -1,13 +1,14 @@
 // ============================================================================
-// ---- Standard Libraries ----
+// ------------------- Standard Libraries -------------------
 // ============================================================================
 const { handleError } = require('@/utils/globalErrorHandler');
 const logger = require('@/utils/logger');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const { calculateFinalValue, calculateRaidFinalValue } = require('./rngModule');
 const { EmbedBuilder } = require('discord.js');
-const { 
+const {
   getEncounterOutcome,
+  createEncounterContext,
   getTier5EncounterOutcome,
   getTier6EncounterOutcome,
   getTier7EncounterOutcome,
@@ -20,15 +21,25 @@ const { capitalizeVillageName } = require('@/utils/stringUtils');
 const { monsterMapping } = require('@/models/MonsterModel');
 const Raid = require('@/models/RaidModel');
 const { finalizeBlightApplication } = require('../handlers/blightHandler');
-const { getExploreCommandId } = require('../embeds/embeds.js');
+const embedsModule = require('../embeds/embeds.js');
+const { getExploreCommandId, getItemCommandId } = embedsModule;
 const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
+const scheduler = require('@/utils/scheduler');
+const { fetchCharacterById, updateCharacterById, updateModCharacterById } = require('@/database/db');
+const { generateModCharacterVictoryMessage, generateDamageDealtMessage, generateDamageMessage } = require('./flavorTextModule');
+const { getCharacterBoostStatus, applyLootingDamageBoost } = require('./boostIntegration');
+const { shouldConsumeElixir, consumeElixirBuff, getActiveBuffEffects } = require('./elixirModule');
+const { useHearts } = require('./characterStatsModule');
+const { getCurrentWeather } = require('@/services/weatherService');
+const { getGlobalRaidCooldown, setGlobalRaidCooldown, getVillageRaidCooldown, VILLAGE_RAID_COOLDOWN, setVillageRaidCooldown } = require('../scripts/randomMonsterEncounters');
 
 // ============================================================================
-// ---- Constants ----
+// ------------------- Constants -------------------
 // ============================================================================
-// ---- Function: calculateRaidDuration ----
-// Calculates raid duration based on monster tier
+
+// ------------------- calculateRaidDuration ------------------
+// Calculates raid duration based on monster tier (Tier 5: 10 min, Tier 10: 20 min, linear).
 // Tier 5: 10 minutes, Tier 10: 20 minutes, scales linearly
 function calculateRaidDuration(tier) {
   if (tier < 5) {
@@ -49,10 +60,10 @@ function calculateRaidDuration(tier) {
 
 const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (Discord allows: 1, 3, 7, 14, 30, 60, 1440 minutes)
 
-/** Agenda job name for one-time raid expiration (used by scheduler and raidModule) */
+// ------------------- Agenda job names ------------------
+// One-time raid expiration (scheduler and raidModule)
 const RAID_EXPIRATION_JOB_NAME = 'raid-expiration';
-
-/** Agenda job name for 1-minute turn skip (when current player doesn't roll in time) */
+// 1-minute turn skip when current player doesn't roll in time
 const RAID_TURN_SKIP_JOB_NAME = 'raid-turn-skip';
 
 const RAID_TURN_SKIP_SECONDS = 60;
@@ -74,13 +85,15 @@ const VILLAGE_VISITING_ROLES = {
 // Universal raid role for all villages (replaces resident + visiting during raids)
 const UNIVERSAL_RAID_ROLE = '1205321558671884328';
 
-/** Party-size scaling: 5 or fewer = base max hearts; 6+ = base + 2 per extra participant (5→10, 6→12, 7→14). */
+// ------------------- getScaledMaxHearts ------------------
+// Party-size scaling: 5 or fewer = base max hearts; 6+ = base + 2 per extra participant (5→10, 6→12, 7→14).
 function getScaledMaxHearts(baseHearts, partySize) {
   if (partySize <= 5) return baseHearts;
   return baseHearts + 2 * (partySize - 5);
 }
 
-/** Recompute monster max/current hearts from base and current participant count; preserves damage dealt. Call after join or leave. */
+// ------------------- applyPartySizeScalingToRaid ------------------
+// Recompute monster max/current hearts from base and current participant count; preserves damage dealt. Call after join or leave.
 async function applyPartySizeScalingToRaid(raid) {
   if (!raid.analytics) raid.analytics = {};
   if (!raid.analytics.baseMonsterHearts || raid.analytics.baseMonsterHearts <= 0) {
@@ -97,16 +110,38 @@ async function applyPartySizeScalingToRaid(raid) {
   raid.monster.currentHearts = newCurrent;
   await raid.save();
   if (partySize >= 5) {
-    console.log(`[raidModule.js]: 📈 Raid ${raid.raidId} scaled HP → partySize=${partySize}, base=${baseHearts}, max=${newMax}, current=${newCurrent}`);
+    logger.info('RAID', `[raidModule.js] 📈 Raid ${raid.raidId} scaled HP → partySize=${partySize}, base=${baseHearts}, max=${newMax}, current=${newCurrent}`);
   }
   return raid;
 }
 
 // ============================================================================
-// ---- Raid Battle Processing ----
+// ------------------- Raid Battle Processing -------------------
 // ============================================================================
 
-// ---- Function: processRaidBattle ----
+// ------------------- getTierEncounterOutcomeForRaid ------------------
+// Returns tier 5-10 encounter outcome for raid; null for tier < 5, throws for unsupported tier > 10.
+async function getTierEncounterOutcomeForRaid(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, tier) {
+  if (tier < 5) return null;
+  switch (tier) {
+    case 5:
+      return await getTier5EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+    case 6:
+      return await getTier6EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+    case 7:
+      return await getTier7EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+    case 8:
+      return await getTier8EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+    case 9:
+      return await getTier9EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+    case 10:
+      return await getTier10EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
+    default:
+      throw new Error(`Unsupported monster tier for raid: ${tier}`);
+  }
+}
+
+// ------------------- processRaidBattle ------------------
 // Processes a raid battle turn using the encounter module's tier-specific logic.
 // options: { skipPersist: true } for expedition (monster camp) waves — no character hearts or KO persisted; caller applies damage to party pool only.
 async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, characterHeartsBefore = null, options = {}) {
@@ -120,9 +155,6 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // Mod characters have the ability to 1-hit KO all raid monsters
     if (character.isModCharacter) {
       logger.info('RAID', `Mod character ${character.name} (${character.modTitle || 'Oracle'}) uses 1-hit KO ability on ${monster.name}!`);
-      
-      // Import flavor text module for mod character victory messages
-      const { generateModCharacterVictoryMessage } = require('./flavorTextModule');
       
       // Generate appropriate flavor text based on character type
       const modFlavorText = generateModCharacterVictoryMessage(
@@ -160,7 +192,6 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
         // getEncounterOutcome already saved character damage via useHearts (unless skipPersist)
         // Reload character to get updated hearts when not in testing mode
         if (!skipPersist) {
-          const { fetchCharacterById } = require('@/database/db');
           const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
           if (updatedCharacter) {
             Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
@@ -177,9 +208,6 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
         
         // Calculate monster damage incrementally (like tiers 5+)
         // For raids/waves, we want incremental damage, not instant defeats
-        // Generate flavor text based on the outcome
-        const { generateDamageDealtMessage, generateDamageMessage } = require('./flavorTextModule');
-        
         // Calculate incremental damage based on roll value (similar to tier 5+)
         // Use ranges similar to tier 5 but scaled for lower tiers
         if (defenseSuccess) {
@@ -238,28 +266,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
           damageAlreadySaved: true // Flag to prevent double-saving damage
         };
       } else {
-        switch (monster.tier) {
-        case 5:
-          outcome = await getTier5EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-          break;
-        case 6:
-          outcome = await getTier6EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-          break;
-        case 7:
-          outcome = await getTier7EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-          break;
-        case 8:
-          outcome = await getTier8EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-          break;
-        case 9:
-          outcome = await getTier9EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-          break;
-        case 10:
-          outcome = await getTier10EncounterOutcome(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, true);
-          break;
-        default:
-          throw new Error(`Unsupported monster tier for raid: ${monster.tier}`);
-        }
+        outcome = await getTierEncounterOutcomeForRaid(character, monsterCopy, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess, monster.tier);
       }
     }
 
@@ -276,7 +283,6 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     let initialCharacterDamage = characterHeartsBefore - (outcome.playerHearts?.current || character.currentHearts);
     
     try {
-      const { getCharacterBoostStatus } = require('./boostIntegration');
       const boostStatusForReroll = await getCharacterBoostStatus(character.name);
       const hasFortuneTellerLootBoost = boostStatusForReroll && boostStatusForReroll.boosterJob === 'Fortune Teller' && boostStatusForReroll.category === 'Looting';
       
@@ -286,36 +292,14 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
 
         // Perform a single reroll end-to-end
         const diceRollReroll = Math.floor(Math.random() * 100) + 1;
-        const { calculateRaidFinalValue } = require('./rngModule');
         let { damageValue: damageValueReroll, adjustedRandomValue: adjustedRandomValueReroll, attackSuccess: attackSuccessReroll, defenseSuccess: defenseSuccessReroll } =
           calculateRaidFinalValue(character, diceRollReroll);
 
-        // Create a copy of the monster for reroll
+        // Create a copy of the monster for reroll; get outcome via shared tier helper
         const monsterCopyReroll = { ...monster };
-        let rerollOutcome;
-        
-        // Get reroll outcome using the same tier-specific logic
-        switch (monster.tier) {
-        case 5:
-          rerollOutcome = await getTier5EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
-          break;
-        case 6:
-          rerollOutcome = await getTier6EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
-          break;
-        case 7:
-          rerollOutcome = await getTier7EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
-          break;
-        case 8:
-          rerollOutcome = await getTier8EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
-          break;
-        case 9:
-          rerollOutcome = await getTier9EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
-          break;
-        case 10:
-          rerollOutcome = await getTier10EncounterOutcome(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, true);
-          break;
-        default:
-          rerollOutcome = null;
+        let rerollOutcome = null;
+        if (monster.tier >= 5 && monster.tier <= 10) {
+          rerollOutcome = await getTierEncounterOutcomeForRaid(character, monsterCopyReroll, damageValueReroll, adjustedRandomValueReroll, attackSuccessReroll, defenseSuccessReroll, monster.tier);
         }
 
         if (rerollOutcome) {
@@ -357,13 +341,12 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // Note: For tiers 1-4, damage was already saved by getEncounterOutcome, so boosts can't reduce it
     // This is acceptable since tiers 1-4 are simpler encounters
     if (character.boostedBy && characterDamage > 0 && !damageAlreadySaved) {
-      const { applyLootingDamageBoost } = require('./boostIntegration');
       const monsterTier = monster.tier || 5;
       finalDamage = await applyLootingDamageBoost(character.name, characterDamage, monsterTier);
       const damageReduction = characterDamage - finalDamage;
       
       if (damageReduction > 0) {
-        console.log(`[raidModule.js]: 🎭 Boost applied - damage reduced from ${characterDamage} to ${finalDamage} (-${damageReduction} hearts) for ${character.name}`);
+        logger.info('RAID', `[raidModule.js] 🎭 Boost applied - damage reduced ${characterDamage}→${finalDamage} (-${damageReduction}) for ${character.name}`);
       }
     }
 
@@ -372,23 +355,15 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // For tiers 5+, the encounter module doesn't save hearts to DB, so we need to do it here
     // Apply the final damage (after boost reduction) to the database
     if (finalDamage > 0 && !damageAlreadySaved && !skipPersist) {
-      const { useHearts } = require('./characterStatsModule');
-      const { createEncounterContext } = require('./encounterModule');
-      // Calculate final hearts after damage
       const finalHearts = Math.max(0, characterHeartsBefore - finalDamage);
       
       // Use useHearts to properly save damage and handle KO if needed
       await useHearts(character._id, finalDamage, createEncounterContext(character, 'raid_damage'));
       
-      // Reload character from database to get the latest state (useHearts may have updated KO status)
-      const { fetchCharacterById } = require('@/database/db');
       const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
       if (updatedCharacter) {
-        // Update the character object reference with fresh data
         Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
       }
-      
-      // Update outcome to reflect final damage
       if (outcome.playerHearts) {
         outcome.playerHearts.current = character.currentHearts;
       }
@@ -407,20 +382,14 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
     // Check if elixirs should be consumed based on the raid encounter
     try {
       if (!skipPersist) {
-        const { shouldConsumeElixir, consumeElixirBuff } = require('./elixirModule');
         if (shouldConsumeElixir(character, 'raid', { monster: monster })) {
           consumeElixirBuff(character);
-          console.log(`[raidModule.js]: 🧪 Elixir consumed for ${character.name} during raid against ${monster.name}`);
-          
-          // Update character in database to persist the consumed elixir
+          logger.info('RAID', `[raidModule.js] 🧪 Elixir consumed for ${character.name} during raid`);
           await character.save();
-        } else if (character.buff?.active) {
-          // Log when elixir is not used due to conditions not met
-          console.log(`[raidModule.js]: 🧪 Elixir not used for ${character.name} - conditions not met. Active buff: ${character.buff.type}`);
         }
       }
     } catch (elixirError) {
-      console.error(`[raidModule.js]: ⚠️ Warning - Elixir consumption failed:`, elixirError);
+      logger.warn('RAID', `[raidModule.js] ⚠️ Elixir consumption failed:`, elixirError);
       // Don't fail the raid if elixir consumption fails
     }
 
@@ -453,16 +422,34 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       characterName: character?.name,
       monsterName: monster?.name
     });
-    console.error(`[raidModule.js]: ❌ Error processing raid battle:`, error);
+    logger.error('RAID', `[raidModule.js] ❌ Error processing raid battle:`, error);
     return null;
   }
 }
 
 // ============================================================================
-// ---- Raid Functions ----
+// ------------------- Raid Functions -------------------
 // ============================================================================
+// ------------------- Turn order rules ------------------
+// currentTurn indexes raid.participants[]; first joiner is index 0.
+// Mod characters are in the array but do not participate in turn order (can roll anytime; advanceTurn skips them; no skip timer).
+// KO'd participants stay in order (turn to use a fairy or leave); skip timer applies to them.
+// Turn advances after a non-mod roll or item use; skip job runs only for village raids (no skip for expedition raids).
+// When someone leaves or is skip-removed, RaidModel adjusts currentTurn; raidModule cancels/schedules the skip timer when the current turn player changes.
 
-// ---- Function: startRaid ----
+// ------------------- getRaidOrThrow ------------------
+// Fetches raid by raidId; throws with debug info (available active raid IDs) if not found.
+async function getRaidOrThrow(raidId) {
+  const raid = await Raid.findOne({ raidId });
+  if (!raid) {
+    const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
+    const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
+    throw new Error(`Raid not found. Raid ID: "${raidId}". Available active raids: ${activeRaidIds || 'None'}`);
+  }
+  return raid;
+}
+
+// ------------------- startRaid ------------------
 // Creates a new raid instance with the given monster and village
 // expeditionId: when set, only members of that expedition can join (exploration-triggered raid)
 // grottoId: when set, this raid is a Grotto Test of Power; on victory complete grotto and grant Spirit Orbs
@@ -505,12 +492,11 @@ async function startRaid(monster, village, interaction = null, expeditionId = nu
     // Save raid to database
     await raid.save();
 
-    console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village}${isExpeditionRaid ? ' (expedition — no timer)' : ` - Duration: ${Math.floor(raidDuration / (1000 * 60))} minutes`}`);
+    logger.info('RAID', `[raidModule.js] 🐉 Started raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village}${isExpeditionRaid ? ' (expedition)' : ` (${Math.floor(raidDuration / (1000 * 60))}m)`}`);
     
     // Schedule raid expiration using Agenda (only for normal village raids; expedition raids have no timer)
     if (!isExpeditionRaid) {
       try {
-        const scheduler = require('@/utils/scheduler');
         const expirationTime = new Date(Date.now() + raidDuration);
         await scheduler.scheduleOneTimeJob(RAID_EXPIRATION_JOB_NAME, expirationTime, { raidId });
         logger.info('RAID', `Scheduled raid expiration for ${raidId} at ${expirationTime.toISOString()}`);
@@ -531,27 +517,16 @@ async function startRaid(monster, village, interaction = null, expeditionId = nu
       monsterName: monster?.name,
       village: village
     });
-    console.error(`[raidModule.js]: ❌ Error starting raid:`, error);
+    logger.error('RAID', `[raidModule.js] ❌ Error starting raid:`, error);
     throw error;
   }
 }
 
-// ---- Function: joinRaid ----
-// Allows a character to join an active raid after validation checks
-// @param {Object} character - Character document
-// @param {string} raidId - Raid ID to join
-// @param {Object} options - Optional: { client, guild } for blight finalization
+// ------------------- joinRaid ------------------
+// Allows a character to join an active raid after validation checks. options: { client, guild } for blight finalization.
 async function joinRaid(character, raidId, options = {}) {
   try {
-    // Retrieve raid from database
-    const raid = await Raid.findOne({ raidId: raidId });
-    if (!raid) {
-      // Get all active raids for debugging
-      const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
-      const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
-      
-      throw new Error(`Raid not found. Raid ID: "${raidId}". Available active raids: ${activeRaidIds || 'None'}`);
-    }
+    const raid = await getRaidOrThrow(raidId);
 
     // Check if raid is active
     if (raid.status !== 'active') {
@@ -608,8 +583,6 @@ async function joinRaid(character, raidId, options = {}) {
     }
 
     // ------------------- Blight Rain Check -------------------
-    // Check for blight rain in the village and apply infection chance
-    const { getCurrentWeather } = require('@/services/weatherService');
     const weatherData = await getCurrentWeather(raid.village);
     let blightRainMessage = null;
     
@@ -621,41 +594,33 @@ async function joinRaid(character, raidId, options = {}) {
           blightRainMessage = 
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** is a ${character.modTitle} of ${character.modType} and is immune to blight infection! ◈`;
-          console.log(`[raidModule.js]: 🛡️ Mod character ${character.name} is immune to blight infection`);
         } else {
           blightRainMessage = 
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** was definitely in the blight rain, but somehow avoided being infected... Was it luck? Or something else? ◈`;
-          console.log(`[raidModule.js]: 🛡️ Hibiki (${character.name}) avoided blight infection`);
         }
       } else if (character.blighted) {
         blightRainMessage = 
           "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
           `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-        console.log(`[raidModule.js]: 💀 Character ${character.name} is already blighted`);
       } else {
         // Check for resistance buffs
-        const { getActiveBuffEffects, shouldConsumeElixir, consumeElixirBuff } = require('../modules/elixirModule');
         const buffEffects = getActiveBuffEffects(character);
         let infectionChance = 0.75; // Base 75% chance
         
         // Apply resistance buffs
         if (buffEffects && buffEffects.blightResistance > 0) {
           infectionChance -= (buffEffects.blightResistance * 0.3); // Each level reduces by 30%
-          console.log(`[raidModule.js]: 🧪 Blight resistance buff applied - Infection chance reduced from 0.75 to ${infectionChance}`);
         }
         if (buffEffects && buffEffects.fireResistance > 0) {
           infectionChance -= (buffEffects.fireResistance * 0.05); // Each level reduces by 5%
-          console.log(`[raidModule.js]: 🧪 Fire resistance buff applied - Infection chance reduced by ${buffEffects.fireResistance * 0.05}`);
         }
         
         // Consume elixirs after applying their effects
         if (shouldConsumeElixir(character, 'raid', { blightRain: true })) {
           consumeElixirBuff(character);
-          // Update character in database
-          const { updateCharacterById, updateModCharacterById } = require('@/database/db.js');
-          const updateFunction = character.isModCharacter ? updateCharacterById : updateCharacterById;
-          await updateFunction(character._id, { buff: character.buff });
+          const updateFn = character.isModCharacter ? updateModCharacterById : updateCharacterById;
+          await updateFn(character._id, { buff: character.buff });
         }
         
         // Ensure chance stays within reasonable bounds
@@ -672,8 +637,8 @@ async function joinRaid(character, raidId, options = {}) {
             "⚠️ **STAGE 1:** Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
             "🎲 **Daily Rolling:** **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n*You will not be penalized for missing today's blight roll if you were just infected.*";
           
-          console.log(`[raidModule.js]: 💀 Character ${character.name} infected with blight during raid join`);
-          
+          logger.info('RAID', `[raidModule.js] 💀 ${character.name} infected with blight during raid join`);
+
           // Use shared finalize helper - each step has its own try/catch for resilience
           const finalizeResult = await finalizeBlightApplication(
             character,
@@ -686,12 +651,10 @@ async function joinRaid(character, raidId, options = {}) {
             }
           );
           
-          console.log(`[raidModule.js]: Blight finalize result for ${character.name} - Saved: ${finalizeResult.characterSaved}, Role: ${finalizeResult.roleAdded}, User: ${finalizeResult.userFlagSet}, DM: ${finalizeResult.dmSent}`);
         } else {
           blightRainMessage = 
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain and managed to avoid infection! ◈`;
-          console.log(`[raidModule.js]: ☔ Character ${character.name} avoided blight infection during raid join`);
         }
       }
     }
@@ -732,10 +695,10 @@ async function joinRaid(character, raidId, options = {}) {
     try {
       await applyPartySizeScalingToRaid(raid);
     } catch (scaleError) {
-      console.warn(`[raidModule.js]: ⚠️ Failed to scale raid HP: ${scaleError.message}`);
+      logger.warn('RAID', `[raidModule.js] ⚠️ Failed to scale raid HP: ${scaleError.message}`);
     }
 
-    console.log(`[raidModule.js]: 👤 ${character.name} joined raid ${raidId}`);
+    logger.info('RAID', `[raidModule.js] 👤 ${character.name} joined raid ${raidId}`);
 
     // Only start the 1-minute skip timer when the first participant joins. Later joiners
     // get their turn (and timer) from raid.js + processRaidTurn, so scheduling here
@@ -760,18 +723,17 @@ async function joinRaid(character, raidId, options = {}) {
       characterName: character?.name,
       raidId: raidId
     });
-    console.error(`[raidModule.js]: ❌ Error joining raid:`, error);
+    logger.error('RAID', `[raidModule.js] ❌ Error joining raid:`, error);
     throw error;
   }
 }
 
-// ---- Function: scheduleRaidTurnSkip ----
-// Schedules a one-time job in 60s to skip the current turn if they don't roll (skipped for mod characters)
+// ------------------- scheduleRaidTurnSkip ------------------
+// Schedules a one-time job in 60s to skip the current turn if they don't roll. Mod characters are not on the turn timer.
 // Always cancels any existing skip job for this raid first so only one timer is ever active.
 // Stores scheduledAt (ms) so the handler only skips after 60s elapsed (immune to Agenda running early or clock skew).
 // Expedition raids: no turn-skip timer (only during exploring).
 async function scheduleRaidTurnSkip(raidId) {
-  const scheduler = require('@/utils/scheduler');
   await cancelRaidTurnSkip(raidId); // Prevent duplicate jobs — only one skip timer per raid
   const raid = await Raid.findOne({ raidId, status: 'active' });
   if (!raid || !raid.participants || raid.participants.length === 0) return;
@@ -795,7 +757,7 @@ async function scheduleRaidTurnSkip(raidId) {
   logger.info('RAID', `Scheduled turn skip for ${raidId} in ${RAID_TURN_SKIP_SECONDS}s at ${when.toISOString()} (${current.name})`);
 }
 
-// ---- Function: notifyExpeditionRaidOver ----
+// ------------------- notifyExpeditionRaidOver ------------------
 // When a raid was triggered from an expedition: update party progressLog and send "continue expedition" to thread
 // For result === 'fled' (retreat): do NOT fetch/save party — explore retreat handler owns that save to avoid double-dip on stamina.
 // finalBlowCharacter: when result === 'defeated', the character who dealt the killing blow (for progress log).
@@ -851,14 +813,13 @@ async function notifyExpeditionRaidOver(raid, client, result, finalBlowCharacter
   }
 }
 
-// ---- Function: cancelRaidTurnSkip ----
+// ------------------- cancelRaidTurnSkip ------------------
 async function cancelRaidTurnSkip(raidId) {
-  const scheduler = require('@/utils/scheduler');
   const n = await scheduler.cancelJob(RAID_TURN_SKIP_JOB_NAME, { raidId });
   if (n > 0) logger.info('RAID', `Cancelled ${n} turn-skip job(s) for raid ${raidId}`);
 }
 
-// ---- Function: advanceRaidTurnOnItemUse ----
+// ------------------- advanceRaidTurnOnItemUse ------------------
 // When a character uses a healing item (e.g. Fairy) during their raid turn, advance the raid turn.
 // Called from /item command after successful healing so items count as a turn.
 async function advanceRaidTurnOnItemUse(characterId) {
@@ -890,7 +851,7 @@ async function advanceRaidTurnOnItemUse(characterId) {
   }
 }
 
-// ---- Function: syncExpeditionPartyPoolFromRaid ----
+// ------------------- syncExpeditionPartyPoolFromRaid ------------------
 // For expedition raids, the party pool is the single source of truth throughout the expedition.
 // Damage is applied to the party pool after each turn (in processRaidTurn).
 // This function is a no-op for expeditions — we don't want to overwrite the pool with character DB values.
@@ -901,7 +862,7 @@ async function syncExpeditionPartyPoolFromRaid(raid) {
   logger.info('RAID', `Skipping pool sync for raid ${raid.raidId} (expedition — party pool is source of truth)`);
 }
 
-// ---- Function: endExplorationRaidAsRetreat ----
+// ------------------- endExplorationRaidAsRetreat ------------------
 // Called when party successfully retreats from an exploration raid. Ends the raid as 'fled' and notifies expedition.
 async function endExplorationRaidAsRetreat(raid, client) {
   if (!raid || raid.status !== 'active') return;
@@ -918,7 +879,7 @@ async function endExplorationRaidAsRetreat(raid, client) {
   }
 }
 
-// ---- Function: closeRaidsForExpedition ----
+// ------------------- closeRaidsForExpedition ------------------
 // Closes any active raids linked to an expedition when the expedition ends (party KO or return home).
 // Uses direct update (no KO). Does not notify expedition—caller handles that.
 async function closeRaidsForExpedition(expeditionId) {
@@ -929,7 +890,6 @@ async function closeRaidsForExpedition(expeditionId) {
       try {
         await cancelRaidTurnSkip(raid.raidId);
         try {
-          const scheduler = require('@/utils/scheduler');
           await scheduler.cancelJob(RAID_EXPIRATION_JOB_NAME, { raidId: raid.raidId });
         } catch (cancelErr) {
           // Ignore—expedition raids typically have no expiration job
@@ -947,7 +907,7 @@ async function closeRaidsForExpedition(expeditionId) {
   }
 }
 
-// ---- Function: leaveRaid ----
+// ------------------- leaveRaid ------------------
 // Player voluntarily leaves; monster HP is unchanged (no revert). Eligible for loot if 1+ damage or 3+ rounds.
 // Expedition raids: leaving is not allowed; the whole party must retreat together via /explore retreat.
 async function leaveRaid(character, raidId, options = {}) {
@@ -975,7 +935,7 @@ async function leaveRaid(character, raidId, options = {}) {
       await applyPartySizeScalingToRaid(updatedRaid);
     }
   } catch (scaleError) {
-    console.warn(`[raidModule.js]: ⚠️ Failed to rescale raid HP on leave: ${scaleError.message}`);
+    logger.warn('RAID', `[raidModule.js] ⚠️ Failed to rescale raid HP on leave: ${scaleError.message}`);
   }
 
   if (wasCurrentTurn) {
@@ -996,22 +956,15 @@ async function leaveRaid(character, raidId, options = {}) {
   return { eligibleForLoot, nextTurnMention };
 }
 
-// ---- Function: processRaidTurn ----
+// User-facing message when turn was already processed or turn order advanced (duplicate submit, turn-skip race, etc.)
+const RAID_TURN_ALREADY_PROCESSED_MSG = 'Your turn was already processed or the turn has advanced. Please wait for your next turn.';
+
+// ------------------- processRaidTurn ------------------
 // Processes a single turn in a raid for a character
 async function processRaidTurn(character, raidId, interaction, raidData = null) {
   try {
-    // Use provided raidData or fetch from database
-    let raid = raidData;
-    if (!raid) {
-      raid = await Raid.findOne({ raidId: raidId });
-    }
-    if (!raid) {
-      // Get all active raids for debugging
-      const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
-      const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
-      
-      throw new Error(`Raid not found. Raid ID: "${raidId}". Available active raids: ${activeRaidIds || 'None'}`);
-    }
+    // Always fetch fresh raid for validation (ignore passed raidData to avoid stale state / races)
+    let raid = await getRaidOrThrow(raidId);
 
     // Check if raid is active
     if (raid.status !== 'active') {
@@ -1026,14 +979,22 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
 
     // Find participant
     const participants = raid.participants || [];
-    const participant = participants.find(p => p.characterId.toString() === character._id.toString());
+    let participant = participants.find(p => p.characterId.toString() === character._id.toString());
     if (!participant) {
       throw new Error('Character is not in this raid');
     }
 
+    // Explicit "is it my turn?" check (mod characters can roll anytime)
+    if (!isModTurn) {
+      const currentTurnParticipant = raid.getCurrentTurnParticipant();
+      if (!currentTurnParticipant || currentTurnParticipant.characterId.toString() !== character._id.toString()) {
+        throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
+      }
+    }
+
     // Prevent double turn advancement: if participant already took action this turn, reject
     if (participant.hasTakenActionThisTurn) {
-      throw new Error('You have already taken your turn this round. Please wait for your next turn.');
+      throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
     }
 
     // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
@@ -1108,7 +1069,6 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
         if (raid.monster.currentHearts <= 0) {
           // Cancel the scheduled expiration job since raid completed early
           try {
-            const scheduler = require('@/utils/scheduler');
             await scheduler.cancelJob(RAID_EXPIRATION_JOB_NAME, { raidId });
             logger.info('RAID', `Cancelled expiration job for completed raid ${raidId}`);
           } catch (cancelError) {
@@ -1123,22 +1083,18 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           }
         } else {
           // Reload character from database to get the latest state (hearts were saved in processRaidBattle)
-          const { fetchCharacterById } = require('@/database/db');
           const updatedCharacter = await fetchCharacterById(character._id, character.isModCharacter);
           if (updatedCharacter) {
-            // Update the character object reference with fresh data
             Object.assign(character, updatedCharacter.toObject ? updatedCharacter.toObject() : updatedCharacter);
           }
-          
-          // ------------------- Clear Boost After Raid Turn -------------------
-          // Similar to loot.js - clear boost after damage/encounter
+
           if (character.boostedBy) {
             const { clearBoostAfterUse } = require('../commands/jobs/boosting.js');
             await clearBoostAfterUse(character, {
               client: interaction?.client,
               context: 'raid turn'
             });
-            console.log(`[raidModule.js]: 🎭 Boost cleared for ${character.name} after raid turn`);
+            logger.info('RAID', `[raidModule.js] 🎭 Boost cleared for ${character.name} after raid turn`);
           }
           
           // Mark that this participant has taken their action this turn (prevents double advancement)
@@ -1162,7 +1118,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       } catch (error) {
         if (error.name === 'VersionError' && raidUpdateRetries < maxRaidRetries - 1) {
           raidUpdateRetries++;
-          console.warn(`[raidModule.js]: ⚠️ Version conflict in processRaidTurn, retrying (${raidUpdateRetries}/${maxRaidRetries})`);
+          logger.warn('RAID', `[raidModule.js] ⚠️ Version conflict in processRaidTurn, retrying (${raidUpdateRetries}/${maxRaidRetries})`);
           
           // Reload the raid document to get the latest version
           const freshRaid = await Raid.findById(raid._id);
@@ -1173,7 +1129,23 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           // Update the current raid object with fresh data
           raid.set(freshRaid.toObject());
           
-          // Continue with the retry
+          // Re-validate: turn may have been processed by another request or turn-skip; avoid double-apply
+          const participantsAfter = raid.participants || [];
+          const participantRef = participantsAfter.find(p => p.characterId.toString() === character._id.toString());
+          if (!participantRef) {
+            throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
+          }
+          if (!isModTurn) {
+            const currentTurnParticipant = raid.getCurrentTurnParticipant();
+            if (!currentTurnParticipant || currentTurnParticipant.characterId.toString() !== character._id.toString()) {
+              throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
+            }
+          }
+          if (participantRef.hasTakenActionThisTurn) {
+            throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
+          }
+          participant = participantRef;
+          
           continue;
         } else {
           // Re-throw if it's not a version error or we've exhausted retries
@@ -1255,12 +1227,12 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       characterName: character?.name,
       raidId: raidId
     });
-    console.error(`[raidModule.js]: ❌ Error processing raid turn:`, error);
+    logger.error('RAID', `[raidModule.js] ❌ Error processing raid turn:`, error);
     throw error;
   }
 }
 
-// ---- Function: checkRaidExpiration ----
+// ------------------- checkRaidExpiration ------------------
 // Checks if a raid has expired and handles the timeout consequences
 async function checkRaidExpiration(raidId, client = null) {
   try {
@@ -1281,7 +1253,6 @@ async function checkRaidExpiration(raidId, client = null) {
 
       // Cancel any scheduled expiration job (in case it's still pending)
       try {
-        const scheduler = require('@/utils/scheduler');
         await scheduler.cancelJob(RAID_EXPIRATION_JOB_NAME, { raidId });
       } catch (cancelError) {
         // Ignore cancellation errors - job may have already run or been cancelled
@@ -1373,7 +1344,7 @@ async function checkRaidExpiration(raidId, client = null) {
   }
 }
 
-// ---- Function: createRaidThread ----
+// ------------------- createRaidThread ------------------
 // Creates a Discord thread for raid communication
 async function createRaidThread(interaction, raid) {
   try {
@@ -1405,12 +1376,12 @@ async function createRaidThread(interaction, raid) {
 
     return thread;
   } catch (error) {
-    console.error(`[raidModule.js]: ❌ Error creating raid thread: ${error.message}`);
+    logger.error('RAID', `[raidModule.js] ❌ Error creating raid thread: ${error.message}`);
     return null;
   }
 }
 
-// ---- Function: createRaidEmbed ----
+// ------------------- createRaidEmbed ------------------
 // Creates an embed for displaying raid information. Async when raid.expeditionId is set (loads party for hearts/stamina).
 async function createRaidEmbed(raid, monsterImage) {
   const villageName = capitalizeVillageName(raid.village);
@@ -1448,7 +1419,7 @@ async function createRaidEmbed(raid, monsterImage) {
     ];
   descriptionLines.push(
     `</raid:1470659276287774734> to join or continue the raid!`,
-    `</item:${require('../embeds/embeds.js').getItemCommandId()}> to heal during the raid!`
+    `</item:${getItemCommandId()}> to heal during the raid!`
   );
   if (!isExpeditionRaid) {
     descriptionLines.push('', `⏰ **You have ${totalMinutes} minutes to complete this raid!**`);
@@ -1528,75 +1499,52 @@ async function createRaidEmbed(raid, monsterImage) {
   return embed;
 }
 
-// ---- Function: triggerRaid ----
+// ------------------- formatCooldownRemaining ------------------
+// Returns { hours, minutes } for remainingMs (for cooldown error messages).
+function formatCooldownRemaining(remainingMs) {
+  const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+  const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+  return { hours, minutes };
+}
+
+// ------------------- triggerRaid ------------------
 // Triggers a raid in the specified channel
 // expeditionId: when set, raid is linked to that expedition (only party members can join; skip global cooldown)
 async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null, isQuotaBased = false, expeditionId = null, grottoId = null) {
   try {
-    console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}${expeditionId ? ` (expedition ${expeditionId})` : ''}${grottoId ? ' (Test of Power grotto)' : ''}`);
-    console.log(`[raidModule.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
-    console.log(`[raidModule.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
-    
+    logger.info('RAID', `[raidModule.js] 🐉 Starting raid trigger: ${monster.name} in ${villageId}${expeditionId ? ` (expedition ${expeditionId})` : ''}${grottoId ? ' (Grotto)' : ''}`);
+
     // ------------------- Global Raid Cooldown Check -------------------
     // For Blood Moon, quota-based, and expedition raids, skip global cooldown
     if (!isBloodMoon && !isQuotaBased && !expeditionId) {
-      // Check if we're still in global cooldown period (4 hours between raids)
-      const { getGlobalRaidCooldown, setGlobalRaidCooldown } = require('../scripts/randomMonsterEncounters');
       const currentTime = Date.now();
       const lastRaidTime = await getGlobalRaidCooldown();
       const timeSinceLastRaid = currentTime - lastRaidTime;
       const RAID_COOLDOWN = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
       
       if (timeSinceLastRaid < RAID_COOLDOWN) {
-        const remainingTime = RAID_COOLDOWN - timeSinceLastRaid;
-        const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
-        const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
-        
-        console.log(`[raidModule.js]: ⏰ Global raid cooldown active - ${remainingHours}h ${remainingMinutes}m remaining`);
-        console.log(`[raidModule.js]: ⏰ Last raid time: ${new Date(lastRaidTime).toISOString()}`);
-        console.log(`[raidModule.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
-        console.log(`[raidModule.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
-        
+        const { hours, minutes } = formatCooldownRemaining(RAID_COOLDOWN - timeSinceLastRaid);
         return {
           success: false,
-          error: `Raid cooldown active. Please wait ${remainingHours}h ${remainingMinutes}m before triggering another raid.`
+          error: `Raid cooldown active. Please wait ${hours}h ${minutes}m before triggering another raid.`
         };
       }
       
-      // Update global raid cooldown (applies to all villages)
       await setGlobalRaidCooldown(currentTime);
-      console.log(`[raidModule.js]: ⏰ Global raid cooldown started - next raid available in 4 hours`);
-    } else {
-      if (isBloodMoon) {
-        console.log('[raidModule.js]: 🌕 Blood Moon raid detected — bypassing global raid cooldown.');
-      } else if (isQuotaBased) {
-        console.log('[raidModule.js]: 📅 Quota-based raid detected — bypassing global raid cooldown.');
-      } else if (expeditionId) {
-        console.log('[raidModule.js]: 🗺️ Expedition raid detected — bypassing global raid cooldown.');
-      }
     }
     
     // ------------------- Per-Village Raid Cooldown Check (for quota-based raids) -------------------
     // Quota-based raids have their own per-village cooldown to prevent the same village from triggering too frequently
     if (isQuotaBased) {
-      const { getVillageRaidCooldown, VILLAGE_RAID_COOLDOWN } = require('../scripts/randomMonsterEncounters');
       const currentTime = Date.now();
       const lastRaidTime = await getVillageRaidCooldown(villageId);
       const timeSinceLastRaid = currentTime - lastRaidTime;
       
       if (timeSinceLastRaid < VILLAGE_RAID_COOLDOWN) {
-        const remainingTime = VILLAGE_RAID_COOLDOWN - timeSinceLastRaid;
-        const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
-        const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
-        
-        console.log(`[raidModule.js]: ⏰ Village raid cooldown active for ${villageId} - ${remainingHours}h ${remainingMinutes}m remaining`);
-        console.log(`[raidModule.js]: ⏰ Last village raid time: ${new Date(lastRaidTime).toISOString()}`);
-        console.log(`[raidModule.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
-        console.log(`[raidModule.js]: ⏰ Time since last village raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
-        
+        const { hours, minutes } = formatCooldownRemaining(VILLAGE_RAID_COOLDOWN - timeSinceLastRaid);
         return {
           success: false,
-          error: `Village raid cooldown active. ${villageId} must wait ${remainingHours}h ${remainingMinutes}m before another quota-based raid can be triggered.`
+          error: `Village raid cooldown active. ${villageId} must wait ${hours}h ${minutes}m before another quota-based raid can be triggered.`
         };
       }
     }
@@ -1607,14 +1555,11 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     // Automatically add character to raid if provided (from loot command)
     if (character) {
       try {
-        console.log(`[raidModule.js]: 👤 Auto-adding character ${character.name} to raid ${raidId}`);
         await joinRaid(character, raidId, {
           client: interaction.client,
           guild: interaction.guild
         });
-        console.log(`[raidModule.js]: ✅ Successfully auto-added ${character.name} to raid ${raidId}`);
 
-        // For expedition raids: auto-add all other party members to turn order so "it's your turn" mentions work
         if (expeditionId && raidData.expeditionId) {
           const Party = require('@/models/PartyModel');
           const Character = require('@/models/CharacterModel');
@@ -1630,17 +1575,15 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
                   const charDoc = await Character.findById(slot._id);
                   if (!charDoc) continue;
                   await joinRaid(charDoc, raidId, { client: interaction.client, guild: interaction.guild });
-                  console.log(`[raidModule.js]: ✅ Auto-added expedition member ${charDoc.name} to raid ${raidId}`);
                 } catch (err) {
-                  console.warn(`[raidModule.js]: ⚠️ Could not auto-add ${slot.name} to expedition raid: ${err.message}`);
+                  logger.warn('RAID', `[raidModule.js] ⚠️ Could not auto-add ${slot.name} to expedition raid: ${err.message}`);
                 }
               }
             }
           }
         }
       } catch (joinError) {
-        console.warn(`[raidModule.js]: ⚠️ Failed to auto-add character ${character.name} to raid: ${joinError.message}`);
-        // Don't fail the raid creation if auto-join fails
+        logger.warn('RAID', `[raidModule.js] ⚠️ Failed to auto-add character ${character.name} to raid: ${joinError.message}`);
       }
     }
 
@@ -1657,22 +1600,11 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
           if (party && party.status === 'started') {
             const poolHearts = Math.max(0, party.totalHearts ?? 0);
             const poolStamina = Math.max(0, party.totalStamina ?? 0);
-            const n = refreshed.participants.length;
-            const Character = require('@/models/CharacterModel');
-            const ModCharacter = require('@/models/ModCharacterModel');
-            const heartsPer = Math.floor(poolHearts / n);
-            const heartsRem = poolHearts % n;
-            const staminaPer = Math.floor(poolStamina / n);
-            const staminaRem = poolStamina % n;
-            // For expedition raids, do NOT write pool shares to Character DB.
-            // The party pool is the single source of truth during expeditions.
-            // Character DB values are stale during expeditions and only updated when the expedition ends.
-            // We only need to log the pool assignment for debugging purposes.
-            console.log(`[raidModule.js]: 🗺️ Expedition raid started — using party pool: ${poolHearts} ❤, ${poolStamina} 🟩 (not writing to Character DB)`);
+            logger.info('RAID', `[raidModule.js] 🗺️ Expedition raid started — party pool: ${poolHearts} ❤, ${poolStamina} 🟩`);
           }
         }
       } catch (e) {
-        console.warn(`[raidModule.js]: ⚠️ Could not re-fetch raid for turn ping: ${e?.message || e}`);
+        logger.warn('RAID', `[raidModule.js] ⚠️ Could not re-fetch raid for turn ping: ${e?.message || e}`);
       }
     }
 
@@ -1683,47 +1615,16 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     const monsterImage = monsterDetails.image || monster.image;
     const embed = await createRaidEmbed(raidData, monsterImage);
 
-    console.log(`[raidModule.js]: 📤 Sending raid announcement to channel ${interaction.channel.id}`);
-    console.log(`[raidModule.js]: 📤 Interaction deferred: ${interaction.deferred}`);
-    console.log(`[raidModule.js]: 📤 Interaction replied: ${interaction.replied}`);
-    
-    // Send the raid announcement - always send to channel directly for consistent thread creation
-    console.log(`[raidModule.js]: 📤 Sending raid embed with monster: ${monster.name}, tier: ${monster.tier}`);
-    console.log(`[raidModule.js]: 📤 Embed title: ${embed.data?.title || 'No title'}`);
-    console.log(`[raidModule.js]: 📤 Embed description: ${embed.data?.description || 'No description'}`);
-    
     const raidMessage = await interaction.channel.send({
       content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
       embeds: [embed]
     });
 
-    console.log(`[raidModule.js]: 📝 Raid message sent with ID: ${raidMessage.id}`);
-    console.log(`[raidModule.js]: 📝 Raid message type: ${raidMessage.constructor.name}`);
-    console.log(`[raidModule.js]: 📝 Raid message channel: ${raidMessage.channel?.id}`);
-    console.log(`[raidModule.js]: 📝 Raid message guild: ${raidMessage.guild?.id}`);
-    console.log(`[raidModule.js]: 📝 Raid message has startThread method: ${typeof raidMessage.startThread === 'function'}`);
-    console.log(`[raidModule.js]: 📝 Raid message content: ${raidMessage.content}`);
-    console.log(`[raidModule.js]: 📝 Raid message embeds count: ${raidMessage.embeds?.length || 0}`);
-    if (raidMessage.embeds && raidMessage.embeds.length > 0) {
-      console.log(`[raidModule.js]: 📝 First embed title: ${raidMessage.embeds[0].title}`);
-      console.log(`[raidModule.js]: 📝 First embed description: ${raidMessage.embeds[0].description}`);
-    }
-    console.log(`[raidModule.js]: 🧵 Creating thread on raid message...`);
-
     // Create the raid thread with error handling
     let thread = null;
     try {
-      // Ensure we're creating the thread on the actual raid message
-      console.log(`[raidModule.js]: 🧵 Creating thread on message ID: ${raidMessage.id}`);
-      
-      // Wait a moment to ensure the message is fully processed
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Fetch the message again to ensure we have the latest version
       const freshMessage = await interaction.channel.messages.fetch(raidMessage.id);
-      console.log(`[raidModule.js]: 🧵 Fetched fresh message with ID: ${freshMessage.id}`);
-      
-      // Create thread using the fresh message's startThread method
       thread = await freshMessage.startThread({
         name: `🛡️ ${villageId} - ${monster.name} (T${monster.tier})`,
         autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION,
@@ -1735,15 +1636,11 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         throw new Error('Failed to create raid thread');
       }
 
-      console.log(`[raidModule.js]: 🧵 Thread created with ID: ${thread.id}`);
-      console.log(`[raidModule.js]: 📝 Thread name: ${thread.name}`);
-      
       // Send initial thread message: @ raid role for village raids only; expedition raids = party-only, no @
       const isExpeditionRaid = !!raidData.expeditionId;
       const roleMention = isExpeditionRaid ? null : `<@&${UNIVERSAL_RAID_ROLE}>`;
       const threadRaidEmbed = await createRaidEmbed(raidData, raidData.monster?.image);
       await thread.send({ content: roleMention || undefined, embeds: [threadRaidEmbed] });
-      console.log(`[raidModule.js]: 💬 Thread message sent`);
 
       // Expedition raid: ping the raid's current-turn participant in the thread (turn order was auto-set when raid started)
       if (raidForTurnPing.expeditionId && raidForTurnPing.participants && raidForTurnPing.participants.length > 0) {
@@ -1753,7 +1650,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
           try {
             await thread.send({ content: `<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` to take your turn.` });
           } catch (pingErr) {
-            console.warn(`[raidModule.js]: ⚠️ Could not send expedition turn ping in thread: ${pingErr?.message || pingErr}`);
+            logger.warn('RAID', `[raidModule.js] ⚠️ Could not send expedition turn ping: ${pingErr?.message || pingErr}`);
           }
         }
       }
@@ -1762,12 +1659,9 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       raidData.threadId = thread.id;
       raidData.messageId = raidMessage.id;
       await raidData.save();
-      console.log(`[raidModule.js]: 💾 Updated raid data with thread information`);
 
     } catch (threadError) {
-      console.warn(`[raidModule.js]: ⚠️ Could not create thread: ${threadError.message}`);
-      console.warn(`[raidModule.js]: ⚠️ This may be because the channel doesn't support threads (DM, etc.)`);
-      console.warn(`[raidModule.js]: ⚠️ Raid will continue without a thread - participants can use the raid ID directly`);
+      logger.warn('RAID', `[raidModule.js] ⚠️ Could not create thread: ${threadError.message}. Raid continues without thread.`);
       
       // Send the raid information as a follow-up: @ raid role for village raids only; expedition = no @
       const isExpeditionRaidFallback = !!raidData.expeditionId;
@@ -1790,20 +1684,13 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       raidData.messageId = raidMessage.id;
       raidData.channelId = interaction.channel.id;
       await raidData.save();
-      console.log(`[raidModule.js]: 💾 Updated raid data without thread information`);
     }
 
-    // ------------------- Set Per-Village Cooldown (for quota-based raids) -------------------
-    // Set the per-village cooldown after successfully triggering a quota-based raid
     if (isQuotaBased) {
-      const { setVillageRaidCooldown, VILLAGE_RAID_COOLDOWN } = require('../scripts/randomMonsterEncounters');
-      const currentTime = Date.now();
-      await setVillageRaidCooldown(villageId, currentTime);
-      const cooldownHours = Math.floor(VILLAGE_RAID_COOLDOWN / (1000 * 60 * 60));
-      console.log(`[raidModule.js]: ⏰ Village raid cooldown started for ${villageId} - next quota-based raid available in ${cooldownHours} hours`);
+      await setVillageRaidCooldown(villageId, Date.now());
     }
 
-    console.log(`[raidModule.js]: 🐉 Triggered raid ${raidId} - ${monster.name} (T${monster.tier}) in ${villageId}${isBloodMoon ? ' (Blood Moon)' : ''}${isQuotaBased ? ' (Quota-based)' : ''}`);
+    logger.info('RAID', `[raidModule.js] 🐉 Triggered raid ${raidId} - ${monster.name} (T${monster.tier}) in ${villageId}${isBloodMoon ? ' (Blood Moon)' : ''}${isQuotaBased ? ' (Quota-based)' : ''}`);
 
     return {
       success: true,
@@ -1820,8 +1707,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       villageId: villageId,
       isBloodMoon: isBloodMoon
     });
-    
-    console.error(`[raidModule.js]: ❌ Error triggering raid:`, error);
+    logger.error('RAID', `[raidModule.js] ❌ Error triggering raid:`, error);
     
     return {
       success: false,

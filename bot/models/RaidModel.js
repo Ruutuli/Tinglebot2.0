@@ -369,9 +369,9 @@ raidSchema.methods.removeParticipant = async function(characterId, addToLootElig
     if (idx < this.currentTurn) {
       this.currentTurn = Math.max(0, this.currentTurn - 1);
     } else if (idx === this.currentTurn) {
-      // Removed current turn; currentTurn now points to next person (or 0 if we were last)
       this.currentTurn = this.currentTurn % this.participants.length;
     }
+    this.currentTurn = Math.max(0, Math.min(this.currentTurn, this.participants.length - 1));
   }
   return await this.save();
 };
@@ -402,9 +402,9 @@ raidSchema.methods.incrementParticipantSkipCountAndMaybeRemove = async function(
         newCurrentTurn = this.currentTurn;
       }
     }
-    this.currentTurn = newCurrentTurn;
+    this.currentTurn = Math.max(0, Math.min(newCurrentTurn, this.participants.length - 1));
     await this.save();
-    return { removed: true, participant, newCurrentTurnIndex: newCurrentTurn };
+    return { removed: true, participant, newCurrentTurnIndex: this.currentTurn };
   }
   await this.save();
   return { removed: false, participant, newCurrentTurnIndex: this.currentTurn };
@@ -415,7 +415,10 @@ raidSchema.methods.incrementParticipantSkipCountAndMaybeRemove = async function(
 // Only mod characters are skipped (they don't participate in turn order).
 raidSchema.methods.advanceTurn = async function(maxRetries = 3) {
   if (!this.participants) this.participants = [];
-  if (this.participants.length === 0) return this.save();
+  if (this.participants.length === 0) {
+    this.currentTurn = 0;
+    return this.save();
+  }
 
   const ModCharacter = require('./ModCharacterModel');
   const isModParticipant = async (p) => {
@@ -511,18 +514,16 @@ raidSchema.methods.getEffectiveCurrentTurnParticipant = async function() {
 };
 
 // ---- Method: getCurrentTurnParticipant ----
-// Get the participant whose turn it currently is
+// Get the participant whose turn it currently is. Clamps currentTurn to valid index so callers never get undefined.
 raidSchema.methods.getCurrentTurnParticipant = function() {
-  // Ensure participants array exists
   if (!this.participants) {
     this.participants = [];
   }
-  
   if (this.participants.length === 0) {
     return null;
   }
-  
-  return this.participants[this.currentTurn];
+  const idx = Math.max(0, Math.min(this.currentTurn, this.participants.length - 1));
+  return this.participants[idx];
 };
 
 // ---- Method: getNextTurnParticipant ----
