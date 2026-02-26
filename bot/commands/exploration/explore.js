@@ -7149,10 +7149,9 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
         const raidResult = await triggerRaid(selectedMonster, interaction, village, false, character, false, expeditionId);
         if (raidResult && raidResult.success) {
-         const rollInfo = `(roll ${(campRoll * 100).toFixed(0)}% < ${(campAttackChance * 100).toFixed(0)}% chance, dist=${campDangerLevel.distance})`;
          const raidCampMsg = campAttackStruggleHearts > 0
-           ? `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started. Lost ${campAttackStruggleHearts} heart(s) (struggle). ${rollInfo}`
-           : `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started. ${rollInfo}`;
+           ? `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started. Lost ${campAttackStruggleHearts} heart(s) (struggle).`
+           : `Camp at ${loc} was interrupted by a **${selectedMonster.name}**! Raid started.`;
          pushProgressLog(party, character.name, "camp", raidCampMsg, undefined, campAttackStruggleHearts > 0 ? { heartsLost: campAttackStruggleHearts } : undefined, new Date());
          await party.save();
          const battleId = raidResult.raidId;
@@ -7199,8 +7198,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        lootedItem = await resolveExplorationMonsterLoot(selectedMonster.name, rawItem);
       }
       const totalHeartsLost = campAttackStruggleHearts + (outcome.hearts || 0);
-      const rollInfo = `(roll ${(campRoll * 100).toFixed(0)}% < ${(campAttackChance * 100).toFixed(0)}% chance, dist=${campDangerLevel.distance})`;
-      let campAttackMsg = `Camp at ${loc} interrupted by **${selectedMonster.name}**! ${outcome.result}. ${rollInfo}`;
+      let campAttackMsg = `Camp at ${loc} interrupted by **${selectedMonster.name}**! ${outcome.result}.`;
       if (totalHeartsLost > 0) {
        if (campAttackStruggleHearts > 0 && outcome.hearts > 0) campAttackMsg += ` Lost ${campAttackStruggleHearts} heart(s) (struggle) plus ${outcome.hearts} heart(s) from the monster.`;
        else if (campAttackStruggleHearts > 0) campAttackMsg += ` Lost ${campAttackStruggleHearts} heart(s) (struggle).`;

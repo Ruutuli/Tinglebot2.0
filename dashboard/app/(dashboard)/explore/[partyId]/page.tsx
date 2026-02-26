@@ -2851,7 +2851,8 @@ export default function ExplorePartyPage() {
                             <span className="text-[var(--totk-grey-200)]">
                               {typeof entry.at === "string" ? new Date(entry.at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) : ""}
                             </span>
-                            {(entry.heartsLost != null && entry.heartsLost > 0) || (entry.staminaLost != null && entry.staminaLost > 0) || (entry.heartsRecovered != null && entry.heartsRecovered > 0) || (entry.staminaRecovered != null && entry.staminaRecovered > 0) ? (
+                            {!(entry.outcome === "raid_turn" || entry.outcome === "raid_over") &&
+                            ((entry.heartsLost != null && entry.heartsLost > 0) || (entry.staminaLost != null && entry.staminaLost > 0) || (entry.heartsRecovered != null && entry.heartsRecovered > 0) || (entry.staminaRecovered != null && entry.staminaRecovered > 0)) ? (
                               <span className="ml-auto flex min-w-0 flex-wrap items-center gap-1.5 text-[var(--totk-grey-200)]">
                                 {entry.heartsLost != null && entry.heartsLost > 0 && <span className="text-red-400/90">−{entry.heartsLost} ❤</span>}
                                 {entry.staminaLost != null && entry.staminaLost > 0 && <span className="text-amber-400/90" title="Stamina lost">−{entry.staminaLost} stam</span>}
