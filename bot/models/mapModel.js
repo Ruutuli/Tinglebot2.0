@@ -10,6 +10,7 @@ const DiscoverySchema = new Schema({
   discoveredBy: { type: String, default: '' }, // Discord ID of discoverer
   discoveredAt: { type: Date, default: Date.now },
   discoveryKey: { type: String, default: null }, // outcome|square|quadrant|at ISO — matches party progressLog for "Report to town hall"
+  campId: { type: String, default: null }, // MonsterCamp.campId when type is monster_camp (unique per camp in quadrant)
   pinned: { type: Boolean, default: false },
   pinnedAt: { type: Date, default: null },
   pinId: { type: String, default: null }, // Pin _id when discovery was pinned on the map

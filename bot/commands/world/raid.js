@@ -590,7 +590,7 @@ module.exports = {
         const whoseTurnBody = currentTurnParticipant
           ? currentTurnIsKO
             ? `It's **${currentTurnParticipant.name}**'s turn (${koInstruction}).${timerSuffix}`
-            : `It's **${currentTurnParticipant.name}**'s turn.${timerSuffix} Use </raid:1470659276287774734> to take your turn.`
+            : `It's **${currentTurnParticipant.name}**'s turn.${timerSuffix} Use </raid:1470659276287774734> and choose **${currentTurnParticipant.name}** to take your turn.`
           : 'No valid turn order.';
         const intro = !existingParticipant
           ? `We've added you to the turn order! It's not your turn yet — you'll roll when it's your turn. Use </raid:1470659276287774734> when it's your turn.\n\n${whoseTurnBody}`

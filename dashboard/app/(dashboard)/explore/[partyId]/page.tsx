@@ -158,6 +158,20 @@ function wasSecuredThisSession(progressLog: ProgressEntry[] | undefined, square:
   return progressLog.some((e) => e.outcome === "secure" && (e.message ?? "").toLowerCase().includes(loc));
 }
 
+/** True if the given square+quadrant was marked explored during this expedition (not pre-explored/secured like H5). */
+function wasExploredThisRun(
+  exploredQuadrantsThisRun: Array<{ squareId?: string; quadrantId?: string }> | undefined,
+  square: string,
+  quadrant: string
+): boolean {
+  if (!Array.isArray(exploredQuadrantsThisRun) || !square || !quadrant) return false;
+  const s = String(square).trim().toUpperCase();
+  const q = String(quadrant).trim().toUpperCase();
+  return exploredQuadrantsThisRun.some(
+    (v) => String(v.squareId ?? "").trim().toUpperCase() === s && String(v.quadrantId ?? "").trim().toUpperCase() === q
+  );
+}
+
 /** Return map coordinates (lat, lng) for the center of a square+quadrant. Canvas: lng 0–24000, lat 0–20000. */
 function squareQuadrantToCoordinates(square: string, quadrant: string): { lat: number; lng: number } {
   const letter = (square.charAt(0) ?? "A").toUpperCase();
@@ -324,6 +338,8 @@ type PartyData = {
   pathImageUploadedSquares?: string[];
   /** Quadrants the party has set foot in this run; fog stays clear for these when they move away. */
   visitedQuadrantsThisRun?: Array<{ squareId?: string; quadrantId?: string }>;
+  /** Quadrants marked explored during this expedition (used to show "draw path" only when going explored→explored this run). */
+  exploredQuadrantsThisRun?: Array<{ squareId?: string; quadrantId?: string }>;
   /** Expedition outcome: 'success' (ended normally), 'failed' (party KO'd), null (still in progress). */
   outcome?: 'success' | 'failed' | null;
   /** Items lost when expedition failed (KO'd). */
@@ -2451,9 +2467,9 @@ export default function ExplorePartyPage() {
                           )}
                         </div>
                       )}
-                      {party.square && !(party.pathImageUploadedSquares ?? []).some(
+                      {party.square && party.status === "started" && !(party.pathImageUploadedSquares ?? []).some(
                         (s) => String(s || "").trim().toUpperCase() === String(party.square || "").trim().toUpperCase()
-                      ) && (!party.quadrant || party.quadrantState === "secured") && (
+                      ) && (party.quadrantState === "explored" || party.quadrantState === "secured") && party.quadrant && (wasSecuredThisSession(party.progressLog, party.square, party.quadrant) || wasExploredThisRun(party.exploredQuadrantsThisRun, party.square, party.quadrant)) && (
                         <div className="mb-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-mid-ocher)]/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-ivory)]">
                             <i className="fa-solid fa-route text-[10px] opacity-80" aria-hidden />

@@ -1648,7 +1648,8 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         const firstTurn = raidForTurnPing.participants[currentIdx];
         if (firstTurn?.userId) {
           try {
-            await thread.send({ content: `<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` to take your turn.` });
+            const charName = firstTurn.name || 'your character';
+            await thread.send({ content: `<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` and choose **${charName}** to take your turn.` });
           } catch (pingErr) {
             logger.warn('RAID', `[raidModule.js] ⚠️ Could not send expedition turn ping: ${pingErr?.message || pingErr}`);
           }

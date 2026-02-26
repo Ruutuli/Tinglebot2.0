@@ -262,6 +262,13 @@ export async function GET(
         })).filter((v) => v.squareId && v.quadrantId)
       : [];
 
+    const exploredQuadrantsThisRun = Array.isArray(p.exploredQuadrantsThisRun)
+      ? (p.exploredQuadrantsThisRun as Array<{ squareId?: string; quadrantId?: string }>).map((v) => ({
+          squareId: String(v.squareId ?? "").trim().toUpperCase(),
+          quadrantId: String(v.quadrantId ?? "").trim().toUpperCase(),
+        })).filter((v) => v.squareId && v.quadrantId)
+      : [];
+
     // Expedition outcome: use stored value; status "failed" means KO'd; infer for completed (legacy) without outcome
     let outcome: "success" | "failed" | null = typeof p.outcome === "string" && (p.outcome === "success" || p.outcome === "failed") ? p.outcome : null;
     if (status === "failed") outcome = "failed";
@@ -312,6 +319,7 @@ export async function GET(
       reportedDiscoveryKeys,
       pathImageUploadedSquares,
       visitedQuadrantsThisRun,
+      exploredQuadrantsThisRun,
       ...(lostItems.length > 0 ? { lostItems } : {}),
       ...(finalLocation ? { finalLocation } : {}),
       ...(endedAt ? { endedAt } : {}),

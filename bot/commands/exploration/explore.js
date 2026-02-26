@@ -1023,6 +1023,7 @@ async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) 
   discoveryKey,
  };
  if (options.name) discovery.name = options.name;
+ if (options.campId) discovery.campId = options.campId;
  if (outcomeType === "grotto") {
   discovery.grottoStatus = options.grottoStatus ?? (options.name ? "cleansed" : "found");
  }
@@ -3124,10 +3125,15 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      const regionCapitalized = regionKey.charAt(0).toUpperCase() + regionKey.slice(1).toLowerCase();
      let camp;
      try {
-      camp = await MonsterCamp.findOrCreate(squareId, quadrantId, regionCapitalized);
+      if (discovery.campId) {
+       camp = await MonsterCamp.findByCampId(discovery.campId);
+       if (!camp) camp = await MonsterCamp.findOrCreate(squareId, quadrantId, regionCapitalized);
+      } else {
+       camp = await MonsterCamp.findOrCreate(squareId, quadrantId, regionCapitalized);
+      }
      } catch (err) {
-      logger.error("EXPLORE", `[explore.js]❌ monster_camp findOrCreate: ${err?.message || err}`);
-      return interaction.editReply("Failed to find or create monster camp.");
+      logger.error("EXPLORE", `[explore.js]❌ monster_camp lookup: ${err?.message || err}`);
+      return interaction.editReply("Failed to find monster camp.");
      }
      const isFightable = await MonsterCamp.isFightable(camp);
      if (!isFightable) {
@@ -4698,18 +4704,16 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
            return;
           }
-          // In testing mode waves still run; damage/hearts use party totals only (no persist to Character DB)
-          await pushDiscoveryToMap(freshParty, "monster_camp", at, i.user?.id);
           const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
           const quadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
           const regionKey = (freshParty.region && String(freshParty.region).trim()) || "Eldin";
           const regionCapitalized = regionKey.charAt(0).toUpperCase() + regionKey.slice(1).toLowerCase();
           let camp;
           try {
-           camp = await MonsterCamp.findOrCreate(squareId, quadrantId, regionCapitalized);
+           camp = await MonsterCamp.createCamp(squareId, quadrantId, regionCapitalized);
           } catch (err) {
-           logger.error("EXPLORE", `[explore.js]❌ MonsterCamp findOrCreate: ${err?.message || err}`);
-           await i.followUp({ content: "❌ Failed to find or create monster camp.", ephemeral: true }).catch(() => {});
+           logger.error("EXPLORE", `[explore.js]❌ MonsterCamp createCamp: ${err?.message || err}`);
+           await i.followUp({ content: "❌ Failed to create monster camp.", ephemeral: true }).catch(() => {});
            return;
           }
           const isFightable = await MonsterCamp.isFightable(camp);
@@ -4728,6 +4732,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           await msg.edit({ embeds: [blockedEmbed], components: [disabledRow] }).catch(() => {});
           return;
           }
+          await pushDiscoveryToMap(freshParty, "monster_camp", at, i.user?.id, { campId: camp.campId });
           const village = REGION_TO_VILLAGE[regionKey?.toLowerCase()] || "Inariko";
           const MONSTER_CAMP_DIFFICULTIES = ["beginner", "beginner+", "easy", "easy+", "mixed-low", "mixed-medium", "intermediate", "intermediate+"];
           const difficultyGroup = MONSTER_CAMP_DIFFICULTIES[Math.floor(Math.random() * MONSTER_CAMP_DIFFICULTIES.length)];
