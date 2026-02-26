@@ -113,7 +113,7 @@ export async function GET(
       : foundCharacter._id;
     const inventoryItems = await collection.find({ characterId: charId }).toArray();
 
-    // Create a map of owned items and collect unique item names
+    // Aggregate by item name (case-insensitive): sum quantities across all stacks so multiple acquisition methods show as one combined total
     const ownedItemsMap = new Map<
       string,
       {
@@ -127,20 +127,24 @@ export async function GET(
       }
     >();
     const ownedItemsOriginalByLower = new Map<string, string>();
-    const ownedItemNames = new Set<string>();
     inventoryItems.forEach((item) => {
       if (item.quantity > 0) {
-        ownedItemNames.add(item.itemName);
-        ownedItemsOriginalByLower.set(String(item.itemName).toLowerCase(), String(item.itemName));
-        ownedItemsMap.set(item.itemName.toLowerCase(), {
-          quantity: item.quantity,
-          category: item.category,
-          type: item.type,
-          subtype: item.subtype,
-          obtain: item.obtain,
-          location: item.location,
-          date: item.date,
-        });
+        const key = String(item.itemName).toLowerCase();
+        ownedItemsOriginalByLower.set(key, String(item.itemName));
+        const existing = ownedItemsMap.get(key);
+        if (existing) {
+          existing.quantity += item.quantity;
+        } else {
+          ownedItemsMap.set(key, {
+            quantity: item.quantity,
+            category: item.category,
+            type: item.type,
+            subtype: item.subtype,
+            obtain: item.obtain,
+            location: item.location,
+            date: item.date,
+          });
+        }
       }
     });
 
@@ -197,8 +201,8 @@ export async function GET(
       });
     }
 
-    const totalItems = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    const uniqueItems = inventoryItems.filter((item) => (item.quantity || 0) > 0).length;
+    const totalItems = Array.from(ownedItemsMap.values()).reduce((sum, owned) => sum + owned.quantity, 0);
+    const uniqueItems = ownedItemsMap.size;
 
     return NextResponse.json({
       data: {

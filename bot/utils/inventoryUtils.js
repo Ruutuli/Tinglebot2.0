@@ -308,36 +308,36 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       logger.info('INVENTORY', `Adding enhanced item: ${returnedTrimmed} (qty: ${quantity}) for ${character.name}`);
     }
 
-    // Query for existing item matching both itemName AND obtain field
-    // This allows items with different obtain methods to be tracked separately
+    // Find existing stack by characterId + itemName only so all acquisition methods combine into one stack
     const itemNameRegex = new RegExp(`^${escapeRegExp(itemName.trim())}$`, "i");
-    const obtainValue = obtain || ""; // Normalize empty string for comparison
-    
-    const inventoryItem = await inventoryCollection.findOne({
+    const obtainValue = obtain || "";
+
+    let inventoryItem = await inventoryCollection.findOne({
       characterId,
-      itemName: itemNameRegex,
-      obtain: obtainValue
+      itemName: itemNameRegex
     });
 
+    // If found document has invalid quantity, remove it and treat as no existing stack
+    if (inventoryItem && (inventoryItem.quantity || 0) <= 0) {
+      await inventoryCollection.deleteOne({ _id: inventoryItem._id });
+      logger.info('INVENTORY', `Removed invalid entry ${itemName} (qty <= 0), inserting fresh`);
+      inventoryItem = null;
+    }
+
     if (inventoryItem) {
-      // Item exists with same name AND same obtain method - increment quantity
-      logger.info('INVENTORY', `📊 Found ${inventoryItem.quantity} ${itemName} (obtain: "${obtainValue}") in ${character.name}'s inventory`);
+      // Existing stack found - increment quantity (optionally update obtain to latest source)
+      logger.info('INVENTORY', `📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
       logger.info('INVENTORY', `➕ [ADD] ${character.name}: +${quantity} ${itemName} (source: ${obtain})`);
-      const updateOp = { $inc: { quantity: quantity } };
+      const updateOp = { $inc: { quantity: quantity }, $set: { obtain: obtainValue } };
       if (fortuneTellerBoost || craftedAt) {
-        updateOp.$set = {};
         if (fortuneTellerBoost) updateOp.$set.fortuneTellerBoost = true;
         if (craftedAt) updateOp.$set.craftedAt = craftedAt;
       }
       await inventoryCollection.updateOne(
-        { characterId, itemName: inventoryItem.itemName, obtain: obtainValue },
+        { _id: inventoryItem._id },
         updateOp
       );
-      const updated = await inventoryCollection.findOne({
-        characterId,
-        itemName: inventoryItem.itemName,
-        obtain: obtainValue
-      });
+      const updated = await inventoryCollection.findOne({ _id: inventoryItem._id });
       if (updated && (updated.quantity || 0) <= 0) {
         await inventoryCollection.deleteOne({ _id: inventoryItem._id });
         logger.info('INVENTORY', `Deleted ${itemName} after add (qty <= 0)`);
@@ -345,8 +345,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         logger.success('INVENTORY', `Updated ${itemName} quantity (incremented by ${quantity})`);
       }
     } else {
-      // Item doesn't exist with this obtain method - create new entry
-      // This allows items with different obtain methods (crafting, trading, etc.) to be tracked separately
+      // No existing stack - insert new document
       logger.info('INVENTORY', `➕ [ADD] ${character.name}: +${quantity} ${itemName} (source: ${obtain}, new entry)`);
       const newItem = {
         characterId,
@@ -363,7 +362,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       if (fortuneTellerBoost) newItem.fortuneTellerBoost = true;
       if (craftedAt) newItem.craftedAt = craftedAt;
       await inventoryCollection.insertOne(newItem);
-      logger.success('INVENTORY', `Created new inventory entry for ${itemName} with obtain method "${obtainValue}"`);
+      logger.success('INVENTORY', `Created new inventory entry for ${itemName}`);
     }
     
     // Log to InventoryLog database collection

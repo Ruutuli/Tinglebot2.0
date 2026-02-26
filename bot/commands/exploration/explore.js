@@ -4796,7 +4796,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           if (failedJoins.length > 0) {
            logger.warn("EXPLORE", `[explore.js]⚠️ Monster camp wave: could not join: ${failedJoins.join("; ")}`);
           }
-          pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location}; marked on map and started wave ${waveId}. All party members must fight.`, undefined, monsterCampCosts, at);
+          pushProgressLog(freshParty, character.name, "monster_camp_fight", `Found a monster camp in ${location}; started wave ${waveId}. All party members must fight. Set a pin on the explore page to revisit later.`, undefined, monsterCampCosts, at);
           await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
           const explorePageUrlFight = getExplorePageUrl(expeditionId);
           const monsterCampEmbed = new EmbedBuilder()
@@ -4804,11 +4804,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            .setColor(getExploreOutcomeColor("monster_camp_fight", regionColors[freshParty.region] || "#00ff99"))
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
-            `✅ **Marked on map and fighting now!** All party members must fight. Use </wave:${getWaveCommandId()}> to take turns (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**`
+            `✅ **Fighting now!** All party members must fight. Use </wave:${getWaveCommandId()}> to take turns (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**\n\n📍 **Set a pin** on the explore page below so you can revisit this camp later.`
            )
            .setImage(getExploreMapImageUrl(freshParty, { highlight: true }));
           monsterCampEmbed.addFields({
-           name: "📍 **__Set pin on map__**",
+           name: "📍 **Add this camp to the map**",
            value: `Set a pin for this monster camp on the **explore/${expeditionId}** page so you can revisit it later: ${explorePageUrlFight}`,
            inline: false,
           });

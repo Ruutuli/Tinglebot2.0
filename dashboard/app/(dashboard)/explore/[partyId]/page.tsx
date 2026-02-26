@@ -94,6 +94,7 @@ const GROTTO_NAME_RE = /\*\*([^*]+)\*\*/;
 /** Discoveries that can be placed on the map (Report to town hall). Relics are not placed on the map. Ruins are only placeable when they are a rest spot (camp). */
 const REPORTABLE_OUTCOMES: Record<string, string> = {
   monster_camp: "Monster Camp",
+  monster_camp_fight: "Monster Camp", // chose "Fight it" — still need to set pin to revisit later
   ruin_rest: "Ruins (rest spot)", // only when ruins yielded a camp; generic "ruins" is not placeable
   grotto: "Grotto",
   grotto_cleansed: "Grotto", // cleansed grottos (Yes) — same as grotto for placement
