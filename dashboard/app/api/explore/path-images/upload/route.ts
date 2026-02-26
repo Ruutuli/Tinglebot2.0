@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     if (quadrantId) {
       const imageUrl = await getPathImageUrlForSquare(squareId);
 
-      const res = await fetch(imageUrl, { cache: "no-store" });
+      const res = await fetch(imageUrl, { next: { revalidate: 3600 } });
       if (!res.ok) {
         return NextResponse.json({ error: "Could not load current square image to composite quadrant" }, { status: 502 });
       }

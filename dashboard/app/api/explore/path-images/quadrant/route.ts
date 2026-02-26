@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const imageUrl = await getPathImageUrlForSquare(squareId);
 
-    const res = await fetch(imageUrl, { cache: "no-store" });
+    const res = await fetch(imageUrl, { next: { revalidate: 3600 } });
     if (!res.ok) {
       return NextResponse.json({ error: "Image not found" }, { status: 404 });
     }

@@ -9,6 +9,7 @@ import Image from "next/image";
 import { useSession } from "@/hooks/use-session";
 import { Loading } from "@/components/ui";
 import { capitalize } from "@/lib/string-utils";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 
 // ============================================================================
 // ------------------- Types -------------------
@@ -85,7 +86,7 @@ const getStatusColor = (status: StatusType): string => {
 // Normalizes image URLs for display -
 const normalizeImageUrl = (imageUrl: string): string => {
   if (imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    return `/api/images/${imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`;
+    return imageUrlForGcsUrl(imageUrl);
   }
   return imageUrl;
 };

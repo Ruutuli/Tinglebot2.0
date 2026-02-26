@@ -12,6 +12,7 @@ import { Loading, Tabs, SearchFilterBar } from "@/components/ui";
 import type { TabItem, FilterGroup } from "@/components/ui";
 import { CraftersGuideTab } from "@/components/features/crafters-guide/CraftersGuideTab";
 import { capitalize, createSlug } from "@/lib/string-utils";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 import { equipItem, getWeaponType, isShield, getArmorSlot, type EquippedGear } from "@/lib/gear-equip";
 import { getCachedData, setCachedData } from "@/lib/cache-utils";
 import {
@@ -115,8 +116,7 @@ type Transaction = {
 const formatImageUrl = (url: string): string => {
   if (!url || url === "No Image") return "/ankle_icon.png";
   if (url.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    const path = url.replace("https://storage.googleapis.com/tinglebot/", "");
-    return `/api/images/${path}`;
+    return imageUrlForGcsUrl(url);
   }
   return url;
 };

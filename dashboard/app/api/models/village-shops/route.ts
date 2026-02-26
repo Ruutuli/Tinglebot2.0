@@ -27,7 +27,7 @@ function buildCaseInsensitiveFilter(field: string, values: string[]): { $or: Arr
 // ============================================================================
 // Uses query params (`nextUrl.searchParams`); must be dynamically rendered per-request.
 // Caching is handled via `Cache-Control` response headers below.
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 // ============================================================================
 // ------------------- GET Handler -------------------

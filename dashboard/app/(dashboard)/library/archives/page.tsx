@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loading, Modal } from "@/components/ui";
 import { useSession } from "@/hooks/use-session";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 
 const LIBRARY_IMAGE = "/assets/library.png";
 /** Fixed size for all relic pins on the library map (percent of map width). */
@@ -30,7 +31,7 @@ type ArchivedRelic = {
 function normalizeImageUrl(imageUrl: string | undefined): string {
   if (!imageUrl) return "";
   if (imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    return `/api/images/${imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`;
+    return imageUrlForGcsUrl(imageUrl);
   }
   return imageUrl;
 }
@@ -110,7 +111,7 @@ export default function LibraryArchivesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/relics/archives", { cache: "no-store" });
+      const res = await fetch("/api/relics/archives", { next: { revalidate: 300 } });
       if (!res.ok) {
         setError("Failed to load archived relics");
         setRelics([]);
@@ -161,7 +162,7 @@ export default function LibraryArchivesPage() {
     setLoadRelicLoading(true);
     setLoadRelicError(null);
     try {
-      const res = await fetch(`/api/relics/prefill?relicId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const res = await fetch(`/api/relics/prefill?relicId=${encodeURIComponent(id)}`, { next: { revalidate: 300 } });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setLoadRelicError(data.error || "Failed to load relic");

@@ -3,6 +3,34 @@ import fs from "fs";
 import path from "path";
 import { logger } from "@/utils/logger";
 
+/** Revalidate time for GCS fetches (24h) so repeated requests don't hit GCS every time. */
+const GCS_REVALIDATE_SECONDS = 86400;
+
+/** In-memory cache for GCS image bodies to reduce egress. Max 500 entries, 1h TTL. */
+const MAX_IMAGE_CACHE_ENTRIES = 500;
+const IMAGE_CACHE_TTL_MS = 60 * 60 * 1000;
+type CacheEntry = { buffer: ArrayBuffer; contentType: string; expires: number };
+const imageCache = new Map<string, CacheEntry>();
+const imageCacheKeysByAge: string[] = [];
+
+function getCachedImage(key: string): CacheEntry | null {
+  const entry = imageCache.get(key);
+  if (!entry || Date.now() > entry.expires) return null;
+  return entry;
+}
+
+function setCachedImage(key: string, buffer: ArrayBuffer, contentType: string): void {
+  if (!imageCache.has(key)) {
+    while (imageCache.size >= MAX_IMAGE_CACHE_ENTRIES && imageCacheKeysByAge.length > 0) {
+      const oldest = imageCacheKeysByAge.shift();
+      if (oldest) imageCache.delete(oldest);
+    }
+    imageCacheKeysByAge.push(key);
+  }
+  const expires = Date.now() + IMAGE_CACHE_TTL_MS;
+  imageCache.set(key, { buffer, contentType, expires });
+}
+
 /**
  * GET /api/images/[...path] - Serve images from public directory or proxy from GCS.
  * Map square tiles (maps/squares/*) are never stored locally; they are always served from GCS.
@@ -17,14 +45,26 @@ export async function GET(
     
     // If it's a GCS URL path, proxy it
     if (imagePath.startsWith("https://") || imagePath.startsWith("http://")) {
+      const cacheKey = `url:${imagePath}`;
+      const cached = getCachedImage(cacheKey);
+      if (cached) {
+        return new NextResponse(cached.buffer, {
+          headers: {
+            "Content-Type": cached.contentType,
+            "Cache-Control": "public, max-age=31536000, immutable",
+          },
+        });
+      }
       try {
-        const response = await fetch(imagePath);
+        const response = await fetch(imagePath, {
+          next: { revalidate: GCS_REVALIDATE_SECONDS },
+        });
         if (!response.ok) {
           return new NextResponse("Image not found", { status: 404 });
         }
         const imageBuffer = await response.arrayBuffer();
         const contentType = response.headers.get("content-type") || "image/png";
-        
+        setCachedImage(cacheKey, imageBuffer, contentType);
         return new NextResponse(imageBuffer, {
           headers: {
             "Content-Type": contentType,
@@ -42,6 +82,16 @@ export async function GET(
 
     // Map square tiles are never stored locally – serve from GCS only (no filesystem check)
     if (imagePath.startsWith("maps/squares/")) {
+      const cacheKey = `gcs:${imagePath}`;
+      const cached = getCachedImage(cacheKey);
+      if (cached) {
+        return new NextResponse(cached.buffer, {
+          headers: {
+            "Content-Type": cached.contentType,
+            "Cache-Control": "public, max-age=31536000, immutable",
+          },
+        });
+      }
       const segments = imagePath.split("/");
       const urlsToTry: string[] = [];
       urlsToTry.push(segments.map(s => encodeURIComponent(s)).join("/"));
@@ -53,10 +103,13 @@ export async function GET(
       for (const encodedPath of urlsToTry) {
         const gcsUrl = `https://storage.googleapis.com/tinglebot/${encodedPath}`;
         try {
-          const response = await fetch(gcsUrl, { cache: "no-store" });
+          const response = await fetch(gcsUrl, {
+            next: { revalidate: GCS_REVALIDATE_SECONDS },
+          });
           if (response.ok) {
             const imageBuffer = await response.arrayBuffer();
             const contentType = response.headers.get("content-type") || getContentType(path.extname(imagePath).toLowerCase());
+            setCachedImage(cacheKey, imageBuffer, contentType);
             return new NextResponse(imageBuffer, {
               headers: {
                 "Content-Type": contentType,
@@ -98,12 +151,24 @@ export async function GET(
       // Images from database are stored at https://storage.googleapis.com/tinglebot/{path}
       const encodedPath = imagePath.split("/").map(segment => encodeURIComponent(segment)).join("/");
       const gcsUrl = `https://storage.googleapis.com/tinglebot/${encodedPath}`;
+      const cacheKey = `gcs:${imagePath}`;
+      const cached = getCachedImage(cacheKey);
+      if (cached) {
+        return new NextResponse(cached.buffer, {
+          headers: {
+            "Content-Type": cached.contentType,
+            "Cache-Control": "public, max-age=31536000, immutable",
+          },
+        });
+      }
       try {
-        const response = await fetch(gcsUrl);
+        const response = await fetch(gcsUrl, {
+          next: { revalidate: GCS_REVALIDATE_SECONDS },
+        });
         if (response.ok) {
           const imageBuffer = await response.arrayBuffer();
           const contentType = response.headers.get("content-type") || getContentType(path.extname(imagePath).toLowerCase());
-          
+          setCachedImage(cacheKey, imageBuffer, contentType);
           return new NextResponse(imageBuffer, {
             headers: {
               "Content-Type": contentType,

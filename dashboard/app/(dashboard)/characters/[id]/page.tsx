@@ -14,6 +14,7 @@ import remarkBreaks from "remark-breaks";
 import { Loading } from "@/components/ui";
 import { useSession } from "@/hooks/use-session";
 import { capitalize, createSlug } from "@/lib/string-utils";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 import { RELATIONSHIP_CONFIG, type RelationshipType } from "@/data/relationshipConfig";
 import {
   type Character,
@@ -803,7 +804,7 @@ function RelationshipBlock({ relationship, label, className = "" }: Relationship
 const normalizeImageUrl = (imageUrl: string | undefined): string => {
   if (!imageUrl) return DEFAULT_AVATAR;
   if (imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    return `/api/images/${imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`;
+    return imageUrlForGcsUrl(imageUrl);
   }
   return imageUrl;
 };

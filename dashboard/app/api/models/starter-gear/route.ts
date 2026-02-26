@@ -11,7 +11,7 @@ import { STARTER_GEAR_NAMES } from "@/data/characterData";
 
 // Uses query params via `parsePaginatedQuery`; must be dynamically rendered per-request.
 // Caching is handled via `Cache-Control` response headers below.
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 // ============================================================================
 // ------------------- GET Handler -------------------

@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export async function GET(
   _req: NextRequest,

@@ -7,6 +7,7 @@ import { Loading, SearchFilterBar, Pagination } from "@/components/ui";
 import type { FilterGroup } from "@/components/ui";
 import { capitalize } from "@/lib/string-utils";
 import { getCachedData, setCachedData } from "@/lib/cache-utils";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 
 const CRAFTERS_CACHE_KEY_PREFIX = "crafters-guide";
 const CRAFTERS_CACHE_EXPIRY = 1000 * 60 * 5; // 5 minutes
@@ -15,8 +16,7 @@ const ITEMS_PER_PAGE = 24;
 const formatImageUrl = (url: string | undefined): string => {
   if (!url || url === "No Image") return "/ankle_icon.png";
   if (url.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    const path = url.replace("https://storage.googleapis.com/tinglebot/", "");
-    return `/api/images/${path}`;
+    return imageUrlForGcsUrl(url);
   }
   return url;
 };

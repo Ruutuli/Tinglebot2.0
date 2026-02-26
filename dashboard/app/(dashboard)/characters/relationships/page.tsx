@@ -11,6 +11,7 @@ import { useSession } from "@/hooks/use-session";
 import { Loading, Tabs, Modal, SearchFilterBar, Pagination } from "@/components/ui";
 import type { FilterGroup } from "@/components/ui";
 import { capitalize, createSlug } from "@/lib/string-utils";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 import { RELATIONSHIP_CONFIG, type RelationshipType } from "@/data/relationshipConfig";
 import { getVillageCrestIcon } from "@/app/(dashboard)/models/characters/page";
 
@@ -67,7 +68,7 @@ const EMPTY_STATE_CLASS = "rounded-lg border-2 border-dashed border-[var(--totk-
 const normalizeImageUrl = (imageUrl: string | undefined): string => {
   if (!imageUrl) return "/ankle_icon.png";
   if (imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    return `/api/images/${imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`;
+    return imageUrlForGcsUrl(imageUrl);
   }
   return imageUrl;
 };

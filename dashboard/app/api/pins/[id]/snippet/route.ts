@@ -63,21 +63,25 @@ function getSquareGrid3x3(gridLocation: string): (string | null)[][] {
   return grid;
 }
 
-/** Fetch tile image buffer. Tries app /api/images proxy first (same as map), then direct GCS; tries legacy "base" path if needed. */
+/** Revalidate for tile fetches (1h) so repeated snippet generations reuse cached tiles. */
+const TILE_REVALIDATE_SECONDS = 3600;
+
+/** Fetch tile image buffer. Tries direct GCS first (avoids dashboard proxy egress), then app proxy; tries legacy "base" path if needed. */
 async function fetchTileBuffer(squareId: string, appOrigin?: string): Promise<Buffer | null> {
   const filenameBase = `${BASE_LAYER}_${squareId}.png`;
   const filenameLegacy = `${BASE_LAYER_LEGACY}_${squareId}.png`;
-  const urlsToTry: string[] = [];
+  const urlsToTry: string[] = [
+    `${GCS_TILE_BASE}/${filenameBase}`,
+    `${GCS_TILE_BASE_LEGACY}/${filenameLegacy}`,
+  ];
   if (appOrigin) {
     urlsToTry.push(`${appOrigin}/api/images/${TILE_PATH}/${filenameBase}`);
     urlsToTry.push(`${appOrigin}/api/images/${TILE_PATH_LEGACY}/${filenameLegacy}`);
   }
-  urlsToTry.push(`${GCS_TILE_BASE}/${filenameBase}`);
-  urlsToTry.push(`${GCS_TILE_BASE_LEGACY}/${filenameLegacy}`);
 
   for (const url of urlsToTry) {
     try {
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url, { next: { revalidate: TILE_REVALIDATE_SECONDS } });
       if (res.ok) {
         const ab = await res.arrayBuffer();
         return Buffer.from(ab);

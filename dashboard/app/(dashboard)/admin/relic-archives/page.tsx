@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { Loading } from "@/components/ui";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 
 type ArchiveRequest = {
   _id: string;
@@ -28,7 +29,7 @@ const LIBRARY_IMAGE = "/assets/library.png";
 function normalizeImageUrl(imageUrl: string | undefined): string {
   if (!imageUrl) return "";
   if (imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    return `/api/images/${imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`;
+    return imageUrlForGcsUrl(imageUrl);
   }
   return imageUrl;
 }
@@ -47,7 +48,7 @@ export default function AdminRelicArchivesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/relics/archive-requests", { cache: "no-store" });
+      const res = await fetch("/api/relics/archive-requests", { next: { revalidate: 60 } });
       if (!res.ok) {
         setError("Failed to load archive requests");
         setRequests([]);

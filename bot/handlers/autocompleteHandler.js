@@ -1063,8 +1063,8 @@ async function handleCharacterBasedCommandsAutocomplete(
     const mongoose = require('mongoose');
     
     const requiredFields = ['name', 'currentVillage', 'job', 'status'];
-    const timeoutMs = 2500; // 2.5 seconds timeout
-    
+    const timeoutMs = 2800; // 2.8s - under Discord's 3s autocomplete limit
+
     let timeoutId;
     const queryTimeout = new Promise((_, reject) => {
       timeoutId = setTimeout(() => reject(new Error('Database query timeout')), timeoutMs);
@@ -1079,7 +1079,7 @@ async function handleCharacterBasedCommandsAutocomplete(
         queryTimeout
       ]);
       clearTimeout(timeoutId); // Clear timeout if query succeeds
-      
+
       // Combine regular characters and mod characters
       // Only show accepted characters - they should be the ones in dropdowns
       const allCharacters = [...(characters || []), ...(modCharacters || [])]
@@ -1099,8 +1099,13 @@ async function handleCharacterBasedCommandsAutocomplete(
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     } catch (queryError) {
       clearTimeout(timeoutId);
-      handleError(queryError, "autocompleteHandler.js");
-      console.error(`[autocompleteHandler.js]❌ Error in handleCharacterBasedCommandsAutocomplete database query for ${commandName}:`, queryError);
+      const isTimeout = queryError && queryError.message === 'Database query timeout';
+      if (isTimeout) {
+        console.warn(`[autocompleteHandler.js] Database query timeout for ${commandName}, returning empty choices`);
+      } else {
+        handleError(queryError, "autocompleteHandler.js");
+        console.error(`[autocompleteHandler.js]❌ Error in handleCharacterBasedCommandsAutocomplete database query for ${commandName}:`, queryError);
+      }
       await safeAutocompleteResponse(interaction, []);
       return;
     }

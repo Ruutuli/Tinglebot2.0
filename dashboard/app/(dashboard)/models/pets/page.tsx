@@ -8,6 +8,7 @@ import { useModelList } from "@/hooks/use-model-list";
 import { Pagination } from "@/components/ui";
 import { ModelListPageLayout } from "@/components/layout/model-list-page-layout";
 import { capitalize } from "@/lib/string-utils";
+import { imageUrlForGcsUrl } from "@/lib/image-url";
 
 type Pet = {
   _id: string;
@@ -129,8 +130,8 @@ export default function PetsPage() {
                   <div className="mb-3 sm:mb-4 flex justify-center">
                     <div className="relative h-24 w-24 sm:h-32 sm:w-32 overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--botw-warm-black)] shadow-inner">
                       <Image
-                        src={pet.imageUrl.startsWith("https://storage.googleapis.com/tinglebot/") 
-                          ? `/api/images/${pet.imageUrl.replace("https://storage.googleapis.com/tinglebot/", "")}`
+                        src={pet.imageUrl.startsWith("https://storage.googleapis.com/tinglebot/")
+                          ? imageUrlForGcsUrl(pet.imageUrl)
                           : pet.imageUrl}
                         alt={pet.name}
                         fill

@@ -3,6 +3,8 @@
 // Helper functions to format item data for display
 // ============================================================================
 
+import { imageUrlForGcsPath, imageUrlForGcsUrl } from "@/lib/image-url";
+
 export type ItemData = {
   gathering?: boolean;
   looting?: boolean;
@@ -211,17 +213,15 @@ export function formatItemImageUrl(image?: string): string {
     return "/ankle_icon.png";
   }
   
-  // If it's a GCS URL, route it through our proxy to avoid CORS issues
   if (image.startsWith("https://storage.googleapis.com/tinglebot/")) {
-    const path = image.replace("https://storage.googleapis.com/tinglebot/", "");
-    return `/api/images/${path}`;
+    return imageUrlForGcsUrl(image);
   }
-  
+
   if (image.startsWith("http")) {
     return image;
   }
-  
-  return `/api/images/${image}`;
+
+  return imageUrlForGcsPath(image);
 }
 
 /**
