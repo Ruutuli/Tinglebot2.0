@@ -632,7 +632,7 @@ function sanitizeEmbedField(field) {
   return { name, value, inline: field.inline === true };
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
@@ -667,7 +667,11 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   const cmdId = getExploreCommandId();
   const cmdRoll = `</explore roll:${cmdId}>`;
   let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
-  if (hasActiveGrotto) {
+  if (activeWaveId) {
+   const waveCmdId = getWaveCommandId();
+   const cmdItem = `</explore item:${cmdId}>`;
+   commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use /explore roll until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
+  } else if (hasActiveGrotto) {
    commandsValue += `**Trial in progress** — take your turn:\n${activeGrottoCommand || `</explore grotto continue:${cmdId}>`}\n\n_Other explore actions are blocked until the trial ends._`;
   } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
@@ -708,8 +712,10 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  }
  const safeFields = fields.map(sanitizeEmbedField);
  embed.addFields(...safeFields);
- // Set footer with struggle mode warning when stamina is 0
- if ((party?.totalStamina ?? 0) === 0) {
+ // Set footer: wave in progress takes precedence, then struggle mode when stamina is 0
+ if (activeWaveId) {
+  embed.setFooter({ text: "Finish the wave or use /explore item to heal, then continue." });
+ } else if ((party?.totalStamina ?? 0) === 0) {
   const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
   const footerText = heartCost > 0
    ? `⚠️ 0 stamina — Next actions cost ${heartCost}❤️ here. Use Camp or Item to recover.`
@@ -723,14 +729,18 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
 // showSecuredQuadrantOnly: true = quadrant is secured, no Roll/Secure — show only Move, Item, Camp (and End if at start)
 // showFairyRollOnly: true = fairy just appeared — only instruct to use /explore roll
 // showMoveToUnexploredOnly: true = just moved to unexplored quadrant — only "use /explore roll"
-const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, showSecuredQuadrantOnly = false, showFairyRollOnly = false, showMoveToUnexploredOnly = false, isAtStartQuadrant = false, hasDiscoveriesInQuadrant = false, hideCampCommand = false }) => {
+const addExplorationCommandsField = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, showSecuredQuadrantOnly = false, showFairyRollOnly = false, showMoveToUnexploredOnly = false, isAtStartQuadrant = false, hasDiscoveriesInQuadrant = false, hideCampCommand = false, activeWaveId = null }) => {
  const expId = expeditionId || party?.partyId || "";
  if (!showNextAndCommands || !nextCharacter?.userId || !nextCharacter?.name) return embed;
  const nextName = nextCharacter.name;
  const cmdId = getExploreCommandId();
  const cmdRoll = `</explore roll:${cmdId}>`;
  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
- if (showMoveToUnexploredOnly === true) {
+ if (activeWaveId) {
+  const waveCmdId = getWaveCommandId();
+  const cmdItem = `</explore item:${cmdId}>`;
+  commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use /explore roll until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
+ } else if (showMoveToUnexploredOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
   const cmdCamp = `</explore camp:${cmdId}>`;
   const cmdMove = `</explore move:${cmdId}>`;

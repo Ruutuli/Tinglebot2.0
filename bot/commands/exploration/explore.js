@@ -6519,6 +6519,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      )
      .setImage(getExploreMapImageUrl(party, { highlight: true }));
     const hasDiscItem = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
+    const activeWaveIdForEmbed = activeWaveForItem?.waveId ?? null;
     addExplorationStandardFields(embed, {
       party,
       expeditionId,
@@ -6528,6 +6529,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       showRestSecureMove: false,
       commandsLast: true,
       hasDiscoveriesInQuadrant: hasDiscItem,
+      activeWaveId: activeWaveIdForEmbed,
     });
     addExplorationCommandsField(embed, {
       party,
@@ -6537,6 +6539,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       showNextAndCommands: true,
       showRestSecureMove: false,
       hasDiscoveriesInQuadrant: hasDiscItem,
+      activeWaveId: activeWaveIdForEmbed,
     });
 
     await interaction.editReply({ embeds: [embed] });
