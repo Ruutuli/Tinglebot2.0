@@ -15,7 +15,7 @@ const notificationSchema = new Schema({
   type: { 
     type: String, 
     required: true,
-    enum: ['character_accepted', 'oc_approved', 'oc_needs_changes', 'oc_resubmitted', 'system'],
+    enum: ['character_accepted', 'oc_approved', 'oc_needs_changes', 'oc_resubmitted', 'member_quest_needs_revision', 'system'],
     default: 'system'
   },
   title: { 
@@ -69,7 +69,8 @@ const notificationSchema = new Schema({
 notificationSchema.index({ userId: 1, read: 1 });
 notificationSchema.index({ userId: 1, createdAt: -1 });
 
-// Prevent model redefinition during hot reloading in Next.js
-const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
+// Re-register so schema updates (e.g. enum changes) are picked up after recompile
+if (mongoose.models.Notification) delete mongoose.models.Notification;
+const Notification = mongoose.model('Notification', notificationSchema);
 
 module.exports = Notification;

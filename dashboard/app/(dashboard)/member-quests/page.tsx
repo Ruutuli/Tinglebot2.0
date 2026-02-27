@@ -27,12 +27,31 @@ type Proposal = {
   title: string;
   status: string;
   rejectReason?: string | null;
+  revisionReason?: string | null;
   approvedQuestId?: string | null;
   createdAt: string;
   type?: string;
   locations?: string;
   date?: string;
   timeLimit?: string;
+  timePerRound?: string;
+  specialEquipment?: string;
+  rewards?: string;
+  partySize?: string;
+  signUpFormLink?: string;
+  signupDeadline?: string;
+  questDescription?: string;
+  questSummary?: string;
+  gameplayDescription?: string;
+  gameRules?: string;
+  runningEventDescription?: string;
+  postRequirement?: number | null;
+  collabAllowed?: boolean;
+  collabRule?: string;
+  artWritingMode?: string;
+  tableRollName?: string;
+  requiredRolls?: number | null;
+  minRequirements?: string | number | null;
 };
 
 const MEMBER_TIME_LIMIT_PRESETS = ["1 week", "2 weeks", "7 days", "14 days"] as const;
@@ -47,6 +66,21 @@ function formatDateDisplay(dateStr: string | undefined): string {
 
 function getDefaultStartDate(): string {
   const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Normalize to YYYY-MM-DD for <input type="date">. Handles ISO strings and existing YYYY-MM-DD. */
+function toDateOnly(value: unknown): string {
+  if (value == null || value === "") return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -80,6 +114,40 @@ const formDefaults = {
   runningEventDescription: "",
 };
 
+function proposalToForm(p: Proposal): typeof formDefaults {
+  const presets = ["1 week", "2 weeks", "7 days", "14 days"];
+  const t = (p.timeLimit ?? "").trim();
+  const timeLimit = presets.includes(t) ? t : t ? "Custom" : "1 week";
+  const timeLimitCustom = timeLimit === "Custom" ? t : "";
+  return {
+    ...formDefaults,
+    title: p.title ?? "",
+    locations: p.locations ?? "",
+    date: toDateOnly(p.date) || getDefaultStartDate(),
+    timeLimit,
+    timeLimitCustom,
+    timePerRound: p.timePerRound ?? "",
+    type: p.type ?? "",
+    specialEquipment: p.specialEquipment ?? "",
+    rewards: p.rewards ?? "",
+    partySize: p.partySize ?? "",
+    signUpFormLink: p.signUpFormLink ?? "",
+    signupDeadline: toDateOnly(p.signupDeadline),
+    postRequirement: p.postRequirement != null ? String(p.postRequirement) : "",
+    collabAllowed: Boolean(p.collabAllowed),
+    collabRule: p.collabRule ?? "",
+    artWritingMode: (p.artWritingMode === "either" ? "either" : "both") as "both" | "either",
+    tableRollName: p.tableRollName ?? "",
+    requiredRolls: p.requiredRolls != null ? String(p.requiredRolls) : "",
+    minRequirements: p.minRequirements != null ? String(p.minRequirements) : "",
+    questDescription: p.questDescription ?? "",
+    questSummary: p.questSummary ?? "",
+    gameplayDescription: p.gameplayDescription ?? "",
+    gameRules: p.gameRules ?? "",
+    runningEventDescription: p.runningEventDescription ?? "",
+  };
+}
+
 export default function MemberQuestsPage() {
   const { user, loading: sessionLoading } = useSession();
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -87,6 +155,8 @@ export default function MemberQuestsPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(formDefaults);
   const [submitting, setSubmitting] = useState(false);
+  const [editingProposalId, setEditingProposalId] = useState<string | null>(null);
+  const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
 
   const fetchProposals = useCallback(async () => {
     if (!user?.id) return;
@@ -156,20 +226,24 @@ export default function MemberQuestsPage() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/member-quests", {
-        method: "POST",
+      const payload = {
+        ...form,
+        timeLimit: form.timeLimit === "Custom" ? form.timeLimitCustom.trim() : form.timeLimit,
+      };
+      const url = editingProposalId ? `/api/member-quests/${editingProposalId}` : "/api/member-quests";
+      const method = editingProposalId ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          ...form,
-          timeLimit: form.timeLimit === "Custom" ? form.timeLimitCustom.trim() : form.timeLimit,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || data.error || "Failed to submit");
       }
       setForm(formDefaults);
+      setEditingProposalId(null);
       await fetchProposals();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
@@ -261,7 +335,23 @@ export default function MemberQuestsPage() {
             boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
           }}
         >
-          <h2 className="mb-6 text-lg font-semibold text-[var(--totk-light-ocher)]">Submit a quest proposal</h2>
+          {editingProposalId && (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3">
+              <p className="text-sm text-amber-200">
+                <strong>Editing your proposal.</strong> Make your changes below and click Resubmit to send it back for review.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setEditingProposalId(null); setForm(formDefaults); }}
+                className="shrink-0 rounded border border-amber-500/60 bg-amber-500/20 px-3 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-500/30"
+              >
+                Cancel edit
+              </button>
+            </div>
+          )}
+          <h2 className="mb-6 text-lg font-semibold text-[var(--totk-light-ocher)]">
+            {editingProposalId ? "Edit and resubmit your proposal" : "Submit a quest proposal"}
+          </h2>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basics — shown to players when quest is posted */}
             <div className="space-y-4">
@@ -643,14 +733,14 @@ export default function MemberQuestsPage() {
                 disabled={submitting}
                 className="rounded-lg bg-[var(--totk-light-green)] px-5 py-2.5 font-semibold text-black shadow-md transition hover:opacity-90 disabled:opacity-50"
               >
-                {submitting ? "Submitting…" : "Submit proposal"}
+                {submitting ? (editingProposalId ? "Resubmitting…" : "Submitting…") : editingProposalId ? "Resubmit proposal" : "Submit proposal"}
               </button>
               <button
                 type="button"
-                onClick={() => setForm(formDefaults)}
+                onClick={() => { setForm(formDefaults); setEditingProposalId(null); }}
                 className="rounded-lg border border-[var(--totk-dark-ocher)] px-5 py-2.5 font-medium text-[var(--botw-pale)] transition hover:bg-[var(--totk-dark-ocher)]/30"
               >
-                Reset form
+                {editingProposalId ? "Cancel edit" : "Reset form"}
               </button>
             </div>
           </form>
@@ -693,10 +783,12 @@ export default function MemberQuestsPage() {
                           ? "bg-emerald-500/20 text-emerald-300"
                           : p.status === "rejected"
                             ? "bg-red-500/20 text-red-300"
-                            : "bg-[var(--totk-light-ocher)]/15 text-[var(--totk-light-ocher)]"
+                            : p.status === "needs_revision"
+                              ? "bg-amber-500/20 text-amber-300"
+                              : "bg-[var(--totk-light-ocher)]/15 text-[var(--totk-light-ocher)]"
                       }`}
                     >
-                      {p.status}
+                      {p.status === "needs_revision" ? "Needs revision" : p.status}
                     </span>
                   </div>
                   {(p.locations || p.type || p.date || p.timeLimit) && (
@@ -707,6 +799,41 @@ export default function MemberQuestsPage() {
                   <p className="mt-1 text-xs text-[var(--totk-grey-500)]">
                     Submitted {new Date(p.createdAt).toLocaleDateString()}
                   </p>
+                  {p.status === "needs_revision" && (
+                    <>
+                      {p.revisionReason && (
+                        <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-200 whitespace-pre-wrap">
+                          <strong>Mod feedback:</strong> {p.revisionReason}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setError(null);
+                          setLoadingEditId(p._id);
+                          try {
+                            const res = await fetch(`/api/member-quests/${p._id}`, { credentials: "include" });
+                            if (!res.ok) {
+                              const data = await res.json().catch(() => ({}));
+                              setError(data.error || data.message || "Failed to load proposal");
+                              return;
+                            }
+                            const proposal = await res.json();
+                            setForm(proposalToForm(proposal));
+                            setEditingProposalId(p._id);
+                          } catch {
+                            setError("Failed to load proposal for editing");
+                          } finally {
+                            setLoadingEditId(null);
+                          }
+                        }}
+                        disabled={loadingEditId === p._id}
+                        className="mt-3 rounded-lg bg-amber-500/20 border border-amber-500/50 px-4 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 disabled:opacity-60"
+                      >
+                        {loadingEditId === p._id ? "Loading…" : "Edit and resubmit"}
+                      </button>
+                    </>
+                  )}
                   {p.status === "rejected" && p.rejectReason && (
                     <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
                       {p.rejectReason}
@@ -714,7 +841,7 @@ export default function MemberQuestsPage() {
                   )}
                   {p.status === "approved" && p.approvedQuestId && (
                     <p className="mt-3 text-sm text-emerald-400">
-                      Quest created: <span className="font-medium">{p.approvedQuestId}</span>. A mod will post it to Discord when ready.
+                      Quest created: <span className="font-medium">{p.approvedQuestId}</span>. It has been posted to the quest channel.
                     </p>
                   )}
                 </div>

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
+import { generateUniqueId } from "@/lib/uniqueId";
 import { logger } from "@/utils/logger";
 
 const QUEST_TYPES = ["Art", "Writing", "Interactive", "RP", "Art / Writing"] as const;
@@ -158,13 +159,22 @@ export async function POST(req: NextRequest) {
     const Quest = (await import("@/models/QuestModel.js")).default;
 
     if (!questID) {
-      const maxQuest = (await Quest.findOne()
-        .sort({ questID: -1 })
-        .select("questID")
-        .lean()) as { questID?: string } | null;
-      const match = maxQuest?.questID?.match(/^Q(\d+)$/i);
-      const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-      questID = `Q${nextNum}`;
+      // Same format as elsewhere: Q + 6 digits (e.g. Q73642), consistent with generateUniqueId
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const candidate = generateUniqueId("Q");
+        const existing = await Quest.findOne({ questID: candidate }).lean();
+        if (!existing) {
+          questID = candidate;
+          break;
+        }
+        if (attempt === 9) {
+          logger.error("api/admin/quests POST", "Could not generate unique questID after 10 attempts");
+          return NextResponse.json(
+            { error: "Validation failed", message: "Could not generate unique quest ID" },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     if (!QUEST_TYPES.includes(questType as QuestType)) {

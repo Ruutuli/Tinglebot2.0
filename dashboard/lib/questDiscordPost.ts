@@ -6,7 +6,6 @@
 import { discordApiRequest } from "@/lib/discord";
 
 const QUEST_CHANNEL_ID = process.env.QUESTS_BOARD || "706880599863853097";
-const MOD_ROLE_ID = process.env.MOD_ROLE_ID || "";
 const BORDER_IMAGE = "https://storage.googleapis.com/tinglebot/Graphics/border.png";
 const EMBED_COLOR = 0xaa916a;
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -204,16 +203,10 @@ export async function postQuestToQuestChannel(quest: QuestDoc): Promise<string |
   }
   try {
     const embed = buildQuestEmbed(quest);
-    const content = MOD_ROLE_ID ? `<@&${MOD_ROLE_ID}>` : undefined;
-    const payload: { embeds: unknown[]; content?: string; allowed_mentions?: { roles: string[] } } = { embeds: [embed] };
-    if (content) {
-      payload.content = content;
-      payload.allowed_mentions = { roles: [MOD_ROLE_ID] };
-    }
     const result = await discordApiRequest<{ id: string }>(
       `channels/${QUEST_CHANNEL_ID}/messages`,
       "POST",
-      payload
+      { embeds: [embed] }
     );
     return result?.id ?? null;
   } catch (err) {

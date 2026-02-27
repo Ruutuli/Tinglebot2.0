@@ -10,7 +10,7 @@ import { logger } from "@/utils/logger";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES = ["pending", "approved", "rejected"] as const;
+const STATUSES = ["pending", "needs_revision", "approved", "rejected"] as const;
 
 export async function GET(req: NextRequest) {
   try {

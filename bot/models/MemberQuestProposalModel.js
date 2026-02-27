@@ -9,10 +9,11 @@ const MemberQuestProposalSchema = new Schema(
     submitterUsername: { type: String, default: "" },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "approved", "rejected", "needs_revision"],
       default: "pending",
     },
     rejectReason: { type: String, default: null },
+    revisionReason: { type: String, default: null },
     reviewedByUserId: { type: String, default: null },
     reviewedAt: { type: Date, default: null },
     approvedQuestId: { type: String, default: null }, // questID of created Quest

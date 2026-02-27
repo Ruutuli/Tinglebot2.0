@@ -2544,7 +2544,7 @@ function NotificationsTabContent() {
                     className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
                       n.type === "oc_approved" || n.type === "character_accepted"
                         ? "bg-[var(--totk-light-green)]/20"
-                        : n.type === "oc_needs_changes"
+                        : n.type === "oc_needs_changes" || n.type === "member_quest_needs_revision"
                           ? "bg-[var(--totk-light-ocher)]/20"
                           : "bg-[var(--botw-blue)]/20"
                     }`}
@@ -2553,7 +2553,7 @@ function NotificationsTabContent() {
                       className={`fa-solid text-sm ${
                         n.type === "oc_approved" || n.type === "character_accepted"
                           ? "fa-check text-[var(--totk-light-green)]"
-                          : n.type === "oc_needs_changes"
+                          : n.type === "oc_needs_changes" || n.type === "member_quest_needs_revision"
                             ? "fa-exclamation text-[var(--totk-light-ocher)]"
                             : "fa-info text-[var(--botw-blue)]"
                       }`}

@@ -9,10 +9,11 @@ const MemberQuestProposalSchema = new Schema(
     submitterUsername: { type: String, default: "" },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "approved", "rejected", "needs_revision"],
       default: "pending",
     },
     rejectReason: { type: String, default: null },
+    revisionReason: { type: String, default: null }, // Mod feedback when requesting revision
     reviewedByUserId: { type: String, default: null },
     reviewedAt: { type: Date, default: null },
     approvedQuestId: { type: String, default: null }, // questID of created Quest
@@ -55,6 +56,6 @@ MemberQuestProposalSchema.pre("save", function (next) {
   next();
 });
 
-module.exports =
-  mongoose.models.MemberQuestProposal ||
-  mongoose.model("MemberQuestProposal", MemberQuestProposalSchema);
+// Re-register so schema updates (e.g. enum changes) are picked up after recompile
+if (mongoose.models.MemberQuestProposal) delete mongoose.models.MemberQuestProposal;
+module.exports = mongoose.model("MemberQuestProposal", MemberQuestProposalSchema);

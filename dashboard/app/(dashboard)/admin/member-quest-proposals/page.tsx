@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { useSession } from "@/hooks/use-session";
-import { Loading } from "@/components/ui";
+import { Loading, Modal } from "@/components/ui";
 
 function formatDateDisplay(dateStr: string | undefined): string {
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) return dateStr ?? "";
@@ -130,6 +130,7 @@ type Proposal = {
   requiredRolls?: number | null;
   minRequirements?: string | number | null;
   rejectReason?: string | null;
+  revisionReason?: string | null;
   approvedQuestId?: string | null;
   createdAt: string;
   updatedAt?: string;
@@ -238,6 +239,12 @@ export default function AdminMemberQuestProposalsPage() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [viewingProposal, setViewingProposal] = useState<Proposal | null>(null);
+  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+  const [revisionProposalId, setRevisionProposalId] = useState<string | null>(null);
+  const [revisionProposalTitle, setRevisionProposalTitle] = useState("");
+  const [revisionReason, setRevisionReason] = useState("");
+  const [revisionLoading, setRevisionLoading] = useState(false);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
 
   const canAccess = isAdmin || isModerator;
 
@@ -319,6 +326,46 @@ export default function AdminMemberQuestProposalsPage() {
     [fetchProposals]
   );
 
+  const openRevisionModal = useCallback((proposalId: string, title: string) => {
+    setRevisionProposalId(proposalId);
+    setRevisionProposalTitle(title);
+    setRevisionReason("");
+    setRevisionError(null);
+    setRevisionModalOpen(true);
+    setViewingProposal(null);
+  }, []);
+
+  const submitRevisionRequest = useCallback(async () => {
+    if (!revisionProposalId) return;
+    if (!revisionReason.trim()) {
+      setRevisionError("Feedback is required so the member knows what to change.");
+      return;
+    }
+    setRevisionLoading(true);
+    setRevisionError(null);
+    try {
+      const res = await fetch(`/api/admin/member-quest-proposals/${revisionProposalId}/request-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: revisionReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRevisionError(data.error ?? "Failed to request revision");
+        return;
+      }
+      setRevisionModalOpen(false);
+      setRevisionProposalId(null);
+      setRevisionProposalTitle("");
+      setRevisionReason("");
+      await fetchProposals();
+    } catch (e) {
+      setRevisionError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setRevisionLoading(false);
+    }
+  }, [revisionProposalId, revisionReason, fetchProposals]);
+
   if (sessionLoading || !user) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -364,6 +411,7 @@ export default function AdminMemberQuestProposalsPage() {
               className="rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-2 py-1 text-[var(--totk-ivory)]"
             >
               <option value="pending">Pending</option>
+              <option value="needs_revision">Needs revision</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
               <option value="all">All</option>
@@ -411,10 +459,12 @@ export default function AdminMemberQuestProposalsPage() {
                           ? "bg-green-900/40 text-green-200"
                           : p.status === "rejected"
                             ? "bg-red-900/40 text-red-200"
-                            : "bg-amber-900/30 text-amber-200"
+                            : p.status === "needs_revision"
+                              ? "bg-amber-900/40 text-amber-200"
+                              : "bg-amber-900/30 text-amber-200"
                       }`}
                     >
-                      {p.status}
+                      {p.status === "needs_revision" ? "Needs revision" : p.status}
                     </span>
                   </div>
 
@@ -455,7 +505,7 @@ export default function AdminMemberQuestProposalsPage() {
 
                 {p.status === "pending" && (
                   <div
-                    className="flex flex-row gap-3 border-t px-5 py-4"
+                    className="flex flex-row flex-wrap gap-3 border-t px-5 py-4"
                     style={{ borderColor: "rgba(191,139,55,0.3)", background: "rgba(0,0,0,0.15)" }}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -465,6 +515,13 @@ export default function AdminMemberQuestProposalsPage() {
                       className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2.5 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50"
                     >
                       {actionId === p._id ? "…" : "Approve"}
+                    </button>
+                    <button
+                      onClick={() => openRevisionModal(p._id, p.title)}
+                      disabled={actionId === p._id}
+                      className="rounded-lg border border-amber-500/60 bg-amber-500/15 px-4 py-2.5 text-sm font-medium text-amber-200 hover:bg-amber-500/25 disabled:opacity-50"
+                    >
+                      Needs revision
                     </button>
                     <button
                       onClick={() => handleReject(p._id)}
@@ -513,9 +570,10 @@ export default function AdminMemberQuestProposalsPage() {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" style={{ color: "#b8b0a8" }}>
                   <span>Submitted by <strong style={{ color: "#f5f0e6" }}>{viewingProposal.submitterUsername || viewingProposal.submitterUserId}</strong></span>
                   <span>Submitted {new Date(viewingProposal.createdAt).toLocaleString()}</span>
-                  <span><span className={`rounded px-2 py-0.5 text-xs font-medium ${viewingProposal.status === "approved" ? "bg-green-900/50 text-green-300" : viewingProposal.status === "rejected" ? "bg-red-900/50 text-red-300" : "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-light-ocher)]"}`}>{viewingProposal.status}</span></span>
+                  <span><span className={`rounded px-2 py-0.5 text-xs font-medium ${viewingProposal.status === "approved" ? "bg-green-900/50 text-green-300" : viewingProposal.status === "rejected" ? "bg-red-900/50 text-red-300" : viewingProposal.status === "needs_revision" ? "bg-amber-900/50 text-amber-300" : "bg-[var(--totk-dark-ocher)]/50 text-[var(--totk-light-ocher)]"}`}>{viewingProposal.status === "needs_revision" ? "Needs revision" : viewingProposal.status}</span></span>
                   {viewingProposal.approvedQuestId && <span>Quest ID: <code className="font-mono" style={{ color: "#e8d5a3" }}>{viewingProposal.approvedQuestId}</code></span>}
                   {viewingProposal.rejectReason && <span className="w-full mt-2 text-red-300 whitespace-pre-wrap">Rejection reason: {viewingProposal.rejectReason}</span>}
+                  {viewingProposal.revisionReason && <span className="w-full mt-2 text-amber-200 whitespace-pre-wrap">Revision requested: {viewingProposal.revisionReason}</span>}
                 </div>
 
                 {/* How it will look when posted to Discord */}
@@ -537,13 +595,20 @@ export default function AdminMemberQuestProposalsPage() {
               </div>
 
               {viewingProposal.status === "pending" && (
-                <div className="sticky bottom-0 flex gap-2 border-t border-[var(--totk-dark-ocher)] px-6 py-4" style={{ background: "#3a3230" }} onClick={(e) => e.stopPropagation()}>
+                <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-[var(--totk-dark-ocher)] px-6 py-4" style={{ background: "#3a3230" }} onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => { handleApprove(viewingProposal._id); setViewingProposal(null); }}
                     disabled={actionId === viewingProposal._id}
                     className="rounded bg-[var(--totk-light-green)] px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50"
                   >
                     {actionId === viewingProposal._id ? "…" : "Approve"}
+                  </button>
+                  <button
+                    onClick={() => openRevisionModal(viewingProposal._id, viewingProposal.title)}
+                    disabled={actionId === viewingProposal._id}
+                    className="rounded border border-amber-500/70 bg-amber-500/20 px-4 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/30 disabled:opacity-50"
+                  >
+                    Needs revision
                   </button>
                   <button
                     onClick={() => { handleReject(viewingProposal._id); setViewingProposal(null); }}
@@ -557,6 +622,80 @@ export default function AdminMemberQuestProposalsPage() {
             </div>
           </div>
         )}
+
+        {/* Request revision modal (like character approvals VoteModal) */}
+        <Modal
+          open={revisionModalOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRevisionModalOpen(false);
+              setRevisionProposalId(null);
+              setRevisionProposalTitle("");
+              setRevisionReason("");
+              setRevisionError(null);
+            }
+          }}
+          title={revisionProposalTitle ? `Request revision – ${revisionProposalTitle}` : "Request revision"}
+          description="Tell the member what to change or add. This feedback will be shown to them so they can edit and resubmit."
+          size="md"
+        >
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="revision-reason"
+                className="mb-2 block text-sm font-medium text-[var(--totk-light-ocher)]"
+              >
+                Feedback / Reason *{" "}
+                <span className="text-xs text-[var(--totk-grey-200)]">(Required)</span>
+              </label>
+              <textarea
+                id="revision-reason"
+                value={revisionReason}
+                onChange={(e) => {
+                  setRevisionReason(e.target.value);
+                  setRevisionError(null);
+                }}
+                placeholder="What should the member change or add? (Markdown and line breaks supported)"
+                rows={4}
+                className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-sm text-[var(--botw-pale)] placeholder:text-[var(--totk-grey-300)] focus:border-[var(--totk-light-green)] focus:outline-none"
+              />
+              <p className="mt-1 text-xs text-[var(--totk-grey-200)]">
+                Markdown formatting is supported. Use double line breaks for new paragraphs.
+              </p>
+            </div>
+
+            {revisionError && (
+              <div className="rounded-lg border-2 border-red-500 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {revisionError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRevisionModalOpen(false);
+                  setRevisionProposalId(null);
+                  setRevisionProposalTitle("");
+                  setRevisionReason("");
+                  setRevisionError(null);
+                }}
+                disabled={revisionLoading}
+                className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-4 py-2 text-sm font-medium text-[var(--botw-pale)] transition-colors hover:bg-[var(--totk-dark-green)]/20 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitRevisionRequest}
+                disabled={revisionLoading}
+                className="rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)] px-4 py-2 text-sm font-medium text-[var(--botw-warm-black)] transition-all hover:bg-[var(--totk-light-green)]/90 disabled:opacity-50"
+              >
+                {revisionLoading ? "Submitting…" : "Request revision"}
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );

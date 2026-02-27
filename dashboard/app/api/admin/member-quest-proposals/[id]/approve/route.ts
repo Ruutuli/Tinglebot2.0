@@ -6,6 +6,7 @@ import { connect } from "@/lib/db";
 import { postQuestToQuestChannel } from "@/lib/questDiscordPost";
 import { getSession, isAdminUser } from "@/lib/session";
 import { isModeratorUser } from "@/lib/moderator";
+import { generateUniqueId } from "@/lib/uniqueId";
 import { logger } from "@/utils/logger";
 
 export const dynamic = "force-dynamic";
@@ -90,17 +91,18 @@ export async function POST(
       );
     }
 
-    const questID = await (async () => {
-      const memberQuests = await Quest.find({ questID: /^M\d+$/i }).select("questID").lean();
-      const nums = (memberQuests as { questID?: string }[])
-        .map((q) => {
-          const m = (q.questID ?? "").match(/^M(\d+)$/i);
-          return m ? parseInt(m[1], 10) : 0;
-        })
-        .filter((n) => n > 0);
-      const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-      return `M${nextNum}`;
-    })();
+    // Same format as elsewhere: M + 6 digits (e.g. M28464), consistent with generateUniqueId
+    let questID: string;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      questID = generateUniqueId("M");
+      const existing = await Quest.findOne({ questID }).lean();
+      if (!existing) break;
+      if (attempt === 9) {
+        logger.error("api/admin/member-quest-proposals/[id]/approve", "Could not generate unique questID after 10 attempts");
+        return NextResponse.json({ error: "Failed to generate quest ID" }, { status: 500 });
+      }
+    }
+    questID = questID!;
 
     const timeLimit = (proposal.timeLimit && String(proposal.timeLimit).trim()) || "1 week";
     const questType = toQuestType(proposal.type);
