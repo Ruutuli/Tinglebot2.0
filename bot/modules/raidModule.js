@@ -959,22 +959,31 @@ async function leaveRaid(character, raidId, options = {}) {
 // User-facing message when turn was already processed or turn order advanced (duplicate submit, turn-skip race, etc.)
 const RAID_TURN_ALREADY_PROCESSED_MSG = 'Your turn was already processed or the turn has advanced. Please wait for your next turn.';
 
+// Ensures the raid has a turn-skip timer for the actual current player when we reject a turn (so the raid never gets stuck). Logs and ignores errors.
+async function ensureTurnSkipScheduledForRaid(raidId) {
+  try {
+    await scheduleRaidTurnSkip(raidId);
+  } catch (err) {
+    logger.warn('RAID', `Failed to ensure turn-skip fallback for raid ${raidId}: ${err.message}`);
+  }
+}
+
 // ------------------- processRaidTurn ------------------
 // Processes a single turn in a raid for a character
 async function processRaidTurn(character, raidId, interaction, raidData = null) {
   try {
+    // Cancel 1-minute skip job first (before fetch) so turn-skip job is less likely to run in the window between fetch and cancel
+    const isModTurn = !!character.isModCharacter;
+    if (!isModTurn) {
+      await cancelRaidTurnSkip(raidId);
+    }
+
     // Always fetch fresh raid for validation (ignore passed raidData to avoid stale state / races)
     let raid = await getRaidOrThrow(raidId);
 
     // Check if raid is active
     if (raid.status !== 'active') {
       throw new Error('Raid is not active');
-    }
-
-    // Cancel 1-minute skip job only when the current turn player is rolling (mod characters don't affect turn order)
-    const isModTurn = !!character.isModCharacter;
-    if (!isModTurn) {
-      await cancelRaidTurnSkip(raidId);
     }
 
     // Find participant
@@ -988,12 +997,14 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     if (!isModTurn) {
       const currentTurnParticipant = raid.getCurrentTurnParticipant();
       if (!currentTurnParticipant || currentTurnParticipant.characterId.toString() !== character._id.toString()) {
+        await ensureTurnSkipScheduledForRaid(raidId);
         throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
       }
     }
 
     // Prevent double turn advancement: if participant already took action this turn, reject
     if (participant.hasTakenActionThisTurn) {
+      await ensureTurnSkipScheduledForRaid(raidId);
       throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
     }
 
@@ -1133,15 +1144,18 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           const participantsAfter = raid.participants || [];
           const participantRef = participantsAfter.find(p => p.characterId.toString() === character._id.toString());
           if (!participantRef) {
+            await ensureTurnSkipScheduledForRaid(raidId);
             throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
           }
           if (!isModTurn) {
             const currentTurnParticipant = raid.getCurrentTurnParticipant();
             if (!currentTurnParticipant || currentTurnParticipant.characterId.toString() !== character._id.toString()) {
+              await ensureTurnSkipScheduledForRaid(raidId);
               throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
             }
           }
           if (participantRef.hasTakenActionThisTurn) {
+            await ensureTurnSkipScheduledForRaid(raidId);
             throw new Error(RAID_TURN_ALREADY_PROCESSED_MSG);
           }
           participant = participantRef;

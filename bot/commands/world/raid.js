@@ -516,7 +516,15 @@ module.exports = {
           });
         }
       } else {
-        // Character already in raid
+        // Character already in raid — re-fetch raid so "is it my turn?" uses current state (avoids TOCTOU with turn-skip or double submit)
+        const freshRaid = await checkRaidExpiration(raidId, interaction.client);
+        if (freshRaid) updatedRaidData = freshRaid;
+        if (!updatedRaidData || updatedRaidData.status !== 'active') {
+          return interaction.editReply({
+            content: '❌ This raid is no longer active. It may have been completed or expired.',
+            ephemeral: true
+          });
+        }
       }
 
       // When someone new joins: start or reset the 1-minute skip timer for the current turn holder (so they get a full minute; mid-raid join no longer wrongly skips them).
@@ -698,6 +706,14 @@ module.exports = {
         });
       }
     } catch (error) {
+      const msg = error?.message || '';
+      if (msg.includes('already processed') || msg.includes('turn has advanced')) {
+        await interaction.editReply({
+          content: "It's no longer your turn — the turn has already advanced. Please wait for your next turn.",
+          ephemeral: true
+        }).catch(() => {});
+        return;
+      }
       await handleInteractionError(error, interaction, {
         source: 'raid.js',
         raidId: interaction.options.getString('raidid'),
