@@ -169,9 +169,15 @@ function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
   const desc = description.length > 4096 ? description.slice(0, 4093) + "..." : description;
   const descriptionBlockquote = desc.trimEnd().split("\n").map((line) => (line === "" ? "" : `> ${line}`)).join("\n");
 
+  // Make it very clear this is a member-run quest (not an official mod-run quest)
+  const memberRunLabel = quest.isMemberQuest
+    ? `**🏠 MEMBER-RUN QUEST** — Run by: **${(quest.runByUsername ?? "Member").trim()}**\n\n`
+    : "";
+  const fullDescription = memberRunLabel + descriptionBlockquote;
+
   return {
-    title,
-    description: descriptionBlockquote,
+    title: quest.isMemberQuest ? `🏠 ${title}` : title,
+    description: fullDescription,
     color: EMBED_COLOR,
     fields: [
       { name: "**__📋 Details__**", value: detailsLines.join("\n"), inline: false },
@@ -184,7 +190,7 @@ function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
     ],
     image: { url: BORDER_IMAGE },
     timestamp: new Date().toISOString(),
-    footer: quest.isMemberQuest ? { text: "Member quest" } : undefined,
+    footer: quest.isMemberQuest ? { text: "Member-run quest — not an official mod-run quest" } : undefined,
   };
 }
 
