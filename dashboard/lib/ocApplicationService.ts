@@ -11,8 +11,8 @@ import { sendOCDecisionNotification } from "@/lib/services/notificationService";
 import { assignCharacterRoles } from "@/lib/services/roleAssignmentService";
 import { addEquippedGearToInventory } from "@/lib/addStarterGearToInventory";
 
-// Approval threshold: number of approve votes needed (set to 1 for testing; use 4 for production)
-export const APPROVAL_THRESHOLD = 1;
+// Approval threshold: 4 approve votes required for acceptance
+export const APPROVAL_THRESHOLD = 4;
 
 type VoteDocument = {
   _id: unknown;
