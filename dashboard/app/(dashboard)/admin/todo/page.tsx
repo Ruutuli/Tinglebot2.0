@@ -1214,7 +1214,7 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                           <i className="fa-solid fa-trash-can text-sm sm:text-xs" />
                         </button>
                       </div>
-                      <p className="mt-1.5 rounded-lg bg-[#1a1615] p-3 text-sm text-[var(--botw-pale)] sm:mt-1 sm:p-2">
+                      <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-[#1a1615] p-3 text-sm text-[var(--botw-pale)] sm:mt-1 sm:p-2">
                         {comment.text}
                       </p>
                     </div>

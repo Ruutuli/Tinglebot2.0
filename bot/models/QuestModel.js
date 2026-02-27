@@ -151,6 +151,9 @@ const additionalFields = {
     rules: { type: String, default: null },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
+    isMemberQuest: { type: Boolean, default: false },
+    runByUserId: { type: String, default: null },
+    runByUsername: { type: String, default: null },
     // Art / Writing: 'both' = require art AND writing; 'either' = require art OR writing
     artWritingMode: { type: String, enum: ['both', 'either'], default: 'both' },
     // Interactive Quest Table Roll Fields
