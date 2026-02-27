@@ -593,7 +593,7 @@ module.exports = {
           : null;
         const cmdExploreItemBody = isExpeditionRaid && getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : null;
         const koInstruction = isExpeditionRaid
-          ? `KO'd — use ${cmdExploreItemBody || '`/explore item`'} to heal from your expedition loadout, or </item:1463789335626125378> for a fairy. To escape, the party retreats together with ${cmdRetreat || '`/explore retreat`'}.`
+          ? `KO'd — use ${cmdExploreItemBody || '`/explore item`'} to heal from your expedition loadout. To escape, the party retreats together with ${cmdRetreat || '`/explore retreat`'}.`
           : `KO'd — please use a fairy with </item:1463789335626125378> or leave with </raid:1470659276287774734> raidid, charactername, action: Leave raid.`;
         const whoseTurnBody = currentTurnParticipant
           ? currentTurnIsKO
@@ -940,7 +940,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     const isExpeditionRaidKo = !!raidData.expeditionId;
     const cmdExploreItem = isExpeditionRaidKo && getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : null;
     const koValue = isExpeditionRaidKo && cmdExploreItem
-      ? `💥 **${character.name} has been knocked out and cannot continue!**\n\nUse ${cmdExploreItem} to heal from your expedition loadout (or </item:1463789335626125378> for a fairy).`
+      ? `💥 **${character.name} has been knocked out and cannot continue!**\n\nUse ${cmdExploreItem} to heal from your expedition loadout.`
       : `💥 **${character.name} has been knocked out and cannot continue!**`;
     embed.addFields({
       name: 'KO',

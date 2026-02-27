@@ -41,6 +41,7 @@ const { enforceJail } = require('@/utils/jailCheck');
 const User = require('@/models/UserModel');
 const Pet = require('@/models/PetModel');
 const Party = require('@/models/PartyModel');
+const Raid = require('@/models/RaidModel');
 
 // ------------------- Command Definition -------------------
 // Defines the /item command schema and its execution logic.
@@ -1280,6 +1281,24 @@ module.exports = {
           .setThumbnail(item.image)
           .setFooter({ text: 'Try using a Recipe item or Fairy for healing!' });
         return void await interaction.editReply({ embeds: [embed] });
+      }
+
+      // ------------------- Expedition raid: item = turn -------------------
+      // During an expedition raid, only the current raid turn may use /item heal.
+      const activeRaid = await Raid.findOne({ status: 'active', 'participants.characterId': character._id }).lean();
+      if (activeRaid && activeRaid.expeditionId) {
+        const currentParticipant = activeRaid.participants?.[activeRaid.currentTurn ?? 0];
+        if (currentParticipant && currentParticipant.characterId && character._id && currentParticipant.characterId.toString() !== character._id.toString()) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0xFF6347,
+              title: "Not your turn",
+              description: "It's not your turn. Only the current turn can use an item (item = turn). Wait for your turn in the raid, then use **/explore item**.",
+              footer: { text: 'Item = turn' }
+            }],
+            ephemeral: true
+          });
+        }
       }
 
       // ------------------- KO Revival Logic -------------------

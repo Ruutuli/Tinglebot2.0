@@ -2470,7 +2470,7 @@ export default function ExplorePartyPage() {
                       )}
                       {party.square && party.status === "started" && !(party.pathImageUploadedSquares ?? []).some(
                         (s) => String(s || "").trim().toUpperCase() === String(party.square || "").trim().toUpperCase()
-                      ) && (party.quadrantState === "explored" || party.quadrantState === "secured") && party.quadrant && (wasSecuredThisSession(party.progressLog, party.square, party.quadrant) || wasExploredThisRun(party.exploredQuadrantsThisRun, party.square, party.quadrant)) && (
+                      ) && party.quadrantState === "secured" && party.quadrant && wasSecuredThisSession(party.progressLog, party.square, party.quadrant) && (
                         <div className="mb-3 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-mid-ocher)]/20 px-3 py-2">
                           <h3 className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--totk-ivory)]">
                             <i className="fa-solid fa-route text-[10px] opacity-80" aria-hidden />

@@ -345,26 +345,6 @@ function shouldBlockItemForBalance(party, rollingCharacter) {
   return (rollerCount - minCount) > ITEM_BALANCE_THRESHOLD;
 }
 
-// ------------------- createStuckInWildEmbed ------------------
-// Party out of stamina; recovery via /explore camp. nextCharacter: { userId?, name? } for "who's next".
-function createStuckInWildEmbed(party, location, nextCharacter = null) {
-  let desc =
-    `Your party has run out of stamina. **If you continue** (roll, move, secure, etc.), each action will **cost hearts** instead (1 heart = 1 stamina). **Or** use </explore camp:${getExploreCommandId()}> — at 0 stamina, Camp is free and recovers up to 50% of your max stamina (but has higher monster attack chance).\n\n` +
-    `After recovering, use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue the expedition.`;
-  if (nextCharacter && (nextCharacter.userId || nextCharacter.name)) {
-    const nextLine = nextCharacter.userId
-      ? `**Next:** <@${nextCharacter.userId}> (${nextCharacter.name || "you"}) — use Camp, Roll, or Move to continue.`
-      : `**Next:** ${nextCharacter.name || "—"} — use Camp, Roll, or Move to continue.`;
-    desc += `\n\n${nextLine}`;
-  }
-  return new EmbedBuilder()
-    .setTitle("🏕️ Stuck in the wild — camp to recover")
-    .setColor(getExploreOutcomeColor("explored", regionColors[party?.region] || "#8B4513"))
-    .setDescription(desc)
-    .setImage(getExploreMapImageUrl(party, { highlight: true }))
-    .setFooter({ text: location ? `Current location: ${location}` : "Expedition" });
-}
-
 const EXPLORE_STRUGGLE_CONTEXT = { commandName: "explore", operation: "struggle" };
 
 // ------------------- createRaidBlockEmbed ------------------
@@ -3579,10 +3559,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 
      const payResult = await payStaminaOrStruggle(party, characterIndex, rollStaminaCost, { order: "currentFirst", action: "roll" });
      if (!payResult.ok) {
-      const location = `${party.square} ${party.quadrant}`;
-      const nextCharacterStuck = party.characters?.[party.currentTurn] ?? null;
+      const partyStamina = party.totalStamina ?? 0;
+      const partyHearts = party.totalHearts ?? 0;
       return interaction.editReply({
-        embeds: [createStuckInWildEmbed(party, location, nextCharacterStuck)],
+        content: `Not enough stamina or hearts to roll. Party has **${partyStamina}** stamina and **${partyHearts}** hearts (need **${rollStaminaCost}**). Use hearts to pay for actions (1 heart = 1 stamina), or use items to recover.`,
       });
      }
      
@@ -6146,10 +6126,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     if (staminaCost > 0) {
      movePayResult = await payStaminaOrStruggle(party, characterIndex, staminaCost, { order: "currentFirst", action: "move" });
      if (!movePayResult.ok) {
-      const location = `${party.square} ${party.quadrant}`;
-      const nextCharacterStuckMove = party.characters?.[party.currentTurn] ?? null;
+      const partyStaminaMove = party.totalStamina ?? 0;
+      const partyHeartsMove = party.totalHearts ?? 0;
       return interaction.editReply({
-       embeds: [createStuckInWildEmbed(party, location, nextCharacterStuckMove)],
+       content: `Not enough stamina or hearts to move. Party has **${partyStaminaMove}** stamina and **${partyHeartsMove}** hearts (need **${staminaCost}**). Use hearts to pay for actions (1 heart = 1 stamina), or use items to recover.`,
       });
      }
      
@@ -6436,6 +6416,27 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       `❤️🟩 **Team is at full capacity!** Cannot use **${carried.itemName}** — the party is already at maximum hearts (${currentHearts}/${itemCaps.maxHearts}) and stamina (${currentStamina}/${itemCaps.maxStamina}).`
      );
     }
+
+    // Item = turn: during active wave/raid, only the current turn participant may use an item. Check before applying any effects.
+    const activeWaveForItem = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
+    const activeRaidForItem = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
+    if (activeWaveForItem) {
+     const waveCurrent = activeWaveForItem.participants?.[activeWaveForItem.currentTurn ?? 0];
+     if (waveCurrent && waveCurrent.characterId && character._id && waveCurrent.characterId.toString() !== character._id.toString()) {
+      return interaction.editReply(
+       "It's not your turn. Only the current turn can use an item (item = turn). Wait for your turn in the wave, then use **/explore item**."
+      );
+     }
+    }
+    if (activeRaidForItem) {
+     const raidCurrent = activeRaidForItem.getCurrentTurnParticipant?.() ?? activeRaidForItem.participants?.[activeRaidForItem.currentTurn ?? 0];
+     if (raidCurrent && raidCurrent.characterId && character._id && raidCurrent.characterId.toString() !== character._id.toString()) {
+      return interaction.editReply(
+       "It's not your turn. Only the current turn can use an item (item = turn). Wait for your turn in the raid, then use **/explore item**."
+      );
+     }
+    }
+
     const beforeHeartsItem = party.totalHearts ?? 0;
     const beforeStaminaItem = party.totalStamina ?? 0;
     if (hearts > 0) {
@@ -6451,23 +6452,18 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     // Always remove from party loadout so it appears used (testing: still no DB change to character inventory)
     partyChar.items.splice(itemIndex, 1);
 
-    // Check if there's an active wave or raid for this expedition
-    const activeWaveForItem = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    const activeRaidForItem = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    
-    // During active wave/raid: only advance wave/raid turn, NOT expedition turn
-    // This prevents confusion where both turn systems advance independently
+    // During active wave/raid: only advance wave/raid turn, NOT expedition turn (dashboard stays correct)
     // Track the next turn participant from wave/raid for proper follow-up ping
     let combatNextTurnParticipant = null;
-    
-    // Item use ALWAYS advances expedition turn
-    party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-    
+    if (!activeWaveForItem && !activeRaidForItem) {
+     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+    }
+
     if (activeWaveForItem) {
       // Also advance wave turn during active wave
       try {
         await advanceWaveTurnOnItemUse(character._id);
-        logger.info("EXPLORE", `[explore.js] Item used during wave — advanced both expedition and wave turns`);
+        logger.info("EXPLORE", `[explore.js] Item used during wave — advanced wave turn`);
         // Re-fetch wave to get updated turn order
         const refreshedWave = await Wave.findOne({ waveId: activeWaveForItem.waveId });
         if (refreshedWave && refreshedWave.participants && refreshedWave.participants.length > 0) {
@@ -6481,7 +6477,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       // Also advance raid turn during active raid
       try {
         await advanceRaidTurnOnItemUse(character._id);
-        logger.info("EXPLORE", `[explore.js] Item used during raid — advanced both expedition and raid turns`);
+        logger.info("EXPLORE", `[explore.js] Item used during raid — advanced raid turn`);
         // Re-fetch raid to get updated turn order
         const refreshedRaid = await Raid.findOne({ raidId: activeRaidForItem.raidId });
         if (refreshedRaid && refreshedRaid.participants && refreshedRaid.participants.length > 0) {

@@ -3570,7 +3570,14 @@ async function handleExploreUseItemAutocomplete(interaction, focusedOption) {
 
   const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
   const characterName = normalizeExploreCharacterName(interaction.options.getString("charactername"));
-  if (!expeditionId || !characterName) return await interaction.respond([]);
+  if (!expeditionId || !characterName) {
+   const hint = !expeditionId && !characterName
+     ? "Enter expedition id and character first"
+     : !expeditionId
+     ? "Enter expedition id first"
+     : "Enter character name first";
+   return await interaction.respond([{ name: hint, value: "none" }]);
+  }
 
   const party = await Party.findActiveByPartyId(expeditionId).lean();
   if (!party) return await interaction.respond([]);
