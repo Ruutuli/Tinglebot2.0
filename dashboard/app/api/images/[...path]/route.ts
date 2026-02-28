@@ -3,9 +3,11 @@ import fs from "fs";
 import path from "path";
 import { logger } from "@/utils/logger";
 
-/** In-memory cache for GCS image bodies to reduce egress. Max 500 entries, 1h TTL. */
-const MAX_IMAGE_CACHE_ENTRIES = 500;
+/** In-memory cache for GCS image bodies to reduce egress. Max 150 entries, 1h TTL. */
+const MAX_IMAGE_CACHE_ENTRIES = 150;
 const IMAGE_CACHE_TTL_MS = 60 * 60 * 1000;
+/** Don't cache responses over 2MB (e.g. map tiles); keeps server memory bounded. */
+const MAX_CACHEABLE_BYTES = 2 * 1024 * 1024;
 type CacheEntry = { buffer: ArrayBuffer; contentType: string; expires: number };
 const imageCache = new Map<string, CacheEntry>();
 const imageCacheKeysByAge: string[] = [];
@@ -60,7 +62,9 @@ export async function GET(
         }
         const imageBuffer = await response.arrayBuffer();
         const contentType = response.headers.get("content-type") || "image/png";
-        setCachedImage(cacheKey, imageBuffer, contentType);
+        if (imageBuffer.byteLength <= MAX_CACHEABLE_BYTES) {
+          setCachedImage(cacheKey, imageBuffer, contentType);
+        }
         return new NextResponse(imageBuffer, {
           headers: {
             "Content-Type": contentType,
@@ -104,7 +108,9 @@ export async function GET(
           if (response.ok) {
             const imageBuffer = await response.arrayBuffer();
             const contentType = response.headers.get("content-type") || getContentType(path.extname(imagePath).toLowerCase());
-            setCachedImage(cacheKey, imageBuffer, contentType);
+            if (imageBuffer.byteLength <= MAX_CACHEABLE_BYTES) {
+              setCachedImage(cacheKey, imageBuffer, contentType);
+            }
             return new NextResponse(imageBuffer, {
               headers: {
                 "Content-Type": contentType,
@@ -162,7 +168,9 @@ export async function GET(
         if (response.ok) {
           const imageBuffer = await response.arrayBuffer();
           const contentType = response.headers.get("content-type") || getContentType(path.extname(imagePath).toLowerCase());
-          setCachedImage(cacheKey, imageBuffer, contentType);
+          if (imageBuffer.byteLength <= MAX_CACHEABLE_BYTES) {
+            setCachedImage(cacheKey, imageBuffer, contentType);
+          }
           return new NextResponse(imageBuffer, {
             headers: {
               "Content-Type": contentType,
