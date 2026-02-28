@@ -63,9 +63,6 @@ function getSquareGrid3x3(gridLocation: string): (string | null)[][] {
   return grid;
 }
 
-/** Revalidate for tile fetches (1h) so repeated snippet generations reuse cached tiles. */
-const TILE_REVALIDATE_SECONDS = 3600;
-
 /** Fetch tile image buffer. Tries direct GCS first (avoids dashboard proxy egress), then app proxy; tries legacy "base" path if needed. */
 async function fetchTileBuffer(squareId: string, appOrigin?: string): Promise<Buffer | null> {
   const filenameBase = `${BASE_LAYER}_${squareId}.png`;
@@ -81,7 +78,8 @@ async function fetchTileBuffer(squareId: string, appOrigin?: string): Promise<Bu
 
   for (const url of urlsToTry) {
     try {
-      const res = await fetch(url, { next: { revalidate: TILE_REVALIDATE_SECONDS } });
+      // Don't use Next.js data cache (2MB limit); tiles can exceed it.
+      const res = await fetch(url, { cache: "no-store" });
       if (res.ok) {
         const ab = await res.arrayBuffer();
         return Buffer.from(ab);

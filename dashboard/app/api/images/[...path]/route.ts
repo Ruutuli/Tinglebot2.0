@@ -3,9 +3,6 @@ import fs from "fs";
 import path from "path";
 import { logger } from "@/utils/logger";
 
-/** Revalidate time for GCS fetches (24h) so repeated requests don't hit GCS every time. */
-const GCS_REVALIDATE_SECONDS = 86400;
-
 /** In-memory cache for GCS image bodies to reduce egress. Max 500 entries, 1h TTL. */
 const MAX_IMAGE_CACHE_ENTRIES = 500;
 const IMAGE_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -56,9 +53,8 @@ export async function GET(
         });
       }
       try {
-        const response = await fetch(imagePath, {
-          next: { revalidate: GCS_REVALIDATE_SECONDS },
-        });
+        // Don't use Next.js data cache (2MB limit); we use in-memory imageCache below instead.
+        const response = await fetch(imagePath, { cache: "no-store" });
         if (!response.ok) {
           return new NextResponse("Image not found", { status: 404 });
         }
@@ -103,9 +99,8 @@ export async function GET(
       for (const encodedPath of urlsToTry) {
         const gcsUrl = `https://storage.googleapis.com/tinglebot/${encodedPath}`;
         try {
-          const response = await fetch(gcsUrl, {
-            next: { revalidate: GCS_REVALIDATE_SECONDS },
-          });
+          // Don't use Next.js data cache (2MB limit); we use in-memory imageCache below instead.
+          const response = await fetch(gcsUrl, { cache: "no-store" });
           if (response.ok) {
             const imageBuffer = await response.arrayBuffer();
             const contentType = response.headers.get("content-type") || getContentType(path.extname(imagePath).toLowerCase());
@@ -162,9 +157,8 @@ export async function GET(
         });
       }
       try {
-        const response = await fetch(gcsUrl, {
-          next: { revalidate: GCS_REVALIDATE_SECONDS },
-        });
+        // Don't use Next.js data cache (2MB limit); we use in-memory imageCache above instead.
+        const response = await fetch(gcsUrl, { cache: "no-store" });
         if (response.ok) {
           const imageBuffer = await response.arrayBuffer();
           const contentType = response.headers.get("content-type") || getContentType(path.extname(imagePath).toLowerCase());
