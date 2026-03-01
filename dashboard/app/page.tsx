@@ -328,21 +328,40 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     : [];
 
   const tokenVal = doc.tokenReward;
-  const rewards: { tokens?: number; flat?: number; perUnit?: number; description?: string } = {};
+  const rewards: {
+    tokens?: number;
+    flat?: number;
+    perUnit?: number;
+    unitLabel?: string;
+    maxUnits?: number;
+    collabBonus?: number;
+    description?: string;
+  } = {};
   if (typeof tokenVal === "number" && tokenVal >= 0) {
     rewards.flat = tokenVal;
     rewards.tokens = tokenVal;
   } else if (typeof tokenVal === "string" && tokenVal.trim()) {
     const s = tokenVal.trim();
-    const flatMatch = s.match(/^flat:\s*(\d+)$/i);
-    const perUnitMatch = s.match(/^per_unit:\s*(\d+)$/i);
+    const flatMatch = s.match(/flat:\s*(\d+)/i);
+    const perUnitMatch = s.match(/per_unit:\s*(\d+)/i);
+    const unitQuoted = s.match(/\bunit:\s*"((?:[^"\\]|\\.)*)"/i)?.[1];
+    const unitUnquoted = !unitQuoted ? s.match(/\bunit:\s*(\S+)/i)?.[1] : null;
+    const unitLabel = unitQuoted ? unitQuoted.replace(/\\"/g, '"') : (unitUnquoted ?? null);
+    const maxMatch = s.match(/max:\s*(\d+)/i);
+    const collabMatch = s.match(/collab_bonus:\s*(\d+)/i);
     if (flatMatch) {
       rewards.flat = Math.max(0, parseInt(flatMatch[1], 10));
       rewards.tokens = rewards.flat;
-    } else if (perUnitMatch) {
+    }
+    if (perUnitMatch) {
       rewards.perUnit = Math.max(0, parseInt(perUnitMatch[1], 10));
-    } else {
-      rewards.description = tokenVal.trim();
+    }
+    if (unitLabel) rewards.unitLabel = unitLabel;
+    if (maxMatch) rewards.maxUnits = Math.max(0, parseInt(maxMatch[1], 10));
+    if (collabMatch) rewards.collabBonus = Math.max(0, parseInt(collabMatch[1], 10));
+    if (!rewards.flat && !rewards.perUnit && !rewards.collabBonus) {
+      const isNoReward = /^(n\/a|no reward|none)$/i.test(s) || s === "";
+      if (!isNoReward) rewards.description = s;
     }
   }
 

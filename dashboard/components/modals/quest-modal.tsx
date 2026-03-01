@@ -38,6 +38,9 @@ export type DetailedQuestItem = {
     tokens?: number;
     flat?: number;
     perUnit?: number;
+    unitLabel?: string;
+    maxUnits?: number;
+    collabBonus?: number;
     description?: string;
   };
   rules: string[];
@@ -100,15 +103,35 @@ function formatRewards(r: DetailedQuestItem["rewards"]): { lines: { icon?: strin
   if (!r) return { lines: [] };
   const flat = r.flat ?? (typeof r.tokens === "number" && r.tokens >= 0 ? r.tokens : null);
   const perUnit = r.perUnit;
+  const unitLabel = r.unitLabel?.trim();
+  const maxUnits = r.maxUnits;
+  const collabBonus = r.collabBonus;
   const desc = (r.description ?? "").trim().toLowerCase();
   const isNoReward = NO_REWARD_STRINGS.some((s) => desc === s || desc.startsWith(s));
 
+  const lines: { icon?: string; text: string; muted?: boolean }[] = [];
+
   if (flat != null && flat >= 0) {
-    return { lines: [{ icon: "fa-coins", text: `${flat} tokens (flat rate)` }] };
+    lines.push({ icon: "fa-coins", text: `${flat} tokens (flat rate)` });
   }
   if (perUnit != null && perUnit >= 0) {
-    return { lines: [{ icon: "fa-coins", text: `${perUnit} tokens per unit` }] };
+    let perUnitText: string;
+    if (unitLabel && maxUnits != null && maxUnits >= 0) {
+      perUnitText = `${perUnit} tokens per ${unitLabel} (max ${maxUnits})`;
+    } else if (unitLabel) {
+      perUnitText = `${perUnit} tokens per ${unitLabel}`;
+    } else if (maxUnits != null && maxUnits >= 0) {
+      perUnitText = `${perUnit} tokens per unit (max ${maxUnits})`;
+    } else {
+      perUnitText = `${perUnit} tokens per unit`;
+    }
+    lines.push({ icon: "fa-coins", text: perUnitText });
   }
+  if (collabBonus != null && collabBonus >= 0 && collabBonus > 0) {
+    lines.push({ icon: "fa-coins", text: `${collabBonus} tokens collab bonus` });
+  }
+  if (lines.length > 0) return { lines };
+
   if (isNoReward || (desc && NO_REWARD_STRINGS.some((s) => desc.includes(s)))) {
     return { lines: [{ text: "No reward", muted: true }] };
   }
