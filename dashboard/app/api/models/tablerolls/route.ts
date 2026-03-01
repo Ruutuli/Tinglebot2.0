@@ -16,7 +16,7 @@ export async function GET() {
       .select("name")
       .sort({ name: 1 })
       .lean();
-    const names = tablerolls.map((t: { name: string }) => t.name);
+    const names = (tablerolls as unknown as Array<{ name: string }>).map((t) => t.name);
     return NextResponse.json(names);
   } catch (err) {
     console.error("[tablerolls] GET error:", err);
