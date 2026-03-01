@@ -1339,6 +1339,40 @@ async function postQuestToChannel(client, quest) {
   }
 }
 
+function getQuestParticipantUserIds(quest) {
+  const participants = quest.participants;
+  if (!participants) return [];
+  if (participants instanceof Map) {
+    return Array.from(participants.keys());
+  }
+  if (typeof participants === 'object' && participants !== null) {
+    return Object.keys(participants);
+  }
+  return [];
+}
+
+async function addQuestParticipantsToThread(client, threadId, quest) {
+  const userIds = getQuestParticipantUserIds(quest);
+  if (userIds.length === 0) return;
+  try {
+    const thread = await client.channels.fetch(threadId);
+    if (!thread || !thread.isThread()) {
+      logger.warn('SCHEDULED', `quest-posting-check: Thread ${threadId} not found or not a thread; skipping participant add`);
+      return;
+    }
+    for (const userId of userIds) {
+      if (!userId) continue;
+      try {
+        await thread.members.add(userId);
+      } catch (memberErr) {
+        logger.warn('SCHEDULED', `quest-posting-check: Could not add participant ${userId} to RP thread: ${memberErr.message}`);
+      }
+    }
+  } catch (err) {
+    logger.warn('SCHEDULED', `quest-posting-check: Error adding participants to RP thread ${threadId}: ${err.message}`);
+  }
+}
+
 async function createRPQuestThread(client, quest) {
   if (!client?.channels || (quest.questType || '').toLowerCase() !== 'rp' || !quest.rpThreadParentChannel || quest.rpThreadId) {
     return null;
@@ -1350,11 +1384,31 @@ async function createRPQuestThread(client, quest) {
       return null;
     }
     const threadName = (`📜 ${(quest.title || 'Quest').toString().trim()} (${quest.questID || ''}) - RP Thread`).slice(0, 100);
-    const thread = await parentChannel.threads.create({
-      name: threadName,
-      type: 10,
-      autoArchiveDuration: 10080
-    });
+    const messageContent = `RP thread for **${(quest.title || 'Quest').toString().trim().slice(0, 80)}** (${quest.questID || ''}). Use this thread for quest roleplay.`;
+    const channelType = parentChannel.type;
+    const isForum = channelType === 15;
+    const isTextOrAnnouncement = channelType === 0 || channelType === 5;
+
+    let thread = null;
+    if (isForum) {
+      thread = await parentChannel.threads.create({
+        name: threadName,
+        message: { content: messageContent },
+        autoArchiveDuration: 10080
+      });
+    } else if (isTextOrAnnouncement) {
+      thread = await parentChannel.threads.create({
+        name: threadName,
+        type: 10,
+        autoArchiveDuration: 10080
+      });
+      if (thread) {
+        await thread.send({ content: messageContent });
+      }
+    } else {
+      logger.warn('SCHEDULED', `quest-posting-check: Channel ${quest.rpThreadParentChannel} type ${channelType} is not threadable for quest ${quest.questID}`);
+      return null;
+    }
     return thread?.id ?? null;
   } catch (err) {
     logger.error('SCHEDULED', `quest-posting-check: Failed to create RP thread for quest ${quest.questID}: ${err.message}`);
@@ -1444,6 +1498,7 @@ async function questPostingCheck(client, _data = {}) {
             quest.rpThreadId = rpThreadId;
             await quest.save();
             logger.info('SCHEDULED', `quest-posting-check: Created RP thread ${rpThreadId} for quest ${quest.questID}`);
+            await addQuestParticipantsToThread(client, rpThreadId, quest);
           }
 
           postedCount++;
