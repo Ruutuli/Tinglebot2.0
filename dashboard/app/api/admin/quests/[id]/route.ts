@@ -286,9 +286,9 @@ export async function PUT(
       );
       if (threadResult?.id) {
         rpThreadIdToSet = threadResult.id;
-        logger.info(`api/admin/quests/[id] Created RP thread ${rpThreadIdToSet} for quest ${questID}`);
+        logger.info("api/admin/quests/[id]", `Created RP thread ${rpThreadIdToSet} for quest ${questID}`);
       } else {
-        logger.warn(`api/admin/quests/[id] Failed to create RP thread in channel ${rpThreadParentChannelVal} for quest ${questID}`);
+        logger.warn("api/admin/quests/[id]", `Failed to create RP thread in channel ${rpThreadParentChannelVal} for quest ${questID}`);
       }
     }
 
