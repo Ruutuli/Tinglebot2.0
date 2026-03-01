@@ -279,12 +279,13 @@ export async function PUT(
     ) {
       const questTitle = title ?? (existing as Record<string, unknown>).title ?? "Quest";
       const threadName = `📜 RP Thread — ${String(questTitle).trim()}`.slice(0, 100);
-      // Forum channels require message content; text channels accept optional message. Use forum-style payload for compatibility.
+      // Forum channels require message content; text channels accept optional message. type: 10 = public thread (default is 11 = private).
       const threadResult = await discordApiRequest<{ id: string }>(
         `channels/${rpThreadParentChannelVal}/threads`,
         "POST",
         {
           name: threadName,
+          type: 10,
           message: { content: `RP thread for **${String(questTitle).trim().slice(0, 80)}**. Use this thread for quest roleplay.` },
           auto_archive_duration: 10080,
         }
@@ -324,7 +325,10 @@ export async function PUT(
       itemRewardQty: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].quantity : itemParsed.itemRewardQty,
       itemRewards: itemRewardsFinal,
       rpThreadParentChannel: rpThreadParentChannelVal,
-      rpThreadId: rpThreadIdToSet ?? (existing as Record<string, unknown>).rpThreadId ?? null,
+      rpThreadId:
+        typeof body.rpThreadId === "string" && body.rpThreadId.trim()
+          ? body.rpThreadId.trim()
+          : rpThreadIdToSet ?? (existing as Record<string, unknown>).rpThreadId ?? null,
       collabAllowed: Boolean(body.collabAllowed),
       collabRule: typeof body.collabRule === "string" ? body.collabRule.trim() || null : null,
       artWritingMode: body.artWritingMode === "either" ? "either" : "both",

@@ -306,6 +306,7 @@ type FormState = {
   tokenRewardCustom: string;
   itemRewards: ItemRewardRow[];
   rpThreadParentChannel: string;
+  rpThreadId: string;
   collabAllowed: boolean;
   collabRule: string;
   questID: string;
@@ -345,6 +346,7 @@ const emptyForm: FormState = {
   tokenRewardCustom: "",
   itemRewards: [],
   rpThreadParentChannel: "",
+  rpThreadId: "",
   collabAllowed: false,
   collabRule: "",
   questID: "",
@@ -451,6 +453,7 @@ function questToForm(q: QuestRecord): FormState {
     tokenRewardCustom: parsed.tokenRewardCustom,
     itemRewards,
     rpThreadParentChannel: String(q.rpThreadParentChannel ?? ""),
+    rpThreadId: String((q as { rpThreadId?: string }).rpThreadId ?? ""),
     collabAllowed: Boolean(q.collabAllowed),
     collabRule: String(q.collabRule ?? ""),
     questID: String(q.questID ?? ""),
@@ -503,6 +506,7 @@ function formToBody(f: FormState, isEdit: boolean): Record<string, unknown> {
     status: f.status,
     tokenReward,
     rpThreadParentChannel: f.rpThreadParentChannel.trim() || null,
+    rpThreadId: f.rpThreadId.trim() || null,
     collabAllowed: f.collabAllowed,
     collabRule: f.collabRule.trim() || null,
     posted: f.posted,
@@ -1462,6 +1466,13 @@ export default function AdminQuestsPage() {
                                 {RP_THREAD_CHANNELS.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
                               </select>
                             </div>
+                            {editingId && (
+                              <div className="sm:col-span-2">
+                                <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">RP Thread ID (manual override)</label>
+                                <input type="text" value={form.rpThreadId} onChange={(e) => setField("rpThreadId", e.target.value)} placeholder="e.g. 1234567890123456789" className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] px-3 py-2 text-[var(--totk-ivory)]" />
+                                <p className="mt-1 text-xs text-[var(--totk-grey-200)]">Paste the Discord thread ID if you created the thread yourself (e.g. after a failed or wrong-type auto-create). Leave empty to use auto-created or existing.</p>
+                              </div>
+                            )}
                             <div>
                               <label className="mb-1 block text-sm font-medium text-[var(--totk-grey-200)]">Table roll (optional)</label>
                               <select value={form.tableroll} onChange={(e) => setField("tableroll", e.target.value)} className="w-full rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] pl-3 pr-8 py-2 text-[var(--totk-ivory)]">
