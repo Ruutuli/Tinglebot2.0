@@ -18,10 +18,14 @@ export type QuestParticipant = {
   status: "Active" | "Completed";
 };
 
+/* [quest-modal.tsx]🧷 Item reward (name + quantity) - */
+export type QuestItemReward = { name: string; quantity: number };
+
 /* [quest-modal.tsx]🧷 Detailed quest item - */
 export type DetailedQuestItem = {
   category: string;
   description: string;
+  itemRewards?: QuestItemReward[];
   locations: string[];
   maxParticipants: number;
   month: string;
@@ -288,6 +292,27 @@ export function QuestDetailsModal({
           )}
         </div>
 
+        {/* Item rewards */}
+        {quest.itemRewards && quest.itemRewards.length > 0 && (
+          <div
+            className="rounded-lg border-2 p-4"
+            style={{ borderColor: SECTION_ACCENT.rewards.border, backgroundColor: SECTION_ACCENT.rewards.bg }}
+          >
+            <h3 className="mb-2.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider" style={{ color: SECTION_ACCENT.rewards.icon }}>
+              <i aria-hidden className="fa-solid fa-gift text-sm" />
+              Item rewards
+            </h3>
+            <ul className="space-y-1.5">
+              {quest.itemRewards.map((item, idx) => (
+                <li key={idx} className="flex items-center gap-2 text-sm font-medium text-[var(--totk-ivory)]">
+                  <span style={{ color: SECTION_ACCENT.rewards.icon }}>•</span>
+                  <span>{item.quantity > 1 ? `${item.name} × ${item.quantity}` : item.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Rules — distinct accent */}
         {quest.rules && quest.rules.length > 0 && (
           <div
@@ -300,7 +325,7 @@ export function QuestDetailsModal({
             </h3>
             <ul className="space-y-1.5">
               {quest.rules.map((rule, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-sm text-[var(--botw-pale)]">
+                <li key={idx} className="flex items-start gap-2 text-sm leading-relaxed text-[var(--botw-pale)]">
                   <span className="mt-1.5 shrink-0 text-xs" style={{ color: typeStyle.color }}>•</span>
                   <span>{rule}</span>
                 </li>

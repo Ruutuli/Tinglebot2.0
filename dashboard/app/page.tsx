@@ -291,6 +291,9 @@ type QuestApiDoc = {
   postedAt?: string | null;
   postRequirement?: number | null;
   minRequirements?: unknown;
+  itemReward?: string | null;
+  itemRewardQty?: number | null;
+  itemRewards?: { name: string; quantity: number }[];
 };
 
 function participantCount(participants: QuestApiDoc["participants"]): number {
@@ -316,7 +319,12 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     : [];
 
   const rulesStr = doc.rules ?? doc.specialNote ?? "";
-  const rules = rulesStr ? rulesStr.split(/\n/).map((s) => s.trim()).filter(Boolean) : [];
+  const rules = rulesStr
+    ? rulesStr
+        .split(/\n/)
+        .map((s) => s.replace(/^[\s•\-–\*]+\s*/, "").trim())
+        .filter(Boolean)
+    : [];
 
   const tokenVal = doc.tokenReward;
   const rewards: { tokens?: number; flat?: number; perUnit?: number; description?: string } = {};
@@ -357,9 +365,22 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     }
   }
 
+  const itemRewards: { name: string; quantity: number }[] = [];
+  if (Array.isArray(doc.itemRewards) && doc.itemRewards.length > 0) {
+    doc.itemRewards.forEach((ir) => {
+      if (ir && typeof ir.name === "string" && ir.name.trim()) {
+        itemRewards.push({ name: ir.name.trim(), quantity: typeof ir.quantity === "number" && ir.quantity >= 0 ? ir.quantity : 1 });
+      }
+    });
+  } else if (doc.itemReward && String(doc.itemReward).trim()) {
+    const qty = typeof doc.itemRewardQty === "number" && doc.itemRewardQty >= 0 ? doc.itemRewardQty : 1;
+    itemRewards.push({ name: String(doc.itemReward).trim(), quantity: qty });
+  }
+
   const fullDetails: DetailedQuestItem = {
     category: type,
     description: doc.description ?? "",
+    itemRewards: itemRewards.length > 0 ? itemRewards : undefined,
     locations: village === "Multiple" ? ["Rudania", "Inariko", "Vhintl"] : [village],
     maxParticipants,
     month,
