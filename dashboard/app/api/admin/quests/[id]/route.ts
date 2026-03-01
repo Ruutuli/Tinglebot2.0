@@ -279,10 +279,15 @@ export async function PUT(
     ) {
       const questTitle = title ?? (existing as Record<string, unknown>).title ?? "Quest";
       const threadName = `📜 RP Thread — ${String(questTitle).trim()}`.slice(0, 100);
+      // Forum channels require message content; text channels accept optional message. Use forum-style payload for compatibility.
       const threadResult = await discordApiRequest<{ id: string }>(
         `channels/${rpThreadParentChannelVal}/threads`,
         "POST",
-        { name: threadName, type: 10, auto_archive_duration: 10080 }
+        {
+          name: threadName,
+          message: { content: `RP thread for **${String(questTitle).trim().slice(0, 80)}**. Use this thread for quest roleplay.` },
+          auto_archive_duration: 10080,
+        }
       );
       if (threadResult?.id) {
         rpThreadIdToSet = threadResult.id;
