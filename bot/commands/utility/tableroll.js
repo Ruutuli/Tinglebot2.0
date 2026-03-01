@@ -16,6 +16,21 @@ const {
   parseCSVData
 } = require('@/utils/tableRollUtils');
 
+// Roll frequency choices for slash options (value = maxRollsPerDay, 0 = unlimited)
+const ROLL_LIMIT_CHOICES = [
+  { name: 'As much as wanted', value: '0' },
+  { name: '1x per day', value: '1' },
+  { name: '2x per day', value: '2' },
+  { name: '3x per day', value: '3' },
+  { name: '5x per day', value: '5' },
+  { name: '10x per day', value: '10' }
+];
+
+function formatRollFrequency(maxRollsPerDay) {
+  if (!maxRollsPerDay || maxRollsPerDay <= 0) return 'As much as wanted';
+  return `${maxRollsPerDay}x per day`;
+}
+
 // ------------------- Helper function to get item emoji from database -------------------
 async function getItemEmoji(itemName) {
   try {
@@ -86,9 +101,12 @@ module.exports = {
             .setDescription('CSV file with table data (Weight,Flavor,Item,thumbnail image)')
             .setRequired(true)
         )
-        
-
-        
+        .addStringOption(option =>
+          option.setName('rolllimit')
+            .setDescription('How often this table can be rolled (default: as much as wanted)')
+            .setRequired(false)
+            .addChoices(...ROLL_LIMIT_CHOICES)
+        )
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -138,6 +156,12 @@ module.exports = {
           option.setName('csvfile')
             .setDescription('New CSV file with table data (Weight,Flavor,Item,thumbnail image)')
             .setRequired(true)
+        )
+        .addStringOption(option =>
+          option.setName('rolllimit')
+            .setDescription('How often this table can be rolled (optional; leave blank to keep current)')
+            .setRequired(false)
+            .addChoices(...ROLL_LIMIT_CHOICES)
         )
     )
     .addSubcommand(subcommand =>
@@ -258,11 +282,15 @@ module.exports = {
          });
        }
 
+    const rollLimitValue = interaction.options.getString('rolllimit');
+    const maxRollsPerDay = rollLimitValue != null ? parseInt(rollLimitValue, 10) : 0;
+
                // Create table
         const table = new TableRoll({
           name: name,
           entries: parseResult.entries,
-          createdBy: interaction.user.id
+          createdBy: interaction.user.id,
+          maxRollsPerDay: isNaN(maxRollsPerDay) ? 0 : Math.max(0, maxRollsPerDay)
         });
 
       await table.save();
@@ -282,7 +310,8 @@ module.exports = {
         .setImage(DEFAULT_IMAGE_URL)
         .setDescription(`**📊 ${parseResult.entries.length} entries** | **🎲 ${table.totalWeight} total weight**`)
         .addFields(
-          { name: '👤 Created By', value: `<@${interaction.user.id}>`, inline: true }
+          { name: '👤 Created By', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '🔄 Roll limit', value: formatRollFrequency(table.maxRollsPerDay), inline: true }
         )
         .setTimestamp();
 
@@ -602,12 +631,12 @@ module.exports = {
         .setFooter({ text: `Found ${tables.length} active table${tables.length !== 1 ? 's' : ''}` })
         .setTimestamp();
 
-      // Simplified table list with just entries and weight
+      // Simplified table list with entries, weight, and roll limit
       const tableList = tables.map(table => {
         const entryCount = table.entries.length;
         const totalWeight = table.totalWeight;
-        
-        return `**${table.name}**\n└ 📊 ${entryCount} entries | 🎲 ${totalWeight} weight`;
+        const rollLimit = formatRollFrequency(table.maxRollsPerDay);
+        return `**${table.name}**\n└ 📊 ${entryCount} entries | 🎲 ${totalWeight} weight | 🔄 ${rollLimit}`;
       }).join('\n\n');
 
       embed.addFields({
@@ -663,13 +692,14 @@ module.exports = {
         .setDescription(`**📊 ${table.entries.length} entries** | **🎲 ${table.totalWeight} total weight**`)
         .addFields(
           { name: '👤 Created By', value: `<@${table.createdBy}>`, inline: true },
+          { name: '🔄 Roll limit', value: formatRollFrequency(table.maxRollsPerDay), inline: true },
           { name: '📅 Created', value: table.createdAt.toLocaleDateString(), inline: true },
           { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true }
         );
 
       if (table.maxRollsPerDay > 0) {
         embed.addFields({
-          name: '📅 Daily Limit',
+          name: '📅 Used today',
           value: `${table.dailyRollCount}/${table.maxRollsPerDay}`,
           inline: true
         });
@@ -765,21 +795,28 @@ module.exports = {
       table.totalWeight = parseResult.entries.reduce((sum, entry) => sum + (entry.weight || 0), 0);
       table.updatedAt = new Date();
 
+      const rollLimitValue = interaction.options.getString('rolllimit');
+      if (rollLimitValue != null) {
+        const maxRollsPerDay = parseInt(rollLimitValue, 10);
+        table.maxRollsPerDay = isNaN(maxRollsPerDay) ? 0 : Math.max(0, maxRollsPerDay);
+      }
+
       await table.save();
 
       const embed = new EmbedBuilder()
         .setColor(0x00FF00)
         .setTitle(`✅ Table '${tableName}' Updated Successfully`)
-                 .addFields(
-           { name: '📊 New Entries', value: parseResult.entries.length.toString(), inline: true },
-           { name: '🎲 New Total Weight', value: table.totalWeight.toString(), inline: true },
-                        { name: '👤 Updated By', value: `<@${interaction.user.id}>`, inline: true },
-             { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true }
-         );
+        .addFields(
+          { name: '📊 New Entries', value: parseResult.entries.length.toString(), inline: true },
+          { name: '🎲 New Total Weight', value: table.totalWeight.toString(), inline: true },
+          { name: '👤 Updated By', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true },
+          { name: '🔄 Roll limit', value: formatRollFrequency(table.maxRollsPerDay), inline: true }
+        );
 
       if (table.maxRollsPerDay > 0) {
         embed.addFields({
-          name: '📅 Daily Limit',
+          name: '📅 Daily limit today',
           value: `${table.dailyRollCount}/${table.maxRollsPerDay}`,
           inline: true
         });

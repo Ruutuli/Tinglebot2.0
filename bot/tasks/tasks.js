@@ -1339,6 +1339,29 @@ async function postQuestToChannel(client, quest) {
   }
 }
 
+async function createRPQuestThread(client, quest) {
+  if (!client?.channels || (quest.questType || '').toLowerCase() !== 'rp' || !quest.rpThreadParentChannel || quest.rpThreadId) {
+    return null;
+  }
+  try {
+    const parentChannel = await client.channels.fetch(quest.rpThreadParentChannel);
+    if (!parentChannel || !parentChannel.threads) {
+      logger.warn('SCHEDULED', `quest-posting-check: RP parent channel ${quest.rpThreadParentChannel} not found or not threadable for quest ${quest.questID}`);
+      return null;
+    }
+    const threadName = (`📜 RP Thread — ${(quest.title || 'Quest').toString().trim()}`).slice(0, 100);
+    const thread = await parentChannel.threads.create({
+      name: threadName,
+      type: 10,
+      autoArchiveDuration: 10080
+    });
+    return thread?.id ?? null;
+  } catch (err) {
+    logger.error('SCHEDULED', `quest-posting-check: Failed to create RP thread for quest ${quest.questID}: ${err.message}`);
+    return null;
+  }
+}
+
 function getCurrentMonthFormats() {
   const now = new Date();
   const estOffset = -5 * 60;
@@ -1415,7 +1438,14 @@ async function questPostingCheck(client, _data = {}) {
           }
           quest.guildId = message.guildId;
           await quest.save();
-          
+
+          const rpThreadId = await createRPQuestThread(client, quest);
+          if (rpThreadId) {
+            quest.rpThreadId = rpThreadId;
+            await quest.save();
+            logger.info('SCHEDULED', `quest-posting-check: Created RP thread ${rpThreadId} for quest ${quest.questID}`);
+          }
+
           postedCount++;
           logger.info('SCHEDULED', `quest-posting-check: Posted quest ${quest.questID} "${quest.title}" to channel ${quest.targetChannel}`);
         } else {

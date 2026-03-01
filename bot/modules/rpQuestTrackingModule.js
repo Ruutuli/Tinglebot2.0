@@ -229,14 +229,17 @@ const QUEST_CATEGORY_ID = '717090310911426590';
 // ------------------- Find Quest by Thread ID -------------------
 async function findQuestByThreadId(threadId, options = {}) {
     try {
-        const quest = await Quest.findOne({ 
+        const quest = await Quest.findOne({
             status: QUEST_SEARCH_CRITERIA.STATUS,
             questType: QUEST_SEARCH_CRITERIA.QUEST_TYPE,
-            rpThreadParentChannel: threadId
+            $or: [
+                { rpThreadId: threadId },
+                { rpThreadParentChannel: threadId }
+            ]
         });
 
         if (quest) {
-            logger.info('QUEST', `Found quest ${quest.questID} by parent channel`);
+            logger.info('QUEST', `Found quest ${quest.questID} by RP thread`);
             return quest;
         }
 

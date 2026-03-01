@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
+import { discordApiRequest } from "@/lib/discord";
 import { isModeratorUser } from "@/lib/moderator";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
@@ -263,6 +264,33 @@ export async function PUT(
           ? new Date()
           : null;
 
+    const rpThreadParentChannelVal =
+      typeof body.rpThreadParentChannel === "string"
+        ? body.rpThreadParentChannel.trim() || null
+        : null;
+
+    let rpThreadIdToSet: string | null = (existing as Record<string, unknown>).rpThreadId as string | null ?? null;
+    if (
+      posted &&
+      status === "active" &&
+      questType === "RP" &&
+      rpThreadParentChannelVal &&
+      !rpThreadIdToSet
+    ) {
+      const threadName = `📜 RP Thread — ${(title ?? existing.title ?? "Quest").toString().trim()}`.slice(0, 100);
+      const threadResult = await discordApiRequest<{ id: string }>(
+        `channels/${rpThreadParentChannelVal}/threads`,
+        "POST",
+        { name: threadName, type: 10, auto_archive_duration: 10080 }
+      );
+      if (threadResult?.id) {
+        rpThreadIdToSet = threadResult.id;
+        logger.info(`api/admin/quests/[id] Created RP thread ${rpThreadIdToSet} for quest ${questID}`);
+      } else {
+        logger.warn(`api/admin/quests/[id] Failed to create RP thread in channel ${rpThreadParentChannelVal} for quest ${questID}`);
+      }
+    }
+
     const update: Record<string, unknown> = {
       title,
       description,
@@ -289,10 +317,8 @@ export async function PUT(
       itemReward: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].name : itemParsed.itemReward,
       itemRewardQty: itemRewardsFinal?.length === 1 ? itemRewardsFinal[0].quantity : itemParsed.itemRewardQty,
       itemRewards: itemRewardsFinal,
-      rpThreadParentChannel:
-        typeof body.rpThreadParentChannel === "string"
-          ? body.rpThreadParentChannel.trim() || null
-          : null,
+      rpThreadParentChannel: rpThreadParentChannelVal,
+      rpThreadId: rpThreadIdToSet ?? (existing as Record<string, unknown>).rpThreadId ?? null,
       collabAllowed: Boolean(body.collabAllowed),
       collabRule: typeof body.collabRule === "string" ? body.collabRule.trim() || null : null,
       artWritingMode: body.artWritingMode === "either" ? "either" : "both",

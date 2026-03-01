@@ -1713,14 +1713,15 @@ formatQuestCount(count = 0) {
  },
 
  async addUserToRPThread(interaction, quest, userID, userName) {
-  if (quest.questType.toLowerCase() === 'rp' && quest.rpThreadParentChannel) {
+  const threadId = quest.rpThreadId || quest.rpThreadParentChannel;
+  if (quest.questType.toLowerCase() === 'rp' && threadId) {
    try {
-    const rpThread = interaction.guild.channels.cache.get(quest.rpThreadParentChannel);
+    const rpThread = interaction.guild.channels.cache.get(threadId);
     if (rpThread && rpThread.isThread()) {
      await rpThread.members.add(userID);
      logger.info('QUEST', `Added ${userName} to RP thread for quest ${quest.title}`);
     } else {
-     logger.warn('QUEST', `RP thread not found for quest ${quest.title} (ID: ${quest.rpThreadParentChannel})`);
+     logger.warn('QUEST', `RP thread not found for quest ${quest.title} (ID: ${threadId})`);
     }
    } catch (error) {
     logger.error('QUEST', `Failed to add user to RP thread: ${error.message}`, error);

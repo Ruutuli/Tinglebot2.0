@@ -65,7 +65,8 @@ const integrationFields = {
     messageID: { type: String, default: null },
     roleID: { type: String, default: null },
     guildId: { type: String, default: null },
-    rpThreadParentChannel: { type: String, default: null }
+    rpThreadParentChannel: { type: String, default: null },
+    rpThreadId: { type: String, default: null }
 };
 
 // ------------------- Quest Status Fields ------------------
