@@ -293,18 +293,21 @@ export async function PUT(
       const threadName = `📜 ${String(questTitle).trim()} (${questID}) - RP Thread`.slice(0, 100);
       const messageContent = `RP thread for **${String(questTitle).trim().slice(0, 80)}** (${questID}). Use this thread for quest roleplay.`;
 
-      const channelData = await discordApiRequest<{ type: number }>(
+      const channelData = await discordApiRequest<{ type: number; name?: string }>(
         `channels/${rpThreadParentChannelVal}`,
         "GET"
       );
       if (!channelData || channelData.type === undefined) {
-        logger.warn("api/admin/quests/[id]", `Could not fetch channel ${rpThreadParentChannelVal}; skipping RP thread creation for quest ${questID}`);
+        logger.warn("api/admin/quests/[id]", `Could not fetch channel ${rpThreadParentChannelVal}; skipping RP thread creation for quest ${questID}. GET channel returned null or missing type.`);
       } else {
         const channelType = channelData.type;
         const isForum = channelType === 15;
         const isTextOrAnnouncement = channelType === 0 || channelType === 5;
+        const typeLabel = channelType === 15 ? "forum" : channelType === 0 ? "text" : channelType === 5 ? "announcement" : `other(${channelType})`;
+        logger.info("api/admin/quests/[id]", `RP thread creation: channel ${rpThreadParentChannelVal} type=${channelType} (${typeLabel})${channelData.name ? ` name="${channelData.name}"` : ""} for quest ${questID}`);
 
         if (isForum) {
+          logger.info("api/admin/quests/[id]", `Creating RP thread as forum: POST threads with name, message, auto_archive_duration (no type) for quest ${questID}`);
           const threadResult = await discordApiRequest<{ id: string }>(
             `channels/${rpThreadParentChannelVal}/threads`,
             "POST",
@@ -318,31 +321,34 @@ export async function PUT(
             rpThreadIdToSet = threadResult.id;
             logger.info("api/admin/quests/[id]", `Created RP thread ${rpThreadIdToSet} for quest ${questID} (forum)`);
           } else {
-            logger.warn("api/admin/quests/[id]", `Failed to create RP thread in forum channel ${rpThreadParentChannelVal} for quest ${questID}`);
+            logger.warn("api/admin/quests/[id]", `Failed to create RP thread in forum channel ${rpThreadParentChannelVal} for quest ${questID}. Channel type was ${channelType} (forum). If Discord returned 400/50024 "Cannot execute action on this channel type", the channel may not accept this payload.`);
           }
         } else if (isTextOrAnnouncement) {
-          const threadResult = await discordApiRequest<{ id: string }>(
-            `channels/${rpThreadParentChannelVal}/threads`,
+          // Public threads must be created FROM a message (Start Thread from Message). "Start Thread without Message" only creates private threads.
+          logger.info("api/admin/quests/[id]", `Creating public RP thread via Start Thread from Message: post message then POST messages/{id}/threads for quest ${questID}`);
+          const messageResult = await discordApiRequest<{ id: string }>(
+            `channels/${rpThreadParentChannelVal}/messages`,
             "POST",
-            {
-              name: threadName,
-              type: 10,
-              auto_archive_duration: 10080,
-            }
+            { content: messageContent }
           );
-          if (threadResult?.id) {
-            rpThreadIdToSet = threadResult.id;
-            await discordApiRequest(
-              `channels/${rpThreadIdToSet}/messages`,
+          if (messageResult?.id) {
+            const threadResult = await discordApiRequest<{ id: string }>(
+              `channels/${rpThreadParentChannelVal}/messages/${messageResult.id}/threads`,
               "POST",
-              { content: messageContent }
+              { name: threadName, auto_archive_duration: 10080 }
             );
-            logger.info("api/admin/quests/[id]", `Created RP thread ${rpThreadIdToSet} for quest ${questID} (text/announcement)`);
+            if (threadResult?.id) {
+              rpThreadIdToSet = threadResult.id;
+              logger.info("api/admin/quests/[id]", `Created public RP thread ${rpThreadIdToSet} for quest ${questID} (from message in text/announcement channel)`);
+            } else {
+              logger.warn("api/admin/quests/[id]", `Message posted but thread create failed for channel ${rpThreadParentChannelVal} quest ${questID}. Thread id may equal message id: ${messageResult.id}. Using as rpThreadId.`);
+              rpThreadIdToSet = messageResult.id;
+            }
           } else {
-            logger.warn("api/admin/quests/[id]", `Failed to create RP thread in channel ${rpThreadParentChannelVal} for quest ${questID}`);
+            logger.warn("api/admin/quests/[id]", `Could not post message to channel ${rpThreadParentChannelVal} for quest ${questID} (channel reported as type ${channelType}). Public threads require posting a message first; if this channel is a forum, posting is not allowed. Create a public thread manually and paste its ID in "RP Thread ID (manual override)".`);
           }
         } else {
-          logger.warn("api/admin/quests/[id]", `Channel ${rpThreadParentChannelVal} type ${channelType} is not threadable; skipping RP thread for quest ${questID}`);
+          logger.warn("api/admin/quests/[id]", `Channel ${rpThreadParentChannelVal} type ${channelType} is not threadable (expected 0=text, 5=announcement, 15=forum); skipping RP thread for quest ${questID}`);
         }
       }
     }
@@ -413,7 +419,7 @@ export async function PUT(
         if (!userId || typeof userId !== "string") continue;
         try {
           await discordApiRequest(
-            `channels/${finalRpThreadId.trim()}/thread_members/${userId.trim()}`,
+            `channels/${finalRpThreadId.trim()}/thread-members/${userId.trim()}`,
             "PUT"
           );
         } catch (e) {

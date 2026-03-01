@@ -371,6 +371,7 @@ export async function discordApiRequest<T = unknown>(
       // Retry once
       const retryRes = await fetch(url, options);
       if (!retryRes.ok) return null;
+      if (retryRes.status === 204) return null as T;
       return retryRes.json() as Promise<T>;
     }
 
