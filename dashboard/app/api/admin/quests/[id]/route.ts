@@ -277,7 +277,8 @@ export async function PUT(
       rpThreadParentChannelVal &&
       !rpThreadIdToSet
     ) {
-      const threadName = `📜 RP Thread — ${(title ?? existing.title ?? "Quest").toString().trim()}`.slice(0, 100);
+      const questTitle = title ?? (existing as Record<string, unknown>).title ?? "Quest";
+      const threadName = `📜 RP Thread — ${String(questTitle).trim()}`.slice(0, 100);
       const threadResult = await discordApiRequest<{ id: string }>(
         `channels/${rpThreadParentChannelVal}/threads`,
         "POST",
