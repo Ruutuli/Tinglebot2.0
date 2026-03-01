@@ -288,6 +288,9 @@ type QuestApiDoc = {
   rules?: string | null;
   specialNote?: string | null;
   status?: string;
+  postedAt?: string | null;
+  postRequirement?: number | null;
+  minRequirements?: unknown;
 };
 
 function participantCount(participants: QuestApiDoc["participants"]): number {
@@ -334,6 +337,26 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     }
   }
 
+  const participationRequirements: string[] = [];
+  if (doc.questType === "RP" && typeof doc.postRequirement === "number" && doc.postRequirement > 0) {
+    participationRequirements.push(`${doc.postRequirement} RP posts required`);
+  }
+  if (doc.minRequirements != null && typeof doc.minRequirements === "number" && doc.minRequirements > 0) {
+    participationRequirements.push(`Minimum requirement: ${doc.minRequirements}`);
+  }
+
+  let postedDate: string | undefined;
+  if (doc.postedAt) {
+    try {
+      const d = new Date(doc.postedAt);
+      if (!Number.isNaN(d.getTime())) {
+        postedDate = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      }
+    } catch {
+      postedDate = String(doc.postedAt);
+    }
+  }
+
   const fullDetails: DetailedQuestItem = {
     category: type,
     description: doc.description ?? "",
@@ -342,7 +365,8 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     month,
     name,
     participants: participantList,
-    participationRequirements: [],
+    participationRequirements,
+    postedDate,
     rewards,
     rules,
     specialNote: doc.specialNote ?? undefined,

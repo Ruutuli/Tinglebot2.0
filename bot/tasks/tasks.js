@@ -1043,6 +1043,7 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
     // Get all members with nitro boost
     const members = await guild.members.fetch();
     const boosters = members.filter(member => member.premiumSince !== null);
+    const boosterUsernames = [...boosters.values()].map(m => m.user?.username || 'Unknown').filter(Boolean);
     
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
     
@@ -1110,14 +1111,16 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
     // Post announcement to community board channel
     const communityBoardChannel = await client.channels.fetch(COMMUNITY_BOARD_CHANNEL_ID).catch(() => null);
     if (communityBoardChannel) {
+      const descriptionParts = rewardedCount > 0
+        ? [
+            `Thank you to our **${boosters.size}** server booster${boosters.size !== 1 ? 's' : ''}! Each has received **1000 tokens** for boosting this month.`,
+            boosterUsernames.length ? '\n\n' + boosterUsernames.map(u => `• ${u}`).join('\n') : ''
+          ]
+        : ['No new boost rewards were distributed this month. Thank you to everyone who boosts the server!'];
       const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('💜 Monthly Nitro Boost Rewards')
-        .setDescription(
-          rewardedCount > 0
-            ? `Thank you to our **${rewardedCount}** server booster${rewardedCount !== 1 ? 's' : ''}! Each has received **1000 tokens** for boosting this month.`
-            : 'No new boost rewards were distributed this month. Thank you to everyone who boosts the server!'
-        )
+        .setDescription(descriptionParts.join(''))
         .setTimestamp();
       await communityBoardChannel.send({ embeds: [embed] }).catch(err => {
         logger.error('SCHEDULED', `monthly-nitro-boost-rewards: Failed to post to community board: ${err.message}`);
@@ -1135,6 +1138,7 @@ async function monthlyNitroBoostRewards(client, _data = {}) {
 // ------------------- quest-posting-check (1st of month 12am EST = 05:00 UTC) -------------------
 // Posts all pending quests whose date matches the current month
 const QUEST_CHANNEL_ID = process.env.QUESTS_BOARD || '706880599863853097';
+const QUESTS_MONTH_IMAGE_BASE = 'https://storage.googleapis.com/tinglebot/Quests/';
 const BORDER_IMAGE = 'https://storage.googleapis.com/tinglebot/Graphics/border.png';
 const QUEST_EMBED_COLOR = 0xaa916a;
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -1380,6 +1384,19 @@ async function questPostingCheck(client, _data = {}) {
     }
     
     logger.info('SCHEDULED', `quest-posting-check: Found ${pendingQuests.length} pending quest(s) to post`);
+    
+    const channelId = pendingQuests[0].targetChannel || QUEST_CHANNEL_ID;
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      logger.error('SCHEDULED', `quest-posting-check: Could not find channel ${channelId}`);
+      return;
+    }
+    const monthNum = parseInt(yyyyMm.split('-')[1], 10);
+    const monthIdx = Math.max(0, Math.min(11, monthNum - 1));
+    const monthSlug = MONTH_NAMES[monthIdx].toLowerCase() + '.png';
+    const monthImageUrl = QUESTS_MONTH_IMAGE_BASE + monthSlug;
+    await channel.send({ embeds: [new EmbedBuilder().setImage(monthImageUrl)] });
+    await channel.send({ content: '@everyone' });
     
     let postedCount = 0;
     let errorCount = 0;

@@ -183,8 +183,8 @@ export function QuestDetailsModal({
           </div>
         </div>
 
-        {/* Location, Time, Participants — distinct accent per cell */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Location, Month, Time, Participants — distinct accent per cell */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div
             className="flex items-center gap-2.5 rounded-lg border-2 p-3"
             style={{ borderColor: SECTION_ACCENT.location.border, backgroundColor: SECTION_ACCENT.location.bg }}
@@ -193,6 +193,16 @@ export function QuestDetailsModal({
             <div className="min-w-0">
               <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">Location</div>
               <div className="truncate text-sm font-semibold text-[var(--totk-ivory)]">{formatLocationsDisplay(quest.locations)}</div>
+            </div>
+          </div>
+          <div
+            className="flex items-center gap-2.5 rounded-lg border-2 p-3"
+            style={{ borderColor: SECTION_ACCENT.time.border, backgroundColor: SECTION_ACCENT.time.bg }}
+          >
+            <i aria-hidden className="fa-solid fa-calendar-days text-base shrink-0" style={{ color: SECTION_ACCENT.time.icon }} />
+            <div className="min-w-0">
+              <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">Month</div>
+              <div className="text-sm font-semibold text-[var(--totk-ivory)]">{quest.month || "—"}</div>
             </div>
           </div>
           <div

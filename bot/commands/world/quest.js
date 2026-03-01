@@ -26,6 +26,9 @@ const {
 // ------------------- Constants -------------------
 // ============================================================================
 
+// Quest join is only allowed in the Sheikah Slate channel
+const SHEIKAH_SLATE_CHANNEL_ID = '641858948802150400';
+
 // Embed update queue to prevent race conditions
 const embedUpdateQueue = new Map(); // questID -> { isUpdating: boolean, pendingUpdates: Array }
 const updateTimeouts = new Map(); // questID -> timeout
@@ -175,6 +178,13 @@ module.exports = {
  // ------------------- Quest Join Handler -------------------
  // ============================================================================
  async handleJoinQuest(interaction) {
+  if (interaction.channelId !== SHEIKAH_SLATE_CHANNEL_ID) {
+   return interaction.reply({
+    content: `❌ The \`/quest join\` command can only be used in <#${SHEIKAH_SLATE_CHANNEL_ID}> (Sheikah Slate).`,
+    flags: MessageFlags.Ephemeral,
+   });
+  }
+
   const { characterName, questID, userID, userName } = this.extractJoinData(interaction);
 
   // Validate all requirements
