@@ -33,6 +33,7 @@ export type DetailedQuestItem = {
   participants: QuestParticipant[];
   participationRequirements: string[];
   postedDate?: string;
+  signupDeadline?: string;
   rewards: {
     tokens?: number;
     flat?: number;
@@ -231,18 +232,32 @@ export function QuestDetailsModal({
           </div>
         </div>
 
-        {quest.postedDate && (
-          <div
-            className="flex max-w-[50%] items-center gap-2.5 rounded-lg border-2 p-3"
-            style={{ borderColor: SECTION_ACCENT.time.border, backgroundColor: SECTION_ACCENT.time.bg }}
-          >
-            <i aria-hidden className="fa-solid fa-calendar-days text-base shrink-0" style={{ color: SECTION_ACCENT.time.icon }} />
-            <div className="min-w-0">
-              <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">Posted</div>
-              <div className="text-sm font-semibold text-[var(--totk-ivory)]">{quest.postedDate}</div>
+        <div className="flex flex-wrap gap-3">
+          {quest.postedDate && (
+            <div
+              className="flex items-center gap-2.5 rounded-lg border-2 p-3"
+              style={{ borderColor: SECTION_ACCENT.time.border, backgroundColor: SECTION_ACCENT.time.bg }}
+            >
+              <i aria-hidden className="fa-solid fa-calendar-days text-base shrink-0" style={{ color: SECTION_ACCENT.time.icon }} />
+              <div className="min-w-0">
+                <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">Posted</div>
+                <div className="text-sm font-semibold text-[var(--totk-ivory)]">{quest.postedDate}</div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          {quest.signupDeadline && (
+            <div
+              className="flex items-center gap-2.5 rounded-lg border-2 p-3"
+              style={{ borderColor: SECTION_ACCENT.time.border, backgroundColor: SECTION_ACCENT.time.bg }}
+            >
+              <i aria-hidden className="fa-solid fa-user-clock text-base shrink-0" style={{ color: SECTION_ACCENT.time.icon }} />
+              <div className="min-w-0">
+                <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--totk-grey-200)]">Signup deadline</div>
+                <div className="text-sm font-semibold text-[var(--totk-ivory)]">{quest.signupDeadline}</div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Rewards & Requirements — side by side when both exist */}
         <div className={clsx("grid gap-4", (quest.participationRequirements?.length ?? 0) > 0 && "sm:grid-cols-2")}>

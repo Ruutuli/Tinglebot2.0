@@ -294,6 +294,7 @@ type QuestApiDoc = {
   itemReward?: string | null;
   itemRewardQty?: number | null;
   itemRewards?: { name: string; quantity: number }[];
+  signupDeadline?: string | null;
 };
 
 function participantCount(participants: QuestApiDoc["participants"]): number {
@@ -365,6 +366,17 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     }
   }
 
+  let signupDeadlineDisplay: string | undefined;
+  if (doc.signupDeadline && String(doc.signupDeadline).trim()) {
+    const s = String(doc.signupDeadline).trim();
+    try {
+      const d = new Date(s);
+      signupDeadlineDisplay = Number.isNaN(d.getTime()) ? s : d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+    } catch {
+      signupDeadlineDisplay = s;
+    }
+  }
+
   const itemRewards: { name: string; quantity: number }[] = [];
   if (Array.isArray(doc.itemRewards) && doc.itemRewards.length > 0) {
     doc.itemRewards.forEach((ir) => {
@@ -389,6 +401,7 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     participationRequirements,
     postedDate,
     rewards,
+    signupDeadline: signupDeadlineDisplay,
     rules,
     specialNote: doc.specialNote ?? undefined,
     status: doc.status === "completed" ? "Completed" : "Active",

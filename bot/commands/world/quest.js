@@ -5,6 +5,7 @@ const logger = require('@/utils/logger');
 const Quest = require('@/models/QuestModel');
 const Character = require('@/models/CharacterModel');
 const User = require('@/models/UserModel');
+const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getCharacterInventoryCollection, updateModCharacterById } = require('@/database/db');
 const { 
     BORDER_IMAGE, 
     QUEST_CHANNEL_ID, 
@@ -545,7 +546,6 @@ async handleQuestTurnIn(interaction) {
   } else {
    // getCharacterInventoryCollection required here to avoid loading db when reward is character_slot
    try {
-    const { getCharacterInventoryCollection } = require('@/database/db');
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
     const existingOrb = await inventoryCollection.findOne({
      characterId: character._id,
@@ -572,7 +572,11 @@ async handleQuestTurnIn(interaction) {
      });
     }
 
-    await Character.findByIdAndUpdate(character._id, { spiritOrbs: newOrbTotal });
+    if (character.isModCharacter) {
+     await updateModCharacterById(character._id, { spiritOrbs: newOrbTotal });
+    } else {
+     await Character.findByIdAndUpdate(character._id, { spiritOrbs: newOrbTotal });
+    }
 
     rewardFields.push({
      name: "<:spiritorb:1171310851748270121> Spirit Orbs",
@@ -1487,10 +1491,10 @@ formatQuestCount(count = 0) {
  },
 
  async validateCharacter(interaction, characterName, userID) {
-  const character = await Character.findOne({
-   name: characterName,
-   userId: userID,
-  });
+  let character = await fetchCharacterByNameAndUserId(characterName, userID);
+  if (!character) {
+   character = await fetchModCharacterByNameAndUserId(characterName, userID);
+  }
 
   if (!character) {
    await interaction.reply({
