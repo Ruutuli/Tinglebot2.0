@@ -278,7 +278,7 @@ export async function PUT(
       !rpThreadIdToSet
     ) {
       const questTitle = title ?? (existing as Record<string, unknown>).title ?? "Quest";
-      const threadName = `📜 RP Thread — ${String(questTitle).trim()}`.slice(0, 100);
+      const threadName = `📜 ${String(questTitle).trim()} (${questID}) - RP Thread`.slice(0, 100);
       // Forum channels require message content; text channels accept optional message. type: 10 = public thread (default is 11 = private).
       const threadResult = await discordApiRequest<{ id: string }>(
         `channels/${rpThreadParentChannelVal}/threads`,

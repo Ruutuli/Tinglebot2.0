@@ -1349,7 +1349,7 @@ async function createRPQuestThread(client, quest) {
       logger.warn('SCHEDULED', `quest-posting-check: RP parent channel ${quest.rpThreadParentChannel} not found or not threadable for quest ${quest.questID}`);
       return null;
     }
-    const threadName = (`📜 RP Thread — ${(quest.title || 'Quest').toString().trim()}`).slice(0, 100);
+    const threadName = (`📜 ${(quest.title || 'Quest').toString().trim()} (${quest.questID || ''}) - RP Thread`).slice(0, 100);
     const thread = await parentChannel.threads.create({
       name: threadName,
       type: 10,
