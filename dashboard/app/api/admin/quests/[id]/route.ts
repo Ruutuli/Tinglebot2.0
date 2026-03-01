@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connect } from "@/lib/db";
 import { discordApiRequest } from "@/lib/discord";
+import { buildQuestEmbed } from "@/lib/questDiscordPost";
 import { isModeratorUser } from "@/lib/moderator";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
@@ -291,7 +292,16 @@ export async function PUT(
     ) {
       const questTitle = title ?? (existing as Record<string, unknown>).title ?? "Quest";
       const threadName = `📜 ${String(questTitle).trim()} (${questID}) - RP Thread`.slice(0, 100);
-      const messageContent = `RP thread for **${String(questTitle).trim().slice(0, 80)}** (${questID}). Use this thread for quest roleplay.`;
+      // Build the same quest embed used for announcements; thread will be created from this message.
+      const questEmbed = buildQuestEmbed(existing as Parameters<typeof buildQuestEmbed>[0]);
+      const rpFooter = "Use this thread for quest roleplay.";
+      const existingFooter = questEmbed.footer as { text?: string } | undefined;
+      const embedWithRpNote = {
+        ...questEmbed,
+        footer: existingFooter?.text
+          ? { text: `${existingFooter.text} • ${rpFooter}` }
+          : { text: rpFooter },
+      };
 
       const channelData = await discordApiRequest<{ type: number; name?: string }>(
         `channels/${rpThreadParentChannelVal}`,
@@ -307,13 +317,13 @@ export async function PUT(
         logger.info("api/admin/quests/[id]", `RP thread creation: channel ${rpThreadParentChannelVal} type=${channelType} (${typeLabel})${channelData.name ? ` name="${channelData.name}"` : ""} for quest ${questID}`);
 
         if (isForum) {
-          logger.info("api/admin/quests/[id]", `Creating RP thread as forum: POST threads with name, message, auto_archive_duration (no type) for quest ${questID}`);
+          logger.info("api/admin/quests/[id]", `Creating RP thread as forum: POST threads with name, message (embed), auto_archive_duration for quest ${questID}`);
           const threadResult = await discordApiRequest<{ id: string }>(
             `channels/${rpThreadParentChannelVal}/threads`,
             "POST",
             {
               name: threadName,
-              message: { content: messageContent },
+              message: { embeds: [embedWithRpNote] },
               auto_archive_duration: 10080,
             }
           );
@@ -324,12 +334,12 @@ export async function PUT(
             logger.warn("api/admin/quests/[id]", `Failed to create RP thread in forum channel ${rpThreadParentChannelVal} for quest ${questID}. Channel type was ${channelType} (forum). If Discord returned 400/50024 "Cannot execute action on this channel type", the channel may not accept this payload.`);
           }
         } else if (isTextOrAnnouncement) {
-          // Public threads must be created FROM a message (Start Thread from Message). "Start Thread without Message" only creates private threads.
-          logger.info("api/admin/quests/[id]", `Creating public RP thread via Start Thread from Message: post message then POST messages/{id}/threads for quest ${questID}`);
+          // Public threads must be created FROM a message (Start Thread from Message). Post quest embed, then create thread from that message.
+          logger.info("api/admin/quests/[id]", `Creating public RP thread via Start Thread from Message: post quest embed then POST messages/{id}/threads for quest ${questID}`);
           const messageResult = await discordApiRequest<{ id: string }>(
             `channels/${rpThreadParentChannelVal}/messages`,
             "POST",
-            { content: messageContent }
+            { embeds: [embedWithRpNote] }
           );
           if (messageResult?.id) {
             const threadResult = await discordApiRequest<{ id: string }>(

@@ -62,6 +62,7 @@ export const navItems: NavItem[] = [
       { href: "/admin/todo", label: "Todo List", icon: "fa-list-check" },
       { href: "/admin/database", label: "Database Editor", icon: "fa-database" },
       { href: "/admin/quests", label: "Quests", icon: "fa-scroll" },
+      { href: "/admin/tablerolls", label: "Table Rolls", icon: "fa-dice" },
       { href: "/admin/member-quest-proposals", label: "Member Quest Proposals", icon: "fa-scroll" },
       { href: "/admin/relic-archives", label: "Relic Archive Requests", icon: "fa-book" },
     ],

@@ -49,6 +49,7 @@ type Village = {
   raidQuotaPeriodStart?: string | null;
   raidQuotaPeriodType?: string | null;
   lastQuotaRaidTime?: string | null;
+  raidsThisPeriod?: number;
   levelHealth?: Record<string, number>;
   lastDamageTime?: string | null;
   cooldowns?: Record<string, unknown>;
@@ -315,10 +316,16 @@ export default function VillagesPage() {
                       </div>
                     )}
                     {/* ------------------- Raid Quota ------------------- */}
-                    {(village.raidQuotaPeriodType || village.raidQuotaCount != null) && (
+                    {(village.raidQuotaPeriodType || village.raidQuotaCount != null || village.raidsThisPeriod != null) && (
                       <div className="rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)] to-[var(--totk-brown)]/40 p-3 shadow-inner">
                         <div className="mb-2 font-semibold text-[var(--totk-light-ocher)]">Raid Quota</div>
                         <div className="space-y-1.5 text-xs">
+                        {village.raidsThisPeriod != null && (
+                          <div className="flex justify-between">
+                            <span className="font-medium">Raids this period:</span>
+                            <span className="text-[var(--totk-light-green)] font-medium">{village.raidsThisPeriod}</span>
+                          </div>
+                        )}
                         {village.raidQuotaPeriodType && (
                           <div className="flex justify-between">
                             <span className="font-medium">Raid Period:</span>
@@ -339,7 +346,7 @@ export default function VillagesPage() {
                         )}
                         {village.raidQuotaCount != null && (
                           <div className="flex justify-between">
-                            <span className="font-medium">Raid Count:</span>
+                            <span className="font-medium">Quota used:</span>
                             <span>{village.raidQuotaCount}</span>
                           </div>
                         )}

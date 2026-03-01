@@ -115,7 +115,7 @@ type QuestDoc = {
   runByUsername?: string | null;
 };
 
-function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
+export function buildQuestEmbed(quest: QuestDoc): Record<string, unknown> {
   const title = (quest.title ?? "").trim() || "Quest";
   const description = (quest.description ?? "").trim() || "";
   const questType = quest.questType ?? "—";

@@ -7,7 +7,7 @@ const TableRollEntrySchema = new Schema({
   weight: { 
     type: Number, 
     required: true, 
-    min: 0.1, // Minimum weight to prevent zero-weight entries
+    min: 1, // Whole numbers only
     default: 1 
   },
   flavor: { 
@@ -301,4 +301,5 @@ TableRollSchema.methods.duplicate = function(newName, newCreator) {
 };
 
 // ------------------- Export the model -------------------
-module.exports = mongoose.model('TableRoll', TableRollSchema); 
+// Avoid OverwriteModelError when the module is loaded multiple times (e.g. Next.js API routes + models-index)
+module.exports = mongoose.models.TableRoll || mongoose.model('TableRoll', TableRollSchema); 

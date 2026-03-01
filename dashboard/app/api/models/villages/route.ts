@@ -8,6 +8,7 @@ import {
   buildListResponse,
   buildSearchRegex,
 } from "@/lib/api-utils";
+import { getVillagePeriodStart } from "@/lib/villagePeriodUtils";
 import { logger } from "@/utils/logger";
 
 // ------------------- Map Serialization -------------------
@@ -93,6 +94,33 @@ export async function GET(req: NextRequest) {
       Village.distinct("region"),
     ]);
 
+    // ------------------- Raids This Period (from Raid collection) -------------------
+    let Raid: { countDocuments: (q: Record<string, unknown>) => Promise<number> };
+    try {
+      const RaidMod = await import("@/models/RaidModel.js");
+      Raid = RaidMod.default ?? RaidMod;
+    } catch {
+      Raid = { countDocuments: async () => 0 };
+    }
+    const villageList = rawData as Record<string, unknown>[];
+    const raidCounts = await Promise.all(
+      villageList.map(async (v) => {
+        const name = v.name as string;
+        const level = (v.level as number) ?? 1;
+        const periodStart = getVillagePeriodStart(level);
+        return Raid.countDocuments({
+          village: name,
+          createdAt: { $gte: periodStart },
+          $or: [{ expeditionId: null }, { expeditionId: { $exists: false } }],
+        });
+      })
+    );
+    const raidsThisPeriodByVillage: Record<string, number> = {};
+    villageList.forEach((v, i) => {
+      const name = v.name as string;
+      raidsThisPeriodByVillage[name] = raidCounts[i] ?? 0;
+    });
+
     // ------------------- Collect All Contributor IDs -------------------
     const allContributorIds = new Set<string>();
     for (const v of rawData as Record<string, unknown>[]) {
@@ -174,6 +202,7 @@ export async function GET(req: NextRequest) {
         })
         .sort((a, b) => (b.tokens + b.totalItems) - (a.tokens + a.totalItems));
 
+      const villageName = v.name as string;
       return {
         ...v,
         materials,
@@ -183,6 +212,7 @@ export async function GET(req: NextRequest) {
         cooldowns,
         materialsProgress,
         tokenProgress,
+        raidsThisPeriod: raidsThisPeriodByVillage[villageName] ?? 0,
       };
     });
 
