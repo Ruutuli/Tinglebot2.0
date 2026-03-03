@@ -14,6 +14,7 @@ const FILE = 'TOPIC_FILTER';
 // ---------------------------------------------------------------------------
 
 const MOD_CHANNEL_ID = process.env.TOPIC_FILTER_LOG_CHANNEL_ID || process.env.MOD_LOG_CHANNEL_ID || '855628652389335040';
+const MOD_ROLE_ID = process.env.MOD_ROLE_ID || '606128760655183882';
 
 /**
  * @typedef {Object} TopicDefinition
@@ -156,7 +157,10 @@ async function sendLog(client, embed, channelId = MOD_CHANNEL_ID) {
   try {
     const ch = await client.channels.fetch(channelId);
     if (ch?.isTextBased()) {
-      await ch.send({ embeds: [embed] });
+      await ch.send({
+        content: `<@&${MOD_ROLE_ID}> Topic filter triggered — please review.`,
+        embeds: [embed],
+      });
     }
   } catch (err) {
     logger.warn(FILE, `Could not send log to mod channel: ${err.message}`);
