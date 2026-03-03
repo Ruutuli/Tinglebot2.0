@@ -511,6 +511,10 @@ async function initializeClient() {
         // Initialize random encounters system
         const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
         initializeRandomEncounterBot(client);
+
+        // Initialize topic filter (trigger & greylist)
+        const { initializeTopicFilter } = require('./modules/topicFilterModule');
+        initializeTopicFilter(client);
         
         // Initialize universal scheduler (Agenda) and register tasks
         const scheduler = require('@/utils/scheduler');
