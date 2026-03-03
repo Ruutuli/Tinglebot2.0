@@ -122,13 +122,17 @@ function detectTopic(messageContent) {
 /**
  * Creates the topic reminder embed for DMs.
  * @param {TopicDefinition} topic
+ * @param {string} messageContent - The user's message that triggered the filter
  * @returns {EmbedBuilder}
  */
-function createTopicReminderEmbed(topic) {
+function createTopicReminderEmbed(topic, messageContent) {
   const isBlacklist = topic.isBlacklist;
   const color = isBlacklist ? 0xff4444 : 0xffaa00;
   const listType = isBlacklist ? 'Trigger' : 'Grey';
   const listEmoji = isBlacklist ? '❌' : '⚪';
+
+  const yourMessage = (messageContent || '').trim() || '*No text content*';
+  const truncatedMessage = yourMessage.length > 500 ? yourMessage.substring(0, 497) + '...' : yourMessage;
 
   return new EmbedBuilder()
     .setTitle(`${listEmoji} Topic Reminder`)
@@ -138,8 +142,9 @@ function createTopicReminderEmbed(topic) {
     .setColor(color)
     .addFields(
       { name: '📋 Detected Topic', value: `**${topic.name}**\n${listType} Topic`, inline: false },
+      { name: '💬 Your Message', value: truncatedMessage, inline: false },
       { name: '⚠️ Detection System Note', value: 'Our detection system isn\'t perfect and may sometimes flag things incorrectly.', inline: false },
-      { name: '✅ What To Do', value: 'If you weren\'t actually discussing a blacklisted/greylisted topic, please disregard this message. If you were, please be mindful of how you discuss it in the server.', inline: false }
+      { name: '✅ What To Do', value: 'If you weren\'t actually discussing a blacklisted/greylisted topic, please disregard this message. If you were, please delete your message immediately if it violates the trigger and be mindful of how you discuss it in the server.', inline: false }
     )
     .setFooter({ text: 'Tinglebot - Keeping the server safe and comfortable for everyone' })
     .setTimestamp();
@@ -207,7 +212,7 @@ async function logFailedDM(client, user, topic, message, reason) {
 async function sendTopicReminderDM(client, user, topic, originalMessage) {
   try {
     const userObj = await client.users.fetch(user.id);
-    const embed = createTopicReminderEmbed(topic);
+    const embed = createTopicReminderEmbed(topic, originalMessage?.content ?? '');
     await userObj.send({ embeds: [embed] });
     logger.success(FILE, `Sent topic reminder DM to ${user.tag} for: ${topic.name}`);
     await logSuccessfulDM(client, user, topic, originalMessage);
