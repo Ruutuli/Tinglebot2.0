@@ -33,7 +33,7 @@ const BLACKLIST_TOPICS = [
   {
     name: 'Car Wrecks & Accidents',
     keywords: [
-      'car', 'car wreck', 'carwreck', 'car crash', 'carcrash', 'vehicle wreck', 'vehiclewreck',
+      'car wreck', 'carwreck', 'car crash', 'carcrash', 'vehicle wreck', 'vehiclewreck',
       'vehicle crash', 'vehiclecrash', 'car accident', 'caraccident', 'vehicle accident', 'vehicleaccident',
       'auto accident', 'autoaccident', 'traffic accident', 'trafficaccident', 'car collision', 'carcollision',
       'vehicle collision', 'vehiclecollision', 'car wrecked', 'crashed car', 'wrecked car', 'car totaled',
