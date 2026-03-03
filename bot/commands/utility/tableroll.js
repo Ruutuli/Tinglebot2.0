@@ -224,10 +224,16 @@ module.exports = {
       
       console.error(`[tableroll.js]: Command failed:`, error);
       
-      await interaction.reply({
-        content: '❌ An error occurred while processing your request. Please try again later.',
-        flags: [MessageFlags.Ephemeral]
-      });
+      const errorMsg = '❌ An error occurred while processing your request. Please try again later.';
+      try {
+        if (interaction.deferred) {
+          await interaction.editReply({ content: errorMsg, flags: [MessageFlags.Ephemeral] });
+        } else if (!interaction.replied) {
+          await interaction.reply({ content: errorMsg, flags: [MessageFlags.Ephemeral] });
+        }
+      } catch (replyError) {
+        console.error(`[tableroll.js]: Failed to send error response:`, replyError);
+      }
     }
   },
 
