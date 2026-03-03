@@ -16,6 +16,10 @@ const FILE = 'TOPIC_FILTER';
 const MOD_CHANNEL_ID = process.env.TOPIC_FILTER_LOG_CHANNEL_ID || process.env.MOD_LOG_CHANNEL_ID || '855628652389335040';
 const MOD_ROLE_ID = process.env.MOD_ROLE_ID || '606128760655183882';
 
+// Throttle DMs to avoid Discord rate limit ("opening direct messages too fast")
+const DM_THROTTLE_MS = 2500; // min ms between sending topic filter DMs
+let lastTopicFilterDMAt = 0;
+
 /**
  * @typedef {Object} TopicDefinition
  * @property {string} name - Display name for the topic
@@ -211,9 +215,36 @@ async function logFailedDM(client, user, topic, message, reason) {
 
 async function sendTopicReminderDM(client, user, topic, originalMessage) {
   try {
+    // Throttle to avoid Discord "opening direct messages too fast" rate limit
+    const now = Date.now();
+    const waitMs = lastTopicFilterDMAt + DM_THROTTLE_MS - now;
+    if (waitMs > 0) {
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+    lastTopicFilterDMAt = Date.now();
+
     const userObj = await client.users.fetch(user.id);
     const embed = createTopicReminderEmbed(topic, originalMessage?.content ?? '');
-    await userObj.send({ embeds: [embed] });
+
+    try {
+      await userObj.send({ embeds: [embed] });
+    } catch (dmErr) {
+      const dmMsg = dmErr?.message ?? '';
+      if (dmMsg.toLowerCase().includes('too fast') || dmMsg.toLowerCase().includes('rate limit')) {
+        // Wait and retry once
+        await new Promise((r) => setTimeout(r, 5000));
+        try {
+          await userObj.send({ embeds: [embed] });
+        } catch (retryErr) {
+          logger.warn(FILE, `DM retry failed for ${user.tag}: ${retryErr?.message}`);
+          await logFailedDM(client, user, topic, originalMessage, dmMsg || retryErr?.message);
+          return;
+        }
+      } else {
+        throw dmErr;
+      }
+    }
+
     logger.success(FILE, `Sent topic reminder DM to ${user.tag} for: ${topic.name}`);
     await logSuccessfulDM(client, user, topic, originalMessage);
   } catch (err) {
