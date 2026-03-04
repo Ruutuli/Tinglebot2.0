@@ -821,7 +821,7 @@ async function cancelRaidTurnSkip(raidId) {
 
 // ------------------- advanceRaidTurnOnItemUse ------------------
 // When a character uses a healing item (e.g. Fairy) during their raid turn, advance the raid turn.
-// Called from /item command after successful healing so items count as a turn.
+// Expedition raids only: items count as a turn. Village raids: items do not count as a turn (heal then attack).
 async function advanceRaidTurnOnItemUse(characterId) {
   if (!characterId) return;
   const charIdStr = characterId.toString();
@@ -830,7 +830,9 @@ async function advanceRaidTurnOnItemUse(characterId) {
     const current = raid.getCurrentTurnParticipant();
     if (current && current.characterId && current.characterId.toString() === charIdStr) {
       if (current.isModCharacter) return; // Mod characters don't affect turn order
-      
+      // Village raids: items do not count as a turn — same person can heal then attack
+      if (!raid.expeditionId) return;
+
       // Check if this participant already took an action this turn (e.g., attacked then healed)
       // If so, skip advancing the turn again to prevent double-advancement
       if (current.hasTakenActionThisTurn) {
