@@ -15,7 +15,10 @@ const { EmbedBuilder } = require('discord.js');
 const { NPCs, getNPCQuestFlavor } = require('./NPCsModule');
 const { generateUniqueId } = require('@/utils/uniqueIdUtils');
 const { getWeatherWithoutGeneration } = require('@/services/weatherService');
+const { escapeRegExp } = require('@/utils/inventoryUtils');
 const logger = require('@/utils/logger');
+const Character = require('@/models/CharacterModel');
+const ModCharacter = require('@/models/ModCharacterModel');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -3185,6 +3188,21 @@ async function postQuestToDiscord(client, quest) {
 // ------------------- Auto-Quest Completion -------------------
 // ============================================================================
 
+// ------------------- Helper: findCharacterByNameForUser -------------------
+// Resolves a character by name for a user (case-insensitive). Checks Character then ModCharacter.
+// Supports "Name | Village" format. Used when completing art/writing HWQ from submission approval.
+async function findCharacterByNameForUser(userId, characterName) {
+  const raw = (characterName || '').trim();
+  const name = raw.includes('|') ? raw.split('|')[0].trim() : raw;
+  if (!name) return null;
+  const pattern = new RegExp(`^${escapeRegExp(name)}$`, 'i');
+  let character = await Character.findOne({ userId, name: { $regex: pattern } });
+  if (!character) {
+    character = await ModCharacter.findOne({ userId, name: { $regex: pattern } });
+  }
+  return character || null;
+}
+
 // ------------------- Function: checkAndCompleteQuestFromSubmission -------------------
 // Checks if a submission is for a Help Wanted quest and completes it if approved
 async function checkAndCompleteQuestFromSubmission(submissionData, client) {
@@ -3299,12 +3317,22 @@ async function checkSubmissionApproval(messageUrl, client) {
 // Completes a quest when a mod approves an art/writing submission (immediately upon approval)
 async function completeQuestFromSubmission(quest, submissionData, client) {
   try {
-    // Mark quest as completed
+    // Resolve completing character from first tagged character (so dashboard and character bio show completion)
+    let character = null;
+    const taggedCharacters = Array.isArray(submissionData.taggedCharacters) ? submissionData.taggedCharacters : [];
+    if (taggedCharacters.length > 0) {
+      character = await findCharacterByNameForUser(submissionData.userId, taggedCharacters[0]);
+      if (!character) {
+        logger.debug('QUEST', `Quest ${quest.questId}: tagged character "${taggedCharacters[0]}" not found for user ${submissionData.userId}, completion will not appear on character bio`);
+      }
+    }
+
+    // Mark quest as completed (include characterId so dashboard character API finds this completion)
     quest.completed = true;
     quest.completedBy = {
       userId: submissionData.userId,
-      characterId: null, // We don't have character info in submission data
-      timestamp: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})
+      characterId: character ? character._id : null,
+      timestamp: new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })
     };
     await quest.save();
 
@@ -3324,6 +3352,25 @@ async function completeQuestFromSubmission(quest, submissionData, client) {
       if (collabUser) {
         await updateUserTracking(collabUser, quest, collaboratorId);
       }
+    }
+
+    // Update character's helpWanted.completions so character bio and bot-side reads see the completion
+    if (character) {
+      const today = getESTDateString(new Date());
+      if (!character.helpWanted) {
+        character.helpWanted = { lastCompletion: null, cooldownUntil: null, completions: [] };
+      }
+      character.helpWanted.lastCompletion = today;
+      character.helpWanted.completions = character.helpWanted.completions || [];
+      character.helpWanted.completions.push({
+        date: today,
+        village: quest.village,
+        questType: quest.type,
+        questId: quest.questId,
+        timestamp: new Date()
+      });
+      await character.save();
+      logger.debug('QUEST', `Quest ${quest.questId}: recorded completion on character ${character.name} (${character._id})`);
     }
 
     // Update quest embed

@@ -1204,21 +1204,22 @@ async function processTravelDay(day, context) {
         await character.save();
 
         // ------------------- Clear Boost After Travel -------------------
-        // Only consume Traveling boost when a road gather actually occurred (not on monster-only travel)
+        // Only consume Traveling/Gathering boost when a road gather actually occurred (not on monster-only travel)
         const { clearBoostAfterUse, retrieveBoostingRequestFromTempDataByCharacter } = require('../jobs/boosting');
         const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
         const hasActiveBoost = character.boostedBy || (activeBoost && activeBoost.status === 'accepted');
         
         if (hasActiveBoost) {
           const isTravelingBoost = activeBoost?.category === 'Traveling';
+          const isGatheringBoost = activeBoost?.category === 'Gathering';
           const gatherOccurred = context.travelGatherOccurred === true;
           const boosterJob = activeBoost?.boosterJob?.toLowerCase() || '';
           
-          // Teacher/Scholar Traveling boosts should only be consumed when gather occurs
+          // Teacher/Scholar Traveling and Gathering boosts should only be consumed when a road gather occurs
           // Other boosts are consumed normally
-          if (isTravelingBoost && !gatherOccurred) {
-            // Preserve the Traveling boost since no gather opportunity occurred
-            console.log(`[travel.js]: 📚 Preserving ${boosterJob} Traveling boost for ${character.name} - no gather occurred during this trip`);
+          if ((isTravelingBoost || isGatheringBoost) && !gatherOccurred) {
+            const categoryLabel = isTravelingBoost ? 'Traveling' : 'Gathering';
+            console.log(`[travel.js]: 📚 Preserving ${boosterJob} ${categoryLabel} boost for ${character.name} - no gather occurred during this trip`);
           } else {
             await clearBoostAfterUse(character, {
               client: interaction?.client,
@@ -1527,7 +1528,20 @@ async function processTravelDay(day, context) {
         safeEmbed.setDescription(updatedDescription);
       }
       
-      const safeMessage = await channel.send({ embeds: [safeEmbed] });
+      // Build buttons before sending so the message is sent with components in one request
+      const buttonComponents = [
+        new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.currentStamina === 0),
+        new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(character.currentStamina === 0),
+        new ButtonBuilder().setCustomId('do_nothing').setLabel('✨ Do Nothing').setStyle(ButtonStyle.Secondary)
+      ];
+      if (chestFound) {
+        buttonComponents.push(
+          new ButtonBuilder().setCustomId('open_chest').setLabel('🎁 Open Chest!').setStyle(ButtonStyle.Primary).setDisabled(character.currentStamina === 0)
+        );
+      }
+      const buttons = new ActionRowBuilder().addComponents(buttonComponents);
+      
+      const safeMessage = await channel.send({ embeds: [safeEmbed], components: [buttons] });
       
       // Delete traveling message immediately after safe day embed is posted
       try {
@@ -1539,23 +1553,6 @@ async function processTravelDay(day, context) {
       } catch (error) {
         console.warn(`[travel.js]: ⚠️ Error deleting traveling message after safe day: ${error.message}`);
       }
-      
-      // Build buttons array
-      const buttonComponents = [
-        new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.currentStamina === 0),
-        new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(character.currentStamina === 0),
-        new ButtonBuilder().setCustomId('do_nothing').setLabel('✨ Do Nothing').setStyle(ButtonStyle.Secondary)
-      ];
-      
-      // Add "Open Chest!" button if chest was found
-      if (chestFound) {
-        buttonComponents.push(
-          new ButtonBuilder().setCustomId('open_chest').setLabel('🎁 Open Chest!').setStyle(ButtonStyle.Primary).setDisabled(character.currentStamina === 0)
-        );
-      }
-      
-      const buttons = new ActionRowBuilder().addComponents(buttonComponents);
-      await safeMessage.edit({ embeds: [safeEmbed], components: [buttons] });
 
       let interactionProcessed = false; // Flag to prevent multiple interactions
       const collector = safeMessage.createMessageComponentCollector({ 

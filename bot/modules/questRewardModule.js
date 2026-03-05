@@ -1736,6 +1736,22 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
             return completionResult;
         }
         
+        // If quest allows collab and submission has tagged collaborators, credit them too when they are participants
+        if (quest.collabAllowed && submissionData.collab) {
+            const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
+            for (const mention of collabList) {
+                if (!mention || typeof mention !== 'string') continue;
+                const collaboratorId = mention.replace(/[<@!>]/g, '').trim();
+                if (!collaboratorId || collaboratorId === userId) continue;
+                const collabParticipant = quest.getParticipant(collaboratorId);
+                if (!collabParticipant || collabParticipant.progress !== 'active') continue;
+                const collabResult = await quest.completeFromArtSubmission(collaboratorId, submissionData);
+                if (collabResult.success) {
+                    console.log(`[questRewardModule.js] ✅ Art quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
+                }
+            }
+        }
+        
         // Check if the entire quest should be completed
         // Note: checkAutoCompletion now requires time expiration before completing
         // This prevents premature completion when submissions are approved before quest period ends
@@ -1808,6 +1824,22 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         if (!completionResult.success) {
             console.log(`[questRewardModule.js] ❌ Failed to complete writing quest: ${completionResult.reason || completionResult.error}`);
             return completionResult;
+        }
+        
+        // If quest allows collab and submission has tagged collaborators, credit them too when they are participants
+        if (quest.collabAllowed && submissionData.collab) {
+            const collabList = Array.isArray(submissionData.collab) ? submissionData.collab : (submissionData.collab ? [submissionData.collab] : []);
+            for (const mention of collabList) {
+                if (!mention || typeof mention !== 'string') continue;
+                const collaboratorId = mention.replace(/[<@!>]/g, '').trim();
+                if (!collaboratorId || collaboratorId === userId) continue;
+                const collabParticipant = quest.getParticipant(collaboratorId);
+                if (!collabParticipant || collabParticipant.progress !== 'active') continue;
+                const collabResult = await quest.completeFromWritingSubmission(collaboratorId, submissionData);
+                if (collabResult.success) {
+                    console.log(`[questRewardModule.js] ✅ Writing quest collab credit: ${collabParticipant.characterName} in quest ${questID}`);
+                }
+            }
         }
         
         // Check if the entire quest should be completed
