@@ -3,6 +3,7 @@
 // Purpose: Static job-related data and metadata for dashboard
 // - Defines job perks and their associations for field syncing
 // - Used by item editor to automatically sync job flags with arrays
+// - Mirrors bot/data/jobData.js: keep in sync when adding or changing jobs
 // ============================================================================
 
 export type JobPerk = {
@@ -49,6 +50,39 @@ export const jobPerks: JobPerk[] = [
   { job: 'Oracle', perk: 'ALL', village: null },
   { job: 'Sage', perk: 'ALL', village: null },
   { job: 'Dragon', perk: 'ALL', village: null }
+];
+
+// ------------------- Structure (mirrors bot/data/jobData.js) -------------------
+
+export const villageJobs: Record<string, string[]> = {
+  inariko: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'],
+  rudania: ['Rancher', 'Blacksmith', 'Miner'],
+  vhintl: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver'],
+};
+
+export const generalJobs: string[] = [
+  'Adventurer', 'Artist', 'Bandit', 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager',
+  'Guard', 'Graveskeeper', 'Healer', 'Herbalist', 'Hunter', 'Merchant', 'Mercenary',
+  'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch', 'Entertainer',
+];
+
+export const modCharacterJobs: string[] = ['Oracle', 'Sage', 'Dragon'];
+
+export const allJobs: string[] = [
+  ...new Set([
+    ...Object.values(villageJobs).flat(),
+    ...generalJobs,
+    ...modCharacterJobs,
+  ]),
+].sort();
+
+export const jobPages: { title: string; jobs: string[] }[] = [
+  { title: 'General Jobs (Page 1)', jobs: ['Adventurer', 'Artist', 'Bandit', 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager', 'Graveskeeper', 'Guard', 'Healer', 'Entertainer'] },
+  { title: 'General Jobs (Page 2)', jobs: ['Herbalist', 'Hunter', 'Merchant', 'Mercenary', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'] },
+  { title: 'Inariko Exclusive Jobs', jobs: villageJobs.inariko },
+  { title: 'Rudania Exclusive Jobs', jobs: villageJobs.rudania },
+  { title: 'Vhintl Exclusive Jobs', jobs: villageJobs.vhintl },
+  { title: 'All Jobs', jobs: allJobs },
 ];
 
 // ------------------- Helper Functions -------------------
@@ -111,5 +145,16 @@ export function getJobDisplayName(fieldName: string): string {
 
 // CommonJS export for compatibility with .js files
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { jobPerks, getJobPerk, getJobDisplayName, jobHasPerk, getJobsByPerk };
+  module.exports = {
+    jobPerks,
+    villageJobs,
+    generalJobs,
+    modCharacterJobs,
+    allJobs,
+    jobPages,
+    getJobPerk,
+    getJobDisplayName,
+    jobHasPerk,
+    getJobsByPerk,
+  };
 }

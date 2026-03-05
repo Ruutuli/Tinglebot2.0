@@ -45,6 +45,7 @@ export const navItems: NavItem[] = [
     label: "Reference",
     icon: "fa-book-open",
     children: [
+      { href: "/reference/jobs", label: "Jobs", icon: "fa-briefcase" },
       { href: "/models/items", label: "Items", icon: "fa-cube" },
       { href: "/models/pets", label: "Pets", icon: "fa-paw" },
       { href: "/models/monsters", label: "Monsters", icon: "fa-dragon" },

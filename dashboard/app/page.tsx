@@ -129,10 +129,11 @@ type CharacterOfWeekResponse = {
   };
 };
 
-// Calculate countdown targets dynamically
-function getCountdownTargets(currentTime: Date): CountdownItem[] {
-  const nextBloodMoon = getNextBloodMoonDate(currentTime);
-  const nextBlightRollCall = getNextBlightRollCallTime(currentTime);
+// Calculate countdown targets dynamically (refTime when currentTime null, for target dates only)
+function getCountdownTargets(currentTime: Date | null): CountdownItem[] {
+  const refTime = currentTime ?? new Date();
+  const nextBloodMoon = getNextBloodMoonDate(refTime);
+  const nextBlightRollCall = getNextBlightRollCallTime(refTime);
   
   return [
     {
@@ -761,13 +762,13 @@ function CountdownCard({
   label,
   showDays,
   targetDate,
-}: CountdownItem & { currentTime: Date }) {
-  const timeRemaining = formatTimeRemaining(targetDate, currentTime);
-  const parts = timeRemaining.split(" ");
-  const days = parts[0]?.replace("d", "") ?? "00";
-  const hours = parts[1]?.replace("h", "") ?? "00";
-  const minutes = parts[2]?.replace("m", "") ?? "00";
-  const seconds = parts[3]?.replace("s", "") ?? "00";
+}: CountdownItem & { currentTime: Date | null }) {
+  const timeRemaining = currentTime ? formatTimeRemaining(targetDate, currentTime) : null;
+  const parts = timeRemaining ? timeRemaining.split(" ") : [];
+  const days = parts[0]?.replace("d", "") ?? "—";
+  const hours = parts[1]?.replace("h", "") ?? "—";
+  const minutes = parts[2]?.replace("m", "") ?? "—";
+  const seconds = parts[3]?.replace("s", "") ?? "—";
 
   // Determine if this is Blood Moon (left, rounded left) or Blight Roll Call (right, rounded right)
   const isBloodMoon = label === "Blood Moon";
@@ -1235,8 +1236,9 @@ export default function HomePage() {
     router.replace("/");
   }, [router]);
 
-  // Initialize with a date to avoid hydration mismatch - will be updated immediately on mount
-  const [currentTime, setCurrentTime] = useState(() => new Date());
+  // Countdown uses client time only so it's correct regardless of server timezone (e.g. Railway UTC vs local).
+  // null = not yet set; we set it on mount so SSR and first paint don't show server-time countdown.
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [characterOfWeek, setCharacterOfWeek] = useState<CharacterOfWeekData | null>(null);
   const [rotationInfo, setRotationInfo] = useState<{
     nextRotation: string;
