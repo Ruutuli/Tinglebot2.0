@@ -103,18 +103,18 @@ function JobCard({ job }: { job: JobReference }) {
   return (
     <Link
       href={`/reference/jobs/${job.slug}`}
-      className="flex flex-col overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg transition-shadow hover:border-[var(--totk-light-ocher)]/60 hover:shadow-xl"
+      className="flex min-h-[120px] touch-manipulation flex-col overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg transition-shadow active:scale-[0.99] hover:border-[var(--totk-light-ocher)]/60 hover:shadow-xl"
     >
-      <div className="relative h-28 w-full overflow-hidden bg-gradient-to-br from-[var(--totk-brown)] to-[var(--totk-dark-ocher)]">
+      <div className="relative h-24 w-full overflow-hidden bg-gradient-to-br from-[var(--totk-brown)] to-[var(--totk-dark-ocher)] sm:h-28">
         <div className="absolute inset-0 flex items-center justify-center">
-          <i className={`fa-solid ${icon} text-5xl text-[var(--totk-ivory)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]`} />
+          <i className={`fa-solid ${icon} text-4xl text-[var(--totk-ivory)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] sm:text-5xl`} />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent" />
-        <h2 className="absolute bottom-2 left-2 right-2 text-lg font-bold text-[var(--totk-ivory)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+        <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-black/80 to-transparent sm:h-12" />
+        <h2 className="absolute bottom-2 left-2 right-2 truncate text-base font-bold text-[var(--totk-ivory)] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-lg">
           {job.name}
         </h2>
       </div>
-      <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col p-3 sm:p-4">
         <span className={`mb-2 inline-block w-fit rounded border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${perkClass}`}>
           {perkDisplay}
         </span>
@@ -133,10 +133,10 @@ function JobCard({ job }: { job: JobReference }) {
             </span>
           )}
         </div>
-        <p className="mb-4 flex-1 text-sm text-[var(--totk-grey-200)]">
+        <p className="mb-3 flex-1 text-sm leading-snug text-[var(--totk-grey-200)] sm:mb-4">
           {truncate(job.description || "—", SHORT_DESC_LENGTH)}
         </p>
-        <span className="text-sm font-medium text-[var(--totk-light-ocher)] underline hover:no-underline">
+        <span className="py-2 text-sm font-medium text-[var(--totk-light-ocher)] underline hover:no-underline">
           View details →
         </span>
       </div>
@@ -241,11 +241,11 @@ export default function ReferenceJobsPage() {
   };
 
   return (
-    <div className="min-h-full p-4 sm:p-6 md:p-8">
+    <div className="min-h-full overflow-x-hidden p-3 sm:p-6 md:p-8">
       <div className="mx-auto max-w-[90rem]">
-        <div className="mb-4 sm:mb-6 flex items-center justify-center gap-2 sm:gap-4">
+        <div className="mb-4 flex items-center justify-center gap-2 sm:mb-6 sm:gap-4">
           <img src="/Side=Left.svg" alt="" className="h-4 w-auto sm:h-6" />
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-[var(--totk-light-ocher)]">
+          <h1 className="text-center text-xl font-bold text-[var(--totk-light-ocher)] sm:text-2xl md:text-3xl">
             Jobs
           </h1>
           <img src="/Side=Right.svg" alt="" className="h-4 w-auto sm:h-6" />
@@ -253,7 +253,7 @@ export default function ReferenceJobsPage() {
         <SearchFilterBar
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Search jobs by name, description, or perk..."
+          searchPlaceholder="Search jobs..."
           filterGroups={filterGroups}
           onFilterChange={handleFilterChange}
           onClearAll={clearAll}
@@ -270,7 +270,7 @@ export default function ReferenceJobsPage() {
             <p className="text-center text-[var(--botw-pale)]">No jobs match your filters.</p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredJobs.map((job) => (
               <JobCard key={job.slug} job={job} />
             ))}

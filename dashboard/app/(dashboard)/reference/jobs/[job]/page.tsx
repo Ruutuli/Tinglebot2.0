@@ -110,7 +110,7 @@ export default function ReferenceJobDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-full p-4 sm:p-6 md:p-8">
+      <div className="min-h-full p-3 sm:p-6 md:p-8">
         <div className="mx-auto max-w-[90rem]">
           <Loading message="Loading job..." variant="inline" size="lg" />
         </div>
@@ -120,13 +120,13 @@ export default function ReferenceJobDetailPage() {
 
   if (error || !data) {
     return (
-      <div className="min-h-full p-4 sm:p-6 md:p-8">
+      <div className="min-h-full p-3 sm:p-6 md:p-8">
         <div className="mx-auto max-w-[90rem]">
-          <div className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-6">
+          <div className="rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] p-4 sm:p-6">
             <p className="text-[var(--botw-pale)]">{error ?? "Job not found."}</p>
             <Link
               href="/reference/jobs"
-              className="mt-4 inline-flex items-center gap-2 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--totk-brown)]/30 px-4 py-2 text-sm font-semibold text-[var(--totk-light-ocher)] transition-colors hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/50 hover:text-[var(--totk-ivory)]"
+              className="mt-4 inline-flex min-h-[44px] touch-manipulation items-center gap-2 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--totk-brown)]/30 px-4 py-2.5 text-sm font-semibold text-[var(--totk-light-ocher)] transition-colors active:scale-95 hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/50 hover:text-[var(--totk-ivory)]"
             >
               <i className="fa-solid fa-arrow-left text-xs" aria-hidden />
               Back to Jobs
@@ -141,30 +141,30 @@ export default function ReferenceJobDetailPage() {
   const perkLabel = getPerkLabel(job.perk);
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-[var(--botw-warm-black)] to-[var(--totk-brown)]/5 p-4 sm:p-6 md:p-8">
+    <div className="min-h-full overflow-x-hidden bg-gradient-to-b from-[var(--botw-warm-black)] to-[var(--totk-brown)]/5 p-3 sm:p-6 md:p-8">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex items-center justify-between gap-4">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 sm:mb-8 sm:gap-4">
           <Link
             href="/reference/jobs"
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 px-4 py-2 text-sm font-semibold text-[var(--totk-light-ocher)] shadow-sm transition-all hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/30 hover:text-[var(--totk-ivory)]"
+            className="inline-flex min-h-[44px] min-w-[44px] shrink-0 touch-manipulation items-center justify-center gap-2 rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 px-3 py-2.5 text-sm font-semibold text-[var(--totk-light-ocher)] shadow-sm transition-all active:scale-95 hover:border-[var(--totk-light-ocher)] hover:bg-[var(--totk-brown)]/30 hover:text-[var(--totk-ivory)] sm:px-4"
           >
             <i className="fa-solid fa-arrow-left text-xs" aria-hidden />
             Jobs
           </Link>
-          <div className="flex flex-1 items-center justify-center gap-3 min-w-0">
-            <span className="h-px w-8 shrink-0 bg-[var(--totk-dark-ocher)]/60 sm:w-12" aria-hidden />
-            <img src="/Side=Left.svg" alt="" className="h-5 w-auto shrink-0 opacity-90" />
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--totk-ivory)] drop-shadow-sm shrink-0 sm:text-3xl">
+          <div className="flex flex-1 basis-full items-center justify-center gap-2 min-w-0 sm:basis-auto sm:gap-3">
+            <span className="h-px w-6 shrink-0 bg-[var(--totk-dark-ocher)]/60 sm:w-12" aria-hidden />
+            <img src="/Side=Left.svg" alt="" className="h-4 w-auto shrink-0 opacity-90 sm:h-5" />
+            <h1 className="truncate text-xl font-bold tracking-tight text-[var(--totk-ivory)] drop-shadow-sm sm:text-2xl md:text-3xl">
               {job.name}
             </h1>
-            <img src="/Side=Right.svg" alt="" className="h-5 w-auto shrink-0 opacity-90" />
-            <span className="h-px w-8 shrink-0 bg-[var(--totk-dark-ocher)]/60 sm:w-12" aria-hidden />
+            <img src="/Side=Right.svg" alt="" className="h-4 w-auto shrink-0 opacity-90 sm:h-5" />
+            <span className="h-px w-6 shrink-0 bg-[var(--totk-dark-ocher)]/60 sm:w-12" aria-hidden />
           </div>
-          <span className="w-[88px] shrink-0 sm:w-[108px]" aria-hidden />
+          <span className="hidden w-[88px] shrink-0 sm:block sm:w-[108px]" aria-hidden />
         </header>
 
-        <div className="mb-8 overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg">
-          <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-6 py-4">
+        <div className="mb-6 overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg sm:mb-8">
+          <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-4 py-3 sm:px-6 sm:py-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
               Overview
             </p>
@@ -187,7 +187,7 @@ export default function ReferenceJobDetailPage() {
               )}
             </div>
           </div>
-          <div className="px-6 py-5">
+          <div className="px-4 py-4 sm:px-6 sm:py-5">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
               Description
             </h2>
@@ -208,7 +208,7 @@ export default function ReferenceJobDetailPage() {
 
           const regionTabsBlock = (
             <nav
-              className="mb-5 flex flex-wrap gap-2"
+              className="mb-4 flex flex-wrap gap-2 sm:mb-5"
               aria-label="Region tabs"
             >
               {REGION_TABS.map(({ value, label, icon }) => {
@@ -219,7 +219,7 @@ export default function ReferenceJobDetailPage() {
                     key={value}
                     type="button"
                     onClick={() => setActiveRegion(value)}
-                    className="flex min-w-[90px] flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-200 sm:min-w-[110px] sm:text-sm"
+                    className="flex min-h-[44px] min-w-[80px] flex-1 touch-manipulation items-center justify-center gap-1.5 rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-all duration-200 active:scale-95 sm:min-w-[100px] sm:px-3 sm:text-sm"
                     style={
                       isActive
                         ? {
@@ -248,17 +248,17 @@ export default function ReferenceJobDetailPage() {
             <>
               {isCraftingJob && (
                 <section className="overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg">
-                  <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-6 py-4">
-                    <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--totk-ivory)]">
+                  <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-4 py-3 sm:px-6 sm:py-4">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--totk-ivory)] sm:text-base">
                       <i className="fa-solid fa-hammer text-[var(--totk-light-ocher)]" aria-hidden />
                       Items you can craft
                     </h2>
-                    <p className="mt-1 text-sm text-[var(--totk-grey-200)]">
+                    <p className="mt-1 text-xs text-[var(--totk-grey-200)] sm:text-sm">
                       Items that {job.name} can craft.
                     </p>
                   </div>
-                  <div className="p-4 sm:p-5">
-                    <div className="overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-brown)]/10 p-4 sm:p-5">
+                  <div className="p-3 sm:p-5">
+                    <div className="overflow-hidden rounded-lg border-2 border-[var(--totk-dark-ocher)]/60 bg-[var(--totk-brown)]/10 p-3 sm:p-5">
                       <div className="mb-4 flex items-center justify-between gap-2">
                         <span className="rounded-full border border-[var(--totk-light-ocher)]/50 bg-[var(--totk-light-ocher)]/10 px-2.5 py-0.5 text-xs font-medium text-[var(--totk-light-ocher)]">
                           {craftableItems.length} {craftableItems.length === 1 ? "item" : "items"}
@@ -269,14 +269,14 @@ export default function ReferenceJobDetailPage() {
                           No craftable items for this job.
                         </p>
                       ) : (
-                        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4">
                           {craftableItems.map((item) => {
                             const showImage = item.image && item.image !== "No Image";
                             return (
                               <li key={item._id}>
                                 <Link
                                   href="/models/items"
-                                  className="flex flex-col items-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-3 text-center transition-all hover:border-[var(--totk-light-ocher)]/50 hover:bg-[var(--totk-brown)]/20 hover:shadow-md"
+                                  className="flex min-h-[88px] touch-manipulation flex-col items-center justify-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-2.5 text-center transition-all active:scale-[0.98] hover:border-[var(--totk-light-ocher)]/50 hover:bg-[var(--totk-brown)]/20 hover:shadow-md sm:p-3"
                                 >
                                   <div className="mb-2 flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--totk-brown)]/30">
                                     {showImage ? (
@@ -318,35 +318,35 @@ export default function ReferenceJobDetailPage() {
 
               {isGatheringJob && (
                 <section className="overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg">
-                  <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-6 py-4">
-                    <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--totk-ivory)]">
+                  <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-4 py-3 sm:px-6 sm:py-4">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--totk-ivory)] sm:text-base">
                       <i className="fa-solid fa-map-location-dot text-[var(--totk-light-ocher)]" aria-hidden />
                       Gatherable Items by Region
                     </h2>
-                    <p className="mt-1 text-sm text-[var(--totk-grey-200)]">
+                    <p className="mt-1 text-xs text-[var(--totk-grey-200)] sm:text-sm">
                       Choose a region to see what {job.name} can find there.
                     </p>
                   </div>
-                  <div className="p-4 sm:p-5">
+                  <div className="p-3 sm:p-5">
                     {regionTabsBlock}
                     <div
-                      className="overflow-hidden rounded-lg border-2 p-4 sm:p-5"
+                      className="overflow-hidden rounded-lg border-2 p-3 sm:p-5"
                       style={{
                         borderColor: regionColor,
                         backgroundColor: `${regionColor}0c`,
                         boxShadow: `inset 0 1px 0 ${regionColor}20, 0 2px 12px rgba(0,0,0,0.2)`,
                       }}
                     >
-                      <div className="mb-4 flex items-center justify-between gap-2">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
                         <h3
-                          className="flex items-center gap-2 text-lg font-semibold"
+                          className="flex min-w-0 items-center gap-2 text-base font-semibold sm:text-lg"
                           style={{ color: regionColor }}
                         >
-                          <i className="fa-solid fa-mountain-sun opacity-80" aria-hidden />
-                          {activeRegion}
+                          <i className="fa-solid fa-mountain-sun shrink-0 opacity-80" aria-hidden />
+                          <span className="truncate">{activeRegion}</span>
                         </h3>
                         <span
-                          className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                          className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
                           style={{ backgroundColor: `${regionColor}30`, color: regionColor }}
                         >
                           {regionItems.length} {regionItems.length === 1 ? "item" : "items"}
@@ -357,14 +357,14 @@ export default function ReferenceJobDetailPage() {
                           No gatherable items for this job in this region.
                         </p>
                       ) : (
-                        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4">
                           {regionItems.map((item) => {
                             const showImage = item.image && item.image !== "No Image";
                             return (
                               <li key={item._id}>
                                 <Link
                                   href="/models/items"
-                                  className="flex flex-col items-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-3 text-center transition-all hover:border-[var(--totk-light-ocher)]/50 hover:bg-[var(--totk-brown)]/20 hover:shadow-md"
+                                  className="flex min-h-[88px] touch-manipulation flex-col items-center justify-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-2.5 text-center transition-all active:scale-[0.98] hover:border-[var(--totk-light-ocher)]/50 hover:bg-[var(--totk-brown)]/20 hover:shadow-md sm:p-3"
                                 >
                                   <div className="mb-2 flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--totk-brown)]/30">
                                     {showImage ? (
@@ -406,35 +406,35 @@ export default function ReferenceJobDetailPage() {
 
               {isLootingJob && (
                 <section className="overflow-hidden rounded-xl border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)] shadow-lg">
-                  <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-6 py-4">
-                    <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--totk-ivory)]">
+                  <div className="border-b border-[var(--totk-dark-ocher)]/50 bg-[var(--totk-brown)]/10 px-4 py-3 sm:px-6 sm:py-4">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--totk-ivory)] sm:text-base">
                       <i className="fa-solid fa-dragon text-[var(--totk-light-ocher)]" aria-hidden />
                       Monsters you can encounter
                     </h2>
-                    <p className="mt-1 text-sm text-[var(--totk-grey-200)]">
+                    <p className="mt-1 text-xs text-[var(--totk-grey-200)] sm:text-sm">
                       Choose a region to see which monsters {job.name} can encounter there.
                     </p>
                   </div>
-                  <div className="p-4 sm:p-5">
+                  <div className="p-3 sm:p-5">
                     {regionTabsBlock}
                     <div
-                      className="overflow-hidden rounded-lg border-2 p-4 sm:p-5"
+                      className="overflow-hidden rounded-lg border-2 p-3 sm:p-5"
                       style={{
                         borderColor: regionColor,
                         backgroundColor: `${regionColor}0c`,
                         boxShadow: `inset 0 1px 0 ${regionColor}20, 0 2px 12px rgba(0,0,0,0.2)`,
                       }}
                     >
-                      <div className="mb-4 flex items-center justify-between gap-2">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
                         <h3
-                          className="flex items-center gap-2 text-lg font-semibold"
+                          className="flex min-w-0 items-center gap-2 text-base font-semibold sm:text-lg"
                           style={{ color: regionColor }}
                         >
-                          <i className="fa-solid fa-mountain-sun opacity-80" aria-hidden />
-                          {activeRegion}
+                          <i className="fa-solid fa-mountain-sun shrink-0 opacity-80" aria-hidden />
+                          <span className="truncate">{activeRegion}</span>
                         </h3>
                         <span
-                          className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                          className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
                           style={{ backgroundColor: `${regionColor}30`, color: regionColor }}
                         >
                           {regionMonsters.length} {regionMonsters.length === 1 ? "monster" : "monsters"}
@@ -445,14 +445,14 @@ export default function ReferenceJobDetailPage() {
                           No monsters for this job in this region.
                         </p>
                       ) : (
-                        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4">
                           {regionMonsters.map((monster) => {
                             const showImage = monster.image && monster.image !== "No Image";
                             return (
                               <li key={monster._id}>
                                 <Link
                                   href="/models/monsters"
-                                  className="flex flex-col items-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-3 text-center transition-all hover:border-[var(--totk-light-ocher)]/50 hover:bg-[var(--totk-brown)]/20 hover:shadow-md"
+                                  className="flex min-h-[88px] touch-manipulation flex-col items-center justify-center rounded-lg border border-[var(--totk-dark-ocher)]/40 bg-[var(--botw-warm-black)]/80 p-2.5 text-center transition-all active:scale-[0.98] hover:border-[var(--totk-light-ocher)]/50 hover:bg-[var(--totk-brown)]/20 hover:shadow-md sm:p-3"
                                 >
                                   <div className="mb-2 flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--totk-brown)]/30">
                                     {showImage ? (
