@@ -54,6 +54,22 @@ function getLocationClass(locationName: string | null | undefined): string {
   return "";
 }
 
+// Merge split location strings so "Central Hyrule" displays as one (not "Central" + "Hyrule")
+const MULTI_WORD_LOCATION_PHRASES = ["Central Hyrule", "Path of Scarlet Leaves", "Leaf Dew Way"];
+function normalizeLocationsForDisplay(locations: string[] | null | undefined): string[] {
+  if (!locations?.length) return [];
+  const joined = locations.map((s) => (s ?? "").trim()).filter(Boolean).join(" ");
+  const out: string[] = [];
+  for (const phrase of MULTI_WORD_LOCATION_PHRASES) {
+    if (joined.toLowerCase().includes(phrase.toLowerCase())) out.push(phrase);
+  }
+  for (const single of ["Eldin", "Lanayru", "Faron", "Gerudo", "Hebra"]) {
+    if (locations.some((s) => (s ?? "").trim().toLowerCase() === single.toLowerCase())) out.push(single);
+  }
+  if (out.length > 0) return out;
+  return joined ? [joined] : locations;
+}
+
 // ------------------- Monster flip card (front: stats, back: drops) -------------------
 function MonsterFlipCard({ monster }: { monster: Monster }) {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -154,20 +170,24 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             Blood Moon Monster
           </div>
         )}
-        {monster.locations && monster.locations.length > 0 && (
-          <div className="item-section modern-item-section">
-            <div className="item-section-label modern-item-section-label">
-              <i className="fas fa-map-marker-alt" aria-hidden="true"></i> Locations
+        {monster.locations && monster.locations.length > 0 && (() => {
+          const displayLocations = normalizeLocationsForDisplay(monster.locations);
+          if (displayLocations.length === 0) return null;
+          return (
+            <div className="item-section modern-item-section">
+              <div className="item-section-label modern-item-section-label">
+                <i className="fas fa-map-marker-alt" aria-hidden="true"></i> Locations
+              </div>
+              <div className="item-tag-list modern-item-tag-list">
+                {displayLocations.map((loc, idx) => (
+                  <span key={idx} className={`item-tag whitespace-nowrap ${getLocationClass(loc)}`}>
+                    {loc}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="item-tag-list modern-item-tag-list">
-              {monster.locations.map((loc, idx) => (
-                <span key={idx} className={`item-tag ${getLocationClass(loc)}`}>
-                  {loc}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+          );
+        })()}
         {monster.job && monster.job.length > 0 && (
           <div className="item-section modern-item-section">
             <div className="item-section-label modern-item-section-label">
@@ -175,7 +195,7 @@ function MonsterFlipCard({ monster }: { monster: Monster }) {
             </div>
             <div className="item-tag-list modern-item-tag-list">
               {monster.job.map((j, idx) => (
-                <span key={idx} className="item-tag">
+                <span key={idx} className="item-tag whitespace-nowrap">
                   {j}
                 </span>
               ))}

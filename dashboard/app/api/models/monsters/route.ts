@@ -100,12 +100,45 @@ export async function GET(req: NextRequest) {
       tier: (tierOpts as number[]).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b),
     };
 
-    // Resolve image from monsterMapping when document has no image or "No Image"
-    const dataWithImages = (data as Array<{ nameMapping?: string; image?: string; [k: string]: unknown }>).map((doc) => {
+    // Region boolean → display label (single string so "Central Hyrule" doesn't split)
+    const REGION_LABELS: { field: string; label: string }[] = [
+      { field: "centralHyrule", label: "Central Hyrule" },
+      { field: "eldin", label: "Eldin" },
+      { field: "faron", label: "Faron" },
+      { field: "gerudo", label: "Gerudo" },
+      { field: "hebra", label: "Hebra" },
+      { field: "lanayru", label: "Lanayru" },
+      { field: "pathOfScarletLeaves", label: "Path of Scarlet Leaves" },
+      { field: "leafDewWay", label: "Leaf Dew Way" },
+    ];
+
+    // Merge split location strings from DB (e.g. ["Central", "Hyrule"] → ["Central Hyrule"])
+    const MULTI_WORD_LOCATIONS = ["Central Hyrule", "Path of Scarlet Leaves", "Leaf Dew Way"];
+    function normalizeLocations(arr: string[]): string[] {
+      if (!Array.isArray(arr) || arr.length === 0) return arr;
+      const joined = arr.map((s) => (s ?? "").trim()).filter(Boolean).join(" ");
+      const out: string[] = [];
+      for (const phrase of MULTI_WORD_LOCATIONS) {
+        if (joined.toLowerCase().includes(phrase.toLowerCase())) {
+          out.push(phrase);
+        }
+      }
+      for (const single of ["Eldin", "Lanayru", "Faron", "Gerudo", "Hebra"]) {
+        if (arr.some((s) => (s ?? "").trim().toLowerCase() === single.toLowerCase())) out.push(single);
+      }
+      return out.length > 0 ? out : joined ? [joined] : arr;
+    }
+
+    // Resolve image and build locations from region flags (so "Central Hyrule" is one string)
+    const dataWithImages = (data as Array<{ nameMapping?: string; image?: string; locations?: string[]; [k: string]: unknown }>).map((doc) => {
       const hasNoImage = !doc.image || doc.image === "No Image";
       const key = doc.nameMapping?.replace(/\s+/g, "");
       const mappedImage = key != null ? monsterMapping?.[key]?.image : undefined;
-      return { ...doc, image: hasNoImage && mappedImage ? mappedImage : doc.image };
+      const locationsFromFlags = REGION_LABELS.filter(({ field }) => doc[field] === true).map((r) => r.label);
+      const rawLocations = doc.locations ?? [];
+      const locations =
+        locationsFromFlags.length > 0 ? locationsFromFlags : normalizeLocations(rawLocations as string[]);
+      return { ...doc, image: hasNoImage && mappedImage ? mappedImage : doc.image, locations };
     });
 
     const response = NextResponse.json(

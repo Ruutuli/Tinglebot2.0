@@ -380,7 +380,7 @@ export async function GET(req: NextRequest) {
 
     const monsterDropMap =
       Array.isArray(rawMonsters) && rawMonsters.length > 0
-        ? buildMonsterDropMap(rawMonsters as MonsterDocForDrops[])
+        ? buildMonsterDropMap((rawMonsters as unknown) as MonsterDocForDrops[])
         : new Map<string, { regions: string[]; lootingJobs: string[] }>();
 
     const dataWithDropSources = (data as Record<string, unknown>[]).map((doc) => {
