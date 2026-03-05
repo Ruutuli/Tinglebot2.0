@@ -76,7 +76,7 @@ const { applyTravelWeatherBoost } = require('../../modules/boostIntegration');
 const { generateBoostFlavorText } = require('../../modules/flavorTextModule');
 const { retrieveBoostingRequestFromTempDataByCharacter, saveBoostingRequestToTempData, updateBoostAppliedMessage } = require('../jobs/boosting');
 const { updateBoostRequestEmbed } = require('../../embeds/embeds.js');
-const { checkVillageStatus } = require('../../modules/villageModule');
+const { isTravelBlockedByVillageDamage } = require('../../modules/villageModule');
 
 // ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
@@ -294,51 +294,43 @@ module.exports = {
       const startingVillage = character.currentVillage.toLowerCase();
       
       // ------------------- Check if Starting Village is Damaged -------------------
-      // Mod characters are exempt. If village is damaged, travel is only blocked when character has 75% health or less.
+      // Mod characters are exempt. Travel is only blocked when village has 75% health or less (not character health).
       const isModCharacter = character.isModCharacter || (character.constructor && character.constructor.modelName === 'ModCharacter');
       if (!isModCharacter && startingVillage) {
-        const villageStatus = await checkVillageStatus(startingVillage);
-        if (villageStatus === 'damaged') {
-          const maxHearts = character.maxHearts || 1;
-          const healthRatio = maxHearts > 0 ? (character.currentHearts ?? 0) / maxHearts : 0;
-          if (healthRatio <= 0.75) {
-            const capitalizedStartingVillage = capitalizeFirstLetter(startingVillage);
-            const errorEmbed = new EmbedBuilder()
-              .setColor(0xFF0000)
-              .setTitle('❌ Village Repair Required')
-              .setDescription(`**${character.name}** cannot travel because **${capitalizedStartingVillage}** is damaged and needs repair. Travel from a damaged village is only allowed when you have more than 75% health (you have **${character.currentHearts}/${character.maxHearts}** hearts).`)
-              .addFields(
-                { name: 'What to do', value: 'Please help repair the village first by contributing tokens using </village donate>, or recover hearts to above 75% to travel.', inline: false }
-              )
-              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setFooter({ text: 'Repair the village or recover health to unlock travel' })
-              .setTimestamp();
-            return interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
-          }
+        const { blocked, health, maxHealth } = await isTravelBlockedByVillageDamage(startingVillage);
+        if (blocked) {
+          const capitalizedStartingVillage = capitalizeFirstLetter(startingVillage);
+          const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Village Repair Required')
+            .setDescription(`**${character.name}** cannot travel because **${capitalizedStartingVillage}** is severely damaged (village health is **${health}/${maxHealth}** — 75% or below). Travel is allowed when the village has more than 75% health.`)
+            .addFields(
+              { name: 'What to do', value: 'Please help repair the village by contributing tokens using </village donate> to raise village health above 75%.', inline: false }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setFooter({ text: 'Repair the village to unlock travel' })
+            .setTimestamp();
+          return interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
         }
       }
 
       // ------------------- Check if Destination Village is Damaged -------------------
-      // If destination is damaged, travel is only blocked when character has 75% health or less (mod characters exempt).
+      // Travel is only blocked when destination village has 75% health or less (mod characters exempt).
       if (!isModCharacter && destination) {
-        const destinationStatus = await checkVillageStatus(destination);
-        if (destinationStatus === 'damaged') {
-          const maxHearts = character.maxHearts || 1;
-          const healthRatio = maxHearts > 0 ? (character.currentHearts ?? 0) / maxHearts : 0;
-          if (healthRatio <= 0.75) {
-            const capitalizedDestination = capitalizeFirstLetter(destination);
-            const errorEmbed = new EmbedBuilder()
-              .setColor(0xFF0000)
-              .setTitle('❌ Destination Village Damaged')
-              .setDescription(`**${character.name}** cannot travel to **${capitalizedDestination}** because the village is damaged and needs repair. Travel to a damaged village is only allowed when you have more than 75% health (you have **${character.currentHearts}/${character.maxHearts}** hearts).`)
-              .addFields(
-                { name: 'What to do', value: 'Travel is blocked until the village is repaired or you recover to above 75% health. Others can help by contributing tokens using </village donate> in that village.', inline: false }
-              )
-              .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-              .setFooter({ text: 'Repair the village or recover health to unlock travel' })
-              .setTimestamp();
-            return interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
-          }
+        const { blocked, health, maxHealth } = await isTravelBlockedByVillageDamage(destination);
+        if (blocked) {
+          const capitalizedDestination = capitalizeFirstLetter(destination);
+          const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Destination Village Damaged')
+            .setDescription(`**${character.name}** cannot travel to **${capitalizedDestination}** because the village is severely damaged (village health is **${health}/${maxHealth}** — 75% or below). Travel is allowed when the village has more than 75% health.`)
+            .addFields(
+              { name: 'What to do', value: 'Travel is blocked until the village is repaired. Others can help by contributing tokens using </village donate> in that village.', inline: false }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+            .setFooter({ text: 'Repair the village to unlock travel' })
+            .setTimestamp();
+          return interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
         }
       }
 

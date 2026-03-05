@@ -234,6 +234,27 @@ async function checkVillageStatus(villageName) {
     }
 }
 
+// ------------------- Function: isTravelBlockedByVillageDamage -------------------
+// Returns { blocked, health, maxHealth }. Travel is blocked only when village is damaged AND village has 75% health or less.
+async function isTravelBlockedByVillageDamage(villageName) {
+    try {
+        const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+        if (!village) return { blocked: false };
+        updateVillageStatus(village);
+        if (village.status !== 'damaged') return { blocked: false };
+        const maxHealth = village.levelHealth instanceof Map
+            ? village.levelHealth.get(village.level.toString())
+            : village.levelHealth[village.level.toString()] || 100;
+        const healthRatio = maxHealth > 0 ? village.health / maxHealth : 1;
+        const blocked = healthRatio <= 0.75;
+        return { blocked, health: village.health, maxHealth };
+    } catch (error) {
+        handleError(error, 'villageModule.js');
+        console.error(`[isTravelBlockedByVillageDamage] Error for "${villageName}":`, error.message);
+        return { blocked: false };
+    }
+}
+
 // ------------------- Handle Village Damage -------------------
 // damageCause: optional string describing what caused the damage (e.g. "Monster: Stalkoblin", "Weather", "Moderator: Event")
 async function damageVillage(villageName, damageAmount, damageCause = null) {
@@ -658,6 +679,7 @@ module.exports = {
     calculateVillageStatus,
     updateVillageStatus,
     checkVillageStatus,
+    isTravelBlockedByVillageDamage,
     getEffectiveVendingTier,
     getEffectiveVendingDiscount,
     getEffectiveRestLevel
