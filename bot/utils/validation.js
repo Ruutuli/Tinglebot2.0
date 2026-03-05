@@ -146,28 +146,31 @@ async function canChangeVillage(character, newVillage) {
         return { valid: false, message: errorEmbed };
     }
 
-    // Check if current village is damaged (mod characters are exempt)
-    // Check if character is a mod character - try both isModCharacter property and constructor name
+    // Check if current village is damaged (mod characters are exempt). Village change is only blocked when character has 75% health or less.
     const isModCharacter = character.isModCharacter || (character.constructor && character.constructor.modelName === 'ModCharacter');
     if (!isModCharacter && character.currentVillage) {
         const villageStatus = await checkVillageStatus(character.currentVillage);
         if (villageStatus === 'damaged') {
-            const capitalizedCurrentVillage = capitalizeFirstLetter(character.currentVillage);
-            const errorEmbed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle('❌ Village Repair Required')
-                .setDescription(`**${character.name}** cannot move villages because **${capitalizedCurrentVillage}** is damaged and needs repair.`)
-                .addFields(
-                    { name: 'What to do', value: 'Please help repair the village first by contributing tokens using the </village donate> command.', inline: false }
-                )
-                .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
-                .setFooter({ text: 'Repair the village to unlock travel and village changes' })
-                .setTimestamp();
+            const maxHearts = character.maxHearts || 1;
+            const healthRatio = maxHearts > 0 ? (character.currentHearts ?? 0) / maxHearts : 0;
+            if (healthRatio <= 0.75) {
+                const capitalizedCurrentVillage = capitalizeFirstLetter(character.currentVillage);
+                const errorEmbed = new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle('❌ Village Repair Required')
+                    .setDescription(`**${character.name}** cannot move villages because **${capitalizedCurrentVillage}** is damaged and needs repair. Leaving a damaged village is only allowed when you have more than 75% health (you have **${character.currentHearts}/${character.maxHearts}** hearts).`)
+                    .addFields(
+                        { name: 'What to do', value: 'Please help repair the village first by contributing tokens using the </village donate> command, or recover hearts to above 75% to change village.', inline: false }
+                    )
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
+                    .setFooter({ text: 'Repair the village or recover health to unlock village changes' })
+                    .setTimestamp();
 
-            return {
-                valid: false,
-                message: errorEmbed
-            };
+                return {
+                    valid: false,
+                    message: errorEmbed
+                };
+            }
         }
     }
 
