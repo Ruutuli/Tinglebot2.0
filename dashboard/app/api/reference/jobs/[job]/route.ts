@@ -7,6 +7,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { getJobBySlug } from "@/data/jobsReference";
+import {
+  buildMonsterDropMap,
+  getItemDropSources,
+  ITEM_MONSTER_FIELDS,
+  type MonsterDocForDrops,
+} from "@/lib/item-drop-sources";
 import mongoose, { type Model } from "mongoose";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +71,8 @@ type GatherableItem = {
   image?: string;
   category?: string | string[];
   itemRarity?: number;
+  /** Derived in code from Monster data: regions/jobs where this item can be obtained via monster drops */
+  dropSources?: { regions: string[]; lootingJobs: string[] };
 };
 
 type MonsterSummary = {
@@ -119,6 +127,28 @@ export async function GET(
     let gatherableByVillage: Record<string, GatherableItem[]> = { ...emptyVillage };
     let gatherableByRegion: Record<string, GatherableItem[]> = { ...emptyRegion };
     let craftableItems: GatherableItem[] = [];
+    let gatherableList: ItemDoc[] = [];
+
+    const pickItemFields = (
+      item: ItemDoc,
+      monsterDropMap?: Map<string, { regions: string[]; lootingJobs: string[] }>
+    ): GatherableItem => {
+      const base: GatherableItem = {
+        _id: item._id,
+        itemName: item.itemName,
+        emoji: item.emoji,
+        image: item.image,
+        category: item.category,
+        itemRarity: item.itemRarity,
+      };
+      if (monsterDropMap) {
+        const dropSources = getItemDropSources(item, monsterDropMap);
+        if (dropSources.regions.length > 0 || dropSources.lootingJobs.length > 0) {
+          base.dropSources = dropSources;
+        }
+      }
+      return base;
+    };
 
     if (hasGathering && fieldNames) {
       let Item: Model<unknown>;
@@ -142,8 +172,12 @@ export async function GET(
         image: 1,
         category: 1,
         itemRarity: 1,
+        monsterList: 1,
       };
       for (const { field } of REGION_FIELDS) {
+        projection[field] = 1;
+      }
+      for (const field of ITEM_MONSTER_FIELDS) {
         projection[field] = 1;
       }
 
@@ -151,7 +185,7 @@ export async function GET(
         .sort({ itemName: 1 })
         .lean()) as unknown[];
 
-      const gatherableList: ItemDoc[] = items.map((doc: unknown) => {
+      gatherableList = items.map((doc: unknown) => {
         const d = doc as Record<string, unknown>;
         const imageRaw = d.image != null ? String(d.image) : undefined;
         const image = imageRaw && imageRaw !== "No Image" ? imageRaw : undefined;
@@ -162,30 +196,27 @@ export async function GET(
           image,
           category: d.category as string | string[] | undefined,
           itemRarity: d.itemRarity as number | undefined,
+          monsterList: d.monsterList as string[] | undefined,
           ...Object.fromEntries(
             REGION_FIELDS.map(({ field }) => [field, d[field]])
+          ),
+          ...Object.fromEntries(
+            ITEM_MONSTER_FIELDS.map((field) => [field, d[field]])
           ),
         } as ItemDoc;
       });
 
-      const pickItemFields = (item: ItemDoc): GatherableItem => ({
-        _id: item._id,
-        itemName: item.itemName,
-        emoji: item.emoji,
-        image: item.image,
-        category: item.category,
-        itemRarity: item.itemRarity,
-      });
-
       gatherableByVillage = {};
       for (const v of jobRef.villages) {
-        gatherableByVillage[v] = gatherableList.map(pickItemFields);
+        gatherableByVillage[v] = gatherableList.map((item) =>
+          pickItemFields(item, undefined)
+        );
       }
       gatherableByRegion = {};
       for (const { field, label } of REGION_FIELDS) {
         gatherableByRegion[label] = gatherableList
           .filter((item) => item[field] === true)
-          .map(pickItemFields);
+          .map((item) => pickItemFields(item, undefined));
       }
     }
 
@@ -238,12 +269,22 @@ export async function GET(
       const monsterOrConditions: Record<string, unknown>[] = monsterFieldNames.map(
         (field) => ({ [field]: true })
       );
-      const monsterProjection: Record<string, 1> = { name: 1, nameMapping: 1, image: 1 };
+      const monsterProjection: Record<string, 1> = {
+        name: 1,
+        nameMapping: 1,
+        image: 1,
+        adventurer: 1,
+        guard: 1,
+        graveskeeper: 1,
+        hunter: 1,
+        mercenary: 1,
+        scout: 1,
+      };
       for (const { field } of REGION_FIELDS) {
         monsterProjection[field] = 1;
       }
 
-      const monsters = (await Monster.find(
+      const rawMonsters = (await Monster.find(
         { $or: monsterOrConditions },
         monsterProjection
       )
@@ -251,7 +292,7 @@ export async function GET(
         .lean()) as unknown[];
 
       type MonsterDoc = MonsterSummary & Record<string, unknown>;
-      const monsterList: MonsterDoc[] = monsters.map((doc: unknown) => {
+      const monsterList: MonsterDoc[] = rawMonsters.map((doc: unknown) => {
         const d = doc as Record<string, unknown>;
         const imageRaw = d.image != null ? String(d.image) : undefined;
         const dbImage = imageRaw && imageRaw !== "No Image" ? imageRaw : undefined;
@@ -273,6 +314,24 @@ export async function GET(
         monstersByRegion[label] = monsterList
           .filter((m) => m[field] === true)
           .map((m) => ({ _id: m._id, name: m.name, image: m.image }));
+      }
+
+      if (gatherableList.length > 0 && rawMonsters.length > 0) {
+        const monsterDropMap = buildMonsterDropMap(
+          rawMonsters as MonsterDocForDrops[]
+        );
+        const pickWithDrops = (item: ItemDoc) =>
+          pickItemFields(item, monsterDropMap);
+        gatherableByVillage = {};
+        for (const v of jobRef.villages) {
+          gatherableByVillage[v] = gatherableList.map(pickWithDrops);
+        }
+        gatherableByRegion = {};
+        for (const { field, label } of REGION_FIELDS) {
+          gatherableByRegion[label] = gatherableList
+            .filter((item) => item[field] === true)
+            .map(pickWithDrops);
+        }
       }
     }
 

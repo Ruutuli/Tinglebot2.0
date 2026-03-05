@@ -12,6 +12,12 @@ import {
   buildListResponse,
   buildSearchRegex,
 } from "@/lib/api-utils";
+import {
+  buildMonsterDropMap,
+  getItemDropSources,
+  ITEM_MONSTER_FIELDS,
+  type MonsterDocForDrops,
+} from "@/lib/item-drop-sources";
 import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
 
@@ -336,18 +342,20 @@ export async function GET(req: NextRequest) {
     // - category (for filtering)
     // - type (for filtering)
     // - itemRarity (for filtering)
-    const [data, total, categoryOpts, typeOpts, rarityOpts, categoryGearOpts, subtypeOpts] = await Promise.all([
+    const itemSelect =
+      "itemName image imageType emoji type subtype category categoryGear buyPrice sellPrice stackable maxStackSize itemRarity " +
+      "gathering looting traveling exploring vending crafting petPerk " +
+      "locations centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay " +
+      "allJobs farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
+      "fisherman gravekeeper guard maskMaker hunter hunterLooting mercenary miner researcher scout weaver witch " +
+      "craftingMaterial crafting staminaToCraft craftingJobs " +
+      "specialWeather modifierHearts staminaRecovered " +
+      "entertainerItems divineItems monsterList " +
+      ITEM_MONSTER_FIELDS.join(" ");
+
+    const [data, total, categoryOpts, typeOpts, rarityOpts, categoryGearOpts, subtypeOpts, rawMonsters] = await Promise.all([
       Item.find(finalFilter)
-        .select(
-          "itemName image imageType emoji type subtype category categoryGear buyPrice sellPrice stackable maxStackSize itemRarity " +
-          "gathering looting traveling exploring vending crafting petPerk " +
-          "locations centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay " +
-          "allJobs farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
-          "fisherman gravekeeper guard maskMaker hunter hunterLooting mercenary miner researcher scout weaver witch " +
-          "craftingMaterial crafting staminaToCraft craftingJobs " +
-          "specialWeather modifierHearts staminaRecovered " +
-          "entertainerItems divineItems"
-        )
+        .select(itemSelect)
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(limit)
@@ -358,7 +366,32 @@ export async function GET(req: NextRequest) {
       Item.distinct("itemRarity"),
       Item.distinct("categoryGear"),
       Item.distinct("subtype"),
+      (async () => {
+        const MonsterModule = await import("@/models/MonsterModel.js");
+        const Monster = (mongoose.models.Monster ?? MonsterModule.default) as Model<unknown>;
+        const regionFields = ["eldin", "lanayru", "faron", "centralHyrule", "gerudo", "hebra", "pathOfScarletLeaves", "leafDewWay"];
+        const jobFields = ["adventurer", "guard", "graveskeeper", "hunter", "mercenary", "scout"];
+        const proj: Record<string, 1> = { name: 1, nameMapping: 1 };
+        regionFields.forEach((f) => (proj[f] = 1));
+        jobFields.forEach((f) => (proj[f] = 1));
+        return Monster.find({}, proj).lean();
+      })(),
     ]);
+
+    const monsterDropMap =
+      Array.isArray(rawMonsters) && rawMonsters.length > 0
+        ? buildMonsterDropMap(rawMonsters as MonsterDocForDrops[])
+        : new Map<string, { regions: string[]; lootingJobs: string[] }>();
+
+    const dataWithDropSources = (data as Record<string, unknown>[]).map((doc) => {
+      const dropSources = getItemDropSources(doc, monsterDropMap);
+      return {
+        ...doc,
+        ...(dropSources.regions.length > 0 || dropSources.lootingJobs.length > 0
+          ? { dropSources }
+          : {}),
+      };
+    });
 
     // ------------------- Build Filter Options -------------------
     const filterOptions: Record<string, (string | number)[]> = {
@@ -411,7 +444,7 @@ export async function GET(req: NextRequest) {
     // ------------------- Return Response -------------------
     const response = NextResponse.json(
       buildListResponse({
-        data,
+        data: dataWithDropSources,
         total,
         page,
         limit,

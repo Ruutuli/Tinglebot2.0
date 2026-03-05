@@ -12,6 +12,8 @@ type GatherableItem = {
   image?: string;
   category?: string | string[];
   itemRarity?: number;
+  /** Derived in code: regions/jobs where this item can be obtained via monster drops */
+  dropSources?: { regions: string[]; lootingJobs: string[] };
 };
 
 type MonsterSummary = {
@@ -360,6 +362,8 @@ export default function ReferenceJobDetailPage() {
                         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4">
                           {regionItems.map((item) => {
                             const showImage = item.image && item.image !== "No Image";
+                            const ds = item.dropSources;
+                            const hasDropInfo = ds && (ds.regions.length > 0 || ds.lootingJobs.length > 0);
                             return (
                               <li key={item._id}>
                                 <Link
@@ -393,6 +397,15 @@ export default function ReferenceJobDetailPage() {
                                   <span className="line-clamp-2 text-sm font-medium text-[var(--botw-pale)]">
                                     {item.itemName}
                                   </span>
+                                  {hasDropInfo && (
+                                    <span className="mt-1 line-clamp-2 text-[10px] text-[var(--totk-grey-200)]">
+                                      {ds.regions.length > 0 && ds.lootingJobs.length > 0
+                                        ? `${ds.regions.slice(0, 2).join(", ")} · ${ds.lootingJobs.join(", ")}`
+                                        : ds.regions.length > 0
+                                          ? ds.regions.slice(0, 3).join(", ")
+                                          : ds.lootingJobs.join(", ")}
+                                    </span>
+                                  )}
                                 </Link>
                               </li>
                             );

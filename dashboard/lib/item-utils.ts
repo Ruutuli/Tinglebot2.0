@@ -45,6 +45,8 @@ export type ItemData = {
   witch?: boolean;
   allJobs?: string[];
   locations?: string[];
+  /** Derived in code from Monster data: regions/jobs where this item can be obtained via monster drops */
+  dropSources?: { regions: string[]; lootingJobs: string[] };
   craftingMaterial?: Array<{ itemName: string; quantity: number }>;
   specialWeather?: {
     muggy?: boolean;
@@ -80,11 +82,12 @@ export function formatSources(item: ItemData): string[] {
     sources.push("Gathering");
   }
   
-  // Looting: check if any looting job is true
+  // Looting: check if any looting job is true or item is dropped by monsters (dropSources)
   // Looting jobs: Adventurer, Graveskeeper, Guard, Mercenary, Scout, Hunter, Hunter (Looting)
   const hasLootingJob = item.adventurer || item.gravekeeper || item.guard || item.mercenary || 
                         item.scout || item.hunter || item.hunterLooting;
-  if (hasLootingJob) {
+  const hasMonsterDropSource = item.dropSources?.lootingJobs && item.dropSources.lootingJobs.length > 0;
+  if (hasLootingJob || hasMonsterDropSource) {
     sources.push("Looting");
   }
   
@@ -116,7 +119,7 @@ export function formatSources(item: ItemData): string[] {
 }
 
 /**
- * Format locations array from location flags and arrays
+ * Format locations array from location flags, arrays, or derived drop sources (monster regions)
  */
 export function formatLocations(item: ItemData): string[] {
   const locations: string[] = [];
@@ -136,11 +139,16 @@ export function formatLocations(item: ItemData): string[] {
   if (item.pathOfScarletLeaves) locations.push("Path of Scarlet Leaves");
   if (item.leafDewWay) locations.push("Leaf Dew Way");
   
-  return locations.length > 0 ? locations : ["None"];
+  if (locations.length > 0) return locations;
+  // Use derived drop regions (from monsters that drop this item) when no DB locations
+  if (item.dropSources?.regions && item.dropSources.regions.length > 0) {
+    return item.dropSources.regions;
+  }
+  return ["None"];
 }
 
 /**
- * Format jobs array from job flags and arrays
+ * Format jobs array from job flags, arrays, or derived drop sources (looting jobs that can fight dropping monsters)
  */
 export function formatJobs(item: ItemData): string[] {
   const jobs: string[] = [];
@@ -174,7 +182,12 @@ export function formatJobs(item: ItemData): string[] {
   if (item.weaver) jobs.push("Weaver");
   if (item.witch) jobs.push("Witch");
   
-  return jobs.length > 0 ? jobs : ["None"];
+  if (jobs.length > 0) return jobs;
+  // Use derived drop looting jobs when no DB jobs
+  if (item.dropSources?.lootingJobs && item.dropSources.lootingJobs.length > 0) {
+    return item.dropSources.lootingJobs;
+  }
+  return ["None"];
 }
 
 /**
