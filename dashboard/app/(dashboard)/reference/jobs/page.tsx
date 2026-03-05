@@ -44,7 +44,7 @@ const JOB_ICONS: Record<string, string> = {
   Farmer: "fa-wheat-awn",
   Fisherman: "fa-fish",
   Forager: "fa-basket-shopping",
-  "Fortune Teller": "fa-crystal-ball",
+  "Fortune Teller": "fa-wand-magic-sparkles",
   Graveskeeper: "fa-monument",
   Guard: "fa-shield-halved",
   Healer: "fa-hand-holding-medical",
