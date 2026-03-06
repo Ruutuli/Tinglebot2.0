@@ -305,6 +305,22 @@ export async function POST(req: NextRequest) {
     };
     await normalizeGearSlots(gear, getItemByName);
 
+    // Always apply weapon/shield from plain form fields when present — guarantees user's selection is saved
+    const gearWeaponName = get("gearWeaponName") as string | undefined;
+    const gearShieldName = get("gearShieldName") as string | undefined;
+    if (gearWeaponName?.trim()) {
+      gear.gearWeapon = {
+        name: gearWeaponName.trim(),
+        stats: new Map([["modifierHearts", 0]]),
+      };
+    }
+    if (gearShieldName?.trim()) {
+      gear.gearShield = {
+        name: gearShieldName.trim(),
+        stats: new Map([["modifierHearts", 0]]),
+      };
+    }
+
     // Ensure every new character has default chest/legs armor if missing
     if (!gear.gearArmor) gear.gearArmor = {};
     if (!gear.gearArmor.chest) {

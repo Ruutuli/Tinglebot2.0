@@ -26,11 +26,18 @@ const { createCharacterGearEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Modules -------------------
 // Import character stats modules for updating defense and attack.
-const { updateCharacterDefense, updateCharacterAttack } = require('../../modules/characterStatsModule.js');
+const { getModifierHearts, updateCharacterDefense, updateCharacterAttack } = require('../../modules/characterStatsModule.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
 const logger = require('@/utils/logger');
 
+// Helper: get modifier for display (prefer character's stored stats, fallback to ItemModel by case-insensitive name)
+function getDisplayModifier(gear, itemDetails) {
+  if (!gear) return 0;
+  if (gear.stats != null) return getModifierHearts(gear.stats);
+  const found = itemDetails.find(i => i.itemName && gear.name && String(i.itemName).toLowerCase() === String(gear.name).toLowerCase());
+  return found?.modifierHearts ?? 0;
+}
 
 // ------------------- Command Definition -------------------
 // Defines the slash command for managing character gear.
@@ -203,22 +210,22 @@ module.exports = {
           }
         });
 
-        // Map gear to display in the embed.
+        // Map gear to display in the embed (modifier from character stats, fallback to ItemModel).
         const updatedGearMap = {
           head: updatedCharacter.gearArmor?.head
-            ? `> ${updatedCharacter.gearArmor.head.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearArmor.head.name)?.modifierHearts || 0}]`
+            ? `> ${updatedCharacter.gearArmor.head.name} [+${getDisplayModifier(updatedCharacter.gearArmor.head, updatedItemDetails)}]`
             : '> N/A',
           chest: updatedCharacter.gearArmor?.chest
-            ? `> ${updatedCharacter.gearArmor.chest.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearArmor.chest.name)?.modifierHearts || 0}]`
+            ? `> ${updatedCharacter.gearArmor.chest.name} [+${getDisplayModifier(updatedCharacter.gearArmor.chest, updatedItemDetails)}]`
             : '> N/A',
           legs: updatedCharacter.gearArmor?.legs
-            ? `> ${updatedCharacter.gearArmor.legs.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearArmor.legs.name)?.modifierHearts || 0}]`
+            ? `> ${updatedCharacter.gearArmor.legs.name} [+${getDisplayModifier(updatedCharacter.gearArmor.legs, updatedItemDetails)}]`
             : '> N/A',
           weapon: updatedCharacter.gearWeapon
-            ? `> ${updatedCharacter.gearWeapon.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearWeapon.name)?.modifierHearts || 0}]`
+            ? `> ${updatedCharacter.gearWeapon.name} [+${getDisplayModifier(updatedCharacter.gearWeapon, updatedItemDetails)}]`
             : '> N/A',
           shield: updatedCharacter.gearShield
-            ? `> ${updatedCharacter.gearShield.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearShield.name)?.modifierHearts || 0}]`
+            ? `> ${updatedCharacter.gearShield.name} [+${getDisplayModifier(updatedCharacter.gearShield, updatedItemDetails)}]`
             : '> N/A',
         };
 
@@ -253,22 +260,22 @@ module.exports = {
           }
         });
 
-        // Map current gear to display in the embed
+        // Map current gear to display in the embed (modifier from character stats, fallback to ItemModel).
         const currentGearMap = {
           head: character.gearArmor?.head
-            ? `> ${character.gearArmor.head.name} [+${currentItemDetails.find(i => i.itemName === character.gearArmor.head.name)?.modifierHearts || 0}]`
+            ? `> ${character.gearArmor.head.name} [+${getDisplayModifier(character.gearArmor.head, currentItemDetails)}]`
             : '> N/A',
           chest: character.gearArmor?.chest
-            ? `> ${character.gearArmor.chest.name} [+${currentItemDetails.find(i => i.itemName === character.gearArmor.chest.name)?.modifierHearts || 0}]`
+            ? `> ${character.gearArmor.chest.name} [+${getDisplayModifier(character.gearArmor.chest, currentItemDetails)}]`
             : '> N/A',
           legs: character.gearArmor?.legs
-            ? `> ${character.gearArmor.legs.name} [+${currentItemDetails.find(i => i.itemName === character.gearArmor.legs.name)?.modifierHearts || 0}]`
+            ? `> ${character.gearArmor.legs.name} [+${getDisplayModifier(character.gearArmor.legs, currentItemDetails)}]`
             : '> N/A',
           weapon: character.gearWeapon
-            ? `> ${character.gearWeapon.name} [+${currentItemDetails.find(i => i.itemName === character.gearWeapon.name)?.modifierHearts || 0}]`
+            ? `> ${character.gearWeapon.name} [+${getDisplayModifier(character.gearWeapon, currentItemDetails)}]`
             : '> N/A',
           shield: character.gearShield
-            ? `> ${character.gearShield.name} [+${currentItemDetails.find(i => i.itemName === character.gearShield.name)?.modifierHearts || 0}]`
+            ? `> ${character.gearShield.name} [+${getDisplayModifier(character.gearShield, currentItemDetails)}]`
             : '> N/A',
         };
 
@@ -413,16 +420,16 @@ module.exports = {
       }
 
       // ------------------- Equip Item Logic -------------------
-      // Update the character's gear based on the selected slot.
-      // Use the appropriate update function based on character type
+      // Use canonical name and modifier from item database so display/lookups match.
+      const canonicalName = itemDetail.itemName;
+      const modifierHeartsFromDb = Number(itemDetail.modifierHearts) || 0;
+
       if (['head', 'chest', 'legs'].includes(type)) {
-        const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        // Explicitly preserve other slots (Mongoose subdocs may not spread correctly)
         const ga = character.gearArmor || {};
         const updatedGearArmor = {
-          head: type === 'head' ? { name: itemName, stats: { modifierHearts } } : (ga.head ? { name: ga.head.name, stats: ga.head.stats || {} } : null),
-          chest: type === 'chest' ? { name: itemName, stats: { modifierHearts } } : (ga.chest ? { name: ga.chest.name, stats: ga.chest.stats || {} } : null),
-          legs: type === 'legs' ? { name: itemName, stats: { modifierHearts } } : (ga.legs ? { name: ga.legs.name, stats: ga.legs.stats || {} } : null),
+          head: type === 'head' ? { name: canonicalName, stats: { modifierHearts: modifierHeartsFromDb } } : (ga.head ? { name: ga.head.name, stats: ga.head.stats || {} } : null),
+          chest: type === 'chest' ? { name: canonicalName, stats: { modifierHearts: modifierHeartsFromDb } } : (ga.chest ? { name: ga.chest.name, stats: ga.chest.stats || {} } : null),
+          legs: type === 'legs' ? { name: canonicalName, stats: { modifierHearts: modifierHeartsFromDb } } : (ga.legs ? { name: ga.legs.name, stats: ga.legs.stats || {} } : null),
         };
 
         // Ensure all equipped armor exists in inventory (fixes "armor equipped but not in inventory")
@@ -436,29 +443,30 @@ module.exports = {
         for (const slot of ['head', 'chest', 'legs']) {
           const armorItem = updatedGearArmor[slot];
           if (armorItem?.name) {
+            // For the slot we just equipped, check inventory by user's itemName to avoid duplicate entries.
+            const nameToCheck = slot === type ? itemName : armorItem.name;
             const existingInInventory = await inventoryCollection.findOne({
               $and: [
                 charInvFilter,
-                { itemName: { $regex: new RegExp(`^${escapeRegExp(armorItem.name)}$`, 'i') } },
+                { itemName: { $regex: new RegExp(`^${escapeRegExp(nameToCheck)}$`, 'i') } },
                 { quantity: { $gt: 0 } }
               ]
             });
             if (!existingInInventory) {
               try {
-                await addItemInventoryDatabase(character._id, armorItem.name, 1, interaction, 'Starting gear (restored)');
+                await addItemInventoryDatabase(character._id, nameToCheck, 1, interaction, 'Starting gear (restored)');
               } catch (addErr) {
-                logger.warn('GEAR', `Could not ensure armor ${armorItem.name} in inventory: ${addErr.message}`);
+                logger.warn('GEAR', `Could not ensure armor ${nameToCheck} in inventory: ${addErr.message}`);
               }
             }
           }
         }
 
-        logger.debug('CHARACTER', `Updating gearArmor - Slot: ${type}, Item: ${itemName}`);
+        logger.debug('CHARACTER', `Updating gearArmor - Slot: ${type}, Item: ${canonicalName}`);
         await updateFunction(character._id, { gearArmor: updatedGearArmor });
       } else if (type === 'weapon') {
-        const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        logger.debug('CHARACTER', `Updating gearWeapon - Item: ${itemName}`);
-        await updateFunction(character._id, { gearWeapon: { name: itemName, stats: { modifierHearts }, type: itemDetail.type } });
+        logger.debug('CHARACTER', `Updating gearWeapon - Item: ${canonicalName}`);
+        await updateFunction(character._id, { gearWeapon: { name: canonicalName, stats: { modifierHearts: modifierHeartsFromDb }, type: itemDetail.type } });
         const charInvFilterWeapon = {
           $or: [
             { characterId: character._id },
@@ -481,9 +489,8 @@ module.exports = {
           }
         }
       } else if (type === 'shield') {
-        const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        logger.debug('CHARACTER', `Updating gearShield - Item: ${itemName}`);
-        await updateFunction(character._id, { gearShield: { name: itemName, stats: { modifierHearts }, subtype: itemDetail.subtype } });
+        logger.debug('CHARACTER', `Updating gearShield - Item: ${canonicalName}`);
+        await updateFunction(character._id, { gearShield: { name: canonicalName, stats: { modifierHearts: modifierHeartsFromDb }, subtype: itemDetail.subtype } });
         const charInvFilterShield = {
           $or: [
             { characterId: character._id },
@@ -538,29 +545,29 @@ module.exports = {
         }
       });
 
-      // Map the updated gear for embed display.
+      // Map the updated gear for embed display (modifier from character stats, fallback to ItemModel).
       const updatedGearMap = {
         head: updatedCharacter.gearArmor?.head
-          ? `> ${updatedCharacter.gearArmor.head.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearArmor.head.name)?.modifierHearts || 0}]`
+          ? `> ${updatedCharacter.gearArmor.head.name} [+${getDisplayModifier(updatedCharacter.gearArmor.head, updatedItemDetails)}]`
           : '> N/A',
         chest: updatedCharacter.gearArmor?.chest
-          ? `> ${updatedCharacter.gearArmor.chest.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearArmor.chest.name)?.modifierHearts || 0}]`
+          ? `> ${updatedCharacter.gearArmor.chest.name} [+${getDisplayModifier(updatedCharacter.gearArmor.chest, updatedItemDetails)}]`
           : '> N/A',
         legs: updatedCharacter.gearArmor?.legs
-          ? `> ${updatedCharacter.gearArmor.legs.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearArmor.legs.name)?.modifierHearts || 0}]`
+          ? `> ${updatedCharacter.gearArmor.legs.name} [+${getDisplayModifier(updatedCharacter.gearArmor.legs, updatedItemDetails)}]`
           : '> N/A',
         weapon: updatedCharacter.gearWeapon
-          ? `> ${updatedCharacter.gearWeapon.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearWeapon.name)?.modifierHearts || 0}]`
+          ? `> ${updatedCharacter.gearWeapon.name} [+${getDisplayModifier(updatedCharacter.gearWeapon, updatedItemDetails)}]`
           : '> N/A',
         shield: updatedCharacter.gearShield
-          ? `> ${updatedCharacter.gearShield.name} [+${updatedItemDetails.find(i => i.itemName === updatedCharacter.gearShield.name)?.modifierHearts || 0}]`
+          ? `> ${updatedCharacter.gearShield.name} [+${getDisplayModifier(updatedCharacter.gearShield, updatedItemDetails)}]`
           : '> N/A',
       };
 
       // ------------------- Create and Send Gear Embed -------------------
       logger.debug('CHARACTER', `Generating gear embed for ${character.name}`);
       const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type);
-      await interaction.editReply({ content: `✅ **${itemName} has been equipped to the ${type} slot for ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed], flags: [MessageFlags.Ephemeral] });
+      await interaction.editReply({ content: `✅ **${canonicalName} has been equipped to the ${type} slot for ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed], flags: [MessageFlags.Ephemeral] });
     } catch (error) {
       await handleInteractionError(error, interaction, {
         source: 'gear.js',

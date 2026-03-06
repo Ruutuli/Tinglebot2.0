@@ -12,6 +12,7 @@ const { getLastDebugValues } = require("../modules/buffModule");
 const { capitalize, capitalizeFirstLetter, capitalizeWords, getRandomColor } = require("../modules/formattingModule");
 const { getVillageColorByName, getVillageEmojiByName } = require("../modules/locationsModule");
 const { getMountEmoji, getMountThumbnail } = require("../modules/mountModule");
+const { getModifierHearts } = require("../modules/characterStatsModule");
 const { getNoEncounterMessage, generateCraftingFlavorText, generateGatherFlavorText, typeActionMap, generateBoostFlavorText, generateUnusedBoostFlavorText, generateDivineItemFlavorText, generateTeacherGatheringFlavorText, generateBlightRollBoostFlavorText, generateSubmissionBoostFlavorText } = require("../modules/flavorTextModule");
 const { convertCmToFeetInches, isValidImageUrl } = require('../utils/validation');
 // Google Sheets functionality removed
@@ -505,13 +506,13 @@ const createCharacterGearEmbed = (character, gearMap, type, unequippedMessage = 
 
  let totalDefense = 0;
  if (character.gearArmor) {
-  totalDefense += character.gearArmor.head?.stats?.get("modifierHearts") || 0;
-  totalDefense += character.gearArmor.chest?.stats?.get("modifierHearts") || 0;
-  totalDefense += character.gearArmor.legs?.stats?.get("modifierHearts") || 0;
+  totalDefense += getModifierHearts(character.gearArmor.head?.stats);
+  totalDefense += getModifierHearts(character.gearArmor.chest?.stats);
+  totalDefense += getModifierHearts(character.gearArmor.legs?.stats);
  }
- totalDefense += character.gearShield?.stats?.get("modifierHearts") || 0;
+ totalDefense += getModifierHearts(character.gearShield?.stats);
 
- let totalAttack = character.gearWeapon?.stats?.get("modifierHearts") || 0;
+ let totalAttack = getModifierHearts(character.gearWeapon?.stats) || 0;
 
  return new EmbedBuilder()
   .setColor(settings.color || "#0099ff")

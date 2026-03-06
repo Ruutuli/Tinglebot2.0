@@ -716,6 +716,7 @@ const handleZeroStamina = async (characterId) => {
 // Module Exports
 // ------------------- Exporting all functions -------------------
 module.exports = {
+  getModifierHearts,
   updateHearts,
   updateStamina,
   updateCurrentHearts,

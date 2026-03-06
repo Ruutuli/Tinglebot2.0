@@ -13,11 +13,12 @@ export const BLOOD_MOON_DATES = [
 ];
 
 /**
- * Parse MM-DD date string and return Date object for the current or next year
+ * Parse MM-DD date string and return Date object for the current or next year.
+ * Event time is 01:00 UTC (8pm EST) to match the bot's bloodmoon-start-announcement cron.
  */
 function parseBloodMoonDate(dateStr: string, referenceYear: number): Date {
   const [month, day] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(referenceYear, month - 1, day, 0, 0, 0, 0));
+  return new Date(Date.UTC(referenceYear, month - 1, day, 1, 0, 0, 0));
 }
 
 /**

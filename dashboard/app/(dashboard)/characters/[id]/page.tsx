@@ -1714,7 +1714,7 @@ export default function OCDetailPage() {
             )}
             {submitError && <MessageBanner variant="error" message={submitError} />}
             {showSavedBanner && (
-              <MessageBanner variant="saved" message="Your changes have been saved." />
+              <MessageBanner variant="saved" message="All changes saved. Weapon, shield, and gear are saved." />
             )}
 
             {/* Basic Info Card */}

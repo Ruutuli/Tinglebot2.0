@@ -708,6 +708,42 @@ export function CreateForm({
     setChecklist((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  /* [create/page.tsx]🧠 Form dirty: any persisted field or gear changed from initial (for unsaved-changes protection) */
+  const isFormDirty = useMemo(() => {
+    const init = initialCharacter;
+    const trim = (s: string | undefined) => (s ?? "").trim();
+    if (trim(name) !== trim(init?.name ?? "")) return true;
+    if (trim(age) !== (init?.age != null ? String(init.age) : "")) return true;
+    if (trim(height) !== (init?.height != null ? String(init.height) : "")) return true;
+    if (trim(pronouns) !== trim(init?.pronouns ?? "")) return true;
+    if (trim(gender) !== trim(init?.gender ?? "")) return true;
+    if (trim(race) !== trim(init?.race ?? "")) return true;
+    if (trim(village) !== trim(init?.homeVillage ?? init?.village ?? "")) return true;
+    if (trim(job) !== trim(init?.job ?? "")) return true;
+    const initVirtue = init?.virtue ? init.virtue.charAt(0).toUpperCase() + init.virtue.slice(1).toLowerCase() : "";
+    if (trim(virtue) !== trim(initVirtue)) return true;
+    if (trim(personality) !== trim(init?.personality ?? "")) return true;
+    if (trim(history) !== trim(init?.history ?? "")) return true;
+    if (trim(extras) !== trim(init?.extras ?? "")) return true;
+    if (trim(appLink) !== trim(init?.appLink ?? "")) return true;
+    const initB = init?.birthday ? parseBirthday(init.birthday) : { month: "", day: "" };
+    if (birthdayMonth !== initB.month || birthdayDay !== initB.day) return true;
+    if ((equippedWeapon?.name ?? "") !== (init?.gearWeapon?.name ?? "")) return true;
+    if ((equippedShield?.name ?? "") !== (init?.gearShield?.name ?? "")) return true;
+    if ((equippedHead?.name ?? "") !== (init?.gearArmor?.head?.name ?? "")) return true;
+    if ((equippedChest?.name ?? "") !== (init?.gearArmor?.chest?.name ?? "")) return true;
+    if ((equippedLegs?.name ?? "") !== (init?.gearArmor?.legs?.name ?? "")) return true;
+    if (iconFile != null && iconFile instanceof File && iconFile.size > 0) return true;
+    if (appArtFile != null && appArtFile instanceof File && appArtFile.size > 0) return true;
+    return false;
+  }, [
+    name, age, height, pronouns, gender, race, village, job, virtue, personality, history, extras, appLink,
+    birthdayMonth, birthdayDay,
+    equippedWeapon?.name, equippedShield?.name, equippedHead?.name, equippedChest?.name, equippedLegs?.name,
+    iconFile, appArtFile,
+    initialCharacter,
+  ]);
+
   /* [create/page.tsx]✨ Class name constants - */
   const styles = {
     input:
@@ -894,6 +930,52 @@ export function CreateForm({
       }
     }
   }, [isEditMode, initialCharacter, availableGearItems.legsArmor, equippedLegs]);
+
+  /* [create/page.tsx]🧠 Unsaved changes: beforeunload and in-app navigation guard */
+  useEffect(() => {
+    if (!isFormDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isFormDirty]);
+
+  const pushedHistoryRef = useRef(false);
+  useEffect(() => {
+    if (!isFormDirty) {
+      pushedHistoryRef.current = false;
+      return;
+    }
+    if (!pushedHistoryRef.current) {
+      window.history.pushState(null, "", window.location.href);
+      pushedHistoryRef.current = true;
+    }
+    const handlePopState = () => {
+      const leave = window.confirm("You have unsaved changes. Leave anyway?");
+      if (!leave) window.history.pushState(null, "", window.location.href);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isFormDirty]);
+
+  useEffect(() => {
+    if (!isFormDirty) return;
+    const handleClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest?.('a[href^="/"]');
+      if (!a || (a as HTMLAnchorElement).target === "_blank") return;
+      const el = a as HTMLAnchorElement;
+      const href = el.getAttribute("href");
+      if (!href || href === window.location.pathname) return;
+      if (el.origin !== window.location.origin) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const leave = window.confirm("You have unsaved changes. Leave anyway?");
+      if (leave) router.push(href);
+    };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [isFormDirty, router]);
 
   /* [create/page.tsx]🧠 Sync village value when metadata loads (initial load only; do not overwrite user's selection). */
   useEffect(() => {
@@ -1285,6 +1367,19 @@ export function CreateForm({
         setSubmitError(err);
         return;
       }
+      const canEditGear = isEditable("gearWeapon") && isEditable("gearShield") && isEditable("gearArmor");
+      if (canEditGear) {
+        const w = equippedWeaponRef.current ?? equippedWeapon;
+        const s = equippedShieldRef.current ?? equippedShield;
+        if (w && !availableGearItems.weapons.some((i) => i.name.toLowerCase() === w.name.toLowerCase())) {
+          setSubmitError("Your selected weapon isn't in the starter gear list. Please pick one from the dropdown.");
+          return;
+        }
+        if (s && !availableGearItems.shields.some((i) => i.name.toLowerCase() === s.name.toLowerCase())) {
+          setSubmitError("Your selected shield isn't in the starter gear list. Please pick one from the dropdown.");
+          return;
+        }
+      }
       if (submitInFlightRef.current) return;
       submitInFlightRef.current = true;
       setSubmitLoading(true);
@@ -1538,12 +1633,12 @@ export function CreateForm({
         }
 
         form.set("equippedGear", JSON.stringify(gearForSubmit));
-        // Backup: send weapon/shield names as plain fields so API always persists user's selection
-        if (isEditMode && canEditGear) {
+        // Backup: always send weapon/shield names when we built gear from form state (create or edit with gear editable) so API persists or clears
+        if (!(isEditMode && !canEditGear && initialCharacter)) {
           const w = equippedWeaponRef.current ?? equippedWeapon;
           const s = equippedShieldRef.current ?? equippedShield;
-          if (w?.name) form.set("gearWeaponName", w.name);
-          if (s?.name) form.set("gearShieldName", s.name);
+          form.set("gearWeaponName", w?.name ?? "");
+          form.set("gearShieldName", s?.name ?? "");
         }
 
         const url = isEditMode ? `/api/characters/${characterId}` : "/api/characters/create";
@@ -1575,11 +1670,10 @@ export function CreateForm({
             setTimeout(() => router.push(redirectUrl), 2200);
           }
         } else {
+          const hadGear = !!(equippedWeaponRef.current ?? equippedWeapon) || !!(equippedShieldRef.current ?? equippedShield);
           setSubmitSuccess(
             data.character?.name
-              ? `Character "${data.character.name}" created${
-                  doSubmit ? " and submitted for review" : ""
-                }.`
+              ? `Character "${data.character.name}" created${hadGear ? " with your chosen weapon and shield" : ""}${doSubmit ? " and submitted for review" : ""}.`
               : "Character created."
           );
           // Redirect to character page after successful creation using slug
@@ -1590,7 +1684,10 @@ export function CreateForm({
           }
         }
       } catch (e) {
-        setSubmitError(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        setSubmitError(
+          `Couldn't save. Your weapon and shield may not have been saved. Please try again; if it keeps failing, copy your answers somewhere safe and refresh the page.${msg ? ` (${msg})` : ""}`
+        );
       } finally {
         submitInFlightRef.current = false;
         setSubmitLoading(false);
@@ -1627,6 +1724,9 @@ export function CreateForm({
       characterId,
       initialCharacter,
       allChecklistChecked,
+      availableGearItems.weapons,
+      availableGearItems.shields,
+      isEditable,
     ]
   );
 
@@ -2247,6 +2347,9 @@ export function CreateForm({
             &quot;Well-Worn Trousers&quot; (legs). Conflicts are automatically
             resolved (e.g., equipping a 2H weapon will unequip your shield).
           </p>
+          <p className={styles.labelMuted}>
+            Your weapon and shield choices are saved when you click Save / Create Character.
+          </p>
           {gearConflictAlert && (
             <div className="mb-4 rounded-lg border-2 border-[var(--totk-light-green)] bg-[var(--totk-light-green)]/10 px-4 py-3 text-sm text-[var(--botw-pale)] animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-2">
@@ -2607,7 +2710,7 @@ export function CreateForm({
           type="submit"
           title={isEditMode ? "Save all your changes to this character" : undefined}
         >
-          {submitLoading ? (isEditMode ? "Updating…" : "Saving…") : (isEditMode ? "Update Character" : "Create and Save Character")}
+          {submitLoading ? (isEditMode ? "Updating…" : "Creating…") : (isEditMode ? "Update Character" : "Create and Save Character")}
         </button>
         {!isEditMode && (
           <button

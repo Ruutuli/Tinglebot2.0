@@ -47,6 +47,7 @@ const {
 } = require('../embeds/embeds.js');
 
 // ------------------- Modules -------------------
+const { getModifierHearts } = require('../modules/characterStatsModule');
 const { getGeneralJobsPage, getJobPerk } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { roles } = require('../modules/rolesModule');
@@ -620,17 +621,21 @@ async function handleViewCharacter(interaction, characterId) {
     ].filter(Boolean);
 
     const itemDetails = await ItemModel.find({ itemName: { $in: itemNames } });
-    const getItemDetail = (itemName) => {
-      const item = itemDetails.find(i => i.itemName === itemName);
-      return item ? `${item.emoji} ${item.itemName} [+${item.modifierHearts}]` : 'N/A';
+    // Modifier from character's stored stats (getModifierHearts), fallback to ItemModel by case-insensitive name.
+    const getItemDetail = (gear) => {
+      if (!gear) return 'N/A';
+      const item = itemDetails.find(i => i.itemName && gear.name && String(i.itemName).toLowerCase() === String(gear.name).toLowerCase());
+      const mod = gear.stats != null ? getModifierHearts(gear.stats) : (item?.modifierHearts ?? 0);
+      const emoji = item?.emoji || '';
+      return `${emoji} ${gear.name} [+${mod}]`;
     };
 
     const gearMap = {
-      head: character.gearArmor?.head ? `> ${getItemDetail(character.gearArmor.head.name)}` : '> N/A',
-      chest: character.gearArmor?.chest ? `> ${getItemDetail(character.gearArmor.chest.name)}` : '> N/A',
-      legs: character.gearArmor?.legs ? `> ${getItemDetail(character.gearArmor.legs.name)}` : '> N/A',
-      weapon: character.gearWeapon ? `> ${getItemDetail(character.gearWeapon.name)}` : '> N/A',
-      shield: character.gearShield ? `> ${getItemDetail(character.gearShield.name)}` : '> N/A',
+      head: character.gearArmor?.head ? `> ${getItemDetail(character.gearArmor.head)}` : '> N/A',
+      chest: character.gearArmor?.chest ? `> ${getItemDetail(character.gearArmor.chest)}` : '> N/A',
+      legs: character.gearArmor?.legs ? `> ${getItemDetail(character.gearArmor.legs)}` : '> N/A',
+      weapon: character.gearWeapon ? `> ${getItemDetail(character.gearWeapon)}` : '> N/A',
+      shield: character.gearShield ? `> ${getItemDetail(character.gearShield)}` : '> N/A',
     };
 
     const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');

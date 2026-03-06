@@ -893,22 +893,20 @@ export async function PUT(
       }
     }
 
-    // Always apply weapon/shield from plain form fields when present — guarantees user's selection is saved
-    // (equippedGear JSON or normalizeGearSlots can drop/clear items; backup names are source of truth)
+    // Always apply weapon/shield from plain form fields when key was sent — guarantees user's selection is saved or explicitly cleared
+    // (equippedGear JSON or normalizeGearSlots can drop/clear items; backup names are source of truth; empty string = unequip)
     const gearWeaponName = get("gearWeaponName") as string | undefined;
     const gearShieldName = get("gearShieldName") as string | undefined;
-    if (canEditGear && (gearWeaponName?.trim() || gearShieldName?.trim())) {
-      if (gearWeaponName?.trim()) {
-        char.gearWeapon = {
-          name: gearWeaponName.trim(),
-          stats: new Map([["modifierHearts", 0]]),
-        };
+    if (canEditGear) {
+      if (gearWeaponName !== undefined) {
+        char.gearWeapon = gearWeaponName?.trim()
+          ? { name: gearWeaponName.trim(), stats: new Map([["modifierHearts", 0]]) }
+          : undefined;
       }
-      if (gearShieldName?.trim()) {
-        char.gearShield = {
-          name: gearShieldName.trim(),
-          stats: new Map([["modifierHearts", 0]]),
-        };
+      if (gearShieldName !== undefined) {
+        char.gearShield = gearShieldName?.trim()
+          ? { name: gearShieldName.trim(), stats: new Map([["modifierHearts", 0]]) }
+          : undefined;
       }
     }
 
