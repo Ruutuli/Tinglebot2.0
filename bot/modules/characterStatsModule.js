@@ -16,7 +16,38 @@ const { info, success, debug } = require('../utils/logger');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
-const { createSimpleCharacterEmbed } = require('../embeds/embeds.js');
+// NOTE: `bot/embeds/embeds.js` imports from this module, so destructuring embed helpers
+// here can become `undefined` under CommonJS circular-require timing. We load embeds
+// lazily at call time and provide a minimal fallback to avoid crashing encounters.
+const { EmbedBuilder } = require('discord.js');
+
+const createSimpleCharacterEmbedSafe = (character, description) => {
+  try {
+    const embeds = require('../embeds/embeds.js');
+    if (typeof embeds?.createSimpleCharacterEmbed === 'function') {
+      return embeds.createSimpleCharacterEmbed(character, description);
+    }
+    if (typeof embeds?.createCharacterEmbed === 'function') {
+      const embed = embeds.createCharacterEmbed(character);
+      if (embed && typeof embed.setDescription === 'function') embed.setDescription(description);
+      return embed;
+    }
+  } catch (_) {
+    // ignore and fall back below
+  }
+
+  // Fallback: keep the bot functional even if embed module is mid-load or broken.
+  return new EmbedBuilder()
+    .setTitle(character?.name ? `${character.name}` : 'Character')
+    .setDescription(description || '')
+    .addFields(
+      { name: '❤️ Hearts', value: `${character?.currentHearts ?? '?'} / ${character?.maxHearts ?? '?'}`, inline: true },
+      { name: '🟩 Stamina', value: `${character?.currentStamina ?? '?'} / ${character?.maxStamina ?? '?'}`, inline: true },
+    )
+    .setThumbnail(character?.icon || null)
+    .setColor('#2B6CB0')
+    .setTimestamp();
+};
 
 
 // ============================================================================
@@ -132,7 +163,7 @@ const recoverHearts = async (characterId, hearts, healerId = null, allowOneOverf
     const modCharacter = await ModCharacter.findById(characterId);
     if (modCharacter) {
       console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - heart recovery skipped (mod characters have unlimited hearts)`);
-      return createSimpleCharacterEmbed(modCharacter, `❤️ Mod character - no heart recovery needed`);
+      return createSimpleCharacterEmbedSafe(modCharacter, `❤️ Mod character - no heart recovery needed`);
     }
 
     const character = await Character.findById(characterId);
@@ -160,7 +191,7 @@ const recoverHearts = async (characterId, hearts, healerId = null, allowOneOverf
     }
 
     await character.save();
-    return createSimpleCharacterEmbed(character, `❤️ +${hearts} hearts recovered`);
+    return createSimpleCharacterEmbedSafe(character, `❤️ +${hearts} hearts recovered`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
       operation: 'recover_hearts',
@@ -183,7 +214,7 @@ const recoverStamina = async (characterId, stamina) => {
     const modCharacter = await ModCharacter.findById(characterId);
     if (modCharacter) {
       console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - stamina recovery skipped (mod characters have unlimited stamina)`);
-      return createSimpleCharacterEmbed(modCharacter, `🟩 Mod character - no stamina recovery needed`);
+      return createSimpleCharacterEmbedSafe(modCharacter, `🟩 Mod character - no stamina recovery needed`);
     }
     
     const character = await Character.findById(characterId);
@@ -192,7 +223,7 @@ const recoverStamina = async (characterId, stamina) => {
     const newStamina = Math.min(character.currentStamina + stamina, character.maxStamina);
     await updateCurrentStamina(characterId, newStamina);
 
-    return createSimpleCharacterEmbed(character, `🟩 +${stamina} stamina recovered`);
+    return createSimpleCharacterEmbedSafe(character, `🟩 +${stamina} stamina recovered`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
       operation: 'recover_stamina',
@@ -215,7 +246,7 @@ const useHearts = async (characterId, hearts, context = {}) => {
     const modCharacter = await ModCharacter.findById(characterId);
     if (modCharacter) {
       console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} is immune to heart loss.`);
-      return createSimpleCharacterEmbed(modCharacter, `❤️ Mod character - no hearts lost`);
+      return createSimpleCharacterEmbedSafe(modCharacter, `❤️ Mod character - no hearts lost`);
     }
 
     // If not a mod character, check regular character collection
@@ -225,7 +256,7 @@ const useHearts = async (characterId, hearts, context = {}) => {
     // Double-check if this is a mod character
     if (character.isModCharacter) {
       console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} is immune to heart loss.`);
-      return createSimpleCharacterEmbed(character, `❤️ Mod character - no hearts lost`);
+      return createSimpleCharacterEmbedSafe(character, `❤️ Mod character - no hearts lost`);
     }
 
     if (character.ko) {
@@ -245,7 +276,7 @@ const useHearts = async (characterId, hearts, context = {}) => {
       await handleKO(characterId, context);
     }
 
-    return createSimpleCharacterEmbed(character, `❤️ -${hearts} hearts used`);
+    return createSimpleCharacterEmbedSafe(character, `❤️ -${hearts} hearts used`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', context);
 
@@ -471,7 +502,7 @@ const healKoCharacter = async (characterId, healerId = null) => {
     const modCharacter = await ModCharacter.findById(characterId);
     if (modCharacter) {
       console.log(`[characterStatsModule.js]: 👑 Mod character ${modCharacter.name} - KO healing skipped (mod characters cannot be KO'd)`);
-      return createSimpleCharacterEmbed(modCharacter, `❤️ Mod character - no KO healing needed`);
+      return createSimpleCharacterEmbedSafe(modCharacter, `❤️ Mod character - no KO healing needed`);
     }
     
     const character = await Character.findById(characterId);
@@ -496,7 +527,7 @@ const healKoCharacter = async (characterId, healerId = null) => {
     }
     
     await Character.updateOne({ _id: characterId }, { $set: updateData });
-    return createSimpleCharacterEmbed(character, `❤️ ${character.name} has been revived.`);
+    return createSimpleCharacterEmbedSafe(character, `❤️ ${character.name} has been revived.`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js', {
       operation: 'heal_ko_character',
