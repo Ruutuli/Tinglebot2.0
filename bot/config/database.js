@@ -40,7 +40,8 @@ const getMongoUri = (type) => {
 
 const dbConfig = {
   tinglebot: getMongoUri('TINGLEBOT'),
-  inventories: getMongoUri('INVENTORIES'),
+  // Use same server as dashboard for inventories (dashboard uses tinglebot URI + useDb('inventories'))
+  inventories: getMongoUri('INVENTORIES') || getMongoUri('TINGLEBOT'),
   vending: getMongoUri('VENDING')
 };
 
@@ -128,9 +129,9 @@ if (!dbConfig.tinglebot) {
   // Don't throw - allow server to start and handle connection errors gracefully
 }
 
-// Warn about missing optional databases but don't fail
-if (!dbConfig.inventories) {
-  console.warn('Warning: MONGODB_INVENTORIES_URI_PROD not set. Inventories database features will be unavailable.');
+// Warn about missing optional databases but don't fail (inventories falls back to tinglebot URI)
+if (!getMongoUri('INVENTORIES') && dbConfig.tinglebot) {
+  console.warn('Warning: MONGODB_INVENTORIES_URI not set; using tinglebot URI for inventories (same as dashboard).');
 }
 
 if (!dbConfig.vending) {

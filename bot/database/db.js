@@ -561,7 +561,7 @@ const getCharacterInventoryCollectionWithModSupport = async (characterOrName) =>
   await connectToInventories();
   let collectionName;
   if (typeof characterOrName === 'object' && characterOrName.isModCharacter) {
-    collectionName = characterOrName.name.toLowerCase(); // Now uses individual collection
+    collectionName = characterOrName.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
   } else if (typeof characterOrName === 'object') {
     collectionName = characterOrName.name.toLowerCase();
   } else { // string
@@ -620,6 +620,8 @@ const transferCharacterInventoryToVillageShops = async (characterName) => {
    if (qty <= 0) continue;
    byItem.set(name, (byItem.get(name) || 0) + qty);
   }
+  let updatedCount = 0;
+  let createdCount = 0;
   for (const [itemName, totalQty] of byItem) {
    let itemFilter;
    if (itemName.includes("+")) {
@@ -633,6 +635,7 @@ const transferCharacterInventoryToVillageShops = async (characterName) => {
      { _id: shopItem._id },
      { $inc: { stock: totalQty } }
     );
+    updatedCount++;
     continue;
    }
    const item = await fetchItemByName(itemName);
@@ -685,6 +688,10 @@ const transferCharacterInventoryToVillageShops = async (characterName) => {
     stock: totalQty
    });
    await newShopItem.save();
+   createdCount++;
+  }
+  if (byItem.size > 0) {
+   logger.info("INVENTORY_TRANSFER", `[db.js] ${characterName}: ${byItem.size} item type(s), ${updatedCount} stock update(s), ${createdCount} new shop entry(ies)`);
   }
  } catch (error) {
   handleError(error, "db.js");

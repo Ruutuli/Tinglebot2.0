@@ -1199,7 +1199,7 @@ async function initializeClient() {
         const { connectToVending } = require('@/database/db');
         const vendingConnection = await connectToVending();
         
-        // Get all characters for this user (needed for cascading deletes)
+        // Get all characters for this user (needed for cascading deletes and inventory transfer)
         const characters = await Character.find({ userId: discordId });
         const characterIds = characters.map(char => char._id);
         const characterNames = characters.map(char => char.name);
@@ -1209,48 +1209,54 @@ async function initializeClient() {
         const modCharacterIds = modCharacters.map(char => char._id);
         const modCharacterNames = modCharacters.map(char => char.name);
         
-        // Combine all character IDs and names
+        // Combine all character IDs and names (for later cleanup steps)
         const allCharacterIds = [...characterIds, ...modCharacterIds];
         const allCharacterNames = [...characterNames, ...modCharacterNames];
         
-        // Delete data from all collections
+        // Build inventory collection names: regular = trim+lowercase; mod = trim+lowercase+replace non-alphanumeric with underscore (match modCharacter.js creation)
+        const regularCollectionNames = characterNames.map(n => (n || '').trim().toLowerCase());
+        const modCollectionNames = modCharacterNames.map(n => (n || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_'));
+        const allCollectionNames = [...regularCollectionNames, ...modCollectionNames];
+        
         const deletionResults = {};
         
-        // 1. Delete user data
-        const userResult = await User.deleteMany({ discordId: discordId });
-        deletionResults.users = userResult.deletedCount;
-        
-        // 2. Delete characters
-        const characterResult = await Character.deleteMany({ userId: discordId });
-        deletionResults.characters = characterResult.deletedCount;
-        
-        // 3. Delete mod characters
-        const modCharacterResult = await ModCharacter.deleteMany({ userId: discordId });
-        deletionResults.modCharacters = modCharacterResult.deletedCount;
-        
-        // 4. Delete inventories (for all characters)
+        // 1. Transfer inventories to village shops and drop collections (before deleting User/Character/ModCharacter)
         const { deleteCharacterInventoryCollection, transferCharacterInventoryToVillageShops } = require('@/database/db');
         let inventoryCollectionsDeleted = 0;
-        if (allCharacterNames.length > 0) {
-          for (const characterName of allCharacterNames) {
+        if (allCollectionNames.length > 0) {
+          for (const collectionName of allCollectionNames) {
             try {
-              await transferCharacterInventoryToVillageShops(characterName);
-            } catch (transferErr) {
-              logger.warn('CLEANUP', `[index.js] Failed to transfer inventory to village shops for ${characterName}: ${transferErr.message}`);
-            }
-            try {
-              await deleteCharacterInventoryCollection(characterName);
-              inventoryCollectionsDeleted++;
-            } catch (inventoryError) {
-              if (inventoryError.code !== 26) {
-                logger.warn('CLEANUP', `[index.js]⚠️ Error deleting inventory collection for ${characterName}: ${inventoryError.message}`);
+              await transferCharacterInventoryToVillageShops(collectionName);
+              logger.success('CLEANUP', `[index.js] Transferred inventory to village shops for collection: ${collectionName}`);
+              try {
+                await deleteCharacterInventoryCollection(collectionName);
+                inventoryCollectionsDeleted++;
+              } catch (inventoryError) {
+                if (inventoryError.code !== 26) {
+                  logger.warn('CLEANUP', `[index.js]⚠️ Error deleting inventory collection for ${collectionName}: ${inventoryError.message}`);
+                }
               }
+            } catch (transferErr) {
+              const errStack = transferErr && transferErr.stack ? transferErr.stack : String(transferErr);
+              logger.warn('CLEANUP', `[index.js] Failed to transfer inventory to village shops for ${collectionName}: ${transferErr?.message ?? transferErr}. ${errStack}`);
             }
           }
           deletionResults.inventoryItems = inventoryCollectionsDeleted;
         } else {
           deletionResults.inventoryItems = 0;
         }
+        
+        // 2. Delete user data
+        const userResult = await User.deleteMany({ discordId: discordId });
+        deletionResults.users = userResult.deletedCount;
+        
+        // 3. Delete characters
+        const characterResult = await Character.deleteMany({ userId: discordId });
+        deletionResults.characters = characterResult.deletedCount;
+        
+        // 4. Delete mod characters
+        const modCharacterResult = await ModCharacter.deleteMany({ userId: discordId });
+        deletionResults.modCharacters = modCharacterResult.deletedCount;
         
         // 5. Delete vending inventories (by character names)
         let vendingItemsDeleted = 0;
