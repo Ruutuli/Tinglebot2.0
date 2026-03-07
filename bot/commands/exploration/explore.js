@@ -223,6 +223,26 @@ const REGION_TO_VILLAGE = {
  faron: "Vhintl",
 };
 
+// ------------------- Monster camp wave variety (weighted so beginner/2-monster are rarer) ------------------
+function pickWeighted(items) {
+  const total = items.reduce((s, x) => s + x.weight, 0);
+  let r = Math.random() * total;
+  for (const x of items) {
+    r -= x.weight;
+    if (r <= 0) return x.value;
+  }
+  return items[items.length - 1].value;
+}
+const MONSTER_CAMP_DIFFICULTY_WEIGHTS = [
+  { value: 'beginner', weight: 1 }, { value: 'beginner+', weight: 1 },
+  { value: 'easy', weight: 2 }, { value: 'easy+', weight: 2 }, { value: 'mixed-low', weight: 2 }, { value: 'mixed-medium', weight: 2 },
+  { value: 'intermediate', weight: 2 }, { value: 'intermediate+', weight: 2 },
+  { value: 'advanced', weight: 1 }, { value: 'advanced+', weight: 1 },
+];
+const MONSTER_CAMP_COUNT_WEIGHTS = [
+  { value: 2, weight: 1 }, { value: 3, weight: 3 }, { value: 4, weight: 3 }, { value: 5, weight: 2 }, { value: 6, weight: 1 },
+];
+
 // ------------------- Paving bundles (virtual slots, 5 base items each) ------------------
 const PAVING_BUNDLES = {
  "Eldin Ore Bundle": { baseItemName: "Eldin Ore", quantityPerSlot: 5 },
@@ -3131,9 +3151,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       return interaction.editReply({ embeds: [blockedEmbed] });
      }
      const village = REGION_TO_VILLAGE[regionKey?.toLowerCase()] || "Inariko";
-     const MONSTER_CAMP_DIFFICULTIES = ["beginner", "beginner+", "easy", "easy+", "mixed-low", "mixed-medium", "intermediate", "intermediate+"];
-     const difficultyGroup = MONSTER_CAMP_DIFFICULTIES[Math.floor(Math.random() * MONSTER_CAMP_DIFFICULTIES.length)];
-     const monsterCount = 2 + Math.floor(Math.random() * 4);
+     const difficultyGroup = pickWeighted(MONSTER_CAMP_DIFFICULTY_WEIGHTS);
+     const monsterCount = pickWeighted(MONSTER_CAMP_COUNT_WEIGHTS);
      const modifiedInteraction = {
       channel: interaction.channel,
       client: interaction.client,
@@ -4714,9 +4733,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
           }
           await pushDiscoveryToMap(freshParty, "monster_camp", at, i.user?.id, { campId: camp.campId });
           const village = REGION_TO_VILLAGE[regionKey?.toLowerCase()] || "Inariko";
-          const MONSTER_CAMP_DIFFICULTIES = ["beginner", "beginner+", "easy", "easy+", "mixed-low", "mixed-medium", "intermediate", "intermediate+"];
-          const difficultyGroup = MONSTER_CAMP_DIFFICULTIES[Math.floor(Math.random() * MONSTER_CAMP_DIFFICULTIES.length)];
-          const monsterCount = 2 + Math.floor(Math.random() * 4);
+          const difficultyGroup = pickWeighted(MONSTER_CAMP_DIFFICULTY_WEIGHTS);
+          const monsterCount = pickWeighted(MONSTER_CAMP_COUNT_WEIGHTS);
           const modifiedInteraction = {
            channel: i.channel,
            client: i.client,
