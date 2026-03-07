@@ -82,7 +82,7 @@ const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR } = require('@
 const { rollPuzzleConfig, getPuzzleFlavor, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
 const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
-const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome } = require('@/data/grottoMazeOutcomes.js');
+const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, getGrottoMazeChestLoot } = require('@/data/grottoMazeOutcomes.js');
 const { getRandomMazeEntryFlavor } = require('@/data/grottoMazeEntryFlavors.js');
 const { rollTestOfPowerMonster } = require('@/data/grottoTestOfPowerMonsters.js');
 const { getRandomBlessingFlavor } = require('@/data/grottoBlessingOutcomes.js');
@@ -2701,10 +2701,11 @@ module.exports = {
          party.markModified("currentTurn");
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
          const nextCharErr = party.characters[party.currentTurn] ?? null;
+         const scryingResultErr = "**❌ Result: Failure** — A construct appeared but the raid could not start.";
          const mazeEmbedErr = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Song of Scrying**")
           .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
-          .setDescription(`${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**${character.name}** sings the sequence on the wall...${rollLabel}\n\n${outcome.flavor}\n\n⏰ **${wallRaidError}**\n\n↳ Continue with </explore grotto maze:${mazeCmdId}>.`)
+          .setDescription(`${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**${character.name}** sings the sequence on the wall...${rollLabel}\n\n${scryingResultErr}\n\n${outcome.flavor}\n\n⏰ **${wallRaidError}**\n\n↳ Continue with </explore grotto maze:${mazeCmdId}>.`)
           .setImage(mazeImg);
         addExplorationStandardFields(mazeEmbedErr, {
           party,
@@ -2726,7 +2727,10 @@ module.exports = {
        }
       }
       const ctaHint = (outcome.ctaHint || "").replace(/<\/explore grotto maze>/g, `</explore grotto maze:${mazeCmdId}>`);
-      let desc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**${character.name}** sings the sequence on the wall...${rollLabel}\n\n${outcome.flavor}\n\n↳ **${ctaHint}**`;
+      const scryingResultLine = outcome.type === "faster_path_open"
+        ? "**✅ Result: Success** — The wall opens a faster path!"
+        : "**❌ Result: Failure** — The song didn't open the wall.";
+      let desc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**${character.name}** sings the sequence on the wall...${rollLabel}\n\n${scryingResultLine}\n\n${outcome.flavor}\n\n↳ **${ctaHint}**`;
       if (wallRaidError) desc += `\n\n⏰ **${wallRaidError}**`;
       const scryingLogMsg = outcome.type === 'faster_path_open' ? 'Song of Scrying: faster path opened.' : outcome.type === 'pit_trap' ? 'Song of Scrying: pit trap (lost hearts and stamina).' : outcome.type === 'collapse' ? 'Song of Scrying: passage collapsed, emerged on other side.' : outcome.type === 'step_back' ? 'Song of Scrying: stepped back.' : outcome.type === 'stalagmites' ? 'Song of Scrying: stalagmites fell (stamina cost).' : outcome.type === 'nothing' ? 'Song of Scrying: nothing happened.' : outcome.type === 'battle' ? `Song of Scrying: ${outcome.battle?.monsterLabel || 'construct'} appeared.` : 'Song of Scrying.';
       if (outcome.type !== 'battle' || wallRaidError) {
@@ -2925,10 +2929,21 @@ module.exports = {
       const opened = grotto.mazeState.openedChests || [];
       if (!opened.includes(nextKey)) {
        grotto.mazeState.openedChests = [...opened, nextKey];
+       const allItemsForChest = await fetchAllItems();
+       const chestLoot = getGrottoMazeChestLoot(allItemsForChest);
+       let givenItemName = chestLoot.itemName;
+       let givenEmoji = chestLoot.emoji || "📦";
        try {
-        await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
+        await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze chest");
        } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest: ${err?.message || err}`);
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest (${givenItemName}): ${err?.message || err}`);
+        try {
+         await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
+         givenItemName = "Spirit Orb";
+         givenEmoji = "💫";
+        } catch (fallbackErr) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest fallback: ${fallbackErr?.message || fallbackErr}`);
+        }
        }
        if (!usePartyOnlyForHeartsStamina(party)) {
         const charDoc = await Character.findById(character._id);
@@ -2938,7 +2953,7 @@ module.exports = {
         }
        }
        await grotto.save();
-       pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} opened a maze chest (moved ${displayDir}) and received a Spirit Orb.`, { itemName: "Spirit Orb", emoji: "💫" }, undefined, new Date());
+       pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} opened a maze chest (moved ${displayDir}) and received a ${givenItemName}.`, { itemName: givenItemName, emoji: givenEmoji }, undefined, new Date());
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        party.markModified("currentTurn");
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
@@ -2950,7 +2965,7 @@ module.exports = {
         .setDescription(
           chestDesc +
           `**📦 Chest found!** Party moved **${displayDir}** and discovered a treasure chest!\n\n` +
-          `**${character.name}** receives a **Spirit Orb** from the chest.`
+          `**${character.name}** receives ${givenEmoji} **${givenItemName}** from the chest.`
         )
         .setImage(mazeImg);
        addExplorationStandardFields(chestEmbed, {
@@ -3670,8 +3685,6 @@ module.exports = {
       return outcome;
      }
      let outcomeType = rollOutcome();
-     // TESTING: force grotto every roll so grottos appear immediately (nothing else)
-     if (EXPLORATION_TESTING_MODE) outcomeType = "grotto";
      const currentSquareNorm = normalizeSquareId(party.square);
      const specialCount = countSpecialEventsInSquare(party, party.square);
      const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
@@ -3682,7 +3695,6 @@ module.exports = {
       if (found && normalizeSquareId(found.squareId) === currentSquareNorm) mapSquareForGrotto = found;
      }
      for (;;) {
-      if (EXPLORATION_TESTING_MODE) break; // testing: grotto only, skip reroll/fallback
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
        const reason = "explored twice in a row at this location (blocked by rule)";

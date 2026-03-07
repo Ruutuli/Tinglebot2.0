@@ -381,6 +381,49 @@ function getGazepScryingOutcome(success) {
   };
 }
 
+// ============================================================================
+// Grotto Maze — Treasure chest loot (4 preferred most likely; any DB item can drop)
+// ============================================================================
+
+const GROTTO_MAZE_PREFERRED_LOOT = [
+  { itemName: "Fairy", weight: 40, emoji: "🧚" },
+  { itemName: "Star Fragment", weight: 25, emoji: "⭐" },
+  { itemName: "Goddess Plume", weight: 20, emoji: "🪶" },
+  { itemName: "Spirit Orb", weight: 5, emoji: "💫" },
+];
+
+const PREFERRED_NAMES = new Set(GROTTO_MAZE_PREFERRED_LOOT.map((e) => e.itemName));
+const OTHER_ITEM_WEIGHT = 2; // each non-preferred item from DB gets this weight
+
+/**
+ * Roll one item: preferred four (Spirit Orb, Fairy, Star Fragment, Goddess Plume) are most likely;
+ * any item from the DB (allItems) can also drop.
+ * @param {Array<{ itemName: string, emoji?: string }>} [allItems] - from fetchAllItems(); if missing/empty, only preferred loot is used
+ * @returns {{ itemName: string, emoji: string }}
+ */
+function getGrottoMazeChestLoot(allItems) {
+  const pool = [...GROTTO_MAZE_PREFERRED_LOOT];
+  if (allItems && allItems.length > 0) {
+    for (const item of allItems) {
+      const name = (item.itemName || item.name || "").trim();
+      if (!name || PREFERRED_NAMES.has(name)) continue;
+      pool.push({
+        itemName: name,
+        weight: OTHER_ITEM_WEIGHT,
+        emoji: item.emoji || "📦",
+      });
+    }
+  }
+  if (pool.length === 0) return { itemName: "Spirit Orb", emoji: "💫" };
+  const total = pool.reduce((s, x) => s + x.weight, 0);
+  let r = Math.random() * total;
+  for (const entry of pool) {
+    r -= entry.weight;
+    if (r <= 0) return { itemName: entry.itemName, emoji: entry.emoji || "📦" };
+  }
+  return { itemName: pool[0].itemName, emoji: pool[0].emoji || "📦" };
+}
+
 module.exports = {
   GROTTO_MAZE_OUTCOMES,
   GROTTO_MAZE_TRAP_OUTCOMES,
@@ -388,4 +431,5 @@ module.exports = {
   getGrottoMazeTrapOutcome,
   MAZEP_WALL_FLAVOR,
   getGazepScryingOutcome,
+  getGrottoMazeChestLoot,
 };
