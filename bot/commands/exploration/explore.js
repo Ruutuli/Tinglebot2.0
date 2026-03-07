@@ -82,7 +82,7 @@ const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR } = require('@
 const { rollPuzzleConfig, getPuzzleFlavor, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
 const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
-const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, getGrottoMazeChestLoot } = require('@/data/grottoMazeOutcomes.js');
+const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, getGrottoMazeChestLoot, getGrottoMazeRandomMoveEvent } = require('@/data/grottoMazeOutcomes.js');
 const { getRandomMazeEntryFlavor } = require('@/data/grottoMazeEntryFlavors.js');
 const { rollTestOfPowerMonster } = require('@/data/grottoTestOfPowerMonsters.js');
 const { getRandomBlessingFlavor } = require('@/data/grottoBlessingOutcomes.js');
@@ -3082,6 +3082,67 @@ module.exports = {
       }
      }
 
+     // Random move events (flavor, small gather, or monster) — not tied to marked cells
+     let randomEventPart = '';
+     const randomEvent = getGrottoMazeRandomMoveEvent();
+     if (randomEvent.type === 'monster') {
+      const regionMonsters = await getMonstersByRegion(party.region?.toLowerCase());
+      const manageable = regionMonsters && regionMonsters.filter((m) => m.tier >= 1 && m.tier <= 4);
+      const monster = manageable && manageable.length > 0 ? manageable[Math.floor(Math.random() * manageable.length)] : null;
+      const monsterFlavor = monster ? `A **${monster.name}** blocks the way!` : null;
+      if (monster) {
+       const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
+       const raidResult = await triggerRaid(monster, interaction, village, false, character, false, expeditionId);
+       if (raidResult && raidResult.success) {
+        pushProgressLog(party, character.name, "grotto_maze_raid", `Random encounter: ${monster.name}. Raid started.`, undefined, undefined, new Date());
+        await grotto.save();
+        await party.save();
+        const raidCta = `Use </raid> with the Raid ID above. When the monster is defeated, continue with </explore grotto maze:${mazeCmdId}>.`;
+        const raidEmbed = new EmbedBuilder()
+         .setTitle("🗺️ **Grotto: Maze — Random encounter!**")
+         .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
+         .setDescription((mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + `Party moved **${displayDir}**.\n\n${monsterFlavor}\n\n↳ ${raidCta}`)
+         .setImage(mazeImg);
+        addExplorationStandardFields(raidEmbed, { party, expeditionId, location, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>` });
+        if (mazeFiles.length) raidEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
+        await interaction.editReply({ embeds: [raidEmbed], files: mazeFiles });
+        return;
+       }
+       randomEventPart = `${monsterFlavor}\n\n⏰ **${raidResult?.error || "Raid could not be started."}**`;
+       pushProgressLog(party, character.name, "grotto_maze_raid", `Random encounter: ${monster.name} appeared but raid could not start.`, undefined, undefined, new Date());
+      } else {
+       randomEventPart = "Something stirs in the dark—but it doesn't emerge. You move on.";
+      }
+     } else if (randomEvent.type === 'gather') {
+      // Same logic as explore roll "item": region-filtered items, rarity-weighted (FV 50)
+      const allItemsForGather = await fetchAllItems();
+      const regionKey = party.region?.toLowerCase() || "";
+      const availableItems = allItemsForGather.filter((item) => item[regionKey]);
+      const weightedList = availableItems.length > 0 ? createWeightedItemList(availableItems, 50) : [];
+      const selectedItem = weightedList.length > 0
+       ? weightedList[Math.floor(Math.random() * weightedList.length)]
+       : availableItems.length > 0 ? availableItems[Math.floor(Math.random() * availableItems.length)] : null;
+      let givenItemName = selectedItem?.itemName ?? "Spirit Orb";
+      let givenEmoji = selectedItem?.emoji ?? "💫";
+      try {
+       await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze (corridor)");
+      } catch (err) {
+       logger.warn("EXPLORE", `[explore.js] Grotto maze corridor gather: ${err?.message || err}`);
+       try {
+        await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze (corridor)");
+        givenItemName = "Spirit Orb";
+        givenEmoji = "💫";
+       } catch (e) {}
+      }
+      if (!party.gatheredItems) party.gatheredItems = [];
+      party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: givenItemName, quantity: 1, emoji: givenEmoji });
+      party.markModified("gatheredItems");
+      pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} found something in the corridor (moved ${displayDir}): ${givenItemName}.`, { itemName: givenItemName, emoji: givenEmoji }, undefined, new Date());
+      randomEventPart = `Along the way, **${character.name}** finds ${givenEmoji} **${givenItemName}**!`;
+     } else if (randomEvent.type === 'flavor') {
+      randomEventPart = randomEvent.flavor;
+     }
+
      await grotto.save();
      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
      party.markModified("currentTurn");
@@ -3091,7 +3152,7 @@ module.exports = {
      const moveEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Maze**")
       .setColor(getMazeEmbedColor(null, regionColors[party.region]))
-      .setDescription(moveDesc + `Party moved **${displayDir}**.`)
+      .setDescription(moveDesc + `Party moved **${displayDir}**.` + (randomEventPart ? "\n\n" + randomEventPart : ""))
       .setImage(mazeImg);
     addExplorationStandardFields(moveEmbed, {
        party,

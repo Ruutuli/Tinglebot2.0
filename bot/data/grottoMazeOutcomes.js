@@ -424,6 +424,55 @@ function getGrottoMazeChestLoot(allItems) {
   return { itemName: pool[0].itemName, emoji: pool[0].emoji || "📦" };
 }
 
+// ============================================================================
+// Grotto Maze — Random move events (every step: flavor, small gather, or monster)
+// Not tied to marked cells; fills the "empty" moves with life.
+// ============================================================================
+
+const GROTTO_MAZE_RANDOM_MOVE_FLAVOR = [
+  "The passage echoes with the drip of water somewhere ahead.",
+  "Faint luminescent moss lines the walls here.",
+  "You hear distant stone grinding—another part of the maze shifting?",
+  "The air grows cooler as you press deeper.",
+  "Scratches on the wall suggest something was dragged through here long ago.",
+  "A draft stirs the dust; you catch a whiff of something ancient.",
+  "Your footsteps echo off the low ceiling.",
+  "Roots from above have broken through the stone in places.",
+  "You pass a narrow side passage—best not to wander.",
+  "The corridor bends; torchlight casts long shadows.",
+  "Something skitters in the dark ahead, then goes still.",
+  "Runes carved into the floor have mostly worn away.",
+  "A patch of mushrooms glows faintly in a corner.",
+  "The walls here are smoother—worked by hands, not nature.",
+  "You notice fresh scrapes in the stone. Something passed through recently.",
+  "The maze seems to breathe—a subtle shift in pressure.",
+  "Tiny crystals in the rock catch the light.",
+  "A discarded torch lies burnt out on the ground.",
+  "The path splits and rejoins; you stick to the main way.",
+  "Somewhere far off, you hear what might be singing.",
+];
+
+// Weights: none 52%, flavor 32%, gather 11%, monster 5%
+const RANDOM_MOVE_WEIGHTS = { none: 52, flavor: 32, gather: 11, monster: 5 };
+
+/**
+ * Roll a random move event for any maze step (path or already-used special cells).
+ * Monster is not chosen here — caller (explore.js) picks a random monster from MonsterModel by party region and tier 3–5.
+ * @returns {{ type: 'none'|'flavor'|'gather'|'monster', flavor?: string }}
+ */
+function getGrottoMazeRandomMoveEvent() {
+  const r = Math.random() * 100;
+  if (r < RANDOM_MOVE_WEIGHTS.none) return { type: 'none' };
+  if (r < RANDOM_MOVE_WEIGHTS.none + RANDOM_MOVE_WEIGHTS.flavor) {
+    const flavor = GROTTO_MAZE_RANDOM_MOVE_FLAVOR[Math.floor(Math.random() * GROTTO_MAZE_RANDOM_MOVE_FLAVOR.length)];
+    return { type: 'flavor', flavor };
+  }
+  if (r < RANDOM_MOVE_WEIGHTS.none + RANDOM_MOVE_WEIGHTS.flavor + RANDOM_MOVE_WEIGHTS.gather) {
+    return { type: 'gather' };
+  }
+  return { type: 'monster' };
+}
+
 module.exports = {
   GROTTO_MAZE_OUTCOMES,
   GROTTO_MAZE_TRAP_OUTCOMES,
@@ -432,4 +481,5 @@ module.exports = {
   MAZEP_WALL_FLAVOR,
   getGazepScryingOutcome,
   getGrottoMazeChestLoot,
+  getGrottoMazeRandomMoveEvent,
 };
