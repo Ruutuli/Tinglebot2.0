@@ -143,7 +143,7 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs, at
 // ------------------- updateDiscoveryGrottoStatus ------------------
 // Update grottoStatus on map discovery (found | cleansed | cleared) -
 async function updateDiscoveryGrottoStatus(squareId, quadrantId, discoveryKey, grottoStatus, options = {}) {
-    if (EXPLORATION_TESTING_MODE || !squareId || !quadrantId || !discoveryKey || !grottoStatus) return;
+    if (!squareId || !quadrantId || !discoveryKey || !grottoStatus) return;
     if (options.party && options.party.status !== "started") return; // Do not update map when expedition is over
     const qd = String(quadrantId).trim().toUpperCase();
     await Square.updateOne(
@@ -157,7 +157,6 @@ async function updateDiscoveryGrottoStatus(squareId, quadrantId, discoveryKey, g
 // Mark grotto cleared (status + completedAt) and update map discovery -
 async function markGrottoCleared(grotto) {
     if (!grotto) return;
-    if (EXPLORATION_TESTING_MODE) return; // No persist in testing mode
     grotto.status = "cleared";
     grotto.completedAt = new Date();
     grotto.markModified?.("status");

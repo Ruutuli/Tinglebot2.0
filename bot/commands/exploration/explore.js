@@ -1010,7 +1010,7 @@ const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto"
 // ------------------- pushDiscoveryToMap ------------------
 // Add discovery to Square.quadrants[].discoveries for map display
 async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) {
- if (EXPLORATION_TESTING_MODE) return;
+ if (EXPLORATION_TESTING_MODE && outcomeType !== "grotto") return; // allow grotto creation in testing
  if (party.status !== "started") return; // Do not update map when expedition is over
  const squareId = (party.square && String(party.square).trim()) || "";
  const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
@@ -1037,7 +1037,7 @@ async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) 
 // ------------------- updateDiscoveryName ------------------
 // Set name on an existing discovery (e.g. grotto when cleansed on revisit)
 async function updateDiscoveryName(squareId, quadrantId, discoveryKey, name, options = {}) {
- if (EXPLORATION_TESTING_MODE || !squareId || !quadrantId || !discoveryKey || !name) return;
+ if (!squareId || !quadrantId || !discoveryKey || !name) return;
  if (options.party && options.party.status !== "started") return; // Do not update map when expedition is over
  await Square.updateOne(
   { squareId },
@@ -1110,22 +1110,6 @@ async function partyHasLensOfTruth(party) {
 // ------------------- handleGrottoCleanse ------------------
 // Plume + 1 stamina; create Grotto, roll trial; blessing = immediate Spirit Orbs
 async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextCharacter, ruinRestRecovered) {
- if (EXPLORATION_TESTING_MODE) {
-  const freshParty = await Party.findActiveByPartyId(expeditionId);
-  if (freshParty) {
-   pushProgressLog(freshParty, freshParty.characters[characterIndex]?.name || "Party", "grotto", `Found a grotto in ${location} (testing mode — skipped).`, undefined, undefined, new Date());
-   freshParty.currentTurn = (freshParty.currentTurn + 1) % (freshParty.characters?.length || 1);
-   // No persist in testing mode
-  }
-  const skipEmbed = new EmbedBuilder()
-   .setTitle("🗺️ **Expedition: Grotto found (testing — skipped)**")
-   .setColor(getExploreOutcomeColor("grotto_skipped", regionColors[party.region] || "#00ff99"))
-   .setDescription(`Found a grotto in **${location}**.\n\n⚠️ **Testing mode:** Grottos are not created or persisted. Continue with </explore roll>.`)
-   .setImage(getExploreMapImageUrl(party, { highlight: true }));
-  addExplorationStandardFields(skipEmbed, { party: freshParty || party, expeditionId, location, nextCharacter: (freshParty ? freshParty.characters[freshParty.currentTurn] : null) ?? nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant) });
-  await msg.edit({ embeds: [skipEmbed], components: [disabledRow] }).catch(() => {});
-  return;
- }
  const freshParty = await Party.findActiveByPartyId(expeditionId);
  if (!freshParty) {
   logger.warn("EXPLORE", `[explore.js]⚠️ Expedition not found: id=${expeditionId}`);
@@ -1252,12 +1236,10 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
 
  if (trialType === "blessing") {
   for (const slot of freshParty.characters) {
-   if (!EXPLORATION_TESTING_MODE) {
-    try {
-     await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
-    } catch (err) {
-     logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
-    }
+   try {
+    await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
+   } catch (err) {
+    logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
    }
   }
   await markGrottoCleared(grottoDoc);
@@ -1905,12 +1887,10 @@ module.exports = {
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === true && !grotto.completedAt) {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       if (!EXPLORATION_TESTING_MODE) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
-        }
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
        }
       }
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -1985,7 +1965,7 @@ module.exports = {
        grotto.testOfPowerState = grotto.testOfPowerState || {};
        grotto.testOfPowerState.raidStarted = true;
        grotto.testOfPowerState.raidId = raidResult.raidId;
-       if (!EXPLORATION_TESTING_MODE) await grotto.save();
+       await grotto.save();
        const embedStarted = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power — Raid Started**")
         .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
@@ -2121,7 +2101,7 @@ module.exports = {
 
      if (roll < failThreshold) {
       grotto.targetPracticeState.failed = true;
-      if (!EXPLORATION_TESTING_MODE) await grotto.save();
+      await grotto.save();
       pushProgressLog(party, character.name, "grotto_target_fail", `Target Practice: ${character.name} failed the roll. Party may return later.`, undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getFailOutcome();
@@ -2187,12 +2167,10 @@ module.exports = {
      if (newSuccesses >= TARGET_SUCCESSES) {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       if (!EXPLORATION_TESTING_MODE) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
-        }
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
        }
       }
       pushProgressLog(party, character.name, "grotto_target_success", `Target Practice completed. Each party member received a Spirit Orb.`, undefined, undefined, new Date());
@@ -2217,7 +2195,7 @@ module.exports = {
      });
       return interaction.editReply({ embeds: [embed] });
      }
-     if (!EXPLORATION_TESTING_MODE) await grotto.save();
+     await grotto.save();
      const nextIdx = turnIndex % party.characters.length;
      const nextChar = party.characters[nextIdx];
      const outcome = getSuccessOutcome();
@@ -2364,18 +2342,16 @@ module.exports = {
      if (checkResult.approved) {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       if (!EXPLORATION_TESTING_MODE) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
-        }
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
        }
       }
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
      }
      pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${displayItems.join(", ")}. ${checkResult.approved ? "Approved." : "Denied."}`, undefined, undefined, new Date());
-     if (!EXPLORATION_TESTING_MODE) await grotto.save();
+     await grotto.save();
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      if (checkResult.approved) {
       const flavor = getRandomPuzzleSuccessFlavor();
@@ -2444,13 +2420,13 @@ module.exports = {
       grotto.mazeState.openedChests = [];
       grotto.mazeState.triggeredTraps = [];
       grotto.mazeState.usedScryingWalls = [];
-      if (!EXPLORATION_TESTING_MODE) await grotto.save();
+      await grotto.save();
       hasLayout = true;
       layoutJustCreated = true;
       postGrottoMazeModVersion(interaction.client, grotto.mazeState.layout, grotto.mazeState.currentNode, grotto.name || "Grotto", expeditionId, location, grotto.mazeState);
      } else if (!grotto.mazeState.visitedCells?.length && grotto.mazeState.currentNode) {
       grotto.mazeState.visitedCells = [grotto.mazeState.currentNode];
-      if (!EXPLORATION_TESTING_MODE) await grotto.save();
+      await grotto.save();
      }
      // Lens of Truth bypass: offer skip on first entry (layout just created)
      if (layoutJustCreated && (await partyHasLensOfTruth(party))) {
@@ -2485,12 +2461,10 @@ module.exports = {
          await markGrottoCleared(freshGrotto);
          for (const slot of freshParty.characters) {
           if (slot._id) {
-           if (!EXPLORATION_TESTING_MODE) {
-            try {
-             await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
-            } catch (err) {
-             logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze bypass Spirit Orb: ${err?.message || err}`);
-            }
+           try {
+            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
+           } catch (err) {
+            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze bypass Spirit Orb: ${err?.message || err}`);
            }
           }
          }
@@ -2622,18 +2596,16 @@ module.exports = {
         visited.add(newKey);
         grotto.mazeState.visitedCells = [...visited];
         grotto.mazeState.steps = [...steps, newKey];
-        if (!EXPLORATION_TESTING_MODE) await grotto.save();
+        await grotto.save();
         const destCell = getPathCellAt(pathCells, beyond.x, beyond.y);
         const destType = destCell?.type || 'path';
         if (destType === 'exit') {
          await markGrottoCleared(grotto);
          for (const slot of party.characters) {
-          if (!EXPLORATION_TESTING_MODE) {
-           try {
-            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-           } catch (err) {
-            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
-           }
+          try {
+           await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+          } catch (err) {
+           logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
           }
          }
          pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -2663,7 +2635,7 @@ module.exports = {
          return interaction.editReply({ embeds: [exitEmbed], files: mazeFiles });
         }
        }
-       if (!EXPLORATION_TESTING_MODE) await grotto.save();
+       await grotto.save();
        try {
         const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
         mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
@@ -2678,7 +2650,7 @@ module.exports = {
         grotto.mazeState.facing = backResult.facing;
         const steps = grotto.mazeState.steps || [];
         grotto.mazeState.steps = steps.slice(0, Math.max(0, steps.length - 1));
-        if (!EXPLORATION_TESTING_MODE) await grotto.save();
+        await grotto.save();
         try {
          const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
          mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
@@ -2811,12 +2783,10 @@ module.exports = {
      if (cellType === 'exit') {
       await markGrottoCleared(grotto);
       for (const slot of party.characters) {
-       if (!EXPLORATION_TESTING_MODE) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
-        }
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
        }
       }
       pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
@@ -2904,7 +2874,7 @@ module.exports = {
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
       if (mazeFiles.length) trapEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-      if (!EXPLORATION_TESTING_MODE) await grotto.save();
+      await grotto.save();
       return interaction.editReply({ embeds: [trapEmbed], files: mazeFiles });
       }
      }
@@ -2913,12 +2883,10 @@ module.exports = {
       const opened = grotto.mazeState.openedChests || [];
       if (!opened.includes(nextKey)) {
        grotto.mazeState.openedChests = [...opened, nextKey];
-       if (!EXPLORATION_TESTING_MODE) {
-        try {
-         await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest: ${err?.message || err}`);
-        }
+       try {
+        await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest: ${err?.message || err}`);
        }
        if (!usePartyOnlyForHeartsStamina(party)) {
         const charDoc = await Character.findById(character._id);
@@ -2927,7 +2895,7 @@ module.exports = {
          if (idx !== -1) party.characters[idx] = { ...party.characters[idx], ...charDoc.toObject?.() || charDoc };
         }
        }
-       if (!EXPLORATION_TESTING_MODE) await grotto.save();
+       await grotto.save();
        pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} opened a maze chest (moved ${displayDir}) and received a Spirit Orb.`, { itemName: "Spirit Orb", emoji: "💫" }, undefined, new Date());
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
        const chestDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
@@ -2982,12 +2950,12 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
 activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
        if (mazeFiles.length) redEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-       if (!EXPLORATION_TESTING_MODE) await grotto.save();
+       await grotto.save();
        return interaction.editReply({ embeds: [redEmbed], files: mazeFiles });
       }
      }
 
-     if (!EXPLORATION_TESTING_MODE) await grotto.save();
+     await grotto.save();
      const moveDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
      const moveEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Maze**")
@@ -3223,18 +3191,6 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
     }
 
     if (discoveryType === "grotto") {
-     if (EXPLORATION_TESTING_MODE) {
-      pushProgressLog(party, character.name, "grotto_revisit", `Revisited grotto at ${location} (testing mode — skipped).`, undefined, undefined, new Date());
-      party.currentTurn = (party.currentTurn + 1) % (party.characters?.length || 1);
-      // No persist in testing mode
-      const skipEmbed = new EmbedBuilder()
-       .setTitle("🗺️ **Expedition: Grotto revisit (testing — skipped)**")
-       .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
-       .setDescription(`Revisiting grotto at **${location}**.\n\n⚠️ **Testing mode:** Grottos are not created or persisted. Continue with </explore roll>.`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
-      addExplorationStandardFields(skipEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false });
-      return interaction.editReply({ embeds: [skipEmbed] });
-     }
      const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
      if (grotto) {
       const trialLabel = getTrialLabel(grotto.trialType);
@@ -3349,12 +3305,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
      if (grottoDoc.trialType === "blessing") {
       await markGrottoCleared(grottoDoc);
       for (const slot of party.characters) {
-       if (!EXPLORATION_TESTING_MODE) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
-        }
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
        }
       }
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
