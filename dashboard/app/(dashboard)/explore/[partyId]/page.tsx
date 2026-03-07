@@ -1369,12 +1369,13 @@ export default function ExplorePartyPage() {
             <div className="space-y-1.5">
               {collectedItems.map((g, idx) => {
                 const imgUrl = g.image ? formatItemImageUrl(g.image) : null;
+                const isLegendary = g.itemName?.toLowerCase() === "spirit orb";
                 return (
                   <div
                     key={`${g.itemName}-${idx}`}
-                    className="flex items-center gap-2 rounded-lg border border-[var(--totk-light-green)]/30 bg-[var(--botw-warm-black)]/60 px-2 py-1.5"
+                    className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 ${isLegendary ? "border-amber-400/50 bg-amber-950/30" : "border-[var(--totk-light-green)]/30 bg-[var(--botw-warm-black)]/60"}`}
                   >
-                    <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded border border-[var(--totk-light-green)]/40">
+                    <div className={`h-7 w-7 flex-shrink-0 overflow-hidden rounded border ${isLegendary ? "border-amber-400/50" : "border-[var(--totk-light-green)]/40"}`}>
                       {imgUrl ? (
                         <Image
                           src={imgUrl}
@@ -1390,9 +1391,12 @@ export default function ExplorePartyPage() {
                         </div>
                       )}
                     </div>
-                    <span className="min-w-0 flex-1 truncate text-xs text-[var(--totk-ivory)]">{g.itemName}</span>
+                    <span className={`min-w-0 flex-1 truncate text-xs ${isLegendary ? "font-medium text-amber-200" : "text-[var(--totk-ivory)]"}`}>
+                      {isLegendary && <span className="mr-1 text-[10px] text-amber-400/90" title="Legendary">✦</span>}
+                      {g.itemName}
+                    </span>
                     {g.quantity > 1 && (
-                      <span className="flex-shrink-0 rounded bg-[var(--totk-light-green)]/20 px-1.5 py-0.5 text-[10px] font-medium text-[var(--totk-light-green)]">
+                      <span className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${isLegendary ? "bg-amber-500/20 text-amber-300" : "bg-[var(--totk-light-green)]/20 text-[var(--totk-light-green)]"}`}>
                         ×{g.quantity}
                       </span>
                     )}
