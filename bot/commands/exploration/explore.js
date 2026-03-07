@@ -3122,16 +3122,16 @@ module.exports = {
       const selectedItem = weightedList.length > 0
        ? weightedList[Math.floor(Math.random() * weightedList.length)]
        : availableItems.length > 0 ? availableItems[Math.floor(Math.random() * availableItems.length)] : null;
-      let givenItemName = selectedItem?.itemName ?? "Spirit Orb";
-      let givenEmoji = selectedItem?.emoji ?? "💫";
+      let givenItemName = selectedItem?.itemName ?? "Fairy";
+      let givenEmoji = selectedItem?.emoji ?? "🧚";
       try {
        await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze (corridor)");
       } catch (err) {
        logger.warn("EXPLORE", `[explore.js] Grotto maze corridor gather: ${err?.message || err}`);
        try {
-        await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze (corridor)");
-        givenItemName = "Spirit Orb";
-        givenEmoji = "💫";
+        await addItemInventoryDatabase(character._id, "Fairy", 1, interaction, "Grotto - Maze (corridor)");
+        givenItemName = "Fairy";
+        givenEmoji = "🧚";
        } catch (e) {}
       }
       if (!party.gatheredItems) party.gatheredItems = [];
