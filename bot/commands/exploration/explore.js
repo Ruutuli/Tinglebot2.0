@@ -2395,6 +2395,8 @@ module.exports = {
      if (!grotto || grotto.trialType !== "maze") {
       return interaction.editReply("No Maze grotto at this location for this expedition.");
      }
+     const characterIndex = party.characters.findIndex((c) => c.name === characterName);
+     if (characterIndex === -1) return interaction.editReply("Your character is not part of this expedition.");
      const layout = grotto.mazeState?.layout;
      let hasLayout = layout && layout.pathCells && layout.pathCells.length > 0 && layout.matrix && layout.matrix.length > 0;
      let layoutJustCreated = false;
@@ -2498,6 +2500,8 @@ module.exports = {
         }
         addExplorationStandardFields(enterEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: mazeCmd });
         await i.editReply({ embeds: [enterEmbed], components: [disabledRow], files: enterFiles }).catch(() => {});
+        const firstUp = party.characters[party.currentTurn] ?? null;
+        if (getExplorationNextTurnContent(firstUp)) await i.followUp({ content: getExplorationNextTurnContent(firstUp) }).catch(() => {});
        }
        bypassCollector.stop();
       });
@@ -2513,6 +2517,16 @@ module.exports = {
       return;
      }
      const action = interaction.options.getString("action");
+     if (action && party.currentTurn !== characterIndex) {
+      const nextChar = party.characters[party.currentTurn];
+      const notYourTurnEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Grotto: Maze**")
+       .setColor(getMazeEmbedColor("blocked", regionColors[party.region]))
+       .setDescription(`It's not your turn. **${nextChar?.name || "Next"}** is up. Use </explore grotto maze:${mazeCmdId}> when it's your turn.`)
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+      addExplorationStandardFields(notYourTurnEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>` });
+      return interaction.editReply({ embeds: [notYourTurnEmbed] });
+     }
      const matrix = grotto.mazeState.layout?.matrix || [];
      const pathCells = grotto.mazeState.layout?.pathCells || [];
      const currentNode = grotto.mazeState.currentNode || '';
@@ -2605,16 +2619,19 @@ module.exports = {
           try {
            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
           } catch (err) {
-           logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
           }
          }
          pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
+         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+         party.markModified("currentTurn");
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
          try {
           const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "mod", currentNode: newKey, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
           mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
           mazeImg = "attachment://maze.png";
          } catch (e) {}
+         const nextCharExit = party.characters[party.currentTurn] ?? null;
          const exitDesc = (mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + outcome.flavor + "\n\n**Exit!**\n\n";
          const exitEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Exit!**")
@@ -2625,14 +2642,16 @@ module.exports = {
           party,
           expeditionId,
           location,
-          nextCharacter: party.characters[party.currentTurn] ?? null,
+          nextCharacter: nextCharExit,
           showNextAndCommands: true,
           showRestSecureMove: false,
           hasActiveGrotto: false,
           hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
          });
          if (mazeFiles.length) exitEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-         return interaction.editReply({ embeds: [exitEmbed], files: mazeFiles });
+         await interaction.editReply({ embeds: [exitEmbed], files: mazeFiles });
+         if (getExplorationNextTurnContent(nextCharExit)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharExit) }).catch(() => {});
+         return;
         }
        }
        await grotto.save();
@@ -2678,7 +2697,10 @@ module.exports = {
         } else {
          wallRaidError = raidResult?.error || "Raid could not be started.";
          pushProgressLog(party, character.name, "grotto_maze_scrying", `Song of Scrying: ${outcome.battle.monsterLabel} appeared but raid could not start.`, undefined, undefined, new Date());
+         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+         party.markModified("currentTurn");
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+         const nextCharErr = party.characters[party.currentTurn] ?? null;
          const mazeEmbedErr = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Song of Scrying**")
           .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
@@ -2688,14 +2710,16 @@ module.exports = {
           party,
           expeditionId,
           location,
-          nextCharacter: party.characters[party.currentTurn] ?? null,
+          nextCharacter: nextCharErr,
           showNextAndCommands: true,
           showRestSecureMove: false,
           hasActiveGrotto: true,
           activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         });
          if (mazeFiles.length) mazeEmbedErr.setFooter({ text: GROTTO_MAZE_LEGEND });
-         return interaction.editReply({ embeds: [mazeEmbedErr], files: mazeFiles });
+         await interaction.editReply({ embeds: [mazeEmbedErr], files: mazeFiles });
+         if (getExplorationNextTurnContent(nextCharErr)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharErr) }).catch(() => {});
+         return;
         }
        } else {
         wallRaidError = "Construct not found; continue exploring.";
@@ -2709,6 +2733,12 @@ module.exports = {
        pushProgressLog(party, character.name, "grotto_maze_scrying", scryingLogMsg, undefined, (outcome.heartsLost > 0 || outcome.staminaCost > 0) ? { heartsLost: outcome.heartsLost || undefined, staminaLost: outcome.staminaCost || undefined } : undefined, new Date());
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       }
+      if (!raidIdForEmbed) {
+       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+       party.markModified("currentTurn");
+       await party.save();
+      }
+      const nextCharScrying = party.characters[party.currentTurn] ?? null;
       const mazeEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Song of Scrying**")
        .setColor(getMazeEmbedColor(outcome.type, regionColors[party.region]))
@@ -2721,14 +2751,16 @@ module.exports = {
        party,
        expeditionId,
        location,
-       nextCharacter: party.characters[party.currentTurn] ?? null,
+       nextCharacter: nextCharScrying,
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
       if (mazeFiles.length) mazeEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-      return interaction.editReply({ embeds: [mazeEmbed], files: mazeFiles });
+      await interaction.editReply({ embeds: [mazeEmbed], files: mazeFiles });
+      if (getExplorationNextTurnContent(nextCharScrying)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharScrying) }).catch(() => {});
+      return;
      }
 
      const dir = action;
@@ -2790,12 +2822,15 @@ module.exports = {
        }
       }
       pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
+      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      party.markModified("currentTurn");
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       try {
        const exitMazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "mod", currentNode: nextKey, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
        mazeFiles = [new AttachmentBuilder(exitMazeBuf, { name: "maze.png" })];
        mazeImg = "attachment://maze.png";
       } catch (e) {}
+      const nextCharExitMove = party.characters[party.currentTurn] ?? null;
       const exitDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
       const exitEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Exit!**")
@@ -2806,14 +2841,16 @@ module.exports = {
        party,
        expeditionId,
        location,
-       nextCharacter: party.characters[party.currentTurn] ?? null,
+       nextCharacter: nextCharExitMove,
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: false,
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
       });
       if (mazeFiles.length) exitEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-      return interaction.editReply({ embeds: [exitEmbed], files: mazeFiles });
+      await interaction.editReply({ embeds: [exitEmbed], files: mazeFiles });
+      if (getExplorationNextTurnContent(nextCharExitMove)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharExitMove) }).catch(() => {});
+      return;
      }
 
      if (cellType === 'trap') {
@@ -2856,7 +2893,11 @@ module.exports = {
       if (staminaCost > 0) costParts.push(`−${staminaCost}🟩 stamina`);
       const costLine = costParts.length > 0 ? `\n\n**Cost:** ${costParts.join(", ")}` : "";
       pushProgressLog(party, character.name, "grotto_maze_trap", `Maze trap triggered (moved ${displayDir}): ${trapOutcome.flavor?.split(".")[0] || "trap"}.`, undefined, heartsLost > 0 || staminaCost > 0 ? { heartsLost: heartsLost || undefined, staminaLost: staminaCost || undefined } : undefined, new Date());
+      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+      party.markModified("currentTurn");
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+      await grotto.save();
+      const nextCharTrap = party.characters[party.currentTurn] ?? null;
       const trapDesc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**Party moved ${displayDir} and triggered a trap!** (Roll: ${trapRoll})\n\n${trapOutcome.flavor}${costLine}`;
       const trapEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Trap!**")
@@ -2867,15 +2908,16 @@ module.exports = {
        party,
        expeditionId,
        location,
-       nextCharacter: party.characters[party.currentTurn] ?? null,
+       nextCharacter: nextCharTrap,
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
       if (mazeFiles.length) trapEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-      await grotto.save();
-      return interaction.editReply({ embeds: [trapEmbed], files: mazeFiles });
+      await interaction.editReply({ embeds: [trapEmbed], files: mazeFiles });
+      if (getExplorationNextTurnContent(nextCharTrap)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharTrap) }).catch(() => {});
+      return;
       }
      }
 
@@ -2897,7 +2939,10 @@ module.exports = {
        }
        await grotto.save();
        pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} opened a maze chest (moved ${displayDir}) and received a Spirit Orb.`, { itemName: "Spirit Orb", emoji: "💫" }, undefined, new Date());
+       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+       party.markModified("currentTurn");
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+       const nextCharChest = party.characters[party.currentTurn] ?? null;
        const chestDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
        const chestEmbed = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Maze — 📦 Treasure Chest!**")
@@ -2912,14 +2957,16 @@ module.exports = {
         party,
         expeditionId,
         location,
-        nextCharacter: party.characters[party.currentTurn] ?? null,
+        nextCharacter: nextCharChest,
         showNextAndCommands: true,
         showRestSecureMove: false,
         hasActiveGrotto: true,
-activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
        if (mazeFiles.length) chestEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-       return interaction.editReply({ embeds: [chestEmbed], files: mazeFiles });
+       await interaction.editReply({ embeds: [chestEmbed], files: mazeFiles });
+       if (getExplorationNextTurnContent(nextCharChest)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharChest) }).catch(() => {});
+       return;
       }
      }
 
@@ -2927,7 +2974,11 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       const usedWalls = grotto.mazeState.usedScryingWalls || [];
       if (!usedWalls.includes(nextKey)) {
        pushProgressLog(party, character.name, "grotto_maze_scrying_wall", `Party encountered a Scrying Wall (moved ${displayDir}). Use Song of Scrying to interact.`, undefined, undefined, new Date());
+       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+       party.markModified("currentTurn");
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+       await grotto.save();
+       const nextCharRed = party.characters[party.currentTurn] ?? null;
        const redDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
        const redEmbed = new EmbedBuilder()
         .setTitle(`🗺️ **Grotto: Maze — Scrying Wall**`)
@@ -2943,19 +2994,24 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         party,
         expeditionId,
         location,
-        nextCharacter: party.characters[party.currentTurn] ?? null,
+        nextCharacter: nextCharRed,
         showNextAndCommands: true,
         showRestSecureMove: false,
         hasActiveGrotto: true,
-activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
        if (mazeFiles.length) redEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-       await grotto.save();
-       return interaction.editReply({ embeds: [redEmbed], files: mazeFiles });
+       await interaction.editReply({ embeds: [redEmbed], files: mazeFiles });
+       if (getExplorationNextTurnContent(nextCharRed)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharRed) }).catch(() => {});
+       return;
       }
      }
 
      await grotto.save();
+     party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+     party.markModified("currentTurn");
+     await party.save();
+     const nextCharMove = party.characters[party.currentTurn] ?? null;
      const moveDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
      const moveEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Maze**")
@@ -2966,14 +3022,16 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        party,
        expeditionId,
        location,
-       nextCharacter: party.characters[party.currentTurn] ?? null,
+       nextCharacter: nextCharMove,
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       });
      if (mazeFiles.length) moveEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
-     return interaction.editReply({ embeds: [moveEmbed], files: mazeFiles });
+     await interaction.editReply({ embeds: [moveEmbed], files: mazeFiles });
+     if (getExplorationNextTurnContent(nextCharMove)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharMove) }).catch(() => {});
+     return;
     }
 
     if (subcommand === "travel") {

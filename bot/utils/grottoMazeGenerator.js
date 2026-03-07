@@ -337,6 +337,27 @@ function generateGrottoMaze(config = {}) {
   removeMazeWalls(matrix, removeWalls);
 
   let pathCells = collectPathCells(matrix, entryNodes);
+
+  // Ensure exit exists: the intended end cell may be a wall in the generated matrix.
+  // If so, assign the path cell closest to the intended end as the exit.
+  const hasExit = pathCells.some((c) => c.type === "exit");
+  if (!hasExit && pathCells.length > 0) {
+    const endNode = getEntryNode(entryNodes, "end");
+    if (endNode) {
+      let closest = null;
+      let bestDist = Infinity;
+      for (const c of pathCells) {
+        if (c.type === "start") continue;
+        const d = Math.abs(c.x - endNode.x) + Math.abs(c.y - endNode.y);
+        if (d < bestDist) {
+          bestDist = d;
+          closest = c;
+        }
+      }
+      if (closest) closest.type = "exit";
+    }
+  }
+
   pathCells = assignGrottoCellTypes(pathCells, {
     numTraps: config.numTraps,
     numChests: config.numChests,
