@@ -45,7 +45,7 @@ const GrottoSchema = new Schema({
   },
   mazeState: {
     currentNode: { type: String, default: '' }, // 'x,y' matrix coords or legacy id
-    steps: [{ direction: String, at: Date }],
+    steps: [Schema.Types.Mixed], // ordered cell keys 'x,y' (legacy docs may have { direction, at })
     visitedCells: [{ type: String }], // 'x,y' keys of cells the party has been to (stays revealed)
     facing: { type: String, enum: ['n', 's', 'e', 'w'], default: 's' },
     layout: {

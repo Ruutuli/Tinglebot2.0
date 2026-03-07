@@ -2801,7 +2801,7 @@ module.exports = {
      grotto.mazeState.currentNode = nextKey;
      grotto.mazeState.facing = nextResult.facing;
      if (!grotto.mazeState.steps) grotto.mazeState.steps = [];
-     grotto.mazeState.steps.push({ direction: dir, at: new Date() });
+     grotto.mazeState.steps.push(nextKey);
      if (!grotto.mazeState.visitedCells) grotto.mazeState.visitedCells = [];
      if (!grotto.mazeState.visitedCells.includes(nextKey)) grotto.mazeState.visitedCells.push(nextKey);
      try {
