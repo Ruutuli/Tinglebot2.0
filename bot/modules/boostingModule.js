@@ -43,7 +43,7 @@ const boostingEffects = {
   },
   Tokens: {
    name: "Fortunate Exchange",
-   description: "Trade forecasts ensure 10% extra tokens whenever you sell your wares to village shops.",
+   description: "Trade forecasts ensure 15% extra tokens whenever you sell your wares to village shops.",
   },
   Traveling: {
    name: "Foresight Detour",
@@ -78,7 +78,7 @@ const boostingEffects = {
   },
   Looting: {
    name: "Combat Insight",
-   description: "Combat notes bump the loot roll by 20%, reflecting studied weak points and clever timing.",
+   description: "Combat notes bump the loot roll by up to 20%, reflecting studied weak points and clever timing.",
   },
   // Mounts: {
   //  name: "Weather Wisdom",
@@ -243,7 +243,7 @@ const boostingEffects = {
 
 const BOOST_MULTIPLIERS = {
  FORTUNE_TELLER_CRAFTING: 1.2,
- FORTUNE_TELLER_TOKENS: 1.1,
+ FORTUNE_TELLER_TOKENS: 1.15, // 15% extra on shop sales (differentiated from Priest 10% sell + 10% buy)
  FORTUNE_TELLER_HEALING: 0.5,
  FORTUNE_TELLER_MOUNT_BONUS: 30,
  FORTUNE_TELLER_STEAL_BONUS: 20,
@@ -694,9 +694,8 @@ function applyTeacherTravelingBoost(roadGathers) {
  if (roadGathers && roadGathers.length >= 2) {
   const firstRoll = roadGathers[0];
   const secondRoll = roadGathers[1];
-
-  const firstRarity = firstRoll.rarity || firstRoll.itemRarity || 0;
-  const secondRarity = secondRoll.rarity || secondRoll.itemRarity || 0;
+  const firstRarity = Math.max(0, Number(firstRoll.rarity ?? firstRoll.itemRarity ?? 0) || 0);
+  const secondRarity = Math.max(0, Number(secondRoll.rarity ?? secondRoll.itemRarity ?? 0) || 0);
   // Tie-break: keep first so we don't always keep the second when rarities are equal
   return firstRarity >= secondRarity ? firstRoll : secondRoll;
  }

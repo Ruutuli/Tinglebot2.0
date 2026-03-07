@@ -157,7 +157,7 @@ async function fulfillTokenBoost(characterOrName, client) {
 
   try {
     const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
-    if (activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens') {
+    if (activeBoost && activeBoost.status === 'accepted' && (activeBoost.category || '').toLowerCase() === 'tokens') {
       activeBoost.status = 'fulfilled';
       activeBoost.fulfilledAt = Date.now();
       await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
@@ -646,7 +646,7 @@ module.exports = {
           ) {
             // Verify the boost category is 'Tokens' (Research Stipend) before applying
             const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-            const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens';
+            const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && (activeBoost.category || '').toLowerCase() === 'tokens';
             
             if (isTokensBoost) {
               const boostedTokens = applyScholarTokensBoost(finalTokenAmount);

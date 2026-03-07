@@ -289,6 +289,21 @@ async function handleSelectMenuInteraction(interaction) {
       /** Character names that had Tokens boost applied — cleared on confirm so boost is one-use only */
       const boostFulfillmentTargets = [];
 
+      // Restore boostedBy from TempData when missing (e.g. so Scholar Research Stipend is found for writing)
+      for (const character of focusCharacters) {
+        if (!character.boostedBy) {
+          const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
+          if (activeBoost && activeBoost.status === 'accepted' && (activeBoost.category || '').toLowerCase() === 'tokens') {
+            character.boostedBy = activeBoost.boostingCharacter;
+            try {
+              await character.save();
+            } catch (e) {
+              console.error(`[selectMenuHandler.js]: Failed to save restored boostedBy for ${character.name}:`, e);
+            }
+          }
+        }
+      }
+
       for (const character of focusCharacters) {
         if (!character.boostedBy) continue;
 
@@ -329,7 +344,7 @@ async function handleSelectMenuInteraction(interaction) {
         ) {
           // Verify the boost category is 'Tokens' (Research Stipend) before applying
           const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-          const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens';
+          const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && (activeBoost.category || '').toLowerCase() === 'tokens';
           
           if (isTokensBoost) {
             const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
@@ -403,7 +418,7 @@ async function handleSelectMenuInteraction(interaction) {
             ) {
               // Verify the boost category is 'Tokens' (Research Stipend) before applying
               const activeBoostForUser = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-              const isTokensBoostForUser = activeBoostForUser && activeBoostForUser.status === 'accepted' && activeBoostForUser.category === 'Tokens';
+              const isTokensBoostForUser = activeBoostForUser && activeBoostForUser.status === 'accepted' && (activeBoostForUser.category || '').toLowerCase() === 'tokens';
               
               if (isTokensBoostForUser) {
                 const boostedTokens = applyScholarTokensBoost(finalTokenAmount);

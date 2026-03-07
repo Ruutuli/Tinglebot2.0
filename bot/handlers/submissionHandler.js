@@ -299,7 +299,7 @@ async function handleSubmissionCompletion(interaction) {
       ) {
         // Verify the boost category is 'Tokens' (Research Stipend) before applying
         const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-        const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && activeBoost.category === 'Tokens';
+        const isTokensBoost = activeBoost && activeBoost.status === 'accepted' && (activeBoost.category || '').toLowerCase() === 'tokens';
         
         if (isTokensBoost) {
           const scholarEffectAlreadyLogged = boostEffects.some(effect =>
@@ -416,7 +416,7 @@ async function handleSubmissionCompletion(interaction) {
           ) {
             // Verify the boost category is 'Tokens' (Research Stipend) before applying
             const activeBoostForUser = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-            const isTokensBoostForUser = activeBoostForUser && activeBoostForUser.status === 'accepted' && activeBoostForUser.category === 'Tokens';
+            const isTokensBoostForUser = activeBoostForUser && activeBoostForUser.status === 'accepted' && (activeBoostForUser.category || '').toLowerCase() === 'tokens';
             
             if (isTokensBoostForUser) {
               const scholarEffectAlreadyLogged = boostEffects.some(effect =>

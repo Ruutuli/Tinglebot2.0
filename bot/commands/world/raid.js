@@ -324,8 +324,8 @@ module.exports = {
         });
       }
 
-      // Check if character is in the same village as the raid
-      if (character.currentVillage.toLowerCase() !== raidData.village.toLowerCase()) {
+      // Check if character is in the same village as the raid (skip for expedition raids — party is in the region, joinRaid enforces expedition membership)
+      if (!raidData.expeditionId && character.currentVillage.toLowerCase() !== raidData.village.toLowerCase()) {
         const villageEmojis = {
           rudania: '<:rudania:899492917452890142>',
           inariko: '<:inariko:899493009073274920>',

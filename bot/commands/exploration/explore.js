@@ -3658,6 +3658,8 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       return outcome;
      }
      let outcomeType = rollOutcome();
+     // TESTING: force grotto every roll so grottos appear immediately (nothing else)
+     if (EXPLORATION_TESTING_MODE) outcomeType = "grotto";
      const currentSquareNorm = normalizeSquareId(party.square);
      const specialCount = countSpecialEventsInSquare(party, party.square);
      const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
@@ -3668,6 +3670,7 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       if (found && normalizeSquareId(found.squareId) === currentSquareNorm) mapSquareForGrotto = found;
      }
      for (;;) {
+      if (EXPLORATION_TESTING_MODE) break; // testing: grotto only, skip reroll/fallback
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
        const reason = "explored twice in a row at this location (blocked by rule)";
@@ -4582,9 +4585,13 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
            });
           }
          } else {
-          // Ruins exploration complete (non-chest outcomes) - advance turn now
+          // Ruins exploration complete (non-chest outcomes) - advance turn only if no one else took a turn (e.g. item) in between
           const ruinsFinalParty = await Party.findActiveByPartyId(expeditionId);
-          if (ruinsFinalParty && ruinsFinalParty.characters?.length > 0) {
+          const ruinsClickerParts = i.customId.split("|");
+          const ruinsClickerIndex = ruinsClickerParts.length >= 3 && /^\d+$/.test(ruinsClickerParts[2])
+            ? Math.max(0, Math.min(parseInt(ruinsClickerParts[2], 10), (ruinsFinalParty?.characters?.length ?? 1) - 1))
+            : -1;
+          if (ruinsFinalParty && ruinsFinalParty.characters?.length > 0 && ruinsClickerIndex >= 0 && ruinsClickerIndex === ruinsFinalParty.currentTurn) {
            ruinsFinalParty.currentTurn = (ruinsFinalParty.currentTurn + 1) % ruinsFinalParty.characters.length;
            await ruinsFinalParty.save();
           }
@@ -6949,12 +6956,10 @@ activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
       actionCost: { staminaCost: retreatPayResult.staminaPaid ?? 0, heartsCost: retreatPayResult.heartsPaid ?? 0 },
      });
-     await interaction.editReply({ embeds: [embed] });
-     // Ping next player after successful retreat
-     const nextTurnContent = getExplorationNextTurnContent(nextCharacter);
-     if (nextTurnContent) {
-      await interaction.followUp({ content: nextTurnContent });
-     }
+     await interaction.editReply({
+      content: getExplorationNextTurnContent(nextCharacter) ?? undefined,
+      embeds: [embed],
+     });
      return;
     }
 

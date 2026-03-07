@@ -761,8 +761,18 @@ module.exports = {
                 // Entertainer boosts augment (not replace) the filtered pool—fallback to the
                 // original selection if no dedicated bonus items are configured.
                 let entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
-                  ? entertainerItems
-                  : availableForBonus;
+                  ? entertainerItems.filter((item) => item.entertainerItems === true)
+                  : availableForBonus.filter((item) => item.entertainerItems === true);
+
+                // Region-only fallback: if no job+region entertainer items, use any gatherable entertainer item in this region
+                if (entertainerBonusPool.length === 0 && regionKeyForBonus) {
+                  const regionOnlyEntertainer = itemsForBonus.filter(
+                    (item) => item.gathering === true && item.entertainerItems === true && item[regionKeyForBonus] === true
+                  );
+                  if (regionOnlyEntertainer.length > 0) {
+                    entertainerBonusPool = regionOnlyEntertainer;
+                  }
+                }
 
                 // Defensive filter: Remove weapons from bonus pool
                 entertainerBonusPool = entertainerBonusPool.filter((item) => {
@@ -1119,12 +1129,22 @@ module.exports = {
         }
         
         // Handle Entertainer bonus item: only items with entertainerItems === true
+        // First use job+region pool; if empty, fall back to region-only (any job) so more jobs get a bonus
         let entertainerBonusUnavailable = false;
         if (isEntertainerBoost) {
           const entertainerItems = await applyGatheringBoost(character.name, availableItems);
           let entertainerBonusPool = Array.isArray(entertainerItems) && entertainerItems.length > 0
             ? entertainerItems.filter((item) => item.entertainerItems === true)
             : availableItems.filter((item) => item.entertainerItems === true);
+          if (entertainerBonusPool.length === 0 && regionKey) {
+            const regionOnlyEntertainer = items.filter(
+              (item) => item.gathering === true && item.entertainerItems === true && item[regionKey] === true
+            );
+            if (regionOnlyEntertainer.length > 0) {
+              entertainerBonusPool = regionOnlyEntertainer;
+              logger.info('GATHER', `Entertainer bonus: using region-only pool (${regionOnlyEntertainer.length} items) for ${job} in ${region}`);
+            }
+          }
 
           if (entertainerBonusPool.length > 0) {
             // Select a random entertainer item as bonus

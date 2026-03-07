@@ -1008,7 +1008,7 @@ const BOOST_FLAVOR_MESSAGES = {
       "🔍 Shared effort knocks up to 3 stamina off your personal cost while the Teacher covers the gap."
     ],
     Looting: [
-      "🎓 Combat Insight adds a studied flourish—loot rolls climb by 20% after the lecture.",
+      "🎓 Combat Insight adds a studied flourish—loot rolls climb by up to 20% after the lecture.",
       "📚 Weak-point diagrams pay off, nudging the loot check up by a solid fifth.",
       "🔍 Tactical notes sharpen your timing so the loot value surges by twenty percent."
     ],
@@ -1182,9 +1182,9 @@ const BOOST_FLAVOR_MESSAGES = {
       "🌟 The seer times your grab, granting +20% success chance while respecting the natural ceiling."
     ],
     Tokens: [
-      "🔮 Fortunate Exchange sweetens every sale by 10% when you trade with village shops.",
+      "🔮 Fortunate Exchange sweetens every sale by 15% when you trade with village shops.",
       "✨ Market omens ensure wares fetch ten percent more tokens at the counter.",
-      "🌟 The teller's haggling script nets a flat +10% token bonus on sales."
+      "🌟 The teller's haggling script nets a flat +15% token bonus on sales."
     ],
     Traveling: [
       "🔮 Foresight Detour charts a safe route—weather roadblocks can't halt the party today.",

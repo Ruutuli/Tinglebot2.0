@@ -448,8 +448,11 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       const weighted = createWeightedItemList(available, 50, jobForWeighting);
       const rollRandomItem = () => {
         const baseItem = weighted[Math.floor(Math.random() * weighted.length)];
+        const rarity = Number(baseItem.itemRarity) ?? Number(baseItem.rarity) ?? 0;
         return {
-          ...baseItem
+          ...baseItem,
+          rarity,
+          itemRarity: baseItem.itemRarity ?? rarity
         };
       };
 

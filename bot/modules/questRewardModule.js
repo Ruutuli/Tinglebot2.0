@@ -702,6 +702,7 @@ async function buildQuestRewardContext(quest, participants = []) {
 
 async function detectEntertainerBonus(participants = []) {
     if (!participants.length) {
+        logger.debug('QUEST', '[Entertainer bonus] Skipped: no participants');
         return {
             enabled: false,
             amountPerParticipant: 0,
@@ -717,6 +718,7 @@ async function detectEntertainerBonus(participants = []) {
     });
 
     if (!eligibleParticipants.length) {
+        logger.debug('QUEST', `[Entertainer bonus] Skipped: no eligible participants (${participants.length} total, all failed/disqualified)`);
         return {
             enabled: false,
             amountPerParticipant: 0,
@@ -759,6 +761,7 @@ async function detectEntertainerBonus(participants = []) {
     });
 
     if (!entertainers.length) {
+        logger.debug('QUEST', `[Entertainer bonus] Skipped: no Entertainer in ${eligibleParticipants.length} eligible participants`);
         return {
             enabled: false,
             amountPerParticipant: 0,

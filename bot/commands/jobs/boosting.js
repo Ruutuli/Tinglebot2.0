@@ -62,7 +62,9 @@ const BOOST_CATEGORIES = [
   { name: "Traveling", value: "Traveling" }
 ];
 
-const SONG_OF_STORMS_ENABLED = false; // Set to true to enable Song of Storms
+// Disabled due to timing/weather cycle bugs. Before re-enabling: set to true and verify weather
+// service day-boundary logic and Song of Storms scheduled weather posting work correctly.
+const SONG_OF_STORMS_ENABLED = false;
 const SONG_OF_STORMS_VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 // Lightning Storm excluded by design (in weatherData.specials but not choosable for Song of Storms).
 const SONG_OF_STORMS_SPECIAL_WEATHER = [
@@ -535,6 +537,7 @@ function createBoostRequestEmbedData(targetCharacter, boosterCharacter, category
  */
 function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boost) {
  const boosterJob = getEffectiveJob(booster);
+ const staminaBefore = requestData.boosterStaminaBeforeDeduction ?? booster.currentStamina;
  return {
    boostedBy: booster.name,
    boosterJob: boosterJob,
@@ -545,7 +548,7 @@ function createBoostAppliedEmbedData(booster, targetCharacter, requestData, boos
    village: requestData.village,
    boostedByIcon: booster.icon,
    targetIcon: targetCharacter.icon,
-   boosterStamina: booster.currentStamina,
+   boosterStamina: staminaBefore,
    boosterHearts: booster.currentHearts,
    boosterMaxStamina: booster.maxStamina,
    boosterMaxHearts: booster.maxHearts,
@@ -994,9 +997,15 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
- // Validate village compatibility
+ // Validate village compatibility (re-fetch so currentVillage is fresh from DB)
  const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID || interaction.channel?.parentId === TESTING_CHANNEL_ID;
- const villageValidation = validateVillageCompatibility(targetCharacter, boosterCharacter, isTestingChannel);
+ const targetForVillage = await fetchCharacterByName(targetCharacter.name);
+ const boosterForVillage = await fetchCharacterByName(boosterCharacter.name);
+ const villageValidation = validateVillageCompatibility(
+  targetForVillage || targetCharacter,
+  boosterForVillage || boosterCharacter,
+  isTestingChannel
+ );
  if (!villageValidation.valid) {
   logger.debug('BOOST', '[Validation] Village mismatch detected during boost request.');
   await safeReply({
@@ -1148,11 +1157,16 @@ async function handleBoostAccept(interaction) {
   return;
  }
 
- // Village check on accept: both characters must still be in the same village
+ // Village check on accept: both characters must still be in the same village (re-fetch for fresh currentVillage)
  const targetCharacterForAccept = await fetchCharacterByName(requestData.targetCharacter);
+ const boosterForVillageAccept = await fetchCharacterByName(booster.name);
  if (targetCharacterForAccept) {
   const isTestingChannel = interaction.channelId === TESTING_CHANNEL_ID || interaction.channel?.parentId === TESTING_CHANNEL_ID;
-  const villageValidation = validateVillageCompatibility(targetCharacterForAccept, booster, isTestingChannel);
+  const villageValidation = validateVillageCompatibility(
+   targetCharacterForAccept,
+   boosterForVillageAccept || booster,
+   isTestingChannel
+  );
   if (!villageValidation.valid) {
    logger.debug('BOOST', '[Accept] Village mismatch - characters no longer in same village.');
    await interaction.reply({
@@ -1232,6 +1246,9 @@ async function handleBoostAccept(interaction) {
   });
   return;
  }
+
+ // Capture stamina before deduction so the fulfillment embed shows correct "before → after"
+ requestData.boosterStaminaBeforeDeduction = available;
 
  // Deduct 1 stamina from the booster character
  try {
