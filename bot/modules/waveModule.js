@@ -1294,6 +1294,7 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
 
     // For expedition waves: apply damage to party pool FIRST, THEN check for KO.
     // This ensures the KO check uses the updated party hearts value.
+    let expeditionPartyKOd = false;
     if (wave.expeditionId && battleResult) {
       try {
         const Party = require('@/models/PartyModel');
@@ -1310,14 +1311,19 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
           party.markModified('totalHearts');
           await party.save();
           console.log(`[waveModule.js]: 🗺️ Expedition wave turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
+          // Explicit KO: when party pool hits 0, fail the wave so expedition is always ended (don't rely only on checkAllParticipantsKO)
+          if (newPartyHearts <= 0) {
+            expeditionPartyKOd = true;
+          }
         }
       } catch (syncErr) {
         logger.warn('WAVE', `Failed to update expedition party hearts after wave turn: ${syncErr?.message || syncErr}`);
       }
     }
 
-    // Check if all participants are KO'd after this turn (now uses updated party pool value)
-    const allKO = await checkAllParticipantsKO(wave);
+    // Check if all participants are KO'd after this turn (now uses updated party pool value).
+    // For expedition waves we also use the explicit expeditionPartyKOd flag so party pool 0 always fails the wave.
+    const allKO = expeditionPartyKOd || await checkAllParticipantsKO(wave);
     if (allKO && wave.status === 'active') {
       console.log(`[waveModule.js]: 💀 All participants KO'd in wave ${waveId}, failing wave`);
       await wave.failWave();
