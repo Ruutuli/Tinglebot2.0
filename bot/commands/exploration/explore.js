@@ -6544,8 +6544,11 @@ module.exports = {
     }
 
     const partyChar = party.characters[characterIndex];
+    // Normalize input: autocomplete display is "ItemName — ❤ N | 🟩 N"; if user pastes that, strip suffix so we match stored itemName
+    const normalizedItemInput = (itemName || "").trim().replace(/\s*[—\-]\s*.*$/, "").trim();
+    const itemKey = normalizedItemInput.toLowerCase();
     const itemIndex = partyChar.items.findIndex(
-     (i) => i.itemName && i.itemName.trim().toLowerCase() === (itemName || "").trim().toLowerCase()
+     (i) => i.itemName && i.itemName.trim().toLowerCase() === itemKey
     );
     if (itemIndex === -1) {
      return interaction.editReply(
@@ -7043,23 +7046,25 @@ module.exports = {
      return interaction.editReply("This expedition has not been started yet.");
     }
 
-    // Enforce turn order for retreat attempts
-    if (party.currentTurn !== characterIndex) {
-     const nextCharacter = party.characters[party.currentTurn];
-     const notYourTurnEmbed = new EmbedBuilder()
-       .setTitle("⏳ Not Your Turn")
-       .setColor(getExploreOutcomeColor("retreat", regionColors[party.region] || "#FF9800"))
-       .setDescription(`It is not your turn to attempt retreat.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
-     return interaction.editReply({ embeds: [notYourTurnEmbed] });
-    }
-
     const raid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${party.partyId}$`, 'i') }, status: "active" });
     if (!raid) {
      return interaction.editReply({
       content: "Your party is not in a tier 5+ monster battle. Use **/explore retreat** only during such a battle (when a tier 5+ encounter started a raid).",
       ephemeral: true
      });
+    }
+
+    // Enforce turn order for retreat: use the raid's current turn (same as /raid "It's your turn"), not expedition party.currentTurn
+    const raidCurrentTurnParticipant = raid.getCurrentTurnParticipant?.() ?? raid.participants?.[raid.currentTurn ?? 0];
+    const isRaidTurnForRetreat = raidCurrentTurnParticipant && raidCurrentTurnParticipant.characterId && character._id && raidCurrentTurnParticipant.characterId.toString() === character._id.toString();
+    if (!isRaidTurnForRetreat) {
+     const nextCharacterName = raidCurrentTurnParticipant?.name ?? party.characters[party.currentTurn]?.name ?? "Unknown";
+     const notYourTurnEmbed = new EmbedBuilder()
+       .setTitle("⏳ Not Your Turn")
+       .setColor(getExploreOutcomeColor("retreat", regionColors[party.region] || "#FF9800"))
+       .setDescription(`It is not your turn to attempt retreat.\n\n**Next turn:** ${nextCharacterName}`)
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
     if (raid.grottoId) {
