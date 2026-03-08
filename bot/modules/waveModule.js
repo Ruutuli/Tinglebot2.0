@@ -1236,6 +1236,56 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
     wave.currentMonster.currentHearts = updatedMonsterHearts;
     wave.markModified('currentMonster');
 
+    // For expedition waves: apply damage to party pool BEFORE deciding to complete the wave.
+    // This ensures "mutual kill" (last monster dies + party hits 0 same turn) fails the wave and ends the expedition.
+    let expeditionPartyKOd = false;
+    if (wave.expeditionId && battleResult) {
+      try {
+        const Party = require('@/models/PartyModel');
+        const party = await Party.findActiveByPartyId(wave.expeditionId);
+        if (party) {
+          const heartsBefore = battleResult.characterHeartsBefore ?? characterHeartsBefore ?? party.totalHearts ?? 0;
+          const heartsAfter = battleResult.playerHearts?.current ?? heartsBefore;
+          const damageTaken = Math.max(0, heartsBefore - heartsAfter);
+          const newPartyHearts = Math.max(0, (party.totalHearts ?? 0) - damageTaken);
+          party.totalHearts = newPartyHearts;
+          party.markModified('totalHearts');
+          await party.save();
+          console.log(`[waveModule.js]: 🗺️ Expedition wave turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
+          if (newPartyHearts <= 0) {
+            expeditionPartyKOd = true;
+          }
+        }
+      } catch (syncErr) {
+        logger.warn('WAVE', `Failed to update expedition party hearts after wave turn: ${syncErr?.message || syncErr}`);
+      }
+    }
+
+    // If party is KO'd, fail the wave and return so expedition ends (do not complete wave even if monster died this turn).
+    if (expeditionPartyKOd) {
+      if (wave.status === 'active') {
+        console.log(`[waveModule.js]: 💀 Party pool 0 in expedition wave ${waveId}, failing wave (mutual kill or lethal damage)`);
+        await wave.failWave();
+        const failedWave = await Wave.findOne({ waveId: waveId });
+        if (failedWave) wave = failedWave;
+        if (wave.expeditionId) {
+          try {
+            const Party = require('@/models/PartyModel');
+            const party = await Party.findActiveByPartyId(wave.expeditionId);
+            if (party) {
+              party.totalHearts = 0;
+              party.markModified('totalHearts');
+              await party.save();
+              console.log(`[waveModule.js]: 🗺️ Expedition wave failed — party hearts set to 0`);
+            }
+          } catch (syncErr) {
+            logger.warn('WAVE', `Failed to sync expedition party after wave failure: ${syncErr?.message || syncErr}`);
+          }
+        }
+      }
+      return { waveId, waveData: wave, battleResult, participant };
+    }
+
     // Check if current monster is defeated (use the value from battleResult, not the wave object)
     if (isMonsterDefeated) {
       // Advance to next monster, tracking who defeated it
@@ -1252,11 +1302,9 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
         wave = reloadedWave;
       }
       
-      // Check if all monsters are defeated
+      // Check if all monsters are defeated (party not KO'd so safe to complete)
       if (wave.currentMonsterIndex >= wave.monsters.length) {
-        // All monsters defeated - will complete in completeWave
         await wave.completeWave();
-        // Reload wave after completeWave
         const completedWave = await Wave.findOne({ waveId: waveId });
         if (completedWave) {
           wave = completedWave;
@@ -1290,35 +1338,6 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
     const finalWave = await Wave.findOne({ waveId: waveId });
     if (finalWave) {
       wave = finalWave;
-    }
-
-    // For expedition waves: apply damage to party pool FIRST, THEN check for KO.
-    // This ensures the KO check uses the updated party hearts value.
-    let expeditionPartyKOd = false;
-    if (wave.expeditionId && battleResult) {
-      try {
-        const Party = require('@/models/PartyModel');
-        const party = await Party.findActiveByPartyId(wave.expeditionId);
-        if (party) {
-          // Calculate damage taken this turn from battleResult
-          const heartsBefore = battleResult.characterHeartsBefore ?? characterHeartsBefore ?? party.totalHearts ?? 0;
-          const heartsAfter = battleResult.playerHearts?.current ?? heartsBefore;
-          const damageTaken = Math.max(0, heartsBefore - heartsAfter);
-          
-          // Apply damage to current party pool
-          const newPartyHearts = Math.max(0, (party.totalHearts ?? 0) - damageTaken);
-          party.totalHearts = newPartyHearts;
-          party.markModified('totalHearts');
-          await party.save();
-          console.log(`[waveModule.js]: 🗺️ Expedition wave turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
-          // Explicit KO: when party pool hits 0, fail the wave so expedition is always ended (don't rely only on checkAllParticipantsKO)
-          if (newPartyHearts <= 0) {
-            expeditionPartyKOd = true;
-          }
-        }
-      } catch (syncErr) {
-        logger.warn('WAVE', `Failed to update expedition party hearts after wave turn: ${syncErr?.message || syncErr}`);
-      }
     }
 
     // Check if all participants are KO'd after this turn (now uses updated party pool value).

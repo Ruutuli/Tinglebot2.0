@@ -6439,7 +6439,7 @@ module.exports = {
       }
      }
     }
-    if (clearedCount > 0) {
+    if (clearedCount > 0 && party.status === "started") {
      moveDescription += `\n\n⚠️ **${clearedCount} unmarked discovery(ies) in ${currentSquare} were forgotten.** Place pins on the dashboard before moving to keep them on the map.`;
     }
 
@@ -7054,8 +7054,11 @@ module.exports = {
      });
     }
 
+    // Re-fetch raid immediately before turn check so we use latest persisted state (avoid stale currentTurn)
+    const freshRaid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${party.partyId}$`, 'i') }, status: "active" });
+    const raidForTurn = freshRaid ?? raid;
     // Enforce turn order for retreat: use the raid's current turn (same as /raid "It's your turn"), not expedition party.currentTurn
-    const raidCurrentTurnParticipant = raid.getCurrentTurnParticipant?.() ?? raid.participants?.[raid.currentTurn ?? 0];
+    const raidCurrentTurnParticipant = raidForTurn.getCurrentTurnParticipant?.() ?? raidForTurn.participants?.[raidForTurn.currentTurn ?? 0];
     const isRaidTurnForRetreat = raidCurrentTurnParticipant && raidCurrentTurnParticipant.characterId && character._id && raidCurrentTurnParticipant.characterId.toString() === character._id.toString();
     if (!isRaidTurnForRetreat) {
      const nextCharacterName = raidCurrentTurnParticipant?.name ?? party.characters[party.currentTurn]?.name ?? "Unknown";

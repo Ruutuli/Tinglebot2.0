@@ -26,6 +26,7 @@ const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { createDebuffEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
 const { advanceRaidTurnOnItemUse } = require('../../modules/raidModule');
+const { advanceWaveTurnOnItemUse } = require('../../modules/waveModule');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
 const { applyElixirBuff, getElixirInfo, removeExpiredBuffs, ELIXIR_EFFECTS } = require('../../modules/elixirModule');
@@ -42,6 +43,7 @@ const User = require('@/models/UserModel');
 const Pet = require('@/models/PetModel');
 const Party = require('@/models/PartyModel');
 const Raid = require('@/models/RaidModel');
+const Wave = require('@/models/WaveModel');
 
 // ------------------- Command Definition -------------------
 // Defines the /item command schema and its execution logic.
@@ -1301,6 +1303,27 @@ module.exports = {
         }
       }
 
+      // ------------------- Expedition wave: item = turn -------------------
+      // During an expedition wave, only the current wave turn may use /item heal (same as /explore item).
+      const partyForWave = await Party.findOne({ status: 'started', 'characters._id': character._id }).select('partyId').lean();
+      if (partyForWave && partyForWave.partyId) {
+        const activeWave = await Wave.findOne({ status: 'active', expeditionId: { $regex: new RegExp(`^${String(partyForWave.partyId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }).lean();
+        if (activeWave && activeWave.participants && activeWave.participants.length > 0) {
+          const waveCurrent = activeWave.participants[activeWave.currentTurn ?? 0];
+          if (waveCurrent && waveCurrent.characterId && character._id && waveCurrent.characterId.toString() !== character._id.toString()) {
+            return void await interaction.editReply({
+              embeds: [{
+                color: 0xFF6347,
+                title: "Not your turn",
+                description: "It's not your turn. Only the current turn can use an item (item = turn). Wait for your turn in the wave, then use **/explore item**.",
+                footer: { text: 'Item = turn' }
+              }],
+              ephemeral: true
+            });
+          }
+        }
+      }
+
       // ------------------- KO Revival Logic -------------------
       // Allow fairies to revive KO'd characters, BUT NOT if character is debuffed
       // Debuffed characters can ONLY be healed by boosted healers
@@ -1356,6 +1379,12 @@ module.exports = {
         } catch (raidErr) {
           // Non-fatal: log and continue; healing succeeded
           console.warn('[item.js] advanceRaidTurnOnItemUse:', raidErr?.message || raidErr);
+        }
+        // Using an item in an expedition wave counts as a turn — advance wave turn if this character is current
+        try {
+          await advanceWaveTurnOnItemUse(character._id);
+        } catch (waveErr) {
+          console.warn('[item.js] advanceWaveTurnOnItemUse:', waveErr?.message || waveErr);
         }
 
         const successEmbed = new EmbedBuilder()
@@ -1440,6 +1469,12 @@ module.exports = {
       } catch (raidErr) {
         // Non-fatal: log and continue; healing succeeded
         console.warn('[item.js] advanceRaidTurnOnItemUse:', raidErr?.message || raidErr);
+      }
+      // Using an item in an expedition wave counts as a turn — advance wave turn if this character is current
+      try {
+        await advanceWaveTurnOnItemUse(character._id);
+      } catch (waveErr) {
+        console.warn('[item.js] advanceWaveTurnOnItemUse:', waveErr?.message || waveErr);
       }
 
       // Build description with actual recovered amounts
