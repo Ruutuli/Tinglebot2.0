@@ -591,7 +591,7 @@ function PrimaryStats({ user, activity }: { user: UserProfile; activity?: Activi
         <StatCard
           icon="fa-scroll"
           label="Quests"
-          value={(user.quests.bot?.completed ?? user.quests.totalCompleted ?? 0) + (user.quests.legacy?.completed ?? user.quests.legacy?.totalTransferred ?? 0)}
+          value={user.quests.allTimeTotal ?? (user.quests.bot?.completed ?? 0) + (user.quests.legacy?.completed ?? 0)}
           subtitle={`${questTurnInSummary.totalPending} pending`}
           color="var(--botw-blue)"
         />
