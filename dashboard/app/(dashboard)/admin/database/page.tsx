@@ -240,7 +240,11 @@ export default function AdminDatabasePage() {
         }
         if (key === "status") {
           const status = item.status;
-          return status != null && selectedValues.includes(status);
+          return (
+            status != null &&
+            (typeof status === "string" || typeof status === "number" || typeof status === "boolean") &&
+            selectedValues.includes(status)
+          );
         }
         if (key === "job") {
           const jobs: Record<string, string> = {
