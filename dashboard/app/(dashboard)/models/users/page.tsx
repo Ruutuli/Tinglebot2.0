@@ -86,13 +86,13 @@ function SectionStat({
   valueClass: string;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/35 px-3 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--totk-grey-200)]">
+    <div className="min-w-0 rounded-lg border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/35 px-3 py-2.5">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="min-w-0 shrink-0 flex items-center gap-2 text-[11px] font-semibold text-[var(--totk-grey-200)]">
           <i aria-hidden className={`fa-solid ${icon} text-[10px]`} />
-          {label}
+          <span className="truncate">{label}</span>
         </div>
-        <div className={`text-sm font-extrabold tabular-nums ${valueClass}`}>
+        <div className={`shrink-0 text-sm font-extrabold tabular-nums ${valueClass}`}>
           {value}
         </div>
       </div>
@@ -303,61 +303,60 @@ export default function UsersPage() {
 
                   {/* Quest summary */}
                   <div className="mt-4 rounded-lg border border-[var(--totk-dark-ocher)]/60 bg-gradient-to-br from-[var(--botw-warm-black)]/55 to-[var(--totk-brown)]/25 p-3 shadow-inner">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <i
-                          aria-hidden
-                          className="fa-solid fa-scroll text-xs text-[var(--totk-light-ocher)]"
+                    <div className="flex items-center gap-2">
+                      <i
+                        aria-hidden
+                        className="fa-solid fa-scroll text-xs text-[var(--totk-light-ocher)]"
+                      />
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                        Quests
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
+                        <span>Total</span>
+                        <span>Pending</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <SectionStat
+                          label="Legacy"
+                          value={formatInt(legacyTransferred)}
+                          icon="fa-box-archive"
+                          valueClass="text-[var(--totk-light-ocher)]"
                         />
-                        <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
-                          Quests
-                        </div>
-                      </div>
-                      <div className="text-xs font-semibold text-[var(--totk-grey-200)]">
-                        all-time{" "}
-                        <span className="text-[var(--botw-pale)]">
-                          {formatInt(allTimeQuests)}
-                        </span>{" "}
-                        • pending{" "}
-                        <span className="text-[var(--totk-light-green)]">
-                          {formatInt(totalPending)}
-                        </span>
+                        <SectionStat
+                          label="Legacy"
+                          value={formatInt(legacyPending)}
+                          icon="fa-box-archive"
+                          valueClass="text-[var(--totk-grey-200)]"
+                        />
+                        <SectionStat
+                          label="Bot"
+                          value={formatInt(questsCompleted)}
+                          icon="fa-check"
+                          valueClass="text-[var(--botw-pale)]"
+                        />
+                        <SectionStat
+                          label="Bot"
+                          value={formatInt(pendingTurnIns)}
+                          icon="fa-ticket"
+                          valueClass="text-[var(--totk-light-green)]"
+                        />
+                        <SectionStat
+                          label="Overall"
+                          value={formatInt(allTimeQuests)}
+                          icon="fa-scroll"
+                          valueClass="text-[var(--botw-pale)]"
+                        />
+                        <SectionStat
+                          label="Overall"
+                          value={formatInt(totalPending)}
+                          icon="fa-ticket"
+                          valueClass="text-[var(--totk-light-green)]"
+                        />
                       </div>
                     </div>
-
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <SectionStat
-                        label="Completed"
-                        value={formatInt(questsCompleted)}
-                        icon="fa-check"
-                        valueClass="text-[var(--botw-pale)]"
-                      />
-                      <SectionStat
-                        label="Pending"
-                        value={formatInt(totalPending)}
-                        icon="fa-ticket"
-                        valueClass="text-[var(--totk-light-green)]"
-                      />
-                      <SectionStat
-                        label="Legacy"
-                        value={formatInt(legacyTransferred)}
-                        icon="fa-box-archive"
-                        valueClass="text-[var(--totk-light-ocher)]"
-                      />
-                    </div>
-
-                    {(pendingTurnIns > 0 || legacyPending > 0) && (
-                      <div className="mt-2 text-xs font-semibold text-[var(--totk-grey-200)]">
-                        current pending{" "}
-                        <span className="text-[var(--totk-light-green)] tabular-nums">
-                          {formatInt(pendingTurnIns)}
-                        </span>{" "}
-                        • legacy pending{" "}
-                        <span className="text-[var(--totk-grey-200)] tabular-nums">
-                          {formatInt(legacyPending)}
-                        </span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Help Wanted */}

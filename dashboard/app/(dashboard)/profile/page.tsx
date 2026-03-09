@@ -1033,6 +1033,9 @@ function QuestSection({ user }: { user: UserProfile }) {
   const botCompleted = user.quests.bot?.completed ?? (user.quests as { totalCompleted?: number }).totalCompleted ?? 0;
   const legacyCompleted = user.quests.legacy?.completed ?? (user.quests.legacy as { totalTransferred?: number })?.totalTransferred ?? 0;
   const allTimeTotal = botCompleted + legacyCompleted;
+  const legacyPending = turnInSummary.legacyPending;
+  const botPending = turnInSummary.currentPending;
+  const totalPending = turnInSummary.totalPending;
   const completions = user.quests.completions || [];
   
   // Calculate statistics
@@ -1108,20 +1111,23 @@ function QuestSection({ user }: { user: UserProfile }) {
     <div className="space-y-6">
       <SectionCard title="Quest Statistics" icon="fa-scroll">
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Metric label="All-time" value={allTimeTotal} accent="blue" />
-            <Metric label="Current" value={botCompleted} accent="green" />
-            {legacyCompleted > 0 && (
-              <Metric
-                label="Legacy"
-                value={legacyCompleted}
-                accent="ocher"
-              />
-            )}
-            <Metric label="Total Tokens" value={questStats.totalTokens.toLocaleString()} accent="green" />
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--totk-grey-200)]">
+              <span>Total</span>
+              <span>Pending</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Metric label="Legacy" value={legacyCompleted} accent="ocher" />
+              <Metric label="Legacy" value={legacyPending} accent="muted" />
+              <Metric label="Bot" value={botCompleted} accent="green" />
+              <Metric label="Bot" value={botPending} accent="green" />
+              <Metric label="Overall" value={allTimeTotal} accent="blue" />
+              <Metric label="Overall" value={totalPending} accent="green" />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Metric label="Total Tokens" value={questStats.totalTokens.toLocaleString()} accent="green" />
             <Metric label="This Month" value={questStats.thisMonth} accent="blue" />
             <Metric label="Last Month" value={questStats.lastMonth} accent="ocher" />
             <Metric label="Avg/Month" value={questStats.avgPerMonth} accent="muted" />
