@@ -424,6 +424,11 @@ async function updateRPPostCount(questID, userId, newCount) {
         if (meetsRequirements && participant.progress === 'active') {
             participant.progress = 'completed';
             participant.completedAt = new Date();
+            try {
+                await questRewardModule.recordQuestCompletionSafeguard(participant, quest);
+            } catch (err) {
+                logger.error('QUEST', `Error recording quest completion safeguard after RP post count update: ${err.message}`);
+            }
         }
 
         await quest.save();

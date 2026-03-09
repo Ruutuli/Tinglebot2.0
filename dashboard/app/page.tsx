@@ -284,7 +284,17 @@ type QuestApiDoc = {
   date: string;
   timeLimit?: string;
   participantCap?: number | null;
-  participants?: Record<string, { characterName?: string; progress?: string }>;
+  requiredRolls?: number | null;
+  participants?: Record<
+    string,
+    {
+      characterName?: string;
+      progress?: string;
+      rpPostCount?: number | null;
+      tableRollResults?: unknown[] | null;
+      successfulRolls?: number | null;
+    }
+  >;
   tokenReward?: unknown;
   rules?: string | null;
   specialNote?: string | null;
@@ -317,6 +327,12 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
         .map((p) => ({
           name: p.characterName ?? "—",
           status: (p.progress === "active" ? "Active" : "Completed") as "Active" | "Completed",
+          rpPostCount: typeof p.rpPostCount === "number" && Number.isFinite(p.rpPostCount) ? p.rpPostCount : undefined,
+          rollCount: Array.isArray(p.tableRollResults)
+            ? p.tableRollResults.length
+            : typeof p.successfulRolls === "number" && Number.isFinite(p.successfulRolls)
+              ? p.successfulRolls
+              : undefined,
         }))
     : [];
 
@@ -419,6 +435,8 @@ function mapQuestToMonthlyItem(doc: QuestApiDoc): MonthlyQuestItem {
     name,
     participants: participantList,
     participationRequirements,
+    postRequirement: typeof doc.postRequirement === "number" && doc.postRequirement > 0 ? doc.postRequirement : undefined,
+    requiredRolls: typeof doc.requiredRolls === "number" && doc.requiredRolls > 0 ? doc.requiredRolls : undefined,
     postedDate,
     rewards,
     signupDeadline: signupDeadlineDisplay,

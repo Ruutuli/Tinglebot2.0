@@ -1409,6 +1409,8 @@ async function processRPQuestCompletion(quest, participant) {
         const rewardResult = await distributeRewards(quest, participant, rewardContext);
         
         if (rewardResult.success) {
+            updateParticipantRewardData(participant, quest, rewardResult, 'immediate');
+            await recordUserQuestCompletion(participant, quest, rewardResult, 'immediate');
             console.log(`[questRewardModule.js] ✅ RP quest completed and rewards distributed for ${participant.characterName}`);
             return {
                 success: true,
@@ -1522,7 +1524,7 @@ async function processQuestMonthlyRewards(quest) {
                         participant.updatedAt = new Date();
                         
                         // Record quest completion for the user with temporary reward data (tokens: 0)
-                        // This ensures user.quests.totalCompleted is updated immediately
+                        // This ensures user.quests.bot.completed (and bot.pending) is updated immediately
                         // The record will be updated with actual reward data when rewards are distributed
                         const tempRewardResult = {
                             success: true,

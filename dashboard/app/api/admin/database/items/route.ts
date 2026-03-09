@@ -13,6 +13,7 @@ import { logger } from "@/utils/logger";
 import mongoose, { type Model } from "mongoose";
 import { FIELD_OPTIONS } from "@/app/(dashboard)/admin/database/constants/field-options";
 import { getModelConfig } from "@/app/(dashboard)/admin/database/config/model-configs";
+import { fetchDiscordUsernames } from "@/lib/discord";
 
 // ============================================================================
 // ------------------- Types -------------------
@@ -227,6 +228,13 @@ export async function GET(req: NextRequest) {
         const mapModel = await import("@/models/mapModel.js");
         Model = (mapModel.default || mapModel) as unknown as Model<unknown>;
       }
+    } else if (modelName === "User") {
+      if (mongoose.models.User) {
+        Model = mongoose.models.User;
+      } else {
+        const { default: UserModel } = await import("@/models/UserModel.js");
+        Model = UserModel as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${modelName}" is not supported` },
@@ -247,6 +255,7 @@ export async function GET(req: NextRequest) {
       }
       const convertMapsToObjects = (obj: unknown): unknown => {
         if (obj instanceof Map) return Object.fromEntries(obj);
+        if (obj instanceof Date) return Number.isFinite((obj as Date).getTime()) ? (obj as Date).toISOString() : null;
         if (Array.isArray(obj)) return obj.map(convertMapsToObjects);
         // Preserve Mongoose/BSON ObjectId as string so _id is not turned into an empty object
         if (obj !== null && typeof obj === "object" && typeof (obj as { toString?: () => string }).toString === "function") {
@@ -274,10 +283,13 @@ export async function GET(req: NextRequest) {
       .lean()) as unknown as ItemLean[];
 
     // Convert Map objects to plain objects for JSON serialization.
-    // Preserve Mongoose/BSON ObjectId as string so _id is not turned into an empty object.
+    // Preserve Mongoose/BSON ObjectId as string; preserve Date as ISO string (so not turned into {}).
     const convertMapsToObjects = (obj: unknown): unknown => {
       if (obj instanceof Map) {
         return Object.fromEntries(obj);
+      }
+      if (obj instanceof Date) {
+        return Number.isFinite((obj as Date).getTime()) ? (obj as Date).toISOString() : null;
       }
       if (Array.isArray(obj)) {
         return obj.map(convertMapsToObjects);
@@ -297,6 +309,47 @@ export async function GET(req: NextRequest) {
     };
 
     const convertedRecords = records.map(convertMapsToObjects) as unknown as ItemLean[];
+
+    // ------------------- User model: fill missing usernames from Discord and persist -------------------
+    if (modelName === "User") {
+      const needsUsername = (convertedRecords as Array<{ discordId?: string; username?: string }>).filter(
+        (u) => u.discordId && (!u.username || String(u.username).trim() === "")
+      );
+      const discordIdsToFetch = needsUsername.map((u) => String(u.discordId!));
+      if (discordIdsToFetch.length > 0) {
+        try {
+          const usernameMap = await fetchDiscordUsernames(discordIdsToFetch);
+          for (const record of convertedRecords as Array<Record<string, unknown>>) {
+            const discordId = record.discordId;
+            const currentUsername = record.username;
+            if (
+              typeof discordId === "string" &&
+              discordId &&
+              (!currentUsername || String(currentUsername).trim() === "") &&
+              usernameMap[discordId]
+            ) {
+              const name = usernameMap[discordId];
+              record.username = name;
+              await Model.updateOne(
+                { discordId },
+                { $set: { username: name } }
+              ).exec();
+            }
+          }
+          if (Object.keys(usernameMap).length > 0) {
+            logger.info(
+              "api/admin/database/items GET",
+              `Filled ${Object.keys(usernameMap).length} missing usernames from Discord for User model`
+            );
+          }
+        } catch (e) {
+          logger.warn(
+            "api/admin/database/items GET",
+            `Failed to fetch Discord usernames: ${e instanceof Error ? e.message : String(e)}`
+          );
+        }
+      }
+    }
 
     logger.info(
       "api/admin/database/items GET",
@@ -429,6 +482,13 @@ export async function GET(req: NextRequest) {
       });
 
       filterOptions.region = Array.from(regionSet).sort();
+      filterOptions.status = Array.from(statusSet).sort();
+    } else if (modelName === "User") {
+      const statusSet = new Set<string>();
+      convertedRecords.forEach((record) => {
+        const r = record as { status?: string };
+        if (r.status) statusSet.add(r.status);
+      });
       filterOptions.status = Array.from(statusSet).sort();
     }
 
@@ -661,6 +721,13 @@ export async function PUT(req: NextRequest) {
         const mapModel = await import("@/models/mapModel.js");
         Model = (mapModel.default || mapModel) as unknown as Model<unknown>;
       }
+    } else if (model === "User") {
+      if (mongoose.models.User) {
+        Model = mongoose.models.User;
+      } else {
+        const { default: UserModel } = await import("@/models/UserModel.js");
+        Model = UserModel as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },
@@ -744,6 +811,22 @@ export async function PUT(req: NextRequest) {
         "mapCoordinates.bounds.north", "mapCoordinates.bounds.south",
         "mapCoordinates.bounds.east", "mapCoordinates.bounds.west",
       ];
+    } else if (model === "User") {
+      allowedFields = [
+        "discordId", "username", "timezone", "tokens", "characterSlot", "status",
+        "blightedcharacter", "statusChangedAt", "lastMessageContent", "lastMessageTimestamp",
+        "introPostedAt", "googleSheetsUrl", "tokenTracker", "tokensSynced",
+        "leveling.xp", "leveling.level", "leveling.totalMessages", "leveling.lastMessageTime",
+        "leveling.lastExchangedLevel", "leveling.totalLevelsExchanged",
+        "leveling.hasImportedFromMee6", "leveling.importedMee6Level", "leveling.mee6ImportDate",
+        "quests.bot.completed", "quests.bot.pending", "quests.legacy.completed", "quests.legacy.pending",
+        "quests.lastCompletionAt", "quests.turnIns.totalSetsTurnedIn", "quests.turnIns.lastTurnedInAt",
+        "quests.completions",
+        "helpWanted.lastCompletion", "helpWanted.cooldownUntil", "helpWanted.totalCompletions",
+        "helpWanted.currentCompletions", "helpWanted.lastExchangeAt", "helpWanted.lastExchangeAmount",
+        "birthday.month", "birthday.day", "birthday.lastBirthdayReward", "birthday.birthdayDiscountExpiresAt",
+        "boostRewards.lastRewardMonth", "boostRewards.totalRewards",
+      ];
     } else {
       // For other models, allow all fields (can be refined per model later)
       allowedFields = Object.keys(updates);
@@ -788,6 +871,37 @@ export async function PUT(req: NextRequest) {
         } else if (typeof value === "boolean") {
           // Handle boolean fields
           updateData[key] = value;
+        } else if (key === "quests.completions" && Array.isArray(value)) {
+          const normalized = value.map((entry: Record<string, unknown>) => {
+            const out = { ...entry };
+            const toDate = (v: unknown): Date | null => {
+              if (v == null) return null;
+              if (typeof v === "string") {
+                const d = new Date(v);
+                return Number.isFinite(d.getTime()) ? d : null;
+              }
+              if (v instanceof Date && Number.isFinite((v as Date).getTime())) return v as Date;
+              return null;
+            };
+            out.completedAt = toDate(out.completedAt);
+            out.rewardedAt = toDate(out.rewardedAt);
+            if (Array.isArray(out.itemsEarned)) {
+              out.itemsEarned = out.itemsEarned.map((i: Record<string, unknown>) => ({
+                name: i.name,
+                quantity: typeof i.quantity === "number" ? i.quantity : 0,
+              }));
+            }
+            return out;
+          });
+          updateData[key] = normalized;
+        } else if (key === "birthday.month" || key === "birthday.day") {
+          // User birthday: schema allows 1–12 / 1–31 or null; store null for empty/0 so validation passes
+          const n = typeof value === "number" ? value : Number(value);
+          if (Number.isFinite(n) && n >= 1 && (key === "birthday.month" ? n <= 12 : n <= 31)) {
+            updateData[key] = n;
+          } else {
+            updateData[key] = null;
+          }
         } else if (typeof value === "number") {
           // Handle number fields
           updateData[key] = value;
@@ -848,6 +962,24 @@ export async function PUT(req: NextRequest) {
           name: nameStr,
           stats: statsMap,
         };
+      }
+    }
+
+    // ------------------- User model: sanitize birthday so validation passes -------------------
+    if (model === "User") {
+      const month = (updateData as Record<string, unknown>)["birthday.month"];
+      const day = (updateData as Record<string, unknown>)["birthday.day"];
+      if (month !== undefined) {
+        const n = typeof month === "number" ? month : Number(month);
+        if (n < 1 || !Number.isFinite(n)) {
+          (updateData as Record<string, unknown>)["birthday.month"] = null;
+        }
+      }
+      if (day !== undefined) {
+        const n = typeof day === "number" ? day : Number(day);
+        if (n < 1 || !Number.isFinite(n)) {
+          (updateData as Record<string, unknown>)["birthday.day"] = null;
+        }
       }
     }
 
@@ -1018,6 +1150,8 @@ export async function DELETE(req: NextRequest) {
         const mapModel = await import("@/models/mapModel.js");
         Model = (mapModel.default || mapModel) as unknown as Model<unknown>;
       }
+    } else if (model === "User") {
+      Model = (mongoose.models.User ?? (await import("@/models/UserModel.js")).default) as unknown as Model<unknown>;
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },

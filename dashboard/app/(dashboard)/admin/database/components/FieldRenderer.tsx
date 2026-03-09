@@ -13,6 +13,7 @@ import { VillageMaterialsField } from "./VillageMaterialsField";
 import { VillageContributorsField } from "./VillageContributorsField";
 import { VillageCooldownsField } from "./VillageCooldownsField";
 import { QuadrantsField, type Quadrant } from "./QuadrantsField";
+import { QuestCompletionsField } from "./QuestCompletionsField";
 
 type FieldRendererProps = {
   field: FieldConfig;
@@ -187,6 +188,29 @@ export function FieldRenderer({
         />
       );
 
+    case "computed": {
+      const formData = extraProps.formData as Record<string, unknown> | undefined;
+      const computedValue = field.getValue && formData ? field.getValue(formData) : value;
+      const displayStr = computedValue === undefined || computedValue === null
+        ? "—"
+        : typeof computedValue === "number"
+          ? String(computedValue)
+          : String(computedValue);
+      return (
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-[var(--totk-light-ocher)]">
+            {label}
+          </label>
+          <div className="rounded-md border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)]/50 px-3 py-2 text-sm text-[var(--botw-pale)]">
+            {displayStr}
+          </div>
+          {helpText && (
+            <p className="text-xs text-[var(--totk-grey-200)]">{helpText}</p>
+          )}
+        </div>
+      );
+    }
+
     case "date": {
       const safeDateValue = (() => {
         if (value === undefined || value === null) return "";
@@ -329,6 +353,19 @@ export function FieldRenderer({
           <QuadrantsField
             label={label}
             value={quadrantsValue as Quadrant[]}
+            onChange={(val) => onChange(val)}
+            helpText={helpText || ""}
+            isChanged={isChanged}
+            error={error}
+          />
+        );
+      }
+      if (field.component === "QuestCompletionsField") {
+        const completionsValue = Array.isArray(value) ? value : [];
+        return (
+          <QuestCompletionsField
+            label={label}
+            value={completionsValue as Parameters<typeof QuestCompletionsField>[0]["value"]}
             onChange={(val) => onChange(val)}
             helpText={helpText || ""}
             isChanged={isChanged}

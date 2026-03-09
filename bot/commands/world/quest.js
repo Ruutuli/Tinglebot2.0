@@ -305,24 +305,26 @@ module.exports = {
    ? userDocument.getQuestStats()
    : userDocument.quests || {};
 
-  const totalCompleted = stats.totalCompleted || 0;
+  const totalCompleted = stats.bot?.completed ?? stats.totalCompleted ?? 0;
   const legacyInfo = stats.legacy || {
-   totalTransferred: 0,
-   pendingTurnIns: 0,
+   completed: 0,
+   pending: 0,
    transferredAt: null,
    transferUsed: false
   };
+  const legacyCompleted = legacyInfo.completed ?? legacyInfo.totalTransferred ?? 0;
+  const legacyPending = legacyInfo.pending ?? legacyInfo.pendingTurnIns ?? 0;
   const allTimeTotal = typeof stats.allTimeTotal === "number"
    ? stats.allTimeTotal
-   : totalCompleted + (legacyInfo.totalTransferred || 0);
-  
-  // Use turnInSummary if available (from getQuestStats), otherwise calculate from stats
+   : totalCompleted + legacyCompleted;
+
+  const botPendingForFallback = stats.bot?.pending ?? (typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0);
   const turnInSummary = stats.turnInSummary || (typeof userDocument.getQuestTurnInSummary === "function"
    ? userDocument.getQuestTurnInSummary()
    : {
-    totalPending: (typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0) + (legacyInfo.pendingTurnIns || 0),
-    redeemableSets: Math.floor(((typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0) + (legacyInfo.pendingTurnIns || 0)) / 10),
-    remainder: ((typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0) + (legacyInfo.pendingTurnIns || 0)) % 10
+    totalPending: botPendingForFallback + legacyPending,
+    redeemableSets: Math.floor((botPendingForFallback + legacyPending) / 10),
+    remainder: (botPendingForFallback + legacyPending) % 10
    });
   
   const pendingTurnIns = turnInSummary.totalPending || 0;
@@ -356,8 +358,8 @@ module.exports = {
     ? "Your Quest Stats"
     : `${targetUser.username}'s Quest Stats`;
 
-const completionSummary = legacyInfo.totalTransferred > 0
- ? `✨ **All-Time Quests:** ${this.formatQuestCount(allTimeTotal)} ┇ 📘 Tracked: ${this.formatQuestCount(totalCompleted)} ┇ 🕰️ Legacy: ${this.formatQuestCount(legacyInfo.totalTransferred)}`
+const completionSummary = legacyCompleted > 0
+ ? `✨ **All-Time Quests:** ${this.formatQuestCount(allTimeTotal)} ┇ 📘 Tracked: ${this.formatQuestCount(totalCompleted)} ┇ 🕰️ Legacy: ${this.formatQuestCount(legacyCompleted)}`
  : `✨ You have completed **${this.formatQuestCount(totalCompleted)}** quest${totalCompleted === 1 ? "" : "s"}.`;
 
    const statsEmbed = createBaseEmbed(
@@ -371,15 +373,14 @@ const completionSummary = legacyInfo.totalTransferred > 0
     statsEmbed.setThumbnail(avatarUrl);
    }
 
-  // Get breakdown of pending turn-ins
-  const legacyPending = turnInSummary.legacyPending || legacyInfo.pendingTurnIns || 0;
-  const currentPending = turnInSummary.currentPending || (stats.pendingTurnIns && typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0);
-  const totalPendingDisplay = pendingTurnIns; // This is already the total from turnInSummary
+  const legacyPendingDisplay = turnInSummary.legacyPending ?? legacyPending;
+  const currentPending = turnInSummary.currentPending ?? (stats.bot?.pending ?? (typeof stats.pendingTurnIns === "number" ? stats.pendingTurnIns : 0));
+  const totalPendingDisplay = pendingTurnIns;
 
   const legacyStatus = legacyInfo.transferUsed
    ? [
      `✅ **Transferred:** ${legacyInfo.transferredAt ? this.formatQuestStatsDate(legacyInfo.transferredAt) : '*date unknown*'}`,
-     legacyPending > 0 ? `• 🎁 **Legacy Pending Turn-Ins:** ${this.formatQuestCount(legacyPending)}` : null,
+     legacyPendingDisplay > 0 ? `• 🎁 **Legacy Pending Turn-Ins:** ${this.formatQuestCount(legacyPendingDisplay)}` : null,
      currentPending > 0 ? `• 🎯 **New Quest Pending Turn-Ins:** ${this.formatQuestCount(currentPending)}` : null,
      totalPendingDisplay > 0 ? `• 📊 **Total Pending Turn-Ins:** ${this.formatQuestCount(totalPendingDisplay)}` : null
    ].filter(Boolean).join("\n")
@@ -387,7 +388,7 @@ const completionSummary = legacyInfo.totalTransferred > 0
 
 const snapshotLines = [
  `• 🎯 **Tracked Quests:** ${this.formatQuestCount(totalCompleted)}`,
- `• 🗒️ **Legacy Quests:** ${this.formatQuestCount(legacyInfo.totalTransferred || 0)}`,
+ `• 🗒️ **Legacy Quests:** ${this.formatQuestCount(legacyCompleted)}`,
  `• 🧮 **All-Time Total:** ${this.formatQuestCount(allTimeTotal)}`,
 `• 🎁 **Pending Turn-Ins:** ${this.formatQuestCount(pendingTurnIns)} • Sets Ready: **${redeemableSets}**`,
    `• 🧭 **Unique Quest Types:** ${uniqueTypes}`,
@@ -691,8 +692,8 @@ async handleLegacyQuestTransfer(interaction) {
    // Get the correct turn-in summary after ensuring pendingTurnIns is fixed
    const turnInSummary = updatedUser ? updatedUser.getQuestTurnInSummary() : (transferResult.turnInSummary || {
     totalPending: transferResult.pendingTurnIns || 0,
-    currentPending: updatedUser?.quests?.pendingTurnIns ?? 0,
-    legacyPending: transferResult.legacy?.pendingTurnIns ?? 0,
+    currentPending: updatedUser?.quests?.bot?.pending ?? 0,
+    legacyPending: transferResult.legacy?.pending ?? 0,
     redeemableSets: Math.floor((transferResult.pendingTurnIns || 0) / 10),
     remainder: (transferResult.pendingTurnIns || 0) % 10
    });
@@ -703,16 +704,15 @@ async handleLegacyQuestTransfer(interaction) {
     QUEST_COLORS.SUCCESS
    );
 
- // Calculate total pending (legacy + non-legacy) for display
    const totalPendingTurnIns = turnInSummary.totalPending || 0;
-   const legacyPendingDisplay = transferResult.legacy.pendingTurnIns || 0;
-   const currentPendingDisplay = turnInSummary.currentPending || (updatedUser?.quests?.pendingTurnIns || 0);
-   
+   const legacyPendingDisplay = transferResult.legacy?.pending ?? transferResult.legacy?.pendingTurnIns ?? 0;
+   const currentPendingDisplay = turnInSummary.currentPending ?? (updatedUser?.quests?.bot?.pending ?? 0);
+
    summaryEmbed.addFields(
     {
      name: "📦 Legacy Import",
      value: [
-     `• 📚 **Transferred:** ${this.formatQuestCount(transferResult.legacy.totalTransferred)} quests`,
+     `• 📚 **Transferred:** ${this.formatQuestCount(transferResult.legacy?.completed ?? transferResult.legacy?.totalTransferred ?? 0)} quests`,
      `• 🎁 **Legacy Pending Turn-Ins:** ${this.formatQuestCount(legacyPendingDisplay)}`,
      `• 🎯 **New Quest Pending Turn-Ins:** ${this.formatQuestCount(currentPendingDisplay)}`,
      `• 📊 **Total Pending Turn-Ins:** ${this.formatQuestCount(totalPendingTurnIns)}`
@@ -723,7 +723,7 @@ async handleLegacyQuestTransfer(interaction) {
      name: "📈 Updated Totals",
      value: [
      `• 🧮 **All-Time Total:** ${this.formatQuestCount(transferResult.allTimeTotal)} quests`,
-     `• 🎯 **Tracked Quests:** ${this.formatQuestCount(updatedUser?.quests?.totalCompleted || user.quests?.totalCompleted || 0)}`
+     `• 🎯 **Tracked Quests:** ${this.formatQuestCount(updatedUser?.quests?.bot?.completed ?? user?.quests?.bot?.completed ?? 0)}`
      ].join("\n"),
      inline: false
     },

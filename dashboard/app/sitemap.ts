@@ -30,6 +30,7 @@ const SITEMAP_ENTRIES: SitemapEntryConfig[] = [
   { path: "/characters/create", changeFrequency: "weekly", priority: 0.8 },
   { path: "/characters/my-ocs", changeFrequency: "daily", priority: 0.9 },
   { path: "/models/characters", changeFrequency: "daily", priority: 0.7 },
+  { path: "/models/users", changeFrequency: "weekly", priority: 0.6 },
   { path: "/models/items", changeFrequency: "weekly", priority: 0.6 },
   { path: "/models/monsters", changeFrequency: "weekly", priority: 0.6 },
   { path: "/models/villages", changeFrequency: "weekly", priority: 0.6 },

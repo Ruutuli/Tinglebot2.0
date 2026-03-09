@@ -24,6 +24,8 @@ export type ModelListPageLayoutProps = {
   currentPage: number;
   totalItems: number;
   itemsPerPage: number;
+  /** Optional: actual count rendered on this page (after filtering). */
+  currentCount?: number;
   onPageChange: (page: number) => void;
   children: ReactNode;
 };
@@ -48,6 +50,7 @@ export function ModelListPageLayout({
   currentPage,
   totalItems,
   itemsPerPage,
+  currentCount,
   onPageChange,
   children,
 }: ModelListPageLayoutProps) {
@@ -76,6 +79,7 @@ export function ModelListPageLayout({
               currentPage={currentPage}
               totalItems={totalItems}
               itemsPerPage={itemsPerPage}
+              currentCount={currentCount}
               itemName={itemName}
               className="mb-4"
             />
@@ -90,6 +94,7 @@ export function ModelListPageLayout({
               currentPage={currentPage}
               totalItems={totalItems}
               itemsPerPage={itemsPerPage}
+              currentCount={currentCount}
               itemName={itemName}
               className="mb-4"
             />

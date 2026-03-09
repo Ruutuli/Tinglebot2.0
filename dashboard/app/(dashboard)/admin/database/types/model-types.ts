@@ -12,7 +12,8 @@ export type FieldType =
   | "array"
   | "toggle-grid"
   | "date"
-  | "custom";
+  | "custom"
+  | "computed";
 
 export type FieldConfig = {
   key: string;
@@ -38,6 +39,8 @@ export type FieldConfig = {
   // For array fields
   readOnly?: boolean;
   autoPopulated?: boolean;
+  // For computed (read-only derived) fields: value = getValue(formData). Not sent on save.
+  getValue?: (data: Record<string, unknown>) => unknown;
 };
 
 export type TabConfig = {

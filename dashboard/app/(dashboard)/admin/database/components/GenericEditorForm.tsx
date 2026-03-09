@@ -42,6 +42,7 @@ export function GenericEditorForm({
     const initial: Record<string, unknown> = {};
     modelConfig.tabs.forEach((tab) => {
       tab.fields.forEach((field) => {
+        if (field.type === "computed") return; // Derived at render time
         if (field.type === "toggle-grid") {
           // Build toggle-grid values from individual boolean fields
           const gridValues: Record<string, boolean> = {};
@@ -60,7 +61,8 @@ export function GenericEditorForm({
               field.component === "VillageMaterialsField" ||
               field.component === "VillageContributorsField" ||
               field.component === "VillageCooldownsField" ||
-              field.component === "QuadrantsField"
+              field.component === "QuadrantsField" ||
+              field.component === "QuestCompletionsField"
             )) {
               // Keep as object for custom village components
               if (value instanceof Map) {
@@ -223,6 +225,10 @@ export function GenericEditorForm({
 
   // Get field value helper
   const getFieldValue = useCallback((field: FieldConfig): unknown => {
+    // Computed fields: derive from formData, not stored
+    if (field.type === "computed" && field.getValue) {
+      return field.getValue(formData);
+    }
     // Handle toggle-grid fields specially
     if (field.type === "toggle-grid") {
       const value = formData[field.key];
@@ -263,6 +269,8 @@ export function GenericEditorForm({
               }
             });
           }
+        } else if (field.type === "computed") {
+          // Computed fields are read-only derived values; do not include in updates
         } else {
           // Regular field
           const key = field.key;
@@ -273,7 +281,8 @@ export function GenericEditorForm({
             field.component === "VillageMaterialsField" ||
             field.component === "VillageContributorsField" ||
             field.component === "VillageCooldownsField" ||
-            field.component === "QuadrantsField"
+            field.component === "QuadrantsField" ||
+            field.component === "QuestCompletionsField"
           )) {
             if (changes[key] || JSON.stringify(formValue) !== JSON.stringify(item[key])) {
               updates[key] = formValue;

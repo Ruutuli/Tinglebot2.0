@@ -96,10 +96,23 @@ export type QuestTypeTotals = {
 };
 
 export type QuestLegacy = {
-  totalTransferred: number;
-  pendingTurnIns: number;
+  completed: number;
+  pending: number;
   transferredAt: Date | string | null;
   transferUsed: boolean;
+};
+
+export type QuestTurnInEntry = {
+  turnedInAt: Date | string;
+  amount: number;
+  fromBot: number;
+  fromLegacy: number;
+};
+
+export type QuestTurnIns = {
+  totalSetsTurnedIn: number;
+  lastTurnedInAt: Date | string | null;
+  history: QuestTurnInEntry[];
 };
 
 export type QuestListEntry = {
@@ -108,13 +121,22 @@ export type QuestListEntry = {
   category?: string;
 };
 
+export type QuestBot = {
+  completed: number;
+  pending: number;
+};
+
 export type Quests = {
-  totalCompleted: number;
+  bot: QuestBot;
+  legacy: QuestLegacy;
   lastCompletionAt: Date | string | null;
   typeTotals: QuestTypeTotals;
   completions: QuestCompletion[];
-  legacy: QuestLegacy;
-  pendingTurnIns?: number;
+  turnIns?: QuestTurnIns;
+  /** Computed: bot.completed + legacy.completed (convenience for UI). */
+  allTimeTotal?: number;
+  /** Computed: bot.pending + legacy.pending (convenience for UI). */
+  totalPendingTurnIns?: number;
 };
 
 export type BlupeeClaimHistory = {

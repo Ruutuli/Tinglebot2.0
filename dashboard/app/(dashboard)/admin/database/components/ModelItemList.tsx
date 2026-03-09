@@ -64,6 +64,19 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
   const nameField = modelConfig.nameField;
   const displayName = modelConfig.displayName;
 
+  /** Get value from item by key; supports dotted paths (e.g. leveling.level). */
+  const getItemValue = (item: Record<string, unknown>, key: string): unknown => {
+    if (!key.includes(".")) return item[key];
+    const parts = key.split(".");
+    let value: unknown = item;
+    for (const part of parts) {
+      value = value != null && typeof value === "object" && part in value
+        ? (value as Record<string, unknown>)[part]
+        : undefined;
+    }
+    return value;
+  };
+
   /** Get a stable string ID for list keys. Handles _id as string, ObjectId-like, or plain object. */
   const getItemKey = (item: Record<string, unknown>, index: number): string => {
     const id = item._id;
@@ -119,6 +132,13 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
         { key: "category", label: "Category", type: "string" },
         { key: "type", label: "Type", type: "string" },
         { key: "obtain", label: "Obtain", type: "string" },
+      ];
+    } else if (modelConfig.name === "User") {
+      return [
+        { key: "username", label: "Username", type: "string" },
+        { key: "status", label: "Status", type: "string" },
+        { key: "tokens", label: "Tokens", type: "number" },
+        { key: "leveling.level", label: "Level", type: "number" },
       ];
     }
     return [];
@@ -183,7 +203,7 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
                   onClick={() => handleSort(nameField)}
                 >
                   <div className="flex items-center">
-                    Name
+                    {modelConfig.name === "User" ? "Discord ID" : "Name"}
                     <SortIcon field={nameField} />
                   </div>
                 </th>
@@ -236,17 +256,19 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
                         <span className="font-medium text-[var(--botw-pale)]">{itemName}</span>
                       </div>
                     </td>
-                    {displayFields.map((field) => (
+                    {displayFields.map((field) => {
+                      const cellValue = getItemValue(item, field.key);
+                      return (
                       <td key={field.key} className="px-4 py-3">
-                        {item[field.key] !== undefined && item[field.key] !== null ? (
+                        {cellValue !== undefined && cellValue !== null ? (
                           <span className={`${
                             field.type === "array" 
                               ? "flex flex-wrap gap-1" 
                               : "text-sm text-[var(--botw-pale)]"
                           }`}>
-                            {field.type === "array" && Array.isArray(item[field.key]) ? (
+                            {field.type === "array" && Array.isArray(cellValue) ? (
                               <>
-                                {(item[field.key] as unknown[]).slice(0, 2).map((val, idx) => {
+                                {cellValue.slice(0, 2).map((val, idx) => {
                                   const valStr = typeof val === "object" && val !== null && !Array.isArray(val)
                                     ? JSON.stringify(val)
                                     : String(val);
@@ -259,15 +281,15 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
                                   </span>
                                   );
                                 })}
-                                {(item[field.key] as unknown[]).length > 2 && (
+                                {cellValue.length > 2 && (
                                   <span className="px-2 py-0.5 text-xs text-[var(--totk-grey-200)]">
-                                    +{(item[field.key] as unknown[]).length - 2}
+                                    +{cellValue.length - 2}
                                   </span>
                                 )}
                               </>
                             ) : (
                               <span className="px-2 py-0.5 rounded bg-[var(--totk-dark-ocher)]/30 text-xs text-[var(--botw-pale)]">
-                                {formatValue(item[field.key], field.type)}
+                                {formatValue(cellValue, field.type)}
                               </span>
                             )}
                           </span>
@@ -275,7 +297,8 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
                           <span className="text-xs text-[var(--totk-grey-200)] italic">—</span>
                         )}
                       </td>
-                    ))}
+                      );
+                    })}
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -336,7 +359,7 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-[var(--totk-grey-200)]">
                         {displayFields.map((field) => {
-                          const value = item[field.key];
+                          const value = getItemValue(item, field.key);
                           if (value === undefined || value === null) return null;
                           return (
                             <span key={field.key} className="px-2 py-1 rounded bg-[var(--totk-dark-ocher)]/30">

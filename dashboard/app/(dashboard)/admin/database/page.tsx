@@ -163,6 +163,12 @@ export default function AdminDatabasePage() {
           );
           return nameMatch || categoryMatch;
         }
+        // For User, also search username
+        if (selectedModel === "User") {
+          const usernameValue = item.username;
+          const usernameMatch = usernameValue && String(usernameValue).toLowerCase().includes(query);
+          return nameMatch || usernameMatch;
+        }
         return nameMatch;
       });
     }
@@ -231,6 +237,10 @@ export default function AdminDatabasePage() {
             const field = locations[v as string];
             return field && item[field] === true;
           });
+        }
+        if (key === "status") {
+          const status = item.status;
+          return status != null && selectedValues.includes(status);
         }
         if (key === "job") {
           const jobs: Record<string, string> = {
@@ -966,6 +976,7 @@ export default function AdminDatabasePage() {
                     setEditingItem(item as DatabaseRecord);
                     setShowEditModal(true);
                   }}
+                  onDelete={handleDeleteItem}
                 />
               ) : null}
             </div>

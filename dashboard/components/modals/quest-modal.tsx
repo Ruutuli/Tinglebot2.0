@@ -7,6 +7,7 @@
 import { Modal } from "@/components/ui";
 import { formatLocationsDisplay } from "@/lib/string-utils";
 import { clsx } from "clsx";
+import type { ReactNode } from "react";
 
 /* ============================================================================ */
 /* ------------------- Types ------------------- */
@@ -15,6 +16,8 @@ import { clsx } from "clsx";
 /* [quest-modal.tsx]🧷 Quest participant - */
 export type QuestParticipant = {
   name: string;
+  rpPostCount?: number;
+  rollCount?: number;
   status: "Active" | "Completed";
 };
 
@@ -32,6 +35,8 @@ export type DetailedQuestItem = {
   name: string;
   participants: QuestParticipant[];
   participationRequirements: string[];
+  postRequirement?: number;
+  requiredRolls?: number;
   postedDate?: string;
   signupDeadline?: string;
   rewards: {
@@ -141,6 +146,61 @@ function formatRewards(r: DetailedQuestItem["rewards"]): { lines: { icon?: strin
   return { lines: [] };
 }
 
+function renderDiscordInline(text: string): ReactNode {
+  // Minimal Discord-style inline formatting: __underline__ and **bold**.
+  // Safe: no HTML injection; returns plain React nodes.
+  const nodes: ReactNode[] = [];
+  let i = 0;
+
+  const pushText = (s: string) => {
+    if (s) nodes.push(s);
+  };
+
+  while (i < text.length) {
+    const uStart = text.indexOf("__", i);
+    const bStart = text.indexOf("**", i);
+    const next = Math.min(uStart === -1 ? Infinity : uStart, bStart === -1 ? Infinity : bStart);
+    if (next === Infinity) break;
+
+    pushText(text.slice(i, next));
+
+    if (next === uStart) {
+      const end = text.indexOf("__", uStart + 2);
+      if (end === -1) {
+        pushText(text.slice(uStart));
+        i = text.length;
+        break;
+      }
+      const inner = text.slice(uStart + 2, end);
+      nodes.push(
+        <span key={`u-${uStart}`} className="underline underline-offset-2">
+          {inner}
+        </span>
+      );
+      i = end + 2;
+      continue;
+    }
+
+    // Bold
+    const end = text.indexOf("**", bStart + 2);
+    if (end === -1) {
+      pushText(text.slice(bStart));
+      i = text.length;
+      break;
+    }
+    const inner = text.slice(bStart + 2, end);
+    nodes.push(
+      <span key={`b-${bStart}`} className="font-semibold text-[var(--totk-ivory)]">
+        {inner}
+      </span>
+    );
+    i = end + 2;
+  }
+
+  pushText(text.slice(i));
+  return nodes.length > 0 ? <>{nodes}</> : text;
+}
+
 /* [quest-modal.tsx]🧱 Quest details modal - */
 export function QuestDetailsModal({
   isOpen,
@@ -158,6 +218,24 @@ export function QuestDetailsModal({
   const typeStyle = getQuestTypeStyle(quest.type);
   const rewardsFormatted = formatRewards(quest.rewards);
   const hasRewards = rewardsFormatted.lines.length > 0;
+  const requiredRpPosts =
+    quest.type === "RP"
+      ? (() => {
+          if (typeof quest.postRequirement === "number" && quest.postRequirement > 0) return quest.postRequirement;
+          const req = (quest.participationRequirements ?? []).find((r) => /\bRP posts required\b/i.test(r));
+          const m = req?.match(/(\d+)\s*RP posts required/i);
+          return m ? parseInt(m[1], 10) : 15;
+        })()
+      : null;
+  const requiredRolls =
+    quest.type === "Interactive"
+      ? (() => {
+          if (typeof quest.requiredRolls === "number" && quest.requiredRolls > 0) return quest.requiredRolls;
+          const ruleLine = (quest.rules ?? []).find((r) => /minimum of\s+\d+\s+roll/i.test(r) || /\d+\s+rolls?\s+should be executed/i.test(r));
+          const m = ruleLine?.match(/(\d+)\s+roll/i);
+          return m ? parseInt(m[1], 10) : null;
+        })()
+      : null;
 
   return (
     <Modal
@@ -365,7 +443,7 @@ export function QuestDetailsModal({
               {quest.rules.map((rule, idx) => (
                 <li key={idx} className="flex items-start gap-2 text-sm leading-relaxed text-[var(--botw-pale)]">
                   <span className="mt-1.5 shrink-0 text-xs" style={{ color: typeStyle.color }}>•</span>
-                  <span>{rule}</span>
+                  <span>{renderDiscordInline(rule)}</span>
                 </li>
               ))}
             </ul>
@@ -412,7 +490,19 @@ export function QuestDetailsModal({
                       aria-hidden
                       className={clsx("fa-solid text-[10px]", participant.status === "Active" ? "fa-circle-dot" : "fa-circle-check")}
                     />
-                    {participant.status}
+                    <span className="whitespace-nowrap">
+                      {participant.status}
+                      {quest.type === "RP" && typeof participant.rpPostCount === "number" && (
+                        <span>
+                          {requiredRpPosts != null ? ` • ${participant.rpPostCount}/${requiredRpPosts}` : ` • ${participant.rpPostCount} posts`}
+                        </span>
+                      )}
+                      {quest.type === "Interactive" && typeof participant.rollCount === "number" && (
+                        <span>
+                          {requiredRolls != null ? ` • ${participant.rollCount}/${requiredRolls} rolls` : ` • ${participant.rollCount} rolls`}
+                        </span>
+                      )}
+                    </span>
                   </span>
                 </div>
               ))}

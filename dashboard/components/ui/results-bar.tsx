@@ -15,6 +15,8 @@ export type ResultsBarProps = {
   currentPage: number;
   totalItems: number;
   itemsPerPage: number;
+  /** Optional: how many items are actually rendered on this page (after filtering). */
+  currentCount?: number;
   itemName: string; // e.g., "characters", "items", "monsters"
   className?: string;
 };
@@ -28,12 +30,14 @@ export function ResultsBar({
   currentPage,
   totalItems,
   itemsPerPage,
+  currentCount,
   itemName,
   className = "",
 }: ResultsBarProps) {
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  const endItemRaw = currentCount != null ? startItem + Math.max(0, currentCount) - 1 : currentPage * itemsPerPage;
+  const endItem = totalItems === 0 ? 0 : Math.min(endItemRaw, totalItems);
 
   return (
     <div

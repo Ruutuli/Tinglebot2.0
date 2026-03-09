@@ -591,7 +591,7 @@ function PrimaryStats({ user, activity }: { user: UserProfile; activity?: Activi
         <StatCard
           icon="fa-scroll"
           label="Quests"
-          value={user.quests.totalCompleted + (user.quests.legacy.totalTransferred || 0)}
+          value={(user.quests.bot?.completed ?? user.quests.totalCompleted ?? 0) + (user.quests.legacy?.completed ?? user.quests.legacy?.totalTransferred ?? 0)}
           subtitle={`${questTurnInSummary.totalPending} pending`}
           color="var(--botw-blue)"
         />
@@ -1030,7 +1030,9 @@ function LevelingSection({ user, activity }: { user: UserProfile; activity?: Act
 
 function QuestSection({ user }: { user: UserProfile }) {
   const turnInSummary = calculateQuestTurnInSummary(user.quests);
-  const allTimeTotal = user.quests.totalCompleted + (user.quests.legacy.totalTransferred || 0);
+  const botCompleted = user.quests.bot?.completed ?? (user.quests as { totalCompleted?: number }).totalCompleted ?? 0;
+  const legacyCompleted = user.quests.legacy?.completed ?? (user.quests.legacy as { totalTransferred?: number })?.totalTransferred ?? 0;
+  const allTimeTotal = botCompleted + legacyCompleted;
   const completions = user.quests.completions || [];
   
   // Calculate statistics
@@ -1108,11 +1110,11 @@ function QuestSection({ user }: { user: UserProfile }) {
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Metric label="All-time" value={allTimeTotal} accent="blue" />
-            <Metric label="Current" value={user.quests.totalCompleted} accent="green" />
-            {user.quests.legacy.totalTransferred > 0 && (
+            <Metric label="Current" value={botCompleted} accent="green" />
+            {legacyCompleted > 0 && (
               <Metric
                 label="Legacy"
-                value={user.quests.legacy.totalTransferred}
+                value={legacyCompleted}
                 accent="ocher"
               />
             )}
@@ -2705,8 +2707,8 @@ function getXPRequiredForLevel(targetLevel: number): number {
 }
 
 function calculateQuestTurnInSummary(quests: UserProfile["quests"]) {
-  const legacyPending = quests.legacy?.pendingTurnIns || 0;
-  const currentPending = quests.pendingTurnIns || 0;
+  const legacyPending = quests.legacy?.pending ?? (quests.legacy as { pendingTurnIns?: number })?.pendingTurnIns ?? 0;
+  const currentPending = quests.bot?.pending ?? (quests as { pendingTurnIns?: number }).pendingTurnIns ?? 0;
   const totalPending = legacyPending + currentPending;
   const redeemableSets = Math.floor(totalPending / 10);
   const remainder = totalPending % 10;

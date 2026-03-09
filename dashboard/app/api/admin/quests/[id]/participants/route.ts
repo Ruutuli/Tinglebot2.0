@@ -9,6 +9,14 @@ import { connect } from "@/lib/db";
 import { getSession, isAdminUser } from "@/lib/session";
 import { logger } from "@/utils/logger";
 
+function normalizeDiscordId(raw: unknown): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const unwrapped = s.replace(/[<@!>]/g, "").trim();
+  const digitsOnly = unwrapped.replace(/\D/g, "");
+  return digitsOnly.length >= 16 ? digitsOnly : unwrapped;
+}
+
 // ----------------------------------------------------------------------------
 // PATCH - Mark selected participants as completed and distribute tokens + log
 // ----------------------------------------------------------------------------
@@ -88,7 +96,10 @@ export async function PATCH(
     for (const userId of userIds) {
       if (!userId || typeof userId !== "string") continue;
 
-      const participant = participants.get(userId.trim());
+      const key = userId.trim();
+      const participant =
+        participants.get(key) ??
+        participants.get(normalizeDiscordId(key));
       if (!participant) continue;
       if (participant.progress === "rewarded") continue;
 
@@ -100,11 +111,12 @@ export async function PATCH(
         tokensToAward = Math.max(0, Number(quest.getNormalizedTokenReward()) || 0);
       }
 
-      const userDoc = await User.findOne({ discordId: userId }).exec();
+      const discordId = normalizeDiscordId(participant.userId ?? key);
+      const userDoc = await User.findOne({ discordId }).exec();
       if (!userDoc) {
         logger.error(
           "api/admin/quests/[id]/participants",
-          `User not found: ${userId}`
+          `User not found: ${discordId || userId}`
         );
         continue;
       }
@@ -127,7 +139,7 @@ export async function PATCH(
           }) => Promise<unknown>;
         };
         await TT.createTransaction({
-          userId: String(userId),
+          userId: String(discordId || userId),
           amount: tokensToAward,
           type: "earned",
           category: "quest_reward",
@@ -154,7 +166,7 @@ export async function PATCH(
       participant.rewardedAt = now;
       participant.tokensEarned = tokensToAward;
       participant.itemsEarned = [];
-      rewarded.push(userId);
+      rewarded.push(discordId || userId);
     }
 
     await quest.save();

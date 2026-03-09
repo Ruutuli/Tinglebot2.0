@@ -78,8 +78,8 @@ const userSchema = new mongoose.Schema({
 
   // ------------------- Birthday System -------------------
   birthday: {
-    month: { type: Number, min: 1, max: 12, default: null }, // Birthday month (1-12)
-    day: { type: Number, min: 1, max: 31, default: null }, // Birthday day (1-31)
+    month: { type: Number, default: null, validate: { validator: (v) => v == null || (v >= 1 && v <= 12), message: 'Month must be 1-12 or empty (no birthday)' } }, // 1-12 or null for no birthday
+    day: { type: Number, default: null, validate: { validator: (v) => v == null || (v >= 1 && v <= 31), message: 'Day must be 1-31 or empty (no birthday)' } }, // 1-31 or null for no birthday
     lastBirthdayReward: { type: String, default: null }, // Last year they received birthday rewards (YYYY format)
     birthdayDiscountExpiresAt: { type: Date, default: null }, // When the birthday discount expires
     birthdayRewards: [{ // Track birthday rewards given
@@ -103,9 +103,16 @@ const userSchema = new mongoose.Schema({
   },
 
   // ------------------- Quest Completion Tracking -------------------
+  // bot: quests completed/turned in since bot; legacy: pre-bot imported totals
   quests: {
-    totalCompleted: { type: Number, default: 0 }, // Total number of standard quests completed
-    lastCompletionAt: { type: Date, default: null }, // Timestamp of most recent quest completion
+    bot: { completed: { type: Number, default: 0 }, pending: { type: Number, default: 0 } },
+    legacy: {
+      completed: { type: Number, default: 0 },
+      pending: { type: Number, default: 0 },
+      transferredAt: { type: Date, default: null },
+      transferUsed: { type: Boolean, default: false }
+    },
+    lastCompletionAt: { type: Date, default: null },
     typeTotals: {
       art: { type: Number, default: 0 },
       writing: { type: Number, default: 0 },
@@ -126,11 +133,10 @@ const userSchema = new mongoose.Schema({
         rewardSource: { type: String, default: 'immediate' }
       }
     ],
-    legacy: {
-      totalTransferred: { type: Number, default: 0 },
-      pendingTurnIns: { type: Number, default: 0 },
-      transferredAt: { type: Date, default: null },
-      transferUsed: { type: Boolean, default: false }
+    turnIns: {
+      totalSetsTurnedIn: { type: Number, default: 0 },
+      lastTurnedInAt: { type: Date, default: null },
+      history: [{ turnedInAt: Date, amount: Number, fromBot: Number, fromLegacy: Number }]
     }
   },
 
@@ -461,9 +467,14 @@ function getQuestTypeKey(questType = '') {
 
 function defaultQuestTracking() {
   return {
-    totalCompleted: 0,
+    bot: { completed: 0, pending: 0 },
+    legacy: {
+      completed: 0,
+      pending: 0,
+      transferredAt: null,
+      transferUsed: false
+    },
     lastCompletionAt: null,
-    pendingTurnIns: 0,
     typeTotals: {
       art: 0,
       writing: 0,
@@ -473,13 +484,27 @@ function defaultQuestTracking() {
       other: 0
     },
     completions: [],
-    legacy: {
-      totalTransferred: 0,
-      pendingTurnIns: 0,
-      transferredAt: null,
-      transferUsed: false
-    }
+    turnIns: { totalSetsTurnedIn: 0, lastTurnedInAt: null, history: [] }
   };
+}
+
+function migrateQuestShapeToBotLegacy(quests) {
+  if (!quests || typeof quests !== 'object') return false;
+  let changed = false;
+  if (typeof quests.totalCompleted === 'number' || typeof quests.pendingTurnIns === 'number') {
+    if (!quests.bot || typeof quests.bot !== 'object') quests.bot = { completed: 0, pending: 0 };
+    if (typeof quests.bot.completed !== 'number') quests.bot.completed = safePendingNumber(quests.totalCompleted);
+    if (typeof quests.bot.pending !== 'number') quests.bot.pending = safePendingNumber(quests.pendingTurnIns);
+    changed = true;
+  }
+  const legacy = quests.legacy || {};
+  if (typeof legacy.totalTransferred === 'number' || typeof legacy.pendingTurnIns === 'number') {
+    if (!quests.legacy || typeof quests.legacy !== 'object') quests.legacy = { ...defaultQuestTracking().legacy };
+    if (typeof quests.legacy.completed !== 'number') quests.legacy.completed = safePendingNumber(legacy.totalTransferred);
+    if (typeof quests.legacy.pending !== 'number') quests.legacy.pending = safePendingNumber(legacy.pendingTurnIns);
+    changed = true;
+  }
+  return changed;
 }
 
 /** Coerce to a non-negative integer for pending turn-in math (avoids NaN/negative from bad data). */
@@ -491,10 +516,10 @@ function safePendingNumber(value) {
 
 function shouldFixPendingTurnInsFromCompletions(questTracking) {
   const actualCompletions = countUniqueQuestCompletions(questTracking.completions || []);
-  const currentPending = questTracking.pendingTurnIns ?? 0;
-  const legacyPending = questTracking.legacy?.pendingTurnIns ?? 0;
+  const botPending = questTracking.bot?.pending ?? 0;
+  const legacyPending = questTracking.legacy?.pending ?? 0;
   const legacyTransferUsed = questTracking.legacy?.transferUsed || false;
-  if (currentPending !== 0 || actualCompletions <= 0) return false;
+  if (botPending !== 0 || actualCompletions <= 0) return false;
   return !legacyTransferUsed || legacyPending > 0;
 }
 
@@ -503,14 +528,19 @@ userSchema.methods.recomputePendingTurnInsIfNeeded = function(reason = '') {
   if (!qt) return;
   const actualCompletions = countUniqueQuestCompletions(qt.completions || []);
   if (!shouldFixPendingTurnInsFromCompletions(qt)) return;
-  qt.pendingTurnIns = actualCompletions;
-  logger.info('QUEST', `recomputePendingTurnInsIfNeeded: fixed pendingTurnIns for user ${this.discordId}: was 0, set to ${actualCompletions}${reason ? ` (${reason})` : ''}`);
+  if (!qt.bot || typeof qt.bot !== 'object') qt.bot = { completed: qt.bot?.completed ?? 0, pending: 0 };
+  qt.bot.pending = actualCompletions;
+  logger.info('QUEST', `recomputePendingTurnInsIfNeeded: fixed bot.pending for user ${this.discordId}: was 0, set to ${actualCompletions}${reason ? ` (${reason})` : ''}`);
 };
 
 userSchema.methods.ensureQuestTracking = function() {
   if (!this.quests) {
     this.quests = defaultQuestTracking();
   } else {
+    migrateQuestShapeToBotLegacy(this.quests);
+    if (!this.quests.bot || typeof this.quests.bot !== 'object') this.quests.bot = { ...defaultQuestTracking().bot };
+    this.quests.bot.completed = safePendingNumber(this.quests.bot.completed);
+    this.quests.bot.pending = safePendingNumber(this.quests.bot.pending);
     if (!this.quests.typeTotals) {
       this.quests.typeTotals = { ...defaultQuestTracking().typeTotals };
     } else {
@@ -521,26 +551,8 @@ userSchema.methods.ensureQuestTracking = function() {
         }
       }
     }
-    
-    if (!Array.isArray(this.quests.completions)) {
-      this.quests.completions = [];
-    }
-
-    if (typeof this.quests.totalCompleted !== 'number') {
-      this.quests.totalCompleted = 0;
-    }
-
-    if (typeof this.quests.pendingTurnIns !== 'number') {
-      this.quests.pendingTurnIns = 0;
-    }
-
+    if (!Array.isArray(this.quests.completions)) this.quests.completions = [];
     this.recomputePendingTurnInsIfNeeded('ensureQuestTracking');
-    const currentPending = this.quests.pendingTurnIns || 0;
-    if (currentPending < 0) {
-      this.quests.pendingTurnIns = Math.max(0, currentPending);
-      logger.info('QUEST', `ensureQuestTracking: fixed negative pendingTurnIns for user ${this.discordId}: was ${currentPending}, set to 0`);
-    }
-
     if (!this.quests.legacy || typeof this.quests.legacy !== 'object') {
       this.quests.legacy = { ...defaultQuestTracking().legacy };
     } else {
@@ -550,11 +562,13 @@ userSchema.methods.ensureQuestTracking = function() {
           this.quests.legacy[key] = legacyDefaults[key];
         }
       }
-      this.quests.legacy.totalTransferred = safePendingNumber(this.quests.legacy.totalTransferred);
-      this.quests.legacy.pendingTurnIns = safePendingNumber(this.quests.legacy.pendingTurnIns);
+      this.quests.legacy.completed = safePendingNumber(this.quests.legacy.completed);
+      this.quests.legacy.pending = safePendingNumber(this.quests.legacy.pending);
+    }
+    if (!this.quests.turnIns || typeof this.quests.turnIns !== 'object') {
+      this.quests.turnIns = { ...defaultQuestTracking().turnIns };
     }
   }
-
   return this.quests;
 };
 
@@ -630,7 +644,6 @@ userSchema.methods.recordQuestCompletion = async function({
   }
   
   if (isNewCompletion) {
-    // Add new completion
     questTracking.completions.push({
       questId,
       questType,
@@ -641,43 +654,34 @@ userSchema.methods.recordQuestCompletion = async function({
       itemsEarned: normalizedItems,
       rewardSource
     });
-    
-    questTracking.totalCompleted += 1;
-    questTracking.pendingTurnIns = (questTracking.pendingTurnIns || 0) + 1;
+    questTracking.bot.completed += 1;
+    questTracking.bot.pending = (questTracking.bot.pending || 0) + 1;
     questTracking.typeTotals[typeKey] = (questTracking.typeTotals[typeKey] || 0) + 1;
   } else {
-    // ------------------- Safeguard: Ensure totalCompleted matches unique completions -------------------
-    // When updating an existing completion, fix totalCompleted if it was undercounted.
-    // Do NOT set pendingTurnIns = actualCompletions: pendingTurnIns can legitimately be less
-    // when the user has already turned in (consumeQuestTurnIns reduces it; completions are not removed).
     const actualCompletions = countUniqueQuestCompletions(questTracking.completions);
-
-    if (questTracking.totalCompleted !== actualCompletions) {
-      logger.warn('QUEST', `Quest tracking mismatch for user ${this.discordId}: totalCompleted=${questTracking.totalCompleted}, actual=${actualCompletions}. Auto-fixing...`);
-      const diff = actualCompletions - questTracking.totalCompleted;
-      questTracking.totalCompleted = actualCompletions;
-
-      // Adjust pendingTurnIns if needed (only increase, never decrease to avoid undercounting)
+    if (questTracking.bot.completed !== actualCompletions) {
+      logger.warn('QUEST', `Quest tracking mismatch for user ${this.discordId}: bot.completed=${questTracking.bot.completed}, actual=${actualCompletions}. Auto-fixing...`);
+      const diff = actualCompletions - questTracking.bot.completed;
+      questTracking.bot.completed = actualCompletions;
       if (diff > 0) {
-        questTracking.pendingTurnIns = (questTracking.pendingTurnIns || 0) + diff;
-        logger.info('QUEST', `Fixed pendingTurnIns: added ${diff} missing completions for user ${this.discordId}`);
+        questTracking.bot.pending = (questTracking.bot.pending || 0) + diff;
+        logger.info('QUEST', `Fixed bot.pending: added ${diff} missing completions for user ${this.discordId}`);
       }
     }
   }
-  
+
   questTracking.lastCompletionAt = completionTimestamp;
-  
   if (questTracking.completions.length > 25) {
     questTracking.completions = questTracking.completions.slice(-25);
   }
-  
+
   await this.save();
-  
+
   return {
-    totalCompleted: questTracking.totalCompleted,
+    totalCompleted: questTracking.bot.completed,
     lastCompletionAt: questTracking.lastCompletionAt,
     typeTotals: questTracking.typeTotals,
-    pendingTurnIns: questTracking.pendingTurnIns
+    pendingTurnIns: questTracking.bot.pending
   };
 };
 
@@ -685,12 +689,13 @@ userSchema.methods.getQuestStats = function() {
   const questTracking = this.ensureQuestTracking();
   const legacy = questTracking.legacy || defaultQuestTracking().legacy;
   const legacyClone = {
-    totalTransferred: legacy.totalTransferred || 0,
-    pendingTurnIns: legacy.pendingTurnIns || 0,
-    transferredAt: legacy.transferredAt || null,
-    transferUsed: legacy.transferUsed || false
+    completed: legacy.completed ?? 0,
+    pending: legacy.pending ?? 0,
+    transferredAt: legacy.transferredAt ?? null,
+    transferUsed: Boolean(legacy.transferUsed)
   };
-  const allTimeTotal = (questTracking.totalCompleted || 0) + legacyClone.totalTransferred;
+  const botCompleted = questTracking.bot?.completed ?? 0;
+  const allTimeTotal = botCompleted + legacyClone.completed;
   const turnInSummary = this.getQuestTurnInSummary();
   const completions = questTracking.completions || [];
   const questList = completions.map((c) => ({
@@ -699,7 +704,7 @@ userSchema.methods.getQuestStats = function() {
     category: c.questType || ''
   }));
   return {
-    totalCompleted: questTracking.totalCompleted,
+    totalCompleted: botCompleted,
     legacy: legacyClone,
     allTimeTotal,
     lastCompletionAt: questTracking.lastCompletionAt,
@@ -742,8 +747,8 @@ userSchema.methods.applyLegacyQuestTransfer = async function({
   if (!questTracking.legacy || typeof questTracking.legacy !== 'object') {
     questTracking.legacy = { ...defaultQuestTracking().legacy };
   }
-  questTracking.legacy.totalTransferred = sanitizedTotal;
-  questTracking.legacy.pendingTurnIns = sanitizedPending;
+  questTracking.legacy.completed = sanitizedTotal;
+  questTracking.legacy.pending = sanitizedPending;
   questTracking.legacy.transferredAt = new Date();
   questTracking.legacy.transferUsed = true;
 
@@ -754,12 +759,12 @@ userSchema.methods.applyLegacyQuestTransfer = async function({
   return {
     success: true,
     legacy: {
-      totalTransferred: questTracking.legacy.totalTransferred,
-      pendingTurnIns: questTracking.legacy.pendingTurnIns,
+      completed: questTracking.legacy.completed,
+      pending: questTracking.legacy.pending,
       transferredAt: questTracking.legacy.transferredAt,
       transferUsed: questTracking.legacy.transferUsed
     },
-    allTimeTotal: (questTracking.totalCompleted || 0) + questTracking.legacy.totalTransferred,
+    allTimeTotal: (questTracking.bot?.completed ?? 0) + questTracking.legacy.completed,
     pendingTurnIns: this.getQuestPendingTurnIns(),
     turnInSummary: this.getQuestTurnInSummary()
   };
@@ -767,16 +772,16 @@ userSchema.methods.applyLegacyQuestTransfer = async function({
 
 userSchema.methods.getQuestPendingTurnIns = function() {
   const questTracking = this.ensureQuestTracking();
-  const legacyPending = safePendingNumber(questTracking.legacy?.pendingTurnIns);
-  const currentPending = safePendingNumber(questTracking.pendingTurnIns);
-  return Math.max(0, legacyPending + currentPending);
+  const legacyPending = safePendingNumber(questTracking.legacy?.pending);
+  const botPending = safePendingNumber(questTracking.bot?.pending);
+  return Math.max(0, legacyPending + botPending);
 };
 
 userSchema.methods.getQuestTurnInSummary = function() {
   const questTracking = this.ensureQuestTracking();
-  const legacyPending = safePendingNumber(questTracking.legacy?.pendingTurnIns);
-  const currentPending = safePendingNumber(questTracking.pendingTurnIns);
-  const totalPending = Math.max(0, legacyPending + currentPending);
+  const legacyPending = safePendingNumber(questTracking.legacy?.pending);
+  const botPending = safePendingNumber(questTracking.bot?.pending);
+  const totalPending = Math.max(0, legacyPending + botPending);
   const redeemableSets = Math.floor(totalPending / 10);
   const remainder = totalPending % 10;
 
@@ -785,7 +790,7 @@ userSchema.methods.getQuestTurnInSummary = function() {
     redeemableSets,
     remainder,
     legacyPending,
-    currentPending
+    currentPending: botPending
   };
 };
 
@@ -815,23 +820,23 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
   let consumedFromCurrent = 0;
   let consumedFromLegacy = 0;
 
-  const currentPending = safePendingNumber(questTracking.pendingTurnIns);
-  const legacyPendingBeforeDeduct = safePendingNumber(questTracking.legacy.pendingTurnIns);
+  const botPendingBefore = safePendingNumber(questTracking.bot?.pending);
+  const legacyPendingBeforeDeduct = safePendingNumber(questTracking.legacy?.pending);
 
-  if (currentPending > 0 && remaining > 0) {
-    consumedFromCurrent = Math.min(currentPending, remaining);
-    questTracking.pendingTurnIns = Math.max(0, currentPending - consumedFromCurrent);
+  if (botPendingBefore > 0 && remaining > 0) {
+    consumedFromCurrent = Math.min(botPendingBefore, remaining);
+    questTracking.bot.pending = Math.max(0, botPendingBefore - consumedFromCurrent);
     remaining -= consumedFromCurrent;
   }
 
   if (remaining > 0 && legacyPendingBeforeDeduct > 0) {
     consumedFromLegacy = Math.min(legacyPendingBeforeDeduct, remaining);
-    questTracking.legacy.pendingTurnIns = Math.max(0, legacyPendingBeforeDeduct - consumedFromLegacy);
+    questTracking.legacy.pending = Math.max(0, legacyPendingBeforeDeduct - consumedFromLegacy);
     remaining -= consumedFromLegacy;
   }
 
-  questTracking.pendingTurnIns = safePendingNumber(questTracking.pendingTurnIns);
-  questTracking.legacy.pendingTurnIns = safePendingNumber(questTracking.legacy.pendingTurnIns);
+  questTracking.bot.pending = safePendingNumber(questTracking.bot?.pending);
+  questTracking.legacy.pending = safePendingNumber(questTracking.legacy?.pending);
 
   if (remaining > 0) {
     const consumed = consumedFromCurrent + consumedFromLegacy;

@@ -15,6 +15,7 @@ export type ModelListResource =
   | "items"
   | "monsters"
   | "pets"
+  | "users"
   | "villages"
   | "village-shops";
 
@@ -38,9 +39,15 @@ const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
   },
   monsters: { species: "Species", type: "Type", tier: "Tier" },
   pets: { status: "Status", species: "Species", petType: "Type" },
+  users: { status: "Status" },
   villages: { region: "Region" },
   "village-shops": { category: "Category", type: "Type", rarity: "Rarity" },
 };
+
+function getDefaultSortBy(resource: ModelListResource): string {
+  if (resource === "users") return "name";
+  return "name";
+}
 
 function buildFilterGroups(
   filterOptions: Record<string, (string | number)[]> | undefined,
@@ -313,6 +320,50 @@ function buildFilterGroups(
         },
       ],
     });
+  } else if (resource === "users") {
+    groups.push({
+      id: "sortBy",
+      label: "Sort By",
+      type: "single" as const,
+      options: [
+        {
+          id: "name",
+          label: "Discord Name (A-Z)",
+          value: "name",
+          active: sortBy === "name" || !sortBy,
+        },
+        {
+          id: "name-desc",
+          label: "Discord Name (Z-A)",
+          value: "name-desc",
+          active: sortBy === "name-desc",
+        },
+        {
+          id: "tokens-desc",
+          label: "Tokens (Most)",
+          value: "tokens-desc",
+          active: sortBy === "tokens-desc",
+        },
+        {
+          id: "tokens",
+          label: "Tokens (Least)",
+          value: "tokens",
+          active: sortBy === "tokens",
+        },
+        {
+          id: "level-desc",
+          label: "Level (Most)",
+          value: "level-desc",
+          active: sortBy === "level-desc",
+        },
+        {
+          id: "level",
+          label: "Level (Least)",
+          value: "level",
+          active: sortBy === "level",
+        },
+      ],
+    });
   } else if (resource === "village-shops") {
     groups.push({
       id: "sortBy",
@@ -543,7 +594,7 @@ export function useModelList<T>(
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, (string | number | boolean)[]>>({});
-  const [sortBy, setSortBy] = useState<string>("name");
+  const [sortBy, setSortBy] = useState<string>(() => getDefaultSortBy(resource));
   const [itemsPerPage, setItemsPerPage] = useState<number>(
     getDefaultLimit(resource, defaultLimit)
   );
@@ -720,7 +771,7 @@ export function useModelList<T>(
   const clearAll = useCallback(() => {
     setSearch("");
     setFilters({});
-    setSortBy("name");
+    setSortBy(getDefaultSortBy(resource));
     setItemsPerPage(getDefaultLimit(resource, defaultLimit));
     setCurrentPage(1);
   }, [resource, defaultLimit]);

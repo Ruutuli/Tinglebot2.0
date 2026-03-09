@@ -3467,7 +3467,7 @@ async function handleModQuestAdd(interaction) {
     await user.save();
 
     const summary = user.getQuestTurnInSummary();
-    const pendingTurnIns = summary.totalPending ?? (user.quests?.pendingTurnIns || 0) + (user.quests?.legacy?.pendingTurnIns || 0);
+    const pendingTurnIns = summary.totalPending ?? (user.quests?.bot?.pending ?? user.quests?.pendingTurnIns ?? 0) + (user.quests?.legacy?.pending ?? user.quests?.legacy?.pendingTurnIns ?? 0);
     return interaction.editReply({
       content: `✅ Added quest **${quest.title}** (\`${questId}\`) to <@${targetUser.id}>'s completions (they participated).\n• Quest turn-in pending: **${pendingTurnIns}**`,
       ephemeral: true
@@ -3495,7 +3495,7 @@ async function handleModQuestAdd(interaction) {
   await user.save();
 
   const summary = user.getQuestTurnInSummary();
-  const pendingTurnIns = summary.totalPending ?? (user.quests?.pendingTurnIns || 0) + (user.quests?.legacy?.pendingTurnIns || 0);
+  const pendingTurnIns = summary.totalPending ?? (user.quests?.bot?.pending ?? user.quests?.pendingTurnIns ?? 0) + (user.quests?.legacy?.pending ?? user.quests?.legacy?.pendingTurnIns ?? 0);
   return interaction.editReply({
     content: `✅ Added **${amount}** quest completion(s) to <@${targetUser.id}>'s total.\n• Quest turn-in pending: **${pendingTurnIns}**`,
     ephemeral: true
