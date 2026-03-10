@@ -22,6 +22,18 @@ const QuadrantSchema = new Schema({
   quadrantId: { type: String, required: true }, // e.g., Q1, Q2, etc.
   status: { type: String, enum: ['inaccessible', 'unexplored', 'explored', 'secured'], default: 'unexplored' },
   blighted: { type: Boolean, default: false }, // Boolean field for blighted status
+  /** Environmental hazards (e.g. 'thunder', 'hot', 'cold'). */
+  hazards: [{ type: String }],
+  /** Terrain tags (free-form), e.g. ["⛰️ Mountain & Highland", "🌊 Water & Wetlands"]. */
+  terrain: [{ type: String }],
+  /** Items that can be gathered/found here (free-form labels). */
+  items: [{ type: String }],
+  /** Monsters that can appear here (names should match monster DB). */
+  monsters: [{ type: String }],
+  /** Boss monsters that can appear here. */
+  bossMonsters: [{ type: String }],
+  /** Special notes/flags for this quadrant (free-form). */
+  special: [{ type: String }],
   discoveries: [DiscoverySchema], // Array of objects using the DiscoverySchema
   exploredBy: { type: String, default: '' }, // Discord ID of explorer
   exploredAt: { type: Date, default: null },

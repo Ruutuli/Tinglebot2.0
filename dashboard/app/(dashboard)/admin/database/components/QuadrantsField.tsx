@@ -35,6 +35,12 @@ export type Quadrant = {
   status?: string;
   blighted?: boolean;
   noCamp?: boolean;
+  hazards?: string[];
+  terrain?: string[];
+  items?: string[];
+  monsters?: string[];
+  bossMonsters?: string[];
+  special?: string[];
   discoveries?: Discovery[];
   exploredBy?: string;
   exploredAt?: string | Date | null;
@@ -62,6 +68,12 @@ function normalizeQuadrants(value: unknown): Quadrant[] {
       status: (q as Quadrant).status ?? "unexplored",
       blighted: (q as Quadrant).blighted ?? false,
       noCamp: (q as Quadrant).noCamp ?? false,
+      hazards: arrayOrEmpty((q as Quadrant).hazards),
+      terrain: arrayOrEmpty((q as Quadrant).terrain),
+      items: arrayOrEmpty((q as Quadrant).items),
+      monsters: arrayOrEmpty((q as Quadrant).monsters),
+      bossMonsters: arrayOrEmpty((q as Quadrant).bossMonsters),
+      special: arrayOrEmpty((q as Quadrant).special),
       discoveries: Array.isArray((q as Quadrant).discoveries) ? (q as Quadrant).discoveries : [],
       exploredBy: (q as Quadrant).exploredBy ?? "",
       exploredAt: (q as Quadrant).exploredAt ?? null,
@@ -75,6 +87,12 @@ function normalizeQuadrants(value: unknown): Quadrant[] {
     status: "unexplored",
     blighted: false,
     noCamp: false,
+    hazards: [],
+    terrain: [],
+    items: [],
+    monsters: [],
+    bossMonsters: [],
+    special: [],
     discoveries: [],
     exploredBy: "",
     exploredAt: null,
@@ -82,6 +100,18 @@ function normalizeQuadrants(value: unknown): Quadrant[] {
     oldMapLeadsTo: null,
     ruinRestStamina: null,
   });
+}
+
+function arrayOrEmpty(arr: unknown): string[] {
+  return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+}
+
+function stringArrayToLines(arr: string[]): string {
+  return (arr ?? []).join("\n");
+}
+
+function linesToStringArray(text: string): string[] {
+  return text.split("\n").map((s) => s.trim()).filter(Boolean);
 }
 
 function formatDate(v: string | Date | null | undefined): string {
@@ -179,6 +209,66 @@ export function QuadrantsField({
                 />
                 <span className="text-xs text-[var(--totk-grey-200)]">No camp (pass-through only)</span>
               </label>
+              <div>
+                <span className="text-[var(--totk-grey-200)] text-xs">Hazards (one per line, e.g. thunder, hot, cold)</span>
+                <textarea
+                  value={stringArrayToLines(q.hazards ?? [])}
+                  onChange={(e) => updateQuadrant(index, { hazards: linesToStringArray(e.target.value) })}
+                  rows={2}
+                  placeholder={"thunder\nhot"}
+                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[var(--totk-grey-200)] text-xs">Terrain (one per line)</span>
+                <textarea
+                  value={stringArrayToLines(q.terrain ?? [])}
+                  onChange={(e) => updateQuadrant(index, { terrain: linesToStringArray(e.target.value) })}
+                  rows={2}
+                  placeholder="⛰️ Mountain & Highland"
+                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[var(--totk-grey-200)] text-xs">Items (one per line, gather labels)</span>
+                <textarea
+                  value={stringArrayToLines(q.items ?? [])}
+                  onChange={(e) => updateQuadrant(index, { items: linesToStringArray(e.target.value) })}
+                  rows={2}
+                  placeholder={"Fish\nCreature"}
+                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[var(--totk-grey-200)] text-xs">Monsters (one per line, match monster DB)</span>
+                <textarea
+                  value={stringArrayToLines(q.monsters ?? [])}
+                  onChange={(e) => updateQuadrant(index, { monsters: linesToStringArray(e.target.value) })}
+                  rows={2}
+                  placeholder={"Lynel\nBlack Bokoblin"}
+                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[var(--totk-grey-200)] text-xs">Boss monsters (one per line)</span>
+                <textarea
+                  value={stringArrayToLines(q.bossMonsters ?? [])}
+                  onChange={(e) => updateQuadrant(index, { bossMonsters: linesToStringArray(e.target.value) })}
+                  rows={2}
+                  placeholder="—"
+                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
+                />
+              </div>
+              <div>
+                <span className="text-[var(--totk-grey-200)] text-xs">Special (one per line, notes/flags)</span>
+                <textarea
+                  value={stringArrayToLines(q.special ?? [])}
+                  onChange={(e) => updateQuadrant(index, { special: linesToStringArray(e.target.value) })}
+                  rows={2}
+                  placeholder="—"
+                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
+                />
+              </div>
               <div>
                 <span className="text-[var(--totk-grey-200)] text-xs">Explored by (Discord ID)</span>
                 <input

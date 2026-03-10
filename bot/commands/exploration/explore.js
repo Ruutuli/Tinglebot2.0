@@ -1850,26 +1850,6 @@ async function hasAdjacentSecuredQuadrant(square, quadrant) {
  return false;
 }
 
-// ------------------- ensureStartingSquaresSecured -------------------
-// Ensures all starting squares (H5, H8, F10) have every quadrant status set to "secured".
-// Idempotent; safe to call on every explore. Only updates when a quadrant is not already secured.
-async function ensureStartingSquaresSecured() {
- const startSquareIds = [...new Set(Object.values(START_POINTS_BY_REGION).map((p) => (p && p.square ? String(p.square).trim().toUpperCase() : null)).filter(Boolean))];
- if (!startSquareIds.length) return;
- for (const squareId of startSquareIds) {
-  const square = await Square.findOne({
-   squareId: new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-  });
-  if (!square || !square.quadrants || !square.quadrants.length) continue;
-  const anyNotSecured = square.quadrants.some((q) => String(q.status || "").toLowerCase() !== "secured");
-  if (!anyNotSecured) continue;
-  await Square.updateOne(
-   { _id: square._id },
-   { $set: { "quadrants.$[].status": "secured", updatedAt: new Date() } }
-  );
- }
-}
-
 // ============================================================================
 // ------------------- Expedition Command Definition -------------------
 // ============================================================================
@@ -2078,8 +2058,6 @@ module.exports = {
  async execute(interaction) {
   try {
    await interaction.deferReply();
-
-   await ensureStartingSquaresSecured();
 
    const subcommandGroup = interaction.options.getSubcommandGroup(false);
    const subcommand = interaction.options.getSubcommand(false);

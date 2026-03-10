@@ -2370,7 +2370,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             label: "Quadrants",
             type: "custom",
             component: "QuadrantsField",
-            helpText: "Quadrant data (Q1–Q4): status, blighted, noCamp (pass-through only), discoveries, exploredBy, exploredAt, oldMapNumber, oldMapLeadsTo, ruinRestStamina",
+            helpText: "Quadrant data (Q1–Q4): status, blighted, noCamp, hazards, terrain, items, monsters, bossMonsters, special, discoveries, exploredBy, exploredAt, oldMapNumber, oldMapLeadsTo, ruinRestStamina",
           },
         ],
       },
