@@ -424,6 +424,20 @@ function createWaveBlockEmbed(party, waveId, blockedAction) {
     .setFooter({ text: "Finish the wave or use /explore item to heal, then continue." });
 }
 
+// ------------------- getCombatBlockReply ------------------
+// Consistent wave/raid gating for explore actions (roll/move/camp/end/etc.)
+async function getCombatBlockReply(party, expeditionId, blockedAction, location) {
+  if (!expeditionId) return null;
+  const re = exactIRegex(expeditionId);
+  const [activeRaid, activeWave] = await Promise.all([
+    Raid.findOne({ expeditionId: { $regex: re }, status: "active" }),
+    Wave.findOne({ expeditionId: { $regex: re }, status: "active" }),
+  ]);
+  if (activeRaid) return { embeds: [createRaidBlockEmbed(party, activeRaid.raidId, blockedAction, location)] };
+  if (activeWave) return { embeds: [createWaveBlockEmbed(party, activeWave.waveId, blockedAction)] };
+  return null;
+}
+
 // ------------------- payStaminaOrStruggle ------------------
 // Pay cost from PARTY pool only: stamina first, then hearts (struggle) for shortfall.
 // During a started expedition the pool (party.totalStamina / party.totalHearts) is authoritative;
@@ -468,6 +482,16 @@ function normalizeExpeditionId(value) {
  return pipe === -1 ? trimmed : trimmed.slice(0, pipe).trim();
 }
 
+// ------------------- exactIRegex ------------------
+// Exact, case-insensitive regex matcher for user-controlled strings (escapes regex metacharacters).
+function escapeRegexLiteral(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function exactIRegex(value) {
+  const v = String(value ?? "").trim();
+  return new RegExp(`^${escapeRegexLiteral(v)}$`, "i");
+}
+
 // ------------------- normalizeCharacterName ------------------
 // Autocomplete may send full display string (e.g. "Wren | Rudania | Hunter | ❤ 3 | 🟩 5"); use only the character name.
 function normalizeCharacterName(value) {
@@ -491,13 +515,37 @@ async function findCharacterByNameAndUser(characterName, userId) {
 // Max party hearts/stamina = sum of each member's maxHearts/maxStamina. Pool must never exceed these when healing.
 async function getPartyPoolCaps(party) {
  if (!party?.characters?.length) return { maxHearts: 0, maxStamina: 0 };
- let maxHearts = 0, maxStamina = 0;
- for (const pc of party.characters) {
-  const char = await Character.findById(pc._id).lean();
-  if (char) {
-   maxHearts += char.maxHearts ?? 0;
-   maxStamina += char.maxStamina ?? 0;
-  }
+
+ // Fast path: prefer backfilled party-level caps when present.
+ const partyMaxHearts = Number(party.maxHearts) || 0;
+ const partyMaxStamina = Number(party.maxStamina) || 0;
+ if (partyMaxHearts > 0 || partyMaxStamina > 0) {
+  return { maxHearts: Math.max(0, partyMaxHearts), maxStamina: Math.max(0, partyMaxStamina) };
+ }
+
+ // Next best: sum per-slot max values if already present on party.characters.
+ const hasSlotMaxes = party.characters.every(
+  (pc) => typeof pc?.maxHearts === "number" && typeof pc?.maxStamina === "number"
+ );
+ if (hasSlotMaxes) {
+  const maxHearts = party.characters.reduce((s, pc) => s + (pc.maxHearts ?? 0), 0);
+  const maxStamina = party.characters.reduce((s, pc) => s + (pc.maxStamina ?? 0), 0);
+  return { maxHearts, maxStamina };
+ }
+
+ // Fallback: compute from DB (supports both Character and ModCharacter).
+ const ids = party.characters.map((pc) => pc?._id).filter(Boolean);
+ if (ids.length === 0) return { maxHearts: 0, maxStamina: 0 };
+ const [chars, modChars] = await Promise.all([
+  Character.find({ _id: { $in: ids } }).select("maxHearts maxStamina").lean(),
+  ModCharacter.find({ _id: { $in: ids } }).select("maxHearts maxStamina").lean(),
+ ]);
+ const all = [...(chars || []), ...(modChars || [])];
+ let maxHearts = 0;
+ let maxStamina = 0;
+ for (const c of all) {
+  maxHearts += Number(c?.maxHearts) || 0;
+  maxStamina += Number(c?.maxStamina) || 0;
  }
  return { maxHearts, maxStamina };
 }
@@ -756,8 +804,28 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
 
 // ------------------- Discovery constants (3-per-square limit) ------------------
 const SPECIAL_OUTCOMES = ["monster_camp", "ruins", "grotto"];
-const DISCOVERY_COUNT_OUTCOMES = ["monster_camp", "grotto", "ruins", "ruins_found"];
-const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "ruins_found"];
+const DISCOVERY_COUNT_OUTCOMES = [
+  "monster_camp",
+  "monster_camp_fight",
+  "grotto",
+  "grotto_found",
+  "grotto_cleansed",
+  "ruins",
+  "ruins_found",
+  "ruin_rest",
+];
+// When leaving a square, only discoveries that can be pinned (or historically were treated as such) should be eligible for cleanup.
+// Keep legacy outcomes for backward compatibility with older progress logs.
+const DISCOVERY_CLEANUP_OUTCOMES = [
+  "monster_camp",
+  "monster_camp_fight",
+  "grotto",
+  "grotto_found",
+  "grotto_cleansed",
+  "ruins",
+  "ruins_found",
+  "ruin_rest",
+];
 const MAX_SPECIAL_EVENTS_PER_SQUARE = 3;
 const DISCOVERY_REDUCE_CHANCE_WHEN_ANY = 0.25; // 75% less chance when square has 1+ discovery
 
@@ -770,7 +838,8 @@ function partyHasFindThisExpedition(party) {
   return (party.progressLog || []).some((e) => FIND_OUTCOMES_LOGGED.includes(String(e.outcome || "")));
 }
 
-const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
+// Location parsing used for discovery cleanup/pinning reminders. Keep aligned with dashboard parsing (supports "in" and "at").
+const LOC_IN_MESSAGE_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 
 // ------------------- hasActiveGrottoAtLocation ------------------
 // True if party has an open grotto trial at current location (must complete before roll/move/discovery)
@@ -1881,7 +1950,7 @@ module.exports = {
     const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
 
     // Block grotto commands if there's an active raid for this expedition (except Test of Power grotto raids which ARE the raid)
-    const activeRaidGrotto = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
+    const activeRaidGrotto = await Raid.findOne({ expeditionId: { $regex: exactIRegex(expeditionId) }, status: "active" });
     if (activeRaidGrotto) {
      // If this is a Test of Power grotto raid, allow "continue" to show the raid info, but block other subcommands
      const isTestOfPowerRaid = !!activeRaidGrotto.grottoId;
@@ -1894,7 +1963,7 @@ module.exports = {
 
     // Block grotto commands if there's an active wave for this expedition
     const activeWaveGrotto = await Wave.findOne({
-     expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') },
+     expeditionId: { $regex: exactIRegex(expeditionId) },
      status: "active"
     });
     if (activeWaveGrotto) {
@@ -3253,21 +3322,13 @@ module.exports = {
     const characterIndex = party.characters.findIndex((c) => c.name === characterName);
     if (characterIndex === -1) return interaction.editReply("Your character is not part of this expedition.");
     if (party.status !== "started") return interaction.editReply("This expedition has not been started yet.");
-
-    // Block discovery command if there's an active raid for this expedition
-    const activeRaidDiscovery = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    if (activeRaidDiscovery) {
-     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidDiscovery.raidId, "discovery", `${party.square} ${party.quadrant}`)] });
+    if ((party.totalHearts ?? 0) <= 0) {
+     await handleExpeditionFailed(party, interaction);
+     return;
     }
-
-    // Block discovery command if there's an active wave for this expedition
-    const activeWaveDiscovery = await Wave.findOne({
-     expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') },
-     status: "active"
-    });
-    if (activeWaveDiscovery) {
-     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveDiscovery.waveId, "discovery")] });
-    }
+    // Block discovery command if there's active combat for this expedition (must resolve first)
+    const discoveryCombatBlock = await getCombatBlockReply(party, expeditionId, "discovery", `${party.square} ${party.quadrant}`);
+    if (discoveryCombatBlock) return interaction.editReply(discoveryCombatBlock);
 
     const squareId = (party.square && String(party.square).trim()) || "";
     const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
@@ -3625,6 +3686,11 @@ module.exports = {
      if (party.status !== "started") {
       return interaction.editReply("This expedition has not been started yet.");
      }
+     // If party has 0 hearts but expedition still "started" (e.g. KO'd in raid and failure path didn't run), end it now
+     if ((party.totalHearts ?? 0) <= 0) {
+      await handleExpeditionFailed(party, interaction);
+      return;
+     }
 
      const atActiveGrotto = await hasActiveGrottoAtLocation(party, expeditionId);
      if (atActiveGrotto) {
@@ -3641,23 +3707,9 @@ module.exports = {
       );
      }
 
-     // Block rolling if there's an active raid for this expedition (must defeat or retreat first)
-     const activeRaid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-     if (activeRaid) {
-      const raidBlockLocation = `${party.square} ${party.quadrant}`;
-      return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaid.raidId, "roll", raidBlockLocation)] });
-     }
-
-     // Block rolling if there's an active wave for this expedition (must complete wave first)
-     // Use both exact match and regex for case-insensitive comparison
-     const activeWave = await Wave.findOne({ 
-      expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, 
-      status: "active" 
-     });
-     if (activeWave) {
-      logger.info("EXPLORE", `[explore.js] Blocked roll: active wave ${activeWave.waveId} for expedition ${expeditionId}`);
-      return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWave.waveId, "roll")] });
-     }
+     // Block rolling if there's active combat for this expedition (must resolve first)
+     const rollCombatBlock = await getCombatBlockReply(party, expeditionId, "roll", `${party.square} ${party.quadrant}`);
+     if (rollCombatBlock) return interaction.editReply(rollCombatBlock);
 
      const characterIndex = party.characters.findIndex(
       (char) => char.name === characterName
@@ -4083,6 +4135,8 @@ module.exports = {
       const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 }, poolCaps.maxHearts, poolCaps.maxStamina);
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
+      party.markModified("gatheredItems");
+      await party.save(); // Persist gatheredItems so dashboard/expedition record shows the Fairy
       await interaction.editReply({ embeds: [embed] });
       await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) });
       if (!EXPLORATION_TESTING_MODE) {
@@ -5545,15 +5599,18 @@ module.exports = {
     if (party.status !== "started") {
      return interaction.editReply("This expedition is not active. You can only Secure during an active expedition.");
     }
-
+    if ((party.totalHearts ?? 0) <= 0) {
+     await handleExpeditionFailed(party, interaction);
+     return;
+    }
     // Block securing if there's an active raid for this expedition (must defeat or retreat first)
-    const activeRaidSecure = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
+    const activeRaidSecure = await Raid.findOne({ expeditionId: { $regex: exactIRegex(expeditionId) }, status: "active" });
     if (activeRaidSecure) {
      return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidSecure.raidId, "secure", `${party.square} ${party.quadrant}`)] });
     }
 
     // Block securing if there's an active wave for this expedition (must complete wave first)
-    const activeWaveSecure = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
+    const activeWaveSecure = await Wave.findOne({ expeditionId: { $regex: exactIRegex(expeditionId) }, status: "active" });
     if (activeWaveSecure) {
      return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveSecure.waveId, "secure")] });
     }
@@ -6073,7 +6130,10 @@ module.exports = {
     if (party.status !== "started") {
      return interaction.editReply("This expedition has not been started yet.");
     }
-
+    if ((party.totalHearts ?? 0) <= 0) {
+     await handleExpeditionFailed(party, interaction);
+     return;
+    }
     const atActiveGrottoMove = await hasActiveGrottoAtLocation(party, expeditionId);
     if (atActiveGrottoMove) {
      const grotto = await Grotto.findOne({
@@ -6089,17 +6149,9 @@ module.exports = {
      );
     }
 
-    // Block moving if there's an active raid for this expedition (must defeat or retreat first)
-    const activeRaidMove = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    if (activeRaidMove) {
-     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidMove.raidId, "move", `${party.square} ${party.quadrant}`)] });
-    }
-
-    // Block moving if there's an active wave for this expedition (must complete wave first)
-    const activeWaveMove = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    if (activeWaveMove) {
-     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveMove.waveId, "move")] });
-    }
+    // Block moving if there's active combat for this expedition (must resolve first)
+    const moveCombatBlock = await getCombatBlockReply(party, expeditionId, "move", `${party.square} ${party.quadrant}`);
+    if (moveCombatBlock) return interaction.editReply(moveCombatBlock);
 
     // Sync quadrant state from map (exploringMap / Square model) — secured/explored on map means Move is allowed
     // DESIGN NOTE: Exploration state is SHARED across all expeditions via the map database.
@@ -6597,7 +6649,10 @@ module.exports = {
     if (party.status !== "started") {
      return interaction.editReply("This expedition has not been started yet.");
     }
-
+    if ((party.totalHearts ?? 0) <= 0) {
+     await handleExpeditionFailed(party, interaction);
+     return;
+    }
     const partyChar = party.characters[characterIndex];
     // Normalize input: autocomplete display is "ItemName — ❤ N | 🟩 N"; if user pastes that, strip suffix so we match stored itemName
     const normalizedItemInput = (itemName || "").trim().replace(/\s*[—\-]\s*.*$/, "").trim();
@@ -6652,8 +6707,8 @@ module.exports = {
     }
 
     // Item = turn: during active wave/raid, only the current turn participant may use an item. Check before applying any effects.
-    const activeWaveForItem = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    const activeRaidForItem = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
+    const activeWaveForItem = await Wave.findOne({ expeditionId: { $regex: exactIRegex(expeditionId) }, status: "active" });
+    const activeRaidForItem = await Raid.findOne({ expeditionId: { $regex: exactIRegex(expeditionId) }, status: "active" });
     if (activeWaveForItem) {
      const waveCurrent = activeWaveForItem.participants?.[activeWaveForItem.currentTurn ?? 0];
      if (waveCurrent && waveCurrent.characterId && character._id && waveCurrent.characterId.toString() !== character._id.toString()) {
@@ -6699,6 +6754,8 @@ module.exports = {
 
     // Always remove from party loadout so it appears used (testing: still no DB change to character inventory)
     partyChar.items.splice(itemIndex, 1);
+    // Nested mutation (items array) lives under party.characters
+    party.markModified("characters");
 
     // During active wave/raid: only advance wave/raid turn, NOT expedition turn (dashboard stays correct)
     // Track the next turn participant from wave/raid for proper follow-up ping
@@ -6738,7 +6795,6 @@ module.exports = {
     } else {
       logger.info("EXPLORE", `[explore.js] Item used outside combat — advanced expedition turn`);
     }
-    await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
     const heartsText = hearts > 0 ? `+${hearts} ❤️` : "";
     const staminaText = stamina > 0 ? `+${stamina} 🟩` : "";
@@ -6753,7 +6809,7 @@ module.exports = {
      ...(hearts > 0 ? { heartsRecovered: hearts } : {}),
      ...(stamina > 0 ? { staminaRecovered: stamina } : {}),
     });
-    await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+    await party.save(); // Persist pool + loadout + progress log in one place
 
     const embed = new EmbedBuilder()
      .setTitle(`🗺️ **Expedition: Used item — ${carried.itemName}**`)
@@ -6802,16 +6858,12 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    // Block ending if there's an active raid for this expedition (must defeat or retreat first)
-    const activeRaidEnd = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    if (activeRaidEnd) {
-     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidEnd.raidId, "end", `${party.square} ${party.quadrant}`)] });
-    }
-
-    // Block ending if there's an active wave for this expedition (must complete wave first)
-    const activeWaveEnd = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    if (activeWaveEnd) {
-     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveEnd.waveId, "end")] });
+    // Block ending if there's active combat for this expedition (must resolve first)
+    const endCombatBlock = await getCombatBlockReply(party, expeditionId, "end", `${party.square} ${party.quadrant}`);
+    if (endCombatBlock) return interaction.editReply(endCombatBlock);
+    if (party.status === "started" && (party.totalHearts ?? 0) <= 0) {
+     await handleExpeditionFailed(party, interaction);
+     return;
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
@@ -7114,7 +7166,10 @@ module.exports = {
     if (party.status !== "started") {
      return interaction.editReply("This expedition has not been started yet.");
     }
-
+    if ((party.totalHearts ?? 0) <= 0) {
+     await handleExpeditionFailed(party, interaction);
+     return;
+    }
     const raid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${party.partyId}$`, 'i') }, status: "active" });
     if (!raid) {
      return interaction.editReply({
@@ -7251,16 +7306,12 @@ module.exports = {
      return interaction.editReply("Expedition ID not found.");
     }
 
-    // Block camping if there's an active raid for this expedition (must defeat or retreat first)
-    const activeRaidCamp = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    if (activeRaidCamp) {
-     return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaidCamp.raidId, "camp", `${party.square} ${party.quadrant}`)] });
-    }
-
-    // Block camping if there's an active wave for this expedition (must complete wave first)
-    const activeWaveCamp = await Wave.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
-    if (activeWaveCamp) {
-     return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveCamp.waveId, "camp")] });
+    // Block camping if there's active combat for this expedition (must resolve first)
+    const campCombatBlock = await getCombatBlockReply(party, expeditionId, "camp", `${party.square} ${party.quadrant}`);
+    if (campCombatBlock) return interaction.editReply(campCombatBlock);
+    if (party.status === "started" && (party.totalHearts ?? 0) <= 0) {
+     await handleExpeditionFailed(party, interaction);
+     return;
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);

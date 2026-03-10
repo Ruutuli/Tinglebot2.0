@@ -8,6 +8,18 @@ const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid, scheduleRaidT
 const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
 const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
 const Raid = require('@/models/RaidModel');
+
+function normalizeRaidCharacterName(input) {
+  if (!input) return '';
+  // Autocomplete / user paste may include suffixes like "Name | ..." or "Name — ..." or "Name - ..."
+  // Keep only the base character name portion.
+  return String(input)
+    .trim()
+    .split('|')[0]
+    .trim()
+    .replace(/\s*[—\-]\s*.*$/, '')
+    .trim();
+}
 const Party = require('@/models/PartyModel');
 const Grotto = require('@/models/GrottoModel');
 const { finalizeBlightApplication } = require('../../handlers/blightHandler');
@@ -160,14 +172,15 @@ module.exports = {
   async handleLeave(interaction) {
     await interaction.deferReply();
     let raidId = interaction.options.getString('raidid');
-    const characterName = interaction.options.getString('charactername');
+    const characterNameRaw = interaction.options.getString('charactername');
+    const characterName = normalizeRaidCharacterName(characterNameRaw);
     const userId = interaction.user.id;
     if (raidId.includes(' | ')) raidId = raidId.split(' | ')[0];
 
     const character = await fetchAnyCharacterByNameAndUserId(characterName, userId);
     if (!character) {
       return interaction.editReply({
-        content: `❌ Character "${characterName}" not found or doesn't belong to you.`,
+        content: `❌ Character "${characterNameRaw}" not found or doesn't belong to you.`,
         ephemeral: true
       });
     }
@@ -223,7 +236,8 @@ module.exports = {
 
       // Get command options
       let raidId = interaction.options.getString('raidid');
-      const characterName = interaction.options.getString('charactername');
+      const characterNameRaw = interaction.options.getString('charactername');
+      const characterName = normalizeRaidCharacterName(characterNameRaw);
       const userId = interaction.user.id;
       
       // Extract raid ID if user pasted the full description
@@ -235,7 +249,7 @@ module.exports = {
       const character = await fetchAnyCharacterByNameAndUserId(characterName, userId);
       if (!character) {
         return interaction.editReply({
-          content: `❌ Character "${characterName}" not found or doesn't belong to you. Please check the spelling and try again.`,
+          content: `❌ Character "${characterNameRaw}" not found or doesn't belong to you. Please check the spelling and try again.`,
           ephemeral: true
         });
       }

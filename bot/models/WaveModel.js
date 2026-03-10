@@ -120,6 +120,12 @@ const waveSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     },
+    // Mod characters can roll at any time and should not be restricted by turn order checks.
+    // This is persisted so `wave.js` can enforce rules without reloading Character docs.
+    isModCharacter: {
+      type: Boolean,
+      default: false
+    },
     characterState: {
       currentHearts: Number,
       maxHearts: Number,
@@ -347,6 +353,13 @@ waveSchema.methods.advanceTurn = async function(maxRetries = 3) {
   if (this.participants.length === 0) {
     return this.save();
   }
+
+  // Expedition waves (monster camp): do NOT skip individuals based on Character.ko.
+  // The expedition uses a shared party heart pool, and individuals are not KO'd/removed mid-wave.
+  if (this.expeditionId) {
+    this.currentTurn = (this.currentTurn + 1) % this.participants.length;
+    return await this.save();
+  }
   
   let retries = 0;
   while (retries < maxRetries) {
@@ -426,6 +439,11 @@ waveSchema.methods.getEffectiveCurrentTurnParticipant = async function() {
   
   if (this.participants.length === 0) {
     return null;
+  }
+
+  // Expedition waves use party pool hearts; do not treat individual Character.ko as turn-skippable.
+  if (this.expeditionId) {
+    return this.participants[this.currentTurn] || null;
   }
   
   // Get current character states from database to check KO status

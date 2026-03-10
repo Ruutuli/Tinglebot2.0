@@ -36,6 +36,7 @@ const EXPLORE_OUTCOME_COLORS: Record<string, string> = {
   secure: "#0984E3",
   grotto_travel: "#1ABC9C",
   grotto: "#6C5CE7",
+  grotto_found: "#6C5CE7",
   grotto_revisit: "#A29BFE",
   grotto_skipped: "#9B8BDE",
   grotto_cleansed: "#5B4BB5",
@@ -97,6 +98,7 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
   monster_camp_fight: "Monster Camp", // chose "Fight it" — still need to set pin to revisit later
   ruin_rest: "Ruins (rest spot)", // only when ruins yielded a camp; generic "ruins" is not placeable
   grotto: "Grotto",
+  grotto_found: "Grotto", // legacy/alternate logging for grotto discovery
   grotto_cleansed: "Grotto", // cleansed grottos (Yes) — same as grotto for placement
 };
 
@@ -1497,7 +1499,8 @@ export default function ExplorePartyPage() {
                     <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                   </div>
                   <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
-                    {regionInfo?.label ?? party.region} · {(party.status === "completed" || party.status === "failed") ? "Ended at" : "Start"} {party.square} {party.quadrant}
+                    {regionInfo?.label ?? party.region} · {(party.status === "completed" || party.status === "failed") ? "Ended at" : "Start"}{" "}
+                    {(party.status === "completed" || party.status === "failed") ? `${party.square} ${party.quadrant}` : (regionInfo ? `${regionInfo.square} ${regionInfo.quadrant}` : `${party.square} ${party.quadrant}`)}
                   </p>
                 </div>
               </div>
@@ -1516,7 +1519,8 @@ export default function ExplorePartyPage() {
                   <img src="/Side=Right.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                 </div>
                 <p className="mt-0.5 text-center text-xs text-[var(--totk-grey-200)] sm:text-sm">
-                  {regionInfo?.label ?? party.region} · {(party.status === "completed" || party.status === "failed") ? "Ended at" : "Start"} {party.square} {party.quadrant}
+                  {regionInfo?.label ?? party.region} · {(party.status === "completed" || party.status === "failed") ? "Ended at" : "Start"}{" "}
+                  {(party.status === "completed" || party.status === "failed") ? `${party.square} ${party.quadrant}` : (regionInfo ? `${regionInfo.square} ${regionInfo.quadrant}` : `${party.square} ${party.quadrant}`)}
                 </p>
               </div>
             )}

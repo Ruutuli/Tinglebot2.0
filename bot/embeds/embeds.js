@@ -633,6 +633,16 @@ function sanitizeEmbedField(field) {
   return { name, value, inline: field.inline === true };
 }
 
+function partyHasSecureMaterials(party) {
+  // Secure requires Wood + Eldin Ore (or their Bundle variants) in any party member's expedition loadout.
+  const chars = Array.isArray(party?.characters) ? party.characters : [];
+  const items = chars.flatMap((c) => Array.isArray(c?.items) ? c.items : []);
+  const has = (name) => items.some((i) => String(i?.itemName || "").trim().toLowerCase() === String(name).trim().toLowerCase());
+  return has("Wood") || has("Wood Bundle")
+    ? (has("Eldin Ore") || has("Eldin Ore Bundle"))
+    : false;
+}
+
 const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
@@ -676,15 +686,16 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    commandsValue += `**Trial in progress** — take your turn:\n${activeGrottoCommand || `</explore grotto continue:${cmdId}>`}\n\n_Other explore actions are blocked until the trial ends._`;
   } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
-   const cmdSecure = `</explore secure:${cmdId}>`;
    const cmdMove = `</explore move:${cmdId}>`;
    const cmdItem = `</explore item:${cmdId}>`;
    const cmdEnd = `</explore end:${cmdId}>`;
    const cmdDiscovery = `</explore discovery:${cmdId}>`;
    const movePart = showMoveCommand !== false ? ` · ${cmdMove}` : "";
+   const canShowSecure = String(party?.quadrantState || "").toLowerCase() === "explored" && partyHasSecureMaterials(party);
+   const securePart = canShowSecure ? ` · </explore secure:${cmdId}>` : "";
    commandsValue += hideCampCommand
-    ? `${cmdRoll} · ${cmdItem} · ${cmdSecure}${movePart}`
-    : `${cmdRoll} · ${cmdItem} · ${cmdCamp} · ${cmdSecure}${movePart}`;
+    ? `${cmdRoll} · ${cmdItem}${securePart}${movePart}`
+    : `${cmdRoll} · ${cmdItem} · ${cmdCamp}${securePart}${movePart}`;
    if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
    if (isAtStartQuadrant) commandsValue += ` · ${cmdEnd}`;
    commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
@@ -772,15 +783,16 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;
  } else if (showRestSecureMove === true) {
   const cmdCamp = `</explore camp:${cmdId}>`;
-  const cmdSecure = `</explore secure:${cmdId}>`;
   const cmdMove = `</explore move:${cmdId}>`;
   const cmdItem = `</explore item:${cmdId}>`;
   const cmdEnd = `</explore end:${cmdId}>`;
   const cmdDiscovery = `</explore discovery:${cmdId}>`;
   const movePart = showMoveCommand !== false ? ` · ${cmdMove}` : "";
+  const canShowSecure = String(party?.quadrantState || "").toLowerCase() === "explored" && partyHasSecureMaterials(party);
+  const securePart = canShowSecure ? ` · </explore secure:${cmdId}>` : "";
   commandsValue += hideCampCommand
-   ? `${cmdRoll} · ${cmdItem} · ${cmdSecure}${movePart}`
-   : `${cmdRoll} · ${cmdItem} · ${cmdCamp} · ${cmdSecure}${movePart}`;
+   ? `${cmdRoll} · ${cmdItem}${securePart}${movePart}`
+   : `${cmdRoll} · ${cmdItem} · ${cmdCamp}${securePart}${movePart}`;
   if (hasDiscoveriesInQuadrant) commandsValue += ` · ${cmdDiscovery}`;
   if (isAtStartQuadrant) commandsValue += ` · ${cmdEnd}`;
   commandsValue += `\nid: \`${expId || "—"}\` char: **${nextName}**`;

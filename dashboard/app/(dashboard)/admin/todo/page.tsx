@@ -131,6 +131,34 @@ function toDiscordAppUrl(url: string | null | undefined): string {
   return url.replace(/^https:\/\/discord\.com/, "discord://discord.com");
 }
 
+function getTaskPermalink(taskId: string): string {
+  if (typeof window === "undefined") return `/admin/todo?task=${encodeURIComponent(taskId)}`;
+  return `${window.location.origin}/admin/todo?task=${encodeURIComponent(taskId)}`;
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
   const date = new Date(dateStr);
@@ -158,9 +186,10 @@ interface TaskCardProps {
   task: Task;
   onClick: () => void;
   isDragging?: boolean;
+  onCopyLink?: () => void;
 }
 
-function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
+function TaskCard({ task, onClick, isDragging, onCopyLink }: TaskCardProps) {
   const priorityConfig = PRIORITY_CONFIG[task.priority];
   const columnConfig = COLUMNS.find((c) => c.id === task.column);
   const overdue = task.column !== "done" && isOverdue(task.dueDate);
@@ -186,6 +215,19 @@ function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
           <span className={`rounded px-2 py-0.5 text-xs font-medium ${priorityConfig.bgColor} ${priorityConfig.color}`}>
             {priorityConfig.label}
           </span>
+          {onCopyLink && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCopyLink();
+              }}
+              className="text-[var(--botw-pale)] opacity-70 transition-opacity hover:opacity-100"
+              title="Copy task link"
+            >
+              <i className="fa-solid fa-link text-xs" />
+            </button>
+          )}
           {task.discordSource?.messageUrl && (
             <a
               href={toDiscordAppUrl(task.discordSource.messageUrl)}
@@ -306,9 +348,10 @@ function TaskCard({ task, onClick, isDragging }: TaskCardProps) {
 interface SortableTaskCardProps {
   task: Task;
   onClick: () => void;
+  onCopyLink?: () => void;
 }
 
-function SortableTaskCard({ task, onClick }: SortableTaskCardProps) {
+function SortableTaskCard({ task, onClick, onCopyLink }: SortableTaskCardProps) {
   const {
     attributes,
     listeners,
@@ -325,7 +368,7 @@ function SortableTaskCard({ task, onClick }: SortableTaskCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskCard task={task} onClick={onClick} isDragging={isDragging} />
+      <TaskCard task={task} onClick={onClick} isDragging={isDragging} onCopyLink={onCopyLink} />
     </div>
   );
 }
@@ -339,9 +382,10 @@ interface ColumnProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   onAddTask: (column: Column) => void;
+  onCopyTaskLink: (taskId: string) => void;
 }
 
-function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
+function KanbanColumn({ column, tasks, onTaskClick, onAddTask, onCopyTaskLink }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
@@ -372,7 +416,12 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
       <div ref={setNodeRef} className="space-y-2 p-2 md:flex-1 md:space-y-3 md:overflow-y-auto md:p-3" style={{ minHeight: "60px" }}>
         <SortableContext items={tasks.map((t) => t._id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <SortableTaskCard key={task._id} task={task} onClick={() => onTaskClick(task)} />
+            <SortableTaskCard
+              key={task._id}
+              task={task}
+              onClick={() => onTaskClick(task)}
+              onCopyLink={() => onCopyTaskLink(task._id)}
+            />
           ))}
         </SortableContext>
         {tasks.length === 0 && (
@@ -392,6 +441,7 @@ function KanbanColumn({ column, tasks, onTaskClick, onAddTask }: ColumnProps) {
 interface TableViewProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
+  onCopyTaskLink: (taskId: string) => void;
 }
 
 const COLUMN_LABELS: Record<Column, string> = {
@@ -409,7 +459,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgent: "bg-red-500/20 text-red-300 border-red-500/50",
 };
 
-function TableView({ tasks, onTaskClick }: TableViewProps) {
+function TableView({ tasks, onTaskClick, onCopyTaskLink }: TableViewProps) {
   const sortedTasks = useMemo(() => {
     return [...tasks].sort((a, b) => {
       // Sort by column order, then by task order
@@ -524,6 +574,7 @@ function TableView({ tasks, onTaskClick }: TableViewProps) {
                 <th className="px-4 py-3 font-semibold">Due Date</th>
                 <th className="px-4 py-3 font-semibold">Completed By</th>
                 <th className="px-4 py-3 font-semibold">Checklist</th>
+                <th className="px-4 py-3 font-semibold">Link</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--totk-dark-ocher)]/50">
@@ -584,6 +635,19 @@ function TableView({ tasks, onTaskClick }: TableViewProps) {
                     ) : (
                       "—"
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCopyTaskLink(task._id);
+                      }}
+                      className="rounded p-2 text-[var(--botw-pale)] opacity-70 transition-opacity hover:bg-[var(--totk-dark-ocher)]/30 hover:opacity-100"
+                      title="Copy task link"
+                    >
+                      <i className="fa-solid fa-link" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1660,6 +1724,13 @@ function AdminTodoPageContent() {
     setIsNewTask(false);
   };
 
+  const handleCopyTaskLink = useCallback(async (taskId: string) => {
+    const url = getTaskPermalink(taskId);
+    const ok = await copyTextToClipboard(url);
+    setSuccess(ok ? "Copied task link to clipboard" : "Could not copy link");
+    setTimeout(() => setSuccess(null), 2500);
+  }, []);
+
   const handleAddTask = (column: Column) => {
     setModalTask(null);
     setNewTaskColumn(column);
@@ -1850,6 +1921,7 @@ function AdminTodoPageContent() {
                 tasks={tasksByColumn[column.id]}
                 onTaskClick={handleTaskClick}
                 onAddTask={handleAddTask}
+                onCopyTaskLink={handleCopyTaskLink}
               />
             ))}
           </div>
@@ -1868,6 +1940,7 @@ function AdminTodoPageContent() {
         <TableView
           tasks={filteredTasks}
           onTaskClick={handleTaskClick}
+          onCopyTaskLink={handleCopyTaskLink}
         />
       )}
 

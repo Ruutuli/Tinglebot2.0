@@ -1195,15 +1195,16 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
           await party.save();
           logger.info('RAID', `Expedition raid turn — party hearts: ${party.totalHearts} ❤ (damage this turn: ${damageTaken})`);
           
-          // Check if party pool hit 0 — trigger immediate expedition failure
-          if (newPartyHearts <= 0 && raid.status === 'active') {
+          // Check if party pool hit 0 — trigger immediate expedition failure (use both newPartyHearts and saved party.totalHearts)
+          const partyKOd = (newPartyHearts <= 0 || (party.totalHearts ?? 0) <= 0) && raid.status === 'active';
+          if (partyKOd) {
             logger.info('RAID', `Expedition raid ${raid.raidId} — party hearts hit 0, triggering expedition failure`);
             
             // Close the raid first (mark as fled since party was KO'd, not monster defeated)
             await cancelRaidTurnSkip(raid.raidId);
             await raid.completeRaid('fled');
             
-            // Trigger expedition failure
+            // Trigger expedition failure so /explore roll etc. are blocked
             const { handleExpeditionFailedFromWave } = require('./exploreModule');
             const failResult = await handleExpeditionFailedFromWave(raid.expeditionId, interaction?.client);
             if (failResult.success) {
@@ -1221,6 +1222,21 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
               }
             } else {
               logger.warn('RAID', `handleExpeditionFailedFromWave returned error: ${failResult.error}`);
+              // Ensure expedition is still ended so party cannot continue with 0 hearts
+              try {
+                const freshParty = await Party.findActiveByPartyId(raid.expeditionId);
+                if (freshParty && freshParty.status === 'started' && (freshParty.totalHearts ?? 0) <= 0) {
+                  freshParty.status = 'failed';
+                  freshParty.outcome = 'failed';
+                  freshParty.endedAt = new Date();
+                  freshParty.totalHearts = 0;
+                  freshParty.totalStamina = 0;
+                  await freshParty.save();
+                  logger.info('RAID', `Expedition ${raid.expeditionId} marked failed after handleExpeditionFailedFromWave error`);
+                }
+              } catch (fallbackErr) {
+                logger.error('RAID', `Failed to mark expedition ${raid.expeditionId} failed after KO: ${fallbackErr?.message || fallbackErr}`);
+              }
             }
           }
         }

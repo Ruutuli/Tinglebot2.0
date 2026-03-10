@@ -17,8 +17,19 @@ function escapeSquareIdForRegex(squareId) {
 }
 
 // Progress log outcomes that are "reportable" (can be pinned on dashboard). When leaving a square, unpinned ones are cleared.
-const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "ruins_found"];
-const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
+// Keep legacy outcomes for backward compatibility with older progress logs.
+const DISCOVERY_CLEANUP_OUTCOMES = [
+    "monster_camp",
+    "monster_camp_fight",
+    "grotto",
+    "grotto_found",
+    "grotto_cleansed",
+    "ruins",
+    "ruins_found",
+    "ruin_rest",
+];
+// Location parsing used for discovery cleanup / reminders. Keep aligned with dashboard parsing (supports "in" and "at").
+const LOC_IN_MESSAGE_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 
 // True if current quadrant has reportable discoveries that are not yet pinned (reportedDiscoveryKeys). Used for embed reminder.
 function hasUnpinnedDiscoveriesInQuadrant(party) {
