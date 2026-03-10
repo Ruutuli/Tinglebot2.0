@@ -983,6 +983,37 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // ------------------- Monster model: prevent validation errors on save -------------------
+    if (model === "Monster") {
+      const ud = updateData as Record<string, unknown>;
+      // Schema requires name and nameMapping; do not overwrite with empty string
+      if ("name" in ud) {
+        const s = typeof ud.name === "string" ? ud.name.trim() : String(ud.name ?? "").trim();
+        if (s) ud.name = s; else delete ud.name;
+      }
+      if ("nameMapping" in ud) {
+        const s = typeof ud.nameMapping === "string" ? ud.nameMapping.trim() : String(ud.nameMapping ?? "").trim();
+        if (s) ud.nameMapping = s; else delete ud.nameMapping;
+      }
+      // Coerce number fields so Mongoose validation passes (tier, hearts, dmg)
+      if ("tier" in ud) {
+        const n = typeof ud.tier === "number" ? ud.tier : Number(ud.tier);
+        ud.tier = Number.isFinite(n) && n >= 1 ? Math.min(10, Math.max(1, n)) : 1;
+      }
+      if ("hearts" in ud) {
+        const n = typeof ud.hearts === "number" ? ud.hearts : Number(ud.hearts);
+        ud.hearts = Number.isFinite(n) && n >= 0 ? n : 0;
+      }
+      if ("dmg" in ud) {
+        const n = typeof ud.dmg === "number" ? ud.dmg : Number(ud.dmg);
+        ud.dmg = Number.isFinite(n) && n >= 0 ? n : 0;
+      }
+      // Monster schema has no "element" field; omit so strict mode doesn't persist it
+      if ("element" in ud) {
+        delete ud.element;
+      }
+    }
+
     // ------------------- Apply Updates -------------------
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
