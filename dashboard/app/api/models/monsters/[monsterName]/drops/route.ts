@@ -1,11 +1,19 @@
 // ------------------- GET /api/models/monsters/[monsterName]/drops -------------------
-// Returns items that can drop from this monster (Item.monsterList contains monster name)
+// Returns items that can drop from this monster (Item.monsterList or monster boolean flags)
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connect } from "@/lib/db";
 import { logger } from "@/utils/logger";
 
 export const revalidate = 3600;
+
+/** Same as item-field-sync: camelCase → Title Case so we match monsterList strings. */
+function normalizeMonsterNameMapping(nameMapping: string): string {
+  return nameMapping
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
+}
 
 export async function GET(
   _req: NextRequest,
@@ -19,14 +27,26 @@ export async function GET(
       return NextResponse.json({ items: [] });
     }
 
+    const { default: Monster } = await import("@/models/MonsterModel.js");
+    const monsterDoc = await Monster.findOne({ name: monsterName })
+      .select("nameMapping")
+      .lean();
+    const nameMapping = monsterDoc?.nameMapping as string | undefined;
+
+    const orConditions: Array<Record<string, unknown>> = [
+      { monsterList: monsterName },
+      { monsterList: { $in: [monsterName] } },
+    ];
+    if (nameMapping && typeof nameMapping === "string") {
+      const normalizedName = normalizeMonsterNameMapping(nameMapping);
+      orConditions.push({ monsterList: normalizedName });
+      orConditions.push({ monsterList: { $in: [normalizedName] } });
+      orConditions.push({ [nameMapping]: true });
+    }
+
     const { default: Item } = await import("@/models/ItemModel.js");
     type ItemDoc = { itemName: string; image?: string; emoji?: string; itemRarity?: number };
-    const items = (await Item.find({
-      $or: [
-        { monsterList: monsterName },
-        { monsterList: { $in: [monsterName] } },
-      ],
-    })
+    const items = (await Item.find({ $or: orConditions })
       .select("itemName image emoji itemRarity")
       .lean()) as unknown as ItemDoc[];
 
