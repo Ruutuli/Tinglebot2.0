@@ -776,12 +776,13 @@ interface TaskModalProps {
   defaultColumn?: Column;
   mods: ModInfo[];
   currentUser: { id: string; username: string; avatar?: string } | null;
+  canEditAllComments?: boolean;
   onClose: () => void;
   onSave: (data: Partial<Task>) => void;
   onDelete?: () => void;
 }
 
-function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onSave, onDelete }: TaskModalProps) {
+function TaskModal({ task, isNew, defaultColumn, mods, currentUser, canEditAllComments, onClose, onSave, onDelete }: TaskModalProps) {
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [editingDescription, setEditingDescription] = useState(isNew);
@@ -815,6 +816,8 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
   const [comments, setComments] = useState<Comment[]>(task?.comments ?? []);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState("");
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hideCheckedItems, setHideCheckedItems] = useState(false);
@@ -942,6 +945,36 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
 
   const deleteComment = (commentId: string) => {
     setComments((prev) => prev.filter((c) => c._id !== commentId));
+  };
+
+  const canEditComment = (comment: Comment) => {
+    if (!currentUser) return false;
+    return canEditAllComments || comment.author.discordId === currentUser.id;
+  };
+
+  const startEditComment = (comment: Comment) => {
+    if (!canEditComment(comment)) return;
+    setEditingCommentId(comment._id);
+    setEditingCommentText(comment.text);
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentText("");
+  };
+
+  const saveEditComment = () => {
+    if (!editingCommentId) return;
+    const nextText = editingCommentText.trim();
+    if (!nextText) return;
+    setComments((prev) =>
+      prev.map((c) =>
+        c._id === editingCommentId
+          ? { ...c, text: nextText, editedAt: new Date().toISOString() }
+          : c
+      )
+    );
+    cancelEditComment();
   };
 
   const displayedChecklist = hideCheckedItems
@@ -1269,18 +1302,68 @@ function TaskModal({ task, isNew, defaultColumn, mods, currentUser, onClose, onS
                           <span className="text-xs text-[var(--botw-pale)] opacity-50">
                             {new Date(comment.createdAt).toLocaleDateString()}
                           </span>
+                          {comment.editedAt && (
+                            <span
+                              className="text-xs text-[var(--botw-pale)] opacity-40"
+                              title={`Edited ${new Date(comment.editedAt).toLocaleString()}`}
+                            >
+                              (edited)
+                            </span>
+                          )}
                         </div>
-                        <button
-                          onClick={() => deleteComment(comment._id)}
-                          className="rounded p-2 text-[var(--botw-pale)] opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400 sm:p-1 sm:opacity-0 sm:group-hover:opacity-100"
-                          title="Delete comment"
-                        >
-                          <i className="fa-solid fa-trash-can text-sm sm:text-xs" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {canEditComment(comment) && (
+                            <button
+                              type="button"
+                              onClick={() => startEditComment(comment)}
+                              className="rounded p-2 text-[var(--botw-pale)] opacity-100 transition-opacity hover:bg-[var(--totk-dark-ocher)]/40 hover:text-[var(--totk-light-ocher)] sm:p-1 sm:opacity-0 sm:group-hover:opacity-100"
+                              title="Edit comment"
+                            >
+                              <i className="fa-solid fa-pen text-sm sm:text-xs" />
+                            </button>
+                          )}
+                          {canEditComment(comment) && (
+                            <button
+                              onClick={() => deleteComment(comment._id)}
+                              className="rounded p-2 text-[var(--botw-pale)] opacity-100 transition-opacity hover:bg-red-500/20 hover:text-red-400 sm:p-1 sm:opacity-0 sm:group-hover:opacity-100"
+                              title="Delete comment"
+                            >
+                              <i className="fa-solid fa-trash-can text-sm sm:text-xs" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-[#1a1615] p-3 text-sm text-[var(--botw-pale)] sm:mt-1 sm:p-2">
-                        {comment.text}
-                      </p>
+                      {editingCommentId === comment._id ? (
+                        <div className="mt-1.5 rounded-lg bg-[#1a1615] p-3 sm:mt-1 sm:p-2">
+                          <textarea
+                            value={editingCommentText}
+                            onChange={(e) => setEditingCommentText(e.target.value)}
+                            className="w-full rounded-lg border-2 border-[var(--totk-dark-ocher)] bg-[#0d0c0b] px-3 py-2 text-sm text-[var(--botw-pale)] focus:border-[var(--totk-light-green)] focus:outline-none"
+                            rows={3}
+                          />
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={saveEditComment}
+                              disabled={!editingCommentText.trim()}
+                              className="rounded-lg bg-[var(--totk-light-green)] px-4 py-2 text-xs font-medium text-[var(--totk-brown)] disabled:opacity-50"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditComment}
+                              className="rounded-lg px-4 py-2 text-xs text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/40"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-[#1a1615] p-3 text-sm text-[var(--botw-pale)] sm:mt-1 sm:p-2">
+                          {comment.text}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1951,6 +2034,7 @@ function AdminTodoPageContent() {
           isNew={isNewTask}
           defaultColumn={newTaskColumn}
           mods={mods}
+          canEditAllComments={canAccess}
           currentUser={user ? { 
             id: user.id, 
             username: user.username, 
