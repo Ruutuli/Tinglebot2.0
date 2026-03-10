@@ -6656,16 +6656,18 @@ module.exports = {
     if (activeWaveForItem) {
      const waveCurrent = activeWaveForItem.participants?.[activeWaveForItem.currentTurn ?? 0];
      if (waveCurrent && waveCurrent.characterId && character._id && waveCurrent.characterId.toString() !== character._id.toString()) {
+      const currentName = waveCurrent.name ?? "the current turn";
       return interaction.editReply(
-       "It's not your turn. Only the current turn can use an item (item = turn). Wait for your turn in the wave, then use **/explore item**."
+       `It's not your turn. Only **${currentName}** (current turn) can use an item. Wait for your turn in the wave, then use **/explore item**.`
       );
      }
     }
     if (activeRaidForItem) {
      const raidCurrent = activeRaidForItem.getCurrentTurnParticipant?.() ?? activeRaidForItem.participants?.[activeRaidForItem.currentTurn ?? 0];
      if (raidCurrent && raidCurrent.characterId && character._id && raidCurrent.characterId.toString() !== character._id.toString()) {
+      const currentName = raidCurrent.name ?? "the current turn";
       return interaction.editReply(
-       "It's not your turn. Only the current turn can use an item (item = turn). Wait for your turn in the raid, then use **/explore item**."
+       `It's not your turn. Only **${currentName}** (current turn) can use an item. Wait for your turn in the raid, then use **/explore item**.`
       );
      }
     }
@@ -7233,7 +7235,9 @@ module.exports = {
         `• **Keep fighting** — </raid:1470659276287774734> with Raid ID **${raidIdDisplay}**\n> Return to the battle.`,
       inline: false,
     });
-    return interaction.editReply({ embeds: [retreatFailedEmbed] });
+    await interaction.editReply({ embeds: [retreatFailedEmbed] });
+    if (getExplorationNextTurnContent(nextCharacter)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacter) }).catch(() => {});
+    return;
    // ------------------- Camp Command -------------------
    } else if (subcommand === "camp") {
     // /explore camp command: set up camp (costs stamina, party recovers). Distinct from roll outcome "safe space".
