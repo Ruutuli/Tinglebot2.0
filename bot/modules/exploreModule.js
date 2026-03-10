@@ -16,6 +16,30 @@ function escapeSquareIdForRegex(squareId) {
     return String(squareId || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Progress log outcomes that are "reportable" (can be pinned on dashboard). When leaving a square, unpinned ones are cleared.
+const DISCOVERY_CLEANUP_OUTCOMES = ["monster_camp", "ruins", "grotto", "ruins_found"];
+const LOC_IN_MESSAGE_RE = /\s+in\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
+
+// True if current quadrant has reportable discoveries that are not yet pinned (reportedDiscoveryKeys). Used for embed reminder.
+function hasUnpinnedDiscoveriesInQuadrant(party) {
+    if (!party?.square || !party?.quadrant || !Array.isArray(party.progressLog)) return false;
+    const reportedSet = new Set(Array.isArray(party.reportedDiscoveryKeys) ? party.reportedDiscoveryKeys.filter((k) => typeof k === "string" && k.length > 0) : []);
+    const currentSquare = String(party.square).trim().toUpperCase();
+    const currentQuadrant = String(party.quadrant).trim().toUpperCase();
+    for (const e of party.progressLog) {
+        if (!DISCOVERY_CLEANUP_OUTCOMES.includes(e.outcome)) continue;
+        const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
+        if (!m || !m[1] || !m[2]) continue;
+        const entrySquare = String(m[1]).trim().toUpperCase();
+        const entryQuadrant = String(m[2]).trim().toUpperCase();
+        if (entrySquare !== currentSquare || entryQuadrant !== currentQuadrant) continue;
+        const atStr = e.at instanceof Date ? e.at.toISOString() : (typeof e.at === "string" ? e.at : "");
+        const key = `${e.outcome}|${entrySquare}|${entryQuadrant}|${atStr}`;
+        if (!reportedSet.has(key)) return true;
+    }
+    return false;
+}
+
 // ------------------- hasDiscoveriesInQuadrant ------------------
 // True if quadrant has monster_camp or grotto discoveries (for revisiting).
 async function hasDiscoveriesInQuadrant(squareId, quadrantId) {
@@ -316,6 +340,7 @@ module.exports = {
     syncPartyMemberStats,
     pushProgressLog,
     hasDiscoveriesInQuadrant,
+    hasUnpinnedDiscoveriesInQuadrant,
     updateDiscoveryGrottoStatus,
     markGrottoCleared,
     handleExpeditionFailedFromWave

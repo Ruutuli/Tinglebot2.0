@@ -3,13 +3,15 @@
  * Used for grotto, monster camp, ruins/camp; relic uses ruins icon as fallback.
  */
 const GROTTO_ICON_URL = "https://storage.googleapis.com/tinglebot/maps/grottoiconroots2024.png";
+const MONSTER_CAMP_ICON_URL = "https://storage.googleapis.com/tinglebot/maps/monstercamproots2024.png";
+const RUINS_ICON_URL = "https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png";
 
 export const EXPLORATION_ICON_URLS: Record<string, string> = {
   grotto: GROTTO_ICON_URL,
   grotto_cleansed: GROTTO_ICON_URL,
-  monster_camp: "https://storage.googleapis.com/tinglebot/maps/monstercamproots2024.png",
-  ruins: "https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png",
-  relic: "https://storage.googleapis.com/tinglebot/maps/ruinrestcamproots2024.png",
+  monster_camp: MONSTER_CAMP_ICON_URL,
+  ruins: RUINS_ICON_URL,
+  relic: RUINS_ICON_URL,
 };
 
 const PREFIX = "exploration:";
@@ -28,7 +30,10 @@ export function isExplorationIcon(icon: string | undefined): boolean {
 export function getExplorationIconUrl(icon: string | undefined): string | null {
   if (typeof icon !== "string" || !icon.startsWith(PREFIX)) return null;
   const type = icon.slice(PREFIX.length);
-  return EXPLORATION_ICON_URLS[type] ?? EXPLORATION_ICON_URLS.ruins ?? null;
+  if (type in EXPLORATION_ICON_URLS) return EXPLORATION_ICON_URLS[type];
+  if (type.startsWith("monster_camp")) return MONSTER_CAMP_ICON_URL;
+  if (type.startsWith("grotto")) return GROTTO_ICON_URL;
+  return RUINS_ICON_URL;
 }
 
 /** Grotto pin overlay: gold glow for cleansed only; non-cleared grottos have no special styling. */

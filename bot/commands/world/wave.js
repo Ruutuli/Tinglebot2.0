@@ -546,7 +546,7 @@ const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const Party = require('@/models/PartyModel');
 const { addExplorationStandardFields, regionColors, regionImages } = require('../../embeds/embeds.js');
-const { syncPartyMemberStats, pushProgressLog, hasDiscoveriesInQuadrant } = require('../../modules/exploreModule');
+const { syncPartyMemberStats, pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant } = require('../../modules/exploreModule');
 // Google Sheets functionality removed
 
 // ============================================================================
@@ -1347,7 +1347,8 @@ async function handleWaveVictory(interaction, waveData) {
           nextCharacter,
           showNextAndCommands: true,
           showRestSecureMove: false,
-          hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant)
+          hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+          hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party)
         });
         // Store for sending: @mention in a separate message after the embed (so the ping is not attached to the embed)
         monsterCampContent = nextCharacter?.userId

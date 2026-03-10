@@ -633,7 +633,7 @@ function sanitizeEmbedField(field) {
   return { name, value, inline: field.inline === true };
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
@@ -710,6 +710,15 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
     inline: false,
    });
   }
+ }
+ // Remind to set pin on map until they do (so discoveries aren't forgotten when leaving the square)
+ if (hasUnpinnedDiscoveriesInQuadrant && expId) {
+  const pinPageUrl = `${EXPLORE_DASHBOARD_BASE}/${encodeURIComponent(expId)}`;
+  fields.push({
+   name: "📍 **__Set pin on map__**",
+   value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${pinPageUrl}) so they stay on the map when you leave.`,
+   inline: false,
+  });
  }
  const safeFields = fields.map(sanitizeEmbedField);
  embed.addFields(...safeFields);
@@ -790,7 +799,7 @@ embed.addFields(commandsField);
 
 // ------------------- Function: createExplorationEndOnlyAtStartEmbed -------------------
 // Shown when the party tries to end the expedition but is not at the starting quadrant.
-const createExplorationEndOnlyAtStartEmbed = (party, expeditionId, location, nextCharacter) => {
+const createExplorationEndOnlyAtStartEmbed = (party, expeditionId, location, nextCharacter, hasUnpinnedDiscoveriesInQuadrant = false) => {
  const embed = new EmbedBuilder()
   .setTitle("📍 End expedition at start only")
   .setDescription(
@@ -805,6 +814,7 @@ const createExplorationEndOnlyAtStartEmbed = (party, expeditionId, location, nex
   showNextAndCommands: true,
   showRestSecureMove: false,
   showMoveCommand: true,
+  hasUnpinnedDiscoveriesInQuadrant,
  });
  return embed;
 };
@@ -823,6 +833,7 @@ const createExplorationItemEmbed = (
  showNextAndCommands = true,
  ruinRestRecovered = 0,
  hasDiscoveriesInQuadrant = false,
+ hasUnpinnedDiscoveriesInQuadrant = false,
  actionCost = null,
  maxHearts = 0,
  maxStamina = 0
@@ -846,6 +857,7 @@ const createExplorationItemEmbed = (
   showRestSecureMove: false,
   ruinRestRecovered,
   hasDiscoveriesInQuadrant,
+  hasUnpinnedDiscoveriesInQuadrant,
   actionCost,
   maxHearts,
   maxStamina,
@@ -877,6 +889,7 @@ const createExplorationMonsterEmbed = (
  showNextAndCommands = true,
  ruinRestRecovered = 0,
  hasDiscoveriesInQuadrant = false,
+ hasUnpinnedDiscoveriesInQuadrant = false,
  actionCost = null,
  maxHearts = 0,
  maxStamina = 0
@@ -906,6 +919,7 @@ const createExplorationMonsterEmbed = (
   commandsLast: true,
   ruinRestRecovered,
   hasDiscoveriesInQuadrant,
+  hasUnpinnedDiscoveriesInQuadrant,
   actionCost,
   maxHearts,
   maxStamina,
