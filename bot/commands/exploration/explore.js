@@ -6670,6 +6670,18 @@ module.exports = {
      }
     }
 
+    // Normal exploration (no wave/raid): only the current expedition turn may use an item
+    if (!activeWaveForItem && !activeRaidForItem) {
+     const currentTurnIndex = party.currentTurn ?? 0;
+     if (characterIndex !== currentTurnIndex) {
+      const currentTurnChar = party.characters[currentTurnIndex];
+      const currentName = currentTurnChar?.name ?? "the current turn";
+      return interaction.editReply(
+       `It's not your turn. Only **${currentName}** can use an item. Wait for your turn, then use **/explore item**.`
+      );
+     }
+    }
+
     const beforeHeartsItem = party.totalHearts ?? 0;
     const beforeStaminaItem = party.totalStamina ?? 0;
     if (hearts > 0) {
