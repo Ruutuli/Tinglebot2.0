@@ -854,7 +854,7 @@ export async function PUT(req: NextRequest) {
           // categoryGear comes from dropdown - preserve as-is (no trimming needed)
           updateData[key] = value;
         } else if (key === "itemRarity" && typeof value === "number") {
-          updateData[key] = Math.max(1, Math.min(5, value)); // Clamp between 1-5
+          updateData[key] = Math.max(1, Math.min(10, value)); // Clamp between 1-10
         } else if ((key === "buyPrice" || key === "sellPrice") && typeof value === "number") {
           updateData[key] = Math.max(0, value); // No negative prices
         } else if (key === "maxStackSize" && typeof value === "number") {

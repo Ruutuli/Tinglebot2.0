@@ -408,6 +408,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
   const [changes, setChanges] = useState<ItemChanges>({});
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [saveBlockedByValidation, setSaveBlockedByValidation] = useState(false);
 
   // Track Changes
   useEffect(() => {
@@ -434,8 +435,8 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
       errors.itemName = "Item name is required";
     }
 
-    if (formData.itemRarity !== undefined && (formData.itemRarity < 1 || formData.itemRarity > 5)) {
-      errors.itemRarity = "Rarity must be between 1 and 5";
+    if (formData.itemRarity !== undefined && (formData.itemRarity < 1 || formData.itemRarity > 10)) {
+      errors.itemRarity = "Rarity must be between 1 and 10";
     }
 
     if (formData.buyPrice !== undefined && formData.buyPrice < 0) {
@@ -460,21 +461,27 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
       return;
     }
 
+    setSaveBlockedByValidation(false);
     if (!validate()) {
+      setSaveBlockedByValidation(true);
       return;
     }
 
     setShowConfirmModal(true);
   }, [changes, validate]);
 
-  // Confirm Save
+  // Confirm Save — keep modal open until save completes so user sees loading/errors
   const handleConfirmSave = useCallback(async () => {
-    setShowConfirmModal(false);
     const updates: Partial<ItemFormData> = {};
     Object.keys(changes).forEach((key) => {
       updates[key as keyof ItemFormData] = formData[key as keyof ItemFormData];
     });
-    await onSave(getItemId(item._id), updates);
+    try {
+      await onSave(getItemId(item._id), updates);
+      setShowConfirmModal(false);
+    } catch {
+      // Keep modal open; parent shows error. User can retry or cancel.
+    }
   }, [changes, formData, item._id, onSave]);
 
   // Reset Changes
@@ -706,11 +713,11 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
               label="Rarity Level"
               value={formData.itemRarity ?? 1}
               onChange={(v) => handleFieldChange("itemRarity", v)}
-              helpText="Rarity from 1 (common) to 5 (rarest)"
+              helpText="Rarity from 1 (common) to 10 (rarest)"
               isChanged={!!changes.itemRarity}
               error={validationErrors.itemRarity}
               min={1}
-              max={5}
+              max={10}
             />
             <MultiSelectField
               label="Category"
@@ -1434,6 +1441,26 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {saveBlockedByValidation && Object.keys(validationErrors).length > 0 && (
+        <div className="mb-4 rounded-lg border-2 border-amber-500/80 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <strong>Cannot save — fix these first:</strong>
+          <ul className="mt-2 list-disc list-inside space-y-0.5">
+            {Object.entries(validationErrors).map(([field, message]) => (
+              <li key={field}>
+                <strong className="text-amber-100">{getFieldDisplayName(field)}:</strong> {message}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-amber-200/90">These fields are usually on the <strong>Basics</strong> or <strong>Classification</strong> tab.</p>
+          <button
+            type="button"
+            onClick={() => setSaveBlockedByValidation(false)}
+            className="mt-2 underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Sticky Header */}
       <div className="sticky top-0 z-20 bg-[var(--totk-brown)] border-b-2 border-[var(--totk-dark-ocher)] pb-4 mb-4 -mx-6 -mt-6 px-6 pt-6 shadow-lg">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -1453,7 +1480,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
             )}
             <button
               onClick={handleSaveClick}
-              disabled={!hasChanges || hasErrors || saving}
+              disabled={!hasChanges || saving}
               className="rounded-md bg-[var(--totk-mid-ocher)] px-4 py-2 text-sm font-bold text-[var(--totk-ivory)] transition-colors hover:bg-[var(--totk-dark-ocher)] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {saving ? (
@@ -1537,10 +1564,20 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
             </button>
             <button
               onClick={handleConfirmSave}
-              className="rounded-md bg-[var(--totk-light-green)] px-5 py-2.5 text-sm font-bold text-[var(--botw-warm-black)] transition-colors hover:bg-[var(--totk-mid-green)] min-h-[44px]"
+              disabled={saving}
+              className="rounded-md bg-[var(--totk-light-green)] px-5 py-2.5 text-sm font-bold text-[var(--botw-warm-black)] transition-colors hover:bg-[var(--totk-mid-green)] disabled:opacity-60 disabled:cursor-not-allowed min-h-[44px]"
             >
-              <i className="fa-solid fa-check mr-2" aria-hidden="true" />
-              Yes, Save
+              {saving ? (
+                <>
+                  <i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-check mr-2" aria-hidden="true" />
+                  Yes, Save
+                </>
+              )}
             </button>
           </div>
         </div>
