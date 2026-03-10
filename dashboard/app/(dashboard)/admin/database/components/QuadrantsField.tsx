@@ -34,6 +34,7 @@ export type Quadrant = {
   quadrantId: string;
   status?: string;
   blighted?: boolean;
+  noCamp?: boolean;
   discoveries?: Discovery[];
   exploredBy?: string;
   exploredAt?: string | Date | null;
@@ -60,6 +61,7 @@ function normalizeQuadrants(value: unknown): Quadrant[] {
       quadrantId: String(id),
       status: (q as Quadrant).status ?? "unexplored",
       blighted: (q as Quadrant).blighted ?? false,
+      noCamp: (q as Quadrant).noCamp ?? false,
       discoveries: Array.isArray((q as Quadrant).discoveries) ? (q as Quadrant).discoveries : [],
       exploredBy: (q as Quadrant).exploredBy ?? "",
       exploredAt: (q as Quadrant).exploredAt ?? null,
@@ -72,6 +74,7 @@ function normalizeQuadrants(value: unknown): Quadrant[] {
     quadrantId: id,
     status: "unexplored",
     blighted: false,
+    noCamp: false,
     discoveries: [],
     exploredBy: "",
     exploredAt: null,
@@ -166,6 +169,15 @@ export function QuadrantsField({
                   className="rounded border-[var(--totk-dark-ocher)]"
                 />
                 <span className="text-xs text-[var(--totk-grey-200)]">Blighted</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={q.noCamp ?? false}
+                  onChange={(e) => updateQuadrant(index, { noCamp: e.target.checked })}
+                  className="rounded border-[var(--totk-dark-ocher)]"
+                />
+                <span className="text-xs text-[var(--totk-grey-200)]">No camp (pass-through only)</span>
               </label>
               <div>
                 <span className="text-[var(--totk-grey-200)] text-xs">Explored by (Discord ID)</span>

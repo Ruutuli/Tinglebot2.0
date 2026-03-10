@@ -23,6 +23,18 @@ const QuadrantSchema = new Schema({
   quadrantId: { type: String, required: true }, // e.g., Q1, Q2, etc.
   status: { type: String, enum: ['inaccessible', 'unexplored', 'explored', 'secured'], default: 'unexplored' },
   blighted: { type: Boolean, default: false }, // Boolean field for blighted status
+  /** Environmental hazards that can proc while parties take actions in this quadrant (e.g. 'thunder', 'hot', 'cold'). */
+  hazards: [{ type: String }],
+  /** Terrain tags (free-form) for this quadrant, e.g. ["⛰️ Mountain & Highland", "🌊 Water & Wetlands"]. */
+  terrain: [{ type: String }],
+  /** Items that can be gathered/found here (free-form labels for seeding later), e.g. ["Fish", "Creature"]. */
+  items: [{ type: String }],
+  /** Monsters that can appear here (names should match your monster DB seeding), e.g. ["Lynel", "Black Bokoblin"]. */
+  monsters: [{ type: String }],
+  /** Boss monsters that can appear here (names should match your monster DB seeding). */
+  bossMonsters: [{ type: String }],
+  /** Special notes/flags for this quadrant (free-form), e.g. ["SomeSpecialRule"]. */
+  special: [{ type: String }],
   discoveries: [DiscoverySchema], // Array of objects using the DiscoverySchema
   exploredBy: { type: String, default: '' }, // Discord ID of explorer
   exploredAt: { type: Date, default: null },
@@ -30,7 +42,9 @@ const QuadrantSchema = new Schema({
   oldMapNumber: { type: Number, default: null },
   oldMapLeadsTo: { type: String, default: null }, // 'chest' | 'ruins' | 'relic' | 'shrine'
   // Ruin-rest: when a party found a camp spot in ruins here, future visits auto-recover this much stamina
-  ruinRestStamina: { type: Number, default: null }
+  ruinRestStamina: { type: Number, default: null },
+  /** Pre-established path/village: safe to pass through but camping not allowed. */
+  noCamp: { type: Boolean, default: false }
 });
 
 // Define Square Schema, including image URL and map coordinates

@@ -69,6 +69,7 @@ export type ItemFormData = {
   lanayru?: boolean;
   pathOfScarletLeaves?: boolean;
   leafDewWay?: boolean;
+  terrain?: string[];
   // Monsters
   monsterList?: string[];
   // Special weather (nested object)

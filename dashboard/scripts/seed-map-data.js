@@ -48,6 +48,7 @@ const QuadrantSchema = new mongoose.Schema({
   quadrantId: { type: String, required: true },
   status: { type: String, enum: ['inaccessible', 'unexplored', 'explored', 'secured'], default: 'unexplored' },
   blighted: { type: Boolean, default: false },
+  noCamp: { type: Boolean, default: false },
   discoveries: [DiscoverySchema],
   exploredBy: { type: String, default: '' },
   exploredAt: { type: Date, default: null }
@@ -73,6 +74,8 @@ const SquareSchema = new mongoose.Schema({
 });
 
 const Square = mongoose.model('Square', SquareSchema, 'exploringMap');
+
+const { PREESTABLISHED_NO_CAMP, isPreestablishedNoCamp } = require('./preestablished-no-camp.js');
 
 /**
  * Parse square ID to get column/row indices
@@ -194,10 +197,13 @@ function buildSquares(squaresMap) {
         blighted: false,
         region: 'Unknown'
       };
+      const noCamp = isPreestablishedNoCamp(squareId, qId);
+      const status = noCamp ? 'secured' : d.status;
       return {
         quadrantId: d.quadrantId,
-        status: d.status,
+        status,
         blighted: d.blighted,
+        noCamp,
         discoveries: [],
         exploredBy: '',
         exploredAt: null

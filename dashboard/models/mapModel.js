@@ -29,7 +29,9 @@ const QuadrantSchema = new Schema({
   oldMapNumber: { type: Number, default: null },
   oldMapLeadsTo: { type: String, default: null }, // 'chest' | 'ruins' | 'relic' | 'shrine'
   // Ruin-rest: when a party found a camp spot in ruins here, future visits auto-recover this much stamina
-  ruinRestStamina: { type: Number, default: null }
+  ruinRestStamina: { type: Number, default: null },
+  /** Pre-established path/village: safe to pass through but camping not allowed. */
+  noCamp: { type: Boolean, default: false }
 });
 
 // Define Square Schema, including image URL and map coordinates

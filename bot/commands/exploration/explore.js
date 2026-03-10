@@ -473,6 +473,154 @@ async function payStaminaOrStruggle(party, characterIndex, staminaCost, options 
   return { ok: true, staminaPaid, heartsPaid };
 }
 
+// ------------------- Quadrant Hazards ------------------
+// Hazards are stored on the map's quadrant doc (Square.quadrants[].hazards).
+// Tuning: Light (per user selection)
+const HAZARD_PROC_CHANCE = 0.20; // 20% chance per action
+const HOT_COLD_STAMINA_PROC_CHANCE = 0.15; // 15% additional chance per action
+
+async function getQuadrantHazards(squareId, quadrantId) {
+  const s = String(squareId || "").trim();
+  const q = String(quadrantId || "").trim().toUpperCase();
+  if (!s || !q) return [];
+  try {
+    const mapSquare = await Square.findOne({ squareId: { $regex: exactIRegex(s) } }).lean();
+    const quad = mapSquare?.quadrants?.find((qu) => String(qu?.quadrantId || "").trim().toUpperCase() === q);
+    const raw = Array.isArray(quad?.hazards) ? quad.hazards : [];
+    const norm = raw
+      .map((h) => String(h || "").trim().toLowerCase())
+      .filter(Boolean);
+    return [...new Set(norm)];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function getQuadrantMeta(squareId, quadrantId) {
+  const s = String(squareId || "").trim();
+  const q = String(quadrantId || "").trim().toUpperCase();
+  if (!s || !q) {
+    return { terrain: [], hazards: [], items: [], monsters: [], bossMonsters: [], special: [] };
+  }
+  try {
+    const mapSquare = await Square.findOne({ squareId: { $regex: exactIRegex(s) } }).lean();
+    const quad = mapSquare?.quadrants?.find((qu) => String(qu?.quadrantId || "").trim().toUpperCase() === q);
+    const normArr = (v) => (Array.isArray(v) ? v.map((x) => String(x || "").trim()).filter(Boolean) : []);
+    return {
+      terrain: normArr(quad?.terrain),
+      hazards: normArr(quad?.hazards).map((h) => h.toLowerCase()),
+      items: normArr(quad?.items),
+      monsters: normArr(quad?.monsters),
+      bossMonsters: normArr(quad?.bossMonsters),
+      special: normArr(quad?.special),
+    };
+  } catch (_) {
+    return { terrain: [], hazards: [], items: [], monsters: [], bossMonsters: [], special: [] };
+  }
+}
+
+/**
+ * Roll and apply hazards for the party's current quadrant.
+ * Returns: { applied: boolean, ko: boolean, heartsLost: number, staminaLost: number }
+ */
+async function maybeApplyQuadrantHazards(party, options = {}) {
+  if (!party || party.status !== "started") return { applied: false, ko: false, heartsLost: 0, staminaLost: 0 };
+  if ((party.totalHearts ?? 0) <= 0) return { applied: false, ko: true, heartsLost: 0, staminaLost: 0 };
+
+  const squareId = options.squareId ?? party.square;
+  const quadrantId = options.quadrantId ?? party.quadrant;
+  const hazards = await getQuadrantHazards(squareId, quadrantId);
+  if (!hazards.length) return { applied: false, ko: false, heartsLost: 0, staminaLost: 0 };
+
+  const location = `${String(squareId || "").trim().toUpperCase()} ${String(quadrantId || "").trim().toUpperCase()}`.trim();
+  const at = options.at instanceof Date ? options.at : new Date();
+
+  let heartsLostTotal = 0;
+  let staminaLostTotal = 0;
+
+  const totalHeartsBefore = Math.max(0, Number(party.totalHearts) || 0);
+  const totalStaminaBefore = Math.max(0, Number(party.totalStamina) || 0);
+
+  for (const hz of hazards) {
+    if (hz === "thunder") {
+      if (Math.random() < HAZARD_PROC_CHANCE) {
+        const heartsLost = Math.min(1, Math.max(0, Number(party.totalHearts) || 0));
+        if (heartsLost > 0) {
+          party.totalHearts = Math.max(0, (Number(party.totalHearts) || 0) - heartsLost);
+          heartsLostTotal += heartsLost;
+          pushProgressLog(
+            party,
+            "Party",
+            "hazard_thunder",
+            `⚡ **Thunder hazard** in ${location} — the party is electrocuted! (−${heartsLost} ❤️)`,
+            undefined,
+            { heartsLost },
+            at
+          );
+        }
+      }
+      continue;
+    }
+
+    if (hz === "hot" || hz === "cold") {
+      let heartsLost = 0;
+      let staminaLost = 0;
+
+      if (Math.random() < HAZARD_PROC_CHANCE) {
+        heartsLost = Math.min(1, Math.max(0, Number(party.totalHearts) || 0));
+        if (heartsLost > 0) {
+          party.totalHearts = Math.max(0, (Number(party.totalHearts) || 0) - heartsLost);
+          heartsLostTotal += heartsLost;
+        }
+      }
+
+      if (Math.random() < HOT_COLD_STAMINA_PROC_CHANCE) {
+        staminaLost = Math.min(1, Math.max(0, Number(party.totalStamina) || 0));
+        if (staminaLost > 0) {
+          party.totalStamina = Math.max(0, (Number(party.totalStamina) || 0) - staminaLost);
+          staminaLostTotal += staminaLost;
+        }
+      }
+
+      if (heartsLost > 0 || staminaLost > 0) {
+        const label = hz === "hot" ? "Hot" : "Cold";
+        const parts = [];
+        if (heartsLost > 0) parts.push(`−${heartsLost} ❤️`);
+        if (staminaLost > 0) parts.push(`−${staminaLost} 🟩`);
+        pushProgressLog(
+          party,
+          "Party",
+          hz === "hot" ? "hazard_hot" : "hazard_cold",
+          `🌡️ **${label} hazard** in ${location} — the elements sap the party. (${parts.join(", ")})`,
+          undefined,
+          { ...(heartsLost > 0 ? { heartsLost } : {}), ...(staminaLost > 0 ? { staminaLost } : {}) },
+          at
+        );
+      }
+      continue;
+    }
+  }
+
+  if (heartsLostTotal === 0 && staminaLostTotal === 0) {
+    // No procs; do not save.
+    return { applied: false, ko: false, heartsLost: 0, staminaLost: 0 };
+  }
+
+  // Persist pool changes
+  const totalHeartsAfter = Math.max(0, Number(party.totalHearts) || 0);
+  const totalStaminaAfter = Math.max(0, Number(party.totalStamina) || 0);
+  party.markModified("totalHearts");
+  party.markModified("totalStamina");
+  await party.save();
+
+  logger.info(
+    "EXPLORE",
+    `[explore.js] hazards at ${location} ❤${totalHeartsBefore} 🟩${totalStaminaBefore} -> ❤${totalHeartsAfter} 🟩${totalStaminaAfter}`
+  );
+
+  return { applied: true, ko: totalHeartsAfter <= 0, heartsLost: heartsLostTotal, staminaLost: staminaLostTotal };
+}
+
 // ------------------- normalizeExpeditionId ------------------
 // Autocomplete may send full string; extract partyId (before first "|")
 function normalizeExpeditionId(value) {
@@ -3731,6 +3879,13 @@ module.exports = {
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
+    // Quadrant hazards (per-action trigger, party pool)
+    const hazardRollResult = await maybeApplyQuadrantHazards(party, { trigger: "roll" });
+    if (hazardRollResult.ko) {
+      await handleExpeditionFailed(party, interaction);
+      return;
+    }
+
     logger.info("EXPLORE", `[explore.js] id=${expeditionId ?? "?"} roll char=${characterName ?? "?"} ❤${party.totalHearts ?? 0} 🟩${party.totalStamina ?? 0}`);
 
      // Sync quadrant state from map so stamina cost matches canonical explored/secured status.
@@ -5208,6 +5363,9 @@ module.exports = {
        (item) => item[regionKey]
       );
 
+      // Quadrant bias: items listed on the quadrant are 2x as likely (without restricting the pool)
+      const quadrantMetaForItem = await getQuadrantMeta(party.square, party.quadrant);
+      const quadrantItemBiasSet = new Set((quadrantMetaForItem.items || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean));
 
       if (availableItems.length === 0) {
        logger.warn("EXPLORE", `[explore.js]⚠️ No items for region "${regionKey}"`);
@@ -5216,9 +5374,15 @@ module.exports = {
 
       // Rarity-weighted pick: common items (low rarity) more likely, rare less likely. FV 50 = neutral spread. Fallback to uniform if no itemRarity.
       const weightedList = createWeightedItemList(availableItems, 50);
-      const selectedItem = weightedList.length > 0
-       ? weightedList[Math.floor(Math.random() * weightedList.length)]
-       : availableItems[Math.floor(Math.random() * availableItems.length)];
+      const weightedListBiased = quadrantItemBiasSet.size > 0 && weightedList.length > 0
+        ? weightedList.concat(weightedList.filter((it) => quadrantItemBiasSet.has(String(it?.itemName || "").trim().toLowerCase())))
+        : weightedList;
+      const availableItemsBiased = quadrantItemBiasSet.size > 0
+        ? availableItems.concat(availableItems.filter((it) => quadrantItemBiasSet.has(String(it?.itemName || "").trim().toLowerCase())))
+        : availableItems;
+      const selectedItem = weightedListBiased.length > 0
+       ? weightedListBiased[Math.floor(Math.random() * weightedListBiased.length)]
+       : availableItemsBiased[Math.floor(Math.random() * availableItemsBiased.length)];
 
       appendExploreStat(`${new Date().toISOString()}\tfinal\titem\t${location}\trarity=${selectedItem.itemRarity ?? "?"}`);
 
@@ -5289,7 +5453,14 @@ module.exports = {
        return interaction.editReply("No monsters available for this region.");
       }
 
-      const selectedMonster = getExplorationMonsterFromList(monsters, dangerLevel.dangerBonus);
+      // Quadrant bias: monsters listed on the quadrant are 2x as likely (without restricting the pool)
+      const quadrantMetaForMonster = await getQuadrantMeta(party.square, party.quadrant);
+      const quadrantMonsterBiasSet = new Set((quadrantMetaForMonster.monsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean));
+      const monstersBiased = quadrantMonsterBiasSet.size > 0
+        ? monsters.concat(monsters.filter((m) => quadrantMonsterBiasSet.has(String(m?.name || "").trim().toLowerCase())))
+        : monsters;
+
+      const selectedMonster = getExplorationMonsterFromList(monstersBiased, dangerLevel.dangerBonus);
       appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}\tdist=${dangerLevel.distance}\tbonus=${(dangerLevel.dangerBonus * 100).toFixed(0)}%`);
 
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
@@ -5640,6 +5811,13 @@ module.exports = {
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
        .setImage(getExploreMapImageUrl(party, { highlight: true }));
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
+    }
+
+    // Quadrant hazards (per-action trigger, party pool)
+    const hazardSecureResult = await maybeApplyQuadrantHazards(party, { trigger: "secure" });
+    if (hazardSecureResult.ko) {
+      await handleExpeditionFailed(party, interaction);
+      return;
     }
 
     if (party.quadrantState !== "explored") {
@@ -6152,6 +6330,13 @@ module.exports = {
     // Block moving if there's active combat for this expedition (must resolve first)
     const moveCombatBlock = await getCombatBlockReply(party, expeditionId, "move", `${party.square} ${party.quadrant}`);
     if (moveCombatBlock) return interaction.editReply(moveCombatBlock);
+
+    // Quadrant hazards (per-action trigger, party pool) — applied before paying move cost / leaving the quadrant
+    const hazardMoveResult = await maybeApplyQuadrantHazards(party, { trigger: "move" });
+    if (hazardMoveResult.ko) {
+     await handleExpeditionFailed(party, interaction);
+     return;
+    }
 
     // Sync quadrant state from map (exploringMap / Square model) — secured/explored on map means Move is allowed
     // DESIGN NOTE: Exploration state is SHARED across all expeditions via the map database.
@@ -7341,10 +7526,18 @@ module.exports = {
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
+    // Quadrant hazards (per-action trigger, party pool)
+    const hazardCampResult = await maybeApplyQuadrantHazards(party, { trigger: "camp" });
+    if (hazardCampResult.ko) {
+     await handleExpeditionFailed(party, interaction);
+     return;
+    }
+
     // Sync quadrant state from map so stamina cost matches canonical explored/secured status
     const campMapSquare = await Square.findOne({ squareId: party.square });
+    let campQuad = null;
     if (campMapSquare && campMapSquare.quadrants && campMapSquare.quadrants.length) {
-     const campQuad = campMapSquare.quadrants.find(
+     campQuad = campMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
      );
      if (campQuad && (campQuad.status === "explored" || campQuad.status === "secured")) {
@@ -7354,6 +7547,29 @@ module.exports = {
        party.markModified("quadrantState");
       }
      }
+    }
+
+    // Pre-established paths/villages: pass through only, no camping
+    if (campQuad && campQuad.noCamp) {
+     const locationNoCamp = `${party.square} ${party.quadrant}`;
+     const noCampEmbed = new EmbedBuilder()
+      .setTitle("🚫 **No camping here**")
+      .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
+      .setDescription(
+       `**${locationNoCamp}** is a pre-established path or village. You can pass through safely, but you cannot camp here.\n\nUse **Move** to continue to another quadrant.`
+      )
+      .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     addExplorationStandardFields(noCampEmbed, {
+      party,
+      expeditionId: expeditionId || party.partyId,
+      location: locationNoCamp,
+      nextCharacter: party.characters[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: true,
+      hideCampCommand: true,
+      hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+     });
+     return interaction.editReply({ embeds: [noCampEmbed] });
     }
 
     const isSecured = party.quadrantState === "secured";
@@ -7445,7 +7661,14 @@ module.exports = {
      const campAttackStruggleHearts = campAttackPayResult?.heartsPaid ?? 0;
      const monsters = await getMonstersByRegion(party.region?.toLowerCase() || "");
      if (monsters && monsters.length > 0) {
-      const selectedMonster = getExplorationMonsterFromList(monsters, campDangerLevel.dangerBonus);
+      // Quadrant bias: monsters listed on the quadrant are 2x as likely (without restricting the pool)
+      const quadrantMetaForCampMonster = await getQuadrantMeta(party.square, party.quadrant);
+      const quadrantCampMonsterBiasSet = new Set((quadrantMetaForCampMonster.monsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean));
+      const monstersBiased = quadrantCampMonsterBiasSet.size > 0
+        ? monsters.concat(monsters.filter((m) => quadrantCampMonsterBiasSet.has(String(m?.name || "").trim().toLowerCase())))
+        : monsters;
+
+      const selectedMonster = getExplorationMonsterFromList(monstersBiased, campDangerLevel.dangerBonus);
       logger.info("EXPLORE", `[explore.js] Camp attack: monster=${selectedMonster.name} tier=${selectedMonster.tier} dist=${campDangerLevel.distance} bonus=${(campDangerLevel.dangerBonus * 100).toFixed(0)}%`);
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
        try {

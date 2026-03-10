@@ -95,6 +95,10 @@ const EXPLORE_OUTCOME_COLORS = {
   retreat: "#E67E22",
   retreat_failed: "#C0392B",
   blight_exposure: "#641E16",
+  // Hazards
+  hazard_thunder: "#FDE047",
+  hazard_hot: "#FB923C",
+  hazard_cold: "#38BDF8",
   // End
   end: "#7F8C8D",
   end_test_reset: "#95A5A6",

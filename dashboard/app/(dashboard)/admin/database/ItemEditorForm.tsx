@@ -74,6 +74,7 @@ type Item = {
   lanayru?: boolean;
   pathOfScarletLeaves?: boolean;
   leafDewWay?: boolean;
+  terrain?: string[];
   adventurer?: boolean;
   artist?: boolean;
   beekeeper?: boolean;
@@ -287,6 +288,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
     lanayru: item.lanayru ?? false,
     pathOfScarletLeaves: item.pathOfScarletLeaves ?? false,
     leafDewWay: item.leafDewWay ?? false,
+    terrain: item.terrain ?? [],
     adventurer: item.adventurer ?? false,
     artist: item.artist ?? false,
     beekeeper: item.beekeeper ?? false,
@@ -572,6 +574,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
       lanayru: "Lanayru",
       pathOfScarletLeaves: "Path of Scarlet Leaves",
       leafDewWay: "Leaf Dew Way",
+      terrain: "Terrain",
       allJobs: "All Jobs",
       entertainerItems: "Entertainer Items",
       divineItems: "Divine Items",
@@ -1096,6 +1099,15 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
                 columns={2}
                 groupTitle="Special Paths"
               />
+              <div className="pt-6 mt-6 border-t-2 border-[var(--totk-light-green)]/30 rounded-lg p-4">
+                <ArrayFieldInput
+                  label="Terrain"
+                  value={formData.terrain || []}
+                  onChange={(v) => handleFieldChange("terrain", v)}
+                  helpText="Terrain types (e.g. Water & Wetlands, Coastal & Sea Edge)"
+                  isChanged={!!changes.terrain}
+                />
+              </div>
             </div>
             <div className="pt-6 mt-6 border-t-2 border-[var(--totk-light-green)]/30 bg-[var(--totk-light-green)]/5 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-4">
