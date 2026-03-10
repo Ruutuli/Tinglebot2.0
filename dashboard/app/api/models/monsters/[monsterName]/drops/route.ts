@@ -28,10 +28,11 @@ export async function GET(
     }
 
     const { default: Monster } = await import("@/models/MonsterModel.js");
-    const monsterDoc = await Monster.findOne({ name: monsterName })
+    const raw = await Monster.findOne({ name: monsterName })
       .select("nameMapping")
       .lean();
-    const nameMapping = monsterDoc?.nameMapping as string | undefined;
+    const monsterDoc = Array.isArray(raw) ? null : raw;
+    const nameMapping = (monsterDoc as { nameMapping?: string } | null)?.nameMapping;
 
     const orConditions: Array<Record<string, unknown>> = [
       { monsterList: monsterName },
