@@ -3644,7 +3644,8 @@ module.exports = {
      // Block rolling if there's an active raid for this expedition (must defeat or retreat first)
      const activeRaid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${expeditionId}$`, 'i') }, status: "active" });
      if (activeRaid) {
-      return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaid.raidId, "roll", location)] });
+      const raidBlockLocation = `${party.square} ${party.quadrant}`;
+      return interaction.editReply({ embeds: [createRaidBlockEmbed(party, activeRaid.raidId, "roll", raidBlockLocation)] });
      }
 
      // Block rolling if there's an active wave for this expedition (must complete wave first)
