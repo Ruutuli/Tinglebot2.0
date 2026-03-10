@@ -850,15 +850,76 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
     logger.error('QUEST', `consumeQuestTurnIns: attempted to consume ${sanitizedAmount} but only consumed ${consumed} (current=${consumedFromCurrent} legacy=${consumedFromLegacy}); totalPending before was ${totalPending}; userId=${this.discordId}`);
   }
 
-  await this.save();
+  // Atomic pipeline update: pending never goes negative, deduction always persists
+  const setsThisTimeForUpdate = Math.floor(sanitizedAmount / 10) || 1;
+  const historyEntry = {
+    turnedInAt: new Date(),
+    amount: sanitizedAmount,
+    fromBot: consumedFromCurrent,
+    fromLegacy: consumedFromLegacy
+  };
+  const updatePipeline = [
+    {
+      $set: {
+        'quests.bot.pending': {
+          $max: [
+            0,
+            { $subtract: [{ $ifNull: ['$quests.bot.pending', 0] }, consumedFromCurrent] }
+          ]
+        },
+        'quests.legacy.pending': {
+          $max: [
+            0,
+            { $subtract: [{ $ifNull: ['$quests.legacy.pending', 0] }, consumedFromLegacy] }
+          ]
+        },
+        'quests.turnIns.totalSetsTurnedIn': {
+          $add: [{ $ifNull: ['$quests.turnIns.totalSetsTurnedIn', 0] }, setsThisTimeForUpdate]
+        },
+        'quests.turnIns.lastTurnedInAt': new Date(),
+        'quests.turnIns.history': {
+          $slice: [
+            { $concatArrays: [{ $ifNull: ['$quests.turnIns.history', []] }, [historyEntry]] },
+            -25
+          ]
+        }
+      }
+    }
+  ];
+  let updatedDoc;
+  try {
+    updatedDoc = await this.constructor.findOneAndUpdate(
+      { _id: this._id },
+      updatePipeline,
+      { new: true }
+    );
+  } catch (err) {
+    logger.error('QUEST', `consumeQuestTurnIns: findOneAndUpdate failed; userId=${this.discordId}`, err);
+    return {
+      success: false,
+      error: 'Failed to save turn-in. Please try again.'
+    };
+  }
+  if (!updatedDoc || !updatedDoc.quests) {
+    logger.error('QUEST', `consumeQuestTurnIns: no document updated; userId=${this.discordId}`);
+    return {
+      success: false,
+      error: 'Failed to save turn-in. Please try again.'
+    };
+  }
 
+  questTracking.bot.pending = safePendingNumber(updatedDoc.quests.bot?.pending);
+  questTracking.legacy.pending = safePendingNumber(updatedDoc.quests.legacy?.pending);
+  questTracking.turnIns = updatedDoc.quests.turnIns || questTracking.turnIns;
+
+  const turnInSummary = updatedDoc.getQuestTurnInSummary ? updatedDoc.getQuestTurnInSummary() : this.getQuestTurnInSummary();
   return {
     success: true,
     consumed: sanitizedAmount,
     consumedFromCurrent,
     consumedFromLegacy,
-    remainingPending: this.getQuestPendingTurnIns(),
-    turnInSummary: this.getQuestTurnInSummary()
+    remainingPending: turnInSummary.totalPending,
+    turnInSummary
   };
 };
 

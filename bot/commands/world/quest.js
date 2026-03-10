@@ -518,7 +518,15 @@ async handleQuestTurnIn(interaction) {
    });
   }
 
-  const updatedSummary = consumeResult.turnInSummary || user.getQuestTurnInSummary();
+  // Use only the summary returned from the atomic update so the embed always shows persisted state
+  const updatedSummary = consumeResult.turnInSummary;
+  if (!updatedSummary) {
+   logger.error('QUEST', `handleQuestTurnIn: missing turnInSummary after consume; userId=${interaction.user.id}`);
+   return interaction.reply({
+    content: "Turn-in was processed but progress could not be refreshed. Use `/quest stats` to check your current pending count.",
+    flags: MessageFlags.Ephemeral
+   });
+  }
   const rewardFields = [];
   let rewardValue = "";
   let description = "";

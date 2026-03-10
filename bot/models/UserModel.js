@@ -910,35 +910,77 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
     logger.error('QUEST', `consumeQuestTurnIns: attempted to consume ${sanitizedAmount} but only consumed ${consumed} (current=${consumedFromCurrent} legacy=${consumedFromLegacy}); totalPending before was ${totalPending}; userId=${this.discordId}`);
   }
 
-  // Record turn-in for stats and history
-  const setsThisTime = Math.floor(sanitizedAmount / 10) || 1;
-  if (!questTracking.turnIns || typeof questTracking.turnIns !== 'object') {
-    questTracking.turnIns = { ...defaultQuestTracking().turnIns };
-  }
-  questTracking.turnIns.totalSetsTurnedIn = (questTracking.turnIns.totalSetsTurnedIn || 0) + setsThisTime;
-  questTracking.turnIns.lastTurnedInAt = new Date();
-  if (!Array.isArray(questTracking.turnIns.history)) {
-    questTracking.turnIns.history = [];
-  }
-  questTracking.turnIns.history.push({
+  // Atomic DB update: use pipeline so pending never goes negative and deduction always persists (robust against missing nested paths)
+  const setsThisTimeForUpdate = Math.floor(sanitizedAmount / 10) || 1;
+  const historyEntry = {
     turnedInAt: new Date(),
     amount: sanitizedAmount,
     fromBot: consumedFromCurrent,
     fromLegacy: consumedFromLegacy
-  });
-  if (questTracking.turnIns.history.length > 25) {
-    questTracking.turnIns.history = questTracking.turnIns.history.slice(-25);
+  };
+  const updatePipeline = [
+    {
+      $set: {
+        'quests.bot.pending': {
+          $max: [
+            0,
+            { $subtract: [{ $ifNull: ['$quests.bot.pending', 0] }, consumedFromCurrent] }
+          ]
+        },
+        'quests.legacy.pending': {
+          $max: [
+            0,
+            { $subtract: [{ $ifNull: ['$quests.legacy.pending', 0] }, consumedFromLegacy] }
+          ]
+        },
+        'quests.turnIns.totalSetsTurnedIn': {
+          $add: [{ $ifNull: ['$quests.turnIns.totalSetsTurnedIn', 0] }, setsThisTimeForUpdate]
+        },
+        'quests.turnIns.lastTurnedInAt': new Date(),
+        'quests.turnIns.history': {
+          $slice: [
+            { $concatArrays: [{ $ifNull: ['$quests.turnIns.history', []] }, [historyEntry]] },
+            -25
+          ]
+        }
+      }
+    }
+  ];
+  let updatedDoc;
+  try {
+    updatedDoc = await this.constructor.findOneAndUpdate(
+      { _id: this._id },
+      updatePipeline,
+      { new: true }
+    );
+  } catch (err) {
+    logger.error('QUEST', `consumeQuestTurnIns: findOneAndUpdate failed; userId=${this.discordId}`, err);
+    return {
+      success: false,
+      error: 'Failed to save turn-in. Please try again.'
+    };
+  }
+  if (!updatedDoc || !updatedDoc.quests) {
+    logger.error('QUEST', `consumeQuestTurnIns: no document updated; userId=${this.discordId}`);
+    return {
+      success: false,
+      error: 'Failed to save turn-in. Please try again.'
+    };
   }
 
-  await this.save();
+  // Sync in-memory doc from DB so any later reads are correct; response uses DB-backed summary only
+  this.quests.bot.pending = safePendingNumber(updatedDoc.quests.bot?.pending);
+  this.quests.legacy.pending = safePendingNumber(updatedDoc.quests.legacy?.pending);
+  this.quests.turnIns = updatedDoc.quests.turnIns || this.quests.turnIns;
 
+  const turnInSummary = updatedDoc.getQuestTurnInSummary ? updatedDoc.getQuestTurnInSummary() : this.getQuestTurnInSummary();
   return {
     success: true,
     consumed: sanitizedAmount,
     consumedFromCurrent,
     consumedFromLegacy,
-    remainingPending: this.getQuestPendingTurnIns(),
-    turnInSummary: this.getQuestTurnInSummary()
+    remainingPending: turnInSummary.totalPending,
+    turnInSummary
   };
 };
 
