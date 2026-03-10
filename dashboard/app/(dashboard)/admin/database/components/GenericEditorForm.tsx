@@ -62,7 +62,8 @@ export function GenericEditorForm({
               field.component === "VillageContributorsField" ||
               field.component === "VillageCooldownsField" ||
               field.component === "QuadrantsField" ||
-              field.component === "QuestCompletionsField"
+              field.component === "QuestCompletionsField" ||
+              field.component === "QuestParticipantsField"
             )) {
               // Keep as object for custom village components
               if (value instanceof Map) {

@@ -14,6 +14,7 @@ import { VillageContributorsField } from "./VillageContributorsField";
 import { VillageCooldownsField } from "./VillageCooldownsField";
 import { QuadrantsField, type Quadrant } from "./QuadrantsField";
 import { QuestCompletionsField } from "./QuestCompletionsField";
+import { QuestParticipantsField, type QuestParticipantData } from "./QuestParticipantsField";
 
 type FieldRendererProps = {
   field: FieldConfig;
@@ -366,6 +367,26 @@ export function FieldRenderer({
           <QuestCompletionsField
             label={label}
             value={completionsValue as Parameters<typeof QuestCompletionsField>[0]["value"]}
+            onChange={(val) => onChange(val)}
+            helpText={helpText || ""}
+            isChanged={isChanged}
+            error={error}
+          />
+        );
+      }
+      if (field.component === "QuestParticipantsField") {
+        let participantsValue: Record<string, QuestParticipantData> = {};
+        if (value && typeof value === "object") {
+          if (value instanceof Map) {
+            participantsValue = Object.fromEntries(value) as Record<string, QuestParticipantData>;
+          } else {
+            participantsValue = value as Record<string, QuestParticipantData>;
+          }
+        }
+        return (
+          <QuestParticipantsField
+            label={label}
+            value={participantsValue}
             onChange={(val) => onChange(val)}
             helpText={helpText || ""}
             isChanged={isChanged}

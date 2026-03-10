@@ -838,6 +838,13 @@ userSchema.methods.consumeQuestTurnIns = async function(amount = 10) {
   questTracking.bot.pending = safePendingNumber(questTracking.bot?.pending);
   questTracking.legacy.pending = safePendingNumber(questTracking.legacy?.pending);
 
+  // When total pending is 0 after consume, clear both to 0 so nothing is left
+  const totalAfterConsume = this.getQuestPendingTurnIns();
+  if (totalAfterConsume <= 0) {
+    questTracking.bot.pending = 0;
+    questTracking.legacy.pending = 0;
+  }
+
   if (remaining > 0) {
     const consumed = consumedFromCurrent + consumedFromLegacy;
     logger.error('QUEST', `consumeQuestTurnIns: attempted to consume ${sanitizedAmount} but only consumed ${consumed} (current=${consumedFromCurrent} legacy=${consumedFromLegacy}); totalPending before was ${totalPending}; userId=${this.discordId}`);

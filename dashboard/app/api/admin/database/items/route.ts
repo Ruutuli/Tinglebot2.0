@@ -235,6 +235,13 @@ export async function GET(req: NextRequest) {
         const { default: UserModel } = await import("@/models/UserModel.js");
         Model = UserModel as unknown as Model<unknown>;
       }
+    } else if (modelName === "Quest") {
+      if (mongoose.models.Quest) {
+        Model = mongoose.models.Quest;
+      } else {
+        const QuestModel = await import("@/models/QuestModel.js");
+        Model = (QuestModel.default ?? QuestModel) as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${modelName}" is not supported` },
@@ -490,6 +497,16 @@ export async function GET(req: NextRequest) {
         if (r.status) statusSet.add(r.status);
       });
       filterOptions.status = Array.from(statusSet).sort();
+    } else if (modelName === "Quest") {
+      const statusSet = new Set<string>();
+      const questTypeSet = new Set<string>();
+      convertedRecords.forEach((record) => {
+        const r = record as { status?: string; questType?: string };
+        if (r.status) statusSet.add(r.status);
+        if (r.questType) questTypeSet.add(r.questType);
+      });
+      filterOptions.status = Array.from(statusSet).sort();
+      filterOptions.questType = Array.from(questTypeSet).sort();
     }
 
     // ------------------- Return Response -------------------
@@ -728,6 +745,13 @@ export async function PUT(req: NextRequest) {
         const { default: UserModel } = await import("@/models/UserModel.js");
         Model = UserModel as unknown as Model<unknown>;
       }
+    } else if (model === "Quest") {
+      if (mongoose.models.Quest) {
+        Model = mongoose.models.Quest;
+      } else {
+        const QuestModel = await import("@/models/QuestModel.js");
+        Model = (QuestModel.default ?? QuestModel) as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },
@@ -827,6 +851,19 @@ export async function PUT(req: NextRequest) {
         "birthday.month", "birthday.day", "birthday.lastBirthdayReward", "birthday.birthdayDiscountExpiresAt",
         "boostRewards.lastRewardMonth", "boostRewards.totalRewards",
       ];
+    } else if (model === "Quest") {
+      allowedFields = [
+        "questID", "title", "description", "questType", "status", "location", "date", "timeLimit",
+        "participantCap", "minRequirements", "tableroll", "itemReward", "itemRewardQty", "itemRewards",
+        "signupDeadline", "postRequirement", "specialNote", "tokenReward",
+        "targetChannel", "posted", "postedAt", "botNotes", "messageID", "roleID", "guildId",
+        "rpThreadParentChannel", "rpThreadId",
+        "completionReason", "completedAt", "completionProcessed", "lastCompletionCheck",
+        "participants", "leftParticipants",
+        "collabAllowed", "collabRule", "rules", "artWritingMode",
+        "tableRollName", "tableRollConfig", "requiredRolls", "rollSuccessCriteria",
+        "createdByUserId", "createdByUsername", "isMemberQuest", "runByUserId", "runByUsername",
+      ];
     } else {
       // For other models, allow all fields (can be refined per model later)
       allowedFields = Object.keys(updates);
@@ -905,6 +942,42 @@ export async function PUT(req: NextRequest) {
         } else if (typeof value === "number") {
           // Handle number fields
           updateData[key] = value;
+        } else if (key === "participants" && model === "Quest" && value && typeof value === "object" && !Array.isArray(value)) {
+          // Quest participants: plain object → Map; normalize nested dates
+          const plain = value as Record<string, Record<string, unknown>>;
+          const map = new Map<string, Record<string, unknown>>();
+          const toDate = (v: unknown): Date | null => {
+            if (v == null) return null;
+            if (typeof v === "string") {
+              const d = new Date(v);
+              return Number.isFinite(d.getTime()) ? d : null;
+            }
+            if (v instanceof Date && Number.isFinite((v as Date).getTime())) return v as Date;
+            return null;
+          };
+          for (const [userId, p] of Object.entries(plain)) {
+            if (p && typeof p === "object") {
+              const entry = { ...p } as Record<string, unknown>;
+              if (entry.joinedAt !== undefined) entry.joinedAt = toDate(entry.joinedAt);
+              if (entry.leftAt !== undefined) entry.leftAt = toDate(entry.leftAt);
+              if (entry.completedAt !== undefined) entry.completedAt = toDate(entry.completedAt);
+              if (entry.rewardedAt !== undefined) entry.rewardedAt = toDate(entry.rewardedAt);
+              if (entry.voucherUsedAt !== undefined) entry.voucherUsedAt = toDate(entry.voucherUsedAt);
+              if (entry.lastVillageCheck !== undefined) entry.lastVillageCheck = toDate(entry.lastVillageCheck);
+              if (entry.disqualifiedAt !== undefined) entry.disqualifiedAt = toDate(entry.disqualifiedAt);
+              if (entry.updatedAt !== undefined) entry.updatedAt = toDate(entry.updatedAt);
+              if (entry.lastCompletionCheck !== undefined) entry.lastCompletionCheck = toDate(entry.lastCompletionCheck);
+              if (Array.isArray(entry.submissions)) {
+                entry.submissions = entry.submissions.map((s: Record<string, unknown>) => ({
+                  ...s,
+                  submittedAt: s.submittedAt != null ? toDate(s.submittedAt) : undefined,
+                  approvedAt: s.approvedAt != null ? toDate(s.approvedAt) : undefined,
+                }));
+              }
+              map.set(userId, entry);
+            }
+          }
+          updateData[key] = map;
         } else if (typeof value === "string") {
           // Handle other string fields - preserve as-is (no trimming) to maintain special characters
           // Only itemName, image, imageType, and emoji are trimmed above

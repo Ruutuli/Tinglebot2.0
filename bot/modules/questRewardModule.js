@@ -291,7 +291,6 @@ async function sendQuestCompletionSummary(quest, completionReason) {
 
         const participants = Array.from(quest.participants.values());
         const completedParticipants = participants.filter(p => p.progress === 'completed' || p.progress === 'rewarded');
-        const rewardedParticipants = participants.filter(p => p.progress === 'rewarded');
 
         let summaryTitle = '🏁 Quest Completed!';
         let summaryDescription = `The quest **${quest.title}** has been completed!`;
@@ -301,9 +300,8 @@ async function sendQuestCompletionSummary(quest, completionReason) {
             summaryDescription = `The quest **${quest.title}** has ended due to time expiration.`;
         }
 
-        // Build list of completed participants
         const completedList = completedParticipants
-            .map(p => `• ${p.characterName}${p.progress === 'rewarded' ? ' ✅' : ''}`)
+            .map(p => `• ${p.characterName} ✅`)
             .join('\n') || 'None';
 
         const embed = createBaseEmbed(
@@ -315,7 +313,6 @@ async function sendQuestCompletionSummary(quest, completionReason) {
         const additionalFields = [
             { name: 'Total Participants', value: participants.length.toString(), inline: true },
             { name: 'Completed', value: completedParticipants.length.toString(), inline: true },
-            { name: 'Rewarded', value: rewardedParticipants.length.toString(), inline: true },
             { name: 'Completion Reason', value: completionReason.replace('_', ' ').toUpperCase(), inline: true }
         ];
         
@@ -862,11 +859,9 @@ async function processAllParticipants(quest, participants) {
     for (const participant of participants) {
         try {
             const result = await processParticipantReward(quest, participant, rewardContext);
-            if (result === 'rewarded') {
+            if (result === 'completed') {
                 rewardedCount++;
-            } else if (result === 'completed') {
-                completedCount++;
-            } else {
+            } else if (result !== 'already_rewarded' && result !== 'requirements_not_met') {
                 errorCount++;
             }
         } catch (error) {
@@ -875,6 +870,7 @@ async function processAllParticipants(quest, participants) {
         }
     }
 
+    completedCount = rewardedCount;
     return { completedCount, rewardedCount, errorCount };
 }
 
@@ -908,7 +904,7 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
             await sendIndividualRewardNotification(quest, participant, rewardResult);
             
             console.log(`[questRewardModule.js] ✅ Successfully rewarded participant ${participant.characterName} for quest ${quest.questID}`);
-            return 'rewarded';
+            return 'completed';
         } else {
             console.error(`[questRewardModule.js] ❌ Failed to distribute rewards for ${participant.characterName}:`, rewardResult.error);
             return 'reward_failed';
@@ -922,7 +918,7 @@ async function processParticipantReward(quest, participant, rewardContext = {}) 
 
 // ------------------- Update Participant Reward Data ------------------
 function updateParticipantRewardData(participant, quest, rewardResult, rewardSource = 'immediate') {
-    participant.progress = 'rewarded';
+    participant.progress = 'completed';
     participant.rewardedAt = new Date();
     participant.tokensEarned = rewardResult.tokensAdded;
     
@@ -1584,27 +1580,16 @@ async function processQuestMonthlyRewards(quest) {
 
 // ------------------- Get Participant Reward Status ------------------
 function getParticipantRewardStatus(participant) {
-    // Check if already fully rewarded
+    // Completed and rewarded are the same; "already rewarded" = reward processed or legacy 'rewarded' progress
     if (participant.progress === 'rewarded' || participant.rewardProcessed === true) {
         return 'already_rewarded';
     }
-    
-    // Check if has tokens earned (indicates previous reward)
-    if (participant.tokensEarned > 0) {
+    if (participant.tokensEarned > 0 || (participant.itemsEarned && participant.itemsEarned.length > 0)) {
         return 'already_rewarded';
     }
-    
-    // Check if completed but not rewarded
     if (participant.progress === 'completed') {
         return 'needs_rewarding';
     }
-    
-    // Check if has items earned (indicates previous reward)
-    if (participant.itemsEarned && participant.itemsEarned.length > 0) {
-        return 'already_rewarded';
-    }
-    
-    // Not completed yet
     return 'not_completed';
 }
 
@@ -1659,7 +1644,6 @@ async function getQuestRewardSummary() {
         
         let totalParticipants = 0;
         let completedParticipants = 0;
-        let rewardedParticipants = 0;
         let disqualifiedParticipants = 0;
         
         for (const quest of completedQuests) {
@@ -1667,8 +1651,7 @@ async function getQuestRewardSummary() {
             totalParticipants += participants.length;
             
             for (const participant of participants) {
-                if (participant.progress === 'completed') completedParticipants++;
-                if (participant.progress === 'rewarded') rewardedParticipants++;
+                if (participant.progress === 'completed' || participant.progress === 'rewarded') completedParticipants++;
                 if (participant.progress === 'disqualified') disqualifiedParticipants++;
             }
         }
@@ -1677,9 +1660,9 @@ async function getQuestRewardSummary() {
             totalQuests: completedQuests.length,
             totalParticipants,
             completedParticipants,
-            rewardedParticipants,
+            rewardedParticipants: completedParticipants,
             disqualifiedParticipants,
-            pendingRewards: completedParticipants - rewardedParticipants
+            pendingRewards: 0
         };
         
     } catch (error) {
@@ -1720,7 +1703,7 @@ async function processArtQuestCompletionFromSubmission(submissionData, userId) {
         if (quest.status !== 'active') {
             console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
             // Even if quest is not active, if we synced submissions and participant is now completed, return success
-            if (participant && participant.progress === 'completed') {
+            if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
                 console.log(`[questRewardModule.js] ✅ Participant ${participant.characterName} was marked as completed via submission sync`);
                 return { success: true, questCompleted: false, synced: true };
             }
@@ -1810,7 +1793,7 @@ async function processWritingQuestCompletionFromSubmission(submissionData, userI
         if (quest.status !== 'active') {
             console.log(`[questRewardModule.js] ⚠️ Quest ${questID} is not active (status: ${quest.status})`);
             // Even if quest is not active, if we synced submissions and participant is now completed, return success
-            if (participant && participant.progress === 'completed') {
+            if (participant && (participant.progress === 'completed' || participant.progress === 'rewarded')) {
                 console.log(`[questRewardModule.js] ✅ Participant ${participant.characterName} was marked as completed via submission sync`);
                 return { success: true, questCompleted: false, synced: true };
             }

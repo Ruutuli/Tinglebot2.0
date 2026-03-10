@@ -2469,6 +2469,128 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       },
     ],
   },
+  Quest: {
+    name: "Quest",
+    displayName: "Quests",
+    icon: "fa-scroll",
+    collection: "quests",
+    nameField: "title",
+    sortField: "questID",
+    filterKeys: ["status", "questType"],
+    tabs: [
+      {
+        id: "basics",
+        label: "Basics",
+        icon: "fa-tag",
+        gridColumns: 2,
+        fields: [
+          {
+            key: "questID",
+            label: "Quest ID",
+            type: "text",
+            helpText: "Unique quest identifier",
+            required: true,
+          },
+          {
+            key: "title",
+            label: "Title",
+            type: "text",
+            helpText: "Quest title",
+            required: true,
+          },
+          {
+            key: "description",
+            label: "Description",
+            type: "text",
+            helpText: "Quest description",
+          },
+          {
+            key: "questType",
+            label: "Quest Type",
+            type: "select",
+            helpText: "Type of quest",
+            options: [
+              { value: "Art", label: "Art" },
+              { value: "Writing", label: "Writing" },
+              { value: "Interactive", label: "Interactive" },
+              { value: "RP", label: "RP" },
+              { value: "Art / Writing", label: "Art / Writing" },
+            ],
+          },
+          {
+            key: "status",
+            label: "Status",
+            type: "select",
+            helpText: "Quest status",
+            options: [
+              { value: "draft", label: "Draft" },
+              { value: "pending", label: "Pending" },
+              { value: "active", label: "Active" },
+              { value: "completed", label: "Completed" },
+            ],
+          },
+          {
+            key: "location",
+            label: "Location",
+            type: "text",
+            helpText: "Quest location",
+          },
+          {
+            key: "date",
+            label: "Date",
+            type: "text",
+            helpText: "Quest date (e.g. month/year)",
+          },
+          {
+            key: "timeLimit",
+            label: "Time Limit",
+            type: "text",
+            helpText: "Time limit for the quest",
+          },
+          {
+            key: "participantCap",
+            label: "Participant Cap",
+            type: "number",
+            helpText: "Max participants (null = unlimited)",
+            min: 0,
+          },
+          {
+            key: "posted",
+            label: "Posted",
+            type: "boolean",
+            helpText: "Whether the quest has been posted",
+          },
+          {
+            key: "postedAt",
+            label: "Posted At",
+            type: "date",
+            helpText: "When the quest was posted",
+          },
+          {
+            key: "completedAt",
+            label: "Completed At",
+            type: "date",
+            helpText: "When the quest was completed",
+          },
+        ],
+      },
+      {
+        id: "participants",
+        label: "Participants",
+        icon: "fa-users",
+        gridColumns: 1,
+        fields: [
+          {
+            key: "participants",
+            label: "Participants",
+            type: "custom",
+            component: "QuestParticipantsField",
+            helpText: "Quest participants (keyed by Discord user ID). Add, remove, or edit participant progress and notes.",
+          },
+        ],
+      },
+    ],
+  },
 };
 
 // Helper function to get model config

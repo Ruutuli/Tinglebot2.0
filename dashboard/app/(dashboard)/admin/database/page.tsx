@@ -132,6 +132,7 @@ export default function AdminDatabasePage() {
         tier: "Tier",
         village: "Village",
         race: "Race",
+        questType: "Quest Type",
       };
       
       groups.push({

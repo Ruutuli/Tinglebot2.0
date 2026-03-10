@@ -523,7 +523,7 @@ questSchema.methods.checkCompletedParticipantsVillages = async function() {
     
     for (const participant of participants) {
         // Check both active and completed participants
-        if (participant.progress === 'active' || participant.progress === 'completed') {
+        if (participant.progress === 'active' || participant.progress === 'completed' || participant.progress === 'rewarded') {
             const villageCheck = await this.checkParticipantVillage(participant.userId);
             checked++;
             
@@ -549,7 +549,7 @@ questSchema.methods.getVillageTrackingStats = function() {
     const stats = {
         totalParticipants: participants.length,
         activeParticipants: participants.filter(p => p.progress === 'active').length,
-        completedParticipants: participants.filter(p => p.progress === 'completed').length,
+        completedParticipants: participants.filter(p => p.progress === 'completed' || p.progress === 'rewarded').length,
         disqualifiedParticipants: participants.filter(p => p.progress === 'disqualified').length,
         requiredVillage: this.requiredVillage
     };
