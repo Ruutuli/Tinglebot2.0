@@ -64,8 +64,10 @@ function NotificationIcon({ hasUnread }: { hasUnread: boolean }) {
   );
 }
 
-function formatNotificationTime(date: Date | string): string {
+function formatNotificationTime(date: Date | string | null | undefined): string {
+  if (date == null) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return "—";
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -219,13 +221,13 @@ function NotificationsDropdown() {
         const data = await res.json();
         if (abortController.signal.aborted) return;
         
-        const formattedNotifications: Notification[] = data.notifications.map((n: { id: string; title: string; message: string; read: boolean; createdAt: string }) => ({
+        const formattedNotifications: Notification[] = data.notifications.map((n: { id: string; title: string; message: string; read: boolean; createdAt?: string | null }) => ({
           id: n.id,
           title: n.title,
           message: n.message,
           read: n.read,
-          createdAt: n.createdAt,
-          time: formatNotificationTime(n.createdAt),
+          createdAt: n.createdAt ?? "",
+          time: formatNotificationTime(n.createdAt ?? null),
         }));
         setNotifications(formattedNotifications);
         // Update indicator state when we fetch full list

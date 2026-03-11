@@ -830,7 +830,7 @@ export default function CalendarPage() {
                     totalEvents > 0 && "cursor-pointer hover:scale-[1.02]"
                   )}
                   role="gridcell"
-                  aria-label={`${day.date.toLocaleDateString()}, ${day.hyruleanDate}${totalEvents > 0 ? `, ${totalEvents} events` : ''}`}
+                  aria-label={`${day.date != null ? day.date.toLocaleDateString() : day.dateStr}, ${day.hyruleanDate}${totalEvents > 0 ? `, ${totalEvents} events` : ''}`}
                 >
                   {/* Day Number */}
                   <div className="mb-1 flex items-center justify-between">
@@ -1166,12 +1166,14 @@ export default function CalendarPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 id="modal-title" className="text-2xl font-bold text-[var(--totk-light-ocher)]">
-                      {selectedDayEvents.date.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        month: 'long', 
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                      {selectedDayEvents.date != null
+                        ? selectedDayEvents.date.toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })
+                        : selectedDayEvents.dateStr}
                     </h2>
                     <p className="mt-1 text-sm text-[var(--totk-light-green)]">
                       {selectedDayEvents.hyruleanDate}
