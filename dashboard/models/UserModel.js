@@ -520,6 +520,10 @@ function shouldFixPendingTurnInsFromCompletions(questTracking) {
   const legacyPending = questTracking.legacy?.pending ?? 0;
   const legacyTransferUsed = questTracking.legacy?.transferUsed || false;
   if (botPending !== 0 || actualCompletions <= 0) return false;
+  // Never overwrite bot.pending when the user has ever turned in quests — 0 is then valid (they redeemed them)
+  const hasTurnInHistory = (questTracking.turnIns?.totalSetsTurnedIn ?? 0) > 0 ||
+    (Array.isArray(questTracking.turnIns?.history) && questTracking.turnIns.history.length > 0);
+  if (hasTurnInHistory) return false;
   return !legacyTransferUsed || legacyPending > 0;
 }
 
@@ -541,6 +545,16 @@ userSchema.methods.ensureQuestTracking = function() {
     if (!this.quests.bot || typeof this.quests.bot !== 'object') this.quests.bot = { ...defaultQuestTracking().bot };
     this.quests.bot.completed = safePendingNumber(this.quests.bot.completed);
     this.quests.bot.pending = safePendingNumber(this.quests.bot.pending);
+    this.recomputePendingTurnInsIfNeeded('ensureQuestTracking');
+    if (this.quests.bot.pending < 0) this.quests.bot.pending = 0;
+    const turnInHistory = this.quests.turnIns?.history;
+    if (Array.isArray(turnInHistory) && turnInHistory.length > 0) {
+      const totalConsumedFromBot = turnInHistory.reduce((sum, e) => sum + (safePendingNumber(e.fromBot) || 0), 0);
+      const maxPossibleBotPending = Math.max(0, (this.quests.bot.completed || 0) - totalConsumedFromBot);
+      if (this.quests.bot.pending > maxPossibleBotPending) {
+        this.quests.bot.pending = maxPossibleBotPending;
+      }
+    }
     if (!this.quests.typeTotals) {
       this.quests.typeTotals = { ...defaultQuestTracking().typeTotals };
     } else {
@@ -552,7 +566,6 @@ userSchema.methods.ensureQuestTracking = function() {
       }
     }
     if (!Array.isArray(this.quests.completions)) this.quests.completions = [];
-    this.recomputePendingTurnInsIfNeeded('ensureQuestTracking');
     if (!this.quests.legacy || typeof this.quests.legacy !== 'object') {
       this.quests.legacy = { ...defaultQuestTracking().legacy };
     } else {
