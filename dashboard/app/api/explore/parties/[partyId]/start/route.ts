@@ -32,6 +32,10 @@ const REGION_BANNER_FILES: Record<string, string> = {
 
 const EMBED_ATTACHMENT_FILENAME = "banner.png";
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 type PartyMemberDoc = {
   _id: unknown;
   userId: string;
@@ -110,6 +114,23 @@ export async function POST(
     const square = String(p.square ?? "");
     const quadrant = String(p.quadrant ?? "");
     const regionInfo = REGIONS[region];
+
+    // Only one active expedition per region at a time
+    if (region) {
+      const existingActive = await Party.findOne({
+        status: "started",
+        region: { $regex: new RegExp(`^${escapeRegex(region)}$`, "i") },
+        partyId: { $ne: partyId },
+      })
+        .select("partyId")
+        .lean();
+      if (existingActive) {
+        return NextResponse.json(
+          { error: "Hey there is already an active explore here! Please wait for the party to return." },
+          { status: 400 }
+        );
+      }
+    }
 
     // Calculate fresh totalHearts/totalStamina and maxHearts/maxStamina from Character documents BEFORE building embed
     // This ensures the embed shows accurate values, not accumulated increments from join
