@@ -7763,6 +7763,8 @@ module.exports = {
       logger.info("EXPLORE", `[explore.js] Camp attack: monster=${selectedMonster.name} tier=${selectedMonster.tier} dist=${campDangerLevel.distance} bonus=${(campDangerLevel.dangerBonus * 100).toFixed(0)}%`);
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
        try {
+        // Save party before triggerRaid so the raid module sees updated totalHearts/totalStamina (after struggle cost)
+        await party.save();
         const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
         const raidResult = await triggerRaid(selectedMonster, interaction, village, false, character, false, expeditionId);
         if (raidResult && raidResult.success) {
@@ -7787,11 +7789,8 @@ module.exports = {
          );
          addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party) });
          await interaction.editReply({ embeds: [embed] });
-         // Ping the raid's actual current-turn participant (triggering character is first; use raid state so we never ping the wrong person)
-         const raidForPing = await Raid.findOne({ raidId: battleId });
-         const currentTurnParticipant = raidForPing?.participants?.length ? (raidForPing.participants[raidForPing.currentTurn] || raidForPing.participants[0]) : null;
-         const pingUserId = currentTurnParticipant?.userId || character.userId;
-         await interaction.followUp({ content: getExplorationNextTurnContent({ userId: pingUserId }) });
+         // Ping the triggering character (same as roll→raid: they are first in raid turn order and the only one who can /raid or /explore item until their turn)
+         await interaction.followUp({ content: getExplorationNextTurnContent({ userId: character.userId, name: character.name }) });
          return;
         }
        } catch (raidErr) {
