@@ -88,6 +88,7 @@ const { rollTestOfPowerMonster } = require('@/data/grottoTestOfPowerMonsters.js'
 const { getRandomBlessingFlavor } = require('@/data/grottoBlessingOutcomes.js');
 const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
+const { getEffectiveQuadrantStatus, isPreestablishedSecured, isPreestablishedNoCamp } = require("../../data/preestablishedSecuredQuadrants.js");
 
 // ------------------- Embeds & Handlers ------------------
 const { addExplorationStandardFields, addExplorationCommandsField, getExplorationFlavorText, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
@@ -1841,7 +1842,8 @@ async function hasAdjacentSecuredQuadrant(square, quadrant) {
   const sqDoc = squareByNorm[normSquare];
   if (!sqDoc || !sqDoc.quadrants || !sqDoc.quadrants.length) continue;
   const q = sqDoc.quadrants.find((qu) => String(qu.quadrantId || "").toUpperCase() === normQuad);
-  if (q && q.status === "secured") return true;
+  const effectiveStatus = getEffectiveQuadrantStatus(adj.square, adj.quadrant, q?.status);
+  if (effectiveStatus === "secured") return true;
  }
  return false;
 }
@@ -3871,10 +3873,11 @@ module.exports = {
       const q = mapSquare.quadrants.find(
        (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
       );
-      if (q && (q.status === "explored" || q.status === "secured")) {
-       party.quadrantState = q.status;
+      const effectiveStatus = getEffectiveQuadrantStatus(party.square, party.quadrant, q?.status);
+      if (effectiveStatus === "explored" || effectiveStatus === "secured") {
+       party.quadrantState = effectiveStatus;
        party.markModified("quadrantState");
-       rollStaminaCost = q.status === "secured" ? 0 : 1;
+       rollStaminaCost = effectiveStatus === "secured" ? 0 : 1;
       }
       // Quadrant stays unexplored until roll outcome "explored" (see DESIGN NOTE at top of file). Do NOT mark explored here.
       // Known ruin-rest spot: auto-recover stamina when rolling here again — only if THIS expedition found a camp here
@@ -6356,8 +6359,9 @@ module.exports = {
      const qMove = mapSquareForMove.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
      );
-     if (qMove && (qMove.status === "explored" || qMove.status === "secured")) {
-      party.quadrantState = qMove.status;
+     const effectiveStatus = getEffectiveQuadrantStatus(party.square, party.quadrant, qMove?.status);
+     if (effectiveStatus === "explored" || effectiveStatus === "secured") {
+      party.quadrantState = effectiveStatus;
       party.markModified("quadrantState");
      }
     }
@@ -6442,8 +6446,14 @@ module.exports = {
     );
 
     if (!newLocation) {
+     const currentLoc = `${currentSquare} ${currentQuadrant}`;
+     const validOptions = adjacent.length > 0
+      ? adjacent.map((a) => `**${a.square} ${a.quadrant}**`).join(", ")
+      : "none (check map)";
      return interaction.editReply(
-      "That quadrant is not adjacent to your current location. Pick one of the suggested quadrants."
+      `You're at **${currentLoc}**. The quadrant you chose isn't next to that location.\n\n` +
+      `**Valid moves from here:** ${validOptions}\n\n` +
+      `Use **Move** again and pick one of the quadrants listed above (e.g. \`/explore move\` then enter the square and quadrant).`
      );
     }
 
@@ -6520,8 +6530,8 @@ module.exports = {
       });
       return interaction.editReply({ embeds: [outsideRegionEmbed] });
      }
-     if (destQ && (destQ.status === "explored" || destQ.status === "secured")) {
-      destinationQuadrantState = destQ.status;
+     if (destQ) {
+      destinationQuadrantState = getEffectiveQuadrantStatus(newLocation.square, newLocation.quadrant, destQ.status);
      }
     }
     const moveWasReveal = destinationQuadrantState === "unexplored";
@@ -6542,14 +6552,15 @@ module.exports = {
     // This prevents treating ocean squares (all inaccessible) as "fully explored" and bypassing the current square exploration requirement
     let isMovingToFullyExploredSquare = false;
     if (destMapSquare && destMapSquare.quadrants && destMapSquare.quadrants.length) {
+     const squareIdDest = String(destMapSquare.squareId || "").trim().toUpperCase();
      const explorableQuadrants = destMapSquare.quadrants.filter((q) => {
-      const s = (q.status || "").toLowerCase();
-      return s !== "inaccessible";
+      const effective = getEffectiveQuadrantStatus(squareIdDest, q.quadrantId, q.status);
+      return effective !== "inaccessible";
      });
      const hasExplorableQuadrants = explorableQuadrants.length > 0;
      const allExplorableAreExplored = explorableQuadrants.every((q) => {
-      const s = (q.status || "").toLowerCase();
-      return s === "explored" || s === "secured";
+      const effective = getEffectiveQuadrantStatus(squareIdDest, q.quadrantId, q.status);
+      return effective === "explored" || effective === "secured";
      });
      isMovingToFullyExploredSquare = hasExplorableQuadrants && allExplorableAreExplored;
     }
@@ -6557,10 +6568,11 @@ module.exports = {
     if (targetSquareNorm !== currentSquareNorm && !isMovingToStart && !isMovingToFullyExploredSquare) {
      const currentMapSquare = await Square.findOne({ squareId: currentSquare });
      if (currentMapSquare && currentMapSquare.quadrants && currentMapSquare.quadrants.length) {
+      const currentSquareIdNorm = String(currentMapSquare.squareId || currentSquare || "").trim().toUpperCase();
       const unexplored = currentMapSquare.quadrants
        .filter((q) => {
-        const s = (q.status || "").toLowerCase();
-        return s !== "inaccessible" && s !== "explored" && s !== "secured";
+        const effective = getEffectiveQuadrantStatus(currentSquareIdNorm, q.quadrantId, q.status);
+        return effective !== "inaccessible" && effective !== "explored" && effective !== "secured";
        })
        .map((q) => (q.quadrantId || "").trim().toUpperCase())
        .filter(Boolean);
@@ -6906,18 +6918,26 @@ module.exports = {
      const waveCurrent = activeWaveForItem.participants?.[activeWaveForItem.currentTurn ?? 0];
      if (waveCurrent && waveCurrent.characterId && character._id && waveCurrent.characterId.toString() !== character._id.toString()) {
       const currentName = waveCurrent.name ?? "the current turn";
-      return interaction.editReply(
-       `It's not your turn. Only **${currentName}** (current turn) can use an item. Wait for your turn in the wave, then use **/explore item**.`
-      );
+      const notYourTurnEmbed = new EmbedBuilder()
+       .setColor("#FFA500")
+       .setTitle("⏳ It's not your turn")
+       .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the wave, then use **/explore item**.`)
+       .setFooter({ text: "Expedition" })
+       .setTimestamp();
+      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
      }
     }
     if (activeRaidForItem) {
      const raidCurrent = activeRaidForItem.getCurrentTurnParticipant?.() ?? activeRaidForItem.participants?.[activeRaidForItem.currentTurn ?? 0];
      if (raidCurrent && raidCurrent.characterId && character._id && raidCurrent.characterId.toString() !== character._id.toString()) {
       const currentName = raidCurrent.name ?? "the current turn";
-      return interaction.editReply(
-       `It's not your turn. Only **${currentName}** (current turn) can use an item. Wait for your turn in the raid, then use **/explore item**.`
-      );
+      const notYourTurnEmbed = new EmbedBuilder()
+       .setColor("#FFA500")
+       .setTitle("⏳ It's not your turn")
+       .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the raid, then use **/explore item**.`)
+       .setFooter({ text: "Expedition" })
+       .setTimestamp();
+      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
      }
     }
 
@@ -6927,9 +6947,13 @@ module.exports = {
      if (characterIndex !== currentTurnIndex) {
       const currentTurnChar = party.characters[currentTurnIndex];
       const currentName = currentTurnChar?.name ?? "the current turn";
-      return interaction.editReply(
-       `It's not your turn. Only **${currentName}** can use an item. Wait for your turn, then use **/explore item**.`
-      );
+      const notYourTurnEmbed = new EmbedBuilder()
+       .setColor("#FFA500")
+       .setTitle("⏳ It's not your turn")
+       .setDescription(`Only **${currentName}** can use an item. Wait for your turn, then use **/explore item**.`)
+       .setFooter({ text: "Expedition" })
+       .setTimestamp();
+      return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
      }
     }
 
@@ -7432,10 +7456,8 @@ module.exports = {
       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
       actionCost: { staminaCost: retreatPayResult.staminaPaid ?? 0, heartsCost: retreatPayResult.heartsPaid ?? 0 },
      });
-     await interaction.editReply({
-      content: getExplorationNextTurnContent(nextCharacter) ?? undefined,
-      embeds: [embed],
-     });
+     await interaction.editReply({ embeds: [embed] });
+     if (getExplorationNextTurnContent(nextCharacter)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacter) }).catch(() => {});
      return;
     }
 
@@ -7552,17 +7574,18 @@ module.exports = {
      campQuad = campMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase()
      );
-     if (campQuad && (campQuad.status === "explored" || campQuad.status === "secured")) {
-      if (party.quadrantState !== campQuad.status) {
-       logger.info("EXPLORE", `[explore.js] Camp: synced quadrantState from map: ${party.quadrantState} → ${campQuad.status}`);
-       party.quadrantState = campQuad.status;
+     const effectiveCampStatus = getEffectiveQuadrantStatus(party.square, party.quadrant, campQuad?.status);
+     if (effectiveCampStatus === "explored" || effectiveCampStatus === "secured") {
+      if (party.quadrantState !== effectiveCampStatus) {
+       logger.info("EXPLORE", `[explore.js] Camp: synced quadrantState from map: ${party.quadrantState} → ${effectiveCampStatus}`);
+       party.quadrantState = effectiveCampStatus;
        party.markModified("quadrantState");
       }
      }
     }
 
-    // Pre-established paths/villages: pass through only, no camping
-    if (campQuad && campQuad.noCamp) {
+    // Pre-established paths/villages: pass through only, no camping (hardcoded list + DB noCamp)
+    if (isPreestablishedNoCamp(party.square, party.quadrant) || (campQuad && campQuad.noCamp)) {
      const locationNoCamp = `${party.square} ${party.quadrant}`;
      const noCampEmbed = new EmbedBuilder()
       .setTitle("🚫 **No camping here**")

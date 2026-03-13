@@ -189,8 +189,18 @@ module.exports = {
     const raid = await Raid.findOne({ raidId });
     if (raid && raid.expeditionId) {
       const cmdRetreat = getExploreCommandId() ? `</explore retreat:${getExploreCommandId()}>` : '`/explore retreat`';
+      const expeditionLeaveEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Cannot leave individually')
+        .setDescription('This raid is part of an expedition. The entire party must retreat together.')
+        .addFields(
+          { name: '__How to retreat__', value: `Use ${cmdRetreat} with the expedition ID and your character name.`, inline: false },
+          { name: '__Expedition ID__', value: `\`${raid.expeditionId}\``, inline: true }
+        )
+        .setFooter({ text: 'Raid System' })
+        .setTimestamp();
       return interaction.editReply({
-        content: `❌ **Cannot leave individually.** This raid is part of an expedition. The entire party must retreat together using ${cmdRetreat} with the expedition ID and your character name.`,
+        embeds: [expeditionLeaveEmbed],
         ephemeral: true
       });
     }
@@ -443,7 +453,6 @@ module.exports = {
           blightRainMessage = joinResult.blightRainMessage;
         } catch (joinError) {
           const message = (joinError && typeof joinError.message === 'string') ? joinError.message : (typeof joinError === 'string' ? joinError : 'Unable to join raid.');
-          console.error(`[raid.js]: ❌ Join raid error for ${character.name}:`, joinError);
           if (message === 'You already have a character participating in this raid') {
             const alreadyInRaidEmbed = new EmbedBuilder()
               .setColor('#FFA500')
@@ -642,9 +651,9 @@ module.exports = {
             const br = turnResult.battleResult;
             const monsterName = turnResult.raidData.monster?.name || 'monster';
             const dealt = br.hearts ?? 0;
-            const before = br.characterHeartsBefore;
-            const after = br.playerHearts?.current;
-            const received = (typeof before === 'number' && typeof after === 'number' && before > after) ? before - after : 0;
+            const beforeNum = typeof br.characterHeartsBefore === 'number' && Number.isFinite(br.characterHeartsBefore) ? br.characterHeartsBefore : null;
+            const afterNum = typeof br.playerHearts?.current === 'number' && Number.isFinite(br.playerHearts.current) ? br.playerHearts.current : null;
+            const received = (beforeNum != null && afterNum != null && beforeNum > afterNum) ? beforeNum - afterNum : 0;
             let logMessage = `Raid vs ${monsterName}: ${dealt} heart${dealt !== 1 ? 's' : ''} dealt.`;
             if (received > 0) logMessage += ` ${received} heart${received !== 1 ? 's' : ''} received.`;
             if (!logMessage || !logMessage.trim()) logMessage = `Raid vs ${monsterName}: turn completed.`;

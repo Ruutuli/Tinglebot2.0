@@ -160,6 +160,13 @@ export async function GET(
           if (heartsLost == null && e.outcome === "raid_turn" && typeof heartsReceived === "number" && heartsReceived > 0) {
             heartsLost = heartsReceived;
           }
+          if (heartsLost == null && e.outcome === "raid_turn" && typeof e.message === "string") {
+            const receivedMatch = e.message.match(/\s(\d+)\s+heart(s?)\s+received\.?/i);
+            if (receivedMatch) {
+              const n = parseInt(receivedMatch[1], 10);
+              if (Number.isFinite(n) && n > 0) heartsLost = n;
+            }
+          }
           const staminaLost = typeof e.staminaLost === "number" && e.staminaLost > 0 ? e.staminaLost : undefined;
           const heartsRecovered = typeof e.heartsRecovered === "number" && e.heartsRecovered > 0 ? e.heartsRecovered : undefined;
           const staminaRecovered = typeof e.staminaRecovered === "number" && e.staminaRecovered > 0 ? e.staminaRecovered : undefined;
