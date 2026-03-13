@@ -325,7 +325,7 @@ export function MapSquareCard({ square }: { square: MapSquare }) {
   ).length;
 
   return (
-    <article className="map-square-card rounded-xl border-2 border-[var(--totk-light-ocher)] bg-[var(--glass-bg)] shadow-lg overflow-hidden flex flex-col transition-all duration-200 hover:shadow-xl hover:border-[var(--totk-light-ocher)]/90">
+    <article className="map-square-card rounded-xl border-2 border-[var(--totk-light-ocher)] bg-[var(--glass-bg)] shadow-lg overflow-hidden flex flex-col min-h-0 transition-shadow duration-200 hover:shadow-xl hover:border-[var(--totk-light-ocher)]/90 w-full">
       {/* Header */}
       <header className="flex items-start gap-3 p-4 border-b-2 border-[var(--totk-dark-ocher)]/30 bg-gradient-to-br from-[var(--totk-dark-ocher)]/10 to-transparent">
         {imageUrl && (

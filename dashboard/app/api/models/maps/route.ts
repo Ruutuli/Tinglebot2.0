@@ -89,15 +89,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (hideAllInaccessibleParam === "true") {
+      // Include only when: not exactly 4 quadrants OR at least one quadrant has status !== "inaccessible".
+      // Use $expr so "at least one non-inaccessible" is explicit (avoids array $ne quirks).
       pushCondition({
-        $nor: [
-          {
-            $and: [
-              { quadrants: { $size: 4 } },
-              { "quadrants.status": { $all: ["inaccessible", "inaccessible", "inaccessible", "inaccessible"] } },
-            ],
-          },
-        ],
+        $expr: {
+          $or: [
+            { $ne: [{ $size: "$quadrants" }, 4] },
+            { $gt: [{ $size: { $filter: { input: "$quadrants", as: "q", cond: { $ne: [{ $toLower: { $ifNull: ["$$q.status", ""] } }, "inaccessible"] } } } }, 0] },
+          ],
+        },
       });
     }
 

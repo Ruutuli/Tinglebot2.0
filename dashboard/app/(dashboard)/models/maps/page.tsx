@@ -78,7 +78,7 @@ export default function MapsPage() {
         </div>
       ) : (
         <>
-          <div className="mb-6 grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 auto-rows-fr maps-page-grid">
+          <div className="mb-6 grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 items-start">
             {squares.map((square) => (
               <MapSquareCard key={square._id} square={square} />
             ))}
