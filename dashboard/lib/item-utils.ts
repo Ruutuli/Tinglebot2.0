@@ -45,6 +45,8 @@ export type ItemData = {
   witch?: boolean;
   allJobs?: string[];
   locations?: string[];
+  terrain?: string[];
+  terrains?: string[];
   /** Derived in code from Monster data: regions/jobs where this item can be obtained via monster drops */
   dropSources?: { regions: string[]; lootingJobs: string[] };
   craftingMaterial?: Array<{ itemName: string; quantity: number }>;

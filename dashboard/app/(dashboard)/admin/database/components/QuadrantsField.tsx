@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import {
+  TERRAIN_OPTIONS,
+  HAZARDS_OPTIONS,
+  ITEMS_OPTIONS,
+  MONSTERS_OPTIONS,
+  BOSS_MONSTERS_OPTIONS,
+  SPECIAL_OPTIONS,
+} from "./quadrant-options";
 
 const QUADRANT_IDS = ["Q1", "Q2", "Q3", "Q4"] as const;
 const STATUS_OPTIONS = [
@@ -106,12 +114,133 @@ function arrayOrEmpty(arr: unknown): string[] {
   return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
 }
 
-function stringArrayToLines(arr: string[]): string {
-  return (arr ?? []).join("\n");
-}
+/** Multi-select with visible tags and clear "Add from list" flow. */
+function MultiSelectPicker({
+  label,
+  options,
+  value,
+  onChange,
+  maxHeight = "8rem",
+  defaultExpanded = false,
+}: {
+  label: string;
+  options: readonly string[];
+  value: string[];
+  onChange: (selected: string[]) => void;
+  maxHeight?: string;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [filter, setFilter] = useState("");
+  const selectedList = value;
+  const selectedSet = new Set(value);
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return [...options];
+    const q = filter.trim().toLowerCase();
+    return options.filter((opt) => opt.toLowerCase().includes(q));
+  }, [options, filter]);
+  const toggle = (opt: string) => {
+    const next = new Set(selectedSet);
+    if (next.has(opt)) next.delete(opt);
+    else next.add(opt);
+    onChange([...next]);
+  };
+  const remove = (opt: string) => {
+    onChange(selectedList.filter((x) => x !== opt));
+  };
 
-function linesToStringArray(text: string): string[] {
-  return text.split("\n").map((s) => s.trim()).filter(Boolean);
+  return (
+    <div>
+      <span className="text-[var(--totk-grey-200)] text-xs block mb-1">{label}</span>
+      {/* Same box style as Locations: bordered container with tags */}
+      <div className="w-full rounded-md border-2 min-h-[44px] flex items-center px-3 py-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/50">
+        {selectedList.length > 0 ? (
+          <div className="flex flex-wrap gap-2 w-full items-center">
+            {selectedList.map((opt) => (
+              <span
+                key={opt}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--totk-dark-ocher)]/40 text-xs text-[var(--botw-pale)]"
+              >
+                <span className="max-w-[140px] truncate">{opt}</span>
+                <button
+                  type="button"
+                  onClick={() => remove(opt)}
+                  className="shrink-0 w-4 h-4 flex items-center justify-center rounded hover:bg-[var(--totk-dark-ocher)]/60 text-[var(--totk-grey-200)] hover:text-[var(--botw-pale)]"
+                  aria-label={`Remove ${opt}`}
+                >
+                  <i className="fa-solid fa-times text-[10px]" aria-hidden />
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              className="text-xs text-[var(--totk-light-ocher)] hover:underline flex items-center gap-1"
+            >
+              <i className="fa-solid fa-plus" aria-hidden />
+              {expanded ? "Close list" : "Add from list"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2 w-full items-center">
+            <span className="text-xs italic text-[var(--totk-grey-200)]">No items</span>
+            <button
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              className="text-xs text-[var(--totk-light-ocher)] hover:underline flex items-center gap-1"
+            >
+              <i className="fa-solid fa-plus" aria-hidden />
+              Add from list
+            </button>
+          </div>
+        )}
+      </div>
+      {expanded && (
+        <div className="mt-2 rounded-md border-2 border-[var(--totk-dark-ocher)] bg-[var(--botw-warm-black)]/80 px-3 py-3">
+          <p className="text-xs text-[var(--totk-grey-200)] mb-2">Select all that apply:</p>
+          {options.length > 5 && (
+            <input
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Search list…"
+              className="w-full mb-2 px-2 py-1 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs placeholder:text-[var(--totk-grey-200)]"
+              autoFocus
+            />
+          )}
+          <div
+            className="overflow-y-auto flex flex-col gap-0 rounded border border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-black)]/60 mb-2"
+            style={{ maxHeight }}
+          >
+            {filtered.map((opt) => (
+              <label
+                key={opt}
+                className="flex items-center gap-2.5 cursor-pointer px-2 py-1.5 text-sm text-[var(--botw-pale)] hover:bg-[var(--totk-dark-ocher)]/15 border-b border-[var(--totk-dark-ocher)]/30 last:border-b-0"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(opt)}
+                  onChange={() => toggle(opt)}
+                  className="rounded border-[var(--totk-dark-ocher)] shrink-0"
+                />
+                <span className="truncate">{opt}</span>
+              </label>
+            ))}
+          </div>
+          {filtered.length === 0 && (
+            <p className="text-xs text-[var(--totk-grey-200)] py-1 mb-2">No matches. Try a different search.</p>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="w-full py-1.5 rounded text-xs font-medium bg-[var(--totk-dark-ocher)]/40 text-[var(--totk-light-ocher)] hover:bg-[var(--totk-dark-ocher)]/60 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function formatDate(v: string | Date | null | undefined): string {
@@ -209,66 +338,51 @@ export function QuadrantsField({
                 />
                 <span className="text-xs text-[var(--totk-grey-200)]">No camp (pass-through only)</span>
               </label>
-              <div>
-                <span className="text-[var(--totk-grey-200)] text-xs">Hazards (one per line, e.g. thunder, hot, cold)</span>
-                <textarea
-                  value={stringArrayToLines(q.hazards ?? [])}
-                  onChange={(e) => updateQuadrant(index, { hazards: linesToStringArray(e.target.value) })}
-                  rows={2}
-                  placeholder={"thunder\nhot"}
-                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
-                />
-              </div>
-              <div>
-                <span className="text-[var(--totk-grey-200)] text-xs">Terrain (one per line)</span>
-                <textarea
-                  value={stringArrayToLines(q.terrain ?? [])}
-                  onChange={(e) => updateQuadrant(index, { terrain: linesToStringArray(e.target.value) })}
-                  rows={2}
-                  placeholder="⛰️ Mountain & Highland"
-                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
-                />
-              </div>
-              <div>
-                <span className="text-[var(--totk-grey-200)] text-xs">Items (one per line, gather labels)</span>
-                <textarea
-                  value={stringArrayToLines(q.items ?? [])}
-                  onChange={(e) => updateQuadrant(index, { items: linesToStringArray(e.target.value) })}
-                  rows={2}
-                  placeholder={"Fish\nCreature"}
-                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
-                />
-              </div>
-              <div>
-                <span className="text-[var(--totk-grey-200)] text-xs">Monsters (one per line, match monster DB)</span>
-                <textarea
-                  value={stringArrayToLines(q.monsters ?? [])}
-                  onChange={(e) => updateQuadrant(index, { monsters: linesToStringArray(e.target.value) })}
-                  rows={2}
-                  placeholder={"Lynel\nBlack Bokoblin"}
-                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
-                />
-              </div>
-              <div>
-                <span className="text-[var(--totk-grey-200)] text-xs">Boss monsters (one per line)</span>
-                <textarea
-                  value={stringArrayToLines(q.bossMonsters ?? [])}
-                  onChange={(e) => updateQuadrant(index, { bossMonsters: linesToStringArray(e.target.value) })}
-                  rows={2}
-                  placeholder="—"
-                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
-                />
-              </div>
-              <div>
-                <span className="text-[var(--totk-grey-200)] text-xs">Special (one per line, notes/flags)</span>
-                <textarea
-                  value={stringArrayToLines(q.special ?? [])}
-                  onChange={(e) => updateQuadrant(index, { special: linesToStringArray(e.target.value) })}
-                  rows={2}
-                  placeholder="—"
-                  className="w-full mt-0.5 px-2 py-1.5 rounded border border-[var(--totk-dark-ocher)] bg-[var(--botw-black)] text-[var(--botw-pale)] text-xs"
-                />
-              </div>
+              <MultiSelectPicker
+                label="Hazards"
+                options={[...HAZARDS_OPTIONS]}
+                value={(q.hazards ?? []).filter((h) => (HAZARDS_OPTIONS as readonly string[]).includes(h))}
+                onChange={(selected) => updateQuadrant(index, { hazards: selected })}
+                maxHeight="5rem"
+                defaultExpanded
+              />
+              <MultiSelectPicker
+                label="Terrain"
+                options={[...TERRAIN_OPTIONS]}
+                value={(q.terrain ?? []).filter((t) => (TERRAIN_OPTIONS as readonly string[]).includes(t))}
+                onChange={(selected) => updateQuadrant(index, { terrain: selected })}
+                maxHeight="6rem"
+              />
+              <MultiSelectPicker
+                label="Items (gather labels)"
+                options={[...ITEMS_OPTIONS]}
+                value={(q.items ?? []).filter((i) => (ITEMS_OPTIONS as readonly string[]).includes(i))}
+                onChange={(selected) => updateQuadrant(index, { items: selected })}
+                maxHeight="6rem"
+              />
+              <MultiSelectPicker
+                label="Monsters (match monster DB)"
+                options={[...MONSTERS_OPTIONS]}
+                value={(q.monsters ?? []).filter((m) => (MONSTERS_OPTIONS as readonly string[]).includes(m))}
+                onChange={(selected) => updateQuadrant(index, { monsters: selected })}
+                maxHeight="10rem"
+              />
+              <MultiSelectPicker
+                label="Boss monsters"
+                options={[...BOSS_MONSTERS_OPTIONS]}
+                value={(q.bossMonsters ?? []).filter((b) => (BOSS_MONSTERS_OPTIONS as readonly string[]).includes(b))}
+                onChange={(selected) => updateQuadrant(index, { bossMonsters: selected })}
+                maxHeight="4rem"
+                defaultExpanded
+              />
+              <MultiSelectPicker
+                label="Special (notes/flags)"
+                options={[...SPECIAL_OPTIONS]}
+                value={(q.special ?? []).filter((s) => (SPECIAL_OPTIONS as readonly string[]).includes(s))}
+                onChange={(selected) => updateQuadrant(index, { special: selected })}
+                maxHeight="4rem"
+                defaultExpanded
+              />
               <div>
                 <span className="text-[var(--totk-grey-200)] text-xs">Explored by (Discord ID)</span>
                 <input

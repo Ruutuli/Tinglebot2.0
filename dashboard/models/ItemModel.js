@@ -96,6 +96,7 @@ const ItemSchema = new Schema(
     pathOfScarletLeaves: { type: Boolean, default: false },
     leafDewWay: { type: Boolean, default: false },
     terrain: { type: [String], default: [] },  // e.g. 'Water & Wetlands', 'Coastal & Sea Edge'
+    terrains: { type: [String], default: [] }, // alias / additional terrain tags
 
     // ------------------- Job Flags -------------------
     adventurer: { type: Boolean, default: false },

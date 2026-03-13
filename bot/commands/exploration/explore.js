@@ -3919,6 +3919,7 @@ module.exports = {
         showRestSecureMove: false,
         commandsLast: true,
         ruinRestRecovered,
+        hazardMessage: hazardRollResult?.hazardMessage ?? null,
       });
       addExplorationCommandsField(securedNoRollEmbed, {
         party,
@@ -4199,6 +4200,7 @@ module.exports = {
         actionCost: exploredActionCost,
         maxHearts: poolCaps.maxHearts,
         maxStamina: poolCaps.maxStamina,
+        hazardMessage: hazardRollResult?.hazardMessage ?? null,
       });
 
       // Add recovery field for lucky find
@@ -4247,6 +4249,7 @@ module.exports = {
         actionCost: { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
         maxHearts: poolCaps.maxHearts,
         maxStamina: poolCaps.maxStamina,
+        hazardMessage: hazardRollResult?.hazardMessage ?? null,
       });
        fairyEmbed.addFields(
         { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
@@ -4261,7 +4264,7 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const nextChar = party.characters[party.currentTurn];
-      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 }, poolCaps.maxHearts, poolCaps.maxStamina);
+      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 }, poolCaps.maxHearts, poolCaps.maxStamina, undefined, hazardRollResult?.hazardMessage ?? null);
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
       party.markModified("gatheredItems");
@@ -4513,6 +4516,7 @@ module.exports = {
         actionCost: { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
         maxHearts: poolCaps.maxHearts,
         maxStamina: poolCaps.maxStamina,
+        hazardMessage: hazardRollResult?.hazardMessage ?? null,
       });
 
       const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest";
@@ -5398,7 +5402,8 @@ module.exports = {
        { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
        poolCaps.maxHearts,
        poolCaps.maxStamina,
-       itemFlavor || undefined
+       itemFlavor || undefined,
+       hazardRollResult?.hazardMessage ?? null
       );
 
       if (!party.gatheredItems) {
@@ -5514,7 +5519,8 @@ module.exports = {
          { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
          poolCaps.maxHearts,
          poolCaps.maxStamina,
-         monsterFlavorRaid || undefined
+         monsterFlavorRaid || undefined,
+         hazardRollResult?.hazardMessage ?? null
         );
 
         embed.addFields(
@@ -5644,7 +5650,8 @@ module.exports = {
         { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
         poolCaps.maxHearts,
         poolCaps.maxStamina,
-        monsterFlavorWave || undefined
+        monsterFlavorWave || undefined,
+        hazardRollResult?.hazardMessage ?? null
        );
 
        const hasEquippedWeapon = !!(character?.gearWeapon?.name);
@@ -5836,6 +5843,7 @@ module.exports = {
        commandsLast: true,
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
        hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party),
+       hazardMessage: hazardSecureResult?.hazardMessage ?? null,
      });
      addExplorationCommandsField(notExploredEmbed, {
        party,
@@ -5928,6 +5936,7 @@ module.exports = {
       commandsLast: true,
       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
       hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party),
+      hazardMessage: hazardSecureResult?.hazardMessage ?? null,
      });
      addExplorationCommandsField(embed, {
       party,
@@ -5976,6 +5985,7 @@ module.exports = {
      location: locationSecure,
      nextCharacter: party.characters[party.currentTurn] ?? null,
      showNextAndCommands: false,
+     hazardMessage: hazardSecureResult?.hazardMessage ?? null,
      showRestSecureMove: false,
      commandsLast: false,
      hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party),
@@ -6378,6 +6388,7 @@ module.exports = {
       nextCharacter: party.characters[party.currentTurn] ?? null,
       showNextAndCommands: false,
       showRestSecureMove: false,
+      hazardMessage: hazardMoveResult?.hazardMessage ?? null,
      });
      return interaction.editReply({ embeds: [moveBlockedEmbed] });
     }
@@ -6401,6 +6412,7 @@ module.exports = {
        nextCharacter: party.characters[party.currentTurn] ?? null,
        showNextAndCommands: false,
        showRestSecureMove: false,
+       hazardMessage: hazardMoveResult?.hazardMessage ?? null,
       });
       return interaction.editReply({ embeds: [moveBlockedEmbed] });
      }
@@ -6780,6 +6792,7 @@ module.exports = {
       commandsLast: true,
       hasDiscoveriesInQuadrant: hasDiscMove,
       actionCost: movePayResult ? { staminaCost: movePayResult.staminaPaid ?? 0, heartsCost: movePayResult.heartsPaid ?? 0 } : null,
+      hazardMessage: hazardMoveResult?.hazardMessage ?? null,
     });
     addExplorationCommandsField(embed, {
       party,
@@ -7567,6 +7580,7 @@ module.exports = {
       showRestSecureMove: true,
       hideCampCommand: true,
       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      hazardMessage: hazardCampResult?.hazardMessage ?? null,
      });
      return interaction.editReply({ embeds: [noCampEmbed] });
     }
@@ -7591,6 +7605,7 @@ module.exports = {
       nextCharacter: party.characters[party.currentTurn] ?? null,
       showNextAndCommands: true,
       showRestSecureMove: true,
+      hazardMessage: hazardCampResult?.hazardMessage ?? null,
       hideCampCommand: true,
       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
      });
@@ -7912,6 +7927,7 @@ module.exports = {
       hasDiscoveriesInQuadrant: hasDiscCamp,
       isAtStartQuadrant: campIsAtStart,
       actionCost: campPayResult ? { staminaCost: campPayResult.staminaPaid ?? 0, heartsCost: campPayResult.heartsPaid ?? 0 } : (staminaCost > 0 ? { staminaCost: staminaCost, heartsCost: 0 } : null),
+      hazardMessage: hazardCampResult?.hazardMessage ?? null,
     });
     embed.addFields({
       name: "📋 **__Recovery__**",

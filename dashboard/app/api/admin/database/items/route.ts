@@ -798,7 +798,7 @@ export async function PUT(req: NextRequest) {
       "petmon", "petchu", "petfirechu", "peticechu", "petelectricchu",
       // Location Metadata
       "locations", "centralHyrule", "eldin", "faron", "gerudo",
-      "hebra", "lanayru", "pathOfScarletLeaves", "leafDewWay", "terrain",
+      "hebra", "lanayru", "pathOfScarletLeaves", "leafDewWay", "terrain", "terrains",
       // Job Flags (all 20+ job flags)
       "adventurer", "artist", "beekeeper", "blacksmith", "cook", "craftsman",
       "farmer", "fisherman", "forager", "gravekeeper", "guard", "maskMaker",

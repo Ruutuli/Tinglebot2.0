@@ -13,6 +13,7 @@ const DEFAULT_LIMIT_VILLAGE_SHOPS = 36; // Default for village shops
 export type ModelListResource =
   | "characters"
   | "items"
+  | "maps"
   | "monsters"
   | "pets"
   | "users"
@@ -20,6 +21,18 @@ export type ModelListResource =
   | "village-shops";
 
 export type FilterKeyConfig = Record<string, string>;
+
+/** Human-readable name for "Failed to fetch X" network errors. */
+const FETCH_ERROR_ITEM_NAMES: Record<ModelListResource, string> = {
+  characters: "characters",
+  items: "items",
+  maps: "map squares",
+  monsters: "monsters",
+  pets: "pets",
+  users: "users",
+  villages: "villages",
+  "village-shops": "village shops",
+};
 
 const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
   characters: { race: "Race", village: "Village", job: "Job" },
@@ -34,9 +47,11 @@ const FILTER_LABELS: Record<ModelListResource, FilterKeyConfig> = {
     job: "Job",
     craftable: "Craftable",
     stackable: "Stackable",
+    terrain: "Terrain",
     entertainerItems: "Entertainer item",
     divineItems: "Divine item",
   },
+  maps: { region: "Region", status: "Square status", quadrantStatus: "Quadrant status", hazard: "Hazard", terrain: "Terrain", blighted: "Blighted", hasDiscoveries: "Has discoveries", hideAllInaccessible: "Hide all-inaccessible" },
   monsters: { species: "Species", type: "Type", tier: "Tier" },
   pets: { status: "Status", species: "Species", petType: "Type" },
   users: { status: "Status" },
@@ -115,9 +130,19 @@ function buildFilterGroups(
           labelVal = key === "tier" ? `Tier ${v}` : `Rarity ${v}`;
         } else if (key === "isActive") {
           labelVal = String(v) === "true" ? "Active" : "Inactive";
-        } else if (key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems") {
+        } else if (key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems" || key === "blighted" || key === "hasDiscoveries" || key === "hideAllInaccessible") {
           labelVal = String(v) === "true" ? "Yes" : "No";
-        } else if (key === "race" || key === "village" || key === "job" || key === "source" || key === "location" || key === "status" || key === "species" || key === "petType") {
+        } else if (key === "quadrantStatus") {
+          const statusLabels: Record<string, string> = {
+            inaccessible: "Inaccessible",
+            unexplored: "Unexplored",
+            explored: "Explored",
+            secured: "Secured",
+          };
+          labelVal = statusLabels[String(v).toLowerCase()] ?? capitalize(String(v));
+        } else if (key === "terrain" && resource === "maps") {
+          labelVal = String(v); /* preserve emoji and casing for map terrain */
+        } else if (key === "race" || key === "village" || key === "job" || key === "source" || key === "location" || key === "status" || key === "species" || key === "petType" || key === "terrain" || key === "hazard") {
           labelVal = capitalize(String(v));
         } else {
           labelVal = String(v);
@@ -261,6 +286,38 @@ function buildFilterGroups(
           label: "Rarity (High to Low)",
           value: "rarity-desc",
           active: sortBy === "rarity-desc",
+        },
+      ],
+    });
+  } else if (resource === "maps") {
+    groups.push({
+      id: "sortBy",
+      label: "Sort By",
+      type: "single" as const,
+      options: [
+        {
+          id: "name",
+          label: "Square (A-Z)",
+          value: "name",
+          active: sortBy === "name" || !sortBy,
+        },
+        {
+          id: "name-desc",
+          label: "Square (Z-A)",
+          value: "name-desc",
+          active: sortBy === "name-desc",
+        },
+        {
+          id: "region",
+          label: "Region (A-Z)",
+          value: "region",
+          active: sortBy === "region",
+        },
+        {
+          id: "region-desc",
+          label: "Region (Z-A)",
+          value: "region-desc",
+          active: sortBy === "region-desc",
         },
       ],
     });
@@ -491,10 +548,12 @@ function buildFilterGroups(
   }
 
   // Add Per Page group (single select)
-  if (resource === "characters" || resource === "items" || resource === "village-shops" || resource === "monsters") {
+  if (resource === "characters" || resource === "items" || resource === "maps" || resource === "village-shops" || resource === "monsters") {
     let perPageOptions: number[];
     if (resource === "items") {
       perPageOptions = [24, 48, 96, 192];
+    } else if (resource === "maps") {
+      perPageOptions = [12, 24, 48, 96];
     } else if (resource === "village-shops") {
       // Options that work well with 4 columns: 36 (9 rows), 72 (18 rows), 108 (27 rows), 144 (36 rows)
       perPageOptions = [36, 72, 108, 144];
@@ -535,7 +594,7 @@ function buildQueryParams(
     if (values.length && key !== "sortBy" && key !== "perPage") {
       // Handle boolean values for isModCharacter, craftable, stackable
       // These are stored as strings "true"/"false" in filters
-      if (key === "isModCharacter" || key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems") {
+      if (key === "isModCharacter" || key === "craftable" || key === "stackable" || key === "entertainerItems" || key === "divineItems" || key === "blighted" || key === "hasDiscoveries" || key === "hideAllInaccessible") {
         const boolValues = values.map(v => {
           if (typeof v === "boolean") {
             return String(v);
@@ -656,9 +715,10 @@ export function useModelList<T>(
       if (e instanceof Error && (e.message.toLowerCase().includes("aborted") || e.message.toLowerCase().includes("signal"))) return;
       
       const errorMessage = e instanceof Error ? e.message : String(e);
-      // Provide more context for network errors
+      // Provide more context for network errors (resource-specific message)
       if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {
-        setError(`Failed to fetch characters. Please check your connection and try again.`);
+        const itemName = FETCH_ERROR_ITEM_NAMES[resource] ?? resource;
+        setError(`Failed to fetch ${itemName}. Please check your connection and try again.`);
       } else {
         setError(errorMessage);
       }
@@ -749,7 +809,7 @@ export function useModelList<T>(
       let value: string | number | boolean = opt ?? (groupId === "rarity" || groupId === "tier" ? parseInt(optionId, 10) : optionId);
       
       // Handle boolean filters (craftable, stackable, entertainerItems, divineItems) - store as strings for API compatibility
-      if (groupId === "craftable" || groupId === "stackable" || groupId === "entertainerItems" || groupId === "divineItems") {
+      if (groupId === "craftable" || groupId === "stackable" || groupId === "entertainerItems" || groupId === "divineItems" || groupId === "blighted" || groupId === "hasDiscoveries") {
         value = optionId; // Keep as string "true" or "false"
       }
       

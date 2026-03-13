@@ -79,7 +79,20 @@ if (process.env.NODE_ENV !== "production") {
 // ============================================================================
 
 // ------------------- connect ------------------
-// Establishes and caches MongoDB connection -
+// Establishes and caches MongoDB connection.
+// Clears cache on connection/timeout errors so the next request can retry a fresh connection.
+
+function isConnectionError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  const code = e && typeof e === "object" && "code" in e ? String((e as { code: string }).code) : "";
+  return (
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("connection") && (msg.includes("pool") || msg.includes("cleared")) ||
+    code === "ETIMEDOUT" ||
+    code === "ECONNRESET"
+  );
+}
 
 export async function connect(): Promise<typeof mongoose> {
   if (cached.conn) {
@@ -94,8 +107,17 @@ export async function connect(): Promise<typeof mongoose> {
       socketTimeoutMS: 45000,
     });
   }
-  cached.conn = await cached.promise;
-  return cached.conn;
+  try {
+    cached.conn = await cached.promise;
+    return cached.conn;
+  } catch (e) {
+    if (isConnectionError(e)) {
+      cached.promise = null;
+      cached.conn = null;
+      logger.warn("lib/db", "Connection failed, cache cleared for retry");
+    }
+    throw e;
+  }
 }
 
 // ------------------- getInventoriesConnection ------------------

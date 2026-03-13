@@ -6,9 +6,10 @@ import { Modal } from "@/components/ui/modal";
 import { syncAllFields, type ItemFormData as SyncItemFormData } from "@/lib/item-field-sync";
 import { ArrayFieldInput } from "./components/ArrayFieldInput";
 import { BooleanField } from "./components/BooleanField";
+import { ToggleButton } from "./components/ToggleButton";
+import { TERRAIN_OPTIONS } from "./components/quadrant-options";
 import { NumberField } from "./components/NumberField";
 import { TextField } from "./components/TextField";
-import { ToggleButton } from "./components/ToggleButton";
 import { ToggleGrid } from "./components/ToggleGrid";
 import { SelectField } from "./components/SelectField";
 import { MultiSelectField } from "./components/MultiSelectField";
@@ -75,6 +76,7 @@ type Item = {
   pathOfScarletLeaves?: boolean;
   leafDewWay?: boolean;
   terrain?: string[];
+  terrains?: string[];
   adventurer?: boolean;
   artist?: boolean;
   beekeeper?: boolean;
@@ -289,6 +291,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
     pathOfScarletLeaves: item.pathOfScarletLeaves ?? false,
     leafDewWay: item.leafDewWay ?? false,
     terrain: item.terrain ?? [],
+    terrains: item.terrains ?? [],
     adventurer: item.adventurer ?? false,
     artist: item.artist ?? false,
     beekeeper: item.beekeeper ?? false,
@@ -575,6 +578,7 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
       pathOfScarletLeaves: "Path of Scarlet Leaves",
       leafDewWay: "Leaf Dew Way",
       terrain: "Terrain",
+      terrains: "Terrains",
       allJobs: "All Jobs",
       entertainerItems: "Entertainer Items",
       divineItems: "Divine Items",
@@ -1100,13 +1104,58 @@ export function ItemEditorForm({ item, items = [], fieldOptions = { category: []
                 groupTitle="Special Paths"
               />
               <div className="pt-6 mt-6 border-t-2 border-[var(--totk-light-green)]/30 rounded-lg p-4">
-                <ArrayFieldInput
-                  label="Terrain"
-                  value={formData.terrain || []}
-                  onChange={(v) => handleFieldChange("terrain", v)}
-                  helpText="Terrain types (e.g. Water & Wetlands, Coastal & Sea Edge)"
-                  isChanged={!!changes.terrain}
-                />
+                <label className="block text-sm font-medium text-[var(--totk-light-ocher)] mb-1">
+                  Terrain
+                  {(!!changes.terrain || !!changes.terrains) && (
+                    <span className="ml-2 text-xs text-[var(--totk-light-green)]">
+                      <i className="fa-solid fa-circle-check mr-1" aria-hidden="true" />
+                      Changed
+                    </span>
+                  )}
+                </label>
+                <p className="text-xs text-[var(--totk-grey-200)] mb-2">
+                  Terrain types where this item can be found (e.g. Water & Wetlands, Coastal & Sea Edge). Click to toggle.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-4">
+                  {TERRAIN_OPTIONS.map((opt) => {
+                    const selected = (formData.terrain || []).includes(opt);
+                    return (
+                      <ToggleButton
+                        key={opt}
+                        label={opt}
+                        value={selected}
+                        onChange={() => {
+                          const current = formData.terrain || [];
+                          const next = selected
+                            ? current.filter((t) => t !== opt)
+                            : [...current, opt];
+                          handleFieldChange("terrain", next);
+                          handleFieldChange("terrains", next);
+                        }}
+                        isChanged={!!changes.terrain || !!changes.terrains}
+                        className="w-full text-center"
+                      />
+                    );
+                  })}
+                </div>
+                <div className={`w-full rounded-md border-2 min-h-[44px] flex items-center px-3 py-2 ${
+                  (!!changes.terrain || !!changes.terrains) ? "border-[var(--totk-light-green)]" : "border-[var(--totk-dark-ocher)]"
+                } bg-[var(--botw-warm-black)]/50`}>
+                  {(formData.terrain || []).length > 0 ? (
+                    <div className="flex flex-wrap gap-2 w-full">
+                      {(formData.terrain || []).map((t) => (
+                        <span
+                          key={t}
+                          className="px-2 py-1 rounded bg-[var(--totk-dark-ocher)]/40 text-xs text-[var(--botw-pale)]"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs italic text-[var(--totk-grey-200)]">No items</span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="pt-6 mt-6 border-t-2 border-[var(--totk-light-green)]/30 bg-[var(--totk-light-green)]/5 rounded-lg p-4">

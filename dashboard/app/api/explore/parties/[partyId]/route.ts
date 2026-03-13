@@ -156,8 +156,9 @@ export async function GET(
       ? (p.progressLog as Array<Record<string, unknown>>).map((e) => {
           const loot = e.loot as Record<string, unknown> | undefined;
           let heartsLost = typeof e.heartsLost === "number" && e.heartsLost > 0 ? e.heartsLost : undefined;
-          if (heartsLost == null && e.outcome === "raid_turn" && typeof (e as Record<string, unknown>).heartsReceived === "number" && (e as Record<string, unknown>).heartsReceived > 0) {
-            heartsLost = (e as Record<string, unknown>).heartsReceived as number;
+          const heartsReceived = (e as Record<string, unknown>).heartsReceived;
+          if (heartsLost == null && e.outcome === "raid_turn" && typeof heartsReceived === "number" && heartsReceived > 0) {
+            heartsLost = heartsReceived;
           }
           const staminaLost = typeof e.staminaLost === "number" && e.staminaLost > 0 ? e.staminaLost : undefined;
           const heartsRecovered = typeof e.heartsRecovered === "number" && e.heartsRecovered > 0 ? e.heartsRecovered : undefined;

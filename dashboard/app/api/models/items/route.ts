@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
     const jobs = getFilterParamMultiple(params, "job");
     const craftableParam = params.get("craftable");
     const stackableParam = params.get("stackable");
+    const terrains = getFilterParamMultiple(params, "terrain");
     const entertainerItemsParam = params.get("entertainerItems");
     const divineItemsParam = params.get("divineItems");
     
@@ -257,6 +258,20 @@ export async function GET(req: NextRequest) {
       }
     }
     
+    // Terrain filter (match items that have any selected terrain in terrain or terrains array, case-insensitive)
+    if (terrains.length > 0) {
+      const terrainRegexes = terrains.map((v) => {
+        const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`^${escaped}$`, "i");
+      });
+      orConditions.push({
+        $or: [
+          { terrain: { $in: terrainRegexes } },
+          { terrains: { $in: terrainRegexes } },
+        ],
+      });
+    }
+    
     // Craftable filter (if both true and false are selected, don't filter)
     if (craftable === "true") {
       filter.craftingMaterial = { $exists: true, $ne: [] };
@@ -345,7 +360,7 @@ export async function GET(req: NextRequest) {
     const itemSelect =
       "itemName image imageType emoji type subtype category categoryGear buyPrice sellPrice stackable maxStackSize itemRarity " +
       "gathering looting traveling exploring vending crafting petPerk " +
-      "locations centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay " +
+      "locations centralHyrule eldin faron gerudo hebra lanayru pathOfScarletLeaves leafDewWay terrain terrains " +
       "allJobs farmer forager rancher herbalist adventurer artist beekeeper blacksmith cook craftsman " +
       "fisherman gravekeeper guard maskMaker hunter hunterLooting mercenary miner researcher scout weaver witch " +
       "craftingMaterial crafting staminaToCraft craftingJobs " +
@@ -353,7 +368,7 @@ export async function GET(req: NextRequest) {
       "entertainerItems divineItems monsterList " +
       ITEM_MONSTER_FIELDS.join(" ");
 
-    const [data, total, categoryOpts, typeOpts, rarityOpts, categoryGearOpts, subtypeOpts, rawMonsters] = await Promise.all([
+    const [data, total, categoryOpts, typeOpts, rarityOpts, categoryGearOpts, subtypeOpts, terrainOpts, terrainsOpts, rawMonsters] = await Promise.all([
       Item.find(finalFilter)
         .select(itemSelect)
         .sort(sortQuery)
@@ -366,6 +381,8 @@ export async function GET(req: NextRequest) {
       Item.distinct("itemRarity"),
       Item.distinct("categoryGear"),
       Item.distinct("subtype"),
+      Item.distinct("terrain"),
+      Item.distinct("terrains"),
       (async () => {
         const MonsterModule = await import("@/models/MonsterModel.js");
         const Monster = (mongoose.models.Monster ?? MonsterModule.default) as Model<unknown>;
@@ -400,6 +417,10 @@ export async function GET(req: NextRequest) {
       rarity: (rarityOpts as number[]).filter((n) => !Number.isNaN(n)).sort((a, b) => a - b),
       categoryGear: flatFilterOptions(categoryGearOpts as unknown[]),
       subtype: flatFilterOptions(subtypeOpts as unknown[]),
+      terrain: flatFilterOptions([
+        ...(Array.isArray(terrainOpts) ? terrainOpts : []),
+        ...(Array.isArray(terrainsOpts) ? terrainsOpts : []),
+      ] as unknown[]),
       source: ["Gathering", "Looting", "Traveling", "Exploring", "Vending", "Crafting", "Special Weather", "Pet Perk"],
       location: [
         "Central Hyrule",

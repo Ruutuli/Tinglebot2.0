@@ -223,7 +223,7 @@ export function Sidebar() {
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content
-                      className="z-[100] min-w-[200px] rounded-lg pt-3 pb-2 shadow-2xl backdrop-blur-md"
+                      className="z-[100] min-w-[200px] max-h-[min(70vh,28rem)] overflow-y-auto overflow-x-hidden rounded-lg pt-3 pb-2 shadow-2xl backdrop-blur-md"
                       style={{
                         backgroundColor: "rgba(52, 44, 42, 0.98)",
                         boxShadow:
@@ -232,7 +232,7 @@ export function Sidebar() {
                       align="start"
                       side="right"
                       sideOffset={8}
-                      collisionPadding={{ top: 16, bottom: 8, left: 8, right: 8 }}
+                      collisionPadding={{ top: 16, bottom: 16, left: 8, right: 8 }}
                       avoidCollisions={true}
                     >
                       <DropdownMenu.Label
@@ -317,8 +317,8 @@ export function Sidebar() {
                   role="region"
                   aria-label={`${item.label} sub-menu`}
                   className={clsx(
-                    "relative ml-3 flex flex-col gap-1 transition-all duration-200",
-                    isOpen ? "max-h-96 opacity-100 overflow-visible" : "max-h-0 opacity-0 overflow-hidden"
+                    "relative ml-3 flex flex-col gap-1 transition-all duration-200 shrink-0",
+                    isOpen ? "max-h-[min(24rem,50vh)] opacity-100 overflow-y-auto overflow-x-hidden" : "max-h-0 opacity-0 overflow-hidden"
                   )}
                   style={
                     isOpen

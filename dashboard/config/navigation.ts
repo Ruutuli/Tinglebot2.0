@@ -48,6 +48,7 @@ export const navItems: NavItem[] = [
       { href: "/reference/jobs", label: "Jobs", icon: "fa-briefcase" },
       { href: "/models/users", label: "Users", icon: "fa-user" },
       { href: "/models/items", label: "Items", icon: "fa-cube" },
+      { href: "/models/maps", label: "Map Squares", icon: "fa-map" },
       { href: "/models/pets", label: "Pets", icon: "fa-paw" },
       { href: "/models/monsters", label: "Monsters", icon: "fa-dragon" },
       { href: "/models/starter-gear", label: "Starter Gear", icon: "fa-shield" },

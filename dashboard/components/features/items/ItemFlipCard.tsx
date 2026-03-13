@@ -161,6 +161,21 @@ export function ItemFlipCard({ item }: { item: ItemFlipCardProps }) {
     return ""; // Return empty string if no match
   };
 
+  // Map terrain names to CSS classes for color-coding (normalize: strip emoji, lowercase)
+  const getTerrainClass = (terrainName: string | null | undefined): string => {
+    const raw = String(terrainName ?? "").replace(/\p{Emoji}/gu, "").trim().toLowerCase();
+    const n = raw.replace(/\s+/g, " ");
+    if (n.includes("mountain") || n.includes("highland")) return "terrain-mountain";
+    if (n.includes("snow") || n.includes("ice")) return "terrain-snow";
+    if (n.includes("water") || n.includes("wetland")) return "terrain-water";
+    if (n.includes("desert") || n.includes("arid")) return "terrain-desert";
+    if (n.includes("volcanic")) return "terrain-volcanic";
+    if (n.includes("forest") || n.includes("woodland")) return "terrain-forest";
+    if (n.includes("grassland") || n.includes("plains")) return "terrain-grasslands";
+    if (n.includes("coastal") || n.includes("sea")) return "terrain-coastal";
+    return "terrain-default";
+  };
+
   return (
     <div
       className={`model-details-item item-card modern-item-card flip-card ${isFlipped ? "flipped" : ""}`}
@@ -306,6 +321,32 @@ export function ItemFlipCard({ item }: { item: ItemFlipCardProps }) {
               })}
             </div>
           </div>
+
+          {/* Terrain / Terrains Section */}
+          {(() => {
+            const terrainList = [
+              ...(Array.isArray(item.terrain) ? item.terrain : []),
+              ...(Array.isArray(item.terrains) ? item.terrains : []),
+            ].filter(Boolean);
+            if (terrainList.length === 0) return null;
+            return (
+              <div className="item-section modern-item-section">
+                <div className="item-section-label modern-item-section-label">
+                  <i className="fas fa-mountain" aria-hidden="true"></i> Terrain
+                </div>
+                <div className="item-tag-list modern-item-tag-list">
+                  {terrainList.map((t, idx) => {
+                    const terrainClass = getTerrainClass(t);
+                    return (
+                      <span key={idx} className={`item-tag ${terrainClass}`}>
+                        {t}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Jobs Section */}
           <div className="item-section modern-item-section">

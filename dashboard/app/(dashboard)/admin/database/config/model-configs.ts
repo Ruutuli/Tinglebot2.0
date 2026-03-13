@@ -14,7 +14,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     collection: "items",
     nameField: "itemName",
     sortField: "itemName",
-    filterKeys: ["category", "type", "rarity", "categoryGear", "subtype", "source", "location", "job", "craftable", "stackable", "terrain"],
+    filterKeys: ["category", "type", "rarity", "categoryGear", "subtype", "source", "location", "job", "craftable", "stackable", "terrain", "terrains"],
     tabs: [
       {
         id: "basics",
@@ -303,6 +303,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
             label: "Terrain",
             type: "array",
             helpText: "Terrain types where this item can be found (e.g. Grasslands & Plains, Mountain & Highland, Water & Wetlands)",
+          },
+          {
+            key: "terrains",
+            label: "Terrains",
+            type: "array",
+            helpText: "Additional terrain tags for this item",
           },
         ],
       },

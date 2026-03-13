@@ -32,6 +32,7 @@ const SITEMAP_ENTRIES: SitemapEntryConfig[] = [
   { path: "/models/characters", changeFrequency: "daily", priority: 0.7 },
   { path: "/models/users", changeFrequency: "weekly", priority: 0.6 },
   { path: "/models/items", changeFrequency: "weekly", priority: 0.6 },
+  { path: "/models/maps", changeFrequency: "weekly", priority: 0.6 },
   { path: "/models/monsters", changeFrequency: "weekly", priority: 0.6 },
   { path: "/models/villages", changeFrequency: "weekly", priority: 0.6 },
   { path: "/reference/jobs", changeFrequency: "weekly", priority: 0.6 },

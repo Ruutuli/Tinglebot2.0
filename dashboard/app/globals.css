@@ -792,7 +792,7 @@ textarea::placeholder {
 }
 
 .item-card.modern-item-card.flip-card {
-  height: 1000px;
+  height: 1100px;
   overflow: visible;
   transform-style: preserve-3d;
   transition: transform 0.8s cubic-bezier(0.4, 0.0, 0.2, 1), box-shadow 0.3s ease;
@@ -820,7 +820,8 @@ textarea::placeholder {
   top: 0;
   left: 0;
   border-radius: 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -1284,6 +1285,306 @@ textarea::placeholder {
   background-color: #38bcd2 !important;
 }
 
+/* ============================================================================ */
+/* Terrain tag colors (item cards)                                              */
+/* ============================================================================ */
+
+.terrain-mountain {
+  background-color: #6b7280 !important;
+  color: #ffffff !important;
+}
+.terrain-mountain:hover {
+  background-color: #9ca3af !important;
+}
+
+.terrain-snow {
+  background-color: #0ea5e9 !important;
+  color: #ffffff !important;
+}
+.terrain-snow:hover {
+  background-color: #38bdf8 !important;
+}
+
+.terrain-water {
+  background-color: #0d9488 !important;
+  color: #ffffff !important;
+}
+.terrain-water:hover {
+  background-color: #14b8a6 !important;
+}
+
+.terrain-desert {
+  background-color: #d97706 !important;
+  color: #ffffff !important;
+}
+.terrain-desert:hover {
+  background-color: #f59e0b !important;
+}
+
+.terrain-grasslands {
+  background-color: #16a34a !important;
+  color: #ffffff !important;
+}
+.terrain-grasslands:hover {
+  background-color: #22c55e !important;
+}
+
+.terrain-coastal {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+.terrain-coastal:hover {
+  background-color: #3b82f6 !important;
+}
+
+.terrain-forest {
+  background-color: #166534 !important;
+  color: #ffffff !important;
+}
+.terrain-forest:hover {
+  background-color: #15803d !important;
+}
+
+.terrain-volcanic {
+  background-color: #b91c1c !important;
+  color: #ffffff !important;
+}
+.terrain-volcanic:hover {
+  background-color: #dc2626 !important;
+}
+
+.terrain-default {
+  background-color: rgba(0, 163, 218, 0.25) !important;
+  color: #fff !important;
+}
+.terrain-default:hover {
+  background-color: var(--botw-blue) !important;
+}
+
+/* ============================================================================ */
+/* Map square cards (models/maps page)                                          */
+/* ============================================================================ */
+
+.map-square-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 12px rgba(229, 220, 183, 0.08);
+}
+
+.map-square-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 16px rgba(229, 220, 183, 0.12);
+}
+
+.map-square-tag {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.map-square-tag:hover {
+  background-color: rgba(117, 105, 80, 0.4) !important;
+  border-color: var(--totk-dark-ocher) !important;
+}
+
+.map-square-quadrant button:focus-visible {
+  outline: 2px solid var(--totk-light-green);
+  outline-offset: 2px;
+}
+
+/* Quadrant status glow (very subtle) */
+.quad-glow-inaccessible {
+  border: 1px solid rgba(55, 65, 81, 0.5);
+  background: linear-gradient(to bottom, rgba(17, 24, 39, 0.25), rgba(31, 41, 55, 0.15));
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.25), inset 0 0 6px rgba(0, 0, 0, 0.08);
+}
+
+.quad-glow-unexplored {
+  border: 1px solid rgba(185, 28, 28, 0.35);
+  background: linear-gradient(to bottom, rgba(30, 27, 27, 0.3), rgba(127, 29, 29, 0.06));
+  box-shadow: 0 0 5px rgba(185, 28, 28, 0.12), 0 0 2px rgba(185, 28, 28, 0.08);
+}
+
+.quad-glow-explored {
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  background: linear-gradient(to bottom, rgba(30, 27, 27, 0.3), rgba(161, 98, 7, 0.05));
+  box-shadow: 0 0 5px rgba(234, 179, 8, 0.1), 0 0 2px rgba(234, 179, 8, 0.06);
+}
+
+.quad-glow-secured {
+  border: 1px solid rgba(22, 163, 74, 0.35);
+  background: linear-gradient(to bottom, rgba(30, 27, 27, 0.3), rgba(22, 163, 74, 0.05));
+  box-shadow: 0 0 5px rgba(22, 163, 74, 0.12), 0 0 2px rgba(22, 163, 74, 0.06);
+}
+
+/* Blighted: gradient on the right side only; status glow stays on the left */
+.quad-glow-blighted {
+  border: 1px solid rgba(190, 24, 93, 0.4);
+  box-shadow: 0 0 6px rgba(190, 24, 93, 0.2), 0 0 3px rgba(131, 24, 67, 0.12), inset 0 0 10px rgba(190, 24, 93, 0.04);
+}
+
+.quad-glow-inaccessible.quad-glow-blighted {
+  background: linear-gradient(to right, rgba(17, 24, 39, 0.25) 0%, rgba(31, 41, 55, 0.12) 40%, rgba(190, 24, 93, 0.12) 55%, rgba(131, 24, 67, 0.18) 100%) !important;
+}
+
+.quad-glow-unexplored.quad-glow-blighted {
+  background: linear-gradient(to right, rgba(30, 27, 27, 0.3) 0%, rgba(127, 29, 29, 0.08) 40%, rgba(190, 24, 93, 0.14) 55%, rgba(131, 24, 67, 0.2) 100%) !important;
+}
+
+.quad-glow-explored.quad-glow-blighted {
+  background: linear-gradient(to right, rgba(30, 27, 27, 0.3) 0%, rgba(161, 98, 7, 0.06) 40%, rgba(190, 24, 93, 0.14) 55%, rgba(131, 24, 67, 0.2) 100%) !important;
+}
+
+.quad-glow-secured.quad-glow-blighted {
+  background: linear-gradient(to right, rgba(30, 27, 27, 0.3) 0%, rgba(22, 163, 74, 0.06) 40%, rgba(190, 24, 93, 0.14) 55%, rgba(131, 24, 67, 0.2) 100%) !important;
+}
+
+/* Quadrant status tags (match glow colors) – labels stay solid; gradient only on .quad-glow-blighted */
+.quad-tag-inaccessible {
+  background-color: #1f2937 !important;
+  border: 1px solid #374151;
+  color: #e5e7eb !important;
+}
+
+.quad-tag-unexplored {
+  background-color: rgba(185, 28, 28, 0.7) !important;
+  border: 1px solid rgba(185, 28, 28, 0.8);
+  color: #fecaca !important;
+}
+
+.quad-tag-explored {
+  background-color: rgba(234, 179, 8, 0.65) !important;
+  border: 1px solid rgba(234, 179, 8, 0.8);
+  color: #1c1917 !important;
+}
+
+.quad-tag-secured {
+  background-color: rgba(22, 163, 74, 0.7) !important;
+  border: 1px solid rgba(22, 163, 74, 0.8);
+  color: #dcfce7 !important;
+}
+
+.quad-tag-blighted {
+  background-color: rgba(190, 24, 93, 0.85) !important;
+  border: 1px solid rgba(190, 24, 93, 0.9);
+  color: #fce7f3 !important;
+}
+
+/* Map quadrant detail tags: hazards */
+.quad-hazard-cold {
+  background-color: #0ea5e9 !important;
+  border-color: #38bdf8 !important;
+  color: #fff !important;
+}
+.quad-hazard-hot {
+  background-color: #dc2626 !important;
+  border-color: #f87171 !important;
+  color: #fff !important;
+}
+.quad-hazard-thunder {
+  background-color: #a855f7 !important;
+  border-color: #c084fc !important;
+  color: #fff !important;
+}
+.quad-hazard-default {
+  background-color: rgba(117, 105, 80, 0.5) !important;
+  border-color: var(--totk-dark-ocher) !important;
+  color: var(--botw-pale) !important;
+}
+
+/* Map quadrant detail tags: item types */
+.quad-item-fish {
+  background-color: #0d9488 !important;
+  border-color: #14b8a6 !important;
+  color: #fff !important;
+}
+.quad-item-mushroom {
+  background-color: #92400e !important;
+  border-color: #b45309 !important;
+  color: #fff !important;
+}
+.quad-item-plant {
+  background-color: #15803d !important;
+  border-color: #22c55e !important;
+  color: #fff !important;
+}
+.quad-item-ore {
+  background-color: #57534e !important;
+  border-color: #78716c !important;
+  color: #fff !important;
+}
+.quad-item-natural {
+  background-color: #65a30d !important;
+  border-color: #84cc16 !important;
+  color: #fff !important;
+}
+.quad-item-creature {
+  background-color: #ca8a04 !important;
+  border-color: #eab308 !important;
+  color: #fff !important;
+}
+.quad-item-fruit {
+  background-color: #c026d3 !important;
+  border-color: #d946ef !important;
+  color: #fff !important;
+}
+.quad-item-default {
+  background-color: rgba(0, 163, 218, 0.3) !important;
+  border-color: var(--botw-dark-blue) !important;
+  color: #fff !important;
+}
+
+/* Map quadrant detail tags: monster families */
+.quad-monster-chuchu {
+  background-color: #6366f1 !important;
+  border-color: #818cf8 !important;
+  color: #fff !important;
+}
+.quad-monster-lizalfos {
+  background-color: #059669 !important;
+  border-color: #10b981 !important;
+  color: #fff !important;
+}
+.quad-monster-octorok {
+  background-color: #7c3aed !important;
+  border-color: #8b5cf6 !important;
+  color: #fff !important;
+}
+.quad-monster-talus {
+  background-color: #6b7280 !important;
+  border-color: #9ca3af !important;
+  color: #fff !important;
+}
+.quad-monster-keese {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #fff !important;
+}
+.quad-monster-wizzrobe {
+  background-color: #86198f !important;
+  border-color: #a21caf !important;
+  color: #fff !important;
+}
+.quad-monster-stal {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #e5e7eb !important;
+}
+.quad-monster-bokoblin {
+  background-color: #b45309 !important;
+  border-color: #d97706 !important;
+  color: #fff !important;
+}
+.quad-monster-lynel {
+  background-color: #be123c !important;
+  border-color: #e11d48 !important;
+  color: #fff !important;
+}
+.quad-monster-default {
+  background-color: rgba(71, 85, 105, 0.6) !important;
+  border-color: #64748b !important;
+  color: #e2e8f0 !important;
+}
+
+.quad-nocamp {
+  color: #d97706 !important;
+}
+
 /* Item ownership list */
 .item-ownership-list {
   display: flex;
@@ -1309,7 +1610,7 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   gap: 0.4em;
-  max-height: calc(1000px - 400px); /* Account for header and other content */
+  max-height: calc(1100px - 400px); /* Account for header and other content */
   overflow-y: auto;
   overflow-x: hidden;
 }
