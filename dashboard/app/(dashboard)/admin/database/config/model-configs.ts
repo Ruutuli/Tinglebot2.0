@@ -14,7 +14,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     collection: "items",
     nameField: "itemName",
     sortField: "itemName",
-    filterKeys: ["category", "type", "rarity", "categoryGear", "subtype", "source", "location", "job", "craftable", "stackable"],
+    filterKeys: ["category", "type", "rarity", "categoryGear", "subtype", "source", "location", "job", "craftable", "stackable", "terrain"],
     tabs: [
       {
         id: "basics",
@@ -297,6 +297,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
               { value: "pathOfScarletLeaves", label: "Path of Scarlet Leaves" },
               { value: "leafDewWay", label: "Leaf Dew Way" },
             ],
+          },
+          {
+            key: "terrain",
+            label: "Terrain",
+            type: "array",
+            helpText: "Terrain types where this item can be found (e.g. Grasslands & Plains, Mountain & Highland, Water & Wetlands)",
           },
         ],
       },
@@ -2312,7 +2318,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     collection: "exploringMap",
     nameField: "squareId",
     sortField: "squareId",
-    filterKeys: ["region", "status"],
+    filterKeys: ["region", "status", "terrain", "hazards"],
     tabs: [
       {
         id: "basics",

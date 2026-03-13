@@ -54,7 +54,7 @@ const Relic = require('@/models/RelicModel.js');
 const Wave = require('@/models/WaveModel.js');
 
 // ------------------- Modules ------------------
-const { calculateFinalValue, getMonstersByRegion, getExplorationMonsterFromList, createWeightedItemList } = require("../../modules/rngModule.js");
+const { calculateFinalValue, getMonstersByRegion, getExplorationMonsterFromList, createWeightedItemList, createQuadrantWeightedExplorationItemList, applyQuadrantMonsterBias } = require("../../modules/rngModule.js");
 const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const { generateVictoryMessage, generateDamageMessage, generateDefenseBuffMessage, generateAttackBuffMessage, generateFinalOutcomeMessage, generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
 const { handleKO, healKoCharacter, useHearts } = require("../../modules/characterStatsModule.js");
@@ -90,7 +90,7 @@ const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL }
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
 
 // ------------------- Embeds & Handlers ------------------
-const { addExplorationStandardFields, addExplorationCommandsField, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
+const { addExplorationStandardFields, addExplorationCommandsField, getExplorationFlavorText, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
 // ------------------- Image URLs ------------------
@@ -5341,26 +5341,22 @@ module.exports = {
        (item) => item[regionKey]
       );
 
-      // Quadrant bias: items listed on the quadrant are 2x as likely (without restricting the pool)
-      const quadrantMetaForItem = await getQuadrantMeta(party.square, party.quadrant);
-      const quadrantItemBiasSet = new Set((quadrantMetaForItem.items || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean));
-
       if (availableItems.length === 0) {
        logger.warn("EXPLORE", `[explore.js]⚠️ No items for region "${regionKey}"`);
        return interaction.editReply("No items available for this region.");
       }
 
-      // Rarity-weighted pick: common items (low rarity) more likely, rare less likely. FV 50 = neutral spread. Fallback to uniform if no itemRarity.
-      const weightedList = createWeightedItemList(availableItems, 50);
-      const weightedListBiased = quadrantItemBiasSet.size > 0 && weightedList.length > 0
-        ? weightedList.concat(weightedList.filter((it) => quadrantItemBiasSet.has(String(it?.itemName || "").trim().toLowerCase())))
-        : weightedList;
-      const availableItemsBiased = quadrantItemBiasSet.size > 0
-        ? availableItems.concat(availableItems.filter((it) => quadrantItemBiasSet.has(String(it?.itemName || "").trim().toLowerCase())))
-        : availableItems;
-      const selectedItem = weightedListBiased.length > 0
-       ? weightedListBiased[Math.floor(Math.random() * weightedListBiased.length)]
-       : availableItemsBiased[Math.floor(Math.random() * availableItemsBiased.length)];
+      const quadrantMetaForItem = await getQuadrantMeta(party.square, party.quadrant);
+      const quadrantWeightedList = createQuadrantWeightedExplorationItemList(availableItems, 50, quadrantMetaForItem);
+      let selectedItem;
+      if (quadrantWeightedList.length > 0) {
+       selectedItem = quadrantWeightedList[Math.floor(Math.random() * quadrantWeightedList.length)];
+      } else {
+       const fallbackList = createWeightedItemList(availableItems, 50);
+       selectedItem = fallbackList.length > 0
+         ? fallbackList[Math.floor(Math.random() * fallbackList.length)]
+         : availableItems[Math.floor(Math.random() * availableItems.length)];
+      }
 
       appendExploreStat(`${new Date().toISOString()}\tfinal\titem\t${location}\trarity=${selectedItem.itemRarity ?? "?"}`);
 
@@ -5369,6 +5365,7 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
       const nextCharacter = party.characters[party.currentTurn];
+      const itemFlavor = getExplorationFlavorText(quadrantMetaForItem, "item", { item: selectedItem });
       const embed = createExplorationItemEmbed(
        party,
        character,
@@ -5384,7 +5381,8 @@ module.exports = {
        hasUnpinnedDiscoveriesInQuadrant(party),
        { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
        poolCaps.maxHearts,
-       poolCaps.maxStamina
+       poolCaps.maxStamina,
+       itemFlavor || undefined
       );
 
       if (!party.gatheredItems) {
@@ -5431,13 +5429,12 @@ module.exports = {
        return interaction.editReply("No monsters available for this region.");
       }
 
-      // Quadrant bias: monsters listed on the quadrant are 2x as likely (without restricting the pool)
       const quadrantMetaForMonster = await getQuadrantMeta(party.square, party.quadrant);
-      const quadrantMonsterBiasSet = new Set((quadrantMetaForMonster.monsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean));
-      const monstersBiased = quadrantMonsterBiasSet.size > 0
-        ? monsters.concat(monsters.filter((m) => quadrantMonsterBiasSet.has(String(m?.name || "").trim().toLowerCase())))
-        : monsters;
-
+      const quadrantMonsterBiasSet = new Set([
+        ...(quadrantMetaForMonster.monsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean),
+        ...(quadrantMetaForMonster.bossMonsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
+      ]);
+      const monstersBiased = applyQuadrantMonsterBias(monsters, quadrantMonsterBiasSet);
       const selectedMonster = getExplorationMonsterFromList(monstersBiased, dangerLevel.dangerBonus);
       appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}\tdist=${dangerLevel.distance}\tbonus=${(dangerLevel.dangerBonus * 100).toFixed(0)}%`);
 
@@ -5484,6 +5481,7 @@ module.exports = {
 
         // Use raid's current turn (triggering character) so the mention matches who can actually /raid
         const nextCharacterRaid = character;
+        const monsterFlavorRaid = getExplorationFlavorText(quadrantMetaForMonster, "monster", { monster: selectedMonster });
         const embed = createExplorationMonsterEmbed(
          party,
          character,
@@ -5499,7 +5497,8 @@ module.exports = {
          hasUnpinnedDiscoveriesInQuadrant(party),
          { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
          poolCaps.maxHearts,
-         poolCaps.maxStamina
+         poolCaps.maxStamina,
+         monsterFlavorRaid || undefined
         );
 
         embed.addFields(
@@ -5612,6 +5611,7 @@ module.exports = {
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
        const nextCharacterTier = party.characters[party.currentTurn];
+       const monsterFlavorWave = getExplorationFlavorText(quadrantMetaForMonster, "monster", { monster: selectedMonster });
        const embed = createExplorationMonsterEmbed(
         party,
         character,
@@ -5627,7 +5627,8 @@ module.exports = {
         hasUnpinnedDiscoveriesInQuadrant(party),
         { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 },
         poolCaps.maxHearts,
-        poolCaps.maxStamina
+        poolCaps.maxStamina,
+        monsterFlavorWave || undefined
        );
 
        const hasEquippedWeapon = !!(character?.gearWeapon?.name);
@@ -7639,13 +7640,12 @@ module.exports = {
      const campAttackStruggleHearts = campAttackPayResult?.heartsPaid ?? 0;
      const monsters = await getMonstersByRegion(party.region?.toLowerCase() || "");
      if (monsters && monsters.length > 0) {
-      // Quadrant bias: monsters listed on the quadrant are 2x as likely (without restricting the pool)
       const quadrantMetaForCampMonster = await getQuadrantMeta(party.square, party.quadrant);
-      const quadrantCampMonsterBiasSet = new Set((quadrantMetaForCampMonster.monsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean));
-      const monstersBiased = quadrantCampMonsterBiasSet.size > 0
-        ? monsters.concat(monsters.filter((m) => quadrantCampMonsterBiasSet.has(String(m?.name || "").trim().toLowerCase())))
-        : monsters;
-
+      const quadrantCampMonsterBiasSet = new Set([
+        ...(quadrantMetaForCampMonster.monsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean),
+        ...(quadrantMetaForCampMonster.bossMonsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
+      ]);
+      const monstersBiased = applyQuadrantMonsterBias(monsters, quadrantCampMonsterBiasSet);
       const selectedMonster = getExplorationMonsterFromList(monstersBiased, campDangerLevel.dangerBonus);
       logger.info("EXPLORE", `[explore.js] Camp attack: monster=${selectedMonster.name} tier=${selectedMonster.tier} dist=${campDangerLevel.distance} bonus=${(campDangerLevel.dangerBonus * 100).toFixed(0)}%`);
       if (selectedMonster.tier > 4 && !DISABLE_EXPLORATION_RAIDS) {
@@ -7662,9 +7662,11 @@ module.exports = {
          const raidData = raidResult.raidData || {};
          const monsterHearts = raidData.monster ? { current: raidData.monster.currentHearts, max: raidData.monster.maxHearts } : { current: selectedMonster.hearts, max: selectedMonster.hearts };
          const campRaidActionCost = { staminaCost: campAttackPayResult?.staminaPaid ?? 0, heartsCost: campAttackStruggleHearts };
-         const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, character, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), campRaidActionCost);
+         const campMonsterFlavor = getExplorationFlavorText(quadrantMetaForCampMonster, "monster", { monster: selectedMonster });
+         const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, character, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), campRaidActionCost, poolCaps.maxHearts, poolCaps.maxStamina, campMonsterFlavor || undefined);
          embed.setTitle(`🏕️ **Camp interrupted!** — ${selectedMonster.name}`);
-         embed.setDescription(`**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest — fight with </raid:1470659276287774734>.${campAttackStruggleHearts > 0 ? ` **−${campAttackStruggleHearts} ❤ (struggle)** for camping.` : ""}`);
+         const campRaidDesc = `**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest — fight with </raid:1470659276287774734>.${campAttackStruggleHearts > 0 ? ` **−${campAttackStruggleHearts} ❤ (struggle)** for camping.` : ""}`;
+         embed.setDescription((campMonsterFlavor || "") + campRaidDesc);
          embed.addFields(
           { name: "💙 __Monster Hearts__", value: `${monsterHearts.current}/${monsterHearts.max}`, inline: true },
           { name: "🆔 **__Raid ID__**", value: battleId, inline: true },
@@ -7725,10 +7727,11 @@ module.exports = {
       await party.save();
       const nextChar = party.characters[party.currentTurn];
       const campInterruptActionCost = { staminaCost: campAttackPayResult?.staminaPaid ?? 0, heartsCost: campAttackStruggleHearts };
-      const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, nextChar ?? null, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), campInterruptActionCost);
+      const campMonsterFlavorTier = getExplorationFlavorText(quadrantMetaForCampMonster, "monster", { monster: selectedMonster });
+      const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, nextChar ?? null, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), campInterruptActionCost, 0, 0, campMonsterFlavorTier || undefined);
       embed.setTitle(`🏕️ **Camp interrupted!** — ${selectedMonster.name}`);
       const campInterruptDesc = `**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest.${campAttackStruggleHearts > 0 ? ` **−${campAttackStruggleHearts} ❤ (struggle)** for camping.` : ""}\n\n${outcome.result || "Battle resolved."}`;
-      embed.setDescription(campInterruptDesc);
+      embed.setDescription((campMonsterFlavorTier || "") + campInterruptDesc);
       const hasEquippedWeapon = !!(character?.gearWeapon?.name);
       const hasEquippedArmor = !!(character?.gearArmor?.head?.name || character?.gearArmor?.chest?.name || character?.gearArmor?.legs?.name);
       const battleOutcomeDisplay = outcome.hearts > 0 ? generateDamageMessage(outcome.hearts) : (outcome.defenseSuccess ? generateDefenseBuffMessage(outcome.defenseSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedArmor) : (outcome.attackSuccess ? generateAttackBuffMessage(outcome.attackSuccess, outcome.adjustedRandomValue, outcome.damageValue, hasEquippedWeapon) : generateVictoryMessage(outcome.adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess)));

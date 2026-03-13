@@ -1,0 +1,733 @@
+ITEM NAME,IMAGE,ITEM RARITY,CATEGORY,TYPE,SUBTYPE,Terrain
+Arrow,,3,Weapon,1h,Arrow,
+Acorn,,1,Material,Plant,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Old Shirt,,3,Armor,Chest,"Shirt
+",
+Well-Worn Trousers,,3,Armor,Legs,Trousers,
+Bokoblin Arm,,5,Weapon,1h,Arm,
+Lizalfos Arm,,5,Weapon,1h,Arm,
+Ancient Arrow,,5,Weapon,1h,Arrow,
+Lizal Boomerang,,5,Weapon,1h,Boomerang,
+Boko Club,,5,Weapon,1h,Club,
+Spiked Boko Club,,5,Weapon,1h,Club,
+Spring-Loaded Hammer,,5,Weapon,1h,Hammer,
+Lightning Rod,,5,Weapon,1h,Rod,
+Fire Rod,,5,Weapon,1h,Rod,
+Ice Rod,,5,Weapon,1h,Rod,
+Boko Shield,,5,Weapon,1h,Shield,
+Lizal Shield,,5,Weapon,1h,Shield,
+Spiked Boko Shield,,5,Weapon,1h,Shield,
+Moblin Arm,,5,Weapon,2h,Arm,
+Lynel Bow,,5,Weapon,2h,Bow,
+Duplex Bow,,5,Weapon,2h,Bow,
+Boko Bow,,5,Weapon,2h,Bow,
+Lizal Bow,,5,Weapon,2h,Bow,
+Spiked Boko Bow,,5,Weapon,2h,Bow,
+Boko Bat,,5,Weapon,2h,Club,
+Moblin Club,,5,Weapon,2h,Club,
+Spiked Boko Bat,,5,Weapon,2h,Club,
+Spiked Boko Spear,,5,Weapon,2h,Spear,
+Boko Spear,,5,Weapon,2h,Spear,
+Lizal Spear,,5,Weapon,2h,Spear,
+Moblin Spear,,5,Weapon,2h,Spear,
+Lizal Forked Boomerang,,6,Weapon,1h,Boomerang,
+Dragonbone Boko Club,,6,Weapon,1h,Club,
+Dragonbone Boko Shield,,6,Weapon,1h,Shield,
+Guardian Shield,,6,Weapon,1h,Shield,
+Lynel Shield,,6,Weapon,1h,Shield,
+Reinforced Lizal Shield,,6,Weapon,1h,Shield,
+Vicious Sickle,,6,Weapon,1h,Sickle,
+Guardian Sword,,6,Weapon,1h,Sword,
+Lynel Sword,,6,Weapon,1h,Sword,
+Ancient Battle Axe,,6,Weapon,2h,Axe,
+Dragon Bone Boko Bow,,6,Weapon,2h,Bow,
+Strengthened Lizal Bow,,6,Weapon,2h,Bow,
+Dragonbone Boko Bat,,6,Weapon,2h,Club,
+Spiked Moblin Club,,6,Weapon,2h,Club,
+Lynel Crusher,,6,Weapon,2h,Crusher,
+Spiked Moblin Spear,,6,Weapon,2h,Spear,
+Dragonbone Boko Spear,,6,Weapon,2h,Spear,
+Enhanced Lizal Spear,,6,Weapon,2h,Spear,
+Forked Lizal Spear,,6,Weapon,2h,Spear,
+Guardian Spear,,6,Weapon,2h,Spear,
+Lynel Spear,,6,Weapon,2h,Spear,
+Mighty Lynel Bow,,7,Weapon,2h,Bow,
+Lizal Tri-Boomerang,,8,Weapon,1h,Boomerang,
+Demon Carver,,8,Weapon,1h,Carver,
+Mighty Lynel Shield,,8,Weapon,1h,Shield,
+Steel Lizal Shield,,8,Weapon,1h,Shield,
+Mighty Lynel Sword,,8,Weapon,1h,Sword,
+Savage Lynel Bow,,8,Weapon,2h,Bow,
+Steel Lizal Bow,,8,Weapon,2h,Bow,
+Dragonbone Moblin Club,,8,Weapon,2h,Club,
+Mighty Lynel Crusher,,8,Weapon,2h,Crusher,
+Dragonbone Moblin Spear,,8,Weapon,2h,Spear,
+Mighty Lynel Spear,,8,Weapon,2h,Spear,
+Windcleaver,,8,Weapon,2h,Sword,
+Savage Lynel Shield,,9,Weapon,1h,Shield,
+Savage Lynel Sword,,9,Weapon,1h,Sword,
+Savage Lynel Crusher,,9,Weapon,2h,Crusher,
+Savage Lynel Spear,,9,Weapon,2h,Spear,
+Ancient Bladesaw,,9,Weapon,2h,Sword,
+Ancient Shield,,10,Weapon,1h,Shield,
+Ancient Short Sword,,10,Weapon,1h,Sword,
+Ancient Bow,,10,Weapon,2h,Bow,
+Ancient Spear,,10,Weapon,2h,Spear,
+Amber,,3,Material,Ore,,⛰️ Mountain & Highland
+Amber Relic,,4,Material,Ore,,⛰️ Mountain & Highland
+Amethyst,,4,Material,Ore,,"⛰️ Mountain & Highland, 🌋 Volcanic"
+Ancient Arowana,,4,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Ancient Core,,3,Material,Ancient Parts,,⛰️ Mountain & Highland
+Ancient Flower,,5,Material,Plant,,🌿 Grasslands & Plains
+Ancient Gear,,2,Material,Ancient Parts,,⛰️ Mountain & Highland
+Ancient Screw,,1,Material,Ancient Parts,,⛰️ Mountain & Highland
+Ancient Shaft,,2,Material,Ancient Parts,,⛰️ Mountain & Highland
+Ancient Spring,,2,Material,Ancient Parts,,⛰️ Mountain & Highland
+Apple,,2,Material,Fruit,,🌲 Forest & Woodland
+Armoranth,,2,Material,Plant,,🌿 Grasslands & Plains
+Armored Carp,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Armored Porgy,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Aurora Stone,,10,Material,Ore,,⛰️ Mountain & Highland
+Bird Egg,,2,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland, ⛰️ Mountain & Highland"
+Bird Feather,,2,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland, ⛰️ Mountain & Highland"
+Bladed Rhino Beetle,,2,Material,Creature,,🌲 Forest & Woodland
+Blessed Butterfly,,4,Material,Creature,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Blight Geodes,,6,Material,Ore,,⛰️ Mountain & Highland
+Blin Bling,,6,Material,Monster,,
+Blue Bird Feather,,3,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland, ⛰️ Mountain & Highland"
+Blue Nightshade,,2,Material,Plant,,🌿 Grasslands & Plains
+Bokoblin Fang,,2,Material,Monster,,
+Bokoblin Guts,,3,Material,Monster,,
+Bokoblin Horn,,2,Material,Monster,,
+Bright-Eyed Crab,,2,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Brightbloom Seed,,9,Material,Plant,,🌿 Grasslands & Plains
+Brightcap,,4,Material,Mushroom,,🌲 Forest & Woodland
+Cane Sugar,,2,Material,Plant,,🌿 Grasslands & Plains
+Carmine Pearl,,6,Material,Ore,,"⛰️ Mountain & Highland, 🏖️ Coastal & Sea Edge"
+Carrumpkin,,8,Material,Plant,,🌿 Grasslands & Plains
+Chickaloo Tree Nut,,1,Material,Plant,,🌿 Grasslands & Plains
+Chill Stone,,8,Material,Ore,,"⛰️ Mountain & Highland, ❄️ Snow & Ice Biomes"
+Chillfin Trout,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Chillshroom,,2,Material,Mushroom,,"🌲 Forest & Woodland, ❄️ Snow & Ice Biomes"
+Chuchu Egg,,10,Material,Monster,,
+Chuchu Jelly,,2,Material,Monster,,
+Cold Darner,,2,Material,Creature,,"🌲 Forest & Woodland, ❄️ Snow & Ice Biomes"
+Cool Safflina,,2,Material,Plant,,"🌿 Grasslands & Plains, ❄️ Snow & Ice Biomes"
+Cotton,,3,Material,Natural,,🌿 Grasslands & Plains
+Courser Bee Honey,,2,Material,Natural,,🌲 Forest & Woodland
+Crystal Skull,,6,Material,Ore,,⛰️ Mountain & Highland
+Cucco Feathers,,5,Material,Natural,,🌿 Grasslands & Plains
+Dazzlefruit,,4,Material,Fruit,,🌲 Forest & Woodland
+Deep Firefly,,6,Material,Creature,,🌲 Forest & Woodland
+Deku Hornet,,2,Material,Creature,,🌲 Forest & Woodland
+Demon Fossil,,6,Material,Ore,,⛰️ Mountain & Highland
+Diamond,,6,Material,Ore,,⛰️ Mountain & Highland
+Dinraal's Claw,,10,Material,Special,,🌋 Volcanic
+Dinraal's Scale,,10,Material,Special,,🌋 Volcanic
+Dusk Relic,,6,Material,Ore,,⛰️ Mountain & Highland
+Eldin Ore,,4,Material,Ore,,⛰️ Mountain & Highland
+Eldin Roller,,2,Material,Creature,,"🌲 Forest & Woodland, ⛰️ Mountain & Highland"
+Electric Darner,,2,Material,Creature,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Electric Keese Wing,,2,Material,Monster,,
+Electric Safflina,,2,Material,Plant,,🌿 Grasslands & Plains
+Emerald,,6,Material,Ore,,⛰️ Mountain & Highland
+Endura Carrot,,2,Material,Plant,,🌿 Grasslands & Plains
+Endura Shroom,,2,Material,Mushroom,,🌲 Forest & Woodland
+Energetic Rhino Beetle,,2,Material,Creature,,🌲 Forest & Woodland
+Fabled Butterfly,,6,Material,Creature,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Fairy,,1,Material,Creature,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Fairy Dust,,2,Material,Ore,,⛰️ Mountain & Highland
+Fancy Fabric,,8,Material,Natural,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Faron Grasshopper,,2,Material,Creature,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Farosh's Claw,,10,Material,Special,,🌲 Forest & Woodland
+Farosh's Scale,,10,Material,Special,,🌲 Forest & Woodland
+Fire Fruit,,4,Material,Fruit,,"🌲 Forest & Woodland, 🌋 Volcanic"
+Fire Keese Wing,,2,Material,Monster,,
+Fireproof Lizard,,2,Material,Creature,,"🌲 Forest & Woodland, 🌋 Volcanic"
+Fleet-Lotus Seeds,,2,Material,Fruit,,🌲 Forest & Woodland
+Flint,,2,Material,Ore,,⛰️ Mountain & Highland
+Fortified Pumpkin,,2,Material,Plant,,🌿 Grasslands & Plains
+Freezard Water,,8,Material,Monster,,
+Fresh Milk,,2,Material,Natural,,🌿 Grasslands & Plains
+Frilly Fabric,,8,Material,Natural,,🌿 Grasslands & Plains
+Gerudo Dragonfly,,2,Material,Creature,,🏜️ Desert & Arid
+Giant Ancient Core,,4,Material,Ancient Parts,,⛰️ Mountain & Highland
+Gibdo Bandage,,4,Material,Monster,,
+Gibdo Bone,,10,Material,Monster,,
+Gibdo Guts,,9,Material,Monster,,
+Gibdo Wing,,10,Material,Monster,,🌊 Water & Wetlands
+Glowing Cave Fish,,4,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Goat Butter,,2,Material,Natural,,🌿 Grasslands & Plains
+Goddess Plume,,8,Material,Ore,,⛰️ Mountain & Highland
+Gold Bar,,9,Material,Ore,,⛰️ Mountain & Highland
+Gold Dust,,2,Material,Ore,,"⛰️ Mountain & Highland, 🌋 Volcanic"
+Gold Ore,,3,Material,Ore,,"⛰️ Mountain & Highland, 🌋 Volcanic"
+Golden Apple,,4,Material,Fruit,,🌲 Forest & Woodland
+Golden Insect,,6,Material,Creature,,🌲 Forest & Woodland
+Golden Skull,,3,Material,Monster,,
+Goron Ore,,4,Material,Ore,,"⛰️ Mountain & Highland, 🌋 Volcanic"
+Goron Spice,,5,"Recipe , Material","Vegetable, Inedible",,"🌋 Volcanic, 🏜️ Desert & Arid"
+Hateno Cheese,,3,"Material, Recipe",Dairy,,🌿 Grasslands & Plains
+Hearty Bass,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Hearty Blueshell Snail,,2,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Hearty Durian,,2,Material,Fruit,,🌲 Forest & Woodland
+Hearty Lizard,,2,Material,Creature,,"🌲 Forest & Woodland, 🏜️ Desert & Arid"
+Hearty Radish,,2,Material,Plant,,🌿 Grasslands & Plains
+Hearty Salmon,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Hearty Truffle,,2,Material,Mushroom,,"🌲 Forest & Woodland, ❄️ Snow & Ice Biomes"
+Hightail Lizard,,2,Material,Creature,,🌲 Forest & Woodland
+Hinox Guts,,4,Material,Monster,,
+Hinox Toenail,,5,Material,Monster,,
+Hinox Tooth,,5,Material,Monster,,
+Hornet Larvae,,2,Material,Creature,,🌲 Forest & Woodland
+Horriblin Claw,,6,Material,Monster,,
+Horriblin Guts,,6,Material,Monster,,
+Horriblin Horn,,6,Material,Monster,,
+Hot-Footed Frog,,2,Material,Creature,,🌊 Water & Wetlands
+Hydromelon,,2,Material,Fruit,,🌲 Forest & Woodland
+Hylian Rice,,2,Material,Plant,,🌿 Grasslands & Plains
+Hylian Shroom,,1,Material,Mushroom,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains, 🏜️ Desert & Arid, ⛰️ Mountain & Highland"
+Hylian Tomato,,3,Material,Plant,,🌿 Grasslands & Plains
+Hyrule Bass,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Hyrule Herb,,1,Material,Plant,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Ice Fruit,,4,Material,Fruit,,❄️ Snow & Ice Biomes
+Ice Keese Wing,,2,Material,Monster,,
+Ice Rose,,10,Material,Plant,,"🌿 Grasslands & Plains, ❄️ Snow & Ice Biomes"
+Icy Lizalfos Tail,,3,Material,Monster,,
+Insect Parts,,1,Material,Creature,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Iron bar,,9,Material,Ore,,⛰️ Mountain & Highland
+Ironshell Crab,,2,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Ironshroom,,2,Material,Mushroom,,🌲 Forest & Woodland
+Jade Relic,,10,Material,Ore,,⛰️ Mountain & Highland
+Job Voucher,,4,Material,Natural,,
+Keese Eyeball,,2,Material,Monster,,
+Keese Wing,,2,Material,Monster,,
+Kelp,,2,Material,Plant,,"🏖️ Coastal & Sea Edge, 🌊 Water & Wetlands"
+Korok Leaf,,3,"Material, Weapon",2h,Leaf,🌲 Forest & Woodland
+Lace,,8,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Lanayru Ant,,2,Material,Creature,,🌲 Forest & Woodland
+Lava Drop,,6,Material,Ore,,"⛰️ Mountain & Highland, 🌋 Volcanic"
+Leather,,4,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Like Like Stone,,6,Material,Monster,,
+Lizalfos Horn,,3,Material,Monster,,
+Lizalfos Tail,,3,Material,Monster,,
+Lizalfos Talon,,3,Material,Monster,,
+Lizard Tail,,2,Material,Creature,,🌲 Forest & Woodland
+Luminous Stone,,3,Material,Ore,,⛰️ Mountain & Highland
+Lynel Guts,,4,Material,Monster,,
+Lynel Hoof,,3,Material,Monster,,
+Lynel Horn,,3,Material,Monster,,
+Mighty Bananas,,2,Material,Fruit,,🌲 Forest & Woodland
+Mighty Carp,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Mighty Porgy,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Mighty Thistle,,2,Material,Plant,,🌿 Grasslands & Plains
+Moblin Fang,,3,Material,Monster,,
+Moblin Guts,,4,Material,Monster,,
+Moblin Horn,,3,Material,Monster,,
+Mock Fairy,,6,Material,Creature,,🌲 Forest & Woodland
+Molduga Fin,,7,Material,Monster,,
+Molduga Guts,,7,Material,Monster,,
+Monster Claw,,2,Material,Monster,,
+Monster Extract,,4,Material,Monster,,
+Monster Fur,,5,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland, ⛰️ Mountain & Highland"
+Monster Horn,,2,Material,Monster,,
+Muddle Bud,,2,Material,Plant,,🌿 Grasslands & Plains
+Naydra's Claw,,10,Material,Special,,⛰️ Mountain & Highland
+Naydra's Scale,,10,Material,Special,,⛰️ Mountain & Highland
+Octo Balloon,,2,Material,Monster,,
+Octorok Eyeball,,2,Material,Monster,,
+Octorok Tentacle,,2,Material,Monster,,
+Opal,,4,Material,Ore,,⛰️ Mountain & Highland
+Ornamental Skull,,2,Material,Monster,,
+Palm Fruit,,2,Material,Fruit,,🌲 Forest & Woodland
+Papyrus,,5,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Poe Soul,,4,Material,Monster,,
+Pretty Plume,,4,Material,Natural,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Puffshroom,,3,Material,Mushroom,,🌲 Forest & Woodland
+Rainbow Coral,,10,Material,Ore,,"⛰️ Mountain & Highland, 🏖️ Coastal & Sea Edge"
+Raw Bird Drumstick,,2,Material,Meat,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Raw Bird Thigh,,2,Material,Meat,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Raw Gourmet Meat,,3,Material,Meat,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Raw Meat,,2,Material,Meat,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Raw Prime Meat,,2,Material,Meat,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Raw Whole Bird,,3,Material,Meat,,"🌿 Grasslands & Plains, 🌲 Forest & Woodland"
+Razorclaw Crab,,2,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Razorshroom,,2,Material,Mushroom,,🌲 Forest & Woodland
+Red Chuchu Jelly,,2,Material,Monster,,
+Red Lizalfos Tail,,3,Material,Monster,,
+Restless Cricket,,2,Material,Creature,,🌲 Forest & Woodland
+Rock Salt,,2,Material,Ore,,⛰️ Mountain & Highland
+Ruby,,6,Material,Ore,,⛰️ Mountain & Highland
+Rugged Horn,,4,Material,Monster,,
+Rugged Rhino Beetle,,2,Material,Creature,,🌲 Forest & Woodland
+Rushroom,,2,Material,Mushroom,,🌲 Forest & Woodland
+Sand Cicada,,2,Material,Creature,,🌲 Forest & Woodland
+Sandy Ribbon,,5,Material,Natural,,
+Sanke Carp,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Sapphire,,6,Material,Ore,,⛰️ Mountain & Highland
+Serpent Fangs,,4,Material,Monster,,
+Shard of Dinraal's Fang,,10,Material,Special,,
+Shard of Dinraal's Horn,,10,Material,Special,,
+Shard of Farosh's Fang,,10,Material,Special,,
+Shard of Farosh's Horn,,10,Material,Special,,
+Shard of Naydra's Fang,,10,Material,Special,,
+Shard of Naydra's Horn,,10,Material,Special,,
+Shock Fruit,,4,Material,Fruit,,🌲 Forest & Woodland
+Silent Princess,,2,Material,Plant,,🌿 Grasslands & Plains
+Silent Shroom,,2,Material,Mushroom,,🌲 Forest & Woodland
+Silk,,5,Material,Natural,,
+Silver Bar,,9,Material,Ore,,⛰️ Mountain & Highland
+Silver Dust,,2,Material,Ore,,⛰️ Mountain & Highland
+Silver Ore,,3,Material,Ore,,⛰️ Mountain & Highland
+Silver Thread,,4,Material,Natural,,
+Sizzlefin Trout,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Sky Stag Beetle,,2,Material,Creature,,🌲 Forest & Woodland
+Skyloft Mantis,,1,Material,Creature,,🌲 Forest & Woodland
+Skyshroom,,3,Material,Mushroom,,🌲 Forest & Woodland
+Smotherwing Butterfly,,2,Material,Creature,,🌲 Forest & Woodland
+Sneaky River Snail,,2,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Spicy Pepper,,2,Material,Fruit,,🌲 Forest & Woodland
+Spider Silk,,2,Material,Natural,,🌲 Forest & Woodland
+Spider's Eye,,5,Material,Monster,,
+Splash Fruit,,4,Material,Fruit,,🌲 Forest & Woodland
+Stal Skull,,6,Material,Monster,,
+Stambulb,,3,Material,Plant,,🌿 Grasslands & Plains
+Stamella Shroom,,2,Material,Mushroom,,🌲 Forest & Woodland
+Staminoka Bass,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Star Fragment,,7,Material,Natural,,⛰️ Mountain & Highland
+Starry Firefly,,2,Material,Creature,,🌲 Forest & Woodland
+Stealthfin Trout,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Sticky Frog,,4,Material,Creature,,"🌊 Water & Wetlands, ⛰️ Mountain & Highland"
+Sticky Lizard,,3,Material,Creature,,"🌲 Forest & Woodland, ⛰️ Mountain & Highland"
+Summerwing Butterfly,,2,Material,Creature,,"🌲 Forest & Woodland, 🌿 Grasslands & Plains"
+Sundelion,,3,Material,Plant,,🌿 Grasslands & Plains
+Sunset Firefly,,2,Material,Creature,,🌲 Forest & Woodland
+Sunshroom,,2,Material,Mushroom,,"🌲 Forest & Woodland, 🌋 Volcanic"
+Sweet Shroom,,4,Material,Mushroom,,🌲 Forest & Woodland
+Swift Carrot,,2,Material,Plant,,🌿 Grasslands & Plains
+Swift Violet,,2,Material,Plant,,🌿 Grasslands & Plains
+Tabantha Wheat,,2,Material,Plant,,🌿 Grasslands & Plains
+Thornberry,,2,Material,Fruit,,🌲 Forest & Woodland
+Thunderwing Butterfly,,2,Material,Creature,,🌲 Forest & Woodland
+Tireless Frog,,2,Material,Creature,,🌊 Water & Wetlands
+Topaz,,6,Material,Ore,,⛰️ Mountain & Highland
+Tree Branch,,3,"Weapon, Material",1h,Club,🌲 Forest & Woodland
+Vintage Linen,,9,Material,Natural,,🌿 Grasslands & Plains
+Volcanic Ladybug,,2,Material,Creature,,"🌲 Forest & Woodland, 🌋 Volcanic"
+Voltfin Trout,,3,Material,Fish,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Voltfruit,,2,Material,Fruit,,"🌲 Forest & Woodland, 🏜️ Desert & Arid"
+Warm Darner,,2,Material,Creature,,"🌲 Forest & Woodland, 🏜️ Desert & Arid"
+Roasted Acorn,,1,Recipe,Protein,,
+Amber Earrings,,3,Armor,Head,"Earrings
+",
+Ancient Battle Axe+,,9,Weapon,2h,Axe,
+Ancient Battle Axe++,,8,Weapon,2h,Axe,
+Ancient Cuirass,,3,Armor,Chest,Cuirass,
+Ancient Helm,,3,Armor,Head,Helm,
+Ancient Greaves,,3,Armor,Legs,Greaves,
+Roasted Bass,,2,Recipe,Seafood,,
+Roasted Carp,,2,Recipe,Seafood,,
+Carrot Cake,,5,Recipe,Sweets,,
+Carrot Stew,,5,Recipe,Vegetable,,
+Blackened Crab,,2,Recipe,Seafood,,
+Crab Omelet With Rice,,5,Recipe,"Seafood, Grain",,
+Crab Stir-fry,,5,Recipe,Seafood,,
+Salt-grilled Crab,,3,Recipe,Seafood,,
+Crab Risotto,,5,Recipe,Seafood,,
+Fish And Mushroom Skewer,,3,Recipe,"Seafood, Fungi",,
+Salt-grilled Fish,,3,Recipe,Seafood,,
+Fish Skewer,,2,Recipe,Seafood,,
+Copious Fish Skewers,,2,Recipe,Seafood,,
+Fruit And Mushroom Mix,,3,Recipe,"Fruit, Fungi",,
+Steamed Fruit,,4,Recipe,Fruit,,
+Fruit Pie,,5,Recipe,"Fruit, Sweets",,
+Simmered Fruit,,2,Recipe,Fruit,,
+Copious Simmered Fruit,,2,Recipe,Fruit,,
+Mighty Elixir,,7,Recipe,Potion,,
+Chilly Elixir,,7,Recipe,Potion,,
+Electro Elixir,,7,Recipe,Potion,,
+Energizing Elixir,,7,Recipe,Potion,,
+Fairy Tonic,,7,Recipe,Potion,,
+Fireproof Elixir,,7,Recipe,Potion,,
+Hearty Elixir,,7,Recipe,Potion,,
+Hasty Elixir,,7,Recipe,Potion,,
+Tough Elixir,,7,Recipe,Potion,,
+Sneaky Elixir,,7,Recipe,Potion,,
+Enduring Elixir,,7,Recipe,Potion,,
+Spicy Elixir,,7,Recipe,Potion,,
+Steamed Mushrooms,,6,Recipe,Fungi,,
+Cream Of Mushroom Soup,,6,Recipe,Fungi,,
+Mushroom Omelet,,5,Recipe,Fungi,,
+Glazed Mushrooms,,3,Recipe,Fungi,,
+Mushroom Risotto,,5,Recipe,Fungi,,
+Mushroom Rice Balls,,3,Recipe,"Fungi, Grain",,
+Salt-grilled Mushrooms,,3,Recipe,Fungi,,
+Mushroom Skewer,,2,Recipe,Fungi,,
+Fragrant Mushroom Sauté,,5,Recipe,Fungi,,
+Copious Mushroom Skewers,,2,Recipe,Fungi,,
+Nut Cake,,4,Recipe,"Protein, Sweets",,
+Sautéed Nuts,,1,Recipe,Protein,,
+Oil Jar,,2,Recipe,Vegetable,,
+Steamed Fish,,4,Recipe,Seafood,,
+Vegetable Omelet,,6,Recipe,Vegetable,,
+Glazed Veggies,,4,Recipe,Vegetable,,
+Cream Of Vegetable Soup,,5,Recipe,Vegetable,,
+Herb Saute,,6,Recipe,Vegetable,,
+Vegetable Curry,,7,Recipe,Vegetable,,
+Veggie Rice Balls,,4,Recipe,"Vegetable, Grain",,
+Salt-grilled Greens,,4,Recipe,Vegetable,,
+Fried Wild Greens,,3,Recipe,Vegetable,,
+Copious Fried Wild Greens,,3,Recipe,Vegetable,,
+Roasted Porgy,,2,Recipe,Seafood,,
+Porgy Meunière,,4,Recipe,Seafood,,
+Meat & Mushroom Skewer,,3,Recipe,"Protein, Fungi",,
+Meat-stuffed Pumpkins,,3,Recipe,Protein,,
+Meaty Rice Balls,,3,Recipe,"Protein, Grain",,
+Meat Pie,,5,Recipe,Protein,,
+Meat Skewer,,2,Recipe,Protein,,
+Copious Meat Skewers,,2,Recipe,Protein,,
+Creamy Seafood Soup,,6,Recipe,Seafood,,
+Glazed Seafood,,3,Recipe,Seafood,,
+Seafood Meunière,,4,Recipe,Seafood,,
+Cheesy Baked Fish,,4,Recipe,"Dairy, Seafood",,
+Seafood Rice Balls,,3,Recipe,"Seafood, Grain",,
+Seafood Curry,,6,Recipe,Seafood,,
+Seafood Fried Rice,,4,Recipe,"Seafood, Grain",,
+Seafood Skewer,,2,Recipe,Seafood,,
+Clam Chowder,,5,Recipe,Seafood,,
+Roasted Trout,,2,Recipe,Seafood,,
+Baked Apple,,2,Recipe,Fruit,,
+Honeyed Apple,,3,Recipe,Fruit,,
+Hot Buttered Apple,,3,Recipe,Fruit,,
+Apple Pie,,5,Recipe,"Fruit, Sweets",,
+Fruit Cake,,5,Recipe,"Fruit, Sweets",,
+Roasted Armoranth,,2,Recipe,Vegetable,,
+Mystic Headpiece,,9,Armor,Top,Headpiece,
+Mystic Trousers,,8,Armor,Legs,Trousers,
+Mystic Robe,,8,Armor,Chest,Robe,
+Hard-boiled Egg,,2,Recipe,Protein,,
+Omelet,,2,Recipe,Protein,,
+Egg Pudding,,4,Recipe,"Protein, Sweets",,
+Egg Tart,,5,Recipe,"Protein, Sweets",,
+Snowquill Tunic,,3,Armor,Chest,"Tunic
+",
+Snowquill Headdress,,3,Armor,Head,Headdress,
+Snowquill Trousers,,3,Armor,Legs,Trousers,
+Bokoblin Mask,,1,Armor,Head,Mask,
+Miner's Top,,8,Armor,Chest,Top,
+Miner's Mask,,8,Armor,Head,Mask,
+Miner's Trousers,,7,Armor,Legs,Trousers,
+Roasted Tree Nut,,1,Recipe,Protein,,
+Toasty Chillshroom,,2,Recipe,Fungi,,
+Desert Voe Spaulder,,1,Armor,Chest,Spaulder,
+Desert Voe Trousers,,1,Armor,Legs,Trousers,
+Desert Voe Headband,,1,Armor,Head,Headband,
+Gerudo Sirwal,,3,Armor,Legs,Sirwal,
+Gerudo Top,,3,Armor,Chest,"Top
+",
+Gerudo Veil,,3,Armor,Head,Veil,
+Warm Safflina,,2,Material,Plant,,"🌿 Grasslands & Plains, 🏜️ Desert & Arid"
+Island Lobster Shirt,,3,Armor,Chest,"Shirt
+",
+Sand Boots,,3,Armor,Legs,Boots,
+White Chuchu Jelly,,2,Material,Monster,,
+Stealth Tights,,2,Armor,Legs,Tights,
+Salvager Headwear,,8,Armor,Head,Helm,
+Salvager Vest,,8,Armor,Chest,Top,
+Salvager Trousers,,8,Armor,Legs,Trousers,
+Climbing Gear,,2,Armor,Chest,Gear,
+Climber's Bandanna,,2,Armor,Head,Bandanna,
+Climbing Boots,,2,Armor,Legs,Boots,
+Wild berry,,2,Material,Fruit,,❄️ Snow & Ice Biomes
+Stealth Chest Guard,,2,Armor,Chest,Guard,
+Stealth Mask,,2,Armor,Head,Mask,
+Honey Candy,,2,Recipe,Sweets,,
+Honeyed Fruits,,3,Recipe,Fruit,,
+Snow Boots,,6,Armor,Legs,Boots,
+Diamond Circlet,,4,Armor,Head,Circlet,
+Ember Trousers,,9,Armor,Legs,Trousers,
+Ember Shirt,,9,Armor,Chest,Shirt,
+Sword,,5,Weapon,1h,Sword,
+Knight's Broadsword,,5,Weapon,1h,Sword,
+Soldier's Broadsword,,5,Weapon,1h,Sword,
+Soldier's Claymore,,5,Weapon,2h,Sword,
+Zora Armor,,4,Armor,Chest,"Armor
+",
+Zora Helm,,4,Armor,Head,Helm,
+Zora Greaves,,4,Armor,Legs,Greaves,
+Zora Sword,,5,Weapon,1h,Sword,
+Silverscale Spear,,4,Weapon,2h,Spear,
+Opal Earrings,,3,Armor,Head,"Earrings
+",
+Ruby Circlet,,6,Armor,Head,Circlet,
+Silver Bow,,4,Weapon,2h,Bow,
+Soldier's Spear,,4,Weapon,2h,Spear,
+Feathered Spear,,3,Weapon,2h,Spear,
+Feathered Edge,,3,Weapon,1h,Sword,
+Giant Boomerang,,4,Weapon,2h,Boomerang,
+Serpentine Spear,,3,Weapon,2h,Spear,
+Zora Spear,,3,Weapon,2h,Spear,
+Soldier's Armor,,3,Armor,Chest,"Armor
+",
+Edge of Duality,,2,Weapon,2h,Sword,
+Radiant Shield,,3,Weapon,1h,Shield,
+Double Axe,,3,Weapon,2h,Axe,
+Winterwing Butterfly,,2,Material,Creature,,"🌲 Forest & Woodland, ❄️ Snow & Ice Biomes"
+Knight's Shield,,3,Weapon,1h,Shield,
+Knight's Halberd,,3,Weapon,2h,Spear,
+Silver Longsword,,3,Weapon,2h,Sword,
+Soldier's Greaves,,3,Armor,Legs,Greaves,
+Silver Shield,,3,Weapon,1h,Shield,
+Roasted Endura Carrot,,2,Recipe,Vegetable,,
+Toasty Endura Shroom,,2,Recipe,Fungi,,
+Charged Trousers,,9,Armor,Legs,Trousers,
+Charged Shirt,,9,Armor,Chest,Shirt,
+Meteor Rod,,7,Weapon,1h,Rod,
+Great Flameblade,,6,Weapon,2h,Sword,
+Roasted Lotus Seeds,,2,Recipe,Vegetable,,
+Tunic of the Wild,,2,Armor,Chest,"Tunic
+",
+Trousers of the Wild,,2,Armor,Legs,Trousers,
+Baked Fortified Pumpkin,,2,Recipe,Vegetable,,
+Pumpkin Pie,,5,Recipe,Vegetable,,
+Pumpkin Stew,,5,Recipe,Vegetable,,
+Vegetable Risotto,,5,Recipe,Vegetable,,
+Warm Milk,,2,Recipe,Dairy,,
+Honey Crepe,,6,Recipe,Sweets,,
+Veggie Cream Soup,,5,Recipe,Vegetable,,
+Wood,,2,Material,Natural,,🌲 Forest & Woodland
+Great Frostblade,,6,Weapon,2h,Sword,
+Gerudo Scimitar,,9,Weapon,1h,Sword,
+Gerudo Shield,,10,Weapon,1h,Shield,
+Gerudo Spear,,9,Weapon,2h,Spear,
+Gerudo Claymore,,9,Weapon,2h,Sword,
+Gerudo Bow,,10,Weapon,Bow,Bow,
+Woodland Rhino Beetle,,2,Material,Creature,,🌲 Forest & Woodland
+Drillshaft,,5,Weapon,2h,Spear,
+Cobble Crusher,,4,Weapon,2h,Sword,
+Stone Smasher,,4,Weapon,2h,Sword,
+Flamebreaker Armor,,2,Armor,Chest,"Armor
+",
+Flamebreaker Boots,,2,Armor,Legs,Boots,
+Flamebreaker Helm,,2,Armor,Head,Helm,
+Guardian Shield+,,9,Weapon,1h,Shield,
+Guardian Shield++,,8,Weapon,1h,Shield,
+Guardian Spear+,,9,Weapon,2h,Spear,
+Guardian Spear++,,8,Weapon,2h,Spear,
+Guardian Sword+,,9,Weapon,1h,Sword,
+Guardian Sword++,,9,Weapon,1h,Sword,
+Cheesy Meat Bowl,,6,Recipe,"Dairy, Protein",,
+Roasted Hearty Bass,,3,Recipe,Seafood,,
+Blueshell Escargot,,2,Recipe,Seafood,,
+Roasted Hearty Durian,,2,Recipe,Fruit,,
+Roasted Radish,,2,Recipe,Vegetable,,
+Creamy Meat Soup,,5,Recipe,Protein,,
+Creamy Heart Soup,,5,Recipe,Vegetable,,
+Roasted Hearty Salmon,,3,Recipe,Seafood,,
+Salmon Meunière,,5,Recipe,Seafood,,
+Salmon Risotto,,6,Recipe,Seafood,,
+Toasted Hearty Truffle,,2,Recipe,Fungi,,
+Roasted Hydromelon,,2,Recipe,Fruit,,
+Fried Egg And Rice,,3,Recipe,"Protein, Grain",,
+Curry Pilaf,,6,Recipe,Grain,,
+Seafood Paella,,6,Recipe,Seafood,,
+Curry Rice,,5,Recipe,Grain,,
+Toasty Hylian Shroom,,1,Recipe,Fungi,,
+Tabantha Bake,,3,Recipe,"Fungi, Grain",,
+Tomato Mushroom Stew,,4,Recipe,Vegetable,,
+Tomato Seafood Soup,,4,Recipe,"Vegetable, Seafood",,
+Tomato Stew,,5,Recipe,Vegetable,,
+Cheesy Tomato,,5,Recipe,"Dairy, Vegetable",,
+Hylian Tomato Pizza,,6,Recipe,"Vegetable, Grain",,
+Simmered Tomato,,3,Recipe,Vegetable,,
+Fragrant Seafood Stew,,6,Recipe,Seafood,,
+Steamed Meat,,2,Recipe,Protein,,
+Mabe Soufflé,,4,Recipe,"Vegetable, Protein",,
+Cap of the Wild,,1,Armor,Head,Cap,
+Blizzard Rod,,7,Weapon,1h,Rod,
+Eightfold Blade,,9,Weapon,1h,Sword,
+Knight's Claymore,,8,Weapon,2h,Sword,
+Eightfold Longblade,,8,Weapon,2h,Sword,
+Royal Broadsword,,10,Weapon,1h,Sword,
+Moonlight Scimitar,,9,Weapon,1h,Sword,
+Royal Claymore,,10,Weapon,2h,Sword,
+Royal Halberd,,8,Weapon,2h,Spear,
+Flamespear,,8,Weapon,2h,Spear,
+Flameblade,,8,Weapon,1h,Sword,
+Frostspear,,8,Weapon,2h,Spear,
+Frostblade,,8,Weapon,1h,Sword,
+Thunderblade,,8,Weapon,1h,Sword,
+Thunderspear,,8,Weapon,2h,Spear,
+Toasty Ironshroom,,2,Recipe,Fungi,,
+Rusty Halberd,,3,Weapon,2h,Spear,
+Royal Shield,,5,Weapon,1h,Shield,
+Rusty Shield,,3,Weapon,1h,Shield,
+Rubber Armor,,3,Armor,Chest,"Armor
+",
+Rubber Helm,,3,Armor,Head,Helm,
+Rubber Tights,,3,Armor,Legs,Tights,
+Royal Guard Cap,,3,Armor,Head,Cap,
+Royal Guard Uniform,,4,Armor,Chest,"Uniform
+",
+Royal Guard Boots,,3,Armor,Legs,Boots,
+Champion's Tunic,,2,Armor,Chest,Armor,
+Thunderstorm Rod,,7,Weapon,1h,Rod,
+Lizalfos Mask,,2,Armor,Head,Mask,
+Radiant Tights,,2,Armor,Legs,Tights,
+Radiant Mask,,2,Armor,Head,Mask,
+Radiant Shirt,,2,Armor,Chest,"Shirt
+",
+Lynel Mask,,2,Armor,Head,Mask,
+Roasted Mighty Bananas,,2,Recipe,Fruit,,
+Fried Bananas,,4,Recipe,Fruit,,
+Roasted Mighty Thistle,,2,Recipe,Vegetable,,
+Moblin Mask,,2,Armor,Head,Mask,
+Tingle's Hood,,5,Armor,Head,Hood,
+Tingle's Shirt,,5,Armor,Chest,Shirt,
+Tingle's Tights,,5,Armor,Legs,Tights,
+Monster Stew,,6,Recipe,"Monster, Protein, Seafood",,
+Monster Cake,,7,Recipe,"Monster, Sweets",,
+Monster Soup,,7,Recipe,Monster,,
+Monster Curry,,8,Recipe,Monster,,
+Monster Rice Balls,,6,Recipe,"Monster, Grain",,
+Barbarian Leg Wraps,,3,Armor,Legs,Leg Wraps,
+Barbarian Armor,,4,Armor,Chest,"Armor
+",
+Barbarian Helm,,4,Armor,Head,Helm,
+Frostbite Trousers,,9,Armor,Legs,Trousers,
+Frostbite Shirt,,9,Armor,Chest,Shirt,
+Deep-Fried Drumstick,,3,Recipe,Protein,,
+Deep-Fried Thigh,,3,Recipe,Protein,,
+Deep-Fried Bird Roast,,4,Recipe,Protein,,
+Baked Palm Fruit,,2,Recipe,Fruit,,
+Noble Pursuit,,5,Recipe,"Fruit, Sweets",,
+Archaic Legwear,,6,Armor,Legs,Legwear,
+Archaic Tunic,,7,Armor,Chest,"Tunic
+",
+Archaic Warm Greaves,,5,Armor,Legs,Greaves,
+Roasted Bird Drumstick,,2,Recipe,Protein,,
+Poultry Pilaf,,5,Recipe,Protein,,
+Poultry Curry,,4,Recipe,Protein,,
+Roasted Bird Thigh,,2,Recipe,Protein,,
+Prime Poultry Pilaf,,5,Recipe,Protein,,
+Prime Poultry Curry,,6,Recipe,Protein,,
+Seared Gourmet Steak,,3,Recipe,Protein,,
+Gourmet Meat And Seafood Fry,,4,Recipe,"Protein, Seafood",,
+Gourmet Meat Stew,,6,Recipe,Protein,,
+Gourmet Spiced Meat Skewer,,6,Recipe,Protein,,
+Gourmet Meat Curry,,7,Recipe,Protein,,
+Gourmet Meat And Rice Bowl,,5,Recipe,"Protein, Grain",,
+Salt-grilled Gourmet Meat,,4,Recipe,Seafood,,
+Seared Steak,,2,Recipe,Protein,,
+Meat And Seafood Fry,,3,Recipe,"Protein, Seafood",,
+Glazed Meat,,3,Recipe,Protein,,
+Meat Stew,,5,Recipe,Protein,,
+Spiced Meat Skewer,,5,Recipe,Protein,,
+Meat Curry,,6,Recipe,Protein,,
+Meat And Rice Bowl,,4,Recipe,"Protein, Grain",,
+Salt-grilled Meat,,3,Recipe,Protein,,
+Seared Prime Steak,,2,Recipe,Protein,,
+Prime Meat And Seafood Fry,,3,Recipe,"Protein, Seafood",,
+Prime Meat Stew,,5,Recipe,Protein,,
+Prime Spiced Meat Skewer,,5,Recipe,Protein,,
+Prime Meat Curry,,6,Recipe,Protein,,
+Prime Meat And Rice Bowl,,4,Recipe,"Protein, Grain",,
+Salt-grilled Prime Meat,,3,Recipe,Protein,,
+Roasted Whole Bird,,3,Recipe,Protein,,
+Gourmet Poultry Pilaf,,6,Recipe,Protein,,
+Gourmet Poultry Curry,,7,Recipe,Protein,,
+Toasty Razorshroom,,2,Recipe,Fungi,,
+Rock-hard Food,,3,Recipe,Protein ,,
+Royal Guard's Bow,,10,Weapon,2h,Bow,
+Royal Guard's Sword,,9,Weapon,1h,Sword,
+Royal Guard's Claymore,,9,Weapon,2h,Sword,
+Royal Guard's Spear,,6,Weapon,2h,Spear,
+Royal Guard's Shield,,3,Weapon,1h,Shield,
+Toasty Rushroom,,2,Recipe,Fungi,,
+Ember Headdress,,9,Armor,Head,Headdress,
+Charged Headdress,,9,Armor,Head,Headdress,
+Frostbite Headdress,,9,Armor,Head,Headdress,
+Toasty Silent Shroom,,2,Recipe,Fungi,,
+Wool,,6,Material,Natural,,🌿 Grasslands & Plains
+Soldier's Helm,,7,Armor,Head,Helm,
+Sapphire Circlet,,3,Armor,Head,Circlet,
+Yellow Chuchu Jelly,,2,Material,Monster,,
+Toasty Skyshroom,,3,Recipe,Fungi,,
+Sneaky River Escargot,,2,Recipe,Seafood,,
+Charred Pepper,,2,Recipe,Vegetable,,
+Pepper Steak,,5,Recipe,Protein,,
+Pepper Seafood,,3,Recipe,Seafood,,
+Yellow Lizalfos Tail,,3,Material,Monster,,
+Spicy Sautéed Peppers,,2,Recipe,Vegetable,,
+Zapshroom,,2,Material,Mushroom,,"🌲 Forest & Woodland, 🏜️ Desert & Arid"
+Zora Scale,,4,Material,Natural,,"🌊 Water & Wetlands, 🏖️ Coastal & Sea Edge"
+Cooked Stambulb,,3,Recipe,Vegetable,,
+Buttered Stambulb,,4,Recipe,Vegetable,,
+Toasty Stamella Shroom,,2,Recipe,Fungi,,
+Froggy Hood,,4,Armor,Head,Hood,
+Froggy Leggings,,4,Armor,Legs,Tights,
+Froggy Sleeve,,4,Armor,Chest,Shirt,
+Toasty Sunshroom,,2,Recipe,Fungi,,
+Roasted Swift Carrot,,2,Recipe,Vegetable,,
+Plain Crepe,,6,Recipe,Sweets,,
+Fish Pie,,5,Recipe,"Seafood, Grain",,
+Melty Cheesy Bread,,4,Recipe,"Dairy, Vegetable",,
+Wheat Bread,,3,Recipe,Grain,,
+Great Thunderblade,,6,Weapon,2h,Sword,
+Akkala Buns,,3,Recipe,Grain,,
+Topaz Earrings,,5,Armor,Head,"Earrings
+",
+Rusty Claymore,,2,Weapon,2h,Sword,
+Rusty Broadsword,,2,Weapon,1h,Sword,
+Roasted Voltfruit,,2,Recipe,Fruit,,
+Roasted Wildberry,,2,Recipe,Fruit,,
+Wildberry Crepe,,6,Recipe,"Fruit, Sweets",,
+Soup Ladle,,1,Weapon,1h,Club,
+Pot Lid,,1,Weapon,1h,Shield,
+Wooden Shield,,1,Weapon,1h,Shield,
+Wooden Bow,,1,Weapon,2h,Bow,
+Korok Mask,,2,Armor,Head,Mask,
+Campfire Egg,,3,Recipe,Protein,,
+Knight's Bow,,2,Weapon,2h,Bow,
+Boomerang,,2,Weapon,1h,Boomerang,
+Torch,,2,Weapon,1h,Club,
+Bomb Arrow,,1,Weapon,1h,Arrow,
+Traveler's Bow,,2,Weapon,2h,Bow,
+Iron Sledgehammer,,3,Weapon,2h,Hammer,
+Farming Hoe,,3,Weapon,2h,Polearm,
+Farmer's Pitchfork,,3,Weapon,2h,Spear,
+Fishing Harpoon,,3,Weapon,2h,Spear,
+Throwing Spear,,3,Weapon,2h,Spear,
+Traveler's Spear,,3,Weapon,2h,Spear,
+Soldier's Bow,,3,Weapon,2h,Bow,
+Traveler's Sword,,2,Weapon,1h,Sword,
+Woodcutter's Axe,,2,Weapon,2h,Axe,
+Traveler's Claymore,,2,Weapon,2h,Sword,
+Emblazoned Shield,,2,Weapon,1h,Shield,
+Wooden Mop,,2,Weapon,2h,Spear,
+Fire Arrow,,3,Weapon,1h,Arrow,
+Ice Arrow,,3,Weapon,1h,Arrow,
+Hunter's Shield,,2,Weapon,1h,Shield,
+Shock Arrow,,3,Weapon,1h,Arrow,
+Boat Oar,,1,Weapon,2h,Polearm,
+Kite Shield,,1,Weapon,1h,Shield,
+Sea-Breeze Boomerang,,2,Weapon,1h,Boomerang,
+Soldier's Shield,,2,Weapon,1h,Shield,
+Shield of the Mind's Eye,,2,Weapon,1h,Shield,
+Royal Bow,,1,Weapon,2h,Bow,
+Fisherman's Shield,,2,Weapon,1h,Shield,
+Traveler's Shield,,2,Weapon,1h,Shield,
+Swallow Bow,,1,Weapon,2h,Bow,
+Forest Dweller's Bow,,2,Weapon,2h,Bow,
+Falcon Bow,,2,Weapon,2h,Bow,
+Phrenic Bow,,2,Weapon,2h,Bow,
+Forest Dweller's Sword,,4,Weapon,1h,Sword,
+Forest Dweller's Shield,,5,Weapon,1h,Shield,
+Forest Dweller's Spear,,5,Weapon,2h,Spear,
+Warm Doublet,,7,Armor,Chest,"Doublet
+",
+Hylian Tunic,,5,Armor,Chest,"Tunic
+",
+Hylian Trousers,,4,Armor,Legs,Trousers,
+Hylian Hood,,4,Armor,Head,Hood,
+Toasty Zapshroom,,2,Recipe,Fungi,,

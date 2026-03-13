@@ -199,6 +199,76 @@ function createWeightedItemList(items, fv, job, villageLevel = 1) {
   return weightedList;
 }
 
+// ------------------- Quadrant-weighted exploration (terrain + item type boost) -------------------
+// Multipliers for weight when item matches quadrant terrain or quadrant item type (Ore, Fish, etc.).
+// Only likelihood changes; pool stays region-filtered.
+const QUADRANT_TERRAIN_BOOST = 2;
+const QUADRANT_ITEM_TYPE_BOOST = 2;
+const QUADRANT_MONSTER_LISTED_WEIGHT = 3;
+
+/**
+ * Creates a weighted list of items for exploration roll based on rarity, quadrant terrain, and quadrant item types.
+ * Items matching the quadrant's terrain or item-type labels (Ore, Fish, Mushroom, Plant, etc.) get higher weight.
+ * @param {Object[]} items - Region-filtered item docs
+ * @param {number} fv - Final value (e.g. 50) for rarity weights
+ * @param {{ terrain?: string[], items?: string[] }} quadrantMeta - From getQuadrantMeta (terrain and items arrays)
+ * @returns {Object[]} Flat array of item refs (duplicates for weighted draw); empty if no valid items
+ */
+function createQuadrantWeightedExplorationItemList(items, fv, quadrantMeta) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const terrain = Array.isArray(quadrantMeta?.terrain) ? quadrantMeta.terrain.map((t) => String(t).trim()).filter(Boolean) : [];
+  const quadrantItemLabels = Array.isArray(quadrantMeta?.items) ? quadrantMeta.items.map((x) => String(x).trim().toLowerCase()).filter(Boolean) : [];
+
+  const adjustedWeights = adjustRarityWeights(fv);
+  const validItems = items.filter((item) => {
+    if (!item || item.itemRarity == null) return false;
+    const w = adjustedWeights[String(item.itemRarity)];
+    return typeof w === 'number' && w > 0;
+  });
+  if (validItems.length === 0) return [];
+
+  const result = [];
+  for (const item of validItems) {
+    const baseWeight = Math.max(1, Math.floor(adjustedWeights[String(item.itemRarity)] || 1));
+
+    const itemTerrain = Array.isArray(item.terrain) ? item.terrain.map((t) => String(t).trim()).filter(Boolean) : [];
+    const terrainMatch = terrain.length > 0 && itemTerrain.length > 0 &&
+      terrain.some((quadT) => itemTerrain.some((itemT) => itemT === quadT));
+    const terrainMult = terrainMatch ? QUADRANT_TERRAIN_BOOST : 1;
+
+    const typeStrs = []
+      .concat(item.type || [], item.subtype || [], item.category || [])
+      .map((s) => String(s).trim().toLowerCase())
+      .filter(Boolean);
+    const typeMatch = quadrantItemLabels.length > 0 && typeStrs.length > 0 &&
+      quadrantItemLabels.some((qi) => typeStrs.some((ts) => ts === qi || ts.includes(qi) || qi.includes(ts)));
+    const typeMult = typeMatch ? QUADRANT_ITEM_TYPE_BOOST : 1;
+
+    const finalWeight = Math.max(1, Math.floor(baseWeight * terrainMult * typeMult));
+    for (let i = 0; i < finalWeight; i++) result.push(item);
+  }
+  return result;
+}
+
+/**
+ * Returns a monster list with quadrant-listed monsters repeated QUADRANT_MONSTER_LISTED_WEIGHT times, others once.
+ * @param {Object[]} monsters - Full region monster list
+ * @param {Set<string>} quadrantMonsterNames - Lowercase monster names from quadrant monsters + bossMonsters
+ * @returns {Object[]} List suitable for getExplorationMonsterFromList
+ */
+function applyQuadrantMonsterBias(monsters, quadrantMonsterNames) {
+  if (!Array.isArray(monsters) || monsters.length === 0) return [];
+  if (!quadrantMonsterNames || quadrantMonsterNames.size === 0) return monsters;
+  const list = [];
+  for (const m of monsters) {
+    const name = String(m?.name ?? '').trim().toLowerCase();
+    const inQuadrant = name && quadrantMonsterNames.has(name);
+    const count = inQuadrant ? QUADRANT_MONSTER_LISTED_WEIGHT : 1;
+    for (let i = 0; i < count; i++) list.push(m);
+  }
+  return list;
+}
+
 // ============================================================================
 // Final Value Calculation (Gear Overview: Regular vs Raid combat)
 // ============================================================================
@@ -649,6 +719,8 @@ async function attemptFlee(character, monster, options = {}) {
 // ------------------- Exporting all functions -------------------
 module.exports = {
   createWeightedItemList,
+  createQuadrantWeightedExplorationItemList,
+  applyQuadrantMonsterBias,
   getMonsterEncounterFromList,
   getExplorationMonsterFromList,
   getMonstersByCriteria,
