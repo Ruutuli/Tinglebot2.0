@@ -1617,9 +1617,13 @@ function getRuuGameStatusColor(status) {
 
 // ------------------- Function: awardRuuGamePrize -------------------
 // Shared function to award prizes to RuuGame winners
+// Only considers submitted characters (pending, accepted, needs_changes); excludes draft/WIP.
 async function awardRuuGamePrize(session, userId, interaction) {
   try {
-    const characters = await Character.find({ userId: userId });
+    const characters = await Character.find({
+      userId,
+      status: { $in: ['pending', 'accepted', 'needs_changes'] }
+    });
     if (characters.length > 0) {
       const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
       const prize = PRIZES[session.prizeType];
@@ -1658,9 +1662,13 @@ async function awardRuuGamePrize(session, userId, interaction) {
 
 // ------------------- Function: awardRuuGamePityPrize -------------------
 // Awards Mock Fairy pity prize to players who roll a 1
+// Only considers submitted characters (pending, accepted, needs_changes); excludes draft/WIP.
 async function awardRuuGamePityPrize(session, userId, interaction) {
   try {
-    const characters = await Character.find({ userId: userId });
+    const characters = await Character.find({
+      userId,
+      status: { $in: ['pending', 'accepted', 'needs_changes'] }
+    });
     if (characters.length > 0) {
       const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
 

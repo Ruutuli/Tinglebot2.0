@@ -236,7 +236,7 @@ export async function handleResubmission(
 
     // Post notification message as embed
     const version = character.applicationVersion ?? 1;
-    const approvalUrl = process.env.APPROVA_LS_URL || "https://approva.ls";
+    const approvalUrl = `${getAppUrl()}/characters/moderation`;
 
     const updateEmbed = {
       title: `🔄 Character Application Update`,
@@ -250,7 +250,7 @@ export async function handleResubmission(
         },
         {
           name: "🔗 Review",
-          value: `[View on approva.ls](${approvalUrl})`,
+          value: `[Review in Approvals](${approvalUrl})`,
           inline: true,
         },
       ],
