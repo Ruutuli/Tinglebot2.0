@@ -542,7 +542,8 @@ class MapLayers {
             inaccessible: '#1a1a1a',
             unexplored: '#b91c1c',
             explored: '#ca8a04',
-            secured: '#15803d'
+            secured: '#15803d',
+            secured_nocamp: '#38bdf8' // bright blue for secured, no-camp paths/villages
         };
     }
 

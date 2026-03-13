@@ -720,9 +720,13 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  if ((party?.totalStamina ?? 0) === 0) {
   const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
   if (heartCost > 0) {
+   const canCampHere = hideCampCommand !== true;
+   const recoverLine = canCampHere
+    ? "Use **Camp** or **Item** to recover."
+    : "You can't camp in this quadrant — use **Item** to recover, or **Move** to a quadrant where camping is allowed.";
    fields.push({
     name: "⚠️ **__STRUGGLE MODE__**",
-    value: `**0 stamina!** Each **next** Roll, Move, or Camp in this ${party?.quadrantState ?? "unexplored"} quadrant costs **${heartCost}❤️** (until you recover stamina).\nUse **Camp** or **Item** to recover.`,
+    value: `**0 stamina!** Each **next** Roll, Move, or Camp in this ${party?.quadrantState ?? "unexplored"} quadrant costs **${heartCost}❤️** (until you recover stamina).\n${recoverLine}`,
     inline: false,
    });
   }
@@ -743,8 +747,11 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   embed.setFooter({ text: "Finish the wave or use /explore item to heal, then continue." });
  } else if ((party?.totalStamina ?? 0) === 0) {
   const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
+  const canCampHere = hideCampCommand !== true;
   const footerText = heartCost > 0
-   ? `⚠️ 0 stamina — Next actions cost ${heartCost}❤️ here. Use Camp or Item to recover.`
+   ? (canCampHere
+     ? `⚠️ 0 stamina — Next actions cost ${heartCost}❤️ here. Use Camp or Item to recover.`
+     : `⚠️ 0 stamina — Next actions cost ${heartCost}❤️ here. You can't camp in this quadrant; use Item to recover or Move to a campable quadrant.`)
    : "⚠️ 0 stamina — Secured quadrant: actions are free.";
   embed.setFooter({ text: footerText });
  }

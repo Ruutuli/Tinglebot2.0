@@ -63,7 +63,7 @@ function getVillageCircleLayersForSquare(squareId: string): string[] {
 }
 
 /** Quadrant status from DB; used to skip hidden/fog for explored/secured quads */
-type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured";
+type QuadrantStatus = "inaccessible" | "unexplored" | "explored" | "secured" | "secured_nocamp";
 
 /**
  * Build ordered layer list for a square.
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
         image?: string;
         pathImageUrl?: string | null;
         mapCoordinates?: { center?: { lat: number; lng: number }; bounds?: { north: number; south: number; east: number; west: number } };
-        quadrants?: Array<{ quadrantId: string; status?: string; ruinRestStamina?: number | null }>;
+        quadrants?: Array<{ quadrantId: string; status?: string; ruinRestStamina?: number | null; noCamp?: boolean }>;
       } | null;
       if (doc) {
         dbImage = doc.image ?? null;
@@ -171,7 +171,9 @@ export async function GET(request: NextRequest) {
             const id = String(q.quadrantId || "").trim().toUpperCase();
             if (id && (id === "Q1" || id === "Q2" || id === "Q3" || id === "Q4")) {
               const raw = typeof q.status === "string" ? String(q.status).trim().toLowerCase() : "";
-              quadrantStatuses[id] = (["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored") as QuadrantStatus;
+              const baseStatus = (["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored") as QuadrantStatus;
+              const isNoCampSecured = baseStatus === "secured" && q.noCamp === true;
+              quadrantStatuses[id] = (isNoCampSecured ? "secured_nocamp" : baseStatus) as QuadrantStatus;
               const rest = q.ruinRestStamina;
               quadrantRuinRest[id] = typeof rest === "number" && rest > 0 ? rest : null;
             }

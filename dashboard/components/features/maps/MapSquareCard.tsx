@@ -4,7 +4,7 @@
 // MapSquareCard - Detailed view of one map square and its quadrants
 // ============================================================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export type QuadrantDoc = {
   quadrantId?: string;
@@ -37,6 +37,19 @@ export type MapSquare = {
   mapCoordinates?: unknown;
   createdAt?: string | Date;
   updatedAt?: string | Date;
+};
+
+type SquarePreviewLayer = { name: string; url: string };
+type SquarePreview = {
+  layers: SquarePreviewLayer[];
+  quadrantStatuses?: Record<string, string>;
+};
+
+const FOG_QUADRANT_LAYOUT: Record<number, { left: string; top: string; width: string; height: string; bgPos: string }> = {
+  1: { left: "0%", top: "0%", width: "50%", height: "50%", bgPos: "0% 0%" },
+  2: { left: "50%", top: "0%", width: "50%", height: "50%", bgPos: "100% 0%" },
+  3: { left: "0%", top: "50%", width: "50%", height: "50%", bgPos: "0% 100%" },
+  4: { left: "50%", top: "50%", width: "50%", height: "50%", bgPos: "100% 100%" },
 };
 
 function formatDate(v: string | Date | null | undefined): string {
@@ -161,6 +174,7 @@ function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggl
   const status = (q.status ?? "unexplored").toLowerCase();
   const isInaccessible = status === "inaccessible";
   const discoveryCount = Array.isArray(q.discoveries) ? q.discoveries.length : 0;
+  const showBlight = q.blighted && status !== "unexplored";
   const statusClass =
     status === "secured"
       ? "quad-tag-secured"
@@ -178,7 +192,9 @@ function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggl
         : status === "inaccessible"
           ? "quad-glow-inaccessible"
           : "quad-glow-unexplored";
-  const wrapperClass = `map-square-quadrant rounded-xl overflow-hidden shadow-inner ${glowClass}${q.blighted ? " quad-glow-blighted" : ""}`;
+  const wrapperClass = `map-square-quadrant rounded-xl overflow-hidden shadow-inner ${glowClass}${
+    showBlight ? " quad-glow-blighted" : ""
+  }`;
 
   if (isInaccessible) {
     return (
@@ -205,7 +221,7 @@ function QuadrantBlock({ q, defaultOpen = false, isOpen: controlledOpen, onToggl
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${statusClass}`}>
             {status}
           </span>
-          {q.blighted && (
+          {showBlight && (
             <img src="/blight_eye.png" alt="Blighted" className="h-4 w-4 object-contain" title="Blighted" />
           )}
           {discoveryCount > 0 && (
@@ -314,6 +330,7 @@ export function MapSquareCard({ square }: { square: MapSquare }) {
     (q) => (q.status ?? "").toLowerCase() !== "inaccessible"
   );
   const [openQuadrantIndex, setOpenQuadrantIndex] = useState<number | null>(null);
+  const [squarePreview, setSquarePreview] = useState<SquarePreview | null>(null);
   const imageUrl = square.pathImageUrl || square.image;
   const status = (square.status ?? "explorable").toLowerCase();
   const explorableQuadrants = quadrants.filter(
@@ -324,27 +341,110 @@ export function MapSquareCard({ square }: { square: MapSquare }) {
     (q) => (q.status ?? "").toLowerCase() === "explored" || (q.status ?? "").toLowerCase() === "secured"
   ).length;
 
+  useEffect(() => {
+    // Load square preview (includes fog layer and quadrant statuses) so the thumbnail matches the main map/explore pages
+    let cancelled = false;
+    const base =
+      (typeof window !== "undefined" && (window as any).__NEXT_DATA__ && (window as any).__NEXT_DATA__.basePath) || "";
+    const apiBase = typeof base === "string" ? base.replace(/\/$/, "") : "";
+    const url = `${apiBase}/api/explore/square-preview?square=${encodeURIComponent(square.squareId)}`;
+    fetch(url, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.layers)) {
+          setSquarePreview({
+            layers: data.layers as SquarePreviewLayer[],
+            quadrantStatuses: data.quadrantStatuses as Record<string, string> | undefined,
+          });
+        }
+      })
+      .catch(() => {
+        // ignore preview failures; fallback to plain image
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [square.squareId]);
+
   return (
     <article className="map-square-card rounded-xl border-2 border-[var(--totk-light-ocher)] bg-[var(--glass-bg)] shadow-lg overflow-hidden flex flex-col min-h-0 transition-shadow duration-200 hover:shadow-xl hover:border-[var(--totk-light-ocher)]/90 w-full">
       {/* Header */}
       <header className="flex items-start gap-3 p-4 border-b-2 border-[var(--totk-dark-ocher)]/30 bg-gradient-to-br from-[var(--totk-dark-ocher)]/10 to-transparent">
         {imageUrl && (
-          <a
-            href={imageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border-2 border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)] shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--totk-light-green)] focus:ring-offset-2 focus:ring-offset-[var(--botw-warm-black)] hover:border-[var(--totk-light-ocher)]/80 transition-colors block"
-            aria-label="Open map image in new tab"
+          <div
+            className="relative flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border-2 border-[var(--totk-dark-ocher)]/50 bg-[var(--botw-warm-black)] shadow-md"
+            aria-label="Map square preview"
           >
-            <img
-              src={imageUrl}
-              alt=""
-              className="w-full h-full object-cover pointer-events-none"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </a>
+            {/* When preview data is available, layer base/blight/paths and actual fog tiles just like explore party page.
+                Fallback to the stored imageUrl if preview is missing or fails. */}
+            {squarePreview && squarePreview.layers.length > 0 ? (
+              <>
+                {squarePreview.layers
+                  .filter(
+                    (layer) =>
+                      layer.name !== "MAP_0001_hidden-areas" &&
+                      !(
+                        layer.name.startsWith("MAP_0002s_") &&
+                        layer.name.includes("CIRCLE-")
+                      )
+                  )
+                  .map((layer) => (
+                    <img
+                      key={layer.name}
+                      src={layer.url}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ))}
+                {(() => {
+                  const fogLayer = squarePreview.layers.find((l) => l.name === "MAP_0001_hidden-areas");
+                  if (!fogLayer) return null;
+                  const statuses = squarePreview.quadrantStatuses ?? {};
+                  const fogQuadrants: number[] = [];
+                  (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
+                    const s = (statuses[qId] ?? "unexplored").toLowerCase();
+                    if (s !== "explored" && s !== "secured") fogQuadrants.push(i + 1);
+                  });
+                  if (fogQuadrants.length === 0) return null;
+                  return (
+                    <div className="pointer-events-none absolute inset-0" aria-hidden>
+                      {fogQuadrants.map((q) => {
+                        const pos = FOG_QUADRANT_LAYOUT[q];
+                        if (!pos) return null;
+                        return (
+                          <div
+                            key={q}
+                            className="absolute bg-cover bg-no-repeat"
+                            style={{
+                              left: pos.left,
+                              top: pos.top,
+                              width: pos.width,
+                              height: pos.height,
+                              backgroundImage: `url(${fogLayer.url})`,
+                              backgroundSize: "200% 200%",
+                              backgroundPosition: pos.bgPos,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </>
+            ) : (
+              <img
+                src={imageUrl}
+                alt=""
+                className="w-full h-full object-cover pointer-events-none"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            )}
+          </div>
         )}
         <div className="min-w-0 flex-1">
           <h3 className="text-xl font-bold text-[var(--totk-light-ocher)] truncate tracking-tight">

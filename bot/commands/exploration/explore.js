@@ -138,6 +138,41 @@ const RELIC_EMBED_BORDER_URL = "https://storage.googleapis.com/tinglebot/Graphic
 // ------------------- Helper Functions -------------------
 // ============================================================================
 
+// ------------------- enforcePreestablishedSecuredOnSquare ------------------
+// Ensure pre-established path/village quadrants are always stored as
+// { status: 'secured', noCamp: true } in the exploringMap collection.
+async function enforcePreestablishedSecuredOnSquare(squareIdRaw) {
+  try {
+    const squareId = String(squareIdRaw || "").trim();
+    if (!squareId) return;
+    const regex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}$`, "i");
+    const doc = await Square.findOne({ squareId: regex });
+    if (!doc || !Array.isArray(doc.quadrants) || doc.quadrants.length === 0) return;
+    let modified = false;
+    for (const q of doc.quadrants) {
+      const qId = String(q.quadrantId || "").trim().toUpperCase();
+      if (!qId) continue;
+      if (isPreestablishedSecured(squareId, qId) && (!q.noCamp || q.status !== "secured")) {
+        q.noCamp = true;
+        q.status = "secured";
+        modified = true;
+      }
+    }
+    if (modified) {
+      doc.markModified("quadrants");
+      try {
+        doc.updatedAt = new Date();
+      } catch {
+        // ignore if path not present on schema
+      }
+      await doc.save();
+      logger.info("EXPLORE", `[explore.js] Synced pre-established secured/noCamp quadrants for square ${squareId}`);
+    }
+  } catch (err) {
+    logger.warn("EXPLORE", `[explore.js]⚠️ enforcePreestablishedSecuredOnSquare failed for ${squareIdRaw}: ${err?.message || err}`);
+  }
+}
+
 // ------------------- usePartyOnlyForHeartsStamina ------------------
 // During active expedition (or testing), hearts/stamina live only in party model; character DB updated at end -
 function usePartyOnlyForHeartsStamina(party) {
@@ -1785,11 +1820,11 @@ async function handleExpeditionFailed(party, interaction, useFollowUp = false) {
   .setTitle("💀 **Expedition: Expedition Failed — Party KO'd**")
   .setColor(0x8b0000)
   .setDescription(
-   "The party lost all collective hearts. The expedition has failed.\n\n" +
-   "**Return:** Party wakes in **" + villageLabel + "** (the village you began from) with 0 hearts and 0 stamina.\n\n" +
-   "**Items:** All items brought on the expedition and any found during the expedition are lost.\n\n" +
-   "**Map:** Any quadrants this expedition had marked as Explored return to Unexplored status.\n\n" +
-   "**Recovery debuff:** For **" + EXPLORATION_KO_DEBUFF_DAYS + " days**, characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. They must recover their strength. (A future boosting perk may allow removing this debuff.)"
+  "The party lost all collective hearts. The expedition has failed.\n\n" +
+  "**Return:** Party wakes in **" + villageLabel + "** (the village you began from) with 0 hearts and 0 stamina.\n\n" +
+  "**Items:** All items brought on the expedition and any found during the expedition are lost.\n\n" +
+  "**Map:** Any quadrants this expedition had marked as Explored return to Unexplored status.\n\n" +
+  "**Recovery debuff:** For **" + EXPLORATION_KO_DEBUFF_DAYS + " days**, characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. They must recover their strength. Certain boosting perks can remove this debuff early."
   )
   .setImage(getExploreMapImageUrl(party, { highlight: true }));
  addExplorationStandardFields(embed, {
@@ -3787,6 +3822,8 @@ module.exports = {
      if (!party) {
       return interaction.editReply("Expedition ID not found.");
      }
+     // Ensure pre-established secured/no-camp paths are persisted on the map for this square
+     await enforcePreestablishedSecuredOnSquare(party.square);
      // Do NOT sync party from character DB here: we only persist to the character who paid (payStaminaOrStruggle).
      // Syncing would overwrite party slots with stale character docs and falsely restore stamina for other members.
 
@@ -6834,6 +6871,8 @@ module.exports = {
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
+    // Keep pre-established secured/no-camp paths in sync with the map DB
+    await enforcePreestablishedSecuredOnSquare(party.square);
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
@@ -7524,6 +7563,8 @@ module.exports = {
     if (!party) {
      return interaction.editReply("Expedition ID not found.");
     }
+    // Keep pre-established secured/no-camp paths in sync with the map DB
+    await enforcePreestablishedSecuredOnSquare(party.square);
 
     // Block camping if there's active combat for this expedition (must resolve first)
     const campCombatBlock = await getCombatBlockReply(party, expeditionId, "camp", `${party.square} ${party.quadrant}`);

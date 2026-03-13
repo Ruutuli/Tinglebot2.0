@@ -203,8 +203,9 @@ export async function GET(
           const id = String(qu.quadrantId ?? "").trim().toUpperCase();
           if (id === "Q1" || id === "Q2" || id === "Q3" || id === "Q4") {
             const raw = typeof qu.status === "string" ? String(qu.status).trim().toLowerCase() : "";
-            const s = ["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored";
-            quadrantStatuses[id] = s;
+            const baseStatus = ["inaccessible", "unexplored", "explored", "secured"].includes(raw) ? raw : "unexplored";
+            const isNoCampSecured = baseStatus === "secured" && (qu as Record<string, unknown>).noCamp === true;
+            quadrantStatuses[id] = isNoCampSecured ? "secured_nocamp" : baseStatus;
           }
         }
         if (quadrantId) {

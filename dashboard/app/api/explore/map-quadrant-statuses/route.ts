@@ -31,15 +31,17 @@ export async function GET(request: NextRequest) {
       const Square = (await import("@/models/mapModel.js")).default;
       const squareIdRegex = new RegExp(`^${square.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
       const doc = await Square.findOne({ squareId: squareIdRegex }).lean() as {
-        quadrants?: Array<{ quadrantId: string; status?: string }>;
+        quadrants?: Array<{ quadrantId: string; status?: string; noCamp?: boolean }>;
       } | null;
       if (doc?.quadrants && Array.isArray(doc.quadrants)) {
         for (const q of doc.quadrants) {
           const id = String(q.quadrantId || "").trim().toUpperCase();
           if (id === "Q1" || id === "Q2" || id === "Q3" || id === "Q4") {
             const s = String(q.status ?? "").trim().toLowerCase();
-            quadrantStatuses[id] =
+            const baseStatus =
               ["inaccessible", "unexplored", "explored", "secured"].includes(s) ? s : "unexplored";
+            const isNoCampSecured = baseStatus === "secured" && q.noCamp === true;
+            quadrantStatuses[id] = isNoCampSecured ? "secured_nocamp" : baseStatus;
           }
         }
       }

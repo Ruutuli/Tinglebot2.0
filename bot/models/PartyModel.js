@@ -94,6 +94,17 @@ const PartySchema = new Schema({
   endedAt: { type: Date },
   /** Secured quadrant where the party last camped; used to block consecutive /camp in same quadrant until they move. */
   lastCampedAtQuadrant: { square: { type: String }, quadrant: { type: String } },
+  /** Pending choice from a special exploration outcome (monster_camp, ruins, grotto, chest). While set, only that choice should be resolved. */
+  pendingChoice: {
+    type: {
+      type: String,
+      enum: ['monster_camp', 'ruins', 'grotto', 'chest'],
+    },
+    at: { type: Date },
+    square: { type: String },
+    quadrant: { type: String },
+    characterName: { type: String },
+  },
 });
 
 /** Find party by partyId, excluding cancelled and open parties older than 24h (ghost explores). */

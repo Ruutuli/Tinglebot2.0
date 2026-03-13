@@ -27,6 +27,7 @@ const QUADRANT_STATUS_COLORS: Record<string, string> = {
   unexplored: "#b91c1c",
   explored: "#ca8a04",
   secured: "#15803d",
+  secured_nocamp: "#38bdf8", // bright blue for secured paths/villages where camping is disabled
 };
 
 /** Explore outcome → color for progress log and Discord embeds (keep in sync with bot embeds.js EXPLORE_OUTCOME_COLORS). */
@@ -420,7 +421,7 @@ function formatItemStat(modifierHearts: number, staminaRecovered: number): strin
 }
 
 // ------------------- QuadrantStatusLegend ------------------
-// Inaccessible, Unexplored, Explored, Secured legend. -
+// Inaccessible, Unexplored, Explored, Secured, Secured (No Camp) legend. -
 
 function QuadrantStatusLegend() {
   return (
@@ -440,6 +441,10 @@ function QuadrantStatusLegend() {
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#15803d]" aria-hidden />
         Secured
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[#38bdf8]" aria-hidden />
+        Secured (No Camp)
       </span>
     </div>
   );
@@ -1562,7 +1567,7 @@ export default function ExplorePartyPage() {
                     // Only remove fog when quadrant is actually explored or secured - not just because party is standing there
                     (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
                       const s = (statuses[qId] ?? "unexplored").toLowerCase();
-                      if (s !== "explored" && s !== "secured") fogQuadrants.push(i + 1);
+                      if (s !== "explored" && s !== "secured" && s !== "secured_nocamp") fogQuadrants.push(i + 1);
                     });
                     if (fogQuadrants.length === 0) return null;
                     return (
@@ -1806,7 +1811,7 @@ export default function ExplorePartyPage() {
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {(() => {
-                      const itemCounts = new Map<string, { emoji?: string; count: number; characterNames: string[] }>();
+                      const itemCounts = new Map<string, { count: number; characterNames: string[] }>();
                       for (const item of party.lostItems) {
                         const key = item.itemName;
                         const existing = itemCounts.get(key);
@@ -1817,19 +1822,17 @@ export default function ExplorePartyPage() {
                           }
                         } else {
                           itemCounts.set(key, {
-                            emoji: item.emoji,
                             count: item.quantity ?? 1,
                             characterNames: item.characterName ? [item.characterName] : [],
                           });
                         }
                       }
-                      return [...itemCounts.entries()].map(([itemName, { emoji, count, characterNames }]) => (
+                      return [...itemCounts.entries()].map(([itemName, { count, characterNames }]) => (
                         <span
                           key={itemName}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-red-800/30 bg-red-950/40 px-2.5 py-1 text-xs text-red-200"
                           title={characterNames.length > 0 ? `From: ${characterNames.join(", ")}` : undefined}
                         >
-                          {emoji && <span>{emoji}</span>}
                           <span>{itemName}</span>
                           {count > 1 && <span className="text-red-400">×{count}</span>}
                         </span>
@@ -2677,7 +2680,7 @@ export default function ExplorePartyPage() {
                             // Only remove fog when quadrant is actually explored or secured - not just because party is standing there
                             (["Q1", "Q2", "Q3", "Q4"] as const).forEach((qId, i) => {
                               const s = (statuses[qId] ?? "unexplored").toLowerCase();
-                              if (s !== "explored" && s !== "secured") fogQuadrants.push(i + 1);
+                              if (s !== "explored" && s !== "secured" && s !== "secured_nocamp") fogQuadrants.push(i + 1);
                             });
                             if (fogQuadrants.length === 0) return null;
                             return (
