@@ -3939,15 +3939,26 @@ module.exports = {
       }
      }
 
-     // Secured quadrants cannot be rolled — prompt to Move, Item, or Camp instead
+     // Secured quadrants cannot be rolled — prompt to Move, Item, or Camp instead (or Move/Item only if no camp allowed)
      if (party.quadrantState === "secured") {
       const nextCharacter = party.characters[party.currentTurn];
       const location = `${party.square} ${party.quadrant}`;
+      let noCampHere = isPreestablishedNoCamp(party.square, party.quadrant);
+      if (!noCampHere) {
+       const mapSquare = await Square.findOne({ squareId: party.square });
+       if (mapSquare?.quadrants?.length) {
+        const q = mapSquare.quadrants.find((qu) => String(qu.quadrantId).toUpperCase() === String(party.quadrant || "").toUpperCase());
+        noCampHere = !!(q && q.noCamp);
+       }
+      }
+      const actionsLine = noCampHere
+       ? "Use **Move** to go to another quadrant or **Item** to use a healing item. You cannot camp in this quadrant."
+       : "Use **Move** to go to another quadrant, **Item** to use a healing item, or **Camp** to rest and recover hearts.";
       const securedNoRollEmbed = new EmbedBuilder()
        .setTitle("🔒 **Quadrant Secured — No Roll**")
        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
        .setDescription(
-        `This quadrant (**${location}**) is already secured. You cannot roll here.\n\nUse **Move** to go to another quadrant, **Item** to use a healing item, or **Camp** to rest and recover hearts.`
+        `This quadrant (**${location}**) is already secured. You cannot roll here.\n\n${actionsLine}`
        )
        .setImage(getExploreMapImageUrl(party, { highlight: true }));
       addExplorationStandardFields(securedNoRollEmbed, {
@@ -3960,6 +3971,7 @@ module.exports = {
         commandsLast: true,
         ruinRestRecovered,
         hazardMessage: hazardRollResult?.hazardMessage ?? null,
+        hideCampCommand: noCampHere,
       });
       addExplorationCommandsField(securedNoRollEmbed, {
         party,
@@ -3969,6 +3981,7 @@ module.exports = {
         showNextAndCommands: true,
         showRestSecureMove: false,
         showSecuredQuadrantOnly: true,
+        hideCampCommand: noCampHere,
         isAtStartQuadrant: (() => {
           const start = START_POINTS_BY_REGION[party.region];
           return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
