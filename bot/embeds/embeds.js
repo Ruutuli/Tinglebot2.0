@@ -840,79 +840,79 @@ const createExplorationEndOnlyAtStartEmbed = (party, expeditionId, location, nex
 // Keys match Map CSV Terrain: Mountain & Highland, Snow & Ice Biomes, Water & Wetlands, etc.
 const EXPLORATION_TERRAIN_FLAVOR = {
   "mountain & highland": [
-    "The path winds up into rocky highlands—stone underfoot, peaks looming in the distance.",
-    "Sheer slopes and wind-scoured crags surround you; the air is thin and sharp.",
-    "You've crossed into mountain country: boulders, scree, and the silence of the heights.",
-    "Highland terrain opens ahead—ridges and outcrops where the sky feels close.",
+    "⛰️ The path winds up into rocky highlands—stone underfoot, peaks looming in the distance.",
+    "🪨 Sheer slopes and wind-scoured crags surround you; the air is thin and sharp.",
+    "🌫️ You've crossed into mountain country: boulders, scree, and the silence of the heights.",
+    "☁️ Highland terrain opens ahead—ridges and outcrops where the sky feels close.",
   ],
   "snow & ice biomes": [
-    "The world turns white. Snow crunches underfoot and frost clings to every surface.",
-    "You've stepped into a realm of ice and snow—breath mists, and the cold bites.",
-    "Drifts and frozen ground stretch around you; the stillness of winter hangs in the air.",
-    "Snow and ice dominate this place. The light is pale, the air brittle and cold.",
+    "❄️ The world turns white. Snow crunches underfoot and frost clings to every surface.",
+    "🥶 You've stepped into a realm of ice and snow—breath mists, and the cold bites.",
+    "🌨️ Drifts and frozen ground stretch around you; the stillness of winter hangs in the air.",
+    "🩵 Snow and ice dominate this place. The light is pale, the air brittle and cold.",
   ],
   "water & wetlands": [
-    "The ground grows soft. Reeds, standing water, and the smell of damp earth mark the wetlands.",
-    "You've entered a wet, low-lying area—streams, pools, and the quiet hum of life near water.",
-    "Marshes and shallow water surround you; frogs call, and the air is thick and still.",
-    "Wetlands stretch ahead: soggy footing, rustling reeds, and the glint of water everywhere.",
+    "🌿 The ground grows soft. Reeds, standing water, and the smell of damp earth mark the wetlands.",
+    "💧 You've entered a wet, low-lying area—streams, pools, and the quiet hum of life near water.",
+    "🐸 Marshes and shallow water surround you; frogs call, and the air is thick and still.",
+    "🪷 Wetlands stretch ahead: soggy footing, rustling reeds, and the glint of water everywhere.",
   ],
   "desert & arid": [
-    "Sand and stone stretch in every direction. The sun beats down; the air shimmers with heat.",
-    "You've crossed into arid land—dry earth, little shade, and a vast, harsh openness.",
-    "Desert terrain surrounds you. The wind carries dust; the horizon wavers in the heat.",
-    "Nothing but sand and rock and scorching sky. Every step kicks up a puff of dust.",
+    "🏜️ Sand and stone stretch in every direction. The sun beats down; the air shimmers with heat.",
+    "☀️ You've crossed into arid land—dry earth, little shade, and a vast, harsh openness.",
+    "🌪️ Desert terrain surrounds you. The wind carries dust; the horizon wavers in the heat.",
+    "🪨 Nothing but sand and rock and scorching sky. Every step kicks up a puff of dust.",
   ],
   "forest & woodland": [
-    "The trees close in. Dappled light, the rustle of leaves, and the smell of bark and soil.",
-    "You've entered the woods—thick canopy overhead, roots underfoot, and the sense of being watched by the forest itself.",
-    "Forest and woodland envelop you. Branches creak; somewhere a bird calls.",
-    "The path leads under the trees. Shade, quiet, and the deep green of the woodland.",
+    "🌲 The trees close in. Dappled light, the rustle of leaves, and the smell of bark and soil.",
+    "🌳 You've entered the woods—thick canopy overhead, roots underfoot, and the sense of being watched by the forest itself.",
+    "🦜 Forest and woodland envelop you. Branches creak; somewhere a bird calls.",
+    "🍃 The path leads under the trees. Shade, quiet, and the deep green of the woodland.",
   ],
   "grasslands & plains": [
-    "Open country unfolds ahead—grass swaying in the wind, sky wide and endless.",
-    "You've reached the plains. Long grass, few trees, and the feeling of space in every direction.",
-    "Grasslands stretch to the horizon. The wind runs through the grass like a low song.",
-    "Flat, open land surrounds you. The sky dominates; the world feels vast and exposed.",
+    "🌾 Open country unfolds ahead—grass swaying in the wind, sky wide and endless.",
+    "🌿 You've reached the plains. Long grass, few trees, and the feeling of space in every direction.",
+    "🪻 Grasslands stretch to the horizon. The wind runs through the grass like a low song.",
+    "☀️ Flat, open land surrounds you. The sky dominates; the world feels vast and exposed.",
   ],
   "coastal & sea edge": [
-    "The smell of salt and the sound of waves. You've reached the coast—where land meets the sea.",
-    "Sand, rock, and spray. The sea edge stretches beside you; gulls cry overhead.",
-    "You've come to the coast. Wind off the water, the crash of waves, and the endless blue beyond.",
-    "Where the land ends, the sea begins. Coastal terrain—shells, driftwood, and the pull of the tide.",
+    "🌊 The smell of salt and the sound of waves. You've reached the coast—where land meets the sea.",
+    "🪨 Sand, rock, and spray. The sea edge stretches beside you; gulls cry overhead.",
+    "🦅 You've come to the coast. Wind off the water, the crash of waves, and the endless blue beyond.",
+    "🐚 Where the land ends, the sea begins. Coastal terrain—shells, driftwood, and the pull of the tide.",
   ],
   volcanic: [
-    "The air tastes of ash and sulphur. Black rock and the memory of fire define this place.",
-    "You've entered volcanic land—hardened flows, steam vents, and earth that still holds heat.",
-    "Nothing grows easily here. Volcanic rock, scorched earth, and a sky often hazed with smoke.",
-    "The ground beneath you was once molten. Cracks and cinders mark the realm of the volcano.",
+    "🌋 The air tastes of ash and sulphur. Black rock and the memory of fire define this place.",
+    "🔥 You've entered volcanic land—hardened flows, steam vents, and earth that still holds heat.",
+    "💨 Nothing grows easily here. Volcanic rock, scorched earth, and a sky often hazed with smoke.",
+    "🪨 The ground beneath you was once molten. Cracks and cinders mark the realm of the volcano.",
   ],
 };
 // Item-type phrases: what was found. Slightly RP/varied.
 const EXPLORATION_ITEM_TYPE_FLAVOR = {
-  ore: ["A vein of ore glints in the light—the area is rich in minerals.", "Rocks here bear the telltale sheen of ore.", "You've found a promising mineral seam.", "The stone here is shot through with valuable ore."],
-  fish: ["Water here teems with life—a good spot to try your luck.", "A quiet pool or stream holds fish enough to catch.", "You've found a place where the fishing is bound to be good.", "The water is clear and full of movement; the fish are here."],
-  plant: ["Wild plants grow thick—herbs, greens, and useful growth wherever you look.", "The area yields useful plants for the taking.", "You've found a patch rich in forageable plants.", "Leaves and stems crowd the ground; the land is generous here."],
-  fruit: ["The air is sweet with the smell of fruit—trees or bushes heavy with it.", "You've stumbled on a place where fruit hangs ripe and plentiful.", "A pocket of orchard or wild fruit lies here.", "Fruit grows in abundance in this spot."],
-  mushroom: ["Fungi dot the ground—caps and clusters thriving in the damp and shade.", "You've found a patch where mushrooms grow thick.", "The right conditions here have brought a flush of mushrooms.", "Spores and caps mark this as prime mushroom country."],
-  natural: ["The area yields natural materials—feathers, fibres, and the bounty of the land.", "Useful bits of the natural world are scattered here.", "You've found a spot rich in simple, natural resources.", "The land offers up its small treasures freely."],
-  creature: ["Creatures and critters are abroad here—some harmless, some useful to a careful hand.", "You've found a place where wildlife is plentiful.", "Something small and living crosses your path; the area is alive with creatures.", "The buzz and scuttle of life suggest good hunting for materials."],
-  "ancient parts": ["Ancient machinery has left its mark—gears, screws, and strange components lie half-buried.", "You've found a place where the old world's remnants still linger.", "Scattered among the rocks are the remains of something ancient and mechanical.", "The area holds the echoes of ancient tech; parts can still be recovered."],
-  monster: ["Signs of monsters are everywhere—scales, fangs, and the leavings of recent battles.", "You've entered an area where monster materials can be gathered.", "The remains of creatures litter the ground; the bold can salvage something useful.", "Monster territory—and with it, the chance to gather what they leave behind."],
-  special: ["Something out of the ordinary catches your eye—a find that doesn't belong to the everyday.", "The place holds a trace of something rare.", "You've found a spot where the world seems to have left a small gift.", "A little luck has led you to something special."],
+  ore: ["💎 A vein of ore glints in the light—the area is rich in minerals.", "🪨 Rocks here bear the telltale sheen of ore.", "⛏️ You've found a promising mineral seam.", "✨ The stone here is shot through with valuable ore."],
+  fish: ["🐟 Water here teems with life—a good spot to try your luck.", "🎣 A quiet pool or stream holds fish enough to catch.", "🌊 You've found a place where the fishing is bound to be good.", "🐠 The water is clear and full of movement; the fish are here."],
+  plant: ["🌿 Wild plants grow thick—herbs, greens, and useful growth wherever you look.", "🌱 The area yields useful plants for the taking.", "🍃 You've found a patch rich in forageable plants.", "🪴 Leaves and stems crowd the ground; the land is generous here."],
+  fruit: ["🍎 The air is sweet with the smell of fruit—trees or bushes heavy with it.", "🍇 You've stumbled on a place where fruit hangs ripe and plentiful.", "🫐 A pocket of orchard or wild fruit lies here.", "🍑 Fruit grows in abundance in this spot."],
+  mushroom: ["🍄 Fungi dot the ground—caps and clusters thriving in the damp and shade.", "🍂 You've found a patch where mushrooms grow thick.", "🌧️ The right conditions here have brought a flush of mushrooms.", "🟤 Spores and caps mark this as prime mushroom country."],
+  natural: ["🪶 The area yields natural materials—feathers, fibres, and the bounty of the land.", "🌿 Useful bits of the natural world are scattered here.", "🪹 You've found a spot rich in simple, natural resources.", "✨ The land offers up its small treasures freely."],
+  creature: ["🐾 Creatures and critters are abroad here—some harmless, some useful to a careful hand.", "🦔 You've found a place where wildlife is plentiful.", "🐿️ Something small and living crosses your path; the area is alive with creatures.", "🦗 The buzz and scuttle of life suggest good hunting for materials."],
+  "ancient parts": ["⚙️ Ancient machinery has left its mark—gears, screws, and strange components lie half-buried.", "🔩 You've found a place where the old world's remnants still linger.", "⚙️ Scattered among the rocks are the remains of something ancient and mechanical.", "✨ The area holds the echoes of ancient tech; parts can still be recovered."],
+  monster: ["🦴 Signs of monsters are everywhere—scales, fangs, and the leavings of recent battles.", "⚔️ You've entered an area where monster materials can be gathered.", "🩸 The remains of creatures litter the ground; the bold can salvage something useful.", "👹 Monster territory—and with it, the chance to gather what they leave behind."],
+  special: ["✨ Something out of the ordinary catches your eye—a find that doesn't belong to the everyday.", "💫 The place holds a trace of something rare.", "🎁 You've found a spot where the world seems to have left a small gift.", "🍀 A little luck has led you to something special."],
 };
 // Monster encounter: this area is known for {name}. Quadrant's monster list = creatures known to be here.
 const EXPLORATION_MONSTER_FLAVOR = [
-  "This stretch of land is known to be {name} territory—and one has found you.",
-  "A {name} was lying in wait here. The area is notorious for them.",
-  "You've wandered into {name} country. Locals and scouts alike mark this place on their maps.",
-  "This area is prowled by {name}. You've crossed into their hunting ground.",
-  "Something moves in the shadows. A {name}—the kind this region is known for—has caught your scent.",
-  "The signs were there: scrapes, droppings, the smell. {name} are known to haunt this place.",
-  "You've stepped right into where {name} hold sway. One has taken notice.",
-  "Reports from the field don't lie: {name} territory. And here one is.",
-  "This patch of the map is marked for {name}. Today you get to meet one.",
-  "A {name} emerges—exactly the sort of creature travellers are warned about in these parts.",
+  "⚔️ This stretch of land is known to be {name} territory—and one has found you.",
+  "👁️ A {name} was lying in wait here. The area is notorious for them.",
+  "🗺️ You've wandered into {name} country. Locals and scouts alike mark this place on their maps.",
+  "🦴 This area is prowled by {name}. You've crossed into their hunting ground.",
+  "🌑 Something moves in the shadows. A {name}—the kind this region is known for—has caught your scent.",
+  "🩸 The signs were there: scrapes, droppings, the smell. {name} are known to haunt this place.",
+  "⚔️ You've stepped right into where {name} hold sway. One has taken notice.",
+  "📜 Reports from the field don't lie: {name} territory. And here one is.",
+  "📍 This patch of the map is marked for {name}. Today you get to meet one.",
+  "👹 A {name} emerges—exactly the sort of creature travellers are warned about in these parts.",
 ];
 
 // Normalize terrain string from Map CSV (strip emoji, trim, lowercase) for lookup.
@@ -922,6 +922,64 @@ function normalizeTerrainForMatch(t) {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+// Item type keys that can appear in quadrant.items or be implied by terrain.
+const EXPLORATION_ITEM_TYPE_KEYS = ["ore", "fish", "plant", "fruit", "mushroom", "natural", "creature", "ancient parts", "monster", "special"];
+
+// Normalize a quadrant item label (e.g. "Fish", "Ancient Parts") to a type key for flavor lookup.
+function quadrantItemLabelToTypeKey(label) {
+  const s = String(label || "").trim().toLowerCase();
+  if (!s) return null;
+  if (s === "ancient parts" || (s.includes("ancient") && s.includes("parts"))) return "ancient parts";
+  if (EXPLORATION_ITEM_TYPE_KEYS.includes(s)) return s;
+  if (s.includes("ore")) return "ore";
+  if (s.includes("fish")) return "fish";
+  if (s.includes("plant")) return "plant";
+  if (s.includes("fruit")) return "fruit";
+  if (s.includes("mushroom")) return "mushroom";
+  if (s.includes("natural")) return "natural";
+  if (s.includes("creature")) return "creature";
+  if (s.includes("monster")) return "monster";
+  if (s.includes("special")) return "special";
+  return null;
+}
+
+// Build set of item types allowed in this quadrant (from quadrant items list + terrain-implied types).
+// Used for drop eligibility in rngModule; not used for flavor.
+function getAllowedItemTypesForQuadrant(quadrantMeta) {
+  const allowed = new Set();
+  const terrain = Array.isArray(quadrantMeta?.terrain) ? quadrantMeta.terrain : [];
+  const quadItems = Array.isArray(quadrantMeta?.items) ? quadrantMeta.items : [];
+
+  for (const label of quadItems) {
+    const key = quadrantItemLabelToTypeKey(label);
+    if (key) allowed.add(key);
+  }
+  for (const t of terrain) {
+    const key = normalizeTerrainForMatch(t);
+    if (!key) continue;
+    if (key.includes("mountain") || key.includes("highland")) allowed.add("ore");
+    else if (key.includes("snow") || key.includes("ice")) { allowed.add("natural"); }
+    else if (key.includes("water") || key.includes("wetland")) { allowed.add("fish"); allowed.add("natural"); }
+    else if (key.includes("desert") || key.includes("arid")) { allowed.add("natural"); allowed.add("creature"); }
+    else if (key.includes("forest") || key.includes("woodland")) { allowed.add("plant"); allowed.add("fruit"); allowed.add("mushroom"); allowed.add("creature"); allowed.add("natural"); }
+    else if (key.includes("grassland") || key.includes("plains")) { allowed.add("plant"); allowed.add("natural"); allowed.add("creature"); }
+    else if (key.includes("coastal") || key.includes("sea")) { allowed.add("fish"); allowed.add("natural"); }
+    else if (key.includes("volcanic")) { allowed.add("ore"); allowed.add("natural"); }
+  }
+  return allowed;
+}
+
+/** Item types allowed for FLAVOR only: from quadrant items list. Flavor = "this area is more likely to have these". */
+function getAllowedItemTypesForFlavor(quadrantMeta) {
+  const allowed = new Set();
+  const quadItems = Array.isArray(quadrantMeta?.items) ? quadrantMeta.items : [];
+  for (const label of quadItems) {
+    const key = quadrantItemLabelToTypeKey(label);
+    if (key) allowed.add(key);
+  }
+  return allowed;
 }
 
 function getExplorationFlavorText(quadrantMeta, outcome, { item = null, monster = null } = {}) {
@@ -952,8 +1010,10 @@ function getExplorationFlavorText(quadrantMeta, outcome, { item = null, monster 
     if (phrase) parts.push(phrase);
   }
 
-  // Item outcome: add phrase based on item TYPE (Items CSV: Ore, Plant, Fish, Fruit, Mushroom, Natural, Creature, Ancient Parts, Monster, Special)
+  // Item outcome: only show item-type flavor when the FOUND item's type is in the quadrant's items list.
+  // So if the quad lists Plant, Mushroom and you find a mushroom → show mushroom flavor. If you find a creature (lizard) → no item-type flavor.
   if (outcome === "item" && item) {
+    const allowedTypesForFlavor = getAllowedItemTypesForFlavor(quadrantMeta);
     const typeStrs = []
       .concat(item.type || [], item.subtype || [], item.category || [])
       .map((s) => String(s).trim().toLowerCase())
@@ -961,15 +1021,13 @@ function getExplorationFlavorText(quadrantMeta, outcome, { item = null, monster 
     const typeOrder = ["ore", "fish", "plant", "fruit", "mushroom", "natural", "creature", "ancient parts", "monster", "special"];
     let added = false;
     for (const typeKey of typeOrder) {
-      const match = typeStrs.some((ts) => ts === typeKey || ts.includes(typeKey) || (typeKey === "ancient parts" && (ts.includes("ancient") || ts.includes("parts"))));
-      if (match && EXPLORATION_ITEM_TYPE_FLAVOR[typeKey]) {
+      const itemHasType = typeStrs.some((ts) => ts === typeKey || ts.includes(typeKey) || (typeKey === "ancient parts" && (ts.includes("ancient") || ts.includes("parts"))));
+      const typeListedInQuad = allowedTypesForFlavor.size === 0 || allowedTypesForFlavor.has(typeKey);
+      if (itemHasType && typeListedInQuad && EXPLORATION_ITEM_TYPE_FLAVOR[typeKey]) {
         parts.push(pick(EXPLORATION_ITEM_TYPE_FLAVOR[typeKey]));
         added = true;
         break;
       }
-    }
-    if (!added && typeStrs.length > 0 && EXPLORATION_ITEM_TYPE_FLAVOR.natural) {
-      parts.push(pick(EXPLORATION_ITEM_TYPE_FLAVOR.natural));
     }
   }
 

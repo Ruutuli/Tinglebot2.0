@@ -649,7 +649,10 @@ module.exports = {
             if (received > 0) logMessage += ` ${received} heart${received !== 1 ? 's' : ''} received.`;
             if (!logMessage || !logMessage.trim()) logMessage = `Raid vs ${monsterName}: turn completed.`;
             const logCosts = { heartsDealt: br.hearts, roll: br.originalRoll, adjustedRoll: Math.round(br.adjustedRandomValue) };
-            if (received > 0) logCosts.heartsReceived = received;
+            if (received > 0) {
+              logCosts.heartsReceived = received;
+              logCosts.heartsLost = received; // dashboard shows −X hearts in corner
+            }
             pushProgressLog(party, character.name || 'Unknown', 'raid_turn', logMessage, undefined, logCosts, new Date());
             const monsterDefeated = turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed';
             if (monsterDefeated) {

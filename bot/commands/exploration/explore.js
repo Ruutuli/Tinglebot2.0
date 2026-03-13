@@ -58,7 +58,7 @@ const { calculateFinalValue, getMonstersByRegion, getExplorationMonsterFromList,
 const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const { generateVictoryMessage, generateDamageMessage, generateDefenseBuffMessage, generateAttackBuffMessage, generateFinalOutcomeMessage, generateModCharacterVictoryMessage } = require("../../modules/flavorTextModule.js");
 const { handleKO, healKoCharacter, useHearts } = require("../../modules/characterStatsModule.js");
-const { triggerRaid, endExplorationRaidAsRetreat, closeRaidsForExpedition, advanceRaidTurnOnItemUse } = require("../../modules/raidModule.js");
+const { triggerRaid, endExplorationRaidAsRetreat, closeRaidsForExpedition, advanceRaidTurnOnItemUse, cancelRaidTurnSkip, scheduleRaidTurnSkip } = require("../../modules/raidModule.js");
 const { startWave, joinWave, advanceWaveTurnOnItemUse } = require("../../modules/waveModule.js");
 const MapModule = require('@/modules/mapModule.js');
 const { pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant, updateDiscoveryGrottoStatus, markGrottoCleared } = require("../../modules/exploreModule.js");
@@ -524,19 +524,20 @@ async function getQuadrantMeta(squareId, quadrantId) {
  * Returns: { applied: boolean, ko: boolean, heartsLost: number, staminaLost: number }
  */
 async function maybeApplyQuadrantHazards(party, options = {}) {
-  if (!party || party.status !== "started") return { applied: false, ko: false, heartsLost: 0, staminaLost: 0 };
-  if ((party.totalHearts ?? 0) <= 0) return { applied: false, ko: true, heartsLost: 0, staminaLost: 0 };
+  if (!party || party.status !== "started") return { applied: false, ko: false, heartsLost: 0, staminaLost: 0, hazardMessage: null };
+  if ((party.totalHearts ?? 0) <= 0) return { applied: false, ko: true, heartsLost: 0, staminaLost: 0, hazardMessage: null };
 
   const squareId = options.squareId ?? party.square;
   const quadrantId = options.quadrantId ?? party.quadrant;
   const hazards = await getQuadrantHazards(squareId, quadrantId);
-  if (!hazards.length) return { applied: false, ko: false, heartsLost: 0, staminaLost: 0 };
+  if (!hazards.length) return { applied: false, ko: false, heartsLost: 0, staminaLost: 0, hazardMessage: null };
 
   const location = `${String(squareId || "").trim().toUpperCase()} ${String(quadrantId || "").trim().toUpperCase()}`.trim();
   const at = options.at instanceof Date ? options.at : new Date();
 
   let heartsLostTotal = 0;
   let staminaLostTotal = 0;
+  const hazardMessages = [];
 
   const totalHeartsBefore = Math.max(0, Number(party.totalHearts) || 0);
   const totalStaminaBefore = Math.max(0, Number(party.totalStamina) || 0);
@@ -548,15 +549,9 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
         if (heartsLost > 0) {
           party.totalHearts = Math.max(0, (Number(party.totalHearts) || 0) - heartsLost);
           heartsLostTotal += heartsLost;
-          pushProgressLog(
-            party,
-            "Party",
-            "hazard_thunder",
-            `⚡ **Thunder hazard** in ${location} — the party is electrocuted! (−${heartsLost} ❤️)`,
-            undefined,
-            { heartsLost },
-            at
-          );
+          const msg = `⚡ **Thunder hazard** in ${location} — the party is electrocuted! (−${heartsLost} ❤️)`;
+          hazardMessages.push(msg);
+          pushProgressLog(party, "Party", "hazard_thunder", msg, undefined, { heartsLost }, at);
         }
       }
       continue;
@@ -587,11 +582,13 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
         const parts = [];
         if (heartsLost > 0) parts.push(`−${heartsLost} ❤️`);
         if (staminaLost > 0) parts.push(`−${staminaLost} 🟩`);
+        const msg = `🌡️ **${label} hazard** in ${location} — the elements sap the party. (${parts.join(", ")})`;
+        hazardMessages.push(msg);
         pushProgressLog(
           party,
           "Party",
           hz === "hot" ? "hazard_hot" : "hazard_cold",
-          `🌡️ **${label} hazard** in ${location} — the elements sap the party. (${parts.join(", ")})`,
+          msg,
           undefined,
           { ...(heartsLost > 0 ? { heartsLost } : {}), ...(staminaLost > 0 ? { staminaLost } : {}) },
           at
@@ -602,11 +599,9 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
   }
 
   if (heartsLostTotal === 0 && staminaLostTotal === 0) {
-    // No procs; do not save.
-    return { applied: false, ko: false, heartsLost: 0, staminaLost: 0 };
+    return { applied: false, ko: false, heartsLost: 0, staminaLost: 0, hazardMessage: null };
   }
 
-  // Persist pool changes
   const totalHeartsAfter = Math.max(0, Number(party.totalHearts) || 0);
   const totalStaminaAfter = Math.max(0, Number(party.totalStamina) || 0);
   party.markModified("totalHearts");
@@ -618,7 +613,8 @@ async function maybeApplyQuadrantHazards(party, options = {}) {
     `[explore.js] hazards at ${location} ❤${totalHeartsBefore} 🟩${totalStaminaBefore} -> ❤${totalHeartsAfter} 🟩${totalStaminaAfter}`
   );
 
-  return { applied: true, ko: totalHeartsAfter <= 0, heartsLost: heartsLostTotal, staminaLost: staminaLostTotal };
+  const hazardMessage = hazardMessages.length > 0 ? hazardMessages.join("\n") : null;
+  return { applied: true, ko: totalHeartsAfter <= 0, heartsLost: heartsLostTotal, staminaLost: staminaLostTotal, hazardMessage };
 }
 
 // ------------------- normalizeExpeditionId ------------------
@@ -5352,10 +5348,30 @@ module.exports = {
       if (quadrantWeightedList.length > 0) {
        selectedItem = quadrantWeightedList[Math.floor(Math.random() * quadrantWeightedList.length)];
       } else {
-       const fallbackList = createWeightedItemList(availableItems, 50);
-       selectedItem = fallbackList.length > 0
-         ? fallbackList[Math.floor(Math.random() * fallbackList.length)]
-         : availableItems[Math.floor(Math.random() * availableItems.length)];
+       const hasQuadrantRestriction = (Array.isArray(quadrantMetaForItem.terrain) && quadrantMetaForItem.terrain.length > 0) ||
+         (Array.isArray(quadrantMetaForItem.items) && quadrantMetaForItem.items.length > 0);
+       if (!hasQuadrantRestriction) {
+         const fallbackList = createWeightedItemList(availableItems, 50);
+         selectedItem = fallbackList.length > 0
+           ? fallbackList[Math.floor(Math.random() * fallbackList.length)]
+           : availableItems[Math.floor(Math.random() * availableItems.length)];
+       } else {
+         const genericItems = availableItems.filter((item) => {
+           if (!item || item.itemRarity == null) return false;
+           const itemTerrain = Array.isArray(item.terrain) ? item.terrain.filter(Boolean) : [];
+           const typeStrs = [].concat(item.type || [], item.subtype || [], item.category || []).map((s) => String(s).trim()).filter(Boolean);
+           return itemTerrain.length === 0 && typeStrs.length === 0;
+         });
+         const genericList = genericItems.length > 0 ? createWeightedItemList(genericItems, 50) : [];
+         if (genericList.length > 0) {
+           selectedItem = genericList[Math.floor(Math.random() * genericList.length)];
+         } else {
+           const fallbackList = createWeightedItemList(availableItems, 50);
+           selectedItem = fallbackList.length > 0
+             ? fallbackList[Math.floor(Math.random() * fallbackList.length)]
+             : availableItems[Math.floor(Math.random() * availableItems.length)];
+         }
+       }
       }
 
       appendExploreStat(`${new Date().toISOString()}\tfinal\titem\t${location}\trarity=${selectedItem.itemRarity ?? "?"}`);
@@ -7417,12 +7433,16 @@ module.exports = {
     if (!EXPLORATION_TESTING_MODE) await character.save();
 
     pushProgressLog(party, character.name, "retreat_failed", "Party attempted to retreat but could not get away.", undefined, retreatCostsForLog);
-    party.currentTurn = (party.currentTurn + 1) % (party.characters?.length || 1);
-    await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+    // Retreat attempt counts as a turn: advance raid turn so the next person is up (retreat or /raid)
+    await cancelRaidTurnSkip(raid.raidId);
+    await raid.advanceTurn();
+    await scheduleRaidTurnSkip(raid.raidId);
+    await party.save(); // Persist party so dashboard shows current hearts/stamina/progress
 
     const monsterName = raid.monster?.name || "the monster";
     const location = [party.square, party.quadrant].filter(Boolean).join(" ") || "Current location";
-    const nextCharacter = party.characters[party.currentTurn] ?? null;
+    const nextParticipant = raid.getCurrentTurnParticipant();
+    const nextCharacter = nextParticipant ? { name: nextParticipant.name, userId: nextParticipant.userId } : null;
     const nextName = nextCharacter?.name ?? "Unknown";
     const cmdId = getExploreCommandId();
     const cmdRetreat = `</explore retreat:${cmdId}>`;
@@ -7441,7 +7461,7 @@ module.exports = {
       expeditionId,
       location,
       nextCharacter,
-      showNextAndCommands: false,
+      showNextAndCommands: true,
       showRestSecureMove: false,
       actionCost: { staminaCost: retreatPayResult.staminaPaid ?? 0, heartsCost: retreatPayResult.heartsPaid ?? 0 },
     });
