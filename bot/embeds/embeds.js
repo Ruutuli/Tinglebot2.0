@@ -843,6 +843,21 @@ const createExplorationEndOnlyAtStartEmbed = (party, expeditionId, location, nex
  return embed;
 };
 
+// ------------------- Function: createMonsterCampSkippedNextTurnEmbed -------------------
+// Embed for "X chose to ignore the monster camp" + "Y — you're up next" (used in followUp after skip).
+const createMonsterCampSkippedNextTurnEmbed = (characterName, nextParticipant) => {
+ const nextLine = nextParticipant?.userId && nextParticipant?.name
+  ? `<@${nextParticipant.userId}> (${nextParticipant.name}) — **you're up next.**`
+  : nextParticipant?.name
+   ? `**${nextParticipant.name}** — you're up next.`
+   : "You're up next.";
+ const embed = new EmbedBuilder()
+  .setTitle("🗺️ Monster camp ignored")
+  .setDescription(`**${characterName}** chose to ignore the monster camp.\n\n${nextLine}`)
+  .setColor(getExploreOutcomeColor("monster_camp_skipped", "#95A5A6"));
+ return embed;
+};
+
 // ------------------- Exploration flavor text (terrain + item/monster) -------------------
 // Terrain: RP-style, evocative environment only. No item references.
 // Keys match Map CSV Terrain: Mountain & Highland, Snow & Ice Biomes, Water & Wetlands, etc.
@@ -4042,6 +4057,7 @@ module.exports = {
  getExplorationPartyCharacterFields,
  addExplorationCommandsField,
  createExplorationEndOnlyAtStartEmbed,
+ createMonsterCampSkippedNextTurnEmbed,
  getExplorationFlavorText,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,

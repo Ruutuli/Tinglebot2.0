@@ -91,7 +91,7 @@ const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/ex
 const { getEffectiveQuadrantStatus, isPreestablishedSecured, isPreestablishedNoCamp } = require("../../data/preestablishedSecuredQuadrants.js");
 
 // ------------------- Embeds & Handlers ------------------
-const { addExplorationStandardFields, addExplorationCommandsField, getExplorationFlavorText, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
+const { addExplorationStandardFields, addExplorationCommandsField, getExplorationFlavorText, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, createMonsterCampSkippedNextTurnEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
 // ------------------- Image URLs ------------------
@@ -318,7 +318,7 @@ const EXPLORATION_CHEST_RELIC_CHANCE = 0.02;
 const EXPLORATION_OUTCOME_CHANCES = {
   monster: 0.20,   // combat encounters
   item: 0.42,      // finding items (gather) — increased from 0.33
-  explored: 0.205, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
+  explored: 0.145, // fallback when grotto can't be placed (square has grotto, at cap, etc.)
   fairy: 0.05,
   chest: 0.01,     // reduced: chests show up less often
   old_map: 0.01,   // less likely: map finds
@@ -326,7 +326,7 @@ const EXPLORATION_OUTCOME_CHANCES = {
   relic: 0.005,
   camp: 0.02,      // safe space
   monster_camp: 0.04,
-  grotto: 0.02,
+  grotto: 0.08,    // grotto discovery (was 0.02; increased so parties find grottos more often)
 };
 
 // ------------------- Retreat (tier 5+ raids): +5% per fail, cap 95% ------------------
@@ -5239,9 +5239,10 @@ module.exports = {
            .setImage(getExploreMapImageUrl(party, { highlight: true }));
           addExplorationStandardFields(monsterCampEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party) });
           await msg.edit({ embeds: [monsterCampEmbed], components: [disabledRow] }).catch(() => {});
-          if (nextAfterChoice?.userId) {
+          if (nextAfterChoice) {
            await i.followUp({
-            content: `**${character.name}** chose to ignore the monster camp. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.**`}`,
+            content: nextAfterChoice.userId ? `<@${nextAfterChoice.userId}>` : undefined,
+            embeds: [createMonsterCampSkippedNextTurnEmbed(character.name, nextAfterChoice)],
            }).catch(() => {});
           }
           return;
