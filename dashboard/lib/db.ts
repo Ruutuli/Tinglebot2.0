@@ -118,7 +118,6 @@ export async function connect(): Promise<typeof mongoose> {
       maxIdleTimeMS: 30000,
       serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 45000,
-      bufferTimeoutMS: 20000,
     });
   }
   try {
