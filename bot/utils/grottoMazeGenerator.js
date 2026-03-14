@@ -455,23 +455,36 @@ function setCellToPath(matrix, x, y) {
 }
 
 /**
- * Remove the scrying wall and any walls immediately surrounding it in the facing direction,
- * so the passage opens. Does not move the player.
- * - Removes the wall at step1 (one step in facing direction from (x,y)).
- * - Also removes the two cells perpendicular to the passage (left/right of step1) if they are walls.
+ * Remove the scrying wall and any walls directly north, east, south, and west of it.
+ * Does not move the player.
+ * - Removes the wall cell in front (step1) and step2 if it's also a wall (2 cells thick).
+ * - Removes all four cardinal neighbors of that wall: N, E, S, W (only if they are walls).
  */
 function removeScryingWall(matrix, x, y, facing) {
   if (!matrix || isNaN(x) || isNaN(y)) return;
-  const step1 = moveInFacing(x, y, facing);
-  setCellToPath(matrix, step1.x, step1.y);
   const rows = matrix.length;
-  const cols = matrix[step1.y] ? matrix[step1.y].length : 0;
-  const perpendicular = (facing === "n" || facing === "s")
-    ? [{ x: step1.x - 1, y: step1.y }, { x: step1.x + 1, y: step1.y }]
-    : [{ x: step1.x, y: step1.y - 1 }, { x: step1.x, y: step1.y + 1 }];
-  for (const p of perpendicular) {
-    if (p.y >= 0 && p.y < rows && p.x >= 0 && p.x < cols && stringVal(matrix[p.y], p.x) !== 0) {
-      setCellToPath(matrix, p.x, p.y);
+  const cols = matrix[0]?.length || 0;
+
+  const step1 = moveInFacing(x, y, facing);
+  if (step1.x < 0 || step1.x >= cols || step1.y < 0 || step1.y >= rows) return;
+
+  // Open the wall cell in front (and one more if the passage is 2 cells thick)
+  setCellToPath(matrix, step1.x, step1.y);
+  const step2 = moveInFacing(step1.x, step1.y, facing);
+  if (step2.x >= 0 && step2.x < cols && step2.y >= 0 && step2.y < rows && stringVal(matrix[step2.y], step2.x) !== 0) {
+    setCellToPath(matrix, step2.x, step2.y);
+  }
+
+  // Destroy any walls directly north, east, south, and west of the wall (step1)
+  const cardinals = [
+    { x: step1.x, y: step1.y - 1 }, // north
+    { x: step1.x, y: step1.y + 1 }, // south
+    { x: step1.x + 1, y: step1.y }, // east
+    { x: step1.x - 1, y: step1.y }, // west
+  ];
+  for (const c of cardinals) {
+    if (c.y >= 0 && c.y < rows && c.x >= 0 && c.x < cols && stringVal(matrix[c.y], c.x) !== 0) {
+      setCellToPath(matrix, c.x, c.y);
     }
   }
 }

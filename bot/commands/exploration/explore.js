@@ -2900,6 +2900,7 @@ module.exports = {
         mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
         mazeImg = "attachment://maze.png";
        } catch (e) {}
+       postGrottoMazeModVersion(interaction.client, grotto.mazeState.layout, grotto.mazeState.currentNode, grotto.name || "Grotto", expeditionId, location, grotto.mazeState);
       }
       if (outcome.type === 'collapse') {
        const beyond = getCellBeyondWall(matrix, cx, cy, facing);
@@ -3037,7 +3038,7 @@ module.exports = {
       }
       const ctaHint = (outcome.ctaHint || "").replace(/<\/explore grotto maze>/g, `</explore grotto maze:${mazeCmdId}>`);
       const scryingResultLine = outcome.type === "faster_path_open"
-        ? "**✅ Result: Success** — The wall opens a faster path!"
+        ? "**✅ Result: Success** — The wall and surrounding walls open up—a faster path is revealed!"
         : "**❌ Result: Failure** — The song didn't open the wall.";
       let desc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**${character.name}** sings the sequence on the wall...${rollLabel}\n\n${scryingResultLine}\n\n${outcome.flavor}\n\n↳ **${ctaHint}**`;
       if (wallRaidError) desc += `\n\n⏰ **${wallRaidError}**`;
@@ -3354,7 +3355,8 @@ module.exports = {
       const manageable = regionMonsters && regionMonsters.filter((m) => m.tier >= 1 && m.tier <= 4);
       const monster = manageable && manageable.length > 0 ? manageable[Math.floor(Math.random() * manageable.length)] : null;
       const monsterFlavor = monster ? `A **${monster.name}** blocks the way!` : null;
-      if (monster) {
+      // Only tier 5+ start raids; tier 1–4 in maze are treated as "something stirs" (no raid)
+      if (monster && (monster.tier == null || monster.tier >= 5)) {
        const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
        const raidResult = await triggerRaid(monster, interaction, village, false, character, false, expeditionId);
        if (raidResult && raidResult.success) {
@@ -3374,6 +3376,8 @@ module.exports = {
        }
        randomEventPart = `${monsterFlavor}\n\n⏰ **${raidResult?.error || "Raid could not be started."}**`;
        pushProgressLog(party, character.name, "grotto_maze_raid", `Random encounter: ${monster.name} appeared but raid could not start.`, undefined, undefined, new Date());
+      } else if (monster) {
+       randomEventPart = "Something stirs in the dark—but it doesn't emerge. You move on.";
       } else {
        randomEventPart = "Something stirs in the dark—but it doesn't emerge. You move on.";
       }

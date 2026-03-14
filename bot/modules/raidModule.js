@@ -1571,6 +1571,14 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
   try {
     logger.info('RAID', `[raidModule.js] 🐉 Starting raid trigger: ${monster.name} in ${villageId}${expeditionId ? ` (expedition ${expeditionId})` : ''}${grottoId ? ' (Grotto)' : ''}`);
 
+    // Expedition/grotto raids: only tier 5+ monsters (tier 1–4 use waves or inline encounter)
+    if ((expeditionId || grottoId) && (monster.tier == null || monster.tier < 5)) {
+      return {
+        success: false,
+        error: 'Only tier 5+ monsters start expedition raids. Lower-tier encounters use waves or a single battle.'
+      };
+    }
+
     // ------------------- Global Raid Cooldown Check -------------------
     // For Blood Moon, quota-based, and expedition raids, skip global cooldown
     if (!isBloodMoon && !isQuotaBased && !expeditionId) {
