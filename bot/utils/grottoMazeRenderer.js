@@ -3,7 +3,7 @@
 // View modes: 'member' = fog of war (only explored sections visible) | 'mod' = full with solution & you are here
 // ============================================================================
 
-const WALL_SIZE = 15;
+const WALL_SIZE = 11; // ~25% smaller than previous 15 (image size = cols/rows * WALL_SIZE)
 // Fog of war: maze divided into grids. Only start grid visible at first; moving reveals new grids (they stay revealed).
 // Section count scales with maze size: 6x6 maze (13x13 matrix) → 4x4 grids; 12x12 maze (25x25) → 6x6 grids
 
@@ -169,7 +169,7 @@ function isInRevealedSection(x, y, revealedSections, cols, rows) {
 /**
  * Renders a grotto maze layout to a PNG buffer.
  * @param {Object} layout - grotto.mazeState.layout with { matrix, pathCells }
- * @param {number|Object} [optionsOrWallSize=15] - Wall size (number) or { currentNode, wallSize, viewMode, visitedCells }
+ * @param {number|Object} [optionsOrWallSize=11] - Wall size (number) or { currentNode, wallSize, viewMode, visitedCells }
  * @param {string} [optionsOrWallSize.viewMode='member'] - 'member' (fog of war) | 'mod' (full map)
  * @param {string[]} [optionsOrWallSize.visitedCells] - For member: explored cells; unrevealed sections stay black
  * @param {string[]} [optionsOrWallSize.openedChests] - Cell keys 'x,y' already opened
@@ -177,10 +177,10 @@ function isInRevealedSection(x, y, revealedSections, cols, rows) {
  * @param {string[]} [optionsOrWallSize.usedScryingWalls] - Cell keys 'x,y' where Song of Scrying was used
  * @returns {Promise<Buffer>} PNG buffer suitable for Discord attachment
  */
-async function renderMazeToBuffer(layout, optionsOrWallSize = 15) {
+async function renderMazeToBuffer(layout, optionsOrWallSize = 11) {
   const Jimp = require("jimp");
   const opts = typeof optionsOrWallSize === "number" ? { wallSize: optionsOrWallSize } : optionsOrWallSize;
-  const wallSize = opts.wallSize ?? 15;
+  const wallSize = opts.wallSize ?? 11;
   const viewMode = opts.viewMode === "mod" ? "mod" : "member";
   const currentNode = parseCurrentNode(opts.currentNode);
   const solutionPath = viewMode === "mod" ? getSolutionPath(layout?.matrix, layout?.pathCells) : null;

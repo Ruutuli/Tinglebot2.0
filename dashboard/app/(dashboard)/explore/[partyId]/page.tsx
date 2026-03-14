@@ -59,6 +59,7 @@ const EXPLORE_OUTCOME_COLORS: Record<string, string> = {
   grotto_maze_scrying: "#D35400",
   grotto_maze_scrying_wall: "#F39C12",
   grotto_maze_blocked: "#6b7280",
+  grotto_maze_move: "#16A085",
   ruins: "#D35400",
   ruins_explored: "#E67E22",
   ruins_skipped: "#BD6B2E",

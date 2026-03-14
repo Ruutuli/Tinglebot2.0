@@ -3809,12 +3809,16 @@ module.exports = {
      }
 
      await grotto.save();
+     const dirArrow = getMazeDirectionArrow(dir);
+     const moveLogMessage = randomEventPart
+      ? `Party moved ${dirArrow}${displayDir}. ${String(randomEventPart).replace(/\*\*/g, "").trim()}`
+      : `Party moved ${dirArrow}${displayDir}.`;
+     pushProgressLog(party, character.name, "grotto_maze_move", moveLogMessage, undefined, undefined, new Date());
      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
      party.markModified("currentTurn");
      await party.save();
      const nextCharMove = party.characters[party.currentTurn] ?? null;
      const moveDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
-     const dirArrow = getMazeDirectionArrow(dir);
      const flavorBlock = randomEventPart
       ? (randomEvent.type === "flavor"
         ? `\n\n*${String(randomEventPart).replace(/\*\*/g, "").trim()}*`
