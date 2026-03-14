@@ -1518,11 +1518,8 @@ export default function ExplorePartyPage() {
   const regionBanner = regionKeyForLookup ? REGION_BANNERS[regionKeyForLookup] : null;
   const inGrotto = !!party?.inGrotto;
   const partyEnded = party?.status === "completed" || party?.status === "failed";
-  const showGrottoOverlay =
-    !partyEnded &&
-    !inGrotto &&
-    regionBanner &&
-    hasGrottoInQuadrant(party?.progressLog, party?.square ?? "", party?.quadrant ?? "");
+  // Grotto overlay (region banner + grotto image) only on embed overlays, not on main party page
+  const showGrottoOverlay = false;
   const grottoBannerUrl =
     inGrotto || showGrottoOverlay
       ? getGrottoBannerUrl(party?.square ?? "", party?.quadrant ?? "")
@@ -2494,7 +2491,7 @@ export default function ExplorePartyPage() {
                   const canPlacePins = !!(userId && party.currentUserJoined);
                   const unreported = reportableDiscoveries.filter((d) => !isDiscoveryReported(d));
                   const pinned = reportableDiscoveries.filter((d) => isDiscoveryReported(d));
-                  const showReportToTownHall = unreported.length > 0;
+                  const showReportToTownHall = !partyEnded && unreported.length > 0;
                   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
                     if (!isPlacing || !placingForDiscovery) return;
                     const el = e.currentTarget;
