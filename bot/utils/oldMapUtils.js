@@ -76,6 +76,45 @@ async function hasAppraisedOldMap(characterName, mapNumber) {
 }
 
 /**
+ * Check if a character has at least one appraised, not-yet-redeemed map of the given number.
+ * Used to decide whether to grant map-led reward on entering a quadrant.
+ * @param {string} characterName - Character to check
+ * @param {number} mapNumber - Map number (1-46)
+ * @returns {Promise<boolean>}
+ */
+async function hasAppraisedUnexpiredOldMap(characterName, mapNumber) {
+  if (!characterName || typeof mapNumber !== 'number') return false;
+  const count = await OldMapFound.countDocuments({
+    characterName: charNameRegex(characterName),
+    mapNumber,
+    appraised: true,
+    redeemedAt: null,
+  });
+  return count > 0;
+}
+
+/**
+ * Find one appraised, unredeemed OldMapFound for the character and map number;
+ * set redeemedAt to now and return the doc. Used after granting map-led reward (one-and-done).
+ * @param {string} characterName - Character who owns the map
+ * @param {number} mapNumber - Map number (1-46)
+ * @returns {Promise<import('mongoose').Document|null>}
+ */
+async function findAndRedeemOldMap(characterName, mapNumber) {
+  if (!characterName || typeof mapNumber !== 'number') return null;
+  const doc = await OldMapFound.findOne({
+    characterName: charNameRegex(characterName),
+    mapNumber,
+    appraised: true,
+    redeemedAt: null,
+  }).sort({ foundAt: 1 });
+  if (!doc) return null;
+  doc.redeemedAt = new Date();
+  await doc.save();
+  return doc;
+}
+
+/**
  * Get all map numbers a character has (with counts).
  * @param {string} characterName - Character to check
  * @returns {Promise<Array<{mapNumber: number, quantity: number}>>}
@@ -93,7 +132,7 @@ async function getCharacterOldMaps(characterName) {
 /**
  * Get all old maps for a character with full details (for /map list and appraisal-request).
  * @param {string} characterName - Character to check
- * @returns {Promise<Array<{_id: import('mongoose').Types.ObjectId, mapId: string, mapNumber: number, appraised: boolean, foundAt: Date, locationFound: string}>>}
+ * @returns {Promise<Array<{_id: import('mongoose').Types.ObjectId, mapId: string, mapNumber: number, appraised: boolean, redeemedAt: Date|null, foundAt: Date, locationFound: string}>>}
  */
 async function getCharacterOldMapsWithDetails(characterName) {
   if (!characterName) return [];
@@ -105,6 +144,7 @@ async function getCharacterOldMapsWithDetails(characterName) {
     mapId: d.mapId || '',
     mapNumber: d.mapNumber,
     appraised: !!d.appraised,
+    redeemedAt: d.redeemedAt || null,
     foundAt: d.foundAt,
     locationFound: d.locationFound || '',
   }));
@@ -115,6 +155,8 @@ module.exports = {
   findOldMapByIdOrMapId,
   hasOldMap,
   hasAppraisedOldMap,
+  hasAppraisedUnexpiredOldMap,
+  findAndRedeemOldMap,
   getCharacterOldMaps,
   getCharacterOldMapsWithDetails,
 };

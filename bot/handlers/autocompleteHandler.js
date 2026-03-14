@@ -2963,6 +2963,9 @@ async function handleTransferToCharacterAutocomplete(interaction, focusedValue) 
 // Provides autocomplete for selecting items to transfer
 async function handleTransferItemAutocomplete(interaction, focusedValue) {
   try {
+    // Skip if already responded (prevents 40060 from duplicate events or race conditions)
+    if (interaction.responded) return;
+
     const fromCharacter = interaction.options.getString('fromcharacter');
     if (!fromCharacter) return await safeAutocompleteResponse(interaction, []);
 
@@ -2983,7 +2986,7 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
 
     const searchTerm = focusedValue?.toLowerCase().trim() || '';
     const allItems = Array.from(itemMap.values());
-    const filteredItems = allItems.filter(item => 
+    const filteredItems = allItems.filter(item =>
       item.name.toLowerCase().includes(searchTerm)
     );
 
@@ -2992,16 +2995,12 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
       value: item.name
     }));
 
-    await interaction.respond(
-      choices.slice(0, 25).map(choice => ({
-        name: choice.name,
-        value: choice.value
-      }))
-    );
+    const focusedOption = { value: focusedValue || '', name: '' };
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[autocompleteHandler.js]❌ Error in handleTransferItemAutocomplete:", error);
-    await safeRespondWithError(interaction, error);
+    if (!interaction.responded) await safeRespondWithError(interaction, error);
   }
 }
 

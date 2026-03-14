@@ -67,7 +67,7 @@ const { finalizeBlightApplication } = require("../../handlers/blightHandler.js")
 // ------------------- Utils ------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
-const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap } = require('@/utils/oldMapUtils.js');
+const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap, hasAppraisedUnexpiredOldMap, findAndRedeemOldMap } = require('@/utils/oldMapUtils.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig.js');
@@ -858,27 +858,10 @@ function createDisabledYesNoRow(outcomeType, expeditionId, characterIndex, label
  );
 }
 
-// ------------------- handleExplorationChestOpen ------------------
-// Open chest: pay stamina, roll loot per character, embed result
-async function handleExplorationChestOpen(interaction, expeditionId, location, openerCharacterIndex) {
- const party = await Party.findActiveByPartyId(expeditionId);
- if (!party) return null;
-
- const n = party.characters.length;
- if (!n) return null;
- const openerIndex = typeof openerCharacterIndex === "number" && openerCharacterIndex >= 0 && openerCharacterIndex < n
-  ? openerCharacterIndex
-  : (party.currentTurn - 1 + n) % n;
- const partyChar = party.characters[openerIndex];
- const character = await Character.findById(partyChar._id);
- if (!character) return null;
-
- const chestPayResult = await payStaminaOrStruggle(party, openerIndex, 1, { order: "openerFirst", openerIndex, action: "chest" });
- if (!chestPayResult.ok) return { notEnoughStamina: true };
-
- party.currentTurn = (party.currentTurn + 1) % n;
- await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-
+// ------------------- grantExplorationChestLootToParty ------------------
+// Grant chest loot to all party members (no stamina cost). Used by handleExplorationChestOpen and map-led chest on move.
+// Caller is responsible for turn advance (handleExplorationChestOpen) or not (map-led).
+async function grantExplorationChestLootToParty(party, location, interaction) {
  const allItems = await fetchAllItems();
  const lootLines = [];
  for (const pc of party.characters) {
@@ -941,7 +924,6 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
    }
   }
  }
-
  const nextCharacter = party.characters[party.currentTurn];
  const lootEmbed = new EmbedBuilder()
   .setTitle("📦 **Chest opened!**")
@@ -956,13 +938,9 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
  } else {
   lootEmbed.setDescription("Nothing found inside.");
  }
- const footerCost = (chestPayResult.heartsPaid ?? 0) > 0
-  ? `−${chestPayResult.heartsPaid} heart(s) (struggle)`
-  : "−1 stamina";
- lootEmbed.setFooter({ text: footerCost });
  addExplorationStandardFields(lootEmbed, {
   party,
-  expeditionId,
+  expeditionId: party.partyId,
   location,
   nextCharacter: nextCharacter ?? null,
   showNextAndCommands: true,
@@ -971,10 +949,36 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
   hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
   hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
  });
- const lootSummary = lootLines.length > 0
-  ? lootLines.map((line) => line.trim()).join(" · ")
-  : "Nothing found.";
- // Progress log: no Discord/unicode emoji (item names only)
+ await party.save();
+ return { lootEmbed, lootLines, nextCharacter };
+}
+
+// ------------------- handleExplorationChestOpen ------------------
+// Open chest: pay stamina, roll loot per character, embed result
+async function handleExplorationChestOpen(interaction, expeditionId, location, openerCharacterIndex) {
+ const party = await Party.findActiveByPartyId(expeditionId);
+ if (!party) return null;
+
+ const n = party.characters.length;
+ if (!n) return null;
+ const openerIndex = typeof openerCharacterIndex === "number" && openerCharacterIndex >= 0 && openerCharacterIndex < n
+  ? openerCharacterIndex
+  : (party.currentTurn - 1 + n) % n;
+ const partyChar = party.characters[openerIndex];
+ const character = await Character.findById(partyChar._id);
+ if (!character) return null;
+
+ const chestPayResult = await payStaminaOrStruggle(party, openerIndex, 1, { order: "openerFirst", openerIndex, action: "chest" });
+ if (!chestPayResult.ok) return { notEnoughStamina: true };
+
+ party.currentTurn = (party.currentTurn + 1) % n;
+ await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+
+ const { lootEmbed, lootLines, nextCharacter } = await grantExplorationChestLootToParty(party, location, interaction);
+ const footerCost = (chestPayResult.heartsPaid ?? 0) > 0
+  ? `−${chestPayResult.heartsPaid} heart(s) (struggle)`
+  : "−1 stamina";
+ lootEmbed.setFooter({ text: footerCost });
  const lootSummaryForLog = lootLines.length > 0
   ? lootLines
     .map((line) => line.replace(/<:[^:]+:\d+>/g, "").replace(/\s+/g, " ").trim())
@@ -982,7 +986,7 @@ async function handleExplorationChestOpen(interaction, expeditionId, location, o
   : "Nothing found.";
  const chestCostsForLog = buildCostsForLog(chestPayResult);
  pushProgressLog(party, character.name, "chest_open", `Opened chest in **${location}**. **Found:** ${lootSummaryForLog}`, undefined, Object.keys(chestCostsForLog).length ? chestCostsForLog : undefined);
- await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+ await party.save();
  return { lootEmbed, party, nextCharacter };
 }
 
@@ -7238,21 +7242,80 @@ module.exports = {
      moveDescription += `\n\n⚠️ **${clearedCount} unmarked discovery(ies) in ${currentSquare} were forgotten.** Place pins on the dashboard before moving to keep them on the map.`;
     }
 
-    // If this quadrant is an old map location, check if any party member has that map and show prompt
+    let mapLedChestLootEmbed = null;
+    // If this quadrant is an old map location: grant reward if any party member has appraised, unredeemed map (one-and-done)
     const quadWithMap = destMapSquare && destMapSquare.quadrants ? destMapSquare.quadrants.find(
       (qu) => String(qu.quadrantId).toUpperCase() === String(newLocation.quadrant).toUpperCase()
     ) : null;
     if (quadWithMap && quadWithMap.oldMapNumber != null) {
       const mapItemName = `Map #${quadWithMap.oldMapNumber}`;
-      const leadsToLabel = (quadWithMap.oldMapLeadsTo || "treasure").charAt(0).toUpperCase() + (quadWithMap.oldMapLeadsTo || "").slice(1);
-      const whoHasMap = [];
+      const leadsTo = (quadWithMap.oldMapLeadsTo || "chest").toLowerCase();
+      const leadsToLabel = (quadWithMap.oldMapLeadsTo || "treasure").charAt(0).toUpperCase() + (quadWithMap.oldMapLeadsTo || "").slice(1).toLowerCase();
+      const whoHasUnexpiredMap = [];
       try {
         for (const pc of party.characters) {
-          const hasIt = await hasAppraisedOldMap(pc.name, quadWithMap.oldMapNumber);
-          if (hasIt) whoHasMap.push(pc.name);
+          const hasIt = await hasAppraisedUnexpiredOldMap(pc.name, quadWithMap.oldMapNumber);
+          if (hasIt) whoHasUnexpiredMap.push(pc.name);
         }
-        if (whoHasMap.length > 0) {
-          moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}**. ${whoHasMap.join(", ")} ${whoHasMap.length === 1 ? "has" : "have"} the map — you've found the location of a **${leadsToLabel}**! More info: ${OLD_MAPS_LINK}`;
+        if (whoHasUnexpiredMap.length > 0) {
+          const mapOwnerName = whoHasUnexpiredMap[0];
+          const redeemed = await findAndRedeemOldMap(mapOwnerName, quadWithMap.oldMapNumber);
+          if (redeemed) {
+            if (leadsTo === "chest") {
+              const chestResult = await grantExplorationChestLootToParty(party, locationMove, interaction);
+              mapLedChestLootEmbed = chestResult?.lootEmbed ?? null;
+              pushProgressLog(party, mapOwnerName, "map_chest", `Map #${quadWithMap.oldMapNumber} led to a chest at **${locationMove}**. Opened.`, undefined, undefined);
+              moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Chest** — opened!`;
+            } else if (leadsTo === "relic") {
+              const mapOwnerChar = party.characters.find((c) => c.name === mapOwnerName);
+              const mapOwnerDoc = mapOwnerChar ? await Character.findById(mapOwnerChar._id) : null;
+              if (mapOwnerDoc) {
+                try {
+                  const savedRelic = await createRelic({
+                    name: "Unknown Relic",
+                    discoveredBy: mapOwnerDoc.name,
+                    characterId: mapOwnerDoc._id,
+                    discoveredDate: new Date(),
+                    locationFound: locationMove,
+                    appraised: false,
+                  });
+                  if (!party.gatheredItems) party.gatheredItems = [];
+                  party.gatheredItems.push({ characterId: mapOwnerDoc._id, characterName: mapOwnerDoc.name, itemName: "Unknown Relic", quantity: 1, emoji: "🔸" });
+                  pushProgressLog(party, mapOwnerName, "relic", `Map #${quadWithMap.oldMapNumber} led to a relic at **${locationMove}**; take to Artist/Researcher to appraise.`, { itemName: "Unknown Relic", emoji: "🔸" }, undefined);
+                  await party.save();
+                  moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic** (${savedRelic?.relicId || "—"})!`;
+                } catch (err) {
+                  logger.error("EXPLORE", `[explore.js]❌ createRelic (map-led): ${err?.message || err}`);
+                  moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic** (grant failed).`;
+                }
+              } else {
+                moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Relic**!`;
+              }
+            } else if (leadsTo === "shrine") {
+              await pushDiscoveryToMap(party, "shrine", new Date(), interaction.user?.id);
+              pushProgressLog(party, mapOwnerName, "map_shrine", `Map #${quadWithMap.oldMapNumber} led to a shrine at **${locationMove}**.`, undefined, undefined);
+              await party.save();
+              moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **Shrine** — discovery added to the map.`;
+            } else if (leadsTo === "ruins") {
+              await pushDiscoveryToMap(party, "ruins", new Date(), interaction.user?.id);
+              pushProgressLog(party, mapOwnerName, "map_ruins", `Map #${quadWithMap.oldMapNumber} led to ruins at **${locationMove}**.`, undefined, undefined);
+              await party.save();
+              moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed **Ruins** — discovery added to the map.`;
+            } else {
+              moveDescription += `\n\n🗺️ **Your map led you here!** **${mapOwnerName}**'s map revealed a **${leadsToLabel}**!`;
+            }
+          }
+        } else {
+          const whoHasMapRedeemed = [];
+          for (const pc of party.characters) {
+            const hasAppraised = await hasAppraisedOldMap(pc.name, quadWithMap.oldMapNumber);
+            if (hasAppraised) whoHasMapRedeemed.push(pc.name);
+          }
+          if (whoHasMapRedeemed.length > 0) {
+            moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}** — you've already claimed the reward here.`;
+          } else {
+            moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}** (leads to **${leadsToLabel}**). Get the map appraised at the Inariko Library. More info: ${OLD_MAPS_LINK}`;
+          }
         }
       } catch (invErr) {
         logger.warn("EXPLORE", `[explore.js]⚠️ Old map collection check: ${invErr?.message || invErr}`);
@@ -7308,6 +7371,7 @@ module.exports = {
     });
 
     await interaction.editReply({ embeds: [embed] });
+    if (mapLedChestLootEmbed) await interaction.followUp({ embeds: [mapLedChestLootEmbed] }).catch(() => {});
     await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterMove) });
 
     // ------------------- Use Item (healing from expedition loadout) -------------------

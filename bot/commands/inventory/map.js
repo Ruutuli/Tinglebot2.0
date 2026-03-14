@@ -109,7 +109,7 @@ module.exports = {
         const appraised = maps.filter((m) => m.appraised);
         const unappraised = maps.filter((m) => !m.appraised);
         const appraisedLines = appraised.length
-          ? appraised.map((m) => `• **Map #${m.mapNumber}** — deciphered`).join('\n')
+          ? appraised.map((m) => `• **Map #${m.mapNumber}** — deciphered${m.redeemedAt ? ' (claimed at location)' : ''}`).join('\n')
           : '—';
         const unappraisedLines = unappraised.length
           ? unappraised.map((m) => {

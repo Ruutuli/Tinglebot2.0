@@ -17,6 +17,8 @@ const OldMapFoundSchema = new Schema({
   appraised: { type: Boolean, default: false },
   appraisedAt: { type: Date, default: null },
   appraisedBy: { type: String, default: null },
+  /** When set, this map copy was used at its location (one-and-done). */
+  redeemedAt: { type: Date, default: null },
 }, { collection: 'oldMapsFound' });
 
 OldMapFoundSchema.index({ characterName: 1, mapNumber: 1 });
