@@ -3406,9 +3406,11 @@ async function handleExploreIdAutocomplete(interaction, focusedOption) {
   const value = (focusedOption.value || '').toString().toLowerCase();
   const openExpiryCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const subcommand = interaction.options.getSubcommand(false);
+  const subcommandGroup = interaction.options.getSubcommandGroup(false);
 
-  // For roll subcommand, only show started expeditions
-  const statusFilter = subcommand === "roll"
+  // For roll, move, and grotto (targetpractice/puzzle/maze etc.), only show started expeditions; others show open + started
+  const startedOnly = subcommand === "roll" || subcommand === "move" || subcommandGroup === "grotto";
+  const statusFilter = startedOnly
    ? { status: "started" }
    : { status: { $nin: ["completed", "failed", "cancelled"] } };
 
@@ -3419,7 +3421,7 @@ async function handleExploreIdAutocomplete(interaction, focusedOption) {
     { 'characters.userId': userId },
    ],
    // Only apply open expiry filter when not filtering to started-only
-   ...(subcommand !== "roll" && {
+   ...(!startedOnly && {
     $and: [
      { $or: [
        { status: { $ne: "open" } },

@@ -27,6 +27,15 @@ function getMongoUri(): string {
   return uri;
 }
 
+/** Redact URI for logging: show scheme and host only (no user/password). */
+function redactUriForLog(uri: string): string {
+  try {
+    return uri.replace(/^(mongodb(\+srv)?:\/\/)([^@]+)(@.*)$/, "$1***:***$4");
+  } catch {
+    return "(invalid uri)";
+  }
+}
+
 // ============================================================================
 // ------------------- Types -------------------
 // ============================================================================
@@ -112,7 +121,9 @@ export async function connect(): Promise<typeof mongoose> {
     return cached.conn;
   }
   if (!cached.promise) {
-    cached.promise = mongoose.connect(getMongoUri(), {
+    const uri = getMongoUri();
+    logger.info("lib/db", `MongoDB connect attempt: ${redactUriForLog(uri)}`);
+    cached.promise = mongoose.connect(uri, {
       maxPoolSize: 50,
       minPoolSize: 5,
       maxIdleTimeMS: 30000,

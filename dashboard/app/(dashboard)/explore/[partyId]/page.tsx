@@ -93,6 +93,31 @@ function getExploreOutcomeColor(outcome: string | undefined, fallback = "#6b7280
   return EXPLORE_OUTCOME_COLORS[outcome.trim()] ?? fallback;
 }
 
+/** Grotto trial outcomes included in the "trials" expedition stat. */
+const GROTTO_TRIAL_OUTCOMES = new Set([
+  "grotto_target_success",
+  "grotto_target_fail",
+  "grotto_puzzle_success",
+  "grotto_puzzle_offering",
+  "grotto_maze_success",
+  "grotto_blessing",
+  "grotto_test_of_power",
+]);
+
+/** Human-readable label for progress log outcome (especially grotto trials). */
+function getProgressLogOutcomeLabel(outcome: string): string {
+  const labels: Record<string, string> = {
+    grotto_target_success: "Target Practice ✓",
+    grotto_target_fail: "Target Practice (failed)",
+    grotto_puzzle_success: "Puzzle ✓",
+    grotto_puzzle_offering: "Puzzle (offering)",
+    grotto_maze_success: "Maze ✓",
+    grotto_blessing: "Grotto blessing",
+    grotto_test_of_power: "Test of Power ✓",
+  };
+  return labels[outcome] ?? outcome;
+}
+
 // Map grid: 10 cols x 12 rows, each square 2400 x 1666 (canvas 24000 x 20000)
 const SQUARE_W = 2400;
 const SQUARE_H = 1666;
@@ -1920,6 +1945,9 @@ export default function ExplorePartyPage() {
                   <span><strong>{party.progressLog.length}</strong> actions taken</span>
                   <span><strong>{party.progressLog.filter(e => e.outcome === "move").length}</strong> moves</span>
                   <span><strong>{party.progressLog.filter(e => e.outcome === "monster" || e.outcome === "raid").length}</strong> battles</span>
+                  {party.progressLog.some(e => GROTTO_TRIAL_OUTCOMES.has(e.outcome)) && (
+                    <span><strong>{party.progressLog.filter(e => GROTTO_TRIAL_OUTCOMES.has(e.outcome)).length}</strong> trials</span>
+                  )}
                 </div>
               )}
             </section>
@@ -2939,8 +2967,9 @@ export default function ExplorePartyPage() {
                             <span
                               className="rounded px-1 py-0.5 text-[10px] uppercase text-[var(--totk-grey-200)]"
                               style={{ backgroundColor: `${getExploreOutcomeColor(entry.outcome)}33` }}
+                              title={entry.outcome}
                             >
-                              {entry.outcome}
+                              {getProgressLogOutcomeLabel(entry.outcome)}
                             </span>
                             <span className="text-[var(--totk-grey-200)]">
                               {typeof entry.at === "string" ? new Date(entry.at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) : ""}
