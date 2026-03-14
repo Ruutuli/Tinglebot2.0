@@ -2228,7 +2228,7 @@ module.exports = {
        };
       }
       const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
-      const raidResult = await triggerRaid(monster, interaction, village, false, null, false, expeditionId, grotto._id);
+      const raidResult = await triggerRaid(monster, interaction, village, false, character, false, expeditionId, grotto._id);
       if (raidResult && raidResult.success) {
        grotto.testOfPowerState = grotto.testOfPowerState || {};
        grotto.testOfPowerState.raidStarted = true;
