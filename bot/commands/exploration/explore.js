@@ -19,7 +19,7 @@
 //   - The expedition turn is "frozen" while combat is active
 //   - When combat ends (victory/retreat), the expedition turn advances once (the roll that triggered combat is "consumed")
 //   - Items used during combat advance ONLY the combat turn, not the expedition turn
-//   - Items used outside combat are "free actions" — they do NOT advance expedition turn
+//   - Items used outside combat advance the expedition turn (so "Next" and who can use item stay in sync)
 //   - Camping, retreat attempts, and most roll outcomes advance the expedition turn
 //   - Choice-based outcomes (monster_camp, chest, ruins, grotto) defer turn advancement until the choice is made
 //   - Wave currentTurn resets to 0 when advancing to the next monster (first participant always starts each monster)
@@ -5373,8 +5373,12 @@ module.exports = {
            pushProgressLog(fp, character.name, "ruins_skipped", `Found ruins in ${location}; choice timed out (left for later).`, undefined, undefined, new Date());
           } else if (outcomeType === "grotto") {
            pushProgressLog(fp, character.name, "grotto_skipped", `Found a grotto in ${location}; choice timed out (no action).`, undefined, undefined, new Date());
+          } else if (outcomeType === "chest") {
+           pushProgressLog(fp, character.name, "chest_skipped", `Found a chest in ${location}; choice timed out (wasn't opened).`, undefined, undefined, new Date());
           }
-          if (outcomeType === "monster_camp" || outcomeType === "ruins" || outcomeType === "grotto") {
+          if (fp.characters?.length > 0) {
+           await fp.advanceTurn();
+          } else {
            await fp.save();
           }
          }
@@ -5551,11 +5555,13 @@ module.exports = {
         const monsterDefeated = monsterHearts.current === 0;
 
         pushProgressLog(party, character.name, "raid", `Encountered ${selectedMonster.name} (tier ${selectedMonster.tier}) in ${location}. Raid started.`, undefined, Object.keys(rollCostsForLog).length ? rollCostsForLog : undefined);
-        // Don't advance party.currentTurn — raid has its own turn order; the triggering character attacks first
+        // Don't advance party.currentTurn — raid has its own turn order (first in raid = next in expedition order)
         await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
 
-        // Use raid's current turn (triggering character) so the mention matches who can actually /raid
-        const nextCharacterRaid = character;
+        // Raid participant order is (triggerIdx+1)..triggerIdx so first in raid = next in expedition; use them for embed and ping
+        const raidForNextRoll = await Raid.findOne({ raidId: battleId });
+        const firstInRaidRoll = raidForNextRoll?.participants?.length ? (raidForNextRoll.participants[raidForNextRoll.currentTurn ?? 0] || raidForNextRoll.participants[0]) : null;
+        const nextCharacterRaid = firstInRaidRoll ? { userId: firstInRaidRoll.userId, name: firstInRaidRoll.name } : character;
         const monsterFlavorRaid = getExplorationFlavorText(quadrantMetaForMonster, "monster", { monster: selectedMonster });
         const embed = createExplorationMonsterEmbed(
          party,
@@ -7776,9 +7782,12 @@ module.exports = {
          const battleId = raidResult.raidId;
          const raidData = raidResult.raidData || {};
          const monsterHearts = raidData.monster ? { current: raidData.monster.currentHearts, max: raidData.monster.maxHearts } : { current: selectedMonster.hearts, max: selectedMonster.hearts };
+         const raidForNext = await Raid.findOne({ raidId: battleId });
+         const firstInRaid = raidForNext?.participants?.length ? (raidForNext.participants[raidForNext.currentTurn ?? 0] || raidForNext.participants[0]) : null;
+         const nextForEmbed = firstInRaid ? { userId: firstInRaid.userId, name: firstInRaid.name } : character;
          const campRaidActionCost = { staminaCost: campAttackPayResult?.staminaPaid ?? 0, heartsCost: campAttackStruggleHearts };
          const campMonsterFlavor = getExplorationFlavorText(quadrantMetaForCampMonster, "monster", { monster: selectedMonster });
-         const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, character, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), campRaidActionCost, poolCaps.maxHearts, poolCaps.maxStamina, campMonsterFlavor || undefined);
+         const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, loc, party.totalHearts, party.totalStamina, nextForEmbed, true, 0, await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant(party), campRaidActionCost, poolCaps.maxHearts, poolCaps.maxStamina, campMonsterFlavor || undefined);
          embed.setTitle(`🏕️ **Camp interrupted!** — ${selectedMonster.name}`);
          const campRaidDesc = `**${character.name}** set up camp in **${loc}**, but a **${selectedMonster.name}** attacked! No rest — fight with </raid:1470659276287774734>.${campAttackStruggleHearts > 0 ? ` **−${campAttackStruggleHearts} ❤ (struggle)** for camping.` : ""}`;
          embed.setDescription((campMonsterFlavor || "") + campRaidDesc);
@@ -7787,10 +7796,9 @@ module.exports = {
           { name: "🆔 **__Raid ID__**", value: battleId, inline: true },
           { name: "⚔️ __Raid__", value: "Raid in progress...", inline: false }
          );
-         addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party) });
+         addExplorationCommandsField(embed, { party, expeditionId, location: loc, nextCharacter: nextForEmbed, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party) });
          await interaction.editReply({ embeds: [embed] });
-         // Ping the triggering character (same as roll→raid: they are first in raid turn order and the only one who can /raid or /explore item until their turn)
-         await interaction.followUp({ content: getExplorationNextTurnContent({ userId: character.userId, name: character.name }) });
+         await interaction.followUp({ content: getExplorationNextTurnContent(nextForEmbed) });
          return;
         }
        } catch (raidErr) {

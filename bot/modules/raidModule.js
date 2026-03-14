@@ -1609,23 +1609,20 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     // Start the raid
     const { raidId, raidData } = await startRaid(monster, villageId, interaction, expeditionId, grottoId);
     
-    // Automatically add character to raid if provided (from loot command)
+    // Automatically add character to raid if provided (from loot command or expedition roll/camp)
     if (character) {
       try {
-        await joinRaid(character, raidId, {
-          client: interaction.client,
-          guild: interaction.guild
-        });
-
+        // Expedition raids: add participants in expedition "next up" order so raid turn order matches who was next (triggerer last = no one skipped)
         if (expeditionId && raidData.expeditionId) {
           const Party = require('@/models/PartyModel');
           const Character = require('@/models/CharacterModel');
           const party = await Party.findActiveByPartyId(expeditionId);
-          if (party?.characters?.length > 1) {
+          if (party?.characters?.length > 0) {
             const triggerIdx = party.characters.findIndex(c => c._id && character._id && c._id.toString() === character._id.toString());
             if (triggerIdx >= 0) {
               const n = party.characters.length;
-              for (let i = 1; i < n; i++) {
+              // Add in order: (triggerIdx+1), (triggerIdx+2), ..., triggerIdx so first in raid = next in expedition, triggerer last
+              for (let i = 1; i <= n; i++) {
                 const slot = party.characters[(triggerIdx + i) % n];
                 if (!slot?._id) continue;
                 try {
@@ -1636,8 +1633,17 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
                   logger.warn('RAID', `[raidModule.js] ⚠️ Could not auto-add ${slot.name} to expedition raid: ${err.message}`);
                 }
               }
+            } else {
+              await joinRaid(character, raidId, { client: interaction.client, guild: interaction.guild });
             }
+          } else {
+            await joinRaid(character, raidId, { client: interaction.client, guild: interaction.guild });
           }
+        } else {
+          await joinRaid(character, raidId, {
+            client: interaction.client,
+            guild: interaction.guild
+          });
         }
       } catch (joinError) {
         logger.warn('RAID', `[raidModule.js] ⚠️ Failed to auto-add character ${character.name} to raid: ${joinError.message}`);
