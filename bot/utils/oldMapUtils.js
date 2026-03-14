@@ -94,6 +94,24 @@ async function hasAppraisedUnexpiredOldMap(characterName, mapNumber) {
 }
 
 /**
+ * Check if a character has at least one appraised, already-redeemed map of the given number.
+ * Used to show "you've already claimed the reward here" only when someone entered this square with the map and redeemed.
+ * @param {string} characterName - Character to check
+ * @param {number} mapNumber - Map number (1-46)
+ * @returns {Promise<boolean>}
+ */
+async function hasAppraisedRedeemedOldMap(characterName, mapNumber) {
+  if (!characterName || typeof mapNumber !== 'number') return false;
+  const count = await OldMapFound.countDocuments({
+    characterName: charNameRegex(characterName),
+    mapNumber,
+    appraised: true,
+    redeemedAt: { $ne: null },
+  });
+  return count > 0;
+}
+
+/**
  * Find one appraised, unredeemed OldMapFound for the character and map number;
  * set redeemedAt to now and return the doc. Used after granting map-led reward (one-and-done).
  * @param {string} characterName - Character who owns the map
@@ -156,6 +174,7 @@ module.exports = {
   hasOldMap,
   hasAppraisedOldMap,
   hasAppraisedUnexpiredOldMap,
+  hasAppraisedRedeemedOldMap,
   findAndRedeemOldMap,
   getCharacterOldMaps,
   getCharacterOldMapsWithDetails,

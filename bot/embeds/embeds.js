@@ -687,7 +687,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   if (activeWaveId) {
    const waveCmdId = getWaveCommandId();
    const cmdItem = `</explore item:${cmdId}>`;
-   commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use /explore roll until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
+   commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use ${cmdRoll} until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
   } else if (hasActiveGrotto) {
    commandsValue += `**Trial in progress** — take your turn:\n${activeGrottoCommand || `</explore grotto continue:${cmdId}>`}\n\n_Other explore actions are blocked until the trial ends._`;
   } else if (showRestSecureMove === true) {
@@ -745,7 +745,8 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  embed.addFields(...safeFields);
  // Set footer: wave in progress takes precedence, then struggle mode when stamina is 0
  if (activeWaveId) {
-  embed.setFooter({ text: "Finish the wave or use /explore item to heal, then continue." });
+  const _cmdId = getExploreCommandId();
+  embed.setFooter({ text: `Finish the wave or use </explore item:${_cmdId}> to heal, then continue.` });
  } else if ((party?.totalStamina ?? 0) === 0) {
   const heartCost = party?.quadrantState === "unexplored" ? 2 : (party?.quadrantState === "explored" ? 1 : 0);
   const canCampHere = hideCampCommand !== true;
@@ -773,7 +774,7 @@ const addExplorationCommandsField = (embed, { party, expeditionId, location, nex
  if (activeWaveId) {
   const waveCmdId = getWaveCommandId();
   const cmdItem = `</explore item:${cmdId}>`;
-  commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use /explore roll until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
+  commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use ${cmdRoll} until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
  } else if (showMoveToUnexploredOnly === true) {
   const cmdItem = `</explore item:${cmdId}>`;
   const cmdCamp = `</explore camp:${cmdId}>`;

@@ -67,7 +67,7 @@ const { finalizeBlightApplication } = require("../../handlers/blightHandler.js")
 // ------------------- Utils ------------------
 const { handleInteractionError } = require('@/utils/globalErrorHandler.js');
 const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('@/utils/inventoryUtils.js');
-const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap, hasAppraisedUnexpiredOldMap, findAndRedeemOldMap } = require('@/utils/oldMapUtils.js');
+const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap, hasAppraisedUnexpiredOldMap, hasAppraisedRedeemedOldMap, findAndRedeemOldMap } = require('@/utils/oldMapUtils.js');
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig.js');
@@ -430,7 +430,7 @@ function createRaidBlockEmbed(party, raidId, blockedAction, location) {
     .setTitle("⚔️ Complete the Raid First")
     .setColor("#FF4444")
     .setDescription(
-      `You cannot use \`/explore ${blockedAction}\` until the raid is complete.`
+      `You cannot use ${cmdId ? `</explore ${blockedAction}:${cmdId}>` : `\`/explore ${blockedAction}\``} until the raid is complete.`
     )
     .addFields(
       { name: "🆔 **__Raid ID__**", value: `\`${raidId}\``, inline: true },
@@ -450,7 +450,7 @@ function createWaveBlockEmbed(party, waveId, blockedAction) {
     .setTitle("🌊 Complete the Wave First")
     .setColor("#2196F3")
     .setDescription(
-      `You cannot use \`/explore ${blockedAction}\` until the wave is complete.`
+      `You cannot use ${exploreCmdId ? `</explore ${blockedAction}:${exploreCmdId}>` : `\`/explore ${blockedAction}\``} until the wave is complete.`
     )
     .addFields(
       { name: "🆔 **__Wave ID__**", value: `\`${waveId}\``, inline: true },
@@ -461,7 +461,7 @@ function createWaveBlockEmbed(party, waveId, blockedAction) {
       }
     )
     .setImage(getExploreMapImageUrl(party, { highlight: true }))
-    .setFooter({ text: "Finish the wave or use /explore item to heal, then continue." });
+    .setFooter({ text: `Finish the wave or use </explore item:${exploreCmdId}> to heal, then continue.` });
 }
 
 // ------------------- getCombatBlockReply ------------------
@@ -2795,8 +2795,8 @@ module.exports = {
        Object.assign(grotto.puzzleState || {}, ensured.puzzleState);
       }
       const flavor = getPuzzleFlavor(grotto);
-      const grottoDesc = flavor || "Discuss with your group. Determine what to offer and submit with </explore grotto puzzle> (items). If correct, everyone gets Spirit Orbs.";
       const cmdId = getExploreCommandId();
+      const grottoDesc = flavor || `Discuss with your group. Determine what to offer and submit with </explore grotto puzzle:${cmdId}> (items). If correct, everyone gets Spirit Orbs.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -3648,7 +3648,7 @@ module.exports = {
         pushProgressLog(party, character.name, "grotto_maze_raid", `Random encounter: ${monster.name}. Raid started.`, undefined, undefined, new Date());
         await grotto.save();
         await party.save();
-        const raidCta = `Use </raid> with the Raid ID above. When the monster is defeated, continue with </explore grotto maze:${mazeCmdId}>.`;
+        const raidCta = `Use </raid:1470659276287774734> with the Raid ID above. When the monster is defeated, continue with </explore grotto maze:${mazeCmdId}>.`;
         const raidEmbed = new EmbedBuilder()
          .setTitle("🗺️ **Grotto: Maze — Random encounter!**")
          .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
@@ -3802,7 +3802,12 @@ module.exports = {
 
     const squareId = (party.square && String(party.square).trim()) || "";
     const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
-    if (!squareId || !quadrantId) return interaction.editReply("Expedition has no current location. Use </explore roll> or </explore move> first.");
+    if (!squareId || !quadrantId) {
+      const exploreCmdIdLoc = getExploreCommandId();
+      const rollMention = exploreCmdIdLoc ? `</explore roll:${exploreCmdIdLoc}>` : "`/explore roll`";
+      const moveMention = exploreCmdIdLoc ? `</explore move:${exploreCmdIdLoc}>` : "`/explore move`";
+      return interaction.editReply(`Expedition has no current location. Use ${rollMention} or ${moveMention} first.`);
+    }
 
     const squareDoc = await Square.findOne({ squareId: new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
     if (!squareDoc || !squareDoc.quadrants) return interaction.editReply("No map data for this square.");
@@ -3943,7 +3948,7 @@ module.exports = {
       .setTitle("🗺️ **Expedition: Revisiting Monster Camp**")
       .setColor(getExploreOutcomeColor("monster_camp_revisit", regionColors[party.region] || "#00ff99"))
       .setDescription(
-       `Revisiting a monster camp at **${location}**. All party members must fight. Use </wave:${getWaveCommandId()}> (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**`
+       `Revisiting a monster camp at **${location}**. All party members must fight. Use </wave:${getWaveCommandId()}> (id: \`${waveId}\`). **Do not use </explore roll:${getExploreCommandId()}> until the wave is complete.**`
       )
       .setImage(getExploreMapImageUrl(party, { highlight: true }));
      addExplorationStandardFields(embed, { party, expeditionId, location, nextCharacter: null, showNextAndCommands: false, showRestSecureMove: false, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
@@ -4021,7 +4026,7 @@ module.exports = {
      }
      if (!plumeHolder) {
       return interaction.editReply(
-       "No party member has a Goddess Plume in their expedition loadout to cleanse this grotto. Add one to your loadout before departing, or use </explore roll> and when you get a grotto here choose **Yes** to cleanse with a plume."
+       `No party member has a Goddess Plume in their expedition loadout to cleanse this grotto. Add one to your loadout before departing, or use </explore roll:${getExploreCommandId()}> and when you get a grotto here choose **Yes** to cleanse with a plume.`
       );
      }
      const grottoPayResult = await payStaminaOrStruggle(party, plumeHolder.characterIndex, 1, { order: "currentFirst", action: "grotto_plume" });
@@ -4226,7 +4231,7 @@ module.exports = {
        .setTitle("🕳️ **Complete the grotto trial first**")
        .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#9C27B0"))
        .setDescription(
-        `You cannot use \`/explore roll\` until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
+        `You cannot use </explore roll:${getExploreCommandId()}> until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
        )
        .setImage(getExploreMapImageUrl(party, { highlight: true }));
       addExplorationStandardFields(grottoRollEmbed, {
@@ -5333,7 +5338,7 @@ module.exports = {
               const errEmbed = new EmbedBuilder()
                .setTitle("❌ **Couldn't open chest**")
                .setColor("#b91c1c")
-               .setDescription("Something went wrong opening the chest. Try </explore roll> to continue.")
+               .setDescription(`Something went wrong opening the chest. Try </explore roll:${getExploreCommandId()}> to continue.`)
                .setImage(getExploreMapImageUrl(fp, { highlight: true }));
               addExplorationStandardFields(errEmbed, { party: fp || {}, expeditionId, location, nextCharacter: fp?.characters?.[fp.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(fp?.square, fp?.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(fp) });
               await resultMsg.edit({ embeds: [errEmbed], components: [chestDisabledRow] }).catch(() => {});
@@ -5430,7 +5435,7 @@ module.exports = {
            const errEmbed = new EmbedBuilder()
             .setTitle("❌ **Couldn't open chest**")
             .setColor("#b91c1c")
-            .setDescription("Something went wrong opening the chest. Try </explore roll> to continue.")
+            .setDescription(`Something went wrong opening the chest. Try </explore roll:${getExploreCommandId()}> to continue.`)
             .setImage(getExploreMapImageUrl(freshParty, { highlight: true }));
            addExplorationStandardFields(errEmbed, { party: freshParty || {}, expeditionId, location, nextCharacter: freshParty?.characters?.[freshParty.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty?.square, freshParty?.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
            await msg.edit({ embeds: [errEmbed], components: [disabledRow] }).catch(() => {});
@@ -5616,7 +5621,7 @@ module.exports = {
            .setColor(getExploreOutcomeColor("monster_camp_fight", regionColors[freshParty.region] || "#00ff99"))
            .setDescription(
             description.split("\n\n")[0] + "\n\n" +
-            `✅ **Fighting now!** All party members must fight. Use </wave:${getWaveCommandId()}> to take turns (id: \`${waveId}\`). **Do not use /explore roll until the wave is complete.**\n\n📍 **Set a pin** on the explore page below so you can revisit this camp later.`
+            `✅ **Fighting now!** All party members must fight. Use </wave:${getWaveCommandId()}> to take turns (id: \`${waveId}\`). **Do not use </explore roll:${getExploreCommandId()}> until the wave is complete.**\n\n📍 **Set a pin** on the explore page below so you can revisit this camp later.`
            )
            .setImage(getExploreMapImageUrl(freshParty, { highlight: true }));
           monsterCampEmbed.addFields({
@@ -5747,9 +5752,10 @@ module.exports = {
          logger.error("EXPLORE", `[explore.js]❌ Collector collect handler error: ${collectErr?.message || collectErr}`);
          collector.stop();
          if (i && !i.replied && !i.deferred) {
-          await i.reply({ content: "❌ Something went wrong processing your choice. Try /explore roll again.", flags: 64 }).catch(() => {});
+          const rollAgainCmd = getExploreCommandId() ? `Try </explore roll:${getExploreCommandId()}> again.` : "Try /explore roll again.";
+          await i.reply({ content: `❌ Something went wrong processing your choice. ${rollAgainCmd}`, flags: 64 }).catch(() => {});
          } else if (i?.followUp) {
-          await i.followUp({ content: "❌ Something went wrong processing your choice. Try /explore roll again.", flags: 64 }).catch(() => {});
+          await i.followUp({ content: `❌ Something went wrong processing your choice. ${rollAgainCmd}`, flags: 64 }).catch(() => {});
          }
         }
        });
@@ -6720,7 +6726,7 @@ module.exports = {
      } catch (err) {
       logger.error("EXPLORE", `[explore.js]❌ Secure confirm: ${err?.message || err}`);
       collector.stop();
-      await i.followUp({ content: "Something went wrong. Please try /explore secure again.", ephemeral: true }).catch(() => {});
+      await i.followUp({ content: `Something went wrong. Please try ${getExploreCommandId() ? `</explore secure:${getExploreCommandId()}>` : "`/explore secure`"} again.`, ephemeral: true }).catch(() => {});
      }
     });
     return;
@@ -6785,7 +6791,7 @@ module.exports = {
       .setTitle("🕳️ **Complete the grotto trial first**")
       .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#9C27B0"))
       .setDescription(
-       `You cannot use \`/explore move\` until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
+       `You cannot use </explore move:${getExploreCommandId()}> until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
       )
       .setImage(getExploreMapImageUrl(party, { highlight: true }));
      addExplorationStandardFields(grottoMoveEmbed, {
@@ -6917,7 +6923,7 @@ module.exports = {
      return interaction.editReply(
       `You're at **${currentLoc}**. The quadrant you chose isn't next to that location.\n\n` +
       `**Valid moves from here:** ${validOptions}\n\n` +
-      `Use **Move** again and pick one of the quadrants listed above (e.g. \`/explore move\` then enter the square and quadrant).`
+      `Use **Move** again and pick one of the quadrants listed above (e.g. ${getExploreCommandId() ? `</explore move:${getExploreCommandId()}>` : "`/explore move`"} then enter the square and quadrant).`
      );
     }
 
@@ -7223,7 +7229,7 @@ module.exports = {
     const moveToUnexplored = moveWasReveal;
     // Move to unexplored quadrant uses gold color + border image as a milestone prompt
     let moveDescription = moveToUnexplored
-     ? `The party has arrived at **${locationMove}**!\n\n📍 **New quadrant — use /explore roll to continue!**`
+     ? `The party has arrived at **${locationMove}**!\n\n📍 **New quadrant — use ${getExploreCommandId() ? `</explore roll:${getExploreCommandId()}>` : "`/explore roll`"} to continue!**`
      : `${character.name} led the party to **${locationMove}** (quadrant ${quadrantStateLabel}).`;
     
     // Add blight exposure warning if entering blighted quadrant
@@ -7308,13 +7314,26 @@ module.exports = {
         } else {
           const whoHasMapRedeemed = [];
           for (const pc of party.characters) {
-            const hasAppraised = await hasAppraisedOldMap(pc.name, quadWithMap.oldMapNumber);
-            if (hasAppraised) whoHasMapRedeemed.push(pc.name);
+            const hasRedeemed = await hasAppraisedRedeemedOldMap(pc.name, quadWithMap.oldMapNumber);
+            if (hasRedeemed) whoHasMapRedeemed.push(pc.name);
           }
-          if (whoHasMapRedeemed.length > 0) {
-            moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}** — you've already claimed the reward here.`;
-          } else {
-            moveDescription += `\n\n🗺️ **Map location!** This area is marked on **${mapItemName}** (leads to **${leadsToLabel}**). Get the map appraised at the Inariko Library. More info: ${OLD_MAPS_LINK}`;
+          if (whoHasMapRedeemed.length === 0) {
+            moveDescription += `\n\n🗺️ **Map location!** This area is marked on an old map. Get it appraised at the Inariko Library to discover what's here. More info: ${OLD_MAPS_LINK}`;
+            // DM the move leader (person who ran /explore move) so they're notified; don't reveal map number or what it leads to until appraised
+            const moveLeaderId = interaction.user?.id;
+            if (moveLeaderId && interaction.client) {
+              const mapLocationDmEmbed = new EmbedBuilder()
+                .setTitle("🗺️ Map location")
+                .setDescription(`You've entered an area marked on an old map (**${locationMove}**). Get a map appraised at the Inariko Library to discover what's here.`)
+                .setThumbnail(OLD_MAP_ICON_URL)
+                .setURL(OLD_MAPS_LINK)
+                .setColor(0x2ecc71)
+                .setFooter({ text: "Roots of the Wild • Old Maps" });
+              try {
+                const user = await interaction.client.users.fetch(moveLeaderId).catch(() => null);
+                if (user) await user.send({ embeds: [mapLocationDmEmbed] }).catch(() => {});
+              } catch (_) {}
+            }
           }
         }
       } catch (invErr) {
@@ -7474,7 +7493,7 @@ module.exports = {
       const notYourTurnEmbed = new EmbedBuilder()
        .setColor("#FFA500")
        .setTitle("⏳ It's not your turn")
-       .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the wave, then use **/explore item**.`)
+       .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the wave, then use ${getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : "**/explore item**"}.`)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
       return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
@@ -7487,7 +7506,7 @@ module.exports = {
       const notYourTurnEmbed = new EmbedBuilder()
        .setColor("#FFA500")
        .setTitle("⏳ It's not your turn")
-       .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the raid, then use **/explore item**.`)
+       .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the raid, then use ${getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : "**/explore item**"}.`)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
       return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
@@ -7503,7 +7522,7 @@ module.exports = {
       const notYourTurnEmbed = new EmbedBuilder()
        .setColor("#FFA500")
        .setTitle("⏳ It's not your turn")
-       .setDescription(`Only **${currentName}** can use an item. Wait for your turn, then use **/explore item**.`)
+       .setDescription(`Only **${currentName}** can use an item. Wait for your turn, then use ${getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : "**/explore item**"}.`)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
       return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
@@ -8015,7 +8034,7 @@ module.exports = {
     const raid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${party.partyId}$`, 'i') }, status: "active" });
     if (!raid) {
      return interaction.editReply({
-      content: "Your party is not in a tier 5+ monster battle. Use **/explore retreat** only during such a battle (when a tier 5+ encounter started a raid).",
+      content: `Your party is not in a tier 5+ monster battle. Use ${getExploreCommandId() ? `</explore retreat:${getExploreCommandId()}>` : "**/explore retreat**"} only during such a battle (when a tier 5+ encounter started a raid).`,
       ephemeral: true
      });
     }
@@ -8611,4 +8630,6 @@ module.exports = {
  async autocomplete(interaction) {
   await handleAutocomplete(interaction);
  },
+
+ buildTestingEndAfterGrottoEmbed,
 };

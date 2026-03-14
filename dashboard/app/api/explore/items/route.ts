@@ -62,6 +62,7 @@ export async function GET() {
           ],
         },
         { itemName: new RegExp("Goddess Plume", "i") },
+        { itemName: new RegExp("Elixir", "i") },
       ],
     })
       .select("_id itemName emoji modifierHearts staminaRecovered image")

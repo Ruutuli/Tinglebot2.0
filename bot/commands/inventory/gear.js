@@ -17,6 +17,7 @@ const { fetchCharacterByNameAndUserId, fetchModCharacterByNameAndUserId, getChar
 // ------------------- Database Models -------------------
 // Import the Item model for fetching item details.
 const ItemModel = require('@/models/ItemModel.js');
+const Party = require('@/models/PartyModel.js');
 
 
 // ------------------- Embeds -------------------
@@ -140,6 +141,18 @@ module.exports = {
           flags: [MessageFlags.Ephemeral]
         });
         return;
+      }
+
+      // ------------------- Block equip/unequip while on active explore -------------------
+      if (status === 'equip' || status === 'unequip') {
+        const activeParty = await Party.findOne({ status: 'started', 'characters._id': character._id }).select('partyId').lean();
+        if (activeParty) {
+          await interaction.editReply({
+            content: `❌ **${characterName}** is on an active expedition (id: \`${activeParty.partyId}\`). You cannot equip or unequip gear until the expedition has ended.`,
+            flags: [MessageFlags.Ephemeral],
+          });
+          return;
+        }
       }
 
       // ------------------- Handle Unequipping Gear -------------------

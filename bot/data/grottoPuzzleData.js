@@ -127,10 +127,7 @@ function getPuzzleFlavor(grotto) {
     const idx = state.puzzleClueIndex ?? 0;
     const c = OFFERING_STATUE_CLUES[idx];
     if (!c) return null;
-    const itemList = c.expectedItems.length > 1
-      ? `one of: ${c.expectedItems.join(', ')}`
-      : c.expectedItems[0];
-    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n↳ Offer **1** × ${itemList}. Only that amount will be taken from party inventories (any character — not loadout; no transfers during expedition). ➾ \`</explore grotto puzzle items:...>\``;
+    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n↳ Offer one item that fits the clue. Only that amount will be taken from party inventories (any character — not loadout; no transfers during expedition). ➾ \`</explore grotto puzzle items:...>\``;
   }
   return null;
 }

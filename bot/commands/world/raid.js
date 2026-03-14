@@ -1018,6 +1018,25 @@ async function handleRaidVictory(interaction, raidData, monster) {
       } catch (grottoErr) {
         console.error(`[raid.js]: ❌ Error completing Grotto Test of Power:`, grottoErr);
       }
+      // Testing mode: auto-end expedition after grotto (e.g. Trial of Strength) completion
+      if (raidData.grottoId && raidData.expeditionId && EXPLORATION_TESTING_MODE) {
+        try {
+          const party = await Party.findActiveByPartyId(raidData.expeditionId);
+          if (party && party.status === 'started') {
+            const exploreCmd = require('../exploration/explore');
+            const characterName = party.characters?.[0]?.name || 'Party';
+            const endEmbed = await exploreCmd.buildTestingEndAfterGrottoEmbed(party, raidData.expeditionId, characterName);
+            if (raidData.threadId && interaction?.client) {
+              const thread = await interaction.client.channels.fetch(raidData.threadId).catch(() => null);
+              if (thread) {
+                await thread.send({ embeds: [endEmbed] });
+              }
+            }
+          }
+        } catch (testingEndErr) {
+          console.warn(`[raid.js]: ⚠️ Testing end after grotto failed:`, testingEndErr?.message || testingEndErr);
+        }
+      }
     }
 
     const isGrottoRaid = !!raidData.grottoId;

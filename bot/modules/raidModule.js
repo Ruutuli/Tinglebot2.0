@@ -1140,6 +1140,21 @@ async function processRaidTurn(character, raidId, interaction, raidData = null, 
             } catch (skipErr) {
               logger.warn('RAID', `Failed to schedule turn skip after turn for ${raidId}: ${skipErr.message}`);
             }
+            // Expedition raid: ping the new current-turn participant in the thread so turn order is clear
+            if (raid.expeditionId && raid.threadId && interaction?.client) {
+              try {
+                const nextTurn = raid.getCurrentTurnParticipant();
+                if (nextTurn?.userId) {
+                  const charName = nextTurn.name || 'your character';
+                  const thread = await interaction.client.channels.fetch(raid.threadId);
+                  if (thread) {
+                    await thread.send({ content: `<@${nextTurn.userId}> — **you're up next.** Use \`/raid\` and choose **${charName}** to take your turn.` });
+                  }
+                }
+              } catch (pingErr) {
+                logger.warn('RAID', `[raidModule.js] ⚠️ Could not send expedition turn ping after advance: ${pingErr?.message || pingErr}`);
+              }
+            }
           }
         }
 

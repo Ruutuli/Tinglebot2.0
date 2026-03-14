@@ -655,6 +655,13 @@ export default function ExplorePartyPage() {
     };
   }, [partyId, party, fetchParty]);
 
+  // Close item-edit panel when expedition starts so user cannot change loadout during raid/explore
+  useEffect(() => {
+    if (party?.status === "started") {
+      setEditingItems(false);
+    }
+  }, [party?.status]);
+
   useEffect(() => {
     if (!party?.square) {
       setSquarePreview(null);
@@ -1939,7 +1946,7 @@ export default function ExplorePartyPage() {
                 </div>
                 );
               })()}
-              {party.currentUserJoined && party.currentUserMember && editingItems && (
+              {party.currentUserJoined && party.currentUserMember && party.status === "open" && editingItems && (
                 <div className="space-y-4">
                   <p className="text-sm text-[var(--botw-pale)]">Change items you’re bringing (up to 3, optional). Your character: <strong className="text-[var(--totk-ivory)]">{party.currentUserMember.name}</strong></p>
                   <p className="text-xs font-medium text-[var(--totk-grey-200)]">Selected</p>

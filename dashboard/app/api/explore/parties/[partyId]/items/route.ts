@@ -102,6 +102,7 @@ const explorationItemFilter = {
       ],
     },
     { itemName: /Goddess Plume/i },
+    { itemName: /Elixir/i },
   ],
 };
 
