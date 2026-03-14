@@ -1678,8 +1678,18 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     const monsterImage = monsterDetails.image || monster.image;
     const embed = await createRaidEmbed(raidData, monsterImage);
 
+    let channelContent = isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`;
+    // Expedition raid: @ who is next in the channel message (after the embed) so it's visible without opening the thread
+    if (expeditionId && raidForTurnPing.participants && raidForTurnPing.participants.length > 0) {
+      const currentIdx = typeof raidForTurnPing.currentTurn === 'number' ? raidForTurnPing.currentTurn % raidForTurnPing.participants.length : 0;
+      const firstTurn = raidForTurnPing.participants[currentIdx];
+      if (firstTurn?.userId) {
+        const charName = firstTurn.name || 'your character';
+        channelContent += `\n\n<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` and choose **${charName}** to take your turn.`;
+      }
+    }
     const raidMessage = await interaction.channel.send({
-      content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
+      content: channelContent,
       embeds: [embed]
     });
 

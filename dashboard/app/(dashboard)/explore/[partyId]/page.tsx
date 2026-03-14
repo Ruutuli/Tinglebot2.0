@@ -143,7 +143,20 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
     const at = typeof e.at === "string" ? e.at : "";
     out.push({ square, quadrant, outcome: e.outcome, label, occurrenceIndex, at, characterName: e.characterName ?? "" });
   }
-  return out;
+  // Dedupe grottos: same square+quadrant should show only the cleansed/named grotto, not also the initial "Found" entry
+  const grottoOutcomes = new Set(["grotto", "grotto_found", "grotto_cleansed"]);
+  const foundOnlyIndices = new Set<number>();
+  for (let i = 0; i < out.length; i++) {
+    const d = out[i];
+    if (!grottoOutcomes.has(d.outcome)) continue;
+    const isUnnamedFound = (d.outcome === "grotto" || d.outcome === "grotto_found") && (d.label === "Grotto" || d.label.startsWith("Grotto #"));
+    if (!isUnnamedFound) continue;
+    const hasCleansedSameLoc = out.some(
+      (x) => x.square === d.square && x.quadrant === d.quadrant && (x.outcome === "grotto_cleansed" || (x.label !== "Grotto" && !x.label.startsWith("Grotto #")))
+    );
+    if (hasCleansedSameLoc) foundOnlyIndices.add(i);
+  }
+  return out.filter((_, i) => !foundOnlyIndices.has(i));
 }
 
 /** Stable key for a discovery (uses log entry timestamp so it survives party refetch/poll). */

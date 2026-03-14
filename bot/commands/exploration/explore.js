@@ -1500,18 +1500,20 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  }
 
  if (trialType === "blessing") {
-  for (const slot of freshParty.characters) {
-   try {
-    await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
-   } catch (err) {
-    logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
+  if (!EXPLORATION_TESTING_MODE) {
+   for (const slot of freshParty.characters) {
+    try {
+     await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
+    } catch (err) {
+     logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
+    }
    }
+   if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+   for (const slot of freshParty.characters) {
+    freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+   }
+   freshParty.markModified("gatheredItems");
   }
-  if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
-  for (const slot of freshParty.characters) {
-   freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-  }
-  freshParty.markModified("gatheredItems");
   await markGrottoCleared(grottoDoc);
   restorePartyPoolOnGrottoExit(freshParty);
   pushProgressLog(freshParty, cleanseCharacter.name, "grotto_blessing", `Blessing trial: each party member received a Spirit Orb.`, undefined, undefined, new Date());
@@ -1525,11 +1527,11 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
     blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
    )
    .setImage(getExploreMapImageUrl(freshParty, { highlight: true }));
-  addExplorationStandardFields(blessingEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(freshParty) });
+  addExplorationStandardFields(blessingEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
   const explorePageUrlGrotto = getExplorePageUrl(expeditionId);
   blessingEmbed.addFields({
-   name: "📍 **__Set pin on webpage__**",
-   value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlGrotto}`,
+   name: "📍 **__Set pin on map__**",
+   value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlGrotto}) so they stay on the map when you leave.`,
    inline: false,
   });
   await msg.edit({ embeds: [blessingEmbed], components: [disabledRow] }).catch(() => {});
@@ -1541,13 +1543,14 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
     blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
    )
    .setImage(getExploreMapImageUrl(freshParty, { highlight: true }));
-  addExplorationStandardFields(blessingAnnounce, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(freshParty) });
+  addExplorationStandardFields(blessingAnnounce, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
   blessingAnnounce.addFields({
-   name: "📍 **__Set pin on webpage__**",
-   value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlGrotto}`,
+   name: "📍 **__Set pin on map__**",
+   value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlGrotto}) so they stay on the map when you leave.`,
    inline: false,
   });
   await i.followUp({ embeds: [blessingAnnounce] }).catch(() => {});
+  if (getExplorationNextTurnContent(nextCharacter)) await i.followUp({ content: getExplorationNextTurnContent(nextCharacter) }).catch(() => {});
   return;
  }
 
@@ -1585,12 +1588,12 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   ruinRestRecovered,
   hasActiveGrotto: true,
   activeGrottoCommand: grottoCmdHint,
-  hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(freshParty),
+  hasUnpinnedDiscoveriesInQuadrant: false,
  });
  const explorePageUrlTrial = getExplorePageUrl(expeditionId);
  continueEmbed.addFields({
-  name: "📍 **__Set pin on webpage__**",
-  value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlTrial}`,
+  name: "📍 **__Set pin on map__**",
+  value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlTrial}) so they stay on the map when you leave.`,
   inline: false,
  });
  if (trialType === "maze" && trialMazeFiles.length) continueEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
@@ -1612,15 +1615,16 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   ruinRestRecovered,
   hasActiveGrotto: true,
   activeGrottoCommand: grottoCmdHint,
-  hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(freshParty),
+  hasUnpinnedDiscoveriesInQuadrant: false,
  });
  cleanseAnnounce.addFields({
-  name: "📍 **__Set pin on webpage__**",
-  value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlTrial}`,
+  name: "📍 **__Set pin on map__**",
+  value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlTrial}) so they stay on the map when you leave.`,
   inline: false,
  });
  if (trialType === "maze" && trialMazeFiles.length) cleanseAnnounce.setFooter({ text: GROTTO_MAZE_LEGEND });
  await i.followUp({ embeds: [cleanseAnnounce], files: trialMazeFiles.length ? trialMazeFiles : undefined }).catch(() => {});
+ if (getExplorationNextTurnContent(nextCharacter)) await i.followUp({ content: getExplorationNextTurnContent(nextCharacter) }).catch(() => {});
 }
 
 // ------------------- applyBlightExposure ------------------
@@ -2140,18 +2144,20 @@ module.exports = {
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === true && !grotto.completedAt) {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
+      if (!EXPLORATION_TESTING_MODE) {
+       for (const slot of party.characters) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
+        }
        }
+       if (!party.gatheredItems) party.gatheredItems = [];
+       for (const slot of party.characters) {
+        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+       }
+       party.markModified("gatheredItems");
       }
-      if (!party.gatheredItems) party.gatheredItems = [];
-      for (const slot of party.characters) {
-       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-      }
-      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const flavor = getRandomPuzzleSuccessFlavor();
@@ -2201,12 +2207,13 @@ module.exports = {
       const raidStarted = grotto.testOfPowerState?.raidStarted && grotto.testOfPowerState?.raidId;
       if (raidStarted) {
        const raidId = grotto.testOfPowerState.raidId;
+       const raidCmd = "</raid:1470659276287774734>";
        const embedInProgress = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power**")
         .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
-        .setDescription(`The trial has already begun. Use </raid> with Raid ID **${raidId}** to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
+        .setDescription(`The trial has already begun. Use ${raidCmd} with Raid ID \`${raidId}\` to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
         .setImage(getExploreMapImageUrl(party, { highlight: true }));
-       addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</raid> (Raid ID: ${raidId})`, hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party) });
+       addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false });
        return interaction.editReply({ embeds: [embedInProgress] });
       }
       const poolEntry = rollTestOfPowerMonster();
@@ -2227,12 +2234,13 @@ module.exports = {
        grotto.testOfPowerState.raidStarted = true;
        grotto.testOfPowerState.raidId = raidResult.raidId;
        await grotto.save();
+       const raidCmd = "</raid:1470659276287774734>";
        const embedStarted = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power — Raid Started**")
         .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
-        .setDescription(`The trial has begun! A **${monster.name}** has appeared. Use </raid> with Raid ID **${raidResult.raidId}** to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
+        .setDescription(`The trial has begun! A **${monster.name}** has appeared. Use ${raidCmd} with Raid ID \`${raidResult.raidId}\` to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
         .setImage(getExploreMapImageUrl(party, { highlight: true }));
-       addExplorationStandardFields(embedStarted, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</raid> (Raid ID: ${raidResult.raidId})`, hasUnpinnedDiscoveriesInQuadrant: hasUnpinnedDiscoveriesInQuadrant(party) });
+       addExplorationStandardFields(embedStarted, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidResult.raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false });
        return interaction.editReply({ embeds: [embedStarted] });
       }
       const errMsg = raidResult?.error || "Could not start the raid. Try again.";
@@ -2431,18 +2439,20 @@ module.exports = {
      if (newSuccesses >= TARGET_SUCCESSES) {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
+      if (!EXPLORATION_TESTING_MODE) {
+       for (const slot of party.characters) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
+        }
        }
+       if (!party.gatheredItems) party.gatheredItems = [];
+       for (const slot of party.characters) {
+        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+       }
+       party.markModified("gatheredItems");
       }
-      if (!party.gatheredItems) party.gatheredItems = [];
-      for (const slot of party.characters) {
-       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-      }
-      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_target_success", `Target Practice completed. Each party member received a Spirit Orb.`, undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getCompleteOutcome();
@@ -2615,18 +2625,20 @@ module.exports = {
      if (checkResult.approved) {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
+      if (!EXPLORATION_TESTING_MODE) {
+       for (const slot of party.characters) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
+        }
        }
+       if (!party.gatheredItems) party.gatheredItems = [];
+       for (const slot of party.characters) {
+        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+       }
+       party.markModified("gatheredItems");
       }
-      if (!party.gatheredItems) party.gatheredItems = [];
-      for (const slot of party.characters) {
-       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-      }
-      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
      }
      pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${displayItems.join(", ")}. ${checkResult.approved ? "Approved." : "Denied."}`, undefined, undefined, new Date());
@@ -2742,20 +2754,22 @@ module.exports = {
         if (freshGrotto && !freshGrotto.completedAt && freshParty) {
          await markGrottoCleared(freshGrotto);
          restorePartyPoolOnGrottoExit(freshParty);
-         for (const slot of freshParty.characters) {
-          if (slot._id) {
-           try {
-            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
-           } catch (err) {
-            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze bypass Spirit Orb: ${err?.message || err}`);
+         if (!EXPLORATION_TESTING_MODE) {
+          for (const slot of freshParty.characters) {
+           if (slot._id) {
+            try {
+             await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
+            } catch (err) {
+             logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze bypass Spirit Orb: ${err?.message || err}`);
+            }
            }
           }
+          if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+          for (const slot of freshParty.characters) {
+           freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+          }
+          freshParty.markModified("gatheredItems");
          }
-         if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
-         for (const slot of freshParty.characters) {
-          freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-         }
-         freshParty.markModified("gatheredItems");
          pushProgressLog(freshParty, character.name, "grotto_maze_success", "Maze bypassed with Lens of Truth. Each party member received a Spirit Orb.", undefined, undefined, new Date());
          await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
          const rollCmdId = getExploreCommandId();
@@ -2902,18 +2916,20 @@ module.exports = {
         if (destType === 'exit') {
          await markGrottoCleared(grotto);
          restorePartyPoolOnGrottoExit(party);
-         for (const slot of party.characters) {
-          try {
-           await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-          } catch (err) {
-            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+         if (!EXPLORATION_TESTING_MODE) {
+          for (const slot of party.characters) {
+           try {
+            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+           } catch (err) {
+             logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+           }
           }
+          if (!party.gatheredItems) party.gatheredItems = [];
+          for (const slot of party.characters) {
+           party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+          }
+          party.markModified("gatheredItems");
          }
-         if (!party.gatheredItems) party.gatheredItems = [];
-         for (const slot of party.characters) {
-          party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-         }
-         party.markModified("gatheredItems");
          pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          party.markModified("currentTurn");
@@ -3115,18 +3131,20 @@ module.exports = {
      if (cellType === 'exit') {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+      if (!EXPLORATION_TESTING_MODE) {
+       for (const slot of party.characters) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
+        }
        }
+       if (!party.gatheredItems) party.gatheredItems = [];
+       for (const slot of party.characters) {
+        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+       }
+       party.markModified("gatheredItems");
       }
-      if (!party.gatheredItems) party.gatheredItems = [];
-      for (const slot of party.characters) {
-       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-      }
-      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       party.markModified("currentTurn");
@@ -3237,16 +3255,18 @@ module.exports = {
        const chestLoot = getGrottoMazeChestLoot(allItemsForChest);
        let givenItemName = chestLoot.itemName;
        let givenEmoji = chestLoot.emoji || "📦";
-       try {
-        await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze chest");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest (${givenItemName}): ${err?.message || err}`);
+       if (!EXPLORATION_TESTING_MODE) {
         try {
-         await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
-         givenItemName = "Spirit Orb";
-         givenEmoji = "💫";
-        } catch (fallbackErr) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest fallback: ${fallbackErr?.message || fallbackErr}`);
+         await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze chest");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest (${givenItemName}): ${err?.message || err}`);
+         try {
+          await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
+          givenItemName = "Spirit Orb";
+          givenEmoji = "💫";
+         } catch (fallbackErr) {
+          logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest fallback: ${fallbackErr?.message || fallbackErr}`);
+         }
         }
        }
        if (!usePartyOnlyForHeartsStamina(party)) {
@@ -3742,18 +3762,20 @@ module.exports = {
      if (grottoDoc.trialType === "blessing") {
       await markGrottoCleared(grottoDoc);
       restorePartyPoolOnGrottoExit(party);
-      for (const slot of party.characters) {
-       try {
-        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
-       } catch (err) {
-        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
+      if (!EXPLORATION_TESTING_MODE) {
+       for (const slot of party.characters) {
+        try {
+         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
+        } catch (err) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
+        }
        }
+       if (!party.gatheredItems) party.gatheredItems = [];
+       for (const slot of party.characters) {
+        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+       }
+       party.markModified("gatheredItems");
       }
-      if (!party.gatheredItems) party.gatheredItems = [];
-      for (const slot of party.characters) {
-       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-      }
-      party.markModified("gatheredItems");
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
       const blessingFlavorRevisit = getRandomBlessingFlavor();
       const blessingEmbed = new EmbedBuilder()
