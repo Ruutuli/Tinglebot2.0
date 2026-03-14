@@ -3605,7 +3605,8 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Maze — Trap!**")
        .setColor(getMazeEmbedColor('trap', regionColors[party.region]))
        .setDescription(trapDesc)
-       .setImage(mazeImg);
+       .setImage(mazeImg)
+       .setThumbnail("https://ssb.wiki.gallery/images/d/d8/PitfallSSBU.png");
       addExplorationStandardFields(trapEmbed, {
        party,
        expeditionId,
