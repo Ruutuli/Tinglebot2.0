@@ -199,9 +199,9 @@ async function getQuestNotificationChannel(quest, participant) {
             return participant.rpThreadId;
         }
 
-        // Art, Writing, and Art/Writing quest completion notifications always go to Sheikah Slate
+        // Art, Writing, Art/Writing, and Interactive quest completion notifications always go to Sheikah Slate (641858948802150400)
         const questType = (quest.questType || '').toLowerCase();
-        if (questType === 'art' || questType === 'writing' || questType === 'art / writing' || questType === 'art/writing') {
+        if (questType === 'art' || questType === 'writing' || questType === 'art / writing' || questType === 'art/writing' || questType === 'interactive') {
             return SHEIKAH_SLATE_CHANNEL_ID;
         }
 

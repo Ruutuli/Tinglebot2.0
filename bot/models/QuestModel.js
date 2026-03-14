@@ -799,8 +799,9 @@ questSchema.methods.completeFromTableRoll = async function(userId, rollResult) {
             
             await this.save();
             
-            // Send completion notification
-            await sendCompletionNotification(this, participant);
+            // Do NOT send completion notification here for Interactive quests: the caller (e.g. tableroll.js)
+            // will invoke processQuestCompletion, which sends a single reward notification with ping.
+            // Sending here would cause participants to be pinged twice in the quest board.
             
             console.log(`[QuestModel.js] ✅ Interactive quest completed for ${participant.characterName} in quest ${this.questID}`);
         }
