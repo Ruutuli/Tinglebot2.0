@@ -1678,20 +1678,22 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
     const monsterImage = monsterDetails.image || monster.image;
     const embed = await createRaidEmbed(raidData, monsterImage);
 
-    let channelContent = isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`;
-    // Expedition raid: @ who is next in the channel message (after the embed) so it's visible without opening the thread
+    const channelContent = isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`;
+    const raidMessage = await interaction.channel.send({
+      content: channelContent,
+      embeds: [embed]
+    });
+    // Expedition raid: @ who is next in a separate message so the ping is distinct from the embed
     if (expeditionId && raidForTurnPing.participants && raidForTurnPing.participants.length > 0) {
       const currentIdx = typeof raidForTurnPing.currentTurn === 'number' ? raidForTurnPing.currentTurn % raidForTurnPing.participants.length : 0;
       const firstTurn = raidForTurnPing.participants[currentIdx];
       if (firstTurn?.userId) {
         const charName = firstTurn.name || 'your character';
-        channelContent += `\n\n<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` and choose **${charName}** to take your turn.`;
+        await interaction.channel.send({
+          content: `<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` and choose **${charName}** to take your turn.`
+        }).catch((err) => logger.warn('RAID', `[raidModule.js] Could not send expedition turn ping to channel: ${err?.message || err}`));
       }
     }
-    const raidMessage = await interaction.channel.send({
-      content: channelContent,
-      embeds: [embed]
-    });
 
     // Create the raid thread with error handling
     let thread = null;

@@ -3519,9 +3519,22 @@ module.exports = {
       completedAt: null,
      });
      const grottoCmd = getActiveGrottoCommand(grotto?.trialType);
-     return interaction.editReply(
-      `**Complete the grotto trial first.** You cannot visit monster camps until the trial is complete. Use ${grottoCmd} for your turn.`
-     );
+     const grottoCampEmbed = new EmbedBuilder()
+      .setTitle("🕳️ **Complete the grotto trial first**")
+      .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#9C27B0"))
+      .setDescription(
+       `You cannot visit monster camps until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
+      )
+      .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     addExplorationStandardFields(grottoCampEmbed, {
+      party,
+      expeditionId,
+      location: `${party.square} ${party.quadrant}`,
+      nextCharacter: party.characters?.[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+     });
+     return interaction.editReply({ embeds: [grottoCampEmbed] });
     }
 
     const location = `${party.square} ${party.quadrant}`;
@@ -3867,9 +3880,22 @@ module.exports = {
        completedAt: null,
       });
       const grottoCmd = getActiveGrottoCommand(grotto?.trialType);
-      return interaction.editReply(
-       `**Complete the grotto trial first.** You cannot use \`/explore roll\` until the trial is complete. Use ${grottoCmd} for your turn.`
-      );
+      const grottoRollEmbed = new EmbedBuilder()
+       .setTitle("🕳️ **Complete the grotto trial first**")
+       .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#9C27B0"))
+       .setDescription(
+        `You cannot use \`/explore roll\` until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
+       )
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+      addExplorationStandardFields(grottoRollEmbed, {
+       party,
+       expeditionId,
+       location: `${party.square} ${party.quadrant}`,
+       nextCharacter: party.characters?.[party.currentTurn] ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+      });
+      return interaction.editReply({ embeds: [grottoRollEmbed] });
      }
 
      // Block rolling if there's active combat for this expedition (must resolve first)
@@ -6393,9 +6419,22 @@ module.exports = {
       completedAt: null,
      });
      const grottoCmd = getActiveGrottoCommand(grotto?.trialType);
-     return interaction.editReply(
-      `**Complete the grotto trial first.** You cannot use \`/explore move\` until the trial is complete. Use ${grottoCmd} for your turn.`
-     );
+     const grottoMoveEmbed = new EmbedBuilder()
+      .setTitle("🕳️ **Complete the grotto trial first**")
+      .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#9C27B0"))
+      .setDescription(
+       `You cannot use \`/explore move\` until the trial is complete.\n\nUse **${grottoCmd}** for your turn.`
+      )
+      .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     addExplorationStandardFields(grottoMoveEmbed, {
+      party,
+      expeditionId,
+      location: `${party.square} ${party.quadrant}`,
+      nextCharacter: party.characters?.[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+     });
+     return interaction.editReply({ embeds: [grottoMoveEmbed] });
     }
 
     // Block moving if there's active combat for this expedition (must resolve first)
@@ -6642,12 +6681,24 @@ module.exports = {
       if (unexplored.length > 0) {
        const quadList = unexplored.join(", ");
        const locationMove = `${currentSquare} ${party.quadrant}`;
+       const tryingDirection = (newLocation && newLocation.direction) ? newLocation.direction : null;
+       const tryingTarget = newLocation ? `${newLocation.square} ${newLocation.quadrant}` : null;
+       const canGoDirections = (adjacent || [])
+        .map((a) => a.direction)
+        .filter(Boolean);
+       const canGoLine = canGoDirections.length > 0
+        ? `**You can go:** ${canGoDirections.join(", ")}`
+        : "";
        const cantLeaveEmbed = new EmbedBuilder()
         .setTitle("🚫 **Can't leave yet**")
         .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#b91c1c"))
         .setDescription(
          `You can't leave **${currentSquare}** until the whole square is explored.\n\n` +
+         (tryingDirection && tryingTarget
+          ? `**Trying to go:** ${tryingDirection} (to **${tryingTarget}**)\n\n`
+          : "") +
          `**Still unexplored:** ${quadList}\n\n` +
+         (canGoLine ? `${canGoLine}\n\n` : "") +
          `Use the **Move** command again to explore the remaining quadrant(s), then you can move to an adjacent square.`
         )
         .setImage(getExploreMapImageUrl(party, { highlight: true }));
@@ -6707,6 +6758,18 @@ module.exports = {
     // When leaving a square, clear reportable discoveries in that square that were NOT pinned (not in reportedDiscoveryKeys). Marked discoveries are kept.
     const leavingSquare = String(currentSquare || "").trim().toUpperCase();
     const reportedSet = new Set(Array.isArray(party.reportedDiscoveryKeys) ? party.reportedDiscoveryKeys.filter((k) => typeof k === "string" && k.length > 0) : []);
+    const GROTTO_CLEANUP_OUTCOMES = ["grotto", "grotto_found", "grotto_cleansed"];
+    const isDiscoveryReportedForCleanup = (key, outcome, entrySquare, entryQuadrant) => {
+     if (reportedSet.has(key)) return true;
+     // Dashboard dedupes grottos (shows only cleansed/named); user pins one key (e.g. grotto_cleansed|G11|Q3|...). Treat all grotto-type entries in same square+quadrant as reported if any grotto key is pinned.
+     if (GROTTO_CLEANUP_OUTCOMES.includes(outcome)) {
+      for (const k of reportedSet) {
+       const parts = String(k).split("|");
+       if (parts.length >= 3 && GROTTO_CLEANUP_OUTCOMES.includes((parts[0] || "").trim()) && String(parts[1] || "").trim().toUpperCase() === entrySquare && String(parts[2] || "").trim().toUpperCase() === entryQuadrant) return true;
+      }
+     }
+     return false;
+    };
     let clearedCount = 0;
     const clearedKeys = [];
     const skippedKeys = [];
@@ -6720,7 +6783,7 @@ module.exports = {
       if (entrySquare !== leavingSquare) return true;
       const atStr = e.at instanceof Date ? e.at.toISOString() : (typeof e.at === "string" ? e.at : "");
       const key = `${e.outcome}|${entrySquare}|${entryQuadrant}|${atStr}`;
-      if (reportedSet.has(key)) {
+      if (isDiscoveryReportedForCleanup(key, e.outcome, entrySquare, entryQuadrant)) {
        skippedKeys.push(key);
        return true;
       }
@@ -7199,20 +7262,53 @@ module.exports = {
     const splitLinesEnd = [];
     if (!EXPLORATION_TESTING_MODE) {
      if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
-      const heartsPerMember = Math.floor(remainingHearts / memberCount);
-      const heartsRemainder = remainingHearts % memberCount;
-      const staminaPerMember = Math.floor(remainingStamina / memberCount);
-      const staminaRemainder = remainingStamina % memberCount;
+      // Load max hearts/stamina for each character so we can respect caps when splitting
+      const memberMaxes = [];
+      for (let idx = 0; idx < party.characters.length; idx++) {
+       const char = await Character.findById(party.characters[idx]._id);
+       memberMaxes.push({
+        maxH: char?.maxHearts ?? 0,
+        maxS: char?.maxStamina ?? 0,
+       });
+      }
+      const baseHearts = Math.floor(remainingHearts / memberCount);
+      const baseStamina = Math.floor(remainingStamina / memberCount);
+      const assignedHeartsArr = memberMaxes.map((m) => Math.min(m.maxH, baseHearts));
+      const assignedStaminaArr = memberMaxes.map((m) => Math.min(m.maxS, baseStamina));
+      let heartsLeft = remainingHearts - assignedHeartsArr.reduce((s, a) => s + a, 0);
+      let staminaLeft = remainingStamina - assignedStaminaArr.reduce((s, a) => s + a, 0);
+      // Distribute remainder to those who have room; prioritize character who ended, then wrap
+      const priorityOrder = Array.from({ length: memberCount }, (_, i) => (characterIndex + i) % memberCount);
+      while (heartsLeft > 0) {
+       let gave = false;
+       for (const idx of priorityOrder) {
+        if (heartsLeft <= 0) break;
+        if (assignedHeartsArr[idx] < memberMaxes[idx].maxH) {
+         assignedHeartsArr[idx] += 1;
+         heartsLeft -= 1;
+         gave = true;
+        }
+       }
+       if (!gave) break;
+      }
+      while (staminaLeft > 0) {
+       let gave = false;
+       for (const idx of priorityOrder) {
+        if (staminaLeft <= 0) break;
+        if (assignedStaminaArr[idx] < memberMaxes[idx].maxS) {
+         assignedStaminaArr[idx] += 1;
+         staminaLeft -= 1;
+         gave = true;
+        }
+       }
+       if (!gave) break;
+      }
       for (let idx = 0; idx < party.characters.length; idx++) {
        const partyCharacter = party.characters[idx];
        const char = await Character.findById(partyCharacter._id);
        if (char) {
-        const heartShare = heartsPerMember + (idx < heartsRemainder ? 1 : 0);
-        const staminaShare = staminaPerMember + (idx < staminaRemainder ? 1 : 0);
-        const maxH = char.maxHearts ?? 0;
-        const maxS = char.maxStamina ?? 0;
-        const assignedHearts = Math.min(maxH, heartShare);
-        const assignedStamina = Math.min(maxS, staminaShare);
+        const assignedHearts = assignedHeartsArr[idx];
+        const assignedStamina = assignedStaminaArr[idx];
         char.currentHearts = assignedHearts;
         char.currentStamina = assignedStamina;
         char.currentVillage = targetVillage;
@@ -7276,20 +7372,48 @@ module.exports = {
     } else {
     // Testing mode: no character DB persist; revert all map state so the map is clean after the test
     if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
-      const heartsPerMember = Math.floor(remainingHearts / memberCount);
-      const heartsRemainder = remainingHearts % memberCount;
-      const staminaPerMember = Math.floor(remainingStamina / memberCount);
-      const staminaRemainder = remainingStamina % memberCount;
+      const memberMaxes = [];
+      for (let idx = 0; idx < party.characters.length; idx++) {
+       const char = await Character.findById(party.characters[idx]._id);
+       memberMaxes.push({
+        maxH: char?.maxHearts ?? 0,
+        maxS: char?.maxStamina ?? 0,
+       });
+      }
+      const baseHearts = Math.floor(remainingHearts / memberCount);
+      const baseStamina = Math.floor(remainingStamina / memberCount);
+      const assignedHeartsArr = memberMaxes.map((m) => Math.min(m.maxH, baseHearts));
+      const assignedStaminaArr = memberMaxes.map((m) => Math.min(m.maxS, baseStamina));
+      let heartsLeft = remainingHearts - assignedHeartsArr.reduce((s, a) => s + a, 0);
+      let staminaLeft = remainingStamina - assignedStaminaArr.reduce((s, a) => s + a, 0);
+      const priorityOrder = Array.from({ length: memberCount }, (_, i) => (characterIndex + i) % memberCount);
+      while (heartsLeft > 0) {
+       let gave = false;
+       for (const idx of priorityOrder) {
+        if (heartsLeft <= 0) break;
+        if (assignedHeartsArr[idx] < memberMaxes[idx].maxH) {
+         assignedHeartsArr[idx] += 1;
+         heartsLeft -= 1;
+         gave = true;
+        }
+       }
+       if (!gave) break;
+      }
+      while (staminaLeft > 0) {
+       let gave = false;
+       for (const idx of priorityOrder) {
+        if (staminaLeft <= 0) break;
+        if (assignedStaminaArr[idx] < memberMaxes[idx].maxS) {
+         assignedStaminaArr[idx] += 1;
+         staminaLeft -= 1;
+         gave = true;
+        }
+       }
+       if (!gave) break;
+      }
       for (let idx = 0; idx < party.characters.length; idx++) {
        const partyCharacter = party.characters[idx];
-       const heartShare = heartsPerMember + (idx < heartsRemainder ? 1 : 0);
-       const staminaShare = staminaPerMember + (idx < staminaRemainder ? 1 : 0);
-       const char = await Character.findById(partyCharacter._id);
-       const maxH = char?.maxHearts ?? 0;
-       const maxS = char?.maxStamina ?? 0;
-       const assignedHearts = Math.min(maxH, heartShare);
-       const assignedStamina = Math.min(maxS, staminaShare);
-       splitLinesEnd.push(`${partyCharacter.name || "Unknown"}: ${assignedHearts} ❤, ${assignedStamina} stamina`);
+       splitLinesEnd.push(`${partyCharacter.name || "Unknown"}: ${assignedHeartsArr[idx]} ❤, ${assignedStaminaArr[idx]} stamina`);
       }
      }
      await Grotto.deleteMany({ partyId: expeditionId }).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Grotto delete on end: ${err?.message}`));
