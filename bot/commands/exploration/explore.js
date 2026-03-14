@@ -1216,6 +1216,163 @@ async function findExactMapSquareAndQuadrant(squareId, quadrantId) {
  return { square, exactSquareId: square.squareId, exactQuadrantId: quadrant.quadrantId };
 }
 
+// ------------------- buildTestingEndAfterGrottoEmbed ------------------
+// Testing only: end expedition immediately after grotto completion (same cleanup as "end" in testing mode).
+// - Resets map state (quadrants unexplored, discoveries cleared, pins removed), deletes grottos, closes raids.
+// - Does NOT persist Spirit Orbs or any character state (no addItemInventoryDatabase, no Character updates).
+//   Callers already skip Spirit Orb persistence when EXPLORATION_TESTING_MODE is set.
+// Returns the "Expedition: Returned Home" embed; caller must reply with it.
+async function buildTestingEndAfterGrottoEmbed(party, expeditionId, characterName) {
+ const characterIndex = party.characters.findIndex((c) => c.name === characterName);
+ const idx = characterIndex >= 0 ? characterIndex : 0;
+ const regionKeyEnd = (party.region || "").toLowerCase();
+ const regionToVillage = { eldin: "rudania", lanayru: "inariko", faron: "vhintl" };
+ const targetVillage = regionToVillage[regionKeyEnd] || "rudania";
+ const villageLabelEnd = targetVillage.charAt(0).toUpperCase() + targetVillage.slice(1);
+ const remainingHearts = Math.max(0, party.totalHearts ?? 0);
+ const remainingStamina = Math.max(0, party.totalStamina ?? 0);
+ const memberCount = (party.characters || []).length;
+ const splitLinesEnd = [];
+ if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
+  const memberMaxes = [];
+  for (let i = 0; i < party.characters.length; i++) {
+   const char = await Character.findById(party.characters[i]._id);
+   memberMaxes.push({ maxH: char?.maxHearts ?? 0, maxS: char?.maxStamina ?? 0 });
+  }
+  const baseHearts = Math.floor(remainingHearts / memberCount);
+  const baseStamina = Math.floor(remainingStamina / memberCount);
+  const assignedHeartsArr = memberMaxes.map((m) => Math.min(m.maxH, baseHearts));
+  const assignedStaminaArr = memberMaxes.map((m) => Math.min(m.maxS, baseStamina));
+  let heartsLeft = remainingHearts - assignedHeartsArr.reduce((s, a) => s + a, 0);
+  let staminaLeft = remainingStamina - assignedStaminaArr.reduce((s, a) => s + a, 0);
+  const priorityOrder = Array.from({ length: memberCount }, (_, i) => (idx + i) % memberCount);
+  while (heartsLeft > 0) {
+   let gave = false;
+   for (const i of priorityOrder) {
+    if (heartsLeft <= 0) break;
+    if (assignedHeartsArr[i] < memberMaxes[i].maxH) { assignedHeartsArr[i] += 1; heartsLeft -= 1; gave = true; }
+   }
+   if (!gave) break;
+  }
+  while (staminaLeft > 0) {
+   let gave = false;
+   for (const i of priorityOrder) {
+    if (staminaLeft <= 0) break;
+    if (assignedStaminaArr[i] < memberMaxes[i].maxS) { assignedStaminaArr[i] += 1; staminaLeft -= 1; gave = true; }
+   }
+   if (!gave) break;
+  }
+  for (let i = 0; i < party.characters.length; i++) {
+   splitLinesEnd.push(`${party.characters[i].name || "Unknown"}: ${assignedHeartsArr[i]} ❤, ${assignedStaminaArr[i]} stamina`);
+  }
+ }
+ // Reset map and expedition state only; no Character DB writes (no Spirit Orbs or hearts/stamina persist).
+ await Grotto.deleteMany({ partyId: expeditionId }).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end after grotto: Grotto delete: ${err?.message}`));
+ const exploredThisRunEnd = party.exploredQuadrantsThisRun || [];
+ for (const { squareId, quadrantId } of exploredThisRunEnd) {
+  if (!squareId || !quadrantId) continue;
+  const resolvedEnd = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+  if (resolvedEnd) {
+   const { exactSquareId, exactQuadrantId } = resolvedEnd;
+   await Square.updateOne(
+    { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+    { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+    { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
+   ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end after grotto: reset quadrant: ${err?.message}`));
+   await Square.updateOne(
+    { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+    { $set: { "quadrants.$[q].discoveries": [] } },
+    { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
+   ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end after grotto: clear discoveries: ${err?.message}`));
+  }
+ }
+ const expeditionPins = await Pin.find({ partyId: String(expeditionId).trim() }).lean().catch(() => []);
+ for (const pin of expeditionPins || []) {
+  const key = pin.sourceDiscoveryKey;
+  if (key && typeof key === "string") {
+   const parts = key.split("|");
+   const squareIdRaw = (parts[1] ?? "").trim();
+   const quadrantId = (parts[2] ?? "").trim().toUpperCase();
+   if (squareIdRaw && (quadrantId === "Q1" || quadrantId === "Q2" || quadrantId === "Q3" || quadrantId === "Q4")) {
+    const squareIdRegex = new RegExp(`^${String(squareIdRaw).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+    await Square.updateOne(
+     { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId, "quadrants.discoveries.discoveryKey": key },
+     { $set: { "quadrants.$[q].discoveries.$[d].pinned": false, "quadrants.$[q].discoveries.$[d].pinnedAt": null, "quadrants.$[q].discoveries.$[d].pinId": null } },
+     { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.discoveryKey": key }] }
+    ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end after grotto: unpin: ${err?.message}`));
+   }
+  }
+  await Pin.findByIdAndDelete(pin._id).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end after grotto: delete pin: ${err?.message}`));
+ }
+ if (Array.isArray(party.reportedDiscoveryKeys) && party.reportedDiscoveryKeys.length > 0) {
+  party.reportedDiscoveryKeys = [];
+  party.markModified("reportedDiscoveryKeys");
+ }
+ pushProgressLog(party, characterName, "end", `Expedition ended (testing: after grotto). Returned to ${villageLabelEnd}: ${(party.characters || []).map((c) => c.name).filter(Boolean).join(", ") || "—"}.`, undefined, undefined, new Date());
+ pushProgressLog(party, characterName, "end_test_reset", "Testing mode: No changes were saved.", undefined, undefined, new Date());
+ await closeRaidsForExpedition(expeditionId);
+ party.status = "completed";
+ party.outcome = "success";
+ party.finalLocation = { square: party.square, quadrant: party.quadrant };
+ party.endedAt = new Date();
+ await party.save();
+ const log = party.progressLog || [];
+ const turnsOrActions = log.filter((e) => e.outcome !== "end").length;
+ let itemsGathered = Array.isArray(party.gatheredItems) && party.gatheredItems.length > 0
+  ? party.gatheredItems.reduce((sum, g) => sum + (typeof g.quantity === "number" ? g.quantity : 1), 0)
+  : 0;
+ if (itemsGathered === 0 && log.length > 0) {
+  for (const e of log) {
+   if (e.outcome === "item") itemsGathered += 1;
+   else if (e.outcome === "relic") itemsGathered += 1;
+   else if (e.outcome === "monster" && e.loot?.itemName) itemsGathered += 1;
+   else if (e.outcome === "chest_open") itemsGathered += party.characters?.length ?? 1;
+  }
+ }
+ const highlightOutcomes = new Set();
+ for (const e of log) {
+  const o = e.outcome;
+  if (o === "ruins" || o === "ruin_rest") highlightOutcomes.add("Found ruins");
+  else if (o === "grotto" || o === "grotto_cleansed" || o === "grotto_maze_success" || o === "grotto_travel" || o === "grotto_puzzle_success" || o === "grotto_target_success" || o === "grotto_maze_raid") highlightOutcomes.add("Found grotto");
+  else if (o === "monster_camp") highlightOutcomes.add("Monster camp");
+  else if (o === "raid") highlightOutcomes.add("Raid");
+  else if (o === "fairy") highlightOutcomes.add("Fairy");
+  else if (o === "chest_open") highlightOutcomes.add("Chest opened");
+  else if (o === "secure") highlightOutcomes.add("Secured quadrant");
+  else if (o === "monster") highlightOutcomes.add("Defeated monster");
+  else if (o === "retreat") highlightOutcomes.add("Escaped raid");
+  else if (o === "relic") highlightOutcomes.add("Relic found");
+ }
+ const highlightsList = [...highlightOutcomes];
+ if (itemsGathered > 0) highlightsList.unshift(`**${itemsGathered}** item(s) gathered`);
+ const highlightsValue = highlightsList.length > 0 ? highlightsList.map((h) => `• ${h}`).join("\n") : "";
+ const reportUrl = getExplorePageUrl(expeditionId);
+ const splitSectionEnd = splitLinesEnd.length > 0 ? `**Split (remaining hearts & stamina):**\n${splitLinesEnd.join("\n")}\n\n` : "No remaining hearts or stamina to divide.\n\n";
+ const testingResetNote = "⚠️ **Testing mode:** Expedition ended after grotto. No changes were saved.\n\n";
+ const startTime = party.createdAt ? new Date(party.createdAt).getTime() : Date.now();
+ const durationMs = Math.max(0, Date.now() - startTime);
+ const durationMins = Math.floor(durationMs / 60000);
+ const hours = Math.floor(durationMins / 60);
+ const mins = durationMins % 60;
+ const durationText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+ const memberNamesEnd = (party.characters || []).map((c) => c.name).filter(Boolean);
+ const membersTextEnd = memberNamesEnd.length > 0 ? memberNamesEnd.join(", ") : "—";
+ const embed = new EmbedBuilder()
+  .setTitle(`🗺️ **Expedition: Returned Home**`)
+  .setColor(getExploreOutcomeColor("end", regionColors[party.region] || "#4CAF50"))
+  .setDescription(
+   `The expedition has ended.\n\n` +
+   testingResetNote +
+   `**Returned to ${villageLabelEnd}:**\n${membersTextEnd}\n\n` +
+   splitSectionEnd +
+   `**View the expedition report here:** [Open expedition report](${reportUrl})`
+  )
+  .setImage(getExploreMapImageUrl(party, { highlight: true }));
+ embed.addFields({ name: "📊 **Expedition stats**", value: `**${turnsOrActions}** actions · **${itemsGathered}** item(s) gathered · **${durationText}**`, inline: false });
+ if (highlightsValue) embed.addFields({ name: "✨ **Highlights**", value: highlightsValue, inline: false });
+ return embed;
+}
+
 // ------------------- countSpecialEventsInSquare ------------------
 function countSpecialEventsInSquare(party, square) {
  if (!party.progressLog || !Array.isArray(party.progressLog)) return 0;
@@ -1561,6 +1718,11 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   restorePartyPoolOnGrottoExit(freshParty);
   pushProgressLog(freshParty, cleanseCharacter.name, "grotto_blessing", `Blessing trial: each party member received a Spirit Orb.`, undefined, undefined, new Date());
   await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
+  if (EXPLORATION_TESTING_MODE) {
+   const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, cleanseCharacter.name);
+   await msg.edit({ embeds: [endEmbed], components: [disabledRow] }).catch(() => {});
+   return;
+  }
   const blessingFlavor = getRandomBlessingFlavor();
   const blessingEmbed = new EmbedBuilder()
    .setTitle("🗺️ **Expedition: Grotto cleansed — Blessing!**")
@@ -2234,6 +2396,10 @@ module.exports = {
       party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       return interaction.editReply({ embeds: [endEmbed] });
+      }
       const flavor = getRandomPuzzleSuccessFlavor();
       const rollCmdId = getExploreCommandId();
       const approvedEmbed = new EmbedBuilder()
@@ -2532,6 +2698,10 @@ module.exports = {
       party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_target_success", `Target Practice completed. Each party member received a Spirit Orb.`, undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       return interaction.editReply({ embeds: [endEmbed] });
+      }
       const outcome = getCompleteOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
       const desc = `The blimp looms before you. ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nSee **Commands** below to continue exploring.`;
@@ -2725,6 +2895,10 @@ module.exports = {
      await grotto.save();
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      if (checkResult.approved) {
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       return interaction.editReply({ embeds: [endEmbed] });
+      }
       const flavor = getRandomPuzzleSuccessFlavor();
       const rollCmdId = getExploreCommandId();
       const successEmbed = new EmbedBuilder()
@@ -2850,6 +3024,10 @@ module.exports = {
          freshParty.markModified("gatheredItems");
          pushProgressLog(freshParty, character.name, "grotto_maze_success", "Maze bypassed with Lens of Truth. Each party member received a Spirit Orb.", undefined, undefined, new Date());
          await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
+         if (EXPLORATION_TESTING_MODE) {
+          const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, character.name);
+          return i.editReply({ embeds: [endEmbed], components: [disabledRow] }).catch(() => {});
+         }
          const rollCmdId = getExploreCommandId();
          const doneEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Bypassed**")
@@ -3024,6 +3202,10 @@ module.exports = {
          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          party.markModified("currentTurn");
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+         if (EXPLORATION_TESTING_MODE) {
+          const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+          return interaction.editReply({ embeds: [endEmbed] });
+         }
          try {
           const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "mod", currentNode: newKey, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
           mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
@@ -3240,6 +3422,10 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       party.markModified("currentTurn");
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       return interaction.editReply({ embeds: [endEmbed] });
+      }
       try {
        const exitMazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "mod", currentNode: nextKey, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
        mazeFiles = [new AttachmentBuilder(exitMazeBuf, { name: "maze.png" })];
@@ -3919,6 +4105,11 @@ module.exports = {
       }
       party.markModified("gatheredItems");
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
+      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, plumeHolder.character.name);
+       return interaction.editReply({ embeds: [endEmbed] });
+      }
       const blessingFlavorRevisit = getRandomBlessingFlavor();
       const blessingEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
