@@ -455,36 +455,28 @@ function setCellToPath(matrix, x, y) {
 }
 
 /**
- * Remove the scrying wall and any walls directly north, east, south, and west of it.
- * Does not move the player.
- * - Finds the first WALL cell in the facing direction from (x,y) (skips path cells).
- * - Removes that wall and all four cardinal neighbors of it: N, E, S, W (only if they are walls).
+ * Remove the scrying wall: open the cell immediately in front of the player (one step in facing)
+ * and the two cells perpendicular to the passage (above and below when facing E/W, left and right when N/S).
+ * Does not move the player. Only affects the three cells next to the player in the facing direction.
  */
 function removeScryingWall(matrix, x, y, facing) {
   if (!matrix || isNaN(x) || isNaN(y)) return;
   const rows = matrix.length;
   const cols = matrix[0]?.length || 0;
 
-  // Find the first wall in the facing direction (player may be several path cells away from the wall)
-  let pos = moveInFacing(x, y, facing);
-  while (pos.x >= 0 && pos.x < cols && pos.y >= 0 && pos.y < rows && stringVal(matrix[pos.y], pos.x) === 0) {
-    pos = moveInFacing(pos.x, pos.y, facing);
-  }
-  if (pos.x < 0 || pos.x >= cols || pos.y < 0 || pos.y >= rows) return;
+  // One step only in the facing direction (the "wall" / barrier we're scrying is right in front)
+  const step1 = moveInFacing(x, y, facing);
+  if (step1.x < 0 || step1.x >= cols || step1.y < 0 || step1.y >= rows) return;
 
-  const wall = pos;
-  setCellToPath(matrix, wall.x, wall.y);
+  setCellToPath(matrix, step1.x, step1.y);
 
-  // Destroy any walls directly north, east, south, and west of that wall
-  const cardinals = [
-    { x: wall.x, y: wall.y - 1 }, // north
-    { x: wall.x, y: wall.y + 1 }, // south
-    { x: wall.x + 1, y: wall.y }, // east
-    { x: wall.x - 1, y: wall.y }, // west
-  ];
-  for (const c of cardinals) {
-    if (c.y >= 0 && c.y < rows && c.x >= 0 && c.x < cols && stringVal(matrix[c.y], c.x) !== 0) {
-      setCellToPath(matrix, c.x, c.y);
+  // Only the two cells perpendicular to the passage (sides of the corridor), not all four cardinals
+  const perpendicular = (facing === "n" || facing === "s")
+    ? [{ x: step1.x - 1, y: step1.y }, { x: step1.x + 1, y: step1.y }]   // left, right
+    : [{ x: step1.x, y: step1.y - 1 }, { x: step1.x, y: step1.y + 1 }]; // above, below
+  for (const p of perpendicular) {
+    if (p.y >= 0 && p.y < rows && p.x >= 0 && p.x < cols && stringVal(matrix[p.y], p.x) !== 0) {
+      setCellToPath(matrix, p.x, p.y);
     }
   }
 }
