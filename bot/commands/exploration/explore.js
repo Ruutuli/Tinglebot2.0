@@ -3413,7 +3413,11 @@ module.exports = {
      await party.save();
      const nextCharMove = party.characters[party.currentTurn] ?? null;
      const moveDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
-     const flavorBlock = randomEventPart ? `\n\n\`\`\`\n${randomEventPart}\n\`\`\`` : "";
+     const flavorBlock = randomEventPart
+      ? (randomEvent.type === "flavor"
+        ? `\n\n\`\`\`\n${String(randomEventPart).replace(/\*\*/g, "")}\n\`\`\``
+        : `\n\n${randomEventPart}`)
+      : "";
      const moveEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Maze**")
       .setColor(getMazeEmbedColor(null, regionColors[party.region]))
