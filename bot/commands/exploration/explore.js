@@ -71,7 +71,7 @@ const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap } = require('@/utils
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig.js');
-const { generateGrottoMaze, getPathCellAt, getNeighbourCoords, getCellBeyondWall } = require('@/utils/grottoMazeGenerator.js');
+const { generateGrottoMaze, getPathCellAt, getNeighbourCoords, getCellBeyondWall, removeScryingWall } = require('@/utils/grottoMazeGenerator.js');
 const { renderMazeToBuffer } = require('@/utils/grottoMazeRenderer.js');
 const logger = require("@/utils/logger.js");
 const fs = require("fs");
@@ -2890,7 +2890,18 @@ module.exports = {
         return;
        }
       }
-      if (outcome.type === 'collapse' || outcome.type === 'faster_path_open') {
+      if (outcome.type === 'faster_path_open') {
+       // Open the wall (and surrounding walls) so the path is passable; player stays where they are
+       removeScryingWall(matrix, cx, cy, facing);
+       grotto.markModified("mazeState.layout.matrix");
+       await grotto.save();
+       try {
+        const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+        mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
+        mazeImg = "attachment://maze.png";
+       } catch (e) {}
+      }
+      if (outcome.type === 'collapse') {
        const beyond = getCellBeyondWall(matrix, cx, cy, facing);
        if (beyond) {
         const newKey = `${beyond.x},${beyond.y}`;

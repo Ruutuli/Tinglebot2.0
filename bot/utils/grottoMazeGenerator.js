@@ -445,6 +445,38 @@ function getCellBeyondWall(matrix, x, y, facing) {
 }
 
 /**
+ * Set a single matrix cell to path (0). Used when Song of Scrying opens a wall.
+ */
+function setCellToPath(matrix, x, y) {
+  if (!matrix || y < 0 || y >= matrix.length) return;
+  const row = matrix[y];
+  if (!row || x < 0 || x >= row.length) return;
+  matrix[y] = replaceAt(row, x, "0");
+}
+
+/**
+ * Remove the scrying wall and any walls immediately surrounding it in the facing direction,
+ * so the passage opens. Does not move the player.
+ * - Removes the wall at step1 (one step in facing direction from (x,y)).
+ * - Also removes the two cells perpendicular to the passage (left/right of step1) if they are walls.
+ */
+function removeScryingWall(matrix, x, y, facing) {
+  if (!matrix || isNaN(x) || isNaN(y)) return;
+  const step1 = moveInFacing(x, y, facing);
+  setCellToPath(matrix, step1.x, step1.y);
+  const rows = matrix.length;
+  const cols = matrix[step1.y] ? matrix[step1.y].length : 0;
+  const perpendicular = (facing === "n" || facing === "s")
+    ? [{ x: step1.x - 1, y: step1.y }, { x: step1.x + 1, y: step1.y }]
+    : [{ x: step1.x, y: step1.y - 1 }, { x: step1.x, y: step1.y + 1 }];
+  for (const p of perpendicular) {
+    if (p.y >= 0 && p.y < rows && p.x >= 0 && p.x < cols && stringVal(matrix[p.y], p.x) !== 0) {
+      setCellToPath(matrix, p.x, p.y);
+    }
+  }
+}
+
+/**
  * Get neighbouring path cell. Direction can be:
  * - Cardinal: north, south, east, west (or n, s, e, w) — absolute direction
  * - Relative: left, right, straight, back — uses current facing
@@ -471,5 +503,6 @@ module.exports = {
   getEntryNode,
   moveInFacing,
   getCellBeyondWall,
+  removeScryingWall,
   CELL_TYPES,
 };
