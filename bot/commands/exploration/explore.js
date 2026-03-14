@@ -166,9 +166,11 @@ function getRandomGrottoBanner() {
   return GROTTO_INSIDE_BANNERS[Math.floor(Math.random() * GROTTO_INSIDE_BANNERS.length)];
 }
 
-/** Region banner + grotto overlay composite (like weather banner + overlay). Returns { attachment, imageUrl } for embed.setImage and optional files. */
+/** Region banner + grotto overlay composite (like weather banner + overlay). Overlay is scaled to fit without stretching, centered. Returns { attachment, imageUrl } for embed.setImage and optional files. */
 const GROTTO_FOUND_BANNER_NAME = "grotto-found-banner.png";
 const GROTTO_CLEANSED_BANNER_NAME = "grotto-cleansed-banner.png";
+/** Fraction of the "fit" size the overlay uses (keeps overlay smaller with margin, no stretch). */
+const GROTTO_OVERLAY_SCALE = 0.85;
 async function generateGrottoBannerOverlay(party, overlayUrl, attachmentName) {
   const Jimp = require("jimp");
   const timeout = 12000;
@@ -181,9 +183,21 @@ async function generateGrottoBannerOverlay(party, overlayUrl, attachmentName) {
     bannerImg = await Promise.race([bannerPromise, timeoutPromise]);
     const overlayPromise = Jimp.read(overlayUrl);
     overlayImg = await Promise.race([overlayPromise, timeoutPromise]);
-    if (!bannerImg.bitmap.width || !bannerImg.bitmap.height) return { attachment: null, imageUrl: overlayUrl };
-    overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
-    bannerImg.composite(overlayImg, 0, 0, {
+    const bw = bannerImg.bitmap.width || 0;
+    const bh = bannerImg.bitmap.height || 0;
+    const ow = overlayImg.bitmap.width || 0;
+    const oh = overlayImg.bitmap.height || 0;
+    if (!bw || !bh) return { attachment: null, imageUrl: overlayUrl };
+    if (!ow || !oh) return { attachment: null, imageUrl: overlayUrl };
+    // Scale overlay to fit inside banner, keep aspect ratio, then shrink to GROTTO_OVERLAY_SCALE so it stays smaller
+    const scaleFit = Math.min(bw / ow, bh / oh);
+    const scale = scaleFit * GROTTO_OVERLAY_SCALE;
+    const nw = Math.round(ow * scale);
+    const nh = Math.round(oh * scale);
+    overlayImg.resize(nw, nh);
+    const x = Math.round((bw - nw) / 2);
+    const y = Math.round((bh - nh) / 2);
+    bannerImg.composite(overlayImg, x, y, {
       mode: Jimp.BLEND_SOURCE_OVER,
       opacitySource: 1,
       opacityDest: 1,
