@@ -1517,7 +1517,9 @@ export default function ExplorePartyPage() {
 
   const regionBanner = regionKeyForLookup ? REGION_BANNERS[regionKeyForLookup] : null;
   const inGrotto = !!party?.inGrotto;
+  const partyEnded = party?.status === "completed" || party?.status === "failed";
   const showGrottoOverlay =
+    !partyEnded &&
     !inGrotto &&
     regionBanner &&
     hasGrottoInQuadrant(party?.progressLog, party?.square ?? "", party?.quadrant ?? "");
