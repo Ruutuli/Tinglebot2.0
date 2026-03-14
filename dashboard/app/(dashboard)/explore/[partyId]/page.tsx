@@ -1516,15 +1516,9 @@ export default function ExplorePartyPage() {
   }
 
   const regionBanner = regionKeyForLookup ? REGION_BANNERS[regionKeyForLookup] : null;
-  const inGrotto = !!party?.inGrotto;
   const partyEnded = party?.status === "completed" || party?.status === "failed";
-  // Grotto overlay (region banner + grotto image) only on embed overlays, not on main party page
-  const showGrottoOverlay = false;
-  const grottoBannerUrl =
-    inGrotto || showGrottoOverlay
-      ? getGrottoBannerUrl(party?.square ?? "", party?.quadrant ?? "")
-      : null;
-  const heroImageUrl = inGrotto ? grottoBannerUrl : regionBanner;
+  // Grotto overlay image is only for Discord embeds; dashboard always shows region banner.
+  const heroImageUrl = regionBanner;
 
   return (
     <div className="min-h-full overflow-x-hidden bg-gradient-to-b from-[var(--botw-warm-black)]/30 to-transparent p-4 sm:p-6 md:p-8">
@@ -1569,34 +1563,14 @@ export default function ExplorePartyPage() {
           <header className="relative mb-6 overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/60 shadow-lg">
             {heroImageUrl ? (
               <div className="relative h-24 w-full sm:h-28">
-                {inGrotto ? (
-                  <img
-                    src={grottoBannerUrl!}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover object-center"
-                    aria-hidden
-                  />
-                ) : (
-                  <>
-                    <Image
-                      src={regionBanner!}
-                      alt=""
-                      fill
-                      className="object-cover object-center"
-                      sizes="(max-width: 1024px) 100vw, 72rem"
-                      priority
-                    />
-                    {showGrottoOverlay && grottoBannerUrl && (
-                      <div className="absolute inset-0 z-[1]" aria-hidden>
-                        <img
-                          src={grottoBannerUrl}
-                          alt=""
-                          className="h-full w-full object-cover object-center"
-                        />
-                      </div>
-                    )}
-                  </>
-                )}
+                <Image
+                  src={regionBanner!}
+                  alt=""
+                  fill
+                  className="object-cover object-center"
+                  sizes="(max-width: 1024px) 100vw, 72rem"
+                  priority
+                />
                 <div className="absolute inset-0 z-[2] flex flex-col justify-end bg-gradient-to-t from-[var(--botw-warm-black)]/95 via-[var(--botw-warm-black)]/40 to-transparent px-3 pb-2.5 sm:px-4 sm:pb-3">
                   <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                     <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />

@@ -10,7 +10,7 @@ const WALL_SIZE = 15;
 const COLORS = {
   wall: 0x000000ff,
   background: 0xffffffff,
-  fog: 0x0a0a0aff,
+  fog: 0x353535ff, // lighter than wall so hidden/unexplored path is distinguishable from walls
   start: 0x8b6914ff, // brown to match 🟫 Entrance
   exit: 0x00aa00ff,
   trap: 0xffff00ff,
