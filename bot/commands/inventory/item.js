@@ -154,7 +154,7 @@ module.exports = {
               }
             ],
             image: {
-              url: 'https://storage.googleapis.com/tinglebot/Graphics/border.png'
+              url: 'https://storage.googleapis.com/tinglebot/Borders/border_red.png'
             },
             footer: {
               text: 'Channel Validation'

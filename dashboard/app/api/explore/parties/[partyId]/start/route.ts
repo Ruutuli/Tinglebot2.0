@@ -233,7 +233,7 @@ export async function POST(
           name: "__📋 Commands__",
           value:
             characters.length > 0
-              ? `**Take your turn:**\n• </explore roll:${await getExploreCommandId()}> — id: \`${partyId}\` charactername: **${String(characters[0].name)}**\n• </explore move:${await getExploreCommandId()}> — id: \`${partyId}\` charactername: **${String(characters[0].name)}** (start is secured — move first if you like)`
+              ? `**Take your turn:**\n• </explore move:${await getExploreCommandId()}> — id: \`${partyId}\` charactername: **${String(characters[0].name)}**`
               : "Use the expedition page link below to manage the party.",
           inline: false,
         },

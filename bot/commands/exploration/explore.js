@@ -1843,7 +1843,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   .setTitle("🗺️ **Expedition: Grotto cleansed!**")
   .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[freshParty.region] || "#00ff99"))
   .setDescription(continueDesc + "\n\n" + GROTTO_CLEANSED_VS_CLEARED)
-  .setImage(getRandomGrottoBanner());
+  .setImage(trialType === "maze" ? trialMazeImg : getRandomGrottoBanner());
  addExplorationStandardFields(continueEmbed, {
   party: freshParty,
   expeditionId,
@@ -1870,7 +1870,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   .setDescription(
    "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is **cleansed** — the way is open. A trial awaits inside; complete it to **clear** the grotto and receive a **Spirit Orb**.\n\n**Trial: " + trialLabel + "**."
   )
-  .setImage(getRandomGrottoBanner());
+  .setImage(trialType === "maze" ? trialMazeImg : getRandomGrottoBanner());
  addExplorationStandardFields(cleanseAnnounce, {
   party: freshParty,
   expeditionId,
@@ -2286,7 +2286,7 @@ module.exports = {
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) return interaction.editReply("Expedition ID not found.");
     const character = await findCharacterByNameAndUser(characterName, userId);
-    if (!character) return interaction.editReply("Character not found or you do not own this character.");
+    if (!character) return interaction.editReply({ embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)] });
     const location = `${party.square} ${party.quadrant}`;
     const squareId = (party.square && String(party.square).trim()) || "";
     const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
@@ -2963,13 +2963,23 @@ module.exports = {
        new ButtonBuilder().setCustomId(`grotto_maze_bypass_yes|${expeditionId}|${grotto._id}`).setLabel("Bypass maze (Lens of Truth)").setStyle(ButtonStyle.Primary),
        new ButtonBuilder().setCustomId(`grotto_maze_bypass_no|${expeditionId}|${grotto._id}`).setLabel("Enter the maze").setStyle(ButtonStyle.Secondary)
       );
+      let bypassMazeFiles = [];
+      let bypassMazeImg = getExploreMapImageUrl(party, { highlight: true });
+      try {
+       const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "member", currentNode: grotto.mazeState.currentNode, visitedCells: grotto.mazeState.visitedCells, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
+       bypassMazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
+       bypassMazeImg = "attachment://maze.png";
+      } catch (err) {
+       logger.warn("EXPLORE", `[explore.js]⚠️ Maze render (bypass): ${err?.message || err}`);
+      }
       const bypassEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze**")
        .setColor(getMazeEmbedColor(null, regionColors[party.region]))
        .setDescription("Someone in your party has a **Lens of Truth** in their inventory. You may bypass the maze for immediate Spirit Orbs (forgoing chests), or enter the maze as normal.")
-       .setImage(getRandomGrottoBanner());
+       .setImage(bypassMazeImg);
       addExplorationStandardFields(bypassEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: false, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
-      const bypassMsg = await interaction.editReply({ embeds: [bypassEmbed], components: [bypassRow] });
+      if (bypassMazeFiles.length) bypassEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
+      const bypassMsg = await interaction.editReply({ embeds: [bypassEmbed], components: [bypassRow], files: bypassMazeFiles.length ? bypassMazeFiles : undefined });
       const bypassCollector = bypassMsg.createMessageComponentCollector({
        filter: (i) => i.user.id === interaction.user.id,
        time: 60 * 1000,
@@ -3194,7 +3204,7 @@ module.exports = {
           .setTitle("🗺️ **Grotto: Maze — Exit!**")
           .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
           .setDescription(exitDesc + `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`)
-          .setImage(getRandomGrottoBanner());
+          .setImage(mazeImg);
          addExplorationStandardFields(exitEmbed, {
           party,
           expeditionId,
@@ -3415,7 +3425,7 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Maze — Exit!**")
        .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
        .setDescription(exitDesc + `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`)
-       .setImage(getRandomGrottoBanner());
+       .setImage(mazeImg);
       addExplorationStandardFields(exitEmbed, {
        party,
        expeditionId,
@@ -3767,7 +3777,7 @@ module.exports = {
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) return interaction.editReply("Expedition ID not found.");
     const character = await findCharacterByNameAndUser(characterName, userId);
-    if (!character) return interaction.editReply("Character not found or you do not own this character.");
+    if (!character) return interaction.editReply({ embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)] });
     const characterIndex = party.characters.findIndex((c) => c.name === characterName);
     if (characterIndex === -1) return interaction.editReply("Your character is not part of this expedition.");
     if (party.status !== "started") return interaction.editReply("This expedition has not been started yet.");
@@ -3816,7 +3826,7 @@ module.exports = {
       .setDescription(
        `This grotto is **cleansed** (trial in progress). You cannot visit monster camps until the trial is **cleared**.\n\nUse **${grottoCmd}** for your turn.`
       )
-      .setImage(getRandomGrottoBanner());
+      .setImage(grotto?.trialType === "maze" ? getExploreMapImageUrl(party, { highlight: true }) : getRandomGrottoBanner());
      addExplorationStandardFields(grottoCampEmbed, {
       party,
       expeditionId,
@@ -3982,7 +3992,7 @@ module.exports = {
        .setTitle("🗺️ **Expedition: Revisiting Grotto**")
        .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
        .setDescription(`Party is at grotto in **${location}** (grotto is **cleansed**; trial in progress).\n\n**Trial:** ${trialLabel}\n\n${text}`)
-       .setImage(getRandomGrottoBanner());
+       .setImage(grotto.trialType === "maze" ? revisitMazeImg : getRandomGrottoBanner());
       addExplorationStandardFields(embed, {
        party,
        expeditionId,
@@ -4174,9 +4184,9 @@ module.exports = {
 
      const character = await findCharacterByNameAndUser(characterName, userId);
      if (!character) {
-      return interaction.editReply(
-       "Character not found or you do not own this character."
-      );
+      return interaction.editReply({
+       embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+      });
      }
 
      if (character.debuff?.active && character.debuff?.endDate) {
@@ -4928,11 +4938,13 @@ module.exports = {
         `**${character.name}** found a safe space in **${location}** and rested!\n\n\`\`\`\n${safeSpaceFlavorRoll}\n\`\`\`\n\nRecovered ❤️ **${campHeartsRecovered}** heart(s) and 🟩 **${campStaminaRecovered}** stamina.`;
       }
 
+      const mapOrBannerUrl = getExploreMapImageUrl(party, { highlight: true });
       const embed = new EmbedBuilder()
        .setTitle(title)
        .setDescription(description)
-.setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
-  .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
+       .setImage(outcomeType === "grotto" ? GROTTO_BANNER_UNCLEANSED_URL : mapOrBannerUrl);
+      if (outcomeType === "grotto") embed.setThumbnail(mapOrBannerUrl);
       addExplorationStandardFields(embed, {
         party,
         expeditionId,
@@ -6231,9 +6243,9 @@ module.exports = {
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
+     return interaction.editReply({
+      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+     });
     }
 
     const characterIndex = party.characters.findIndex(
@@ -6726,9 +6738,9 @@ module.exports = {
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
+     return interaction.editReply({
+      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+     });
     }
 
     const characterIndex = party.characters.findIndex(
@@ -7343,8 +7355,11 @@ module.exports = {
       }
     }
 
-    // Move to unexplored quadrant: gold color; use region banner image for all move embeds
-    const moveEmbedColor = moveToUnexplored ? "#FFD700" : getExploreOutcomeColor("move", regionColors[party.region] || "#2196F3");
+    // Move to unexplored quadrant: gold color; blighted quadrant: blight color + blight eye thumbnail
+    const isBlightedQuadrant = !!(destQ && destQ.blighted === true);
+    const moveEmbedColor = isBlightedQuadrant
+     ? getExploreOutcomeColor("blight_exposure", "#641E16")
+     : (moveToUnexplored ? "#FFD700" : getExploreOutcomeColor("move", regionColors[party.region] || "#2196F3"));
     const moveEmbedImage = getExploreMapImageUrl(party, { highlight: true });
     const moveEmbedTitle = moveToUnexplored
      ? `📍 **New Quadrant: ${newLocation.square} ${newLocation.quadrant}**`
@@ -7355,6 +7370,9 @@ module.exports = {
      .setColor(moveEmbedColor)
      .setDescription(moveDescription)
      .setImage(moveEmbedImage);
+    if (isBlightedQuadrant) {
+     embed.setThumbnail("https://cdn.discordapp.com/emojis/805576955725611058.png");
+    }
     const moveToSecured = destinationQuadrantState === "secured";
     const moveIsAtStart = (() => {
      const regionKey = (party.region || "").toLowerCase();
@@ -7411,9 +7429,9 @@ module.exports = {
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
+     return interaction.editReply({
+      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+     });
     }
 
     const characterIndex = party.characters.findIndex(
@@ -7666,9 +7684,9 @@ module.exports = {
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
+     return interaction.editReply({
+      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+     });
     }
 
     const characterIndex = party.characters.findIndex(
@@ -8023,9 +8041,9 @@ module.exports = {
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
+     return interaction.editReply({
+      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+     });
     }
 
     const characterIndex = party.characters.findIndex((c) => c.name === characterName);
@@ -8189,9 +8207,9 @@ module.exports = {
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
-     return interaction.editReply(
-      "Character not found or you do not own this character."
-     );
+     return interaction.editReply({
+      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+     });
     }
 
     const characterIndex = party.characters.findIndex(
