@@ -150,6 +150,9 @@ const GROTTO_INSIDE_BANNERS = [
 function getRandomGrottoBanner() {
   return GROTTO_INSIDE_BANNERS[Math.floor(Math.random() * GROTTO_INSIDE_BANNERS.length)];
 }
+/** Border image and color for "Not your turn" embeds. */
+const NOT_YOUR_TURN_BORDER_URL = "https://storage.googleapis.com/tinglebot/Borders/border_orng.png";
+const NOT_YOUR_TURN_COLOR = 0xFFA500; // orange
 
 // ============================================================================
 // ------------------- Constants & Configuration -------------------
@@ -1123,7 +1126,8 @@ async function postGrottoMazeModVersion(client, layout, currentNode, grottoName,
     .setImage("attachment://maze-mod.png")
     .addFields({ name: "Map legend", value: "🟫 Start | 🟩 Exit | 🟨 Trap | 🟦 Chest | 🔴 Scrying Wall | ⬜ Path | 🟧 You are here | 🟢 Correct path | ⬛ Wall", inline: false })
     .setTimestamp();
-   const channel = await client.channels.fetch("1473557438174330880").catch(() => null);
+   const modChannelId = process.env.GROTTO_MAZE_MOD_CHANNEL_ID || "1473557438174330880";
+   const channel = await client.channels.fetch(modChannelId).catch(() => null);
    if (channel) await channel.send({ embeds: [modEmbed], files: modFiles }).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Maze mod post failed: ${err?.message || err}`));
   } catch (err) {
    logger.warn("EXPLORE", `[explore.js]⚠️ Maze mod render failed: ${err?.message || err}`);
@@ -1467,6 +1471,18 @@ async function characterAlreadyFoundRelicThisExpedition(party, characterName, ch
 
 const REPORTABLE_DISCOVERY_OUTCOMES = new Set(["monster_camp", "ruins", "grotto"]);
 
+// ------------------- pullGrottoDiscoveriesFromQuadrant ------------------
+// Remove all grotto-type discoveries from a quadrant (so we can push a single one when reusing grotto doc).
+async function pullGrottoDiscoveriesFromQuadrant(squareId, quadrantId) {
+  if (!squareId || !quadrantId) return;
+  const qd = String(quadrantId).trim().toUpperCase();
+  await Square.updateOne(
+    { squareId: new RegExp(`^${String(squareId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+    { $pull: { "quadrants.$[q].discoveries": { type: "grotto" } } },
+    { arrayFilters: [{ "q.quadrantId": qd }] }
+  ).catch(() => {});
+}
+
 // ------------------- pushDiscoveryToMap ------------------
 // Add discovery to Square.quadrants[].discoveries for map display
 async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) {
@@ -1486,6 +1502,8 @@ async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) 
  if (options.campId) discovery.campId = options.campId;
  if (outcomeType === "grotto") {
   discovery.grottoStatus = options.grottoStatus ?? (options.name ? "cleansed" : "found");
+  // Ensure only one grotto discovery per quadrant (avoid duplicates from dashboard pin fallback or double-push).
+  await pullGrottoDiscoveriesFromQuadrant(squareId, quadrantId);
  }
  await Square.updateOne(
   { squareId },
@@ -1656,6 +1674,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   return s;
  })() : undefined;
  let grottoDoc = await Grotto.findOne({ squareId, quadrantId });
+ const reusedExistingGrotto = !!grottoDoc;
  if (grottoDoc) {
   grottoDoc.discoveryKey = discoveryKey;
   grottoDoc.name = grottoName;
@@ -1689,6 +1708,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   });
   await grottoDoc.save();
  }
+ // pushDiscoveryToMap pulls existing grotto discoveries for this quadrant before pushing, so we only ever have one.
  await pushDiscoveryToMap(freshParty, "grotto", at, i.user?.id, { discoveryKey, name: grottoName });
  const grottoCostsForLog = buildCostsForLog(grottoPayResult);
  pushProgressLog(freshParty, cleanseCharacter.name, "grotto_cleansed", `Cleansed grotto **${grottoName}** in ${location} (1 Goddess Plume + 1 stamina).`, undefined, Object.keys(grottoCostsForLog).length ? grottoCostsForLog : { staminaLost: 1 }, at);
@@ -1736,18 +1756,13 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   restorePartyPoolOnGrottoExit(freshParty);
   pushProgressLog(freshParty, cleanseCharacter.name, "grotto_blessing", `Blessing trial: each party member received a Spirit Orb.`, undefined, undefined, new Date());
   await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
-  if (EXPLORATION_TESTING_MODE) {
-   const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, cleanseCharacter.name);
-   await msg.edit({ embeds: [endEmbed], components: [disabledRow] }).catch(() => {});
-   return;
-  }
   const blessingFlavor = getRandomBlessingFlavor();
   const blessingEmbed = new EmbedBuilder()
    .setTitle("🗺️ **Expedition: Grotto cleansed — Blessing!**")
    .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[freshParty.region] || "#00ff99"))
    .setDescription(
     `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to **cleanse** **${grottoName}** in **${location}**. The grotto held a blessing — it is now **cleared**.\n\n` +
-    blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
+    blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nEach party member received a **Spirit Orb** 💫. Use the commands below to continue exploring.`
    )
    .setImage(getRandomGrottoBanner());
   addExplorationStandardFields(blessingEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
@@ -1758,6 +1773,11 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    inline: false,
   });
   await msg.edit({ embeds: [blessingEmbed], components: [disabledRow] }).catch(() => {});
+  if (EXPLORATION_TESTING_MODE) {
+   const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, cleanseCharacter.name);
+   await msg.channel.send({ embeds: [endEmbed] }).catch(() => {});
+   return;
+  }
   const blessingAnnounce = new EmbedBuilder()
    .setTitle("✨ **A bright light spills from the stump!** ✨")
    .setColor(getExploreOutcomeColor("grotto_blessing", "#fbbf24"))
@@ -1780,6 +1800,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  const trialLabel = getTrialLabel(trialType);
  const grottoCmdHint = getActiveGrottoCommand(trialType);
  let continueDesc = `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}** in **${location}**.\n\n**Trial: ${trialLabel}** — Complete it to receive a **Spirit Orb**. See **Commands** below.`;
+ if (trialType === 'target_practice') continueDesc += '\n\n_Each action will take **1** 🟩 stamina._';
  if (trialType === 'puzzle' && grottoDoc.puzzleState?.puzzleSubType) {
   const puzzleFlavor = getPuzzleFlavor(grottoDoc);
   if (puzzleFlavor) continueDesc += `\n\n${puzzleFlavor}`;
@@ -2316,16 +2337,12 @@ module.exports = {
       party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-      if (EXPLORATION_TESTING_MODE) {
-       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
-       return interaction.editReply({ embeds: [endEmbed] });
-      }
       const flavor = getRandomPuzzleSuccessFlavor();
       const rollCmdId = getExploreCommandId();
       const approvedEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Approved!**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
-       .setDescription(`**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto is now **cleared**. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
+       .setDescription(`**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto is now **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
        .setImage(getRandomGrottoBanner());
       addExplorationStandardFields(approvedEmbed, {
        party,
@@ -2338,7 +2355,12 @@ module.exports = {
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
       });
-      return interaction.editReply({ embeds: [approvedEmbed] });
+      await interaction.editReply({ embeds: [approvedEmbed] });
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       await interaction.followUp({ embeds: [endEmbed] }).catch(() => {});
+      }
+      return;
      }
      if (grotto.trialType === "puzzle" && grotto.completedAt) {
       const rollCmdId = getExploreCommandId();
@@ -2579,7 +2601,7 @@ module.exports = {
       }
       const damageNote = heartsLost > 0 ? ` **${character.name}** took ${heartsLost} ❤ damage.` : "";
       const sameShooter = party.characters[characterIndex];
-      const desc = `The blimp looms before you. ${flavor}\n\n**Miss.**${damageNote} **Same shooter tries again** — **${sameShooter?.name ?? "—"}** uses the command in **Commands** below.`;
+      const desc = `The blimp looms before you. ${flavor}\n\n**Miss.**${damageNote} **Same shooter tries again** — **${sameShooter?.name ?? "—"}** uses the command in **Commands** below.\n\n_Each action will take **1** 🟩 stamina._`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -2596,6 +2618,7 @@ module.exports = {
        hasActiveGrotto: true,
        activeGrottoCommand: cmdTargetPractice,
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       actionCost: { staminaCost: TARGET_PRACTICE_STAMINA_COST, heartsCost: 0 },
      });
       await interaction.editReply({ embeds: [embed] });
       if (getExplorationNextTurnContent(sameShooter)) await interaction.followUp({ content: getExplorationNextTurnContent(sameShooter) }).catch(() => {});
@@ -2623,20 +2646,16 @@ module.exports = {
       party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_target_success", `Target Practice completed. Each party member received a Spirit Orb.`, undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-      if (EXPLORATION_TESTING_MODE) {
-       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
-       return interaction.editReply({ embeds: [endEmbed] });
-      }
       const outcome = getCompleteOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
-      const desc = `The blimp looms before you. ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. See **Commands** below to continue exploring.`;
-      const embed = new EmbedBuilder()
+      const desc = `The blimp looms before you. ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`;
+      const successEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Success!**")
        .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
        .setDescription(desc)
        .setThumbnail(TARGET_PRACTICE_THUMBNAIL_URL)
        .setImage(getRandomGrottoBanner());
-      addExplorationStandardFields(embed, {
+      addExplorationStandardFields(successEmbed, {
        party,
        expeditionId,
        location,
@@ -2646,7 +2665,12 @@ module.exports = {
        hasActiveGrotto: false,
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
      });
-      return interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [successEmbed] });
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       await interaction.followUp({ embeds: [endEmbed] }).catch(() => {});
+      }
+      return;
      }
      await grotto.save();
      // Next shooter = next person in party order (hit passes the turn; miss keeps same shooter — see miss block above).
@@ -2655,7 +2679,7 @@ module.exports = {
      const outcome = getSuccessOutcome();
      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
      const turnOrderHint = party.characters.map((c, i) => (i === nextIdx ? `**${c.name}**` : c.name)).join(" → ");
-     const desc = `The blimp looms before you. ${flavor}\n\n**Progress:** ${newSuccesses}/${TARGET_SUCCESSES} hits.\n\n**Next shooter:** **${nextChar?.name ?? "—"}** — use the command in **Commands** below.\n_Turn order:_ ${turnOrderHint}`;
+     const desc = `The blimp looms before you. ${flavor}\n\n**Progress:** ${newSuccesses}/${TARGET_SUCCESSES} hits.\n\n**Next shooter:** **${nextChar?.name ?? "—"}** — use the command in **Commands** below.\n_Turn order:_ ${turnOrderHint}\n\n_Each action will take **1** 🟩 stamina._`;
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Target Practice**")
       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -2672,12 +2696,15 @@ module.exports = {
       hasActiveGrotto: true,
       activeGrottoCommand: cmdTargetPractice,
       hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+      actionCost: { staminaCost: TARGET_PRACTICE_STAMINA_COST, heartsCost: 0 },
      });
      await interaction.editReply({ embeds: [embed] });
      if (getExplorationNextTurnContent(nextChar)) await interaction.followUp({ content: getExplorationNextTurnContent(nextChar) }).catch(() => {});
      return;
     }
 
+    // Grotto puzzle: bot auto-approves/denies on submit (checkPuzzleOffer) and grants Spirit Orbs immediately when approved.
+    // Dashboard PATCH grottos/[id]/puzzle is for staff override when offeringApproved was left null. "Continue" when already submitted only shows status (no double-grant).
     if (subcommand === "puzzle") {
      const grottoOption = interaction.options.getString("grotto");
      const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, true);
@@ -2826,17 +2853,13 @@ module.exports = {
      await grotto.save();
      await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
      if (checkResult.approved) {
-      if (EXPLORATION_TESTING_MODE) {
-       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
-       return interaction.editReply({ embeds: [endEmbed] });
-      }
       const flavor = getRandomPuzzleSuccessFlavor();
       const rollCmdId = getExploreCommandId();
       const successEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Puzzle — Correct!**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(
-        `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\n**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Use </explore roll:${rollCmdId}> to leave and continue exploring.`
+        `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\n**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`
        )
        .setImage(getRandomGrottoBanner());
       addExplorationStandardFields(successEmbed, {
@@ -2850,7 +2873,12 @@ module.exports = {
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
       });
-      return interaction.editReply({ embeds: [successEmbed] });
+      await interaction.editReply({ embeds: [successEmbed] });
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       await interaction.followUp({ embeds: [endEmbed] }).catch(() => {});
+      }
+      return;
      }
      return interaction.editReply({
       embeds: [
@@ -2955,18 +2983,18 @@ module.exports = {
          freshParty.markModified("gatheredItems");
          pushProgressLog(freshParty, character.name, "grotto_maze_success", "Maze bypassed with Lens of Truth. Each party member received a Spirit Orb.", undefined, undefined, new Date());
          await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
-         if (EXPLORATION_TESTING_MODE) {
-          const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, character.name);
-          return i.editReply({ embeds: [endEmbed], components: [disabledRow] }).catch(() => {});
-         }
          const rollCmdId = getExploreCommandId();
          const doneEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Bypassed**")
           .setColor(getMazeEmbedColor('bypassed', regionColors[freshParty.region]))
-          .setDescription(`Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
+          .setDescription(`Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
           .setImage(getRandomGrottoBanner());
          addExplorationStandardFields(doneEmbed, { party: freshParty, expeditionId, location: `${freshParty.square} ${freshParty.quadrant}`, nextCharacter: freshParty.characters[freshParty.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
          await i.editReply({ embeds: [doneEmbed], components: [disabledRow] }).catch(() => {});
+         if (EXPLORATION_TESTING_MODE) {
+          const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, character.name);
+          await i.followUp({ embeds: [endEmbed] }).catch(() => {});
+         }
         }
        } else {
         const entryFlavor = getRandomMazeEntryFlavor();
@@ -3007,10 +3035,10 @@ module.exports = {
      if (action && party.currentTurn !== characterIndex) {
       const nextChar = party.characters[party.currentTurn];
       const notYourTurnEmbed = new EmbedBuilder()
-       .setTitle("🗺️ **Grotto: Maze**")
-       .setColor(getMazeEmbedColor("blocked", regionColors[party.region]))
+       .setTitle("⏳ Not Your Turn")
+       .setColor(NOT_YOUR_TURN_COLOR)
        .setDescription(`It's not your turn. **${nextChar?.name || "Next"}** is up. Use </explore grotto maze:${mazeCmdId}> when it's your turn.`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(NOT_YOUR_TURN_BORDER_URL);
       addExplorationStandardFields(notYourTurnEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
      }
@@ -3133,10 +3161,6 @@ module.exports = {
          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          party.markModified("currentTurn");
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-         if (EXPLORATION_TESTING_MODE) {
-          const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
-          return interaction.editReply({ embeds: [endEmbed] });
-         }
          try {
           const mazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "mod", currentNode: newKey, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
           mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
@@ -3147,7 +3171,7 @@ module.exports = {
          const exitEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Exit!**")
           .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
-          .setDescription(exitDesc + `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. See **Commands** below to continue exploring.`)
+          .setDescription(exitDesc + `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`)
           .setImage(getRandomGrottoBanner());
          addExplorationStandardFields(exitEmbed, {
           party,
@@ -3162,7 +3186,12 @@ module.exports = {
          });
          if (mazeFiles.length) exitEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
          await interaction.editReply({ embeds: [exitEmbed], files: mazeFiles });
-         if (getExplorationNextTurnContent(nextCharExit)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharExit) }).catch(() => {});
+         if (EXPLORATION_TESTING_MODE) {
+          const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+          await interaction.followUp({ embeds: [endEmbed] }).catch(() => {});
+         } else if (getExplorationNextTurnContent(nextCharExit)) {
+          await interaction.followUp({ content: getExplorationNextTurnContent(nextCharExit) }).catch(() => {});
+         }
          return;
         }
        }
@@ -3353,10 +3382,6 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       party.markModified("currentTurn");
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-      if (EXPLORATION_TESTING_MODE) {
-       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
-       return interaction.editReply({ embeds: [endEmbed] });
-      }
       try {
        const exitMazeBuf = await renderMazeToBuffer(grotto.mazeState.layout, { viewMode: "mod", currentNode: nextKey, openedChests: grotto.mazeState.openedChests, triggeredTraps: grotto.mazeState.triggeredTraps, usedScryingWalls: grotto.mazeState.usedScryingWalls });
        mazeFiles = [new AttachmentBuilder(exitMazeBuf, { name: "maze.png" })];
@@ -3367,7 +3392,7 @@ module.exports = {
       const exitEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Exit!**")
        .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
-       .setDescription(exitDesc + `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. See **Commands** below to continue exploring.`)
+       .setDescription(exitDesc + `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`)
        .setImage(getRandomGrottoBanner());
       addExplorationStandardFields(exitEmbed, {
        party,
@@ -3382,7 +3407,12 @@ module.exports = {
       });
       if (mazeFiles.length) exitEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
       await interaction.editReply({ embeds: [exitEmbed], files: mazeFiles });
-      if (getExplorationNextTurnContent(nextCharExitMove)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharExitMove) }).catch(() => {});
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, character.name);
+       await interaction.followUp({ embeds: [endEmbed] }).catch(() => {});
+      } else if (getExplorationNextTurnContent(nextCharExitMove)) {
+       await interaction.followUp({ content: getExplorationNextTurnContent(nextCharExitMove) }).catch(() => {});
+      }
       return;
      }
 
@@ -4042,17 +4072,13 @@ module.exports = {
       party.markModified("gatheredItems");
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-      if (EXPLORATION_TESTING_MODE) {
-       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, plumeHolder.character.name);
-       return interaction.editReply({ embeds: [endEmbed] });
-      }
       const blessingFlavorRevisit = getRandomBlessingFlavor();
       const blessingEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
        .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[party.region] || "#00ff99"))
        .setDescription(
         `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to **cleanse** **${grottoName}** in **${location}**. The grotto held a blessing — it is now **cleared**.\n\n` +
-        blessingFlavorRevisit + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
+        blessingFlavorRevisit + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nEach party member received a **Spirit Orb** 💫. Use the commands below to continue exploring.`
        )
        .setImage(getRandomGrottoBanner());
       addExplorationStandardFields(blessingEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
@@ -4062,7 +4088,12 @@ module.exports = {
        value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlRevisit}`,
        inline: false,
       });
-      return interaction.editReply({ embeds: [blessingEmbed] });
+      await interaction.editReply({ embeds: [blessingEmbed] });
+      if (EXPLORATION_TESTING_MODE) {
+       const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, plumeHolder.character.name);
+       await interaction.followUp({ embeds: [endEmbed] }).catch(() => {});
+      }
+      return;
      }
      const trialLabelRevisit = getTrialLabel(grottoDoc.trialType);
      const grottoCmdRevisit = getActiveGrottoCommand(grottoDoc.trialType);
@@ -4074,6 +4105,7 @@ module.exports = {
      } else {
       continueDescRevisit += `Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdRevisit} for your turn.`;
      }
+     if (grottoDoc.trialType === 'target_practice') continueDescRevisit += '\n\n_Each action will take **1** 🟩 stamina._';
      const continueEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
       .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[party.region] || "#00ff99"))
@@ -4190,9 +4222,9 @@ module.exports = {
       const nextCharacter = party.characters[party.currentTurn];
       const notYourTurnEmbed = new EmbedBuilder()
         .setTitle("⏳ Not Your Turn")
-        .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
+        .setColor(NOT_YOUR_TURN_COLOR)
         .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-        .setImage(getExploreMapImageUrl(party, { highlight: true }));
+        .setImage(NOT_YOUR_TURN_BORDER_URL);
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6196,9 +6228,9 @@ module.exports = {
      const nextCharacter = party.characters[party.currentTurn];
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
-       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
+       .setColor(NOT_YOUR_TURN_COLOR)
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(NOT_YOUR_TURN_BORDER_URL);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6691,9 +6723,9 @@ module.exports = {
      const nextCharacter = party.characters[party.currentTurn];
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
-       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
+       .setColor(NOT_YOUR_TURN_COLOR)
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(NOT_YOUR_TURN_BORDER_URL);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -6848,11 +6880,29 @@ module.exports = {
      const validOptions = adjacent.length > 0
       ? adjacent.map((a) => `**${a.square} ${a.quadrant}**`).join(", ")
       : "none (check map)";
-     return interaction.editReply(
-      `You're at **${currentLoc}**. The quadrant you chose isn't next to that location.\n\n` +
-      `**Valid moves from here:** ${validOptions}\n\n` +
-      `Use **Move** again and pick one of the quadrants listed above (e.g. ${getExploreCommandId() ? `</explore move:${getExploreCommandId()}>` : "`/explore move`"} then enter the square and quadrant).`
-     );
+     const invalidMoveEmbed = new EmbedBuilder()
+      .setTitle("🚫 **Invalid move**")
+      .setColor(getExploreOutcomeColor("move", regionColors[party.region] || "#b91c1c"))
+      .setDescription(
+       `You're at **${currentLoc}**. The quadrant you chose isn't next to that location.\n\n` +
+       `**Valid moves from here:** ${validOptions}\n\n` +
+       `Use **Move** again and pick one of the quadrants listed above (e.g. ${getExploreCommandId() ? `</explore move:${getExploreCommandId()}>` : "`/explore move`"} then enter the square and quadrant).`
+      )
+      .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     addExplorationStandardFields(invalidMoveEmbed, {
+      party,
+      expeditionId,
+      location: currentLoc,
+      nextCharacter: party.characters[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: true,
+      isAtStartQuadrant: START_POINTS_BY_REGION[party.region] &&
+       String(party.square || "").toUpperCase() === String((START_POINTS_BY_REGION[party.region] || {}).square || "").toUpperCase() &&
+       String(party.quadrant || "").toUpperCase() === String((START_POINTS_BY_REGION[party.region] || {}).quadrant || "").toUpperCase(),
+      hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+     });
+     return interaction.editReply({ embeds: [invalidMoveEmbed] });
     }
 
     // Move cost: 2 if unexplored, 1 if explored, 0 if secured (based on destination quadrant state)
@@ -7392,25 +7442,29 @@ module.exports = {
     const heartsAtMax = currentHearts >= itemCaps.maxHearts;
     const staminaAtMax = currentStamina >= itemCaps.maxStamina;
 
-    // If item only heals hearts and hearts are full, block it
+    // If item would have no effect (pool already full), block it. Do NOT consume the item or advance turn — reply ephemeral so only the user sees it.
     if (hearts > 0 && stamina === 0 && heartsAtMax) {
-     return interaction.editReply(
-      `❤️ **Team hearts are full!** Cannot use **${carried.itemName}** — the party is already at maximum hearts (${currentHearts}/${itemCaps.maxHearts}).`
-     );
+     const fullHeartsEmbed = new EmbedBuilder()
+      .setColor(0xE74C3C)
+      .setTitle("❤️ Hearts are full")
+      .setDescription(`Party is at **${currentHearts}/${itemCaps.maxHearts}** hearts. Save **${carried.itemName}** for when the party takes damage.\n\n_Your turn was **not** used — you can take another action._`);
+     return interaction.editReply({ embeds: [fullHeartsEmbed], ephemeral: true });
     }
 
-    // If item only recovers stamina and stamina is full, block it
     if (stamina > 0 && hearts === 0 && staminaAtMax) {
-     return interaction.editReply(
-      `🟩 **Team stamina is full!** Cannot use **${carried.itemName}** — the party is already at maximum stamina (${currentStamina}/${itemCaps.maxStamina}).`
-     );
+     const fullStaminaEmbed = new EmbedBuilder()
+      .setColor(0x2ECC71)
+      .setTitle("🟩 Stamina is full")
+      .setDescription(`Party is at **${currentStamina}/${itemCaps.maxStamina}** stamina. Save **${carried.itemName}** for when the party needs more.\n\n_Your turn was **not** used — you can take another action._`);
+     return interaction.editReply({ embeds: [fullStaminaEmbed], ephemeral: true });
     }
 
-    // If item does both but both are at max, block it
     if (hearts > 0 && stamina > 0 && heartsAtMax && staminaAtMax) {
-     return interaction.editReply(
-      `❤️🟩 **Team is at full capacity!** Cannot use **${carried.itemName}** — the party is already at maximum hearts (${currentHearts}/${itemCaps.maxHearts}) and stamina (${currentStamina}/${itemCaps.maxStamina}).`
-     );
+     const fullPoolEmbed = new EmbedBuilder()
+      .setColor(0x9B59B6)
+      .setTitle("❤️🟩 Hearts and stamina are full")
+      .setDescription(`Party is at **${currentHearts}/${itemCaps.maxHearts}** ❤ and **${currentStamina}/${itemCaps.maxStamina}** 🟩. Save **${carried.itemName}** for later.\n\n_Your turn was **not** used — you can take another action._`);
+     return interaction.editReply({ embeds: [fullPoolEmbed], ephemeral: true });
     }
 
     // Item = turn: during active wave/raid, only the current turn participant may use an item. Check before applying any effects.
@@ -7421,9 +7475,10 @@ module.exports = {
      if (waveCurrent && waveCurrent.characterId && character._id && waveCurrent.characterId.toString() !== character._id.toString()) {
       const currentName = waveCurrent.name ?? "the current turn";
       const notYourTurnEmbed = new EmbedBuilder()
-       .setColor("#FFA500")
-       .setTitle("⏳ It's not your turn")
+       .setColor(NOT_YOUR_TURN_COLOR)
+       .setTitle("⏳ Not Your Turn")
        .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the wave, then use ${getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : "**/explore item**"}.`)
+       .setImage(NOT_YOUR_TURN_BORDER_URL)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
       return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
@@ -7434,9 +7489,10 @@ module.exports = {
      if (raidCurrent && raidCurrent.characterId && character._id && raidCurrent.characterId.toString() !== character._id.toString()) {
       const currentName = raidCurrent.name ?? "the current turn";
       const notYourTurnEmbed = new EmbedBuilder()
-       .setColor("#FFA500")
-       .setTitle("⏳ It's not your turn")
+       .setColor(NOT_YOUR_TURN_COLOR)
+       .setTitle("⏳ Not Your Turn")
        .setDescription(`Only **${currentName}** (current turn) can use an item. Wait for your turn in the raid, then use ${getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : "**/explore item**"}.`)
+       .setImage(NOT_YOUR_TURN_BORDER_URL)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
       return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
@@ -7450,9 +7506,10 @@ module.exports = {
       const currentTurnChar = party.characters[currentTurnIndex];
       const currentName = currentTurnChar?.name ?? "the current turn";
       const notYourTurnEmbed = new EmbedBuilder()
-       .setColor("#FFA500")
-       .setTitle("⏳ It's not your turn")
+       .setColor(NOT_YOUR_TURN_COLOR)
+       .setTitle("⏳ Not Your Turn")
        .setDescription(`Only **${currentName}** can use an item. Wait for your turn, then use ${getExploreCommandId() ? `</explore item:${getExploreCommandId()}>` : "**/explore item**"}.`)
+       .setImage(NOT_YOUR_TURN_BORDER_URL)
        .setFooter({ text: "Expedition" })
        .setTimestamp();
       return interaction.editReply({ embeds: [notYourTurnEmbed], ephemeral: true });
@@ -7979,9 +8036,9 @@ module.exports = {
      const nextCharacterName = raidCurrentTurnParticipant?.name ?? party.characters[party.currentTurn]?.name ?? "Unknown";
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
-       .setColor(getExploreOutcomeColor("retreat", regionColors[party.region] || "#FF9800"))
+       .setColor(NOT_YOUR_TURN_COLOR)
        .setDescription(`It is not your turn to attempt retreat.\n\n**Next turn:** ${nextCharacterName}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(NOT_YOUR_TURN_BORDER_URL);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 
@@ -8129,9 +8186,9 @@ module.exports = {
      const nextCharacter = party.characters[party.currentTurn];
      const notYourTurnEmbed = new EmbedBuilder()
        .setTitle("⏳ Not Your Turn")
-       .setColor(getExploreOutcomeColor("secure", regionColors[party.region] || "#FF9800"))
+       .setColor(NOT_YOUR_TURN_COLOR)
        .setDescription(`It is not your turn.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}`)
-       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       .setImage(NOT_YOUR_TURN_BORDER_URL);
      return interaction.editReply({ embeds: [notYourTurnEmbed] });
     }
 

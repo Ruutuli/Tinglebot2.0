@@ -35,7 +35,7 @@ function getRandomGrottoName() {
   return `${base} Grotto`;
 }
 
-/** Returns a name not in usedNames (case-insensitive). usedNames = array of existing grotto names. If all base names are taken, appends " (2)" etc. */
+/** Returns a name not in usedNames (case-insensitive). usedNames = array of existing grotto names. If all base names are taken, appends " (2)" etc. Under concurrency, suffix can exceed 50 — then we use a short timestamp to guarantee uniqueness. */
 function getRandomGrottoNameUnused(usedNames = []) {
   const usedLower = new Set((usedNames || []).map((n) => String(n).trim().toLowerCase()));
   for (let attempt = 0; attempt < GROTTO_BASE_NAMES.length * 2; attempt++) {
@@ -48,6 +48,10 @@ function getRandomGrottoNameUnused(usedNames = []) {
   let candidate = `${base} Grotto (${suffix})`;
   while (usedLower.has(candidate.toLowerCase())) {
     suffix++;
+    if (suffix > 50) {
+      candidate = `${base} Grotto (${Date.now().toString(36).slice(-6)})`;
+      break;
+    }
     candidate = `${base} Grotto (${suffix})`;
   }
   return candidate;

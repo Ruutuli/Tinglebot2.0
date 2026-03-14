@@ -25,6 +25,9 @@ const GrottoSchema = new Schema({
     failed: { type: Boolean, default: false },
   },
   puzzleState: {
+    puzzleSubType: { type: String, enum: ["odd_structure", "offering_statue"], default: null },
+    puzzleVariant: { type: Number, default: null },
+    puzzleClueIndex: { type: Number, default: null },
     offeringSubmitted: { type: Boolean, default: false },
     offeringApproved: { type: Boolean, default: null },
     offeringDeniedAt: { type: Date, default: null },
@@ -35,7 +38,8 @@ const GrottoSchema = new Schema({
   },
   mazeState: {
     currentNode: { type: String, default: "" },
-    steps: [{ direction: String, at: Date }],
+    steps: [Schema.Types.Mixed],
+    visitedCells: [{ type: String }],
     facing: { type: String, enum: ["n", "s", "e", "w"], default: "s" },
     layout: {
       matrix: [String],
@@ -52,6 +56,10 @@ const GrottoSchema = new Schema({
     openedChests: [{ type: String }],
     triggeredTraps: [{ type: String }],
     usedScryingWalls: [{ type: String }],
+  },
+  testOfPowerState: {
+    raidStarted: { type: Boolean, default: false },
+    raidId: { type: String, default: null },
   },
 }, { collection: "grottos" });
 

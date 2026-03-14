@@ -240,23 +240,35 @@ async function updateDiscoveryGrottoStatus(squareId, quadrantId, discoveryKey, g
     );
 }
 
+// ------------------- updateDiscoveryGrottoStatusByTypeInQuadrant ------------------
+// Fallback: set grottoStatus on every discovery with type "grotto" in this quadrant (used when grotto has no discoveryKey).
+async function updateDiscoveryGrottoStatusByTypeInQuadrant(squareId, quadrantId, grottoStatus) {
+    if (!squareId || !quadrantId || !grottoStatus) return;
+    const qd = String(quadrantId).trim().toUpperCase();
+    await Square.updateOne(
+        { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i') },
+        { $set: { "quadrants.$[q].discoveries.$[d].grottoStatus": grottoStatus } },
+        { arrayFilters: [{ "q.quadrantId": qd }, { "d.type": "grotto" }] }
+    );
+}
+
 // ------------------- markGrottoCleared ------------------
 // Mark grotto cleared (status + completedAt) and update map discovery -
+// Map is updated even if expedition has ended so grottoStatus stays correct.
 async function markGrottoCleared(grotto) {
     if (!grotto) return;
     grotto.status = "cleared";
     grotto.completedAt = new Date();
     grotto.markModified?.("status");
     await grotto.save();
+    if (!grotto.squareId || !grotto.quadrantId) return;
     const dk = grotto.discoveryKey;
-    if (!dk && grotto.squareId && grotto.quadrantId) {
+    if (dk) {
+        await updateDiscoveryGrottoStatus(grotto.squareId, grotto.quadrantId, dk, "cleared", {});
+    } else {
         const logger = require('@/utils/logger');
-        logger.warn("EXPLORE", `[exploreModule.js] markGrottoCleared: grotto ${grotto._id} has no discoveryKey — map grottoStatus will not be updated`);
-    }
-    if (dk && grotto.squareId && grotto.quadrantId) {
-        const party = grotto.partyId ? await Party.findOne({ partyId: grotto.partyId }).lean() : null;
-        if (party && party.status !== "started") return; // Do not update map when expedition is over
-        await updateDiscoveryGrottoStatus(grotto.squareId, grotto.quadrantId, dk, "cleared");
+        logger.warn("EXPLORE", `[exploreModule.js] markGrottoCleared: grotto ${grotto._id} has no discoveryKey — updating map by type in quadrant`);
+        await updateDiscoveryGrottoStatusByTypeInQuadrant(grotto.squareId, grotto.quadrantId, "cleared");
     }
 }
 

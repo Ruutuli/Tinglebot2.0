@@ -308,6 +308,23 @@ export async function GET(
     }
     const endedAt = p.endedAt instanceof Date ? p.endedAt.toISOString() : typeof p.endedAt === "string" ? p.endedAt : undefined;
 
+    // Party is "in grotto" when there is an active (cleansed) grotto at current location for this expedition
+    let inGrotto = false;
+    if (status === "started" && typeof p.partyId === "string" && p.partyId && squareId && quadrantId) {
+      const Grotto =
+        mongoose.models.Grotto ??
+        ((await import("@/models/GrottoModel.js")) as unknown as { default: mongoose.Model<unknown> }).default;
+      const squareIdRegex = new RegExp(`^${squareId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const quadrantNorm = quadrantId.toUpperCase();
+      const activeGrotto = await Grotto.findOne({
+        partyId: p.partyId,
+        squareId: squareIdRegex,
+        quadrantId: quadrantNorm,
+        status: "cleansed",
+      }).lean();
+      inGrotto = !!activeGrotto;
+    }
+
     return NextResponse.json({
       partyId: p.partyId,
       region: p.region,
@@ -315,6 +332,7 @@ export async function GET(
       quadrant: p.quadrant,
       status: p.status,
       outcome,
+      inGrotto,
       totalHearts: p.totalHearts ?? 0,
       totalStamina: p.totalStamina ?? 0,
       leaderId: p.leaderId,

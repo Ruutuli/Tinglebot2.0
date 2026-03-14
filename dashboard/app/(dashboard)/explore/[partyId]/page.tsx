@@ -22,6 +22,12 @@ const REGION_BANNERS: Record<string, string> = {
   faron: "/assets/banners/Vhintl1.png",
 };
 
+/** Grotto banner overlay URLs (shown on top of region banner when current quadrant has a grotto). */
+const GROTTO_BANNER_URLS = [
+  "https://storage.googleapis.com/tinglebot/Banners/grotto1.png",
+  "https://storage.googleapis.com/tinglebot/Banners/grotto2.png",
+] as const;
+
 const QUADRANT_STATUS_COLORS: Record<string, string> = {
   inaccessible: "#1a1a1a",
   unexplored: "#b91c1c",
@@ -105,6 +111,30 @@ const REPORTABLE_OUTCOMES: Record<string, string> = {
   grotto_found: "Grotto", // legacy/alternate logging for grotto discovery
   grotto_cleansed: "Grotto", // cleansed grottos (Yes) — same as grotto for placement
 };
+
+const GROTTO_OUTCOMES = new Set<string>(["grotto", "grotto_found", "grotto_cleansed"]);
+
+/** True if progress log has a grotto discovery at the given square+quadrant. */
+function hasGrottoInQuadrant(progressLog: ProgressEntry[] | undefined, square: string, quadrant: string): boolean {
+  if (!Array.isArray(progressLog) || !square || !quadrant) return false;
+  const s = String(square).trim().toUpperCase();
+  const q = String(quadrant).trim().toUpperCase();
+  return progressLog.some((e) => {
+    if (!GROTTO_OUTCOMES.has(e.outcome)) return false;
+    const m = REPORTABLE_LOC_RE.exec(e.message);
+    if (!m?.[1]) return false;
+    const parts = m[1].trim().split(/\s+/);
+    return (parts[0] ?? "").toUpperCase() === s && (parts[1] ?? "").toUpperCase() === q;
+  });
+}
+
+/** Pick grotto1 vs grotto2 by square+quadrant so the same location always shows the same banner. */
+function getGrottoBannerUrl(square: string, quadrant: string): string {
+  const letter = (square?.charAt(0) ?? "A").toUpperCase();
+  const qNum = (quadrant?.replace(/\D/g, "") || "1").slice(-1);
+  const n = (letter.charCodeAt(0) - 65) + parseInt(qNum, 10);
+  return GROTTO_BANNER_URLS[n % GROTTO_BANNER_URLS.length];
+}
 
 type ReportableDiscovery = { square: string; quadrant: string; outcome: string; label: string; occurrenceIndex: number; at: string; characterName?: string };
 
@@ -355,6 +385,8 @@ type PartyData = {
   discordThreadUrl?: string | null;
   currentTurn?: number;
   quadrantState?: string;
+  /** True when party is inside a grotto (active trial at current square+quadrant). */
+  inGrotto?: boolean;
   /** Q1–Q4 status from exploring map model (Square.quadrants[].status); drives quadrant colors */
   quadrantStatuses?: Record<string, string>;
   gatheredItems?: GatheredItem[];
@@ -1468,6 +1500,16 @@ export default function ExplorePartyPage() {
   }
 
   const regionBanner = regionKeyForLookup ? REGION_BANNERS[regionKeyForLookup] : null;
+  const inGrotto = !!party?.inGrotto;
+  const showGrottoOverlay =
+    !inGrotto &&
+    regionBanner &&
+    hasGrottoInQuadrant(party?.progressLog, party?.square ?? "", party?.quadrant ?? "");
+  const grottoBannerUrl =
+    inGrotto || showGrottoOverlay
+      ? getGrottoBannerUrl(party?.square ?? "", party?.quadrant ?? "")
+      : null;
+  const heroImageUrl = inGrotto ? grottoBannerUrl : regionBanner;
 
   return (
     <div className="min-h-full overflow-x-hidden bg-gradient-to-b from-[var(--botw-warm-black)]/30 to-transparent p-4 sm:p-6 md:p-8">
@@ -1510,17 +1552,37 @@ export default function ExplorePartyPage() {
           )}
           {/* Hero: banner + title + meta */}
           <header className="relative mb-6 overflow-hidden rounded-xl border border-[var(--totk-dark-ocher)]/60 shadow-lg">
-            {regionBanner ? (
+            {heroImageUrl ? (
               <div className="relative h-24 w-full sm:h-28">
-                <Image
-                  src={regionBanner}
-                  alt=""
-                  fill
-                  className="object-cover object-center"
-                  sizes="(max-width: 1024px) 100vw, 72rem"
-                  priority
-                />
-                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-[var(--botw-warm-black)]/95 via-[var(--botw-warm-black)]/40 to-transparent px-3 pb-2.5 sm:px-4 sm:pb-3">
+                {inGrotto ? (
+                  <img
+                    src={grottoBannerUrl!}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover object-center"
+                    aria-hidden
+                  />
+                ) : (
+                  <>
+                    <Image
+                      src={regionBanner!}
+                      alt=""
+                      fill
+                      className="object-cover object-center"
+                      sizes="(max-width: 1024px) 100vw, 72rem"
+                      priority
+                    />
+                    {showGrottoOverlay && grottoBannerUrl && (
+                      <div className="absolute inset-0 z-[1]" aria-hidden>
+                        <img
+                          src={grottoBannerUrl}
+                          alt=""
+                          className="h-full w-full object-cover object-center"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="absolute inset-0 z-[2] flex flex-col justify-end bg-gradient-to-t from-[var(--botw-warm-black)]/95 via-[var(--botw-warm-black)]/40 to-transparent px-3 pb-2.5 sm:px-4 sm:pb-3">
                   <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                     <img src="/Side=Left.svg" alt="" className="h-3.5 w-auto sm:h-4 opacity-90" aria-hidden />
                     <h1 className="text-lg font-bold tracking-tight text-[var(--totk-ivory)] sm:text-xl md:text-2xl">
@@ -1658,7 +1720,7 @@ export default function ExplorePartyPage() {
                 <QuadrantStatusLegend />
               </div>
             )}
-            {!regionBanner && <div className="h-px bg-[var(--totk-dark-ocher)]/40" />}
+            {!heroImageUrl && <div className="h-px bg-[var(--totk-dark-ocher)]/40" />}
             <div className="flex flex-wrap items-center justify-center gap-2 border-t border-[var(--totk-dark-ocher)]/30 bg-[var(--botw-warm-black)]/40 px-3 py-2.5 sm:gap-3 sm:py-3">
               <button
                 type="button"
