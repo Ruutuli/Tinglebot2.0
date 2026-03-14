@@ -1000,7 +1000,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
             party.markModified('gatheredItems');
             await party.save();
             for (const slot of party.characters) {
-              if (slot._id) {
+              if (slot._id && !(raidData.expeditionId && EXPLORATION_TESTING_MODE)) {
                 try {
                   await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
                 } catch (orbErr) {
@@ -1008,7 +1008,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
                 }
               }
             }
-            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members`);
+            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members${(raidData.expeditionId && EXPLORATION_TESTING_MODE) ? ' (testing: not persisted to inventory)' : ''}`);
           }
         }
       } catch (grottoErr) {

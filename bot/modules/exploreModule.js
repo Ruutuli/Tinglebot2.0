@@ -308,11 +308,19 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
         if (exploredThisRun.length > 0) {
             for (const { squareId, quadrantId } of exploredThisRun) {
                 if (squareId && quadrantId) {
+                    const quadRegex = new RegExp(`^${quadrantId}$`, 'i');
                     await Square.updateOne(
-                        { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": new RegExp(`^${quadrantId}$`, 'i') },
+                        { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": quadRegex },
                         { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
-                        { arrayFilters: [{ "q.quadrantId": new RegExp(`^${quadrantId}$`, 'i') }] }
+                        { arrayFilters: [{ "q.quadrantId": quadRegex }] }
                     ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
+                    if (EXPLORATION_TESTING_MODE) {
+                        await Square.updateOne(
+                            { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": quadRegex },
+                            { $set: { "quadrants.$[q].discoveries": [] } },
+                            { arrayFilters: [{ "q.quadrantId": quadRegex }] }
+                        ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Testing KO: clear discoveries: ${err?.message}`));
+                    }
                 }
             }
         }
@@ -361,6 +369,10 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
             c.currentHearts = 0;
             c.currentStamina = 0;
             c.items = [];
+        }
+        if (EXPLORATION_TESTING_MODE && party.progressLog?.length > 0) {
+            party.progressLog = [];
+            party.markModified('progressLog');
         }
         pushProgressLog(party, 'Party', 'expedition_failed', "Expedition failed — party was KO'd during monster camp wave.", undefined, undefined, new Date());
         await party.save();
