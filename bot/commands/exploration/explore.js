@@ -118,6 +118,16 @@ function getMazeEmbedColor(outcomeType, regionColor) {
   const outcome = outcomeType ? (MAZE_OUTCOME_FOR_EMBED[outcomeType] || "grotto") : "grotto";
   return getExploreOutcomeColor(outcome, regionColor || "#00ff99");
 }
+/** Arrow for maze direction (North ↑, South ↓, East →, West ←) for embed display. */
+function getMazeDirectionArrow(dir) {
+  if (!dir || typeof dir !== "string") return "";
+  const d = dir.toLowerCase();
+  if (d === "north") return "↑ ";
+  if (d === "south") return "↓ ";
+  if (d === "east") return "→ ";
+  if (d === "west") return "← ";
+  return "";
+}
 /** Restore the expedition party pool to full when leaving a grotto (the grotto's blessing restores the party before they step back into the wilds). */
 function restorePartyPoolOnGrottoExit(party) {
   if (!party) return;
@@ -3393,7 +3403,7 @@ module.exports = {
       const blockedEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze**")
        .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
-       .setDescription(blockedDesc + `There's a wall to the **${displayDir}** — you can't move that way. ${ctaText}`)
+       .setDescription(blockedDesc + `There's a wall to the **${getMazeDirectionArrow(dir)}${displayDir}** — you can't move that way. ${ctaText}`)
        .setImage(mazeImg);
       addExplorationStandardFields(blockedEmbed, {
        party,
@@ -3524,7 +3534,7 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       await grotto.save();
       const nextCharTrap = party.characters[party.currentTurn] ?? null;
-      const trapDesc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**Party moved ${displayDir} and triggered a trap!** (Roll: ${trapRoll})\n\n${trapOutcome.flavor}${costLine}`;
+      const trapDesc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}** and triggered a trap! (Roll: ${trapRoll})\n\n${trapOutcome.flavor}${costLine}`;
       const trapEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Trap!**")
        .setColor(getMazeEmbedColor('trap', regionColors[party.region]))
@@ -3557,44 +3567,53 @@ module.exports = {
        let givenItemName = chestLoot.itemName;
        let givenEmoji = chestLoot.emoji || "📦";
        if (!EXPLORATION_TESTING_MODE) {
-        try {
-         await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze chest");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest (${givenItemName}): ${err?.message || err}`);
+        for (const slot of party.characters || []) {
          try {
-          await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
-          givenItemName = "Spirit Orb";
-          givenEmoji = "💫";
-         } catch (fallbackErr) {
-          logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest fallback: ${fallbackErr?.message || fallbackErr}`);
+          await addItemInventoryDatabase(slot._id, givenItemName, 1, interaction, "Grotto - Maze chest");
+         } catch (err) {
+          logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest (${givenItemName}) for ${slot.name}: ${err?.message || err}`);
+          try {
+           await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
+          } catch (fallbackErr) {
+           logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest fallback for ${slot.name}: ${fallbackErr?.message || fallbackErr}`);
+          }
          }
         }
        }
        if (!usePartyOnlyForHeartsStamina(party)) {
-        const charDoc = await Character.findById(character._id);
-        if (charDoc && party.characters) {
-         const idx = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
-         if (idx !== -1) party.characters[idx] = { ...party.characters[idx], ...charDoc.toObject?.() || charDoc };
+        for (const slot of party.characters || []) {
+         const charDoc = await Character.findById(slot._id);
+         if (charDoc && party.characters) {
+          const idx = party.characters.findIndex((c) => c._id && c._id.toString() === slot._id.toString());
+          if (idx !== -1) party.characters[idx] = { ...party.characters[idx], ...charDoc.toObject?.() || charDoc };
+         }
         }
        }
        await grotto.save();
        if (!party.gatheredItems) party.gatheredItems = [];
-       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: givenItemName, quantity: 1, emoji: givenEmoji });
+       for (const slot of party.characters || []) {
+        party.gatheredItems.push({ characterId: slot._id?.toString?.() ?? String(slot._id), characterName: slot.name, itemName: givenItemName, quantity: 1, emoji: givenEmoji });
+       }
        party.markModified("gatheredItems");
-       pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} opened a maze chest (moved ${displayDir}) and received a ${givenItemName}.`, { itemName: givenItemName, emoji: givenEmoji }, undefined, new Date());
+       const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
+       pushProgressLog(party, character.name, "grotto_maze_chest", `Party opened a maze chest (moved ${displayDir}); each member received ${givenItemName}.`, { itemName: givenItemName, emoji: givenEmoji }, undefined, new Date());
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        party.markModified("currentTurn");
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
        const nextCharChest = party.characters[party.currentTurn] ?? null;
        const chestDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
+       const chestReceiveLine = memberNames.length > 0
+        ? memberNames.map((n) => `**${n}** receives ${givenEmoji} **${givenItemName}**`).join("\n") + "."
+        : `Each party member receives ${givenEmoji} **${givenItemName}** from the chest.`;
        const chestEmbed = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Maze — 📦 Treasure Chest!**")
         .setColor(getMazeEmbedColor('chest', regionColors[party.region]))
         .setDescription(
           chestDesc +
-          `**📦 Chest found!** Party moved **${displayDir}** and discovered a treasure chest!\n\n` +
-          `**${character.name}** receives ${givenEmoji} **${givenItemName}** from the chest.`
+          `**📦 Chest found!** Party moved **${getMazeDirectionArrow(dir)}${displayDir}** and discovered a treasure chest!\n\n` +
+          chestReceiveLine
         )
+        .setThumbnail("https://static.wikia.nocookie.net/zelda_gamepedia_en/images/0/0f/MM3D_Chest.png/revision/latest/scale-to-width/360?cb=20201125233413")
         .setImage(mazeImg);
        addExplorationStandardFields(chestEmbed, {
         party,
@@ -3629,7 +3648,7 @@ module.exports = {
         .setColor(getMazeEmbedColor('scrying', regionColors[party.region]))
         .setDescription(
           redDesc +
-          `Party moved **${displayDir}** and came upon a **wall covered in ancient musical notes!** The runes pulse faintly, awaiting a melody.\n\n` +
+          `Party moved **${getMazeDirectionArrow(dir)}${displayDir}** and came upon a **wall covered in ancient musical notes!** The runes pulse faintly, awaiting a melody.\n\n` +
           `↳ **Use action: Song of Scrying at a wall** to see what happens!\n` +
           `💡 *A party member with the Entertainer job has a 50% higher chance of success.*`
         )
@@ -3672,7 +3691,7 @@ module.exports = {
         const raidEmbed = new EmbedBuilder()
          .setTitle("🗺️ **Grotto: Maze — Random encounter!**")
          .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
-         .setDescription((mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + `Party moved **${displayDir}**.\n\n${monsterFlavor}\n\n↳ ${raidCta}`)
+         .setDescription((mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + `**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}**.\n\n${monsterFlavor}\n\n↳ ${raidCta}`)
          .setImage(mazeImg);
         addExplorationStandardFields(raidEmbed, { party, expeditionId, location, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
         if (mazeFiles.length) raidEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
@@ -3710,7 +3729,7 @@ module.exports = {
        }
       }
       if (!party.gatheredItems) party.gatheredItems = [];
-      party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: givenItemName, quantity: 1, emoji: givenEmoji });
+      party.gatheredItems.push({ characterId: character._id?.toString?.() ?? String(character._id), characterName: character.name, itemName: givenItemName, quantity: 1, emoji: givenEmoji });
       party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} found something in the corridor (moved ${displayDir}): ${givenItemName}.`, { itemName: givenItemName, emoji: givenEmoji }, undefined, new Date());
       randomEventPart = `Along the way, **${character.name}** finds ${givenEmoji} **${givenItemName}**!`;
@@ -3724,15 +3743,16 @@ module.exports = {
      await party.save();
      const nextCharMove = party.characters[party.currentTurn] ?? null;
      const moveDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
+     const dirArrow = getMazeDirectionArrow(dir);
      const flavorBlock = randomEventPart
       ? (randomEvent.type === "flavor"
-        ? `\n\n\`\`\`\n${String(randomEventPart).replace(/\*\*/g, "")}\n\`\`\``
+        ? `\n\n*${String(randomEventPart).replace(/\*\*/g, "").trim()}*`
         : `\n\n${randomEventPart}`)
       : "";
      const moveEmbed = new EmbedBuilder()
-      .setTitle("🗺️ **Grotto: Maze**")
+      .setTitle(`🗺️ **Grotto: Maze — Moved ${displayDir}**`)
       .setColor(getMazeEmbedColor(null, regionColors[party.region]))
-      .setDescription(moveDesc + `Party moved **${displayDir}**.` + flavorBlock)
+      .setDescription(moveDesc + `**Party moved** **${dirArrow}${displayDir}**` + flavorBlock)
       .setImage(mazeImg);
     addExplorationStandardFields(moveEmbed, {
        party,
