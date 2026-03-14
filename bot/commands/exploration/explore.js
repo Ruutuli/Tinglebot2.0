@@ -5693,7 +5693,7 @@ module.exports = {
         }
 
         await interaction.editReply({ embeds: [embed] });
-        await interaction.followUp({ content: getExplorationNextTurnContent(nextCharacterRaid) });
+        // Do not followUp with @ "you're up next" — raidModule already pings in the raid thread to avoid double posts and double @s
        } catch (error) {
         handleInteractionError(error, interaction, { source: "explore.js" });
         logger.error("EXPLORE", `[explore.js]❌ Raid processing: ${error?.message || error}`);

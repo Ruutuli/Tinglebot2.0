@@ -1691,17 +1691,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       content: channelContent,
       embeds: [embed]
     });
-    // Expedition raid: @ who is next in a separate message so the ping is distinct from the embed
-    if (expeditionId && raidForTurnPing.participants && raidForTurnPing.participants.length > 0) {
-      const currentIdx = typeof raidForTurnPing.currentTurn === 'number' ? raidForTurnPing.currentTurn % raidForTurnPing.participants.length : 0;
-      const firstTurn = raidForTurnPing.participants[currentIdx];
-      if (firstTurn?.userId) {
-        const charName = firstTurn.name || 'your character';
-        await interaction.channel.send({
-          content: `<@${firstTurn.userId}> — **you're up next.** Use \`/raid\` and choose **${charName}** to take your turn.`
-        }).catch((err) => logger.warn('RAID', `[raidModule.js] Could not send expedition turn ping to channel: ${err?.message || err}`));
-      }
-    }
+    // Expedition raid: do NOT ping in channel here — explore.js already shows "Encountered a Monster" + next in embed; we ping once in the thread below to avoid double @s
 
     // Create the raid thread with error handling
     let thread = null;
