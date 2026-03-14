@@ -426,7 +426,8 @@ const OPPOSITE_FACING = { n: 's', s: 'n', e: 'w', w: 'e' };
 /**
  * Resolve movement from (x,y) with current facing. Action: left | right | straight | back.
  * Returns { nextX, nextY, newFacing } or null if blocked or invalid.
- * One move = one adjacent path cell; if the immediate neighbour is a wall (e.g. thin wall between path cells), tries the path cell beyond it.
+ * Only allows moving to the immediately adjacent cell (one step). Never jumps over walls
+ * to avoid clipping into a different corridor.
  */
 function getNeighbourCoordsWithFacing(matrix, x, y, facing, action) {
   let newFacing = facing;
@@ -436,8 +437,6 @@ function getNeighbourCoordsWithFacing(matrix, x, y, facing, action) {
 
   const next = moveInFacing(x, y, newFacing);
   if (isWalkable(matrix, next.x, next.y)) return { x: next.x, y: next.y, facing: newFacing };
-  const beyond = getCellBeyondWall(matrix, x, y, newFacing);
-  if (beyond) return { x: beyond.x, y: beyond.y, facing: newFacing };
   return null;
 }
 
@@ -514,15 +513,15 @@ function removeScryingWall(matrix, x, y, facing) {
  * - Cardinal: north, south, east, west (or n, s, e, w) — absolute direction
  * - Relative: left, right, straight, back — uses current facing
  *
- * One move = one adjacent path cell. If the immediate neighbour is a wall (thin wall between path cells, e.g. next to a scrying wall), returns the path cell on the other side so players can walk onto scrying walls and other path cells.
+ * Only allows moving to the immediately adjacent cell (one matrix step). If that cell
+ * is a wall, movement is blocked. This prevents clipping through walls into a different
+ * corridor. (Scrying opens walls in-place so the adjacent cell becomes walkable.)
  */
 function getNeighbourCoords(matrix, x, y, direction, facing) {
   const card = CARDINAL_MOVE[direction?.toLowerCase()];
   if (card) {
     const next = { x: x + card.dx, y: y + card.dy };
     if (isWalkable(matrix, next.x, next.y)) return { x: next.x, y: next.y, facing: card.facing };
-    const beyond = getCellBeyondWall(matrix, x, y, card.facing);
-    if (beyond) return { x: beyond.x, y: beyond.y, facing: card.facing };
     return null;
   }
   const defFacing = facing || 's';

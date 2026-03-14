@@ -1040,22 +1040,33 @@ async function hasActiveGrottoAtLocation(party, expeditionId) {
 }
 
 // ------------------- resolveGrottoAtLocation ------------------
-// Resolve grotto by optional name/id, or fall back to most recently unsealed
-async function resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption) {
+// Resolve grotto by optional name/id, or fall back to most recently unsealed.
+// activeOnly: when true, only return grottos that are not cleared (status !== "cleared", completedAt null).
+async function resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, activeOnly = false) {
  const query = {
   squareId: new RegExp(`^${String(squareId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
   quadrantId: new RegExp(`^${String(quadrantId).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
   partyId: expeditionId,
   sealed: false,
  };
+ if (activeOnly) {
+  query.status = { $ne: "cleared" };
+  query.completedAt = null;
+ }
  if (grottoOption && String(grottoOption).trim()) {
   const val = String(grottoOption).trim();
   if (val === "none") return null;
   const byName = await Grotto.findOne({ ...query, name: new RegExp(`^${val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-  if (byName) return byName;
+  if (byName) {
+   if (activeOnly && (byName.status === "cleared" || byName.completedAt)) return null;
+   return byName;
+  }
   try {
    const byId = await Grotto.findById(val);
-   if (byId && byId.partyId === expeditionId && !byId.sealed) return byId;
+   if (byId && byId.partyId === expeditionId && !byId.sealed) {
+    if (activeOnly && (byId.status === "cleared" || byId.completedAt)) return null;
+    return byId;
+   }
   } catch (_) {}
  }
  return Grotto.findOne(query).sort({ unsealedAt: -1 });
@@ -1385,6 +1396,22 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   logger.warn("EXPLORE", `[explore.js]⚠️ Expedition not found: id=${expeditionId}`);
   await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
   return;
+ }
+ const squareIdCheck = (freshParty.square && String(freshParty.square).trim()) || "";
+ const quadrantIdCheck = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
+ if (squareIdCheck && quadrantIdCheck) {
+  const existingGrotto = await Grotto.findOne({ squareId: squareIdCheck, quadrantId: quadrantIdCheck });
+  if (existingGrotto && String(existingGrotto.partyId || "").trim() === String(expeditionId || "").trim() && existingGrotto.status === "cleared") {
+   const alreadyClearedEmbed = new EmbedBuilder()
+    .setTitle("🗺️ **Grotto already cleared**")
+    .setColor(getExploreOutcomeColor("grotto", regionColors[freshParty.region] || "#00ff99"))
+    .setDescription("This grotto has already been cleared by your expedition. No plume or stamina is used.")
+    .setImage(getExploreMapImageUrl(freshParty, { highlight: true }));
+   addExplorationStandardFields(alreadyClearedEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
+   await msg.edit({ embeds: [alreadyClearedEmbed], components: [disabledRow] }).catch(() => {});
+   await i.followUp({ content: "This grotto has already been cleared by your expedition.", ephemeral: true }).catch(() => {});
+   return;
+  }
  }
  const grottoPayResult = await payStaminaOrStruggle(freshParty, characterIndex, 1, { order: "currentFirst", action: "grotto" });
  if (!grottoPayResult.ok) {
@@ -2144,6 +2171,26 @@ module.exports = {
        "No active grotto trial at this location for this expedition. Make sure you have cleansed a grotto here and are in the same square and quadrant."
       );
      }
+     if (grotto.status === "cleared" || grotto.completedAt) {
+      const rollCmdId = getExploreCommandId();
+      const clearedEmbed = new EmbedBuilder()
+       .setTitle("🗺️ **Grotto already cleared**")
+       .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
+       .setDescription(`This grotto has already been cleared. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
+       .setImage(getExploreMapImageUrl(party, { highlight: true }));
+      addExplorationStandardFields(clearedEmbed, {
+       party,
+       expeditionId,
+       location,
+       nextCharacter: party.characters[party.currentTurn] ?? null,
+       showNextAndCommands: true,
+       showRestSecureMove: false,
+       hasActiveGrotto: false,
+       hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+       hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+      });
+      return interaction.editReply({ embeds: [clearedEmbed] });
+     }
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === true && !grotto.completedAt) {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
@@ -2303,9 +2350,12 @@ module.exports = {
 
     if (subcommand === "targetpractice") {
      const grottoOption = interaction.options.getString("grotto");
-     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
+     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, true);
      if (!grotto || grotto.trialType !== "target_practice") {
       return interaction.editReply("No Target Practice grotto at this location for this expedition.");
+     }
+     if (grotto.status === "cleared" || grotto.completedAt) {
+      return interaction.editReply("This grotto has already been cleared.");
      }
      const TARGET_SUCCESSES = 3;
      const BASE_FAIL = 0.15;
@@ -2501,9 +2551,12 @@ module.exports = {
 
     if (subcommand === "puzzle") {
      const grottoOption = interaction.options.getString("grotto");
-     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
+     const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, true);
      if (!grotto || grotto.trialType !== "puzzle") {
       return interaction.editReply("No Puzzle grotto at this location for this expedition.");
+     }
+     if (grotto.status === "cleared" || grotto.completedAt) {
+      return interaction.editReply("This grotto has already been cleared.");
      }
      if (grotto.puzzleState.offeringSubmitted) {
       const approved = grotto.puzzleState.offeringApproved === true;
@@ -2850,11 +2903,6 @@ module.exports = {
       let outcome;
       let rollLabel = '';
       if (isMazepCell) {
-       const usedWalls = grotto.mazeState.usedScryingWalls || [];
-       if (!usedWalls.includes(currentNode)) {
-        grotto.mazeState.usedScryingWalls = [...usedWalls, currentNode];
-        grotto.markModified("mazeState.usedScryingWalls");
-       }
        const charDocs = await Character.find({ _id: { $in: (party.characters || []).map((c) => c._id).filter(Boolean) } }).select('job jobVoucher jobVoucherJob');
        const hasEntertainer = charDocs?.some(
         (c) => (c?.job || '').toLowerCase() === 'entertainer' || (c?.jobVoucher && (c?.jobVoucherJob || '').toLowerCase() === 'entertainer')
@@ -2896,7 +2944,12 @@ module.exports = {
        }
       }
       if (outcome.type === 'faster_path_open') {
-       // Open the wall (and surrounding walls) so the path is passable; player stays where they are
+       // Only when the wall is cleared: open it and mark it used (scrying wall only "does something" when cleared)
+       const usedWalls = grotto.mazeState.usedScryingWalls || [];
+       if (!usedWalls.includes(currentNode)) {
+        grotto.mazeState.usedScryingWalls = [...usedWalls, currentNode];
+        grotto.markModified("mazeState.usedScryingWalls");
+       }
        removeScryingWall(matrix, cx, cy, facing);
        grotto.markModified("mazeState.layout.matrix");
        await grotto.save();
@@ -3090,7 +3143,8 @@ module.exports = {
       return interaction.editReply(`Maze position is invalid. Re-enter the grotto with </explore grotto continue:${mazeCmdId}> and try again.`);
      }
      const nextResult = getNeighbourCoords(matrix, cx, cy, dir, facing);
-     if (!nextResult) {
+     const destInPath = nextResult && pathCells?.length ? getPathCellAt(pathCells, nextResult.x, nextResult.y) : null;
+     if (!nextResult || (pathCells?.length && !destInPath)) {
       const currentCell = getPathCellAt(pathCells, cx, cy);
       const isScryingWall = currentCell && (currentCell.type === 'mazep' || currentCell.type === 'mazen');
       const usedScryingWalls = grotto.mazeState?.usedScryingWalls || [];
@@ -3671,6 +3725,25 @@ module.exports = {
     if (discoveryType === "grotto") {
      const grotto = await Grotto.findOne({ squareId, quadrantId, sealed: false, partyId: expeditionId }).sort({ unsealedAt: -1 });
      if (grotto) {
+      if (grotto.status === "cleared") {
+       const rollCmdId = getExploreCommandId();
+       const clearedRevisitEmbed = new EmbedBuilder()
+        .setTitle("🗺️ **Expedition: Grotto already cleared**")
+        .setColor(getExploreOutcomeColor("grotto_revisit", regionColors[party.region] || "#00ff99"))
+        .setDescription(`This grotto has already been cleared. Use </explore roll:${rollCmdId}> to continue exploring.`)
+        .setImage(getExploreMapImageUrl(party, { highlight: true }));
+       addExplorationStandardFields(clearedRevisitEmbed, {
+        party,
+        expeditionId,
+        location,
+        nextCharacter: party.characters[party.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+        hasActiveGrotto: false,
+        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       });
+       return interaction.editReply({ embeds: [clearedRevisitEmbed] });
+      }
       const trialLabel = getTrialLabel(grotto.trialType);
       const cmdId = getExploreCommandId();
       const instructions = {

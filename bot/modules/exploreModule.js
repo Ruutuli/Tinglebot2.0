@@ -247,6 +247,10 @@ async function markGrottoCleared(grotto) {
     grotto.markModified?.("status");
     await grotto.save();
     const dk = grotto.discoveryKey;
+    if (!dk && grotto.squareId && grotto.quadrantId) {
+        const logger = require('@/utils/logger');
+        logger.warn("EXPLORE", `[exploreModule.js] markGrottoCleared: grotto ${grotto._id} has no discoveryKey — map grottoStatus will not be updated`);
+    }
     if (dk && grotto.squareId && grotto.quadrantId) {
         const party = grotto.partyId ? await Party.findOne({ partyId: grotto.partyId }).lean() : null;
         if (party && party.status !== "started") return; // Do not update map when expedition is over
