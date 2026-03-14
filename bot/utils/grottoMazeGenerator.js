@@ -455,28 +455,27 @@ function setCellToPath(matrix, x, y) {
 }
 
 /**
- * Remove the scrying wall: open the cell immediately in front of the player (one step in facing)
- * and the two cells perpendicular to the passage (above and below when facing E/W, left and right when N/S).
- * Does not move the player. Only affects the three cells next to the player in the facing direction.
+ * Remove the scrying wall: open the 4 cells directly N, E, S, W of the scrying wall cell (x,y).
+ * Does not move the player. (x,y) is the cell the player is on (the scrying wall); we remove the 4 walls around it.
+ *
+ *   OzO
+ *   OXO   -> X = (x,y), z = the 4 cells we open (N, S, E, W of X)
+ *   OzO
  */
 function removeScryingWall(matrix, x, y, facing) {
   if (!matrix || isNaN(x) || isNaN(y)) return;
   const rows = matrix.length;
   const cols = matrix[0]?.length || 0;
 
-  // One step only in the facing direction (the "wall" / barrier we're scrying is right in front)
-  const step1 = moveInFacing(x, y, facing);
-  if (step1.x < 0 || step1.x >= cols || step1.y < 0 || step1.y >= rows) return;
-
-  setCellToPath(matrix, step1.x, step1.y);
-
-  // Only the two cells perpendicular to the passage (sides of the corridor), not all four cardinals
-  const perpendicular = (facing === "n" || facing === "s")
-    ? [{ x: step1.x - 1, y: step1.y }, { x: step1.x + 1, y: step1.y }]   // left, right
-    : [{ x: step1.x, y: step1.y - 1 }, { x: step1.x, y: step1.y + 1 }]; // above, below
-  for (const p of perpendicular) {
-    if (p.y >= 0 && p.y < rows && p.x >= 0 && p.x < cols && stringVal(matrix[p.y], p.x) !== 0) {
-      setCellToPath(matrix, p.x, p.y);
+  const cardinals = [
+    { x, y: y - 1 }, // north
+    { x, y: y + 1 }, // south
+    { x: x + 1, y }, // east
+    { x: x - 1, y }, // west
+  ];
+  for (const c of cardinals) {
+    if (c.y >= 0 && c.y < rows && c.x >= 0 && c.x < cols && stringVal(matrix[c.y], c.x) !== 0) {
+      setCellToPath(matrix, c.x, c.y);
     }
   }
 }

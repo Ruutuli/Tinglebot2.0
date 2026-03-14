@@ -6944,6 +6944,7 @@ module.exports = {
      const start = START_POINTS_BY_REGION[regionKey];
      return start && String(party.square || "").toUpperCase() === String(start.square || "").toUpperCase() && String(party.quadrant || "").toUpperCase() === String(start.quadrant || "").toUpperCase();
     })();
+    const noCampInDest = isPreestablishedNoCamp(newLocation.square, newLocation.quadrant) || (destQ && destQ.noCamp);
     const hasDiscMove = await hasDiscoveriesInQuadrant(newLocation.square, newLocation.quadrant);
     addExplorationStandardFields(embed, {
       party,
@@ -6956,6 +6957,7 @@ module.exports = {
       hasDiscoveriesInQuadrant: hasDiscMove,
       actionCost: movePayResult ? { staminaCost: movePayResult.staminaPaid ?? 0, heartsCost: movePayResult.heartsPaid ?? 0 } : null,
       hazardMessage: hazardMoveResult?.hazardMessage ?? null,
+      hideCampCommand: noCampInDest,
     });
     addExplorationCommandsField(embed, {
       party,
@@ -6969,6 +6971,7 @@ module.exports = {
       showMoveToUnexploredOnly: moveToUnexplored,
       hasDiscoveriesInQuadrant: hasDiscMove,
       isAtStartQuadrant: moveIsAtStart,
+      hideCampCommand: noCampInDest,
     });
 
     await interaction.editReply({ embeds: [embed] });
