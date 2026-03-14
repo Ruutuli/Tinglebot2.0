@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev -p 6001",
-    "build": "next build",
+    "build": "next build && node -e \"const fs=require('fs');const p=require('path');function cp(a,b){try{fs.mkdirSync(p.dirname(b),{recursive:true});fs.cpSync(a,b,{recursive:true});}catch(e){}};cp('.next/static','.next/standalone/.next/static');try{cp('public','.next/standalone/public');}catch(e){}\"",
     "start": "node .next/standalone/server.js",
     "start:next": "next start",
     "lint": "eslint"
