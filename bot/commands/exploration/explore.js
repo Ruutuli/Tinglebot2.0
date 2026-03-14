@@ -2291,15 +2291,9 @@ module.exports = {
       .addStringOption((o) =>
        o
         .setName("action")
-        .setDescription("North, East, South, or West; or Song of Scrying at a wall")
+        .setDescription("North, East, South, or West; or Song of Scrying when on a red cell")
         .setRequired(true)
-        .addChoices(
-          { name: "↑ North", value: "north" },
-          { name: "→ East", value: "east" },
-          { name: "↓ South", value: "south" },
-          { name: "← West", value: "west" },
-          { name: "Song of Scrying (at wall)", value: "wall" }
-        )
+        .setAutocomplete(true)
       )
     )
     .addSubcommand((sub) =>
@@ -3158,7 +3152,7 @@ module.exports = {
        const notOnWallEmbed = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Maze**")
         .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
-        .setDescription(`You must be **standing on a Scrying Wall** (🔴) to use Song of Scrying. Move to a red wall cell first, then use the action.`)
+        .setDescription(`You must be **standing on a red cell** to use Song of Scrying. Move to a red cell first, then use the action.`)
         .setImage(mazeImg);
        addExplorationStandardFields(notOnWallEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
        if (mazeFiles.length) notOnWallEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
@@ -3600,7 +3594,7 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       await grotto.save();
       const nextCharTrap = party.characters[party.currentTurn] ?? null;
-      const trapDesc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}** and triggered a trap! (Roll: ${trapRoll})\n\n${trapOutcome.flavor}${costLine}`;
+      const trapDesc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}** and triggered a trap!\n\n${trapOutcome.flavor}${costLine}`;
       const trapEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Trap!**")
        .setColor(getMazeEmbedColor('trap', regionColors[party.region]))
@@ -7793,7 +7787,7 @@ module.exports = {
      .setDescription(
       `${character.name} used **${carried.itemName}** (${effect}).`
      )
-     .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     .setImage("https://storage.googleapis.com/tinglebot/Borders/border_green.png");
     const hasDiscItem = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
     const activeWaveIdForEmbed = activeWaveForItem?.waveId ?? null;
     addExplorationStandardFields(embed, {
@@ -8283,7 +8277,7 @@ module.exports = {
       .setTitle("🏃 **Retreat successful**")
       .setColor(getExploreOutcomeColor("raid_over", regionColors[party.region] || "#9C27B0"))
       .setDescription(`The party escaped from **${monsterName}**!`)
-      .setImage(getExploreMapImageUrl(party, { highlight: true }));
+      .setImage("https://storage.googleapis.com/tinglebot/Borders/border_brown.png");
      addExplorationStandardFields(embed, {
       party,
       expeditionId,

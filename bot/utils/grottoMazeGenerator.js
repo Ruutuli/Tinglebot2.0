@@ -277,6 +277,23 @@ function isScryingWallConnector(matrix, x, y) {
   return false;
 }
 
+/**
+ * Returns true if path cell (x, y) is at an internal "corner" — it has two adjacent wall
+ * neighbors that meet at a corner (e.g. wall above + wall left, like "XX / X"). We avoid
+ * placing scrying walls on such cells so they don't appear on corner walls.
+ */
+function isCornerWallCell(matrix, x, y) {
+  if (!matrix || matrix.length === 0) return false;
+  const rows = matrix.length;
+  const cols = matrix[0]?.length || 0;
+  const isWall = (ax, ay) => ay >= 0 && ay < rows && ax >= 0 && ax < cols && stringVal(matrix[ay], ax) !== 0;
+  const wallN = isWall(x, y - 1);
+  const wallS = isWall(x, y + 1);
+  const wallW = isWall(x - 1, y);
+  const wallE = isWall(x + 1, y);
+  return (wallN && wallW) || (wallN && wallE) || (wallS && wallW) || (wallS && wallE);
+}
+
 function collectPathCells(matrix, entryNodes) {
   const start = getEntryNode(entryNodes, 'start');
   const end = getEntryNode(entryNodes, 'end');
@@ -319,10 +336,10 @@ function assignGrottoCellTypes(pathCells, options = {}, matrix = null) {
   }
 
   // Scrying walls (mazep/mazen): only place on path cells where clearing would open a new way.
-  // A valid cell has at least one adjacent wall with path on the other side.
+  // Exclude corner walls (e.g. "XX / X") so scrying doesn't show on internal corners.
   const pathStillOpen = pathOnly.filter((c) => c.type === 'path');
   const scryingCandidates = matrix
-    ? pathStillOpen.filter((c) => isScryingWallConnector(matrix, c.x, c.y))
+    ? pathStillOpen.filter((c) => isScryingWallConnector(matrix, c.x, c.y) && !isCornerWallCell(matrix, c.x, c.y))
     : pathStillOpen;
   shuffleArray(scryingCandidates);
   const numScryingToPlace = Math.min(numRed, scryingCandidates.length);
