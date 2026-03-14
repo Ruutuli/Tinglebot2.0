@@ -89,8 +89,21 @@ function isConnectionError(e: unknown): boolean {
     msg.includes("ETIMEDOUT") ||
     msg.includes("ECONNRESET") ||
     msg.includes("connection") && (msg.includes("pool") || msg.includes("cleared")) ||
+    msg.includes("buffering timed out") ||
     code === "ETIMEDOUT" ||
     code === "ECONNRESET"
+  );
+}
+
+/** True if the error is due to MongoDB being unreachable (connection/buffering timeout). Use to return 503 in API routes. */
+export function isDatabaseUnavailableError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  const name = e && typeof e === "object" && "name" in e ? String((e as { name: string }).name) : "";
+  return (
+    name === "MongooseError" ||
+    msg.includes("buffering timed out") ||
+    msg.includes("connection") && (msg.includes("timed out") || msg.includes("pool")) ||
+    isConnectionError(e)
   );
 }
 
@@ -103,8 +116,9 @@ export async function connect(): Promise<typeof mongoose> {
       maxPoolSize: 50,
       minPoolSize: 5,
       maxIdleTimeMS: 30000,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 45000,
+      bufferTimeoutMS: 20000,
     });
   }
   try {

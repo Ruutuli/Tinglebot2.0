@@ -2,7 +2,7 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import mongoose from "mongoose";
 
@@ -30,15 +30,14 @@ export async function GET(
   { params }: { params: Promise<{ partyId: string }> }
 ) {
   try {
-    const session = await getSession();
-    const currentUserId = session.user?.id ?? null;
-
     const { partyId } = await params;
     if (!partyId) {
       return NextResponse.json({ error: "Missing party ID" }, { status: 400 });
     }
 
     await connect();
+    const session = await getSession();
+    const currentUserId = session.user?.id ?? null;
 
     const Party =
       mongoose.models.Party ??
@@ -356,6 +355,12 @@ export async function GET(
     });
   } catch (err) {
     console.error("[explore/parties/[partyId] GET]", err);
+    if (isDatabaseUnavailableError(err)) {
+      return NextResponse.json(
+        { error: "Database unavailable", code: "database_unavailable" },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       { error: "Failed to load expedition" },
       { status: 500 }

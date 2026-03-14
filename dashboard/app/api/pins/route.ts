@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
-import { connect } from "@/lib/db";
+import { connect, isDatabaseUnavailableError } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -15,13 +15,25 @@ async function getAuthenticatedUser() {
 }
 
 export async function GET() {
+  try {
+    await connect();
+  } catch (err) {
+    console.error("[api/pins] GET connect error:", err);
+    if (isDatabaseUnavailableError(err)) {
+      return NextResponse.json(
+        { error: "Database unavailable", code: "database_unavailable" },
+        { status: 503 }
+      );
+    }
+    return NextResponse.json({ error: "Failed to fetch pins" }, { status: 500 });
+  }
+
   const auth = await getAuthenticatedUser();
   if (!auth) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
   try {
-    await connect();
     const Pin = (await import("@/models/PinModel.js")).default;
     const User = (await import("@/models/UserModel.js")).default;
     const pins = await (Pin as unknown as { getUserPins: (d: string, p: boolean) => Promise<unknown[]> }).getUserPins(auth.discordId, true);
@@ -45,6 +57,12 @@ export async function GET() {
     return NextResponse.json({ success: true, pins: pinsWithCreator });
   } catch (error) {
     console.error("[api/pins] GET error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return NextResponse.json(
+        { error: "Database unavailable", code: "database_unavailable" },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: "Failed to fetch pins" }, { status: 500 });
   }
 }
@@ -245,6 +263,7 @@ export async function POST(request: Request) {
 
           if (markPinnedResult.modifiedCount === 0) {
             // Fallback: push a new discovery (e.g. old data without discoveryKey, or bot hadn't written yet)
+            console.warn("[api/pins] No existing discovery matched key; pushing new discovery for", squareIdRaw, quadrantId, "(key may differ in case or not yet written by bot)");
             const discoveredAt = atStr ? new Date(atStr) : now;
             await Square.updateOne(
               { squareId: squareIdRegex, "quadrants.quadrantId": quadrantId },
@@ -273,6 +292,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, pin: pinObj });
   } catch (error) {
     console.error("[api/pins] POST error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return NextResponse.json(
+        { error: "Database unavailable", code: "database_unavailable" },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: "Failed to create pin" }, { status: 500 });
   }
 }

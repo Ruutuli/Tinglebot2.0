@@ -1484,18 +1484,26 @@ async function pullGrottoDiscoveriesFromQuadrant(squareId, quadrantId) {
 }
 
 // ------------------- pushDiscoveryToMap ------------------
-// Add discovery to Square.quadrants[].discoveries for map display
+// Add discovery to Square.quadrants[].discoveries for map display.
+// Resolves square/quadrant via findExactMapSquareAndQuadrant so updates always match the DB; stores canonical discoveryKey (uppercase square|quadrant).
 async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) {
  if (EXPLORATION_TESTING_MODE && outcomeType !== "grotto") return; // allow grotto creation in testing
  if (party.status !== "started") return; // Do not update map when expedition is over
  const squareId = (party.square && String(party.square).trim()) || "";
  const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
  if (!squareId || !quadrantId) return;
- const discoveryKey = options.discoveryKey || `${outcomeType}|${squareId}|${quadrantId}|${(at instanceof Date ? at : new Date()).toISOString()}`;
+ const resolved = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+ if (!resolved) {
+  logger.warn("EXPLORE", `[explore.js] pushDiscoveryToMap: no map square/quadrant found for ${squareId} ${quadrantId}; skipping map update`);
+  return;
+ }
+ const { exactSquareId, exactQuadrantId } = resolved;
+ const atDate = at instanceof Date ? at : new Date();
+ const discoveryKey = `${outcomeType}|${exactSquareId}|${exactQuadrantId}|${atDate.toISOString()}`;
  const discovery = {
   type: outcomeType,
   discoveredBy: userId || party.leaderId || "",
-  discoveredAt: at instanceof Date ? at : new Date(),
+  discoveredAt: atDate,
   discoveryKey,
  };
  if (options.name) discovery.name = options.name;
@@ -1503,24 +1511,30 @@ async function pushDiscoveryToMap(party, outcomeType, at, userId, options = {}) 
  if (outcomeType === "grotto") {
   discovery.grottoStatus = options.grottoStatus ?? (options.name ? "cleansed" : "found");
   // Ensure only one grotto discovery per quadrant (avoid duplicates from dashboard pin fallback or double-push).
-  await pullGrottoDiscoveriesFromQuadrant(squareId, quadrantId);
+  await pullGrottoDiscoveriesFromQuadrant(exactSquareId, exactQuadrantId);
  }
- await Square.updateOne(
-  { squareId },
+ const updateResult = await Square.updateOne(
+  { squareId: exactSquareId },
   { $push: { "quadrants.$[q].discoveries": discovery } },
-  { arrayFilters: [{ "q.quadrantId": quadrantId }] }
+  { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
  );
+ if (updateResult.matchedCount === 0) {
+  logger.warn("EXPLORE", `[explore.js] pushDiscoveryToMap: update matched 0 documents for ${exactSquareId} ${exactQuadrantId}`);
+ }
 }
 
 // ------------------- updateDiscoveryName ------------------
-// Set name on an existing discovery (e.g. grotto when cleansed on revisit)
+// Set name on an existing discovery (e.g. grotto when cleansed on revisit). Resolves square/quadrant so update matches the DB.
 async function updateDiscoveryName(squareId, quadrantId, discoveryKey, name, options = {}) {
  if (!squareId || !quadrantId || !discoveryKey || !name) return;
  if (options.party && options.party.status !== "started") return; // Do not update map when expedition is over
+ const resolved = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+ if (!resolved) return;
+ const { exactSquareId, exactQuadrantId } = resolved;
  await Square.updateOne(
-  { squareId },
+  { squareId: exactSquareId },
   { $set: { "quadrants.$[q].discoveries.$[d].name": name } },
-  { arrayFilters: [{ "q.quadrantId": quadrantId }, { "d.discoveryKey": discoveryKey }] }
+  { arrayFilters: [{ "q.quadrantId": exactQuadrantId }, { "d.discoveryKey": discoveryKey }] }
  );
 }
 
@@ -1662,9 +1676,12 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  const at = new Date();
  const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
  const quadrantId = (freshParty.quadrant && String(freshParty.quadrant).trim()) || "";
+ const resolvedLoc = await findExactMapSquareAndQuadrant(squareId, quadrantId);
+ const exactSquareId = resolvedLoc?.exactSquareId ?? squareId;
+ const exactQuadrantId = resolvedLoc?.exactQuadrantId ?? String(quadrantId).trim().toUpperCase();
+ const discoveryKey = `grotto|${exactSquareId}|${exactQuadrantId}|${at.toISOString()}`;
  const usedGrottoNames = await Grotto.distinct("name").catch(() => []);
  const grottoName = getRandomGrottoNameUnused(usedGrottoNames);
- const discoveryKey = `grotto|${squareId}|${quadrantId}|${at.toISOString()}`;
  const trialType = rollGrottoTrialType();
  const puzzleState = trialType === 'puzzle' ? (() => {
   const cfg = rollPuzzleConfig();
@@ -1673,9 +1690,14 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   else s.puzzleClueIndex = cfg.clueIndex;
   return s;
  })() : undefined;
- let grottoDoc = await Grotto.findOne({ squareId, quadrantId });
+ let grottoDoc = await Grotto.findOne({
+  squareId: new RegExp(`^${String(exactSquareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+  quadrantId: new RegExp(`^${String(exactQuadrantId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+ });
  const reusedExistingGrotto = !!grottoDoc;
  if (grottoDoc) {
+  grottoDoc.squareId = exactSquareId;
+  grottoDoc.quadrantId = exactQuadrantId;
   grottoDoc.discoveryKey = discoveryKey;
   grottoDoc.name = grottoName;
   grottoDoc.sealed = false;
@@ -1695,8 +1717,8 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await grottoDoc.save();
  } else {
   grottoDoc = new Grotto({
-   squareId,
-   quadrantId,
+   squareId: exactSquareId,
+   quadrantId: exactQuadrantId,
    discoveryKey,
    name: grottoName,
    sealed: false,
@@ -1708,8 +1730,8 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   });
   await grottoDoc.save();
  }
- // pushDiscoveryToMap pulls existing grotto discoveries for this quadrant before pushing, so we only ever have one.
- await pushDiscoveryToMap(freshParty, "grotto", at, i.user?.id, { discoveryKey, name: grottoName });
+ // pushDiscoveryToMap pulls existing grotto discoveries for this quadrant before pushing, so we only ever have one; it builds canonical discoveryKey from resolved location.
+ await pushDiscoveryToMap(freshParty, "grotto", at, i.user?.id, { name: grottoName });
  const grottoCostsForLog = buildCostsForLog(grottoPayResult);
  pushProgressLog(freshParty, cleanseCharacter.name, "grotto_cleansed", `Cleansed grotto **${grottoName}** in ${location} (1 Goddess Plume + 1 stamina).`, undefined, Object.keys(grottoCostsForLog).length ? grottoCostsForLog : { staminaLost: 1 }, at);
  await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress

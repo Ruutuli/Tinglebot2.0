@@ -151,8 +151,8 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
     const m = REPORTABLE_LOC_RE.exec(e.message);
     if (!m || !m[1]) continue;
     const parts = m[1].trim().split(/\s+/);
-    const square = parts[0] ?? "";
-    const quadrant = parts[1] ?? "";
+    const square = (parts[0] ?? "").trim().toUpperCase();
+    const quadrant = (parts[1] ?? "").trim().toUpperCase();
     if (!square || !quadrant) continue;
     const locKey = `${e.outcome}|${square}|${quadrant}`;
     const occurrenceIndex = (countByKey.get(locKey) ?? 0) + 1;
@@ -189,9 +189,11 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
   return out.filter((_, i) => !foundOnlyIndices.has(i));
 }
 
-/** Stable key for a discovery (uses log entry timestamp so it survives party refetch/poll). */
+/** Stable key for a discovery (canonical: uppercase square|quadrant so it matches map DB and pins API). */
 function discoveryKey(d: { outcome: string; square: string; quadrant: string; at: string }): string {
-  return `${d.outcome}|${d.square}|${d.quadrant}|${d.at}`;
+  const s = String(d.square ?? "").trim().toUpperCase();
+  const q = String(d.quadrant ?? "").trim().toUpperCase();
+  return `${d.outcome}|${s}|${q}|${d.at ?? ""}`;
 }
 
 /** Render message with Discord-style **bold** (for progress log). */
@@ -239,6 +241,16 @@ function squareQuadrantToCoordinates(square: string, quadrant: string): { lat: n
   };
   const off = offsets[q] ?? offsets["1"];
   return { lat: latBase + off.lat, lng: lngBase + off.lng };
+}
+
+/** True if square is valid explore grid (A1–J12). */
+function isValidExploreSquare(square: string): boolean {
+  return /^[A-J]([1-9]|1[0-2])$/i.test(String(square ?? "").trim());
+}
+
+/** True if quadrant is Q1–Q4. */
+function isValidExploreQuadrant(quadrant: string): boolean {
+  return /^Q[1-4]$/i.test(String(quadrant ?? "").trim());
 }
 
 /** Bounds of a square in map coordinates (lat 0–20000, lng 0–24000). */
@@ -312,10 +324,10 @@ function fogClipPathForQuadrants(quads: number[]): string | null {
   return poly ? `polygon(${poly})` : null;
 }
 
-/** True if (pctX, pctY) in 0–1 is inside the given quadrant (Q1–Q4). */
+/** True if (pctX, pctY) in 0–1 is inside the given quadrant (Q1–Q4). Unknown quadrant returns false. */
 function isClickInQuadrant(pctX: number, pctY: number, quadrant: string): boolean {
   const q = QUADRANT_PCT[quadrant.toUpperCase()];
-  if (!q) return true;
+  if (!q) return false;
   return pctX >= q.x && pctX < q.x + q.w && pctY >= q.y && pctY < q.y + q.h;
 }
 
@@ -1192,6 +1204,10 @@ export default function ExplorePartyPage() {
   /** Create a pin at the given coordinates (from map click). Saves to DB and shows on /map. */
   const createDiscoveryPinAt = useCallback(
     async (coords: { lat: number; lng: number }, d: ReportableDiscovery) => {
+      if (!isValidExploreSquare(d.square) || !isValidExploreQuadrant(d.quadrant)) {
+        setPlacePinError("Invalid map location (use square A1–J12 and quadrant Q1–Q4).");
+        return;
+      }
       const key = discoveryKey(d);
       setPlacePinError(null);
       setPlacingPinForKey(key);
