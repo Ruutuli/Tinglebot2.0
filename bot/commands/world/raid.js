@@ -30,7 +30,7 @@ const { finalizeBlightApplication } = require('../../handlers/blightHandler');
 const { fetchItemsByMonster } = require('@/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
-const { markGrottoCleared, pushProgressLog } = require('../../modules/exploreModule');
+const { markGrottoCleared, pushProgressLog, restorePartyPoolOnGrottoExit } = require('../../modules/exploreModule');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const { GROTTO_CLEARED_FLAVOR } = require('../../data/grottoTrials.js');
 // Google Sheets validation removed
@@ -991,18 +991,18 @@ async function handleRaidVictory(interaction, raidData, monster) {
           await markGrottoCleared(grotto);
           const party = await Party.findActiveByPartyId(raidData.expeditionId);
           if (party && party.characters && party.characters.length > 0) {
-            if (!EXPLORATION_TESTING_MODE) {
-              for (const slot of party.characters) {
-                if (slot._id) {
-                  try {
-                    await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
-                  } catch (orbErr) {
-                    console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
-                  }
+            restorePartyPoolOnGrottoExit(party);
+            await party.save();
+            for (const slot of party.characters) {
+              if (slot._id) {
+                try {
+                  await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
+                } catch (orbErr) {
+                  console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
                 }
               }
-              console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members`);
             }
+            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members`);
           }
         }
       } catch (grottoErr) {
@@ -1207,11 +1207,14 @@ async function handleRaidVictory(interaction, raidData, monster) {
       victoryEmbed.addFields(splitIntoEmbedFields(blightValue, '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**'));
     }
 
-    // Grotto Test of Power: Spirit Orbs, grotto cleared, flavor text
+    // Grotto Test of Power: Spirit Orbs, grotto cleared, flavor text (clickable commands)
     if (raidData.grottoId) {
+      const exploreCmdId = getExploreCommandId();
+      const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
+      const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
       victoryEmbed.addFields({
         name: '🗺️ **Grotto Trial**',
-        value: `${GROTTO_CLEARED_FLAVOR}\n\nUse </explore roll> or </explore move> to continue your expedition.`,
+        value: `${GROTTO_CLEARED_FLAVOR}\n\nUse ${cmdRoll} or ${cmdMove} with id \`${raidData.expeditionId}\` and your character to continue your expedition.`,
         inline: false
       });
     }
@@ -1222,12 +1225,14 @@ async function handleRaidVictory(interaction, raidData, monster) {
       .setFooter({ text: `Raid ID: ${raidData.raidId}` })
       .setTimestamp();
 
-    // Expedition raid: add clear "raid over — use /explore roll" so party knows to continue
+    // Expedition raid: add clear "raid over — use /explore roll or move" so party knows to continue (clickable commands)
     if (raidData.expeditionId) {
-      const cmdRoll = `</explore roll:${getExploreCommandId()}>`;
+      const exploreCmdId = getExploreCommandId();
+      const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
+      const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
       victoryEmbed.addFields({
         name: '🗺️ **Raid over — continue your expedition**',
-        value: `Use ${cmdRoll} with id \`${raidData.expeditionId}\` and your character to continue.`,
+        value: `Use ${cmdRoll} or ${cmdMove} with id \`${raidData.expeditionId}\` and your character to continue.`,
         inline: false
       });
     }

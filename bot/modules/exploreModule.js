@@ -110,6 +110,23 @@ async function calculateTotalHeartsAndStamina(party) {
     return { totalHearts, totalStamina };
 }
 
+// ------------------- restorePartyPoolOnGrottoExit ------------------
+// Restore expedition party pool to full when leaving a grotto (hearts and stamina).
+function restorePartyPoolOnGrottoExit(party) {
+    if (!party) return;
+    party.totalHearts = party.maxHearts ?? party.totalHearts;
+    party.totalStamina = party.maxStamina ?? party.totalStamina;
+    party.markModified('totalHearts');
+    party.markModified('totalStamina');
+    if (party.characters && Array.isArray(party.characters)) {
+        for (const slot of party.characters) {
+            if (typeof slot.maxHearts === 'number') slot.currentHearts = slot.maxHearts;
+            if (typeof slot.maxStamina === 'number') slot.currentStamina = slot.maxStamina;
+        }
+        party.markModified('characters');
+    }
+}
+
 // ------------------- recomputePartyTotals ------------------
 // Set party.totalHearts and party.totalStamina from party.characters. During started expedition, pool is authoritative: no-op.
 function recomputePartyTotals(party) {
@@ -349,6 +366,7 @@ module.exports = {
     formatCharacterItems,
     calculateTotalHeartsAndStamina,
     recomputePartyTotals,
+    restorePartyPoolOnGrottoExit,
     syncPartyMemberStats,
     pushProgressLog,
     hasDiscoveriesInQuadrant,

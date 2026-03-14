@@ -1500,20 +1500,18 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  }
 
  if (trialType === "blessing") {
-  if (!EXPLORATION_TESTING_MODE) {
-   for (const slot of freshParty.characters) {
-    try {
-     await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
-    } catch (err) {
-     logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
-    }
+  for (const slot of freshParty.characters) {
+   try {
+    await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Blessing");
+   } catch (err) {
+    logger.warn("EXPLORE", `[explore.js]⚠️ Grotto blessing Spirit Orb: ${slot.name}: ${err?.message || err}`);
    }
-   if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
-   for (const slot of freshParty.characters) {
-    freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-   }
-   freshParty.markModified("gatheredItems");
   }
+  if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+  for (const slot of freshParty.characters) {
+   freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+  }
+  freshParty.markModified("gatheredItems");
   await markGrottoCleared(grottoDoc);
   restorePartyPoolOnGrottoExit(freshParty);
   pushProgressLog(freshParty, cleanseCharacter.name, "grotto_blessing", `Blessing trial: each party member received a Spirit Orb.`, undefined, undefined, new Date());
@@ -2144,20 +2142,18 @@ module.exports = {
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === true && !grotto.completedAt) {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      if (!EXPLORATION_TESTING_MODE) {
-       for (const slot of party.characters) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
-        }
+      for (const slot of party.characters) {
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
        }
-       if (!party.gatheredItems) party.gatheredItems = [];
-       for (const slot of party.characters) {
-        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-       }
-       party.markModified("gatheredItems");
       }
+      if (!party.gatheredItems) party.gatheredItems = [];
+      for (const slot of party.characters) {
+       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+      }
+      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const flavor = getRandomPuzzleSuccessFlavor();
@@ -2439,20 +2435,18 @@ module.exports = {
      if (newSuccesses >= TARGET_SUCCESSES) {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      if (!EXPLORATION_TESTING_MODE) {
-       for (const slot of party.characters) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
-        }
+      for (const slot of party.characters) {
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Target Practice");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto target practice Spirit Orb: ${err?.message || err}`);
        }
-       if (!party.gatheredItems) party.gatheredItems = [];
-       for (const slot of party.characters) {
-        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-       }
-       party.markModified("gatheredItems");
       }
+      if (!party.gatheredItems) party.gatheredItems = [];
+      for (const slot of party.characters) {
+       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+      }
+      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_target_success", `Target Practice completed. Each party member received a Spirit Orb.`, undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getCompleteOutcome();
@@ -2625,20 +2619,18 @@ module.exports = {
      if (checkResult.approved) {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      if (!EXPLORATION_TESTING_MODE) {
-       for (const slot of party.characters) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
-        }
+      for (const slot of party.characters) {
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Puzzle");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto puzzle Spirit Orb add failed: ${err?.message || err}`);
        }
-       if (!party.gatheredItems) party.gatheredItems = [];
-       for (const slot of party.characters) {
-        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-       }
-       party.markModified("gatheredItems");
       }
+      if (!party.gatheredItems) party.gatheredItems = [];
+      for (const slot of party.characters) {
+       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+      }
+      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_puzzle_success", "Puzzle approved. Each party member received a Spirit Orb.", undefined, undefined, new Date());
      }
      pushProgressLog(party, character.name, "grotto_puzzle_offering", `Puzzle offering submitted: ${displayItems.join(", ")}. ${checkResult.approved ? "Approved." : "Denied."}`, undefined, undefined, new Date());
@@ -2754,22 +2746,20 @@ module.exports = {
         if (freshGrotto && !freshGrotto.completedAt && freshParty) {
          await markGrottoCleared(freshGrotto);
          restorePartyPoolOnGrottoExit(freshParty);
-         if (!EXPLORATION_TESTING_MODE) {
-          for (const slot of freshParty.characters) {
-           if (slot._id) {
-            try {
-             await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
-            } catch (err) {
-             logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze bypass Spirit Orb: ${err?.message || err}`);
-            }
+         for (const slot of freshParty.characters) {
+          if (slot._id) {
+           try {
+            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, i, "Grotto - Maze (Lens of Truth bypass)");
+           } catch (err) {
+            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze bypass Spirit Orb: ${err?.message || err}`);
            }
           }
-          if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
-          for (const slot of freshParty.characters) {
-           freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-          }
-          freshParty.markModified("gatheredItems");
          }
+         if (!freshParty.gatheredItems) freshParty.gatheredItems = [];
+         for (const slot of freshParty.characters) {
+          freshParty.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+         }
+         freshParty.markModified("gatheredItems");
          pushProgressLog(freshParty, character.name, "grotto_maze_success", "Maze bypassed with Lens of Truth. Each party member received a Spirit Orb.", undefined, undefined, new Date());
          await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
          const rollCmdId = getExploreCommandId();
@@ -2916,20 +2906,18 @@ module.exports = {
         if (destType === 'exit') {
          await markGrottoCleared(grotto);
          restorePartyPoolOnGrottoExit(party);
-         if (!EXPLORATION_TESTING_MODE) {
-          for (const slot of party.characters) {
-           try {
-            await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-           } catch (err) {
-             logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
-           }
+         for (const slot of party.characters) {
+          try {
+           await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+          } catch (err) {
+            logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
           }
-          if (!party.gatheredItems) party.gatheredItems = [];
-          for (const slot of party.characters) {
-           party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-          }
-          party.markModified("gatheredItems");
          }
+         if (!party.gatheredItems) party.gatheredItems = [];
+         for (const slot of party.characters) {
+          party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+         }
+         party.markModified("gatheredItems");
          pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          party.markModified("currentTurn");
@@ -3131,20 +3119,18 @@ module.exports = {
      if (cellType === 'exit') {
       await markGrottoCleared(grotto);
       restorePartyPoolOnGrottoExit(party);
-      if (!EXPLORATION_TESTING_MODE) {
-       for (const slot of party.characters) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
-        }
+      for (const slot of party.characters) {
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Maze");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze exit Spirit Orb: ${err?.message || err}`);
        }
-       if (!party.gatheredItems) party.gatheredItems = [];
-       for (const slot of party.characters) {
-        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-       }
-       party.markModified("gatheredItems");
       }
+      if (!party.gatheredItems) party.gatheredItems = [];
+      for (const slot of party.characters) {
+       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+      }
+      party.markModified("gatheredItems");
       pushProgressLog(party, character.name, "grotto_maze_success", "Maze trial complete. Each party member received a Spirit Orb.", undefined, undefined, new Date());
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       party.markModified("currentTurn");
@@ -3255,18 +3241,16 @@ module.exports = {
        const chestLoot = getGrottoMazeChestLoot(allItemsForChest);
        let givenItemName = chestLoot.itemName;
        let givenEmoji = chestLoot.emoji || "📦";
-       if (!EXPLORATION_TESTING_MODE) {
+       try {
+        await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze chest");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest (${givenItemName}): ${err?.message || err}`);
         try {
-         await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze chest");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest (${givenItemName}): ${err?.message || err}`);
-         try {
-          await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
-          givenItemName = "Spirit Orb";
-          givenEmoji = "💫";
-         } catch (fallbackErr) {
-          logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest fallback: ${fallbackErr?.message || fallbackErr}`);
-         }
+         await addItemInventoryDatabase(character._id, "Spirit Orb", 1, interaction, "Grotto - Maze chest");
+         givenItemName = "Spirit Orb";
+         givenEmoji = "💫";
+        } catch (fallbackErr) {
+         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto maze chest fallback: ${fallbackErr?.message || fallbackErr}`);
         }
        }
        if (!usePartyOnlyForHeartsStamina(party)) {
@@ -3762,20 +3746,18 @@ module.exports = {
      if (grottoDoc.trialType === "blessing") {
       await markGrottoCleared(grottoDoc);
       restorePartyPoolOnGrottoExit(party);
-      if (!EXPLORATION_TESTING_MODE) {
-       for (const slot of party.characters) {
-        try {
-         await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
-        } catch (err) {
-         logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
-        }
+      for (const slot of party.characters) {
+       try {
+        await addItemInventoryDatabase(slot._id, "Spirit Orb", 1, interaction, "Grotto - Blessing (revisit)");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js]⚠️ Grotto revisit blessing Spirit Orb: ${err?.message || err}`);
        }
-       if (!party.gatheredItems) party.gatheredItems = [];
-       for (const slot of party.characters) {
-        party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
-       }
-       party.markModified("gatheredItems");
       }
+      if (!party.gatheredItems) party.gatheredItems = [];
+      for (const slot of party.characters) {
+       party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: "Spirit Orb", quantity: 1, emoji: "💫" });
+      }
+      party.markModified("gatheredItems");
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
       const blessingFlavorRevisit = getRandomBlessingFlavor();
       const blessingEmbed = new EmbedBuilder()
@@ -4094,7 +4076,8 @@ module.exports = {
       return outcome;
      }
      let outcomeType = rollOutcome();
-     if (EXPLORATION_TESTING_MODE) outcomeType = "grotto";
+     // Testing: 50% chance to force grotto (revert when done testing)
+     if (EXPLORATION_TESTING_MODE && Math.random() < 0.5) outcomeType = "grotto";
      const currentSquareNorm = normalizeSquareId(party.square);
      const specialCount = countSpecialEventsInSquare(party, party.square);
      const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
