@@ -259,6 +259,24 @@ function removeMazeWalls(matrix, removeWalls, maxTries = 300) {
 // ----- Build path cells and assign grotto cell types -----
 const CELL_TYPES = ['start', 'exit', 'trap', 'chest', 'mazep', 'mazen', 'path'];
 
+/**
+ * Returns true if path cell (x, y) has at least one adjacent wall cell that, when opened
+ * by Song of Scrying, would connect to another path cell (i.e. the cell "beyond" that wall is path).
+ * Only such cells should be used as scrying walls so that clearing actually opens a new way.
+ */
+function isScryingWallConnector(matrix, x, y) {
+  if (!matrix || matrix.length === 0) return false;
+  const rows = matrix.length;
+  const cols = matrix[0]?.length || 0;
+  const isPath = (ax, ay) => ay >= 0 && ay < rows && ax >= 0 && ax < cols && stringVal(matrix[ay], ax) === 0;
+  const isWall = (ax, ay) => ay >= 0 && ay < rows && ax >= 0 && ax < cols && stringVal(matrix[ay], ax) !== 0;
+  if (isWall(x, y - 1) && isPath(x, y - 2)) return true;
+  if (isWall(x, y + 1) && isPath(x, y + 2)) return true;
+  if (isWall(x + 1, y) && isPath(x + 2, y)) return true;
+  if (isWall(x - 1, y) && isPath(x - 2, y)) return true;
+  return false;
+}
+
 function collectPathCells(matrix, entryNodes) {
   const start = getEntryNode(entryNodes, 'start');
   const end = getEntryNode(entryNodes, 'end');
@@ -282,7 +300,7 @@ function collectPathCells(matrix, entryNodes) {
   return cells;
 }
 
-function assignGrottoCellTypes(pathCells, options = {}) {
+function assignGrottoCellTypes(pathCells, options = {}, matrix = null) {
   const pathOnly = pathCells.filter((c) => c.type === 'path');
   if (pathOnly.length === 0) return pathCells;
 
@@ -299,8 +317,17 @@ function assignGrottoCellTypes(pathCells, options = {}) {
   for (let i = 0; i < numChests && idx < pathOnly.length; i++, idx++) {
     pathOnly[idx].type = 'chest';
   }
-  for (let i = 0; i < numRed && idx < pathOnly.length; i++, idx++) {
-    pathOnly[idx].type = Math.random() < 0.5 ? 'mazep' : 'mazen';
+
+  // Scrying walls (mazep/mazen): only place on path cells where clearing would open a new way.
+  // A valid cell has at least one adjacent wall with path on the other side.
+  const pathStillOpen = pathOnly.filter((c) => c.type === 'path');
+  const scryingCandidates = matrix
+    ? pathStillOpen.filter((c) => isScryingWallConnector(matrix, c.x, c.y))
+    : pathStillOpen;
+  shuffleArray(scryingCandidates);
+  const numScryingToPlace = Math.min(numRed, scryingCandidates.length);
+  for (let i = 0; i < numScryingToPlace; i++) {
+    scryingCandidates[i].type = Math.random() < 0.5 ? 'mazep' : 'mazen';
   }
 
   return pathCells;
@@ -362,7 +389,7 @@ function generateGrottoMaze(config = {}) {
     numTraps: config.numTraps,
     numChests: config.numChests,
     numRed: config.numRed,
-  });
+  }, matrix);
 
   return {
     matrix,
@@ -399,7 +426,7 @@ const OPPOSITE_FACING = { n: 's', s: 'n', e: 'w', w: 'e' };
 /**
  * Resolve movement from (x,y) with current facing. Action: left | right | straight | back.
  * Returns { nextX, nextY, newFacing } or null if blocked or invalid.
- * One step = one adjacent cell.
+ * One move = one adjacent path cell; if the immediate neighbour is a wall (e.g. thin wall between path cells), tries the path cell beyond it.
  */
 function getNeighbourCoordsWithFacing(matrix, x, y, facing, action) {
   let newFacing = facing;
@@ -408,8 +435,10 @@ function getNeighbourCoordsWithFacing(matrix, x, y, facing, action) {
   else if (action === 'back') newFacing = OPPOSITE_FACING[facing] || 's';
 
   const next = moveInFacing(x, y, newFacing);
-  if (!isWalkable(matrix, next.x, next.y)) return null;
-  return { x: next.x, y: next.y, facing: newFacing };
+  if (isWalkable(matrix, next.x, next.y)) return { x: next.x, y: next.y, facing: newFacing };
+  const beyond = getCellBeyondWall(matrix, x, y, newFacing);
+  if (beyond) return { x: beyond.x, y: beyond.y, facing: newFacing };
+  return null;
 }
 
 const CARDINAL_MOVE = {
@@ -485,14 +514,16 @@ function removeScryingWall(matrix, x, y, facing) {
  * - Cardinal: north, south, east, west (or n, s, e, w) — absolute direction
  * - Relative: left, right, straight, back — uses current facing
  *
- * One move = one adjacent cell (±1). Destination must be walkable (path, not wall).
+ * One move = one adjacent path cell. If the immediate neighbour is a wall (thin wall between path cells, e.g. next to a scrying wall), returns the path cell on the other side so players can walk onto scrying walls and other path cells.
  */
 function getNeighbourCoords(matrix, x, y, direction, facing) {
   const card = CARDINAL_MOVE[direction?.toLowerCase()];
   if (card) {
     const next = { x: x + card.dx, y: y + card.dy };
-    if (!isWalkable(matrix, next.x, next.y)) return null;
-    return { x: next.x, y: next.y, facing: card.facing };
+    if (isWalkable(matrix, next.x, next.y)) return { x: next.x, y: next.y, facing: card.facing };
+    const beyond = getCellBeyondWall(matrix, x, y, card.facing);
+    if (beyond) return { x: beyond.x, y: beyond.y, facing: card.facing };
+    return null;
   }
   const defFacing = facing || 's';
   const result = getNeighbourCoordsWithFacing(matrix, x, y, defFacing, direction);
