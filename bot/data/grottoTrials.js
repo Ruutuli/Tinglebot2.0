@@ -4,6 +4,9 @@ const GROTTO_CLEARED_FLAVOR = "**Spirit orbs** materialize before each of you—
 // Shown when revisiting an already-cleared blessing grotto (no orbs granted again).
 const GROTTO_ALREADY_CLEARED_BLESSING = "This Grotto held a blessing, and has been cleared. Previous explorers have received a Spirit Orb, and there is nothing more that can be found here.";
 
+// Clarifier for grotto state: cleansed = opened with Plume; cleared = trial done, sealed.
+const GROTTO_CLEANSED_VS_CLEARED = "**Cleansed** = opened with a Goddess Plume (trial in progress or blessing). **Cleared** = trial completed; grotto sealed; Spirit Orbs received.";
+
 // TESTING: maze-only — revert to (blessing:0, target_practice:2, puzzle:2, test_of_power:2, maze:1) when done
 const GROTTO_TRIAL_WEIGHTS = [
   { id: 'blessing', label: 'Blessing', weight: 1 },
@@ -32,6 +35,7 @@ function getTrialLabel(trialType) {
 module.exports = {
   GROTTO_CLEARED_FLAVOR,
   GROTTO_ALREADY_CLEARED_BLESSING,
+  GROTTO_CLEANSED_VS_CLEARED,
   GROTTO_TRIAL_WEIGHTS,
   rollGrottoTrialType,
   getTrialLabel,

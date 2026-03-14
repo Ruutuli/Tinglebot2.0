@@ -10,6 +10,7 @@ const Pin = require('@/models/PinModel');
 
 const { handleError } = require('@/utils/globalErrorHandler');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
+const { START_POINTS_BY_REGION } = require('@/data/explorationStartPoints.js');
 
 // ------------------- Helpers ------------------
 // escapeSquareIdForRegex - escape squareId for use in RegExp
@@ -143,10 +144,11 @@ async function calculateTotalHeartsAndStamina(party) {
 
 // ------------------- restorePartyPoolOnGrottoExit ------------------
 // Restore expedition party pool to full when leaving a grotto (hearts and stamina).
+// Must match explore.js so raid path (e.g. Test of Power exit) gets same full restore.
 function restorePartyPoolOnGrottoExit(party) {
     if (!party) return;
-    party.totalHearts = party.maxHearts ?? party.totalHearts;
-    party.totalStamina = party.maxStamina ?? party.totalStamina;
+    if (typeof party.maxHearts === 'number') party.totalHearts = party.maxHearts;
+    if (typeof party.maxStamina === 'number') party.totalStamina = party.maxStamina;
     party.markModified('totalHearts');
     party.markModified('totalStamina');
     if (party.characters && Array.isArray(party.characters)) {
@@ -258,130 +260,147 @@ async function markGrottoCleared(grotto) {
     }
 }
 
-// ------------------- handleExpeditionFailedFromWave ------------------
-// Called when an expedition wave fails (party pool hits 0) — ends the expedition with KO status
-// Similar to handleExpeditionFailed in explore.js but callable from waveModule
+// ------------------- applyExpeditionFailedState ------------------
+// Shared core logic for expedition failed (KO): apply debuff, reset map, update party.
+// Used by handleExpeditionFailed (explore.js) and handleExpeditionFailedFromWave (wave path).
+// Returns { success, error?, party?, start?, targetVillage?, villageLabel?, regionLabel?, locationStr?, debuffDays? }.
 const EXPLORATION_KO_DEBUFF_DAYS = 7;
 const REGION_TO_VILLAGE_LOWER = { eldin: "rudania", lanayru: "inariko", faron: "vhintl" };
-const START_POINTS_BY_REGION = {
-    eldin: { square: "H5", quadrant: "Q3" },
-    lanayru: { square: "E8", quadrant: "Q2" },
-    faron: { square: "H11", quadrant: "Q1" },
-};
+const logger = require('@/utils/logger');
 
-async function handleExpeditionFailedFromWave(expeditionId, client) {
-    if (!expeditionId) return { success: false, error: 'No expeditionId provided' };
-    
+async function applyExpeditionFailedState(party, options = {}) {
+    const failMessage = options.failMessage || "Expedition failed.";
+    const regionKey = (party.region || "").toString().trim().toLowerCase();
+    const start = START_POINTS_BY_REGION[regionKey];
+    if (!start) return { success: false, error: 'Could not resolve start location for region' };
+
+    const targetVillage = REGION_TO_VILLAGE_LOWER[regionKey] || "rudania";
+    const debuffEndDate = new Date(Date.now() + EXPLORATION_KO_DEBUFF_DAYS * 24 * 60 * 60 * 1000);
+
     const { handleKO } = require('./characterStatsModule.js');
     const { closeRaidsForExpedition } = require('./raidModule.js');
     const Grotto = require('@/models/GrottoModel');
+
+    if (!EXPLORATION_TESTING_MODE) {
+        for (const partyChar of party.characters) {
+            const char = await Character.findById(partyChar._id);
+            if (char) {
+                await handleKO(char._id);
+                char.currentStamina = 0;
+                char.currentVillage = targetVillage;
+                char.debuff = char.debuff || {};
+                char.debuff.active = true;
+                char.debuff.endDate = debuffEndDate;
+                await char.save();
+            }
+        }
+    }
+
+    const exploredThisRun = party.exploredQuadrantsThisRun || [];
+    if (exploredThisRun.length > 0) {
+        for (const { squareId, quadrantId } of exploredThisRun) {
+            if (squareId && quadrantId) {
+                const quadRegex = new RegExp(`^${quadrantId}$`, 'i');
+                await Square.updateOne(
+                    { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": quadRegex },
+                    { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
+                    { arrayFilters: [{ "q.quadrantId": quadRegex }] }
+                ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
+                if (EXPLORATION_TESTING_MODE) {
+                    await Square.updateOne(
+                        { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": quadRegex },
+                        { $set: { "quadrants.$[q].discoveries": [] } },
+                        { arrayFilters: [{ "q.quadrantId": quadRegex }] }
+                    ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Testing fail: clear discoveries: ${err?.message}`));
+                }
+            }
+        }
+    }
+
+    await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Grotto delete on fail: ${err?.message}`));
+    await closeRaidsForExpedition(party.partyId);
+
+    const lostItems = [
+        ...(party.gatheredItems || []).map((item) => ({
+            characterId: item.characterId,
+            characterName: item.characterName,
+            itemName: item.itemName,
+            quantity: item.quantity ?? 1,
+            emoji: item.emoji ?? '',
+        })),
+        ...(party.characters || []).flatMap((c) =>
+            (c.items || []).map((item) => ({
+                characterId: c._id,
+                characterName: c.name,
+                itemName: item.itemName,
+                quantity: 1,
+                emoji: item.emoji ?? '',
+            }))
+        ),
+    ];
+    const finalLocation = { square: party.square, quadrant: party.quadrant };
+
+    party.square = start.square;
+    party.quadrant = start.quadrant;
+    party.status = "failed";
+    party.outcome = "failed";
+    party.lostItems = lostItems;
+    party.finalLocation = finalLocation;
+    party.endedAt = new Date();
+    party.totalHearts = 0;
+    party.totalStamina = 0;
+    party.gatheredItems = [];
+    party.exploredQuadrantsThisRun = [];
+    party.visitedQuadrantsThisRun = [];
+    party.ruinRestQuadrants = [];
+    party.blightExposure = 0;
+    for (const c of party.characters) {
+        c.currentHearts = 0;
+        c.currentStamina = 0;
+        c.items = [];
+    }
+    if (EXPLORATION_TESTING_MODE && party.progressLog?.length > 0) {
+        party.progressLog = [];
+        party.markModified('progressLog');
+    }
+    pushProgressLog(party, 'Party', 'expedition_failed', failMessage, undefined, undefined, new Date());
+    await party.save();
+
+    const villageLabel = (targetVillage || "").charAt(0).toUpperCase() + (targetVillage || "").slice(1);
+    const regionLabel = (party.region || "").charAt(0).toUpperCase() + (party.region || "").slice(1);
+    const locationStr = `${start.square} ${start.quadrant} (${regionLabel} start)`;
+
+    return {
+        success: true,
+        party,
+        start,
+        targetVillage,
+        villageLabel,
+        regionLabel,
+        locationStr,
+        debuffDays: EXPLORATION_KO_DEBUFF_DAYS,
+    };
+}
+
+// ------------------- handleExpeditionFailedFromWave ------------------
+// Called when an expedition wave fails (party pool hits 0) — ends the expedition with KO status.
+// Uses applyExpeditionFailedState for shared logic.
+async function handleExpeditionFailedFromWave(expeditionId, client) {
+    if (!expeditionId) return { success: false, error: 'No expeditionId provided' };
+
     const { EmbedBuilder } = require('discord.js');
-    const logger = require('@/utils/logger');
-    
+
     try {
         const party = await Party.findActiveByPartyId(expeditionId);
         if (!party) return { success: false, error: 'Party not found' };
-        
-        const start = START_POINTS_BY_REGION[party.region];
-        if (!start) return { success: false, error: 'Could not resolve start location for region' };
-        
-        const targetVillage = REGION_TO_VILLAGE_LOWER[party.region] || "rudania";
-        const debuffEndDate = new Date(Date.now() + EXPLORATION_KO_DEBUFF_DAYS * 24 * 60 * 60 * 1000);
-        
-        if (!EXPLORATION_TESTING_MODE) {
-            for (const partyChar of party.characters) {
-                const char = await Character.findById(partyChar._id);
-                if (char) {
-                    await handleKO(char._id);
-                    char.currentStamina = 0;
-                    char.currentVillage = targetVillage;
-                    char.debuff = char.debuff || {};
-                    char.debuff.active = true;
-                    char.debuff.endDate = debuffEndDate;
-                    await char.save();
-                }
-            }
-        }
-        
-        // Reset explored quadrants
-        const exploredThisRun = party.exploredQuadrantsThisRun || [];
-        if (exploredThisRun.length > 0) {
-            for (const { squareId, quadrantId } of exploredThisRun) {
-                if (squareId && quadrantId) {
-                    const quadRegex = new RegExp(`^${quadrantId}$`, 'i');
-                    await Square.updateOne(
-                        { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": quadRegex },
-                        { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
-                        { arrayFilters: [{ "q.quadrantId": quadRegex }] }
-                    ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
-                    if (EXPLORATION_TESTING_MODE) {
-                        await Square.updateOne(
-                            { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": quadRegex },
-                            { $set: { "quadrants.$[q].discoveries": [] } },
-                            { arrayFilters: [{ "q.quadrantId": quadRegex }] }
-                        ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Testing KO: clear discoveries: ${err?.message}`));
-                    }
-                }
-            }
-        }
-        
-        // Delete grottos and close raids
-        await Grotto.deleteMany({ partyId: party.partyId }).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Grotto delete on fail: ${err?.message}`));
-        await closeRaidsForExpedition(party.partyId);
-        
-        // Build lostItems and final location before resetting (failed = completed + outcome "failed", KO'd in the wilds)
-        const lostItems = [
-            ...(party.gatheredItems || []).map((item) => ({
-                characterId: item.characterId,
-                characterName: item.characterName,
-                itemName: item.itemName,
-                quantity: item.quantity ?? 1,
-                emoji: item.emoji ?? '',
-            })),
-            ...(party.characters || []).flatMap((c) =>
-                (c.items || []).map((item) => ({
-                    characterId: c._id,
-                    characterName: c.name,
-                    itemName: item.itemName,
-                    quantity: 1,
-                    emoji: item.emoji ?? '',
-                }))
-            ),
-        ];
-        const finalLocation = { square: party.square, quadrant: party.quadrant };
-        
-        // Update party status
-        party.square = start.square;
-        party.quadrant = start.quadrant;
-        party.status = "failed";
-        party.outcome = "failed";
-        party.lostItems = lostItems;
-        party.finalLocation = finalLocation;
-        party.endedAt = new Date();
-        party.totalHearts = 0;
-        party.totalStamina = 0;
-        party.gatheredItems = [];
-        party.exploredQuadrantsThisRun = [];
-        party.visitedQuadrantsThisRun = [];
-        party.ruinRestQuadrants = [];
-        party.blightExposure = 0;
-        for (const c of party.characters) {
-            c.currentHearts = 0;
-            c.currentStamina = 0;
-            c.items = [];
-        }
-        if (EXPLORATION_TESTING_MODE && party.progressLog?.length > 0) {
-            party.progressLog = [];
-            party.markModified('progressLog');
-        }
-        pushProgressLog(party, 'Party', 'expedition_failed', "Expedition failed — party was KO'd during monster camp wave.", undefined, undefined, new Date());
-        await party.save();
-        
-        // Build KO embed
-        const villageLabel = (targetVillage || "").charAt(0).toUpperCase() + (targetVillage || "").slice(1);
-        const regionLabel = (party.region || "").charAt(0).toUpperCase() + (party.region || "").slice(1);
-        const locationStr = `${start.square} ${start.quadrant} (${regionLabel} start)`;
-        
+
+        const result = await applyExpeditionFailedState(party, {
+            failMessage: "Expedition failed — party was KO'd during monster camp wave.",
+        });
+        if (!result.success) return { success: false, error: result.error };
+
+        const { villageLabel, locationStr, debuffDays } = result;
+
         const embed = new EmbedBuilder()
             .setTitle("💀 **Expedition: Expedition Failed — Party KO'd**")
             .setColor(0x8b0000)
@@ -390,7 +409,7 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
                 "**Return:** Party wakes in **" + villageLabel + "** (the village you began from) with 0 hearts and 0 stamina.\n\n" +
                 "**Items:** All items brought on the expedition and any found during the expedition are lost.\n\n" +
                 "**Map:** Any quadrants this expedition had marked as Explored return to Unexplored status.\n\n" +
-                "**Recovery debuff:** For **" + EXPLORATION_KO_DEBUFF_DAYS + " days**, characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. They must recover their strength."
+                "**Recovery debuff:** For **" + debuffDays + " days**, characters cannot use healing or stamina items, cannot use healer services, and cannot join or go on expeditions. They must recover their strength."
             )
             .addFields(
                 { name: '❤️ **__Party Hearts__**', value: '0', inline: true },
@@ -399,11 +418,9 @@ async function handleExpeditionFailedFromWave(expeditionId, client) {
                 { name: '🆔 **__Expedition ID__**', value: expeditionId, inline: true }
             )
             .setTimestamp();
-        
-        return { success: true, embed, party, villageLabel };
-        
+
+        return { success: true, embed, party: result.party, villageLabel };
     } catch (err) {
-        const logger = require('@/utils/logger');
         logger.error('EXPLORE', `handleExpeditionFailedFromWave: ${err.message}`);
         return { success: false, error: err.message };
     }
@@ -421,5 +438,6 @@ module.exports = {
     hasUnpinnedDiscoveriesInQuadrant,
     updateDiscoveryGrottoStatus,
     markGrottoCleared,
+    applyExpeditionFailedState,
     handleExpeditionFailedFromWave
 };
