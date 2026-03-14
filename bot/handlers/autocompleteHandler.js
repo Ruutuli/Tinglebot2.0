@@ -3751,23 +3751,19 @@ async function handleExploreGrottoMazeActionAutocomplete(interaction, focusedOpt
   const expeditionId = normalizeExploreExpeditionId(interaction.options.getString("id"));
   let grottoOption = (interaction.options.getString("grotto") || "").trim();
   if (grottoOption.includes("(")) grottoOption = grottoOption.split("(")[0].trim();
+  const mazeDirectionChoices = [
+   { name: "↑ North", value: "north" },
+   { name: "→ East", value: "east" },
+   { name: "↓ South", value: "south" },
+   { name: "← West", value: "west" },
+  ];
   if (!expeditionId || !grottoOption) {
-   return await interaction.respond([
-    { name: "North", value: "north" },
-    { name: "East", value: "east" },
-    { name: "South", value: "south" },
-    { name: "West", value: "west" },
-   ]);
+   return await interaction.respond(mazeDirectionChoices);
   }
 
   const party = await Party.findActiveByPartyId(expeditionId).select("square quadrant").lean();
   if (!party || !party.square || !party.quadrant) {
-   return await interaction.respond([
-    { name: "North", value: "north" },
-    { name: "East", value: "east" },
-    { name: "South", value: "south" },
-    { name: "West", value: "west" },
-   ]);
+   return await interaction.respond(mazeDirectionChoices);
   }
 
   const Grotto = require("../models/GrottoModel.js");
@@ -3790,10 +3786,10 @@ async function handleExploreGrottoMazeActionAutocomplete(interaction, focusedOpt
    .lean();
 
   const movementChoices = [
-   { name: "North", value: "north" },
-   { name: "East", value: "east" },
-   { name: "South", value: "south" },
-   { name: "West", value: "west" },
+   { name: "↑ North", value: "north" },
+   { name: "→ East", value: "east" },
+   { name: "↓ South", value: "south" },
+   { name: "← West", value: "west" },
   ];
   const allChoices = [
    ...movementChoices,
@@ -3838,10 +3834,10 @@ async function handleExploreGrottoMazeActionAutocomplete(interaction, focusedOpt
   handleError(error, "autocompleteHandler.js");
   console.error("Error during explore grotto maze action autocomplete:", error);
   await interaction.respond([
-   { name: "North", value: "north" },
-   { name: "East", value: "east" },
-   { name: "South", value: "south" },
-   { name: "West", value: "west" },
+   { name: "↑ North", value: "north" },
+   { name: "→ East", value: "east" },
+   { name: "↓ South", value: "south" },
+   { name: "← West", value: "west" },
   ]);
  }
 }

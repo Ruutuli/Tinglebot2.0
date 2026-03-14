@@ -99,6 +99,8 @@ function pathCellColor(pathCells, currentNode, solutionPath, viewMode, x, y, ope
     return { color: COLORS.path, drawX: false, onSolutionPath: false };
   }
 
+  if (isMod && cell.type === "start") return { color: COLORS.start, drawX: false, onSolutionPath: false };
+  if (isMod && cell.type === "exit") return { color: COLORS.exit, drawX: false, onSolutionPath: false };
   if (isMod && isCurrentCell && !isSpecialCell) return { color: COLORS.youAreHere, drawX: false, onSolutionPath: _onSolutionPath };
   if (isMod && isUsed) {
     const baseColor = cell.type === "chest" ? COLORS.chest : cell.type === "trap" ? COLORS.trap : (COLORS[cell.type] ?? COLORS.mazep);

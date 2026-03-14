@@ -88,6 +88,20 @@ const pinSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+
+  // Exploration: when pin was created from "Set pin on map" (explore page), links back to the discovery
+  sourceDiscoveryKey: {
+    type: String,
+    default: null,
+    maxlength: 200
+  },
+
+  // Expedition (party) this discovery was reported from
+  partyId: {
+    type: String,
+    default: null,
+    maxlength: 32
+  },
   
   // Timestamps
   createdAt: {

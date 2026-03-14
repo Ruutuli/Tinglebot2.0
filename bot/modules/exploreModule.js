@@ -6,6 +6,7 @@ const Character = require('@/models/CharacterModel');
 const ModCharacter = require('@/models/ModCharacterModel');
 const Square = require('../models/mapModel');
 const Party = require('@/models/PartyModel');
+const Pin = require('@/models/PinModel');
 
 const { handleError } = require('@/utils/globalErrorHandler');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
@@ -31,10 +32,24 @@ const DISCOVERY_CLEANUP_OUTCOMES = [
 // Location parsing used for discovery cleanup / reminders. Keep aligned with dashboard parsing (supports "in" and "at").
 const LOC_IN_MESSAGE_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 
-// True if current quadrant has reportable discoveries that are not yet pinned (reportedDiscoveryKeys). Used for embed reminder.
-function hasUnpinnedDiscoveriesInQuadrant(party) {
+// True if current quadrant has reportable discoveries that are not yet pinned (reportedDiscoveryKeys or Pin). Used for embed reminder.
+// Also checks Pin collection so discoveries pinned on the dashboard count even if party.reportedDiscoveryKeys wasn't updated yet.
+async function hasUnpinnedDiscoveriesInQuadrant(party) {
     if (!party?.square || !party?.quadrant || !Array.isArray(party.progressLog)) return false;
     const reportedSet = new Set(Array.isArray(party.reportedDiscoveryKeys) ? party.reportedDiscoveryKeys.filter((k) => typeof k === "string" && k.length > 0) : []);
+    const partyIdNorm = party.partyId ? String(party.partyId).trim() : "";
+    if (partyIdNorm) {
+        try {
+            const pins = await Pin.find({ partyId: partyIdNorm }).select("sourceDiscoveryKey").lean();
+            for (const pin of pins || []) {
+                if (pin.sourceDiscoveryKey && typeof pin.sourceDiscoveryKey === "string") {
+                    reportedSet.add(pin.sourceDiscoveryKey.trim());
+                }
+            }
+        } catch (_) {
+            // ignore pin lookup errors; fall back to reportedDiscoveryKeys only
+        }
+    }
     const currentSquare = String(party.square).trim().toUpperCase();
     const currentQuadrant = String(party.quadrant).trim().toUpperCase();
     for (const e of party.progressLog) {
