@@ -78,7 +78,7 @@ const fs = require("fs");
 const path = require("path");
 
 // ------------------- Data ------------------
-const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR } = require('@/data/grottoTrials.js');
+const { rollGrottoTrialType, getTrialLabel, GROTTO_CLEARED_FLAVOR, GROTTO_ALREADY_CLEARED_BLESSING } = require('@/data/grottoTrials.js');
 const { rollPuzzleConfig, getPuzzleFlavor, ensurePuzzleConfig, checkPuzzleOffer, getPuzzleConsumeItems, getRandomPuzzleSuccessFlavor } = require('@/data/grottoPuzzleData.js');
 const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grottoNames.js');
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
@@ -3679,7 +3679,9 @@ module.exports = {
        puzzle: "Discuss with your group. Submit an offering (items); staff will review. If approved, everyone gets Spirit Orbs. See **Commands** below.",
        maze: "Use North, East, South, or West to move, or Song of Scrying at a wall. See **Commands** below.",
       };
-      const text = instructions[grotto.trialType] || `Complete the ${trialLabel} trial.`;
+      const text = (grotto.status === "cleared" && grotto.trialType === "blessing")
+       ? GROTTO_ALREADY_CLEARED_BLESSING
+       : (instructions[grotto.trialType] || `Complete the ${trialLabel} trial.`);
       let revisitMazeFiles = [];
       let revisitMazeImg = getExploreMapImageUrl(party, { highlight: true });
       if (grotto.trialType === "maze" && grotto.mazeState?.layout) {
@@ -7458,6 +7460,12 @@ module.exports = {
           { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
           { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
          ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end: reset quadrant to unexplored: ${err?.message}`));
+         // Reset grotto discovery state so cleared grottos do not persist on the map for the next test
+         await Square.updateOne(
+          { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
+          { $set: { "quadrants.$[q].discoveries.$[d].grottoStatus": null, "quadrants.$[q].discoveries.$[d].name": "" } },
+          { arrayFilters: [{ "q.quadrantId": exactQuadrantId }, { "d.type": "grotto" }] }
+         ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ Testing end: reset grotto discoveries: ${err?.message}`));
         }
        }
       }
