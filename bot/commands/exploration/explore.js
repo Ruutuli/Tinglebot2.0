@@ -822,7 +822,7 @@ async function createUnpinnedDiscoveriesBlockEmbed(party, expeditionId) {
   .setDescription(
    "You have discovery(ies) in this quadrant that aren't pinned yet. **You cannot roll, move, camp, use items, secure, end the expedition, or continue the grotto trial** until you set a pin on the explore page so they stay on the map when you leave."
   )
-  .setImage(getExploreMapImageUrl(party, { highlight: true }));
+  .setImage("https://storage.googleapis.com/tinglebot/Borders/border_purp.png");
  addExplorationStandardFields(embed, {
   party,
   expeditionId,
@@ -2291,7 +2291,13 @@ module.exports = {
         .setName("action")
         .setDescription("North, East, South, or West; or Song of Scrying at a wall")
         .setRequired(true)
-        .setAutocomplete(true)
+        .addChoices(
+          { name: "↑ North", value: "north" },
+          { name: "→ East", value: "east" },
+          { name: "↓ South", value: "south" },
+          { name: "← West", value: "west" },
+          { name: "Song of Scrying (at wall)", value: "wall" }
+        )
       )
     )
     .addSubcommand((sub) =>
@@ -3104,7 +3110,11 @@ module.exports = {
       });
       return;
      }
-     const action = interaction.options.getString("action");
+     const action = (interaction.options.getString("action") || "").trim().toLowerCase();
+     const validMazeActions = ["north", "south", "east", "west", "wall"];
+     if (!validMazeActions.includes(action)) {
+      return interaction.editReply("Invalid maze action. Please use the command and choose **North**, **East**, **South**, **West**, or **Song of Scrying (at wall)** from the action dropdown.");
+     }
      if (action && party.currentTurn !== characterIndex) {
       const nextChar = party.characters[party.currentTurn];
       const notYourTurnEmbed = new EmbedBuilder()
