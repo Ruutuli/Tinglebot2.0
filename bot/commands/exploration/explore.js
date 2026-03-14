@@ -1073,15 +1073,20 @@ function getActiveGrottoCommand(trialType) {
 
 // ------------------- postGrottoMazeModVersion ------------------
 // Posts the mod view (full map + solution path) to the mod channel
-async function postGrottoMazeModVersion(client, layout, currentNode, grottoName, expeditionId, location, mazeState) {
+// options: { descriptionOverride } — if set, used as the main description (e.g. "Scrying wall was used! Here's the updated map.")
+async function postGrottoMazeModVersion(client, layout, currentNode, grottoName, expeditionId, location, mazeState, options = {}) {
   if (!layout || !client) return;
   try {
    const modBuf = await renderMazeToBuffer(layout, { viewMode: "mod", currentNode, openedChests: mazeState?.openedChests, triggeredTraps: mazeState?.triggeredTraps, usedScryingWalls: mazeState?.usedScryingWalls });
    const modFiles = [new AttachmentBuilder(modBuf, { name: "maze-mod.png" })];
+   const defaultDesc = `**${grottoName}** at ${location}\nExpedition: \`${expeditionId}\`\n\nFull map with correct path (light green), traps, chests, Scrying Walls, and party position.`;
+   const description = options.descriptionOverride
+     ? `**${grottoName}** at ${location}\nExpedition: \`${expeditionId}\`\n\n${options.descriptionOverride}`
+     : defaultDesc;
    const modEmbed = new EmbedBuilder()
     .setTitle("🗺️ **Grotto: Maze — Mod view**")
     .setColor(0x9b59b6)
-    .setDescription(`**${grottoName}** at ${location}\nExpedition: \`${expeditionId}\`\n\nFull map with correct path (light green), traps, chests, Scrying Walls, and party position.`)
+    .setDescription(description)
     .setImage("attachment://maze-mod.png")
     .addFields({ name: "Map legend", value: "🟫 Start | 🟩 Exit | 🟨 Trap | 🟦 Chest | 🔴 Scrying Wall | ⬜ Path | 🟧 You are here | 🟢 Correct path | ⬛ Wall", inline: false })
     .setTimestamp();
@@ -2900,7 +2905,7 @@ module.exports = {
         mazeFiles = [new AttachmentBuilder(mazeBuf, { name: "maze.png" })];
         mazeImg = "attachment://maze.png";
        } catch (e) {}
-       postGrottoMazeModVersion(interaction.client, grotto.mazeState.layout, grotto.mazeState.currentNode, grotto.name || "Grotto", expeditionId, location, grotto.mazeState);
+       postGrottoMazeModVersion(interaction.client, grotto.mazeState.layout, grotto.mazeState.currentNode, grotto.name || "Grotto", expeditionId, location, grotto.mazeState, { descriptionOverride: "Scrying wall was used! Here's the updated map." });
       }
       if (outcome.type === 'collapse') {
        const beyond = getCellBeyondWall(matrix, cx, cy, facing);

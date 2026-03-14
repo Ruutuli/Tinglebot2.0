@@ -457,30 +457,30 @@ function setCellToPath(matrix, x, y) {
 /**
  * Remove the scrying wall and any walls directly north, east, south, and west of it.
  * Does not move the player.
- * - Removes the wall cell in front (step1) and step2 if it's also a wall (2 cells thick).
- * - Removes all four cardinal neighbors of that wall: N, E, S, W (only if they are walls).
+ * - Finds the first WALL cell in the facing direction from (x,y) (skips path cells).
+ * - Removes that wall and all four cardinal neighbors of it: N, E, S, W (only if they are walls).
  */
 function removeScryingWall(matrix, x, y, facing) {
   if (!matrix || isNaN(x) || isNaN(y)) return;
   const rows = matrix.length;
   const cols = matrix[0]?.length || 0;
 
-  const step1 = moveInFacing(x, y, facing);
-  if (step1.x < 0 || step1.x >= cols || step1.y < 0 || step1.y >= rows) return;
-
-  // Open the wall cell in front (and one more if the passage is 2 cells thick)
-  setCellToPath(matrix, step1.x, step1.y);
-  const step2 = moveInFacing(step1.x, step1.y, facing);
-  if (step2.x >= 0 && step2.x < cols && step2.y >= 0 && step2.y < rows && stringVal(matrix[step2.y], step2.x) !== 0) {
-    setCellToPath(matrix, step2.x, step2.y);
+  // Find the first wall in the facing direction (player may be several path cells away from the wall)
+  let pos = moveInFacing(x, y, facing);
+  while (pos.x >= 0 && pos.x < cols && pos.y >= 0 && pos.y < rows && stringVal(matrix[pos.y], pos.x) === 0) {
+    pos = moveInFacing(pos.x, pos.y, facing);
   }
+  if (pos.x < 0 || pos.x >= cols || pos.y < 0 || pos.y >= rows) return;
 
-  // Destroy any walls directly north, east, south, and west of the wall (step1)
+  const wall = pos;
+  setCellToPath(matrix, wall.x, wall.y);
+
+  // Destroy any walls directly north, east, south, and west of that wall
   const cardinals = [
-    { x: step1.x, y: step1.y - 1 }, // north
-    { x: step1.x, y: step1.y + 1 }, // south
-    { x: step1.x + 1, y: step1.y }, // east
-    { x: step1.x - 1, y: step1.y }, // west
+    { x: wall.x, y: wall.y - 1 }, // north
+    { x: wall.x, y: wall.y + 1 }, // south
+    { x: wall.x + 1, y: wall.y }, // east
+    { x: wall.x - 1, y: wall.y }, // west
   ];
   for (const c of cardinals) {
     if (c.y >= 0 && c.y < rows && c.x >= 0 && c.x < cols && stringVal(matrix[c.y], c.x) !== 0) {
