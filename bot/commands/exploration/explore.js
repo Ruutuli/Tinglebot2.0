@@ -3154,6 +3154,27 @@ module.exports = {
       const scryingWallAlreadyUsed = currentCell && (currentCell.type === 'mazep' || currentCell.type === 'mazen') && usedScryingWalls.includes(currentNode);
       const isMazepCell = currentCell && (currentCell.type === 'mazep' || currentCell.type === 'mazen') && !scryingWallAlreadyUsed;
 
+      if (!currentCell || currentCell.type !== 'mazep' && currentCell.type !== 'mazen') {
+       const notOnWallEmbed = new EmbedBuilder()
+        .setTitle("🗺️ **Grotto: Maze**")
+        .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
+        .setDescription(`You must be **standing on a Scrying Wall** (🔴) to use Song of Scrying. Move to a red wall cell first, then use the action.`)
+        .setImage(mazeImg);
+       addExplorationStandardFields(notOnWallEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+       if (mazeFiles.length) notOnWallEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
+       return interaction.editReply({ embeds: [notOnWallEmbed], files: mazeFiles });
+      }
+      if (scryingWallAlreadyUsed) {
+       const alreadyUsedEmbed = new EmbedBuilder()
+        .setTitle("🗺️ **Grotto: Maze**")
+        .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
+        .setDescription(`You've already used the Song of Scrying at this wall. Move on or try another direction.`)
+        .setImage(mazeImg);
+       addExplorationStandardFields(alreadyUsedEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+       if (mazeFiles.length) alreadyUsedEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
+       return interaction.editReply({ embeds: [alreadyUsedEmbed], files: mazeFiles });
+      }
+
       let outcome;
       let rollLabel = '';
       if (isMazepCell) {
@@ -3307,53 +3328,84 @@ module.exports = {
       }
       let raidIdForEmbed = null;
       let wallRaidError = null;
+      // Maze battles: tier 4 and below only, inline encounter (no raid)
       if (outcome.type === 'battle' && outcome.battle) {
-       let monster = await fetchMonsterByName(outcome.battle.monsterLabel);
-       if (!monster && outcome.battle.tier) {
-        const regionMonsters = await getMonstersByRegion(party.region?.toLowerCase());
-        const sameTier = regionMonsters && regionMonsters.filter((m) => m.tier === outcome.battle.tier);
-        if (sameTier && sameTier.length > 0) monster = sameTier[Math.floor(Math.random() * sameTier.length)];
-       }
+       const regionMonsters = await getMonstersByRegion(party.region?.toLowerCase());
+       const tier4AndBelow = regionMonsters && regionMonsters.filter((m) => m.tier >= 1 && m.tier <= 4);
+       const monster = (tier4AndBelow && tier4AndBelow.length > 0)
+        ? tier4AndBelow[Math.floor(Math.random() * tier4AndBelow.length)]
+        : null;
        if (monster) {
-        const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
-        const raidResult = await triggerRaid(monster, interaction, village, false, character, false, expeditionId);
-        if (raidResult && raidResult.success) {
-         raidIdForEmbed = raidResult.raidId;
-         pushProgressLog(party, character.name, "grotto_maze_raid", `Song of Scrying: ${outcome.battle.monsterLabel} appeared. Raid started.`, undefined, undefined, new Date());
-         // Don't advance party.currentTurn — raid has its own turn order; triggering character attacks first
-         await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-        } else {
-         wallRaidError = raidResult?.error || "Raid could not be started.";
-         pushProgressLog(party, character.name, "grotto_maze_scrying", `Song of Scrying: ${outcome.battle.monsterLabel} appeared but raid could not start.`, undefined, undefined, new Date());
-         party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-         party.markModified("currentTurn");
-         await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
-         const nextCharErr = party.characters[party.currentTurn] ?? null;
-         const scryingResultErr = "**❌ Result: Failure** — A construct appeared but the raid could not start.";
-         const mazeEmbedErr = new EmbedBuilder()
-          .setTitle("🗺️ **Grotto: Maze — Song of Scrying**")
-          .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
-          .setDescription(`${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**${character.name}** sings the sequence on the wall...${rollLabel}\n\n${scryingResultErr}\n\n${outcome.flavor}\n\n⏰ **${wallRaidError}**\n\n↳ Continue with </explore grotto maze:${mazeCmdId}>.`)
-          .setImage(mazeImg);
-        addExplorationStandardFields(mazeEmbedErr, {
-          party,
-          expeditionId,
-          location,
-          nextCharacter: nextCharErr,
-          showNextAndCommands: true,
-          showRestSecureMove: false,
-          hasActiveGrotto: true,
-          activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
-          hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
-        });
-         if (mazeFiles.length) mazeEmbedErr.setFooter({ text: GROTTO_MAZE_LEGEND });
-         await interaction.editReply({ embeds: [mazeEmbedErr], files: mazeFiles });
-         if (getExplorationNextTurnContent(nextCharErr)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharErr) }).catch(() => {});
+        const diceRoll = Math.floor(Math.random() * 100) + 1;
+        const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
+        const encounterOutcome = await getEncounterOutcome(
+         character,
+         monster,
+         damageValue,
+         adjustedRandomValue,
+         attackSuccess,
+         defenseSuccess,
+         usePartyOnlyForHeartsStamina(party) ? { skipPersist: true } : {}
+        );
+        if (encounterOutcome.hearts > 0) {
+         party.totalHearts = Math.max(0, (party.totalHearts ?? 0) - encounterOutcome.hearts);
+         party.markModified("totalHearts");
+        }
+        let lootedItem = null;
+        if (encounterOutcome.canLoot) {
+         const items = await fetchItemsByMonster(monster.name);
+         const rawItem = items.length > 0 ? items[Math.floor(Math.random() * items.length)] : null;
+         lootedItem = await resolveExplorationMonsterLoot(monster.name, rawItem);
+         if (lootedItem && !EXPLORATION_TESTING_MODE) {
+          try {
+           await addItemInventoryDatabase(character._id, lootedItem.itemName, lootedItem.quantity ?? 1, interaction, "Grotto - Maze (Song of Scrying)");
+          } catch (err) {
+           logger.warn("EXPLORE", `[explore.js] Grotto maze scrying loot: ${err?.message || err}`);
+          }
+          if (!party.gatheredItems) party.gatheredItems = [];
+          party.gatheredItems.push({ characterId: character._id?.toString?.() ?? String(character._id), characterName: character.name, itemName: lootedItem.itemName, quantity: lootedItem.quantity ?? 1, emoji: lootedItem.emoji ?? "" });
+          party.markModified("gatheredItems");
+         }
+        }
+        pushProgressLog(party, character.name, "grotto_maze_raid", `Song of Scrying: fought ${monster.name}. ${encounterOutcome.result}.${encounterOutcome.hearts > 0 ? ` Lost ${encounterOutcome.hearts} heart(s).` : ""}${encounterOutcome.canLoot ? " Got loot." : ""}`, lootedItem ? { itemName: lootedItem.itemName, emoji: lootedItem.emoji } : undefined, encounterOutcome.hearts > 0 ? { heartsLost: encounterOutcome.hearts } : undefined, new Date());
+        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
+        party.markModified("currentTurn");
+        await party.save();
+        if ((party.totalHearts ?? 0) <= 0) {
+         pushProgressLog(party, character.name, "ko", `Party KO'd after Song of Scrying battle in grotto maze.`, undefined, { heartsLost: encounterOutcome.hearts });
+         await party.save();
+         await handleExpeditionFailed(party, interaction);
          return;
         }
-       } else {
-        wallRaidError = "Construct not found; continue exploring.";
+        const battleResultLine = encounterOutcome.hearts > 0
+         ? `You fought a **${monster.name}** — ${encounterOutcome.result}. Lost ${encounterOutcome.hearts} heart(s).${lootedItem ? ` Found ${lootedItem.emoji ?? ""} **${lootedItem.itemName}**!` : ""}`
+         : `You fought a **${monster.name}** — ${encounterOutcome.result}.${lootedItem ? ` Found ${lootedItem.emoji ?? ""} **${lootedItem.itemName}**!` : ""}`;
+        wallRaidError = null;
+        const nextCharScryingBattle = party.characters[party.currentTurn] ?? null;
+        const ctaHintBattle = (outcome.ctaHint || "").replace(/<\/explore grotto maze>/g, `</explore grotto maze:${mazeCmdId}>`);
+        const descBattle = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**${character.name}** sings the sequence on the wall...${rollLabel}\n\n**❌ Result: Failure** — The song didn't open the wall.\n\n${outcome.flavor}\n\n${battleResultLine}\n\n↳ **${ctaHintBattle}**`;
+        const mazeEmbedBattle = new EmbedBuilder()
+         .setTitle("🗺️ **Grotto: Maze — Song of Scrying**")
+         .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
+         .setDescription(descBattle)
+         .setImage(mazeImg);
+        addExplorationStandardFields(mazeEmbedBattle, {
+         party,
+         expeditionId,
+         location,
+         nextCharacter: nextCharScryingBattle,
+         showNextAndCommands: true,
+         showRestSecureMove: false,
+         hasActiveGrotto: true,
+         activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+         hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+        });
+        if (mazeFiles.length) mazeEmbedBattle.setFooter({ text: GROTTO_MAZE_LEGEND });
+        await interaction.editReply({ embeds: [mazeEmbedBattle], files: mazeFiles });
+        if (getExplorationNextTurnContent(nextCharScryingBattle)) await interaction.followUp({ content: getExplorationNextTurnContent(nextCharScryingBattle) }).catch(() => {});
+        return;
        }
+       wallRaidError = "No tier 1–4 monsters in region; continue exploring.";
       }
       const ctaHint = (outcome.ctaHint || "").replace(/<\/explore grotto maze>/g, `</explore grotto maze:${mazeCmdId}>`);
       const scryingResultLine = outcome.type === "faster_path_open"
@@ -5979,13 +6031,16 @@ module.exports = {
       if (!monsters || monsters.length === 0) {
        return interaction.editReply("No monsters available for this region.");
       }
+      // Only tier 1–4 show up during exploration; tier 5+ do not start expedition raids from explore roll
+      const monstersTier4AndBelow = monsters.filter((m) => m.tier >= 1 && m.tier <= 4);
+      const monstersForEncounter = monstersTier4AndBelow.length > 0 ? monstersTier4AndBelow : monsters;
 
       const quadrantMetaForMonster = await getQuadrantMeta(party.square, party.quadrant);
       const quadrantMonsterBiasSet = new Set([
         ...(quadrantMetaForMonster.monsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean),
         ...(quadrantMetaForMonster.bossMonsters || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean)
       ]);
-      const monstersBiased = applyQuadrantMonsterBias(monsters, quadrantMonsterBiasSet);
+      const monstersBiased = applyQuadrantMonsterBias(monstersForEncounter, quadrantMonsterBiasSet);
       const selectedMonster = getExplorationMonsterFromList(monstersBiased, dangerLevel.dangerBonus);
       appendExploreStat(`${new Date().toISOString()}\tfinal\tmonster\t${location}\ttier=${selectedMonster.tier ?? "?"}\tdist=${dangerLevel.distance}\tbonus=${(dangerLevel.dangerBonus * 100).toFixed(0)}%`);
 
