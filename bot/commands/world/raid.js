@@ -999,16 +999,20 @@ async function handleRaidVictory(interaction, raidData, monster) {
             }
             party.markModified('gatheredItems');
             await party.save();
-            for (const slot of party.characters) {
-              if (slot._id && !(raidData.expeditionId && EXPLORATION_TESTING_MODE)) {
-                try {
-                  await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
-                } catch (orbErr) {
-                  console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
+            // Fallback: never persist Spirit Orbs to real inventory when expedition + testing mode (multiple guards)
+            const skipOrbPersist = !!(raidData.expeditionId && EXPLORATION_TESTING_MODE);
+            if (!skipOrbPersist) {
+              for (const slot of party.characters) {
+                if (slot._id) {
+                  try {
+                    await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
+                  } catch (orbErr) {
+                    console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
+                  }
                 }
               }
             }
-            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members${(raidData.expeditionId && EXPLORATION_TESTING_MODE) ? ' (testing: not persisted to inventory)' : ''}`);
+            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members${skipOrbPersist ? ' (testing: not persisted to inventory)' : ''}`);
           }
         }
       } catch (grottoErr) {

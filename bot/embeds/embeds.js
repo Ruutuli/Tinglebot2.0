@@ -647,7 +647,7 @@ function partyHasSecureMaterials(party) {
     : false;
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null, hotSpringMessage = null }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
@@ -665,6 +665,7 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  const staminaDisplay = effectiveMaxStamina > 0 ? `${party?.totalStamina ?? 0}/${effectiveMaxStamina}` : String(party?.totalStamina ?? 0);
  const fields = [
   ...(hazardMessage ? [{ name: "⚠️ **__Hazard__**", value: hazardMessage, inline: false }] : []),
+  ...(hotSpringMessage ? [{ name: "🔥 **__Hot Springs__**", value: hotSpringMessage, inline: false }] : []),
   { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
   { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },
   ...(actionCost != null ? [{ name: "⚡ **__Action Cost__**", value: (() => {
@@ -1083,7 +1084,8 @@ const createExplorationItemEmbed = (
  maxHearts = 0,
  maxStamina = 0,
  flavorText = null,
- hazardMessage = null
+ hazardMessage = null,
+ hotSpringMessage = null
 ) => {
  const mainDesc = `✨ **${character.name || "Adventurer"}** discovered ${item.emoji || ""} **${
    item.itemName
@@ -1108,6 +1110,7 @@ const createExplorationItemEmbed = (
   maxHearts,
   maxStamina,
   hazardMessage,
+  hotSpringMessage,
  });
 const rarity = item.itemRarity ?? 1;
 const isStruggleMode = (party?.totalStamina ?? 0) === 0;
@@ -1141,7 +1144,8 @@ const createExplorationMonsterEmbed = (
  maxHearts = 0,
  maxStamina = 0,
  flavorText = null,
- hazardMessage = null
+ hazardMessage = null,
+ hotSpringMessage = null
 ) => {
  const monsterImage =
   monster.image ||
@@ -1172,6 +1176,7 @@ const createExplorationMonsterEmbed = (
   maxHearts,
   maxStamina,
   hazardMessage,
+  hotSpringMessage,
  });
 const tier = monster.tier ?? 1;
 const isStruggleMode = (party?.totalStamina ?? 0) === 0;

@@ -329,6 +329,10 @@ const EXPLORATION_OUTCOME_CHANCES = {
   grotto: 0.08,    // grotto discovery (was 0.02; increased so parties find grottos more often)
 };
 
+// ------------------- Hot Spring: chance to heal 1 heart when rolling in a Hot Spring quadrant (only when party has missing hearts) ------------------
+const HOT_SPRING_HEAL_CHANCE = 0.25;
+const HOT_SPRING_HEAL_AMOUNT = 1;
+
 // ------------------- Retreat (tier 5+ raids): +5% per fail, cap 95% ------------------
 const RETREAT_BASE_CHANCE = 0.5;
 const RETREAT_BONUS_PER_FAIL = 0.05;
@@ -3483,15 +3487,17 @@ module.exports = {
        : availableItems.length > 0 ? availableItems[Math.floor(Math.random() * availableItems.length)] : null;
       let givenItemName = selectedItem?.itemName ?? "Fairy";
       let givenEmoji = selectedItem?.emoji ?? "🧚";
-      try {
-       await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze (corridor)");
-      } catch (err) {
-       logger.warn("EXPLORE", `[explore.js] Grotto maze corridor gather: ${err?.message || err}`);
+      if (!EXPLORATION_TESTING_MODE) {
        try {
-        await addItemInventoryDatabase(character._id, "Fairy", 1, interaction, "Grotto - Maze (corridor)");
-        givenItemName = "Fairy";
-        givenEmoji = "🧚";
-       } catch (e) {}
+        await addItemInventoryDatabase(character._id, givenItemName, 1, interaction, "Grotto - Maze (corridor)");
+       } catch (err) {
+        logger.warn("EXPLORE", `[explore.js] Grotto maze corridor gather: ${err?.message || err}`);
+        try {
+         await addItemInventoryDatabase(character._id, "Fairy", 1, interaction, "Grotto - Maze (corridor)");
+         givenItemName = "Fairy";
+         givenEmoji = "🧚";
+        } catch (e) {}
+       }
       }
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: givenItemName, quantity: 1, emoji: givenEmoji });
@@ -4202,6 +4208,20 @@ module.exports = {
 
      const location = `${party.square} ${party.quadrant}`;
 
+     // Hot Spring: if quadrant has Hot Spring and party has room for hearts, chance to heal 1 heart (no proc when full)
+     let hotSpringMessage = null;
+     const quadrantMeta = await getQuadrantMeta(party.square, party.quadrant);
+     const hasHotSpring = (quadrantMeta.special || []).some((s) => String(s || "").toLowerCase() === "hot spring");
+     if (hasHotSpring && (party.totalHearts ?? 0) < poolCaps.maxHearts && Math.random() < HOT_SPRING_HEAL_CHANCE) {
+      const beforeHearts = Math.max(0, party.totalHearts ?? 0);
+      party.totalHearts = Math.min(poolCaps.maxHearts, beforeHearts + HOT_SPRING_HEAL_AMOUNT);
+      party.markModified("totalHearts");
+      await party.save();
+      pushProgressLog(party, character.name, "hot_spring", `The hot springs in ${location} soothed the party. +${HOT_SPRING_HEAL_AMOUNT} ❤`, undefined, { heartsRecovered: HOT_SPRING_HEAL_AMOUNT }, new Date());
+      hotSpringMessage = `The hot springs soothed the party. **+${HOT_SPRING_HEAL_AMOUNT} ❤**`;
+      logger.info("EXPLORE", `[explore.js] id=${party.partyId ?? "?"} hot_spring ❤${beforeHearts} +${HOT_SPRING_HEAL_AMOUNT} → ❤${party.totalHearts ?? 0}`);
+     }
+
      // Calculate danger level based on distance from start
      const dangerLevel = calculateDangerLevel(party);
 
@@ -4427,6 +4447,7 @@ module.exports = {
         maxHearts: poolCaps.maxHearts,
         maxStamina: poolCaps.maxStamina,
         hazardMessage: hazardRollResult?.hazardMessage ?? null,
+        hotSpringMessage: hotSpringMessage ?? null,
       });
 
       // Add recovery field for lucky find
@@ -4476,6 +4497,7 @@ module.exports = {
         maxHearts: poolCaps.maxHearts,
         maxStamina: poolCaps.maxStamina,
         hazardMessage: hazardRollResult?.hazardMessage ?? null,
+        hotSpringMessage: hotSpringMessage ?? null,
       });
        fairyEmbed.addFields(
         { name: "📋 **Recovery**", value: `Party fully healed! (+${totalHeartsRecovered} ❤️ total)`, inline: false },
@@ -4490,7 +4512,7 @@ module.exports = {
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const nextChar = party.characters[party.currentTurn];
-      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered, await hasDiscoveriesInQuadrant(party.square, party.quadrant), await hasUnpinnedDiscoveriesInQuadrant(party), { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 }, poolCaps.maxHearts, poolCaps.maxStamina, undefined, hazardRollResult?.hazardMessage ?? null);
+      const embed = createExplorationItemEmbed(party, character, fairyItem, expeditionId, location, party.totalHearts, party.totalStamina, nextChar ?? null, true, ruinRestRecovered, await hasDiscoveriesInQuadrant(party.square, party.quadrant), await hasUnpinnedDiscoveriesInQuadrant(party), { staminaCost: payResult?.staminaPaid ?? 0, heartsCost: payResult?.heartsPaid ?? 0 }, poolCaps.maxHearts, poolCaps.maxStamina, undefined, hazardRollResult?.hazardMessage ?? null, hotSpringMessage ?? null);
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id, characterName: character.name, itemName: "Fairy", quantity: 1, emoji: fairyItem.emoji || "🧚" });
       party.markModified("gatheredItems");
@@ -4743,6 +4765,7 @@ module.exports = {
         maxHearts: poolCaps.maxHearts,
         maxStamina: poolCaps.maxStamina,
         hazardMessage: hazardRollResult?.hazardMessage ?? null,
+        hotSpringMessage: hotSpringMessage ?? null,
       });
 
       const isYesNoChoice = outcomeType === "ruins" || outcomeType === "grotto" || outcomeType === "chest";
@@ -5634,7 +5657,8 @@ module.exports = {
        poolCaps.maxHearts,
        poolCaps.maxStamina,
        itemFlavor || undefined,
-       hazardRollResult?.hazardMessage ?? null
+       hazardRollResult?.hazardMessage ?? null,
+       hotSpringMessage ?? null
       );
 
       if (!party.gatheredItems) {
@@ -5753,7 +5777,8 @@ module.exports = {
          poolCaps.maxHearts,
          poolCaps.maxStamina,
          monsterFlavorRaid || undefined,
-         hazardRollResult?.hazardMessage ?? null
+         hazardRollResult?.hazardMessage ?? null,
+         hotSpringMessage ?? null
         );
 
         embed.addFields(
@@ -5884,7 +5909,8 @@ module.exports = {
         poolCaps.maxHearts,
         poolCaps.maxStamina,
         monsterFlavorWave || undefined,
-        hazardRollResult?.hazardMessage ?? null
+        hazardRollResult?.hazardMessage ?? null,
+        hotSpringMessage ?? null
        );
 
        const hasEquippedWeapon = !!(character?.gearWeapon?.name);
