@@ -3066,7 +3066,11 @@ module.exports = {
           .setColor(getMazeEmbedColor('bypassed', regionColors[freshParty.region]))
           .setDescription(`Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
           .setImage(GROTTO_BANNER_CLEANSED_URL);
-         addExplorationStandardFields(doneEmbed, { party: freshParty, expeditionId, location: `${freshParty.square} ${freshParty.quadrant}`, nextCharacter: freshParty.characters[freshParty.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
+         const bypassClearedDesc = EXPLORATION_TESTING_MODE
+          ? `Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫.\n\n⚠️ **Testing mode:** Expedition will end next.`
+          : `Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`;
+         doneEmbed.setDescription(bypassClearedDesc);
+         addExplorationStandardFields(doneEmbed, { party: freshParty, expeditionId, location: `${freshParty.square} ${freshParty.quadrant}`, nextCharacter: freshParty.characters[freshParty.currentTurn] ?? null, showNextAndCommands: !EXPLORATION_TESTING_MODE, showRestSecureMove: false, hasActiveGrotto: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
          await i.editReply({ embeds: [doneEmbed], components: [disabledRow] }).catch(() => {});
          if (EXPLORATION_TESTING_MODE) {
           const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, character.name);
@@ -3270,17 +3274,20 @@ module.exports = {
          } catch (e) {}
          const nextCharExit = party.characters[party.currentTurn] ?? null;
          const exitDesc = (mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + outcome.flavor + "\n\n**Exit!**\n\n";
+         const clearedSuffix = EXPLORATION_TESTING_MODE
+          ? `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫.\n\n⚠️ **Testing mode:** Expedition will end next.`
+          : `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`;
          const exitEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Exit!**")
           .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
-          .setDescription(exitDesc + `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`)
+          .setDescription(exitDesc + clearedSuffix)
           .setImage(mazeImg);
          addExplorationStandardFields(exitEmbed, {
           party,
           expeditionId,
           location,
           nextCharacter: nextCharExit,
-          showNextAndCommands: true,
+          showNextAndCommands: !EXPLORATION_TESTING_MODE,
           showRestSecureMove: false,
           hasActiveGrotto: false,
           hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
@@ -3522,17 +3529,20 @@ module.exports = {
       } catch (e) {}
       const nextCharExitMove = party.characters[party.currentTurn] ?? null;
       const exitDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
+      const clearedSuffixMove = EXPLORATION_TESTING_MODE
+       ? `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫.\n\n⚠️ **Testing mode:** Expedition will end next.`
+       : `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`;
       const exitEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Exit!**")
        .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
-       .setDescription(exitDesc + `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`)
+       .setDescription(exitDesc + clearedSuffixMove)
        .setImage(mazeImg);
       addExplorationStandardFields(exitEmbed, {
        party,
        expeditionId,
        location,
        nextCharacter: nextCharExitMove,
-       showNextAndCommands: true,
+       showNextAndCommands: !EXPLORATION_TESTING_MODE,
        showRestSecureMove: false,
        hasActiveGrotto: false,
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
