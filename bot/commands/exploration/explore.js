@@ -7636,8 +7636,11 @@ module.exports = {
     const stamina = Math.max(0, carried.staminaRecovered || 0);
 
     if (hearts === 0 && stamina === 0) {
+     const isElixir = /elixir/i.test(carried.itemName || "");
      return interaction.editReply(
-      "That item can only be used when securing the quadrant (e.g. Wood Bundle, Eldin Ore Bundle)."
+      isElixir
+       ? `**${carried.itemName}** is a buff elixir (resistance/stat boost), not a healing item. Buff elixirs can't be used on expedition item turns yet — only items that restore hearts or stamina can be used here. You can still bring them for later use.`
+       : "That item can only be used when securing the quadrant (e.g. Wood Bundle, Eldin Ore Bundle)."
      );
     }
 

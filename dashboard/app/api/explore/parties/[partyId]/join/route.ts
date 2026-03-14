@@ -270,6 +270,7 @@ export async function POST(
           ],
         },
         { itemName: /Goddess Plume/i },
+        { itemName: /Elixir/i },
       ],
     };
     const foundItems: Array<{ itemName: string; modifierHearts?: number; staminaRecovered?: number; emoji?: string }> = [];

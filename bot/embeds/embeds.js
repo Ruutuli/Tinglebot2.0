@@ -689,7 +689,8 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    const cmdItem = `</explore item:${cmdId}>`;
    commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use ${cmdRoll} until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
   } else if (hasActiveGrotto) {
-   commandsValue += `**Trial in progress** — take your turn:\n${activeGrottoCommand || `</explore grotto continue:${cmdId}>`}\n\n_Other explore actions are blocked until the trial ends._`;
+   const cmdItem = `</explore item:${cmdId}>`;
+   commandsValue += `**Trial in progress** — take your turn:\n${activeGrottoCommand || `</explore grotto continue:${cmdId}>`}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\n_Other explore actions are blocked until the trial ends._`;
   } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
    const cmdMove = `</explore move:${cmdId}>`;
