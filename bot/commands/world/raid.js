@@ -992,6 +992,12 @@ async function handleRaidVictory(interaction, raidData, monster) {
           const party = await Party.findActiveByPartyId(raidData.expeditionId);
           if (party && party.characters && party.characters.length > 0) {
             restorePartyPoolOnGrottoExit(party);
+            pushProgressLog(party, party.characters[0]?.name || 'Party', 'grotto_test_of_power', 'Test of Power complete. Each party member received a Spirit Orb.', undefined, undefined, new Date());
+            if (!party.gatheredItems) party.gatheredItems = [];
+            for (const slot of party.characters) {
+              party.gatheredItems.push({ characterId: slot._id, characterName: slot.name, itemName: 'Spirit Orb', quantity: 1, emoji: '💫' });
+            }
+            party.markModified('gatheredItems');
             await party.save();
             for (const slot of party.characters) {
               if (slot._id) {

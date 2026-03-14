@@ -185,6 +185,7 @@ function pushProgressLog(party, characterName, outcome, message, loot, costs, at
     if (costs) {
         if (typeof costs.heartsLost === 'number' && costs.heartsLost > 0) entry.heartsLost = costs.heartsLost;
         if (typeof costs.heartsReceived === 'number' && costs.heartsReceived > 0) entry.heartsReceived = costs.heartsReceived;
+        if (typeof costs.heartsDealt === 'number' && costs.heartsDealt > 0) entry.heartsDealt = costs.heartsDealt;
         if (typeof costs.staminaLost === 'number' && costs.staminaLost > 0) entry.staminaLost = costs.staminaLost;
         if (typeof costs.heartsRecovered === 'number' && costs.heartsRecovered > 0) entry.heartsRecovered = costs.heartsRecovered;
         if (typeof costs.staminaRecovered === 'number' && costs.staminaRecovered > 0) entry.staminaRecovered = costs.staminaRecovered;

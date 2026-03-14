@@ -61,6 +61,7 @@ const PartySchema = new Schema({
         emoji: { type: String, default: '' },
       },
       heartsLost: { type: Number },
+      heartsDealt: { type: Number },
       staminaLost: { type: Number },
       heartsRecovered: { type: Number },
       staminaRecovered: { type: Number },

@@ -4088,7 +4088,6 @@ module.exports = {
       if (found && normalizeSquareId(found.squareId) === currentSquareNorm) mapSquareForGrotto = found;
      }
      for (;;) {
-      if (EXPLORATION_TESTING_MODE && outcomeType === "grotto") break;
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
        const reason = "explored twice in a row at this location (blocked by rule)";
