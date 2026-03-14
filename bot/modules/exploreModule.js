@@ -37,21 +37,34 @@ const LOC_IN_MESSAGE_RE = /\s+(?:in|at)\s+([A-J](?:[1-9]|1[0-2]))\s+(Q[1-4])/i;
 async function hasUnpinnedDiscoveriesInQuadrant(party) {
     if (!party?.square || !party?.quadrant || !Array.isArray(party.progressLog)) return false;
     const reportedSet = new Set(Array.isArray(party.reportedDiscoveryKeys) ? party.reportedDiscoveryKeys.filter((k) => typeof k === "string" && k.length > 0) : []);
+    const currentSquare = String(party.square).trim().toUpperCase();
+    const currentQuadrant = String(party.quadrant).trim().toUpperCase();
     const partyIdNorm = party.partyId ? String(party.partyId).trim() : "";
+    let quadrantHasPin = false;
     if (partyIdNorm) {
         try {
-            const pins = await Pin.find({ partyId: partyIdNorm }).select("sourceDiscoveryKey").lean();
+            // Case-insensitive partyId match (dashboard URL may use different casing)
+            const pinQuery = { partyId: new RegExp(`^${escapeSquareIdForRegex(partyIdNorm)}$`, "i") };
+            const pins = await Pin.find(pinQuery).select("sourceDiscoveryKey").lean();
             for (const pin of pins || []) {
                 if (pin.sourceDiscoveryKey && typeof pin.sourceDiscoveryKey === "string") {
-                    reportedSet.add(pin.sourceDiscoveryKey.trim());
+                    const k = pin.sourceDiscoveryKey.trim();
+                    reportedSet.add(k);
+                    // If this pin is for the current quadrant, remember so we can suppress reminder even if key format differs
+                    const parts = k.split("|");
+                    if (parts.length >= 3) {
+                        const pinSquare = String(parts[1] || "").trim().toUpperCase();
+                        const pinQuadrant = String(parts[2] || "").trim().toUpperCase();
+                        if (pinSquare === currentSquare && pinQuadrant === currentQuadrant) {
+                            quadrantHasPin = true;
+                        }
+                    }
                 }
             }
         } catch (_) {
             // ignore pin lookup errors; fall back to reportedDiscoveryKeys only
         }
     }
-    const currentSquare = String(party.square).trim().toUpperCase();
-    const currentQuadrant = String(party.quadrant).trim().toUpperCase();
     for (const e of party.progressLog) {
         if (!DISCOVERY_CLEANUP_OUTCOMES.includes(e.outcome)) continue;
         const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
@@ -61,7 +74,10 @@ async function hasUnpinnedDiscoveriesInQuadrant(party) {
         if (entrySquare !== currentSquare || entryQuadrant !== currentQuadrant) continue;
         const atStr = e.at instanceof Date ? e.at.toISOString() : (typeof e.at === "string" ? e.at : "");
         const key = `${e.outcome}|${entrySquare}|${entryQuadrant}|${atStr}`;
-        if (!reportedSet.has(key)) return true;
+        if (reportedSet.has(key)) continue;
+        // Exact key not pinned; if user pinned something in this quadrant, don't show reminder (key format may differ)
+        if (quadrantHasPin) continue;
+        return true;
     }
     return false;
 }
