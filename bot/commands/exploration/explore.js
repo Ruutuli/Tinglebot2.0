@@ -4072,6 +4072,7 @@ module.exports = {
       return outcome;
      }
      let outcomeType = rollOutcome();
+     if (EXPLORATION_TESTING_MODE) outcomeType = "grotto";
      const currentSquareNorm = normalizeSquareId(party.square);
      const specialCount = countSpecialEventsInSquare(party, party.square);
      const lastOutcomeHere = getLastProgressOutcomeForLocation(party, party.square, party.quadrant);
@@ -4082,6 +4083,7 @@ module.exports = {
       if (found && normalizeSquareId(found.squareId) === currentSquareNorm) mapSquareForGrotto = found;
      }
      for (;;) {
+      if (EXPLORATION_TESTING_MODE && outcomeType === "grotto") break;
       // Don't allow "explored" twice in a row at the same location
       if (outcomeType === "explored" && lastOutcomeHere === "explored") {
        const reason = "explored twice in a row at this location (blocked by rule)";
