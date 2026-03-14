@@ -7312,12 +7312,14 @@ module.exports = {
             }
           }
         } else {
-          const whoHasMapRedeemed = [];
+          // Only mention "map location" if someone in the party has this map but hasn't appraised it yet
+          const whoHasMapUnappraised = [];
           for (const pc of party.characters) {
-            const hasRedeemed = await hasAppraisedRedeemedOldMap(pc.name, quadWithMap.oldMapNumber);
-            if (hasRedeemed) whoHasMapRedeemed.push(pc.name);
+            const hasMap = await hasOldMap(pc.name, quadWithMap.oldMapNumber);
+            const hasAppraised = await hasAppraisedOldMap(pc.name, quadWithMap.oldMapNumber);
+            if (hasMap && !hasAppraised) whoHasMapUnappraised.push(pc.name);
           }
-          if (whoHasMapRedeemed.length === 0) {
+          if (whoHasMapUnappraised.length > 0) {
             moveDescription += `\n\n🗺️ **Map location!** This area is marked on an old map. Get it appraised at the Inariko Library to discover what's here. More info: ${OLD_MAPS_LINK}`;
             // DM the move leader (person who ran /explore move) so they're notified; don't reveal map number or what it leads to until appraised
             const moveLeaderId = interaction.user?.id;
