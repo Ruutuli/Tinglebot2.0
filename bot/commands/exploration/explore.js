@@ -76,6 +76,8 @@ const { addOldMapToCharacter, hasOldMap, hasAppraisedOldMap, hasAppraisedUnexpir
 const { checkInventorySync } = require('@/utils/characterUtils.js');
 const { enforceJail } = require('@/utils/jailCheck');
 const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig.js');
+// TEMPORARY: set to true to allow roll/move/camp/secure/end/grotto/discovery/item without pinning discoveries (for testing). Set back to false when done.
+const SKIP_PIN_REQUIREMENT_FOR_TESTING = true;
 const { generateGrottoMaze, getPathCellAt, getNeighbourCoords, getCellBeyondWall, removeScryingWall } = require('@/utils/grottoMazeGenerator.js');
 const { renderMazeToBuffer } = require('@/utils/grottoMazeRenderer.js');
 const logger = require("@/utils/logger.js");
@@ -2353,10 +2355,12 @@ module.exports = {
      return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveGrotto.waveId, `grotto ${subcommand}`)] });
     }
 
-    const unpinnedGrotto = await hasUnpinnedDiscoveriesInQuadrant(party);
-    if (unpinnedGrotto) {
-     const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-     return interaction.editReply({ embeds: [blockEmbed] });
+    if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+     const unpinnedGrotto = await hasUnpinnedDiscoveriesInQuadrant(party);
+     if (unpinnedGrotto) {
+      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+      return interaction.editReply({ embeds: [blockEmbed] });
+     }
     }
 
     if (subcommand === "continue") {
@@ -3850,10 +3854,12 @@ module.exports = {
     const discoveryCombatBlock = await getCombatBlockReply(party, expeditionId, "discovery", `${party.square} ${party.quadrant}`);
     if (discoveryCombatBlock) return interaction.editReply(discoveryCombatBlock);
 
-    const unpinnedDiscovery = await hasUnpinnedDiscoveriesInQuadrant(party);
-    if (unpinnedDiscovery) {
-     const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-     return interaction.editReply({ embeds: [blockEmbed] });
+    if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+     const unpinnedDiscovery = await hasUnpinnedDiscoveriesInQuadrant(party);
+     if (unpinnedDiscovery) {
+      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+      return interaction.editReply({ embeds: [blockEmbed] });
+     }
     }
 
     const squareId = (party.square && String(party.square).trim()) || "";
@@ -4303,10 +4309,12 @@ module.exports = {
       return interaction.editReply({ embeds: [grottoRollEmbed] });
      }
 
-     const unpinnedRoll = await hasUnpinnedDiscoveriesInQuadrant(party);
-     if (unpinnedRoll) {
-      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-      return interaction.editReply({ embeds: [blockEmbed] });
+     if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+      const unpinnedRoll = await hasUnpinnedDiscoveriesInQuadrant(party);
+      if (unpinnedRoll) {
+       const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+       return interaction.editReply({ embeds: [blockEmbed] });
+      }
      }
 
      // Block rolling if there's active combat for this expedition (must resolve first)
@@ -6314,10 +6322,12 @@ module.exports = {
      return interaction.editReply({ embeds: [createWaveBlockEmbed(party, activeWaveSecure.waveId, "secure")] });
     }
 
-    const unpinnedSecure = await hasUnpinnedDiscoveriesInQuadrant(party);
-    if (unpinnedSecure) {
-     const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-     return interaction.editReply({ embeds: [blockEmbed] });
+    if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+     const unpinnedSecure = await hasUnpinnedDiscoveriesInQuadrant(party);
+     if (unpinnedSecure) {
+      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+      return interaction.editReply({ embeds: [blockEmbed] });
+     }
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
@@ -6877,10 +6887,12 @@ module.exports = {
      return interaction.editReply({ embeds: [grottoMoveEmbed] });
     }
 
-    const unpinnedMove = await hasUnpinnedDiscoveriesInQuadrant(party);
-    if (unpinnedMove) {
-     const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-     return interaction.editReply({ embeds: [blockEmbed] });
+    if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+     const unpinnedMove = await hasUnpinnedDiscoveriesInQuadrant(party);
+     if (unpinnedMove) {
+      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+      return interaction.editReply({ embeds: [blockEmbed] });
+     }
     }
 
     // Block moving if there's active combat for this expedition (must resolve first)
@@ -7535,10 +7547,12 @@ module.exports = {
      await handleExpeditionFailed(party, interaction);
      return;
     }
-    const unpinnedItem = await hasUnpinnedDiscoveriesInQuadrant(party);
-    if (unpinnedItem) {
-     const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-     return interaction.editReply({ embeds: [blockEmbed] });
+    if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+     const unpinnedItem = await hasUnpinnedDiscoveriesInQuadrant(party);
+     if (unpinnedItem) {
+      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+      return interaction.editReply({ embeds: [blockEmbed] });
+     }
     }
     const partyChar = party.characters[characterIndex];
     // Normalize input: autocomplete display is "ItemName — ❤ N | 🟩 N"; if user pastes that, strip suffix so we match stored itemName
@@ -7772,10 +7786,12 @@ module.exports = {
      return;
     }
 
-    const unpinnedEnd = await hasUnpinnedDiscoveriesInQuadrant(party);
-    if (unpinnedEnd) {
-     const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-     return interaction.editReply({ embeds: [blockEmbed] });
+    if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+     const unpinnedEnd = await hasUnpinnedDiscoveriesInQuadrant(party);
+     if (unpinnedEnd) {
+      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+      return interaction.editReply({ embeds: [blockEmbed] });
+     }
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
@@ -8301,10 +8317,12 @@ module.exports = {
      return;
     }
 
-    const unpinnedCamp = await hasUnpinnedDiscoveriesInQuadrant(party);
-    if (unpinnedCamp) {
-     const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
-     return interaction.editReply({ embeds: [blockEmbed] });
+    if (!SKIP_PIN_REQUIREMENT_FOR_TESTING) {
+     const unpinnedCamp = await hasUnpinnedDiscoveriesInQuadrant(party);
+     if (unpinnedCamp) {
+      const blockEmbed = await createUnpinnedDiscoveriesBlockEmbed(party, expeditionId);
+      return interaction.editReply({ embeds: [blockEmbed] });
+     }
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
