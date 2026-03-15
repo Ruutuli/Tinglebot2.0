@@ -1138,6 +1138,8 @@ async function resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grott
     return byId;
    }
   } catch (_) {}
+  // User supplied a name/id but it didn't match — don't fall back to "any grotto"
+  return null;
  }
  return Grotto.findOne(query).sort({ unsealedAt: -1 });
 }
@@ -2709,10 +2711,10 @@ module.exports = {
      const failThreshold = Math.max(0.04, BASE_FAIL - failReduction);
      const missThreshold = Math.max(0.10, BASE_MISS - missReduction);
      const hitThreshold = failThreshold + missThreshold;
-     const roll = Math.random();
-     const rollPct = (roll * 100).toFixed(1);
-     const failPct = (failThreshold * 100).toFixed(1);
-     const hitPct = (hitThreshold * 100).toFixed(1);
+    const roll = Math.random();
+    const rollPct = Math.round(roll * 100);
+    const failPct = Math.round(failThreshold * 100);
+    const hitPct = Math.round(hitThreshold * 100);
      const cmdId = getExploreCommandId();
      const cmdRoll = `</explore roll:${cmdId}>`;
      const cmdTargetPractice = `</explore grotto targetpractice:${cmdId}>`;
@@ -2724,7 +2726,7 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getFailOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
-      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — fail (need >${failPct}% to avoid instant fail)\n\nUse ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — fail (need over ${failPct}% to avoid instant fail)\n\nUse ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Failed**")
        .setColor(0x8b0000)
@@ -2760,7 +2762,7 @@ module.exports = {
       }
       const damageNote = heartsLost > 0 ? ` **${character.name}** took ${heartsLost} ❤ damage.` : "";
       const sameShooter = party.characters[characterIndex];
-      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — miss (need >${hitPct}% for hit)${damageNote}\n\n**Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — miss (need over ${hitPct}% to hit)${damageNote}\n\n**Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -2809,7 +2811,7 @@ module.exports = {
       const outcome = getCompleteOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
       const progressBar3 = Array(TARGET_SUCCESSES).fill(0).map((_, i) => i < TARGET_SUCCESSES ? "🎯" : "○").join(" ");
-      const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need >${hitPct}% for hit)\n\n**Progress:** ${progressBar3}  (3/3 hits)\n\n**Trial complete!**`;
+      const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)\n\n**Progress:** ${progressBar3}  (3/3 hits)\n\n**Trial complete!**`;
       const progress3Embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -2858,7 +2860,7 @@ module.exports = {
      const outcome = getSuccessOutcome();
      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
      const progressBar = Array(TARGET_SUCCESSES).fill(0).map((_, i) => (i < newSuccesses ? "🎯" : "○")).join(" ");
-     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need >${hitPct}% for hit)\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
+     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need over ${hitPct}% to hit)\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Target Practice**")
       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -3803,17 +3805,13 @@ module.exports = {
       }
       const heartsLost = trapOutcome.heartsLost ?? 0;
       const staminaCost = trapOutcome.staminaCost ?? 0;
-      const costParts = [];
-      if (heartsLost > 0) costParts.push(`−${heartsLost}❤️ hearts`);
-      if (staminaCost > 0) costParts.push(`−${staminaCost}🟩 stamina`);
-      const costLine = costParts.length > 0 ? `\n\n**Cost:** ${costParts.join(", ")}` : "";
       pushProgressLog(party, character.name, "grotto_maze_trap", `Maze trap triggered (moved ${displayDir}): ${trapOutcome.flavor?.split(".")[0] || "trap"}.`, undefined, heartsLost > 0 || staminaCost > 0 ? { heartsLost: heartsLost || undefined, staminaLost: staminaCost || undefined } : undefined, new Date());
       party.currentTurn = (party.currentTurn + 1) % party.characters.length;
       party.markModified("currentTurn");
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       await grotto.save();
       const nextCharTrap = party.characters[party.currentTurn] ?? null;
-      const trapDesc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}** and triggered a trap!\n\n${trapOutcome.flavor}${costLine}`;
+      const trapDesc = `${mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : ""}**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}** and triggered a trap!\n\n${trapOutcome.flavor}`;
       const trapEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Trap!**")
        .setColor(getMazeEmbedColor('trap', regionColors[party.region]))
@@ -5422,7 +5420,7 @@ module.exports = {
        title = `🗺️ **Expedition: Grotto found!**`;
        description =
         `**${character.name}** stumbled across something strange in **${location}**.\n\n` +
-        "You stumble across an interesting looking stump with roots covered in talismans. More info about grottos can be found [here](https://www.rootsofthewild.com/grottos).\n\n" +
+        "You stumble across an interesting looking stump with roots covered in talismans. More info about grottos can be found [here](https://rootsofthewild.com/mechanics/grottos).\n\n" +
         "**Mark on map** — Save for later (counts toward this square's 3 discovery limit).\n" +
         "**Open** — Cleanse the grotto now (1 Goddess Plume + 1 stamina).";
       } else if (outcomeType === "camp") {
