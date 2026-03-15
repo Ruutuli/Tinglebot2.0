@@ -287,7 +287,6 @@ export async function PATCH(
         Item
       );
     }
-    const distinctOldNonBundle = [...new Set(oldNames.filter((n) => !PAVING_BUNDLES[n]))];
     for (const itemName of distinctOldNonBundle) {
       const count = oldNames.filter((n) => n === itemName).length;
       await addMaterialToInventory(collection, charId, itemName, count, Item);
