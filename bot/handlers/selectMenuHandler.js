@@ -390,55 +390,7 @@ async function handleSelectMenuInteraction(interaction) {
 
             if (!booster) continue;
 
-            if (
-              updatedSubmissionData.category === 'art' &&
-              booster.job === 'Teacher' &&
-              !processedBoosts.has('teacher_tokens')
-            ) {
-              const boostedTokens = applyTeacherTokensBoost(finalTokenAmount);
-              const tokenIncrease = boostedTokens - finalTokenAmount;
-              if (tokenIncrease > 0) {
-                finalTokenAmount = boostedTokens;
-                boostEffects.push(`👩‍🏫 **Critique & Composition:** ${booster.name} added 🪙 ${tokenIncrease}.`);
-                processedBoosts.add('teacher_tokens');
-                boostFulfillmentTargets.push(character.name);
-                console.log(`[selectMenuHandler.js]: 📖 Teacher boost - Critique & Composition (+${tokenIncrease} tokens) from user character ${character.name}`);
-                try {
-                  await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
-                } catch (clearErr) {
-                  console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
-                }
-              }
-            }
-
-            if (
-              updatedSubmissionData.category === 'writing' &&
-              booster.job === 'Scholar' &&
-              !processedBoosts.has('scholar_tokens')
-            ) {
-              // Verify the boost category is 'Tokens' (Research Stipend) before applying
-              const activeBoostForUser = await retrieveBoostingRequestFromTempDataByCharacter(character.name);
-              const isTokensBoostForUser = activeBoostForUser && activeBoostForUser.status === 'accepted' && (activeBoostForUser.category || '').toLowerCase() === 'tokens';
-              
-              if (isTokensBoostForUser) {
-                const boostedTokens = applyScholarTokensBoost(finalTokenAmount);
-                const tokenIncrease = boostedTokens - finalTokenAmount;
-                if (tokenIncrease > 0) {
-                  finalTokenAmount = boostedTokens;
-                  boostEffects.push(`📚 **Research Stipend:** ${booster.name} added 🪙 ${tokenIncrease}.`);
-                  processedBoosts.add('scholar_tokens');
-                  boostFulfillmentTargets.push(character.name);
-                  console.log(`[selectMenuHandler.js]: 📚 Scholar boost - Research Stipend (+${tokenIncrease} tokens) from user character ${character.name}`);
-                  try {
-                    await clearBoostAfterUse(character, { client: interaction.client, context: 'art/writing token step' });
-                  } catch (clearErr) {
-                    console.error(`[selectMenuHandler.js]: ❌ Failed to clear boost for ${character.name}:`, clearErr);
-                  }
-                }
-              } else {
-                console.log(`[selectMenuHandler.js]: 📚 Scholar ${booster.name} boost active for ${character.name} but category is not Tokens (is: ${activeBoostForUser?.category || 'none'}), skipping Research Stipend`);
-              }
-            }
+            // Token boosts (Teacher art, Scholar writing) only apply when the boosted character is tagged in the submission; do not apply here for untagged characters.
           }
         } catch (error) {
           console.error(`[selectMenuHandler.js]: ❌ Error checking user characters for boosts:`, error);
