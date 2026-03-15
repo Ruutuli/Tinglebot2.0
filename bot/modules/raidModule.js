@@ -1455,7 +1455,8 @@ async function createRaidThread(interaction, raid) {
 
 // ------------------- createRaidEmbed ------------------
 // Creates an embed for displaying raid information. Async when raid.expeditionId is set (loads party for hearts/stamina).
-async function createRaidEmbed(raid, monsterImage) {
+// firstTurn: optional { userId, name } for expedition raids — shown in expedition section and used for "You're next" in channel.
+async function createRaidEmbed(raid, monsterImage, firstTurn = null) {
   const villageName = capitalizeVillageName(raid.village);
   const villageEmoji = getVillageEmojiByName(raid.village) || '';
 
@@ -1539,6 +1540,9 @@ async function createRaidEmbed(raid, monsterImage) {
     let expeditionValue = `Only members of expedition **${raid.expeditionId}** can join. After the raid, use ${cmdRoll} with id \`${raid.expeditionId}\` to continue.`;
     if (!isGrottoRaid) {
       expeditionValue += `\n\n**Escape:** You can try to escape with ${cmdRetreat} (id: \`${raid.expeditionId}\`, your character) — costs 1 stamina per attempt, not guaranteed.`;
+    }
+    if (firstTurn?.userId && firstTurn?.name) {
+      expeditionValue += `\n\n**First turn:** <@${firstTurn.userId}> (**${firstTurn.name}**)`;
     }
     embed.addFields({
       name: '🗺️ __Expedition raid__',
@@ -1699,14 +1703,22 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       ? monsterMapping[monster.nameMapping] 
       : { image: monster.image };
     const monsterImage = monsterDetails.image || monster.image;
-    const embed = await createRaidEmbed(raidData, monsterImage);
+    // Expedition raid: get first-turn user for channel ping and embed
+    let firstTurn = null;
+    if (expeditionId && raidForTurnPing.participants && raidForTurnPing.participants.length > 0) {
+      const currentIdx = typeof raidForTurnPing.currentTurn === 'number' ? raidForTurnPing.currentTurn % raidForTurnPing.participants.length : 0;
+      firstTurn = raidForTurnPing.participants[currentIdx] || null;
+    }
+    const embed = await createRaidEmbed(raidData, monsterImage, firstTurn);
 
-    const channelContent = isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`;
+    let channelContent = isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : expeditionId ? `🗺️ **EXPEDITION RAID!**` : isQuotaBased ? `📅 **VILLAGE RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`;
+    if (expeditionId && firstTurn?.userId) {
+      channelContent = `🗺️ **EXPEDITION RAID!**\n<@${firstTurn.userId}> **You're next** — use </raid:1470659276287774734> to take your turn.`;
+    }
     const raidMessage = await interaction.channel.send({
       content: channelContent,
       embeds: [embed]
     });
-    // Expedition raid: do NOT ping in channel here — explore.js already shows "Encountered a Monster" + next in embed; we ping once in the thread below to avoid double @s
 
     // Create the raid thread with error handling
     let thread = null;

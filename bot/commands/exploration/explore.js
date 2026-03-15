@@ -171,6 +171,8 @@ const GROTTO_FOUND_BANNER_NAME = "grotto-found-banner.png";
 const GROTTO_CLEANSED_BANNER_NAME = "grotto-cleansed-banner.png";
 /** Fraction of the "fit" size the overlay uses (keeps overlay smaller with margin, no stretch). */
 const GROTTO_OVERLAY_SCALE = 0.85;
+/** Vertical offset (pixels) to move the grotto overlay down in the embed image. */
+const GROTTO_OVERLAY_OFFSET_Y = 0.06;
 async function generateGrottoBannerOverlay(party, overlayUrl, attachmentName) {
   const Jimp = require("jimp");
   const timeout = 12000;
@@ -196,8 +198,9 @@ async function generateGrottoBannerOverlay(party, overlayUrl, attachmentName) {
     const nh = Math.round(oh * scale);
     overlayImg.resize(nw, nh);
     const x = Math.round((bw - nw) / 2);
-    const y = Math.round((bh - nh) / 2);
-    bannerImg.composite(overlayImg, x, y, {
+    const yCentered = Math.round((bh - nh) / 2);
+    const y = Math.min(yCentered + Math.round(bh * GROTTO_OVERLAY_OFFSET_Y), bh - nh);
+    bannerImg.composite(overlayImg, x, Math.max(0, y), {
       mode: Jimp.BLEND_SOURCE_OVER,
       opacitySource: 1,
       opacityDest: 1,
@@ -1974,9 +1977,14 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   .setTitle("✨ **A bright light spills from the stump!** ✨")
   .setColor(getExploreOutcomeColor("grotto_cleansed", "#fbbf24"))
   .setDescription(
-   "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is **cleansed** — the way is open. A trial awaits inside; complete it to **clear** the grotto and receive a **Spirit Orb**.\n\n**Trial: " + trialLabel + "**."
+   "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is **cleansed** — the way is open."
   )
   .setImage(trialType === "maze" ? trialMazeImg : (cleansedBannerTrial?.imageUrl ?? GROTTO_BANNER_CLEANSED_URL));
+ cleanseAnnounce.addFields({
+  name: "⚔️ **__Trial__**",
+  value: `**${trialLabel}** — Complete it to clear the grotto and receive a **Spirit Orb**.`,
+  inline: false,
+ });
  addExplorationStandardFields(cleanseAnnounce, {
   party: freshParty,
   expeditionId,
@@ -2558,13 +2566,19 @@ module.exports = {
        grotto.testOfPowerState.raidId = raidResult.raidId;
        await grotto.save();
        const raidCmd = "</raid:1470659276287774734>";
+       const grottoRaidBanner = await generateGrottoBannerOverlay(party, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
        const embedStarted = new EmbedBuilder()
         .setTitle("🗺️ **Grotto: Test of Power — Raid Started**")
         .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
-        .setDescription(`The trial has begun! A **${monster.name}** has appeared. Use ${raidCmd} with Raid ID \`${raidResult.raidId}\` to fight. When the monster is defeated, each party member will receive a Spirit Orb.`)
-        .setImage(getExploreMapImageUrl(party, { highlight: true }));
+        .setDescription(`A **${monster.name}** has appeared. Use ${raidCmd} with Raid ID \`${raidResult.raidId}\` to fight — when it's defeated, everyone gets a **Spirit Orb**.`)
+        .setImage(grottoRaidBanner?.imageUrl ?? getExploreMapImageUrl(party, { highlight: true }));
+       embedStarted.addFields({
+        name: "⚔️ **__Trial__**",
+        value: `**Test of Power** — Defeat the monster to clear the grotto and receive a Spirit Orb.`,
+        inline: false,
+       });
        addExplorationStandardFields(embedStarted, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidResult.raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false });
-       return interaction.editReply({ embeds: [embedStarted] });
+       return interaction.editReply({ embeds: [embedStarted], ...(grottoRaidBanner?.attachment ? { files: [grottoRaidBanner.attachment] } : {}) });
       }
       const errMsg = raidResult?.error || "Could not start the raid. Try again.";
       return interaction.editReply(`Test of Power could not start the raid: ${errMsg}`);

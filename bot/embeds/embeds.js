@@ -663,21 +663,27 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  }
  const heartsDisplay = effectiveMaxHearts > 0 ? `${party?.totalHearts ?? 0}/${effectiveMaxHearts}` : String(party?.totalHearts ?? 0);
  const staminaDisplay = effectiveMaxStamina > 0 ? `${party?.totalStamina ?? 0}/${effectiveMaxStamina}` : String(party?.totalStamina ?? 0);
+ const locationDisplay = location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location");
+ const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stamina** ${staminaDisplay}\n📍 **Quadrant** ${locationDisplay}\n🆔 **Expedition ID** \`${expId || "Unknown"}\`` + (ruinRestRecovered > 0 ? `\n🟩 **Ruin rest** — +${ruinRestRecovered} stamina recovered this roll.` : "");
  const fields = [
   ...(hazardMessage ? [{ name: "⚠️ **__Hazard__**", value: hazardMessage, inline: false }] : []),
   ...(hotSpringMessage ? [{ name: "🔥 **__Hot Springs__**", value: hotSpringMessage, inline: false }] : []),
-  { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
-  { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },
-  ...(actionCost != null ? [{ name: "⚡ **__Action Cost__**", value: (() => {
-   const parts = [];
-   if (actionCost.staminaCost > 0) parts.push(`−${actionCost.staminaCost} 🟩`);
-   if (actionCost.heartsCost > 0) parts.push(`−${actionCost.heartsCost} ❤️ (struggle)`);
-   return parts.length > 0 ? parts.join(" ") : "Free";
-  })(), inline: true }] : []),
-  ...extraFields,
-  ...(ruinRestRecovered > 0 ? [{ name: "🟩 **__Ruin rest__**", value: `Recognized a safe spot from your earlier ruins exploration here — **+${ruinRestRecovered} stamina** recovered this roll.`, inline: false }] : []),
-  { name: "📍 **__Quadrant__**", value: location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location"), inline: true },
-  { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
+  ...(hasActiveGrotto
+   ? [{ name: "📊 **__Status__**", value: statusBlock, inline: false }]
+   : [
+      { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
+      { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },
+      ...(actionCost != null ? [{ name: "⚡ **__Action Cost__**", value: (() => {
+       const parts = [];
+       if (actionCost.staminaCost > 0) parts.push(`−${actionCost.staminaCost} 🟩`);
+       if (actionCost.heartsCost > 0) parts.push(`−${actionCost.heartsCost} ❤️ (struggle)`);
+       return parts.length > 0 ? parts.join(" ") : "Free";
+      })(), inline: true }] : []),
+      ...extraFields,
+      ...(ruinRestRecovered > 0 ? [{ name: "🟩 **__Ruin rest__**", value: `Recognized a safe spot from your earlier ruins exploration here — **+${ruinRestRecovered} stamina** recovered this roll.`, inline: false }] : []),
+      { name: "📍 **__Quadrant__**", value: locationDisplay, inline: true },
+      { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
+     ]),
  ];
  if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
   const nextName = nextCharacter.name;
@@ -690,7 +696,8 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
    commandsValue += `**Wave in progress** — </wave:${waveCmdId}> to take your turn (id: \`${activeWaveId}\`). ${cmdItem} to heal. **Do not use ${cmdRoll} until the wave is complete.**\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
   } else if (hasActiveGrotto) {
    const cmdItem = `</explore item:${cmdId}>`;
-   commandsValue += `**Trial in progress** — take your turn:\n${activeGrottoCommand || `</explore grotto continue:${cmdId}>`}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\n_Other explore actions are blocked until the trial ends._`;
+   const grottoCmd = activeGrottoCommand || `</explore grotto continue:${cmdId}>`;
+   commandsValue += `**Take your turn:**\n${grottoCmd}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\n_Other explore actions are blocked until the trial ends._\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
   } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
    const cmdMove = `</explore move:${cmdId}>`;
