@@ -199,6 +199,21 @@ export async function POST(request: Request) {
     if (partyId) {
       pinData.partyId = String(partyId).trim().slice(0, 32);
     }
+
+    // Prevent duplicate discovery markers: only one pin per discovery per expedition (race-safe).
+    if (sourceDiscoveryKey && partyId) {
+      const existing = await Pin.findOne({
+        sourceDiscoveryKey: sourceDiscoveryKey.slice(0, 200),
+        partyId: String(partyId).trim().slice(0, 32),
+      }).lean();
+      if (existing) {
+        return NextResponse.json(
+          { error: "A marker for this discovery has already been placed." },
+          { status: 409 }
+        );
+      }
+    }
+
     const pin = new Pin(pinData);
 
     // 1. Save to pins collection (Pin model)

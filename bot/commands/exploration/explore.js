@@ -99,7 +99,7 @@ const { getEffectiveQuadrantStatus, isPreestablishedSecured, isPreestablishedNoC
 const { START_POINTS_BY_REGION } = require("../../data/explorationStartPoints.js");
 
 // ------------------- Embeds & Handlers ------------------
-const { addExplorationStandardFields, addExplorationCommandsField, getExplorationFlavorText, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, createMonsterCampSkippedNextTurnEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
+const { addExplorationStandardFields, addExplorationCommandsField, getExplorationFlavorText, createExplorationItemEmbed, createExplorationMonsterEmbed, createExplorationEndOnlyAtStartEmbed, createMonsterCampSkippedNextTurnEmbed, createExplorationErrorEmbed, createRaidBlockEmbed, createWaveBlockEmbed, regionColors, regionImages, getExploreCommandId, createWaveEmbed, getWaveCommandId, getItemCommandId, getExploreOutcomeColor, getExploreMapImageUrl } = require("../../embeds/embeds.js");
 const { handleAutocomplete } = require("../../handlers/autocompleteHandler.js");
 
 // ------------------- Image URLs ------------------
@@ -168,13 +168,9 @@ function getRandomGrottoBanner() {
   return GROTTO_INSIDE_BANNERS[Math.floor(Math.random() * GROTTO_INSIDE_BANNERS.length)];
 }
 
-/** Region banner + grotto overlay composite (like weather banner + overlay). Overlay is scaled to fit without stretching, centered. Returns { attachment, imageUrl } for embed.setImage and optional files. */
+/** Grotto image that replaces the region banner (full size, no overlay). Uses region banner only for target dimensions. Returns { attachment, imageUrl } for embed.setImage and optional files. */
 const GROTTO_FOUND_BANNER_NAME = "grotto-found-banner.png";
 const GROTTO_CLEANSED_BANNER_NAME = "grotto-cleansed-banner.png";
-/** Fraction of the "fit" size the overlay uses (keeps overlay smaller with margin, no stretch). */
-const GROTTO_OVERLAY_SCALE = 0.85;
-/** Vertical offset (pixels) to move the grotto overlay down in the embed image. */
-const GROTTO_OVERLAY_OFFSET_Y = 0.06;
 async function generateGrottoBannerOverlay(party, overlayUrl, attachmentName) {
   const Jimp = require("jimp");
   const timeout = 12000;
@@ -193,21 +189,9 @@ async function generateGrottoBannerOverlay(party, overlayUrl, attachmentName) {
     const oh = overlayImg.bitmap.height || 0;
     if (!bw || !bh) return { attachment: null, imageUrl: overlayUrl };
     if (!ow || !oh) return { attachment: null, imageUrl: overlayUrl };
-    // Scale overlay to fit inside banner, keep aspect ratio, then shrink to GROTTO_OVERLAY_SCALE so it stays smaller
-    const scaleFit = Math.min(bw / ow, bh / oh);
-    const scale = scaleFit * GROTTO_OVERLAY_SCALE;
-    const nw = Math.round(ow * scale);
-    const nh = Math.round(oh * scale);
-    overlayImg.resize(nw, nh);
-    const x = Math.round((bw - nw) / 2);
-    const yCentered = Math.round((bh - nh) / 2);
-    const y = Math.min(yCentered + Math.round(bh * GROTTO_OVERLAY_OFFSET_Y), bh - nh);
-    bannerImg.composite(overlayImg, x, Math.max(0, y), {
-      mode: Jimp.BLEND_SOURCE_OVER,
-      opacitySource: 1,
-      opacityDest: 1,
-    });
-    const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
+    // Resize grotto to full banner size so it replaces the region image (no overlay)
+    overlayImg.resize(bw, bh);
+    const buffer = await overlayImg.getBufferAsync(Jimp.MIME_PNG);
     const attachment = new AttachmentBuilder(buffer, { name: attachmentName });
     return { attachment, imageUrl: `attachment://${attachmentName}` };
   } catch (err) {
@@ -514,48 +498,6 @@ function shouldBlockItemForBalance(party, rollingCharacter) {
 }
 
 const EXPLORE_STRUGGLE_CONTEXT = { commandName: "explore", operation: "struggle" };
-
-// ------------------- createRaidBlockEmbed ------------------
-// Embed shown when an explore action is blocked by an active raid
-function createRaidBlockEmbed(party, raidId, blockedAction, location) {
-  const cmdId = getExploreCommandId();
-  return new EmbedBuilder()
-    .setTitle("⚔️ Complete the Raid First")
-    .setColor("#FF4444")
-    .setDescription(
-      `You cannot use ${cmdId ? `</explore ${blockedAction}:${cmdId}>` : `\`/explore ${blockedAction}\``} until the raid is complete.`
-    )
-    .addFields(
-      { name: "🆔 **__Raid ID__**", value: `\`${raidId}\``, inline: true },
-      { name: "📍 **__Location__**", value: location || "Unknown", inline: true },
-      { name: "📋 **__Commands__**", value: `</raid:1470659276287774734> — Fight the monster\n</explore retreat:${cmdId}> — Attempt to escape`, inline: false }
-    )
-    .setImage(getExploreMapImageUrl(party, { highlight: true }))
-    .setFooter({ text: "Defeat the monster or retreat to continue exploring." });
-}
-
-// ------------------- createWaveBlockEmbed ------------------
-// Embed shown when an explore action is blocked by an active wave
-function createWaveBlockEmbed(party, waveId, blockedAction) {
-  const waveCmdId = getWaveCommandId();
-  const exploreCmdId = getExploreCommandId();
-  return new EmbedBuilder()
-    .setTitle("🌊 Complete the Wave First")
-    .setColor("#2196F3")
-    .setDescription(
-      `You cannot use ${exploreCmdId ? `</explore ${blockedAction}:${exploreCmdId}>` : `\`/explore ${blockedAction}\``} until the wave is complete.`
-    )
-    .addFields(
-      { name: "🆔 **__Wave ID__**", value: `\`${waveId}\``, inline: true },
-      {
-        name: "📋 **__Commands__**",
-        value: `</wave:${waveCmdId}> — id: \`${waveId}\` — Fight through the wave\n</explore item:${exploreCmdId}> — Heal from party loadout`,
-        inline: false
-      }
-    )
-    .setImage(getExploreMapImageUrl(party, { highlight: true }))
-    .setFooter({ text: `Finish the wave or use </explore item:${exploreCmdId}> to heal, then continue.` });
-}
 
 // ------------------- getCombatBlockReply ------------------
 // Consistent wave/raid gating for explore actions (roll/move/camp/end/etc.)
@@ -1210,6 +1152,24 @@ function getActiveGrottoCommand(trialType) {
   return `</explore grotto continue:${cmdId}>`;
 }
 
+// ------------------- getMazeActiveGrottoCommand ------------------
+// Same as maze command mention, but when party is on an available scrying wall, appends " · Song of Scrying (action at wall)" for the Commands list.
+function getMazeActiveGrottoCommand(mazeCmdId, grotto) {
+  const base = `</explore grotto maze:${mazeCmdId}>`;
+  const pathCells = grotto?.mazeState?.layout?.pathCells;
+  const currentNode = grotto?.mazeState?.currentNode;
+  if (!pathCells?.length || !currentNode) return base;
+  const parts = currentNode.split(",").map((s) => parseInt(s, 10));
+  const cx = parts[0];
+  const cy = parts[1];
+  if (isNaN(cx) || isNaN(cy)) return base;
+  const currentCell = getPathCellAt(pathCells, cx, cy);
+  const isScryingWall = currentCell && (currentCell.type === "mazep" || currentCell.type === "mazen");
+  const usedScryingWalls = grotto.mazeState?.usedScryingWalls || [];
+  const scryingWallAvailable = isScryingWall && !usedScryingWalls.includes(currentNode);
+  return scryingWallAvailable ? `${base} · Song of Scrying (action at wall)` : base;
+}
+
 // ------------------- postGrottoMazeModVersion ------------------
 // Posts the mod view (full map + solution path) to the mod channel
 // options: { descriptionOverride } — if set, used as the main description (e.g. "Scrying wall was used! Here's the updated map.")
@@ -1715,7 +1675,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
  const freshParty = await Party.findActiveByPartyId(expeditionId);
  if (!freshParty) {
   logger.warn("EXPLORE", `[explore.js]⚠️ Expedition not found: id=${expeditionId}`);
-  await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
+  await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: true }).catch(() => {});
   return;
  }
  const squareIdCheck = (freshParty.square && String(freshParty.square).trim()) || "";
@@ -2381,9 +2341,9 @@ module.exports = {
     const characterName = normalizeCharacterName(interaction.options.getString("charactername"));
     const userId = interaction.user.id;
     const party = await Party.findActiveByPartyId(expeditionId);
-    if (!party) return interaction.editReply("Expedition ID not found.");
+    if (!party) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     const character = await findCharacterByNameAndUser(characterName, userId);
-    if (!character) return interaction.editReply({ embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)] });
+    if (!character) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")] });
     const location = `${party.square} ${party.quadrant}`;
     const squareId = (party.square && String(party.square).trim()) || "";
     const quadrantId = (party.quadrant && String(party.quadrant).trim()) || "";
@@ -2421,9 +2381,9 @@ module.exports = {
      const grottoOption = interaction.options.getString("grotto");
      const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
      if (!grotto) {
-      return interaction.editReply(
-       "No active grotto trial at this location for this expedition. Make sure you have cleansed a grotto here and are in the same square and quadrant."
-      );
+      return interaction.editReply({
+       embeds: [createExplorationErrorEmbed("❌ **No active grotto trial**", "No active grotto trial at this location for this expedition. Make sure you have cleansed a grotto here and are in the same square and quadrant.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+      });
      }
      party.leftGrottoSquare = null;
      party.leftGrottoQuadrant = null;
@@ -2532,12 +2492,31 @@ module.exports = {
       await party.save();
       const rollCmdId = getExploreCommandId();
       const leaveCmdId = getExploreCommandId();
-      return interaction.editReply(`The party used all 3 puzzle attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${rollCmdId}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`);
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle attempts used**", `The party used all 3 puzzle attempts. The grotto is **not cleared** — it stays until someone submits the correct offering. Use </explore grotto leave:${leaveCmdId}> or </explore roll:${rollCmdId}> to leave. Come back later with </explore grotto continue> to get 3 more attempts.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.trialType === "puzzle" && grotto.puzzleState?.offeringSubmitted && grotto.puzzleState?.offeringApproved === false) {
-      return interaction.editReply("The puzzle offering was denied. Items offered are still consumed. You can try again (up to 3 attempts total) with </explore grotto puzzle> (items), or use </explore grotto leave:" + getExploreCommandId() + "> to leave and come back later (no more items consumed).");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Puzzle offering denied**", "The puzzle offering was denied. Items offered are still consumed. You can try again (up to 3 attempts total) with </explore grotto puzzle> (items), or use </explore grotto leave:" + getExploreCommandId() + "> to leave and come back later (no more items consumed).", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.trialType === "test_of_power") {
+      // Only one raid per grotto: check DB for active raid linked to this grotto (handles race / double continue)
+      const existingGrottoRaid = await Raid.findOne({ grottoId: grotto._id, status: "active" });
+      if (existingGrottoRaid) {
+       const raidId = existingGrottoRaid.raidId;
+       if (!grotto.testOfPowerState?.raidStarted || grotto.testOfPowerState.raidId !== raidId) {
+        grotto.testOfPowerState = { raidStarted: true, raidId };
+        grotto.markModified("testOfPowerState");
+        await grotto.save();
+       }
+       const raidCmd = "</raid:1470659276287774734>";
+       const inProgressBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
+       const embedInProgress = new EmbedBuilder()
+        .setTitle("🗺️ **Grotto: Test of Power**")
+        .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
+        .setDescription(`The grotto is **cleansed** and the trial has already begun. Use ${raidCmd} with Raid ID \`${raidId}\` to fight. When the monster is defeated, the grotto will be **cleared** and each party member will receive a Spirit Orb.`)
+        .setImage(inProgressBanner.imageUrl);
+       addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false, compactGrottoCommands: true });
+       return interaction.editReply({ embeds: [embedInProgress], ...(inProgressBanner.attachment ? { files: [inProgressBanner.attachment] } : {}) });
+      }
       const raidStarted = grotto.testOfPowerState?.raidStarted && grotto.testOfPowerState?.raidId;
       if (raidStarted) {
        const raidId = grotto.testOfPowerState.raidId;
@@ -2551,10 +2530,24 @@ module.exports = {
        addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false, compactGrottoCommands: true });
        return interaction.editReply({ embeds: [embedInProgress], ...(inProgressBanner.attachment ? { files: [inProgressBanner.attachment] } : {}) });
       }
+      // Turn order: only the current turn character can start the Test of Power raid
+      const characterIndex = party.characters.findIndex((c) => c.name === characterName);
+      if (characterIndex === -1) {
+       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not in expedition**", "Your character is not part of this expedition.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
+      }
+      if (party.currentTurn !== characterIndex) {
+       const nextCharacter = party.characters[party.currentTurn];
+       const notYourTurnEmbed = new EmbedBuilder()
+        .setTitle("⏳ Not Your Turn")
+        .setColor(NOT_YOUR_TURN_COLOR)
+        .setDescription(`It's not your turn to start the trial.\n\n**Next turn:** ${nextCharacter?.name || "Unknown"}\n\nUse </explore grotto continue> when it's your turn to begin the Test of Power.`)
+        .setImage(NOT_YOUR_TURN_BORDER_URL);
+       return interaction.editReply({ embeds: [notYourTurnEmbed] });
+      }
       // Use a random tier-5+ monster from MonsterModel (name, image, tier, hearts from DB)
       let monster = await getMonstersAboveTier(5);
       if (!monster) {
-       return interaction.editReply("Test of Power could not load a monster from the bestiary. Try again.");
+       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Test of Power**", "Test of Power could not load a monster from the bestiary. Try again.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
       }
       monster = {
         name: monster.name,
@@ -2586,7 +2579,7 @@ module.exports = {
        return interaction.editReply({ embeds: [embedStarted], ...(grottoRaidBanner?.attachment ? { files: [grottoRaidBanner.attachment] } : {}) });
       }
       const errMsg = raidResult?.error || "Could not start the raid. Try again.";
-      return interaction.editReply(`Test of Power could not start the raid: ${errMsg}`);
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Test of Power**", `Test of Power could not start the raid: ${errMsg}`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const trialLabel = getTrialLabel(grotto.trialType);
      const cmdId = getExploreCommandId();
@@ -2650,10 +2643,10 @@ module.exports = {
      const grottoOption = interaction.options.getString("grotto");
      const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, true);
      if (!grotto || grotto.trialType !== "target_practice") {
-      return interaction.editReply("No Target Practice grotto at this location for this expedition.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No Target Practice grotto**", "No Target Practice grotto at this location for this expedition.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.status === "cleared" || grotto.completedAt) {
-      return interaction.editReply("This grotto has already been cleared.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("🗺️ **Grotto already cleared**", "This grotto has already been cleared.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const TARGET_SUCCESSES = 3;
      const BASE_FAIL = 0.15;
@@ -2684,7 +2677,7 @@ module.exports = {
     }
      const characterIndex = party.characters.findIndex((c) => c._id && c._id.toString() === character._id.toString());
      if (characterIndex === -1) {
-      return interaction.editReply("Character is not in this expedition party.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not in expedition**", "Character is not in this expedition party.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
      const TARGET_PRACTICE_STAMINA_COST = 1;
      const payResult = await payStaminaOrStruggle(party, characterIndex, TARGET_PRACTICE_STAMINA_COST, { order: "currentFirst", action: "grotto_target_practice" });
@@ -2715,7 +2708,11 @@ module.exports = {
      const { failReduction, missReduction } = getTargetPracticeModifiers(character);
      const failThreshold = Math.max(0.04, BASE_FAIL - failReduction);
      const missThreshold = Math.max(0.10, BASE_MISS - missReduction);
+     const hitThreshold = failThreshold + missThreshold;
      const roll = Math.random();
+     const rollPct = (roll * 100).toFixed(1);
+     const failPct = (failThreshold * 100).toFixed(1);
+     const hitPct = (hitThreshold * 100).toFixed(1);
      const cmdId = getExploreCommandId();
      const cmdRoll = `</explore roll:${cmdId}>`;
      const cmdTargetPractice = `</explore grotto targetpractice:${cmdId}>`;
@@ -2727,7 +2724,7 @@ module.exports = {
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const outcome = getFailOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
-      const desc = `${flavor}\n\nUse ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — fail (need >${failPct}% to avoid instant fail)\n\nUse ${cmdRoll} to leave. You can’t retry this grotto this expedition; find another Target Practice on a future run.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice — Failed**")
        .setColor(0x8b0000)
@@ -2747,7 +2744,7 @@ module.exports = {
       return interaction.editReply({ embeds: [embed] });
      }
 
-     if (roll < failThreshold + missThreshold) {
+     if (roll < hitThreshold) {
       const outcome = getMissOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
       const damageAmount = outcome.heartsLost ?? 0;
@@ -2763,7 +2760,7 @@ module.exports = {
       }
       const damageNote = heartsLost > 0 ? ` **${character.name}** took ${heartsLost} ❤ damage.` : "";
       const sameShooter = party.characters[characterIndex];
-      const desc = `${flavor}\n\n**Miss.**${damageNote} **Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
+      const desc = `${flavor}\n\n**Roll:** ${rollPct}% — miss (need >${hitPct}% for hit)${damageNote}\n\n**Same shooter tries again** — **${sameShooter?.name ?? "—"}** in **Commands** below.`;
       const embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
@@ -2812,7 +2809,7 @@ module.exports = {
       const outcome = getCompleteOutcome();
       const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
       const progressBar3 = Array(TARGET_SUCCESSES).fill(0).map((_, i) => i < TARGET_SUCCESSES ? "🎯" : "○").join(" ");
-      const progress3Desc = `${flavor}\n\n**Progress:** ${progressBar3}  (3/3 hits)\n\n**Trial complete!**`;
+      const progress3Desc = `${flavor}\n\n**Roll:** ${rollPct}% (need >${hitPct}% for hit)\n\n**Progress:** ${progressBar3}  (3/3 hits)\n\n**Trial complete!**`;
       const progress3Embed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Target Practice**")
        .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -2861,7 +2858,7 @@ module.exports = {
      const outcome = getSuccessOutcome();
      const flavor = outcome.flavor.replace(/\{char\}/g, character.name);
      const progressBar = Array(TARGET_SUCCESSES).fill(0).map((_, i) => (i < newSuccesses ? "🎯" : "○")).join(" ");
-     const desc = `${flavor}\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
+     const desc = `${flavor}\n\n**Roll:** ${rollPct}% (need >${hitPct}% for hit)\n\n**Progress:** ${progressBar}  (${newSuccesses}/${TARGET_SUCCESSES} hits)\n\n**Next:** **${nextChar?.name ?? "—"}** — see **Commands** below.`;
      const embed = new EmbedBuilder()
       .setTitle("🗺️ **Grotto: Target Practice**")
       .setColor(getExploreOutcomeColor("grotto_target_success", regionColors[party.region] || "#00ff99"))
@@ -2892,10 +2889,10 @@ module.exports = {
      const grottoOption = interaction.options.getString("grotto");
      const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, true);
      if (!grotto || grotto.trialType !== "puzzle") {
-      return interaction.editReply("No Puzzle grotto at this location for this expedition.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No Puzzle grotto**", "No Puzzle grotto at this location for this expedition.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.status === "cleared" || grotto.completedAt) {
-      return interaction.editReply("This grotto has already been cleared.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("🗺️ **Grotto already cleared**", "This grotto has already been cleared.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const puzzleAttempts = grotto.puzzleState?.offeringAttempts ?? 0;
      if (puzzleAttempts >= 3) {
@@ -2991,7 +2988,7 @@ module.exports = {
       partyInv = await getPartyWideInventory(party);
      } catch (err) {
       logger.warn("EXPLORE", `[explore.js]⚠️ Puzzle getPartyWideInventory failed: ${err?.message || err}`);
-      return interaction.editReply("Could not read party inventories. Try again or contact staff.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Inventory error**", "Could not read party inventories. Try again or contact staff.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const checkResult = checkPuzzleOffer(grotto, parsedItems);
      // When wrong: for Offering Statue only take 1 per item (clue expects one); use parsedItems otherwise.
@@ -3004,9 +3001,9 @@ module.exports = {
       const key = itemName.trim().toLowerCase();
       const have = partyInv.totalByItem.get(key) || 0;
       if (have < quantity) {
-       return interaction.editReply(
-        `Your party doesn't have enough **${itemName}** in anyone's inventory. ${checkResult.approved ? `The puzzle requires ${quantity}` : `You offered ${quantity}`} but the party has ${have} total. Items must be in a character's inventory (not loadout); no transfers during expedition.`
-       );
+       return interaction.editReply({
+        embeds: [createExplorationErrorEmbed("❌ **Not enough items**", `Your party doesn't have enough **${itemName}** in anyone's inventory. ${checkResult.approved ? `The puzzle requires ${quantity}` : `You offered ${quantity}`} but the party has ${have} total. Items must be in a character's inventory (not loadout); no transfers during expedition.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+       });
       }
      }
      // Allocate removals: submitter first, then others. No transfer — deduct from whoever has it.
@@ -3039,9 +3036,9 @@ module.exports = {
         }
       } catch (err) {
        handleInteractionError(err, interaction, { source: "explore.js grotto puzzle removeItem" });
-       return interaction.editReply(
-         `Could not remove one or more items from party inventories. ${err?.message || err}. If items were partially consumed, contact staff.`
-       ).catch(() => {});
+       return interaction.editReply({
+         embeds: [createExplorationErrorEmbed("❌ **Inventory error**", `Could not remove one or more items from party inventories. ${err?.message || err}. If items were partially consumed, contact staff.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+       }).catch(() => {});
       }
      }
      const displayItems = consumeItems.map((p) => (p.quantity > 1 ? `${p.itemName} x${p.quantity}` : p.itemName));
@@ -3163,17 +3160,17 @@ module.exports = {
      const grottoOption = interaction.options.getString("grotto");
      const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption);
      if (!grotto || grotto.trialType !== "maze") {
-      return interaction.editReply("No Maze grotto at this location for this expedition.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No Maze grotto**", "No Maze grotto at this location for this expedition.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const characterIndex = party.characters.findIndex((c) => c.name === characterName);
-     if (characterIndex === -1) return interaction.editReply("Your character is not part of this expedition.");
+     if (characterIndex === -1) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not in expedition**", "Your character is not part of this expedition.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      const layout = grotto.mazeState?.layout;
      let hasLayout = layout && layout.pathCells && layout.pathCells.length > 0 && layout.matrix && layout.matrix.length > 0;
      let layoutJustCreated = false;
      if (!hasLayout) {
       const generated = generateGrottoMaze({ width: 5, height: 5, entryType: 'diagonal' });
       if (!generated.pathCells || generated.pathCells.length === 0) {
-       return interaction.editReply("Failed to generate the maze. Please try again.");
+       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Maze error**", "Failed to generate the maze. Please try again.", { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
       }
       const startCell = generated.pathCells.find((c) => c.type === 'start');
       grotto.mazeState = grotto.mazeState || {};
@@ -3220,7 +3217,7 @@ module.exports = {
        .setColor(getMazeEmbedColor(null, regionColors[party.region]))
        .setDescription("Someone in your party has a **Lens of Truth** in their inventory. You may bypass the maze for immediate Spirit Orbs (forgoing chests), or enter the maze as normal.")
        .setImage(bypassMazeImg);
-      addExplorationStandardFields(bypassEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: false, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
+      addExplorationStandardFields(bypassEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: false, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
       if (bypassMazeFiles.length) bypassEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
       const bypassMsg = await interaction.editReply({ embeds: [bypassEmbed], components: [bypassRow], files: bypassMazeFiles.length ? bypassMazeFiles : undefined });
       const bypassCollector = bypassMsg.createMessageComponentCollector({
@@ -3294,7 +3291,7 @@ module.exports = {
          logger.warn("EXPLORE", `[explore.js]⚠️ Maze render failed: ${err?.message || err}`);
          enterEmbed.setImage(getExploreMapImageUrl(party, { highlight: true }));
         }
-        addExplorationStandardFields(enterEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: mazeCmd, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
+        addExplorationStandardFields(enterEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
         await i.editReply({ embeds: [enterEmbed], components: [disabledRow], files: enterFiles }).catch(() => {});
         const firstUp = party.characters[party.currentTurn] ?? null;
         if (getExplorationNextTurnContent(firstUp)) await i.followUp({ content: getExplorationNextTurnContent(firstUp) }).catch(() => {});
@@ -3331,7 +3328,7 @@ module.exports = {
        .setColor(NOT_YOUR_TURN_COLOR)
        .setDescription(`It's not your turn. **${nextChar?.name || "Next"}** is up. Use </explore grotto maze:${mazeCmdId}> when it's your turn.`)
        .setImage(NOT_YOUR_TURN_BORDER_URL);
-      addExplorationStandardFields(notYourTurnEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
+      addExplorationStandardFields(notYourTurnEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
      }
      const matrix = grotto.mazeState.layout?.matrix || [];
@@ -3365,7 +3362,7 @@ module.exports = {
         .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
         .setDescription(`You must be **standing on a red cell** to use Song of Scrying. Move to a red cell first, then use the action.`)
         .setImage(mazeImg);
-       addExplorationStandardFields(notOnWallEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
+       addExplorationStandardFields(notOnWallEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
        if (mazeFiles.length) notOnWallEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
        return interaction.editReply({ embeds: [notOnWallEmbed], files: mazeFiles });
       }
@@ -3375,7 +3372,7 @@ module.exports = {
         .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
         .setDescription(`You've already used the Song of Scrying at this wall. Move on or try another direction.`)
         .setImage(mazeImg);
-       addExplorationStandardFields(alreadyUsedEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
+       addExplorationStandardFields(alreadyUsedEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
        if (mazeFiles.length) alreadyUsedEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
        return interaction.editReply({ embeds: [alreadyUsedEmbed], files: mazeFiles });
       }
@@ -3412,7 +3409,7 @@ module.exports = {
       if (outcome.staminaCost > 0) {
        const payResult = await payStaminaOrStruggle(party, party.currentTurn, outcome.staminaCost, { action: "grotto_maze" });
        if (!payResult.ok) {
-        return interaction.editReply(`Not enough stamina or hearts for maze cost (${outcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
+        return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not enough stamina or hearts**", `Not enough stamina or hearts for maze cost (${outcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
        }
        
        // Check if party is KO'd after paying (hearts reached 0 via struggle)
@@ -3606,7 +3603,7 @@ module.exports = {
          showNextAndCommands: true,
          showRestSecureMove: false,
          hasActiveGrotto: true,
-         activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+         activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto),
          hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
          compactGrottoCommands: true,
         });
@@ -3650,7 +3647,7 @@ module.exports = {
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: true,
-       activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+       activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
        compactGrottoCommands: true,
       });
@@ -3664,7 +3661,7 @@ module.exports = {
      const displayDir = dir && dir.length ? dir.charAt(0).toUpperCase() + dir.slice(1).toLowerCase() : dir;
      const [cx, cy] = (currentNode || '').split(',').map((n) => parseInt(n, 10));
      if (isNaN(cx) || isNaN(cy)) {
-      return interaction.editReply(`Maze position is invalid. Re-enter the grotto with </explore grotto continue:${mazeCmdId}> and try again.`);
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Invalid maze position**", `Maze position is invalid. Re-enter the grotto with </explore grotto continue:${mazeCmdId}> and try again.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const nextResult = getNeighbourCoords(matrix, cx, cy, dir, facing);
      const destInPath = nextResult && pathCells?.length ? getPathCellAt(pathCells, nextResult.x, nextResult.y) : null;
@@ -3690,7 +3687,7 @@ module.exports = {
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: true,
-       activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+       activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
        compactGrottoCommands: true,
       });
@@ -3793,7 +3790,7 @@ module.exports = {
       if (trapOutcome.staminaCost > 0) {
        const payResult = await payStaminaOrStruggle(party, party.currentTurn, trapOutcome.staminaCost, { action: "grotto_maze_trap" });
        if (!payResult.ok) {
-        return interaction.editReply(`Not enough stamina or hearts for trap cost (${trapOutcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
+        return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not enough stamina or hearts**", `Not enough stamina or hearts for trap cost (${trapOutcome.staminaCost}). Party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`, { party, expeditionId, location, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
        }
        
        // Check if party is KO'd after paying (hearts reached 0 via struggle)
@@ -3831,7 +3828,7 @@ module.exports = {
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: true,
-       activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+       activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
        compactGrottoCommands: true,
       });
@@ -3928,7 +3925,7 @@ module.exports = {
         showNextAndCommands: true,
         showRestSecureMove: false,
         hasActiveGrotto: true,
-        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+        activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto),
         hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
         compactGrottoCommands: true,
       });
@@ -3967,7 +3964,7 @@ module.exports = {
         showNextAndCommands: true,
         showRestSecureMove: false,
         hasActiveGrotto: true,
-        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+        activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto),
         hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
         compactGrottoCommands: true,
       });
@@ -4001,7 +3998,7 @@ module.exports = {
          .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
          .setDescription((mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + `**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}**.\n\n${monsterFlavor}\n\n↳ ${raidCta}`)
          .setImage(mazeImg);
-        addExplorationStandardFields(raidEmbed, { party, expeditionId, location, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
+        addExplorationStandardFields(raidEmbed, { party, expeditionId, location, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
         if (mazeFiles.length) raidEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
         await interaction.editReply({ embeds: [raidEmbed], files: mazeFiles });
         return;
@@ -4092,7 +4089,7 @@ module.exports = {
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: true,
-       activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
+       activeGrottoCommand: getMazeActiveGrottoCommand(mazeCmdId, grotto),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
        compactGrottoCommands: true,
       });
@@ -4106,7 +4103,7 @@ module.exports = {
      const locationStr = interaction.options.getString("location");
      const match = (locationStr || "").match(/^([A-Ja-j](?:[1-9]|1[0-2]))\s*(Q[1-4])$/i);
      if (!match) {
-      return interaction.editReply("Provide location as square and quadrant, e.g. `H8 Q3`.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Invalid location**", "Provide location as square and quadrant, e.g. `H8 Q3`.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const [, travelSquare, travelQuadrant] = match;
      const normSquare = travelSquare.toUpperCase();
@@ -4117,12 +4114,12 @@ module.exports = {
       quadrants: { $elemMatch: { quadrantId: normQuad, "discoveries.type": "grotto" } },
      });
      if (!grottoDoc && !squareDoc) {
-      return interaction.editReply("No grotto found at that location. The grotto must exist (cleansed or marked) at that square and quadrant.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No grotto at location**", "No grotto found at that location. The grotto must exist (cleansed or marked) at that square and quadrant.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
     const totalCost = 1;
     const payResult = await payStaminaOrStruggle(party, party.currentTurn, totalCost, { action: "grotto_travel" });
     if (!payResult.ok) {
-     return interaction.editReply(`Not enough stamina or hearts to travel to the grotto. Need ${totalCost} 🟩; party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`);
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not enough stamina or hearts**", `Not enough stamina or hearts to travel to the grotto. Need ${totalCost} 🟩; party has ${party.totalStamina ?? 0} 🟩 and ${party.totalHearts ?? 0} ❤.`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
     
     // Check if party is KO'd after paying (hearts reached 0 via struggle)
@@ -4154,10 +4151,10 @@ module.exports = {
      const grottoOption = interaction.options.getString("grotto");
      const grotto = await resolveGrottoAtLocation(squareId, quadrantId, expeditionId, grottoOption, true);
      if (!grotto) {
-      return interaction.editReply("No active grotto trial at this location for this expedition. You can only leave a grotto that is cleansed and not yet cleared.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No active grotto trial**", "No active grotto trial at this location for this expedition. You can only leave a grotto that is cleansed and not yet cleared.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      if (grotto.status === "cleared" || grotto.completedAt) {
-      return interaction.editReply("This grotto is already cleared. Use </explore roll:" + getExploreCommandId() + "> to leave and continue exploring.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("🗺️ **Grotto already cleared**", "This grotto is already cleared. Use </explore roll:" + getExploreCommandId() + "> to leave and continue exploring.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      party.leftGrottoSquare = squareId;
      party.leftGrottoQuadrant = quadrantId;
@@ -4190,7 +4187,7 @@ module.exports = {
      return interaction.editReply({ embeds: [leaveEmbed], ...(leaveBanner?.attachment ? { files: [leaveBanner.attachment] } : {}) });
     }
 
-    return interaction.editReply("Unknown grotto subcommand.");
+    return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Unknown subcommand**", "Unknown grotto subcommand.")] });
    }
 
    // ------------------- Revisit discovery (monster camp or grotto in current quadrant) -------------------
@@ -4201,12 +4198,12 @@ module.exports = {
     const userId = interaction.user.id;
 
     const party = await Party.findActiveByPartyId(expeditionId);
-    if (!party) return interaction.editReply("Expedition ID not found.");
+    if (!party) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     const character = await findCharacterByNameAndUser(characterName, userId);
-    if (!character) return interaction.editReply({ embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)] });
+    if (!character) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")] });
     const characterIndex = party.characters.findIndex((c) => c.name === characterName);
-    if (characterIndex === -1) return interaction.editReply("Your character is not part of this expedition.");
-    if (party.status !== "started") return interaction.editReply("This expedition has not been started yet.");
+    if (characterIndex === -1) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not in expedition**", "Your character is not part of this expedition.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
+    if (party.status !== "started") return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not started**", "This expedition has not been started yet.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     if ((party.totalHearts ?? 0) <= 0) {
      await handleExpeditionFailed(party, interaction);
      return;
@@ -4229,19 +4226,65 @@ module.exports = {
       const exploreCmdIdLoc = getExploreCommandId();
       const rollMention = exploreCmdIdLoc ? `</explore roll:${exploreCmdIdLoc}>` : "`/explore roll`";
       const moveMention = exploreCmdIdLoc ? `</explore move:${exploreCmdIdLoc}>` : "`/explore move`";
-      return interaction.editReply(`Expedition has no current location. Use ${rollMention} or ${moveMention} first.`);
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No location**", `Expedition has no current location. Use ${rollMention} or ${moveMention} first.`, { party, expeditionId, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
 
     const squareDoc = await Square.findOne({ squareId: new RegExp(`^${String(squareId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-    if (!squareDoc || !squareDoc.quadrants) return interaction.editReply("No map data for this square.");
+    if (!squareDoc || !squareDoc.quadrants) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No map data**", "No map data for this square.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     const quadrant = squareDoc.quadrants.find((q) => String(q.quadrantId).toUpperCase() === quadrantId.toUpperCase());
-    if (!quadrant) return interaction.editReply("No quadrant data for your current location.");
+    if (!quadrant) return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No quadrant data**", "No quadrant data for your current location.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     const discoveries = quadrant.discoveries || [];
     const discovery = discoveries.find((d) => d.discoveryKey === discoveryKey);
-    if (!discovery) return interaction.editReply("That discovery was not found in this quadrant. Pick a monster camp or grotto from the list.");
+    if (!discovery) {
+      const revisitable = (discoveries || []).filter((d) => {
+        const t = String(d.type || "").toLowerCase();
+        return t === "monster_camp" || t === "grotto";
+      });
+      const locationStr = `${party.square} ${party.quadrant}`;
+      const discoveryNotFoundEmbed = new EmbedBuilder()
+        .setTitle("📍 **Discovery not found**")
+        .setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#9C27B0"))
+        .setDescription(
+          `The discovery you picked was **not found** in your current quadrant (**${locationStr}**).\n\n` +
+          (discoveryKey
+            ? `The value may be from another quadrant, or the list may have changed. `
+            : `You must choose a discovery. `) +
+          `Use **discovery** and pick one from the autocomplete list (it shows only monster camps and grottos in this quadrant).`
+        )
+        .setImage(getExploreMapImageUrl(party, { highlight: true }));
+      if (revisitable.length > 0) {
+        const listLines = revisitable.map((d) => {
+          const t = String(d.type || "").toLowerCase();
+          const label = t === "grotto" ? (d.name && String(d.name).trim() ? d.name : "Grotto") : "Monster camp";
+          return `• **${label}**`;
+        });
+        discoveryNotFoundEmbed.addFields({
+          name: `**Revisitable in ${locationStr}**`,
+          value: listLines.join("\n") || "—",
+          inline: false,
+        });
+      } else {
+        discoveryNotFoundEmbed.addFields({
+          name: "**No camps or grottos here**",
+          value: `There are no monster camps or grottos to revisit in **${locationStr}**. Use </explore roll:${getExploreCommandId()}> or </explore move:${getExploreCommandId()}> to continue.`,
+          inline: false,
+        });
+      }
+      addExplorationStandardFields(discoveryNotFoundEmbed, {
+        party,
+        expeditionId,
+        location: locationStr,
+        nextCharacter: party.characters?.[party.currentTurn] ?? null,
+        showNextAndCommands: true,
+        showRestSecureMove: false,
+        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+      });
+      return interaction.editReply({ embeds: [discoveryNotFoundEmbed] });
+    }
     const discoveryType = String(discovery.type || "").toLowerCase();
     if (discoveryType !== "monster_camp" && discoveryType !== "grotto") {
-     return interaction.editReply("You can only revisit monster camps and grottos. That discovery is not one of those.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Invalid discovery type**", "You can only revisit monster camps and grottos. That discovery is not one of those.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
 
     const atActiveGrottoDisc = await hasActiveGrottoAtLocation(party, expeditionId);
@@ -4291,7 +4334,7 @@ module.exports = {
       }
      } catch (err) {
       logger.error("EXPLORE", `[explore.js]❌ monster_camp lookup: ${err?.message || err}`);
-      return interaction.editReply("Failed to find monster camp.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Monster camp not found**", "Failed to find monster camp.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const isFightable = await MonsterCamp.isFightable(camp);
      if (!isFightable) {
@@ -4324,7 +4367,7 @@ module.exports = {
       waveResult = await startWave(village, monsterCount, difficultyGroup, modifiedInteraction);
      } catch (waveErr) {
       logger.error("EXPLORE", `[explore.js]❌ startWave failed: ${waveErr?.message || waveErr}`);
-      return interaction.editReply(`Failed to start wave: ${waveErr?.message || "Unknown error"}`);
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Wave failed to start**", `Failed to start wave: ${waveErr?.message || "Unknown error"}`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      const { waveId, waveData } = waveResult;
      waveData.source = "monster_camp";
@@ -4545,7 +4588,6 @@ module.exports = {
       pushProgressLog(party, plumeHolder.character.name, "grotto_blessing", "Blessing trial: each party member received a Spirit Orb.", undefined, undefined, new Date());
       await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
       const blessingFlavorRevisit = getRandomBlessingFlavor();
-      const blessingRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
       const blessingEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
        .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[party.region] || "#00ff99"))
@@ -4553,8 +4595,8 @@ module.exports = {
         `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to **cleanse** **${grottoName}** in **${location}**. The grotto held a blessing — it is now **cleared**.\n\n` +
         blessingFlavorRevisit + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nEach party member received a **Spirit Orb** 💫. Use the commands below to continue exploring.`
        )
-       .setImage(blessingRevisitBanner.imageUrl)
-       .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
+       .setImage(getExploreMapImageUrl(party, { highlight: true }))
+       .setThumbnail(GROTTO_BANNER_CLEANSED_URL);
       addExplorationStandardFields(blessingEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
       const explorePageUrlRevisit = getExplorePageUrl(expeditionId);
       blessingEmbed.addFields({
@@ -4562,7 +4604,7 @@ module.exports = {
        value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlRevisit}`,
        inline: false,
       });
-      await interaction.editReply({ embeds: [blessingEmbed], ...(blessingRevisitBanner.attachment ? { files: [blessingRevisitBanner.attachment] } : {}) });
+      await interaction.editReply({ embeds: [blessingEmbed] });
       if (EXPLORATION_TESTING_MODE) {
        const endEmbed = await buildTestingEndAfterGrottoEmbed(party, expeditionId, plumeHolder.character.name);
        await interaction.followUp({ embeds: [endEmbed] }).catch(() => {});
@@ -4580,12 +4622,12 @@ module.exports = {
       continueDescRevisit += `Complete the trial to receive a **Spirit Orb**. Use ${grottoCmdRevisit} for your turn.`;
      }
      if (grottoDoc.trialType === 'target_practice') continueDescRevisit += '\n\n_Each action will take **1** 🟩 stamina._';
-     const continueRevisitBanner = await generateGrottoBannerOverlay(party, getRandomGrottoBanner(), GROTTO_CLEANSED_BANNER_NAME);
      const continueEmbed = new EmbedBuilder()
       .setTitle("🗺️ **Expedition: Grotto cleansed (revisit)**")
       .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[party.region] || "#00ff99"))
       .setDescription(continueDescRevisit + "\n\n" + GROTTO_CLEANSED_VS_CLEARED)
-      .setImage(continueRevisitBanner.imageUrl);
+      .setImage(getExploreMapImageUrl(party, { highlight: true }))
+      .setThumbnail(GROTTO_BANNER_CLEANSED_URL);
      addExplorationStandardFields(continueEmbed, {
       party,
       expeditionId,
@@ -4603,10 +4645,10 @@ module.exports = {
       value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlRevisitTrial}`,
       inline: false,
      });
-     return interaction.editReply({ embeds: [continueEmbed], ...(continueRevisitBanner.attachment ? { files: [continueRevisitBanner.attachment] } : {}) });
+     return interaction.editReply({ embeds: [continueEmbed] });
     }
 
-    return interaction.editReply("Unknown discovery type.");
+    return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Unknown discovery type**", "Unknown discovery type.")] });
    }
 
    // ------------------- Roll for Encounter -------------------
@@ -4618,7 +4660,7 @@ module.exports = {
 
      const party = await Party.findActiveByPartyId(expeditionId);
      if (!party) {
-      return interaction.editReply("Expedition ID not found.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
      }
      // Ensure pre-established secured/no-camp paths are persisted on the map for this square
      await enforcePreestablishedSecuredOnSquare(party.square);
@@ -4628,7 +4670,7 @@ module.exports = {
      const character = await findCharacterByNameAndUser(characterName, userId);
      if (!character) {
       return interaction.editReply({
-       embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+       embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")]
       });
      }
 
@@ -4643,7 +4685,7 @@ module.exports = {
      }
 
      if (party.status !== "started") {
-      return interaction.editReply("This expedition has not been started yet.");
+      return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not started**", "This expedition has not been started yet.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
      }
      // If party has 0 hearts but expedition still "started" (e.g. KO'd in raid and failure path didn't run), end it now
      if ((party.totalHearts ?? 0) <= 0) {
@@ -4816,7 +4858,7 @@ module.exports = {
       const partyStamina = party.totalStamina ?? 0;
       const partyHearts = party.totalHearts ?? 0;
       return interaction.editReply({
-        content: `Not enough stamina or hearts to roll. Party has **${partyStamina}** stamina and **${partyHearts}** hearts (need **${rollStaminaCost}**). Use hearts to pay for actions (1 heart = 1 stamina), or use items to recover.`,
+        embeds: [createExplorationErrorEmbed("❌ **Not enough stamina or hearts**", `Not enough stamina or hearts to roll. Party has **${partyStamina}** stamina and **${partyHearts}** hearts (need **${rollStaminaCost}**). Use hearts to pay for actions (1 heart = 1 stamina), or use items to recover.`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
       });
      }
      
@@ -5496,7 +5538,7 @@ module.exports = {
          // Ruins exploration: charge 3 stamina, then roll one of chest/camp/landmark/relic/old_map/star_fragment/blight/goddess_plume
          const freshParty = await Party.findActiveByPartyId(expeditionId);
          if (!freshParty) {
-          await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
+          await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: true }).catch(() => {});
           return;
          }
          const parts = i.customId.split("|");
@@ -5506,7 +5548,7 @@ module.exports = {
          const ruinsCharSlot = freshParty.characters[ruinsCharIndex];
          const ruinsCharacter = await Character.findById(ruinsCharSlot._id);
          if (!ruinsCharacter) {
-          await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Character not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
+          await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")], ephemeral: true }).catch(() => {});
           return;
          }
          const ruinsStaminaCost = 3;
@@ -5973,7 +6015,7 @@ module.exports = {
          if (monsterCampChoice === "fight") {
           const freshParty = await Party.findActiveByPartyId(expeditionId);
           if (!freshParty) {
-           await i.followUp({ embeds: [new EmbedBuilder().setTitle("Error").setDescription("Expedition not found.").setColor(0xff0000)], ephemeral: true }).catch(() => {});
+           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found.")], ephemeral: true }).catch(() => {});
            return;
           }
           const squareId = (freshParty.square && String(freshParty.square).trim()) || "";
@@ -5985,7 +6027,7 @@ module.exports = {
            camp = await MonsterCamp.createCamp(squareId, quadrantId, regionCapitalized);
           } catch (err) {
            logger.error("EXPLORE", `[explore.js]❌ MonsterCamp createCamp: ${err?.message || err}`);
-           await i.followUp({ content: "❌ Failed to create monster camp.", ephemeral: true }).catch(() => {});
+           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Monster camp failed**", "Failed to create monster camp.")], ephemeral: true }).catch(() => {});
            return;
           }
           const isFightable = await MonsterCamp.isFightable(camp);
@@ -6021,7 +6063,7 @@ module.exports = {
            waveResult = await startWave(village, monsterCount, difficultyGroup, modifiedInteraction);
           } catch (waveErr) {
            logger.error("EXPLORE", `[explore.js]❌ startWave (monster camp): ${waveErr?.message || waveErr}`);
-           await i.followUp({ content: `❌ Failed to start wave: ${waveErr?.message || "Unknown error"}`, ephemeral: true }).catch(() => {});
+           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Wave failed to start**", `Failed to start wave: ${waveErr?.message || "Unknown error"}`)], ephemeral: true }).catch(() => {});
            return;
           }
           const { waveId, waveData } = waveResult;
@@ -6128,14 +6170,15 @@ module.exports = {
          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          await party.save();
          const nextAfterChoice = party.characters[party.currentTurn];
+         const explorePageUrlNo = getExplorePageUrl(expeditionId);
          const resultEmbed = new EmbedBuilder()
           .setTitle("✅ **Marked on map**")
           .setColor(getExploreOutcomeColor("grotto", regionColors[party.region] || "#00ff99"))
-          .setDescription(`**${character.name}** marked the grotto on the map for later. Continue with </explore roll:${getExploreCommandId()}>.`);
-         addExplorationStandardFields(resultEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
-         const explorePageUrlNo = getExplorePageUrl(expeditionId);
+          .setDescription(`**${character.name}** marked the grotto on the map for later. Continue with </explore roll:${getExploreCommandId()}>.`)
+          .setImage(getExploreMapImageUrl(party, { highlight: true }));
+         addExplorationStandardFields(resultEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
          resultEmbed.addFields({
-          name: "📍 **__Set pin on webpage__**",
+          name: "📍 **__Set pin on map__**",
           value: `Set a pin for this grotto on the [explore page](${explorePageUrlNo}) so it stays on the map.`,
           inline: false,
          });
@@ -6201,7 +6244,7 @@ module.exports = {
           const rollAgainCmd = getExploreCommandId() ? `Try </explore roll:${getExploreCommandId()}> again.` : "Try /explore roll again.";
           await i.reply({ content: `❌ Something went wrong processing your choice. ${rollAgainCmd}`, flags: 64 }).catch(() => {});
          } else if (i?.followUp) {
-          await i.followUp({ content: `❌ Something went wrong processing your choice. ${rollAgainCmd}`, flags: 64 }).catch(() => {});
+          await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Choice error**", `Something went wrong processing your choice. ${rollAgainCmd}`)], flags: 64 }).catch(() => {});
          }
         }
        });
@@ -6244,7 +6287,7 @@ module.exports = {
 
       if (availableItems.length === 0) {
        logger.warn("EXPLORE", `[explore.js]⚠️ No items for region "${regionKey}"`);
-       return interaction.editReply("No items available for this region.");
+       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No items**", "No items available for this region.")] });
       }
 
       const quadrantMetaForItem = await getQuadrantMeta(party.square, party.quadrant);
@@ -6342,14 +6385,14 @@ module.exports = {
       // Check if character has blight stage 3 or higher (monsters don't attack them)
       if (character.blighted && character.blightStage >= 3) {
         return interaction.editReply({
-          content: `❌ **${character.name} cannot encounter monsters during exploration!**\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot encounter monsters until you are healed.`,
+          embeds: [createExplorationErrorEmbed("❌ **Cannot encounter monsters**", `${character.name} cannot encounter monsters during exploration!\n\n<:blight_eye:805576955725611058> At **Blight Stage ${character.blightStage}**, monsters no longer attack your character. You cannot encounter monsters until you are healed.`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
           ephemeral: true
         });
       }
 
       const monsters = await getMonstersByRegion(party.region.toLowerCase());
       if (!monsters || monsters.length === 0) {
-       return interaction.editReply("No monsters available for this region.");
+       return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **No monsters**", "No monsters available for this region.")] });
       }
       // Only tier 1–4 show up during exploration; tier 5+ do not start expedition raids from explore roll
       const monstersTier4AndBelow = monsters.filter((m) => m.tier >= 1 && m.tier <= 4);
@@ -6488,7 +6531,7 @@ module.exports = {
        } catch (error) {
         handleInteractionError(error, interaction, { source: "explore.js" });
         logger.error("EXPLORE", `[explore.js]❌ Raid processing: ${error?.message || error}`);
-        await interaction.editReply("**An error occurred during the raid.**");
+        await interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Raid error**", "An error occurred during the raid.")] });
        }
       } else {
 
@@ -6676,10 +6719,10 @@ module.exports = {
 
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
-     return interaction.editReply("Expedition ID not found.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     }
     if (party.status !== "started") {
-     return interaction.editReply("This expedition is not active. You can only Secure during an active expedition.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not active**", "This expedition is not active. You can only Secure during an active expedition.")] });
     }
     if ((party.totalHearts ?? 0) <= 0) {
      await handleExpeditionFailed(party, interaction);
@@ -6708,7 +6751,7 @@ module.exports = {
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+      embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")]
      });
     }
 
@@ -6979,18 +7022,18 @@ module.exports = {
       // Confirm: re-fetch and re-validate, then pay and secure
       const freshParty = await Party.findActiveByPartyId(expeditionId);
       if (!freshParty) {
-       await i.followUp({ content: "Expedition not found. No changes made.", ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition not found. No changes made.")], ephemeral: true }).catch(() => {});
        collector.stop();
        return;
       }
       const freshCharIndex = freshParty.characters.findIndex((c) => c.userId === i.user.id);
       if (freshCharIndex === -1 || freshParty.currentTurn !== freshCharIndex) {
-       await i.followUp({ content: "It’s not your turn or you’re not in this expedition. No changes made.", ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Not your turn**", "It's not your turn or you're not in this expedition. No changes made.")], ephemeral: true }).catch(() => {});
        collector.stop();
        return;
       }
       if (freshParty.quadrantState !== "explored") {
-       await i.followUp({ content: "This quadrant is no longer in a state that can be secured. No changes made.", ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Cannot secure**", "This quadrant is no longer in a state that can be secured. No changes made.")], ephemeral: true }).catch(() => {});
        collector.stop();
        return;
       }
@@ -7001,7 +7044,7 @@ module.exports = {
       if (!isAtStartConfirm) {
        const hasAdjacentConfirm = await hasAdjacentSecuredQuadrant(freshParty.square, freshParty.quadrant);
        if (!hasAdjacentConfirm) {
-        await i.followUp({ content: "This quadrant can no longer be secured (no adjacent secured quadrant). No changes made.", ephemeral: true }).catch(() => {});
+        await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Cannot secure**", "This quadrant can no longer be secured (no adjacent secured quadrant). No changes made.")], ephemeral: true }).catch(() => {});
         collector.stop();
         return;
        }
@@ -7012,7 +7055,7 @@ module.exports = {
        )
       );
       if (!freshHasResources) {
-       await i.followUp({ content: "Party no longer has Wood and Eldin Ore. No changes made.", ephemeral: true }).catch(() => {});
+       await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Missing materials**", "Party no longer has Wood and Eldin Ore. No changes made.")], ephemeral: true }).catch(() => {});
        collector.stop();
        return;
       }
@@ -7183,7 +7226,7 @@ module.exports = {
      } catch (err) {
       logger.error("EXPLORE", `[explore.js]❌ Secure confirm: ${err?.message || err}`);
       collector.stop();
-      await i.followUp({ content: `Something went wrong. Please try ${getExploreCommandId() ? `</explore secure:${getExploreCommandId()}>` : "`/explore secure`"} again.`, ephemeral: true }).catch(() => {});
+      await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Secure failed**", `Something went wrong. Please try ${getExploreCommandId() ? `</explore secure:${getExploreCommandId()}>` : "`/explore secure`"} again.`)], ephemeral: true }).catch(() => {});
      }
     });
     return;
@@ -7197,13 +7240,13 @@ module.exports = {
 
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
-     return interaction.editReply("Expedition ID not found.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+      embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")]
      });
     }
 
@@ -7228,7 +7271,7 @@ module.exports = {
     }
 
     if (party.status !== "started") {
-     return interaction.editReply("This expedition has not been started yet.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not started**", "This expedition has not been started yet.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
     if ((party.totalHearts ?? 0) <= 0) {
      await handleExpeditionFailed(party, interaction);
@@ -7575,7 +7618,7 @@ module.exports = {
       const partyStaminaMove = party.totalStamina ?? 0;
       const partyHeartsMove = party.totalHearts ?? 0;
       return interaction.editReply({
-       content: `Not enough stamina or hearts to move. Party has **${partyStaminaMove}** stamina and **${partyHeartsMove}** hearts (need **${staminaCost}**). Use hearts to pay for actions (1 heart = 1 stamina), or use items to recover.`,
+       embeds: [createExplorationErrorEmbed("❌ **Not enough stamina or hearts**", `Not enough stamina or hearts to move. Party has **${partyStaminaMove}** stamina and **${partyHeartsMove}** hearts (need **${staminaCost}**). Use hearts to pay for actions (1 heart = 1 stamina), or use items to recover.`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
       });
      }
      
@@ -7891,7 +7934,7 @@ module.exports = {
 
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
-     return interaction.editReply("Expedition ID not found.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     }
     // Keep pre-established secured/no-camp paths in sync with the map DB
     await enforcePreestablishedSecuredOnSquare(party.square);
@@ -7899,7 +7942,7 @@ module.exports = {
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+      embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")]
      });
     }
 
@@ -7913,7 +7956,7 @@ module.exports = {
     }
 
     if (party.status !== "started") {
-     return interaction.editReply("This expedition has not been started yet.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not started**", "This expedition has not been started yet.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
     if ((party.totalHearts ?? 0) <= 0) {
      await handleExpeditionFailed(party, interaction);
@@ -8115,6 +8158,12 @@ module.exports = {
      .setImage("https://storage.googleapis.com/tinglebot/Borders/border_green.png");
     const hasDiscItem = await hasDiscoveriesInQuadrant(party.square, party.quadrant);
     const activeWaveIdForEmbed = activeWaveForItem?.waveId ?? null;
+    // When in a grotto trial (no wave), show grotto command + item instead of roll/camp/discovery
+    const atActiveGrottoForItem = !activeWaveForItem && (await hasActiveGrottoAtLocation(party, expeditionId));
+    const grottoForItem = atActiveGrottoForItem ? await resolveGrottoAtLocation(party.square, party.quadrant, expeditionId, null, true) : null;
+    const activeGrottoCommandForItem = grottoForItem
+      ? (grottoForItem.trialType === "maze" ? getMazeActiveGrottoCommand(getExploreCommandId(), grottoForItem) : getActiveGrottoCommand(grottoForItem.trialType))
+      : "";
     addExplorationStandardFields(embed, {
       party,
       expeditionId,
@@ -8125,8 +8174,12 @@ module.exports = {
       commandsLast: true,
       hasDiscoveriesInQuadrant: hasDiscItem,
       activeWaveId: activeWaveIdForEmbed,
+      hasActiveGrotto: atActiveGrottoForItem,
+      activeGrottoCommand: activeGrottoCommandForItem,
+      compactGrottoCommands: atActiveGrottoForItem,
     });
-    addExplorationCommandsField(embed, {
+    if (!atActiveGrottoForItem) {
+     addExplorationCommandsField(embed, {
       party,
       expeditionId,
       location: locationItem,
@@ -8135,7 +8188,8 @@ module.exports = {
       showRestSecureMove: false,
       hasDiscoveriesInQuadrant: hasDiscItem,
       activeWaveId: activeWaveIdForEmbed,
-    });
+     });
+    }
 
     await interaction.editReply({ embeds: [embed] });
     if (nextCharacterItem?.userId) {
@@ -8150,7 +8204,7 @@ module.exports = {
 
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
-     return interaction.editReply("Expedition ID not found.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     }
 
     // Block ending if there's active combat for this expedition (must resolve first)
@@ -8172,7 +8226,7 @@ module.exports = {
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+      embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")]
      });
     }
 
@@ -8188,7 +8242,7 @@ module.exports = {
     const regionKeyEnd = (party.region || "").toLowerCase();
     const startPoint = START_POINTS_BY_REGION[regionKeyEnd];
     if (!startPoint) {
-     return interaction.editReply("Could not determine the starting quadrant for this region.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Starting quadrant**", "Could not determine the starting quadrant for this region.")] });
     }
     const isAtStartQuadrant = String(party.square || "").toUpperCase() === String(startPoint.square || "").toUpperCase() &&
      String(party.quadrant || "").toUpperCase() === String(startPoint.quadrant || "").toUpperCase();
@@ -8518,23 +8572,23 @@ module.exports = {
 
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
-     return interaction.editReply("Expedition ID not found.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     }
 
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+      embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")]
      });
     }
 
     const characterIndex = party.characters.findIndex((c) => c.name === characterName);
     if (characterIndex === -1) {
-     return interaction.editReply("Your character is not part of this expedition.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Not in expedition**", "Your character is not part of this expedition.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
 
     if (party.status !== "started") {
-     return interaction.editReply("This expedition has not been started yet.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not started**", "This expedition has not been started yet.", { party, expeditionId, location: party ? `${party.square} ${party.quadrant}` : undefined, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })] });
     }
     if ((party.totalHearts ?? 0) <= 0) {
      await handleExpeditionFailed(party, interaction);
@@ -8543,7 +8597,7 @@ module.exports = {
     const raid = await Raid.findOne({ expeditionId: { $regex: new RegExp(`^${party.partyId}$`, 'i') }, status: "active" });
     if (!raid) {
      return interaction.editReply({
-      content: `Your party is not in a tier 5+ monster battle. Use ${getExploreCommandId() ? `</explore retreat:${getExploreCommandId()}>` : "**/explore retreat**"} only during such a battle (when a tier 5+ encounter started a raid).`,
+      embeds: [createExplorationErrorEmbed("❌ **Cannot retreat**", `Your party is not in a tier 5+ monster battle. Use ${getExploreCommandId() ? `</explore retreat:${getExploreCommandId()}>` : "**/explore retreat**"} only during such a battle (when a tier 5+ encounter started a raid).`, { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
       ephemeral: true
      });
     }
@@ -8566,16 +8620,16 @@ module.exports = {
 
     if (raid.grottoId) {
      return interaction.editReply({
-      content: "You cannot retreat from a Grotto Test of Power. Defeat the monster to continue your expedition.",
+      embeds: [createExplorationErrorEmbed("❌ **Cannot retreat**", "You cannot retreat from a Grotto Test of Power. Defeat the monster to continue your expedition.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
       ephemeral: true
      });
     }
 
     const retreatPayResult = await payStaminaOrStruggle(party, characterIndex, 1, { order: "currentFirst", action: "retreat" });
     if (!retreatPayResult.ok) {
-     return interaction.editReply(
-      "Not enough stamina or hearts. A retreat attempt costs **1** (stamina or heart). The party has " + (party.totalStamina ?? 0) + " stamina and " + (party.totalHearts ?? 0) + " hearts. **Camp** to recover, or use hearts to **Struggle**."
-     );
+     return interaction.editReply({
+      embeds: [createExplorationErrorEmbed("❌ **Not enough stamina or hearts**", "Not enough stamina or hearts. A retreat attempt costs **1** (stamina or heart). The party has " + (party.totalStamina ?? 0) + " stamina and " + (party.totalHearts ?? 0) + " hearts. **Camp** to recover, or use hearts to **Struggle**.", { party, expeditionId, location: `${party.square} ${party.quadrant}`, nextCharacter: party?.characters?.[party?.currentTurn] ?? null, showNextAndCommands: true })],
+     });
     }
     const retreatCostsForLog = buildCostsForLog(retreatPayResult);
 
@@ -8674,7 +8728,7 @@ module.exports = {
 
     const party = await Party.findActiveByPartyId(expeditionId);
     if (!party) {
-     return interaction.editReply("Expedition ID not found.");
+     return interaction.editReply({ embeds: [createExplorationErrorEmbed("❌ **Expedition not found**", "Expedition ID not found.")] });
     }
     // Keep pre-established secured/no-camp paths in sync with the map DB
     await enforcePreestablishedSecuredOnSquare(party.square);
@@ -8685,6 +8739,37 @@ module.exports = {
     if (party.status === "started" && (party.totalHearts ?? 0) <= 0) {
      await handleExpeditionFailed(party, interaction);
      return;
+    }
+
+    // Block camping while in a grotto trial — complete the trial or leave the grotto first
+    const atActiveGrottoCamp = await hasActiveGrottoAtLocation(party, expeditionId);
+    if (atActiveGrottoCamp) {
+     const grotto = await resolveGrottoAtLocation(party.square, party.quadrant, expeditionId, null, true);
+     const grottoCmd = grotto ? getActiveGrottoCommand(grotto.trialType) : `</explore grotto continue:${getExploreCommandId()}>`;
+     const leaveCmdId = getExploreCommandId();
+     const leaveCmd = leaveCmdId ? `</explore grotto leave:${leaveCmdId}>` : "`/explore grotto leave`";
+     const grottoBlockEmbed = new EmbedBuilder()
+      .setTitle("🚫 **No camping in a grotto**")
+      .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[party.region] || "#9C27B0"))
+      .setDescription(
+       `You're inside a **grotto trial** at **${party.square} ${party.quadrant}**. You cannot camp here.\n\n` +
+       `Use **${grottoCmd}** to take your turn in the trial, or **${leaveCmd}** to exit the grotto. Then you can move and camp in another quadrant.`
+      )
+      .setImage(getExploreMapImageUrl(party, { highlight: true }));
+     addExplorationStandardFields(grottoBlockEmbed, {
+      party,
+      expeditionId: expeditionId || party.partyId,
+      location: `${party.square} ${party.quadrant}`,
+      nextCharacter: party.characters[party.currentTurn] ?? null,
+      showNextAndCommands: true,
+      showRestSecureMove: false,
+      hasActiveGrotto: true,
+      activeGrottoCommand: grottoCmd,
+      hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
+      hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+      compactGrottoCommands: true,
+     });
+     return interaction.editReply({ embeds: [grottoBlockEmbed] });
     }
 
     // No-camp check first: pre-established paths/villages and DB noCamp — block before character/turn/hazards
@@ -8729,7 +8814,7 @@ module.exports = {
     const character = await findCharacterByNameAndUser(characterName, userId);
     if (!character) {
      return interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle("Character not found").setDescription("Character not found or you do not own this character.").setColor(0xff0000)]
+      embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")]
      });
     }
 

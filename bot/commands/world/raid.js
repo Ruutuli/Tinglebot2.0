@@ -5,7 +5,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleInteractionError } = require('@/utils/globalErrorHandler');
 const { fetchAnyCharacterByNameAndUserId } = require('@/database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration, leaveRaid, scheduleRaidTurnSkip } = require('../../modules/raidModule');
-const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommandId } = require('../../embeds/embeds.js');
+const { createRaidKOEmbed, createBlightRaidParticipationEmbed, getExploreCommandId, getExploreOutcomeColor } = require('../../embeds/embeds.js');
 const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
 const Raid = require('@/models/RaidModel');
 
@@ -1295,8 +1295,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
         const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
         const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
         const grottoSuccessEmbed = new EmbedBuilder()
-          .setColor('#9B59B6')
-          .setTitle('✨ **Grotto trial complete**')
+          .setColor(getExploreOutcomeColor('grotto_blessing'))
+          .setTitle('🗺️ **Grotto: Test of Power — Complete**')
           .setDescription(GROTTO_CLEARED_FLAVOR)
           .addFields({
             name: '🗺️ **Continue your expedition**',
@@ -1317,8 +1317,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
         const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
         const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
         const grottoSuccessEmbed = new EmbedBuilder()
-          .setColor('#9B59B6')
-          .setTitle('✨ **Grotto trial complete**')
+          .setColor(getExploreOutcomeColor('grotto_blessing'))
+          .setTitle('🗺️ **Grotto: Test of Power — Complete**')
           .setDescription(GROTTO_CLEARED_FLAVOR)
           .addFields({
             name: '🗺️ **Continue your expedition**',

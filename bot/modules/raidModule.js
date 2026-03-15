@@ -1249,15 +1249,27 @@ async function processRaidTurn(character, raidId, interaction, raidData = null, 
             const failResult = await handleExpeditionFailedFromWave(raid.expeditionId, interaction?.client);
             if (failResult.success) {
               logger.info('RAID', `Expedition ${raid.expeditionId} failed from raid — party KO'd`);
-              // Send the failure embed to the raid thread
-              if (failResult.embed && raid.threadId && interaction?.client) {
-                try {
-                  const thread = await interaction.client.channels.fetch(raid.threadId);
-                  if (thread) {
-                    await thread.send({ embeds: [failResult.embed] });
+              const embed = failResult.embed;
+              const client = interaction?.client;
+              if (embed && client) {
+                // Send to raid thread so it appears in the battle thread
+                if (raid.threadId) {
+                  try {
+                    const raidThread = await client.channels.fetch(raid.threadId);
+                    if (raidThread) await raidThread.send({ embeds: [embed] });
+                  } catch (threadErr) {
+                    logger.warn('RAID', `Could not send expedition failure embed to raid thread: ${threadErr.message}`);
                   }
-                } catch (threadErr) {
-                  logger.warn('RAID', `Could not send expedition failure embed to raid thread: ${threadErr.message}`);
+                }
+                // Also send to expedition thread so party KO registers in the expedition thread (E812097 etc.)
+                const expeditionThreadId = failResult.party?.discordThreadId;
+                if (expeditionThreadId && expeditionThreadId !== raid.threadId) {
+                  try {
+                    const expeditionThread = await client.channels.fetch(expeditionThreadId);
+                    if (expeditionThread) await expeditionThread.send({ embeds: [embed] });
+                  } catch (threadErr) {
+                    logger.warn('RAID', `Could not send expedition failure embed to expedition thread: ${threadErr.message}`);
+                  }
                 }
               }
             } else {

@@ -171,6 +171,7 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
   if (!Array.isArray(progressLog)) return [];
   const countByKey = new Map<string, number>();
   const out: ReportableDiscovery[] = [];
+  const grottoLocSeen = new Set<string>(); // one grotto per (square, quadrant) — avoid duplicate "Place on map" for same discovery
   for (const e of progressLog) {
     const baseLabel = REPORTABLE_OUTCOMES[e.outcome];
     if (!baseLabel) continue;
@@ -180,6 +181,12 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
     const square = (parts[0] ?? "").trim().toUpperCase();
     const quadrant = (parts[1] ?? "").trim().toUpperCase();
     if (!square || !quadrant) continue;
+    // One grotto per location: grotto_found + grotto (marked on map) are the same discovery — show only one pin option
+    if (GROTTO_OUTCOMES.has(e.outcome)) {
+      const grottoLoc = `${square}|${quadrant}`;
+      if (grottoLocSeen.has(grottoLoc)) continue;
+      grottoLocSeen.add(grottoLoc);
+    }
     const locKey = `${e.outcome}|${square}|${quadrant}`;
     const occurrenceIndex = (countByKey.get(locKey) ?? 0) + 1;
     countByKey.set(locKey, occurrenceIndex);
@@ -1276,6 +1283,10 @@ export default function ExplorePartyPage() {
         if (!res.ok) {
           if (res.status === 401) {
             setPlacePinError("Please log in to place a marker.");
+            return;
+          }
+          if (res.status === 409) {
+            setPlacePinError((data.error as string) || "A marker for this discovery has already been placed.");
             return;
           }
           console.error("[page.tsx]❌ Failed to save marker:", data.error ?? res.status);

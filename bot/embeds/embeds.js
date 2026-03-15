@@ -102,6 +102,11 @@ const EXPLORE_OUTCOME_COLORS = {
   // End
   end: "#7F8C8D",
   end_test_reset: "#95A5A6",
+  // Errors & blocks
+  explore_error: "#E74C3C",
+  explore_validation: "#E67E22",
+  explore_blocked_raid: "#FF4444",
+  explore_blocked_wave: "#2196F3",
 };
 function getExploreOutcomeColor(outcome, fallbackHex = "#00ff99") {
   if (!outcome || typeof outcome !== "string") return fallbackHex;
@@ -772,6 +777,74 @@ const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stam
  }
  return embed;
 };
+
+// ------------------- createExplorationErrorEmbed -------------------
+// Shared exploration/grotto error or validation embed. Use for all editReply that were plain text.
+// options: { color?, outcomeKey?, party?, expeditionId?, location?, nextCharacter?, showNextAndCommands?, hasActiveGrotto?, hasDiscoveriesInQuadrant?, hasUnpinnedDiscoveriesInQuadrant?, ... } — when party is set, addExplorationStandardFields is applied.
+function createExplorationErrorEmbed(title, description, options = {}) {
+  const outcomeKey = options.outcomeKey || (options.party ? "explore_validation" : "explore_error");
+  const color = options.color != null ? options.color : getExploreOutcomeColor(outcomeKey, regionColors[options.party?.region] || "#00ff99");
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setColor(color);
+  if (options.party != null) {
+    addExplorationStandardFields(embed, {
+      party: options.party,
+      expeditionId: options.expeditionId ?? options.party?.partyId,
+      location: options.location ?? (options.party ? `${options.party.square} ${options.party.quadrant}` : undefined),
+      nextCharacter: options.nextCharacter ?? options.party?.characters?.[options.party?.currentTurn] ?? null,
+      showNextAndCommands: options.showNextAndCommands ?? false,
+      showRestSecureMove: false,
+      hasActiveGrotto: options.hasActiveGrotto ?? false,
+      hasDiscoveriesInQuadrant: options.hasDiscoveriesInQuadrant ?? false,
+      hasUnpinnedDiscoveriesInQuadrant: options.hasUnpinnedDiscoveriesInQuadrant ?? false,
+    });
+  }
+  return embed;
+}
+
+// ------------------- createRaidBlockEmbed -------------------
+// Embed shown when an explore action is blocked by an active raid
+function createRaidBlockEmbed(party, raidId, blockedAction, location) {
+  const cmdId = getExploreCommandId();
+  return new EmbedBuilder()
+    .setTitle("⚔️ **Complete the Raid First**")
+    .setColor(getExploreOutcomeColor("explore_blocked_raid"))
+    .setDescription(
+      `You cannot use ${cmdId ? `</explore ${blockedAction}:${cmdId}>` : `\`/explore ${blockedAction}\``} until the raid is complete.`
+    )
+    .addFields(
+      { name: "🆔 **__Raid ID__**", value: `\`${raidId}\``, inline: true },
+      { name: "📍 **__Location__**", value: location || "Unknown", inline: true },
+      { name: "📋 **__Commands__**", value: `</raid:1470659276287774734> — Fight the monster\n</explore retreat:${cmdId}> — Attempt to escape`, inline: false }
+    )
+    .setImage(getExploreMapImageUrl(party, { highlight: true }))
+    .setFooter({ text: "Defeat the monster or retreat to continue exploring." });
+}
+
+// ------------------- createWaveBlockEmbed -------------------
+// Embed shown when an explore action is blocked by an active wave
+function createWaveBlockEmbed(party, waveId, blockedAction) {
+  const waveCmdId = getWaveCommandId();
+  const exploreCmdId = getExploreCommandId();
+  return new EmbedBuilder()
+    .setTitle("🌊 **Complete the Wave First**")
+    .setColor(getExploreOutcomeColor("explore_blocked_wave"))
+    .setDescription(
+      `You cannot use ${exploreCmdId ? `</explore ${blockedAction}:${exploreCmdId}>` : `\`/explore ${blockedAction}\``} until the wave is complete.`
+    )
+    .addFields(
+      { name: "🆔 **__Wave ID__**", value: `\`${waveId}\``, inline: true },
+      {
+        name: "📋 **__Commands__**",
+        value: `</wave:${waveCmdId}> — id: \`${waveId}\` — Fight through the wave\n</explore item:${exploreCmdId}> — Heal from party loadout`,
+        inline: false
+      }
+    )
+    .setImage(getExploreMapImageUrl(party, { highlight: true }))
+    .setFooter({ text: `Finish the wave or use </explore item:${exploreCmdId}> to heal, then continue.` });
+}
 
 // Adds the Commands field to an embed (call last when commandsLast was used in addExplorationStandardFields)
 // showSecuredQuadrantOnly: true = quadrant is secured, no Roll/Secure — show only Move, Item, Camp (and End if at start)
@@ -4075,6 +4148,9 @@ module.exports = {
  addExplorationStandardFields,
  getExplorationPartyCharacterFields,
  addExplorationCommandsField,
+ createExplorationErrorEmbed,
+ createRaidBlockEmbed,
+ createWaveBlockEmbed,
  createExplorationEndOnlyAtStartEmbed,
  createMonsterCampSkippedNextTurnEmbed,
  getExplorationFlavorText,
