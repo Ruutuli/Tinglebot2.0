@@ -269,22 +269,6 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       throw new Error(`Invalid quantity for addItemInventoryDatabase: ${quantity}`);
     }
 
-    // Fallback: Exploration testing mode — never persist grotto items or Spirit Orbs to real inventory
-    try {
-      const { EXPLORATION_TESTING_MODE } = require('./explorationTestingConfig');
-      if (EXPLORATION_TESTING_MODE) {
-        const isSpiritOrb = String(itemName || '').trim().toLowerCase() === 'spirit orb';
-        const obtainStr = String(obtain || '').toLowerCase();
-        const isGrottoSource = obtainStr.includes('grotto');
-        if (isSpiritOrb || isGrottoSource) {
-          logger.info('INVENTORY', `[addItemInventoryDatabase] Skipping ${isGrottoSource ? 'grotto item' : 'Spirit Orb'} (exploration testing mode — not persisted): ${itemName} [source: ${obtain}]`);
-          return;
-        }
-      }
-    } catch (e) {
-      // If config fails to load, continue (don't block non-testing usage)
-    }
-
     if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories || !dbFunctions.fetchItemByName) {
       throw new Error("Required database functions not initialized");
     }

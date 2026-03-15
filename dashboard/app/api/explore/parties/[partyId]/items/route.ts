@@ -268,48 +268,42 @@ export async function PATCH(
       });
     }
 
-    // Refund old + deduct new items (skip in EXPLORATION_TESTING_MODE — loadout is reference-only)
-    const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
-    if (!isTestingMode) {
-      console.log(`[EXPLORE ITEMS] Refunding old loadout + deducting new (charId=${charId})`);
-      if (oldEldinBundles > 0) {
-        await addMaterialToInventory(
-          collection,
-          charId,
-          "Eldin Ore",
-          oldEldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot,
-          Item
-        );
-      }
-      if (oldWoodBundles > 0) {
-        await addMaterialToInventory(
-          collection,
-          charId,
-          "Wood",
-          oldWoodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot,
-          Item
-        );
-      }
-      const distinctOldNonBundle = [...new Set(oldNames.filter((n) => !PAVING_BUNDLES[n]))];
-      for (const itemName of distinctOldNonBundle) {
-        const count = oldNames.filter((n) => n === itemName).length;
-        await addMaterialToInventory(collection, charId, itemName, count, Item);
-      }
-      const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
-      const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
-      if (eldinBundles > 0) {
-        await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
-      }
-      if (woodBundles > 0) {
-        await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
-      }
-      const distinctNewNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
-      for (const itemName of distinctNewNonBundle) {
-        const count = names.filter((n) => (n || "").trim() === itemName).length;
-        await deductMaterialFromInventory(collection, charId, itemName, count);
-      }
-    } else if (oldNames.length > 0 || names.length > 0) {
-      console.log(`[EXPLORE ITEMS] SKIPPED refund/deduct (testing mode) — old: ${oldNames.join(", ") || "none"}, new: ${names.join(", ") || "none"}`);
+    console.log(`[EXPLORE ITEMS] Refunding old loadout + deducting new (charId=${charId})`);
+    if (oldEldinBundles > 0) {
+      await addMaterialToInventory(
+        collection,
+        charId,
+        "Eldin Ore",
+        oldEldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot,
+        Item
+      );
+    }
+    if (oldWoodBundles > 0) {
+      await addMaterialToInventory(
+        collection,
+        charId,
+        "Wood",
+        oldWoodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot,
+        Item
+      );
+    }
+    const distinctOldNonBundle = [...new Set(oldNames.filter((n) => !PAVING_BUNDLES[n]))];
+    for (const itemName of distinctOldNonBundle) {
+      const count = oldNames.filter((n) => n === itemName).length;
+      await addMaterialToInventory(collection, charId, itemName, count, Item);
+    }
+    const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
+    const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
+    if (eldinBundles > 0) {
+      await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
+    }
+    if (woodBundles > 0) {
+      await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
+    }
+    const distinctNewNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
+    for (const itemName of distinctNewNonBundle) {
+      const count = names.filter((n) => (n || "").trim() === itemName).length;
+      await deductMaterialFromInventory(collection, charId, itemName, count);
     }
 
     await Party.updateOne(

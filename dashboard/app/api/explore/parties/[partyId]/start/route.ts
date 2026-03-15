@@ -134,8 +134,6 @@ export async function POST(
 
     // Calculate fresh totalHearts/totalStamina and maxHearts/maxStamina from Character documents BEFORE building embed
     // This ensures the embed shows accurate values, not accumulated increments from join
-    // In testing mode, use maxHearts/maxStamina instead of currentHearts/currentStamina
-    const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
     let totalHeartsSum = 0;
     let totalStaminaSum = 0;
     let maxHeartsSum = 0;
@@ -151,9 +149,8 @@ export async function POST(
       const ch = charDoc as Record<string, unknown> | null;
       const mh = typeof ch?.maxHearts === "number" ? (ch.maxHearts as number) : 0;
       const ms = typeof ch?.maxStamina === "number" ? (ch.maxStamina as number) : 0;
-      // In testing mode, use max values; otherwise use current values (with fallback to max)
-      const h = isTestingMode ? mh : (typeof ch?.currentHearts === "number" ? (ch.currentHearts as number) : mh);
-      const s = isTestingMode ? ms : (typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : ms);
+      const h = typeof ch?.currentHearts === "number" ? (ch.currentHearts as number) : mh;
+      const s = typeof ch?.currentStamina === "number" ? (ch.currentStamina as number) : ms;
       const updated = { ...c, currentHearts: h, currentStamina: s, maxHearts: mh, maxStamina: ms };
       updatedCharacters.push(updated);
       totalHeartsSum += h;

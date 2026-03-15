@@ -24,7 +24,6 @@ const { finalizeBlightApplication } = require('../handlers/blightHandler');
 const embedsModule = require('../embeds/embeds.js');
 const { getExploreCommandId, getItemCommandId } = embedsModule;
 const { chatInputApplicationCommandMention } = require('@discordjs/formatters');
-const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const scheduler = require('@/utils/scheduler');
 const { fetchCharacterById, updateCharacterById, updateModCharacterById } = require('@/database/db');
 const { generateModCharacterVictoryMessage, generateDamageDealtMessage, generateDamageMessage } = require('./flavorTextModule');
@@ -1068,7 +1067,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null, 
     }
     
     // Process the raid battle turn
-    const skipPersist = !!(raid.expeditionId && EXPLORATION_TESTING_MODE);
+    const skipPersist = false;
     const battleResult = await processRaidBattle(
       battleCharacter,
       raid.monster,

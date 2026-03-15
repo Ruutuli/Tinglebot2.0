@@ -543,7 +543,6 @@ module.exports = {
 const { fetchItemsByMonster, fetchAllItems } = require('@/database/db');
 const { createWeightedItemList } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
-const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const Party = require('@/models/PartyModel');
 const { addExplorationStandardFields, regionColors, regionImages } = require('../../embeds/embeds.js');
 const { syncPartyMemberStats, pushProgressLog, hasDiscoveriesInQuadrant, hasUnpinnedDiscoveriesInQuadrant } = require('../../modules/exploreModule');
@@ -877,16 +876,14 @@ async function handleWaveVictory(interaction, waveData) {
         // Add to inventory if character has inventory link
         if (character.inventory) {
           try {
-            if (!(waveData.expeditionId && EXPLORATION_TESTING_MODE)) {
-              console.log(`[wave.js]: 💾 [${i + 1}/${defeatedMonsters.length}] Adding ${lootedItem.itemName} × ${lootedItem.quantity} to ${character.name}'s inventory...`);
-              await addItemInventoryDatabase(
-                character._id,
-                lootedItem.itemName,
-                lootedItem.quantity,
-                interaction,
-                "Wave Loot"
-              );
-            }
+            console.log(`[wave.js]: 💾 [${i + 1}/${defeatedMonsters.length}] Adding ${lootedItem.itemName} × ${lootedItem.quantity} to ${character.name}'s inventory...`);
+            await addItemInventoryDatabase(
+              character._id,
+              lootedItem.itemName,
+              lootedItem.quantity,
+              interaction,
+              "Wave Loot"
+            );
             console.log(`[wave.js]: ✅ [${i + 1}/${defeatedMonsters.length}] Successfully added ${lootedItem.itemName} to ${character.name}'s inventory`);
             
             // For expedition waves, also add to party.gatheredItems for dashboard pockets display
@@ -1021,9 +1018,7 @@ async function handleWaveVictory(interaction, waveData) {
           if (!char) char = await ModCharacter.findById(participant.characterId);
           if (!char || !char.inventory) continue;
           const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
-          if (!(waveData.expeditionId && EXPLORATION_TESTING_MODE)) {
-            await addItemInventoryDatabase(char._id, randomItem.itemName, 1, interaction, "Wave Victory Chest");
-          }
+          await addItemInventoryDatabase(char._id, randomItem.itemName, 1, interaction, "Wave Victory Chest");
           // For expedition waves, also add chest reward to party.gatheredItems for dashboard pockets display
           if (expeditionParty) {
             expeditionParty.gatheredItems.push({

@@ -343,41 +343,41 @@ Either an odd structure to build with materials, or a statue with an offering pi
 
 **Entry flavor:** *"As you enter the space beneath the stump, you find a statue with an offering pit. Before it lies a sheet of paper—a mess of writing, several colors of notes scrawled on top of each other and nearly incoherent. One clue stands out:"*
 
-**Clues (one used per puzzle):**
+**Tiered hints (one clue set per puzzle):** The party has **3 guesses**. Each wrong offering reveals the next tier. Tier 1 = very obscure and riddle-like; Tier 2 = more context; Tier 3 = a little more specific but **never names the item**. The bot shows the current tier on entry and reveals the next tier in the reply when an offering is wrong.
 
-1. *"...the hood of a Golden God."*
-2. *"...they have eight, but **I** only need one..."*
-3. *"Is this thing even real gold?"*
-4. *"...a flower that makes robots gain life."*
-5. *"If I keep having to steal tatters from those creepy undead creatures, so help me Hylia.."*
-6. *"...these petrified bones..."*
-7. *"It took me 10 years to spin this but at last!"*
-8. *"...something that holds the cold of Death Mountain's heart."*
-9. *"...wings that never flew, from a creature long asleep."*
-10. *"...the tears of a Zora prince."*
-11. *"...sand that remembers the desert."*
-12. *"...a blade that cut the darkness."*
-13. *"...something the Koroks would weep to lose."*
-14. *"...a gift from the sky, fallen and still warm."*
+**Clue sets (30 total; one used per puzzle). All items rarity 5+ from `tinglebot.items.json`, grotto/shrine themed.**
 
-**Clue → Item Reference** (staff/player guide; all from `tinglebot.items.json`):
-
-| # | Clue | Item |
-|---|------|------|
-| 1 | "...the hood of a Golden God." | Tingle's Hood |
-| 2 | "...they have eight, but I only need one..." | Spider's Eye |
-| 3 | "Is this thing even real gold?" | Golden Skull or Gold Dust |
-| 4 | "...a flower that makes robots gain life." | Ancient Flower |
-| 5 | "...tatters from those creepy undead creatures..." | Gibdo Wing or Gibdo Guts |
-| 6 | "...these petrified bones..." | Stal Skull or Gibdo Bone |
-| 7 | "It took me 10 years to spin this but at last!" | Silk or Spider Silk |
-| 8 | "...something that holds the cold of Death Mountain's heart." | Sapphire |
-| 9 | "...wings that never flew, from a creature long asleep." | Gibdo Wing |
-| 10 | "...the tears of a Zora prince." | Zora Scale |
-| 11 | "...sand that remembers the desert." | Sand Cicada or Sandy Ribbon |
-| 12 | "...a blade that cut the darkness." | Guardian Sword or Guardian Sword+ |
-| 13 | "...something the Koroks would weep to lose." | Korok Leaf |
-| 14 | "...a gift from the sky, fallen and still warm." | Star Fragment |
+| # | Tier 1 (first view) | Tier 2 (after 1 wrong) | Tier 3 (after 2 wrong) | Item |
+|---|----------------------|--------------------------|--------------------------|------|
+| 1 | *...what crowns the one who believes himself divine, who floats where the earth cannot hold him.* | *...the head-covering of the chart-seller—green and gold, worn by one who calls himself a god.* | *...the hood worn by the man of the balloon; the self-styled Golden God whose maps lead heroes astray.* | Tingle's Hood |
+| 2 | *...one of many that see in the dark, plucked from a keeper of corners and old ceilings.* | *...they have eight, but the pit asks for one—the lens of a hunter that waits in shadow and silk.* | *...a single eye from the many-eyed weaver; the creature of the dungeon, the spinner in the gloom.* | Spider's Eye |
+| 3 | *...what the sun leaves behind, or what the restless dead carry into the light.* | *...is it even real? Something that gleams—from the earth refined, or from a skull that walks.* | *...the dust of ore, or the crown of a skeleton that rose from the grave; the statue accepts either.* | Golden Skull or Gold Dust |
+| 4 | *...a bloom that wakes what has no breath—what the old ones planted where their eyes still watch.* | *...a flower that gives life to the unmoving; it grows where the ancient ones buried their secrets.* | *...the blossom the Sheikah seek for their metal servants—the bloom that quickens the machine.* | Ancient Flower |
+| 5 | *...what falls from the bandaged ones when they fall—tatter or innard, from the sand-buried dead.* | *...if I must take again from those things that rise in the ruins, so help me Hylia...* | *...wing or gut of the mummy that sleeps in the desert—the undead that walk in wrappings.* | Gibdo Wing or Gibdo Guts |
+| 6 | *...what remains when the walking dead are stilled—the frame that once moved in the dark.* | *...these petrified bones... what held a horror together before the light found it.* | *...the skull of one that rose from the grave, or the bone of one that slept in the sand.* | Stal Skull or Gibdo Bone |
+| 7 | *...what time and patience—or many legs—draw out into a thread the world prizes.* | *...it took me ten years to spin this, but at last! The weaver's gift, fine as breath.* | *...the thread of the loom or the thread of the den—cloth fit for the pit, soft and strong.* | Silk or Spider Silk |
+| 8 | *...cold that was born in fire—a stone that keeps winter in the belly of the mountain.* | *...in the heart of Death Mountain the earth gives up something blue and cold as ice.* | *...the blue gem that holds the volcano's chill—crystallized cold from the mountain of flame.* | Sapphire |
+| 9 | *...what never bore its owner aloft—a fold of skin or cloth from one long buried in sand.* | *...wings that never flew; the bandaged dead have them, though they did not rise on the wind.* | *...the wing of the one that sleeps in the desert ruins—tattered, dry, never meant for sky.* | Gibdo Wing |
+| 10 | *...what the water-people shed and keep—a piece of themselves, smooth as the deep.* | *...the Domain's gift; a single plate that gleams like the lake, worn by those who swim the cold.* | *...a scale from the Zora—shed in the waters of the Domain, treasure of the people of the lake.* | Zora Scale |
+| 11 | *...what the dunes keep—a whisper, a husk, a strip of wind and memory.* | *...sand that remembers the desert; the shell of a singer in the heat, or a ribbon the waste left behind.* | *...the cicada that slept in the sand, or the ribbon that tastes of the Gerudo wind—the desert's keepsake.* | Sand Cicada or Sandy Ribbon |
+| 12 | *...what cut the gloom when the world went dark—the edge the old watchers carried.* | *...a blade of the sentinels that stood against the Calamity; Sheikah steel that bit the shadow.* | *...the sword of the Guardian—forged in the age of the ancients, still sharp against the dark.* | Guardian Sword / Guardian Sword+ / Guardian Sword++ |
+| 13 | *...what the laughing ones hide and hold dear—larger than a breath, lighter than a secret.* | *...the forest children would weep to lose it—a leaf that moves more than wind, that carries and hides.* | *...the great leaf the little ones guard; lose it and they cry out in dismay—Yahaha!* | Korok Leaf |
+| 14 | *...what fell from above and has not yet gone cold—a piece of the night, still burning.* | *...it dropped from the stars and keeps their warmth; a shard of the sky, hot to the touch.* | *...the fragment that falls when a star does—still warm, still bright, blessing of the heavens.* | Star Fragment |
+| 15 | *...the hardest tear the earth will ever shed—clear as truth, worth a king's ransom.* | *...the gem the mountain keeps longest; clarity without color, strength without flaw.* | *...the king of gems—cut from the deepest stone, the one that outshines all others.* | Diamond |
+| 16 | *...a stone that holds the heart of a forge—warm in the hand, red as ember.* | *...what the volcano breathes into crystal; the fire of Death Mountain made solid.* | *...the red gem that keeps a spark of flame—treasure of the mountain of fire.* | Ruby |
+| 17 | *...a stone that hums with the storm—golden, electric, restless.* | *...the gem the thunder leaves behind; wear it and the storm remembers you.* | *...the yellow stone of the tempest—crystallized lightning, gift of the storm.* | Topaz |
+| 18 | *...a stone the color of the wind and the forest—green as the wild.* | *...the gem the sky and the leaves share; the color of courage and open roads.* | *...the green jewel—worn by travelers and the free; the stone of the wind.* | Emerald |
+| 19 | *...the heart of the old watcher—what made the eye see and the limb move.* | *...what the Sheikah machines held at their core; the greatest of the ancient sparks.* | *...the giant core of the Guardian—the power that moved the sentinels of old.* | Giant Ancient Core |
+| 20 | *...what the ice dragon leaves when it brushes the mountain—a piece of the eternal cold.* | *...the claw of the spirit of the spring; the one that coils around the frozen peak.* | *...a claw from Naydra—the dragon of ice that guards the mountain of the goddess.* | Naydra's Claw |
+| 21 | *...what the storm dragon sheds—a scale that still crackles with sky-fire.* | *...the serpent of the tempest leaves it behind; a scale that tastes of lightning.* | *...a scale from Farosh—the dragon of thunder that rides the Faron storms.* | Farosh's Scale |
+| 22 | *...a light that never saw the sun—born in the deep, carried into the dark.* | *...what glows where the roots go deepest; a tiny flame that does not burn.* | *...the firefly of the depths—the light the lost carry into the underground.* | Deep Firefly |
+| 23 | *...what the one-eyed giant leaves when it falls—too large for any human jaw.* | *...the sleepers in the woods and the hills give these up when they are stilled.* | *...a tooth from the Hinox—the cyclops that dozes in the wild until disturbed.* | Hinox Tooth |
+| 24 | *...what the leviathan of the sand yields—a fin that crossed the endless dunes.* | *...the whale that swims beneath the desert leaves a piece of itself when it falls.* | *...the fin of the Molduga—the beast that hunts beneath the Gerudo sands.* | Molduga Fin |
+| 25 | *...what the blight leaves behind—a stone that remembers the malice.* | *...the dark watchers of the castle dropped these; crystallized shadow, heavy in the hand.* | *...the geode that forms where the blight touched the earth—the Calamity's leavings.* | Blight Geodes |
+| 26 | *...a piece of the age before the kingdom—something the ruins keep.* | *...what the old tribes left in the stone; the desert and the dusk remember.* | *...the relic of the dusk—treasure of the people who lived when the sun set on the sands.* | Dusk Relic |
+| 27 | *...a seed that carries its own sun—plant it in the dark and it answers.* | *...what the depths grow; bury it and light blooms where no sky has been.* | *...the seed that glows in the underground—the bright bloom of the deep.* | Brightbloom Seed |
+| 28 | *...a feather that remembers the goddess—too light for the wind to take.* | *...what the sacred bird left at the spring; the sky's blessing in a single plume.* | *...the plume of the goddess—worn by the chosen, fallen from the divine.* | Goddess Plume |
+| 29 | *...a skull that does not belong to the dead—clear as ice, precious as memory.* | *...what the ancients prized; a head of crystal, not bone, that the living keep.* | *...a head of crystal, not bone—the treasure the old ones hid in their sanctums.* | Crystal Skull |
 
 ↳ Try offering something ➾ Use `</explore grotto puzzle items:... description:...>` to submit. The bot consumes items on submit and validates automatically. Correct = Spirit Orbs for everyone; wrong = denied, items still consumed.
 

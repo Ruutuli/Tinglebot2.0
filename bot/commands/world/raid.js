@@ -31,7 +31,6 @@ const { fetchItemsByMonster } = require('@/database/db');
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
 const { addItemInventoryDatabase } = require('@/utils/inventoryUtils');
 const { markGrottoCleared, pushProgressLog, restorePartyPoolOnGrottoExit } = require('../../modules/exploreModule');
-const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const { GROTTO_CLEARED_FLAVOR } = require('../../data/grottoTrials.js');
 // Google Sheets validation removed
 // Google Sheets functionality removed
@@ -999,43 +998,20 @@ async function handleRaidVictory(interaction, raidData, monster) {
             }
             party.markModified('gatheredItems');
             await party.save();
-            // Fallback: never persist Spirit Orbs to real inventory when expedition + testing mode (multiple guards)
-            const skipOrbPersist = !!(raidData.expeditionId && EXPLORATION_TESTING_MODE);
-            if (!skipOrbPersist) {
-              for (const slot of party.characters) {
-                if (slot._id) {
-                  try {
-                    await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
-                  } catch (orbErr) {
-                    console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
-                  }
+            for (const slot of party.characters) {
+              if (slot._id) {
+                try {
+                  await addItemInventoryDatabase(slot._id, 'Spirit Orb', 1, interaction, 'Grotto - Test of Power');
+                } catch (orbErr) {
+                  console.warn(`[raid.js]: ⚠️ Grotto Test of Power Spirit Orb for ${slot.name}: ${orbErr?.message || orbErr}`);
                 }
               }
             }
-            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members${skipOrbPersist ? ' (testing: not persisted to inventory)' : ''}`);
+            console.log(`[raid.js]: 🗺️ Grotto Test of Power complete — Spirit Orbs granted to ${party.characters.length} party members`);
           }
         }
       } catch (grottoErr) {
         console.error(`[raid.js]: ❌ Error completing Grotto Test of Power:`, grottoErr);
-      }
-      // Testing mode: auto-end expedition after grotto (e.g. Trial of Strength) completion
-      if (raidData.grottoId && raidData.expeditionId && EXPLORATION_TESTING_MODE) {
-        try {
-          const party = await Party.findActiveByPartyId(raidData.expeditionId);
-          if (party && party.status === 'started') {
-            const exploreCmd = require('../exploration/explore');
-            const characterName = party.characters?.[0]?.name || 'Party';
-            const endEmbed = await exploreCmd.buildTestingEndAfterGrottoEmbed(party, raidData.expeditionId, characterName);
-            if (raidData.threadId && interaction?.client) {
-              const thread = await interaction.client.channels.fetch(raidData.threadId).catch(() => null);
-              if (thread) {
-                await thread.send({ embeds: [endEmbed] });
-              }
-            }
-          }
-        } catch (testingEndErr) {
-          console.warn(`[raid.js]: ⚠️ Testing end after grotto failed:`, testingEndErr?.message || testingEndErr);
-        }
       }
     }
 
@@ -1096,15 +1072,13 @@ async function handleRaidVictory(interaction, raidData, monster) {
           // Add to inventory if character has inventory link
           if (character.inventory) {
             try {
-              if (!(raidData.expeditionId && EXPLORATION_TESTING_MODE)) {
-                await addItemInventoryDatabase(
-                  character._id,
-                  lootedItem.itemName,
-                  lootedItem.quantity,
-                  interaction,
-                  "Raid Loot"
-                );
-              }
+              await addItemInventoryDatabase(
+                character._id,
+                lootedItem.itemName,
+                lootedItem.quantity,
+                interaction,
+                "Raid Loot"
+              );
               let qualityIndicator = '';
               if (participant.damage >= 10) qualityIndicator = ' 🔥';
               else if (participant.damage >= 5) qualityIndicator = ' ⚡';

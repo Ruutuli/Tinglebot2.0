@@ -73,25 +73,245 @@ const ODD_STRUCTURE_VARIANTS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Offering Statue (Cryptic Clues) — Clues 1–14
+// Offering Statue (Cryptic Clues) — Clues 1–30 (rarity 5+, grotto/shrine themed)
+// Each clue has hintTiers: [tier1, tier2, tier3]. Wrong guess reveals next tier (0→1→2).
 // ---------------------------------------------------------------------------
 const OFFERING_STATUE_ENTRY = 'As you enter the space beneath the stump, you find a statue with an offering pit. Before it lies a sheet of paper—a mess of writing, several colors of notes scrawled on top of each other and nearly incoherent. One clue stands out:';
 
 const OFFERING_STATUE_CLUES = [
-  { clue: '...the hood of a Golden God.', expectedItems: ['Tingle\'s Hood'] },
-  { clue: '...they have eight, but **I** only need one...', expectedItems: ["Spider's Eye"] },
-  { clue: 'Is this thing even real gold?', expectedItems: ['Golden Skull', 'Gold Dust'] },
-  { clue: '...a flower that makes robots gain life.', expectedItems: ['Ancient Flower'] },
-  { clue: 'If I keep having to steal tatters from those creepy undead creatures, so help me Hylia..', expectedItems: ['Gibdo Wing', 'Gibdo Guts'] },
-  { clue: '...these petrified bones...', expectedItems: ['Stal Skull', 'Gibdo Bone'] },
-  { clue: 'It took me 10 years to spin this but at last!', expectedItems: ['Silk', 'Spider Silk'] },
-  { clue: '...something that holds the cold of Death Mountain\'s heart.', expectedItems: ['Sapphire'] },
-  { clue: '...wings that never flew, from a creature long asleep.', expectedItems: ['Gibdo Wing'] },
-  { clue: '...the tears of a Zora prince.', expectedItems: ['Zora Scale'] },
-  { clue: '...sand that remembers the desert.', expectedItems: ['Sand Cicada', 'Sandy Ribbon'] },
-  { clue: '...a blade that cut the darkness.', expectedItems: ['Guardian Sword', 'Guardian Sword+', 'Guardian Sword++'] },
-  { clue: '...something the Koroks would weep to lose.', expectedItems: ['Korok Leaf'] },
-  { clue: '...a gift from the sky, fallen and still warm.', expectedItems: ['Star Fragment'] },
+  {
+    hintTiers: [
+      '...what crowns the one who believes himself divine, who floats where the earth cannot hold him.',
+      '...the head-covering of the chart-seller—green and gold, worn by one who calls himself a god.',
+      '...the hood worn by the man of the balloon; the self-styled Golden God whose maps lead heroes astray.',
+    ],
+    expectedItems: ['Tingle\'s Hood'],
+  },
+  {
+    hintTiers: [
+      '...one of many that see in the dark, plucked from a keeper of corners and old ceilings.',
+      '...they have eight, but the pit asks for one—the lens of a hunter that waits in shadow and silk.',
+      '...a single eye from the many-eyed weaver; the creature of the dungeon, the spinner in the gloom.',
+    ],
+    expectedItems: ["Spider's Eye"],
+  },
+  {
+    hintTiers: [
+      '...what the sun leaves behind, or what the restless dead carry into the light.',
+      '...is it even real? Something that gleams—from the earth refined, or from a skull that walks.',
+      '...the dust of ore, or the crown of a skeleton that rose from the grave; the statue accepts either.',
+    ],
+    expectedItems: ['Golden Skull', 'Gold Dust'],
+  },
+  {
+    hintTiers: [
+      '...a bloom that wakes what has no breath—what the old ones planted where their eyes still watch.',
+      '...a flower that gives life to the unmoving; it grows where the ancient ones buried their secrets.',
+      '...the blossom the Sheikah seek for their metal servants—the bloom that quickens the machine.',
+    ],
+    expectedItems: ['Ancient Flower'],
+  },
+  {
+    hintTiers: [
+      '...what falls from the bandaged ones when they fall—tatter or innard, from the sand-buried dead.',
+      '...if I must take again from those things that rise in the ruins, so help me Hylia...',
+      '...wing or gut of the mummy that sleeps in the desert—the undead that walk in wrappings.',
+    ],
+    expectedItems: ['Gibdo Wing', 'Gibdo Guts'],
+  },
+  {
+    hintTiers: [
+      '...what remains when the walking dead are stilled—the frame that once moved in the dark.',
+      '...these petrified bones... what held a horror together before the light found it.',
+      '...the skull of one that rose from the grave, or the bone of one that slept in the sand.',
+    ],
+    expectedItems: ['Stal Skull', 'Gibdo Bone'],
+  },
+  {
+    hintTiers: [
+      '...what time and patience—or many legs—draw out into a thread the world prizes.',
+      '...it took me ten years to spin this, but at last! The weaver\'s gift, fine as breath.',
+      '...the thread of the loom or the thread of the den—cloth fit for the pit, soft and strong.',
+    ],
+    expectedItems: ['Silk', 'Spider Silk'],
+  },
+  {
+    hintTiers: [
+      '...cold that was born in fire—a stone that keeps winter in the belly of the mountain.',
+      '...in the heart of Death Mountain the earth gives up something blue and cold as ice.',
+      '...the blue gem that holds the volcano\'s chill—crystallized cold from the mountain of flame.',
+    ],
+    expectedItems: ['Sapphire'],
+  },
+  {
+    hintTiers: [
+      '...what never bore its owner aloft—a fold of skin or cloth from one long buried in sand.',
+      '...wings that never flew; the bandaged dead have them, though they did not rise on the wind.',
+      '...the wing of the one that sleeps in the desert ruins—tattered, dry, never meant for sky.',
+    ],
+    expectedItems: ['Gibdo Wing'],
+  },
+  {
+    hintTiers: [
+      '...what the water-people shed and keep—a piece of themselves, smooth as the deep.',
+      '...the Domain\'s gift; a single plate that gleams like the lake, worn by those who swim the cold.',
+      '...a scale from the Zora—shed in the waters of the Domain, treasure of the people of the lake.',
+    ],
+    expectedItems: ['Zora Scale'],
+  },
+  {
+    hintTiers: [
+      '...what the dunes keep—a whisper, a husk, a strip of wind and memory.',
+      '...sand that remembers the desert; the shell of a singer in the heat, or a ribbon the waste left behind.',
+      '...the cicada that slept in the sand, or the ribbon that tastes of the Gerudo wind—the desert\'s keepsake.',
+    ],
+    expectedItems: ['Sand Cicada', 'Sandy Ribbon'],
+  },
+  {
+    hintTiers: [
+      '...what cut the gloom when the world went dark—the edge the old watchers carried.',
+      '...a blade of the sentinels that stood against the Calamity; Sheikah steel that bit the shadow.',
+      '...the sword of the Guardian—forged in the age of the ancients, still sharp against the dark.',
+    ],
+    expectedItems: ['Guardian Sword', 'Guardian Sword+', 'Guardian Sword++'],
+  },
+  {
+    hintTiers: [
+      '...what the laughing ones hide and hold dear—larger than a breath, lighter than a secret.',
+      '...the forest children would weep to lose it—a leaf that moves more than wind, that carries and hides.',
+      '...the great leaf the little ones guard; lose it and they cry out in dismay—Yahaha!',
+    ],
+    expectedItems: ['Korok Leaf'],
+  },
+  {
+    hintTiers: [
+      '...what fell from above and has not yet gone cold—a piece of the night, still burning.',
+      '...it dropped from the stars and keeps their warmth; a shard of the sky, hot to the touch.',
+      '...the fragment that falls when a star does—still warm, still bright, blessing of the heavens.',
+    ],
+    expectedItems: ['Star Fragment'],
+  },
+  // 15–30: additional grotto/shrine themed (rarity 5+)
+  {
+    hintTiers: [
+      '...the hardest tear the earth will ever shed—clear as truth, worth a king\'s ransom.',
+      '...the gem the mountain keeps longest; clarity without color, strength without flaw.',
+      '...the king of gems—cut from the deepest stone, the one that outshines all others.',
+    ],
+    expectedItems: ['Diamond'],
+  },
+  {
+    hintTiers: [
+      '...a stone that holds the heart of a forge—warm in the hand, red as ember.',
+      '...what the volcano breathes into crystal; the fire of Death Mountain made solid.',
+      '...the red gem that keeps a spark of flame—treasure of the mountain of fire.',
+    ],
+    expectedItems: ['Ruby'],
+  },
+  {
+    hintTiers: [
+      '...a stone that hums with the storm—golden, electric, restless.',
+      '...the gem the thunder leaves behind; wear it and the storm remembers you.',
+      '...the yellow stone of the tempest—crystallized lightning, gift of the storm.',
+    ],
+    expectedItems: ['Topaz'],
+  },
+  {
+    hintTiers: [
+      '...a stone the color of the wind and the forest—green as the wild.',
+      '...the gem the sky and the leaves share; the color of courage and open roads.',
+      '...the green jewel—worn by travelers and the free; the stone of the wind.',
+    ],
+    expectedItems: ['Emerald'],
+  },
+  {
+    hintTiers: [
+      '...the heart of the old watcher—what made the eye see and the limb move.',
+      '...what the Sheikah machines held at their core; the greatest of the ancient sparks.',
+      '...the giant core of the Guardian—the power that moved the sentinels of old.',
+    ],
+    expectedItems: ['Giant Ancient Core'],
+  },
+  {
+    hintTiers: [
+      '...what the ice dragon leaves when it brushes the mountain—a piece of the eternal cold.',
+      '...the claw of the spirit of the spring; the one that coils around the frozen peak.',
+      '...a claw from Naydra—the dragon of ice that guards the mountain of the goddess.',
+    ],
+    expectedItems: ["Naydra's Claw"],
+  },
+  {
+    hintTiers: [
+      '...what the storm dragon sheds—a scale that still crackles with sky-fire.',
+      '...the serpent of the tempest leaves it behind; a scale that tastes of lightning.',
+      '...a scale from Farosh—the dragon of thunder that rides the Faron storms.',
+    ],
+    expectedItems: ["Farosh's Scale"],
+  },
+  {
+    hintTiers: [
+      '...a light that never saw the sun—born in the deep, carried into the dark.',
+      '...what glows where the roots go deepest; a tiny flame that does not burn.',
+      '...the firefly of the depths—the light the lost carry into the underground.',
+    ],
+    expectedItems: ['Deep Firefly'],
+  },
+  {
+    hintTiers: [
+      '...what the one-eyed giant leaves when it falls—too large for any human jaw.',
+      '...the sleepers in the woods and the hills give these up when they are stilled.',
+      '...a tooth from the Hinox—the cyclops that dozes in the wild until disturbed.',
+    ],
+    expectedItems: ['Hinox Tooth'],
+  },
+  {
+    hintTiers: [
+      '...what the leviathan of the sand yields—a fin that crossed the endless dunes.',
+      '...the whale that swims beneath the desert leaves a piece of itself when it falls.',
+      '...the fin of the Molduga—the beast that hunts beneath the Gerudo sands.',
+    ],
+    expectedItems: ['Molduga Fin'],
+  },
+  {
+    hintTiers: [
+      '...what the blight leaves behind—a stone that remembers the malice.',
+      '...the dark watchers of the castle dropped these; crystallized shadow, heavy in the hand.',
+      '...the geode that forms where the blight touched the earth—the Calamity\'s leavings.',
+    ],
+    expectedItems: ['Blight Geodes'],
+  },
+  {
+    hintTiers: [
+      '...a piece of the age before the kingdom—something the ruins keep.',
+      '...what the old tribes left in the stone; the desert and the dusk remember.',
+      '...the relic of the dusk—treasure of the people who lived when the sun set on the sands.',
+    ],
+    expectedItems: ['Dusk Relic'],
+  },
+  {
+    hintTiers: [
+      '...a seed that carries its own sun—plant it in the dark and it answers.',
+      '...what the depths grow; bury it and light blooms where no sky has been.',
+      '...the seed that glows in the underground—the bright bloom of the deep.',
+    ],
+    expectedItems: ['Brightbloom Seed'],
+  },
+  {
+    hintTiers: [
+      '...a feather that remembers the goddess—too light for the wind to take.',
+      '...what the sacred bird left at the spring; the sky\'s blessing in a single plume.',
+      '...the plume of the goddess—worn by the chosen, fallen from the divine.',
+    ],
+    expectedItems: ['Goddess Plume'],
+  },
+  {
+    hintTiers: [
+      '...a skull that does not belong to the dead—clear as ice, precious as memory.',
+      '...what the ancients prized; a head of crystal, not bone, that the living keep.',
+      '...a head of crystal, not bone—the treasure the old ones hid in their sanctums.',
+    ],
+    expectedItems: ['Crystal Skull'],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -114,6 +334,22 @@ function rollPuzzleConfig() {
   };
 }
 
+/**
+ * Returns the current-tier clue text for Offering Statue only (for wrong-offering reply).
+ * @param {Object} grotto
+ * @returns {string|null} Current hint tier text, or null
+ */
+function getOfferingStatueClueText(grotto) {
+  const state = grotto?.puzzleState || {};
+  if (state.puzzleSubType !== OFFERING_STATUE) return null;
+  const idx = state.puzzleClueIndex ?? 0;
+  const c = OFFERING_STATUE_CLUES[idx];
+  if (!c?.hintTiers?.length) return null;
+  const attempts = state.offeringAttempts ?? 0;
+  const tierIndex = Math.min(attempts, c.hintTiers.length - 1);
+  return c.hintTiers[tierIndex];
+}
+
 function getPuzzleFlavor(grotto, cmdId) {
   const state = grotto?.puzzleState || {};
   const subType = state.puzzleSubType;
@@ -126,10 +362,13 @@ function getPuzzleFlavor(grotto, cmdId) {
   if (subType === OFFERING_STATUE) {
     const idx = state.puzzleClueIndex ?? 0;
     const c = OFFERING_STATUE_CLUES[idx];
-    if (!c) return null;
+    if (!c?.hintTiers?.length) return null;
+    const attempts = state.offeringAttempts ?? 0;
+    const tierIndex = Math.min(attempts, c.hintTiers.length - 1);
+    const clueText = c.hintTiers[tierIndex];
     const hintBlock = 'Offer one item that fits the clue. Only that amount will be taken from party inventories (any character — not loadout; no transfers during expedition).';
     const cmd = cmdId ? `</explore grotto puzzle:${cmdId}>` : '`/explore grotto puzzle` (items)';
-    return `${OFFERING_STATUE_ENTRY}\n\n*${c.clue}*\n\n\`\`\`${hintBlock}\`\`\`\n\n➾ ${cmd}`;
+    return `${OFFERING_STATUE_ENTRY}\n\n*${clueText}*\n\n\`\`\`${hintBlock}\`\`\`\n\n➾ ${cmd}`;
   }
   return null;
 }
@@ -318,6 +557,7 @@ module.exports = {
   OFFERING_STATUE_ENTRY,
   rollPuzzleConfig,
   getPuzzleFlavor,
+  getOfferingStatueClueText,
   ensurePuzzleConfig,
   checkPuzzleOffer,
   getPuzzleConsumeItems,

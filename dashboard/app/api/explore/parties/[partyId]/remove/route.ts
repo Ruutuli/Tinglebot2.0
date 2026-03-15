@@ -154,54 +154,45 @@ export async function POST(
         ? (charArray.find((c) => c.userId !== targetUserId)?.userId as string) ?? ""
         : undefined;
 
-    const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
-    if (!isTestingMode) {
-      const rawItems = (target.items as Array<Record<string, unknown>> | undefined) ?? [];
-      const loadoutItemNamesForLog = rawItems.map((s) => String((s.itemName ?? s.item_name ?? "") ?? "").trim()).filter(Boolean);
-      console.log(`[EXPLORE REMOVE] Returning loadout items to inventory: ${loadoutItemNamesForLog.join(", ") || "none"}`);
-      const loadoutItemNames = rawItems
-        .map((slot) => String((slot.itemName ?? slot.item_name ?? "") ?? "").trim())
-        .filter(Boolean);
-      const charId =
-        target._id instanceof mongoose.Types.ObjectId
-          ? target._id
-          : new mongoose.Types.ObjectId(String(target._id));
+    const rawItems = (target.items as Array<Record<string, unknown>> | undefined) ?? [];
+    const loadoutItemNamesForLog = rawItems.map((s) => String((s.itemName ?? s.item_name ?? "") ?? "").trim()).filter(Boolean);
+    console.log(`[EXPLORE REMOVE] Returning loadout items to inventory: ${loadoutItemNamesForLog.join(", ") || "none"}`);
+    const loadoutItemNames = rawItems
+      .map((slot) => String((slot.itemName ?? slot.item_name ?? "") ?? "").trim())
+      .filter(Boolean);
+    const charId =
+      target._id instanceof mongoose.Types.ObjectId
+        ? target._id
+        : new mongoose.Types.ObjectId(String(target._id));
 
-      if (loadoutItemNames.length > 0) {
-        let collectionName = String(target.name ?? "").trim().toLowerCase();
-        const charFromDb = (await Character.findById(charId).select("name").lean()) as { name: string } | null;
-        if (charFromDb?.name) {
-          collectionName = charFromDb.name.trim().toLowerCase();
-        } else {
-          const modChar = (await ModCharacter.findById(charId).select("name").lean()) as { name: string } | null;
-          if (modChar?.name) {
-            collectionName = modChar.name.trim().toLowerCase();
-          }
-        }
-        if (collectionName) {
-          const db = await getInventoriesDb();
-          const collection = db.collection(collectionName);
-          for (const itemName of loadoutItemNames) {
-            const bundle = PAVING_BUNDLES[itemName];
-            if (bundle) {
-              await addMaterialToInventory(
-                collection,
-                charId,
-                bundle.material,
-                bundle.quantityPerSlot,
-                Item
-              );
-            } else {
-              await addMaterialToInventory(collection, charId, itemName, 1, Item);
-            }
-          }
+    if (loadoutItemNames.length > 0) {
+      let collectionName = String(target.name ?? "").trim().toLowerCase();
+      const charFromDb = (await Character.findById(charId).select("name").lean()) as { name: string } | null;
+      if (charFromDb?.name) {
+        collectionName = charFromDb.name.trim().toLowerCase();
+      } else {
+        const modChar = (await ModCharacter.findById(charId).select("name").lean()) as { name: string } | null;
+        if (modChar?.name) {
+          collectionName = modChar.name.trim().toLowerCase();
         }
       }
-    } else {
-      const rawItems = (target.items as Array<Record<string, unknown>> | undefined) ?? [];
-      const loadoutForLog = rawItems.map((s) => String((s.itemName ?? s.item_name ?? "") ?? "").trim()).filter(Boolean);
-      if (loadoutForLog.length > 0) {
-        console.log(`[EXPLORE REMOVE] SKIPPED return items (testing mode) — would have returned: ${loadoutForLog.join(", ")}`);
+      if (collectionName) {
+        const db = await getInventoriesDb();
+        const collection = db.collection(collectionName);
+        for (const itemName of loadoutItemNames) {
+          const bundle = PAVING_BUNDLES[itemName];
+          if (bundle) {
+            await addMaterialToInventory(
+              collection,
+              charId,
+              bundle.material,
+              bundle.quantityPerSlot,
+              Item
+            );
+          } else {
+            await addMaterialToInventory(collection, charId, itemName, 1, Item);
+          }
+        }
       }
     }
 

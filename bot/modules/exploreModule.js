@@ -9,7 +9,6 @@ const Party = require('@/models/PartyModel');
 const Pin = require('@/models/PinModel');
 
 const { handleError } = require('@/utils/globalErrorHandler');
-const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
 const { START_POINTS_BY_REGION } = require('@/data/explorationStartPoints.js');
 
 // ------------------- Helpers ------------------
@@ -175,7 +174,6 @@ function recomputePartyTotals(party) {
 // Sync member stats from DB into party.characters, recompute totals and save. During started expedition, do not overwrite pool.
 async function syncPartyMemberStats(party) {
     if (!party || !party.characters || party.characters.length === 0) return;
-    if (EXPLORATION_TESTING_MODE) return; // Preserve in-session hearts/stamina display; never overwrite from DB
     try {
         for (let i = 0; i < party.characters.length; i++) {
             const slot = party.characters[i];
@@ -297,18 +295,16 @@ async function applyExpeditionFailedState(party, options = {}) {
     const { closeRaidsForExpedition } = require('./raidModule.js');
     const Grotto = require('@/models/GrottoModel');
 
-    if (!EXPLORATION_TESTING_MODE) {
-        for (const partyChar of party.characters) {
-            const char = await Character.findById(partyChar._id);
-            if (char) {
-                await handleKO(char._id);
-                char.currentStamina = 0;
-                char.currentVillage = targetVillage;
-                char.debuff = char.debuff || {};
-                char.debuff.active = true;
-                char.debuff.endDate = debuffEndDate;
-                await char.save();
-            }
+    for (const partyChar of party.characters) {
+        const char = await Character.findById(partyChar._id);
+        if (char) {
+            await handleKO(char._id);
+            char.currentStamina = 0;
+            char.currentVillage = targetVillage;
+            char.debuff = char.debuff || {};
+            char.debuff.active = true;
+            char.debuff.endDate = debuffEndDate;
+            await char.save();
         }
     }
 
@@ -322,13 +318,6 @@ async function applyExpeditionFailedState(party, options = {}) {
                     { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
                     { arrayFilters: [{ "q.quadrantId": quadRegex }] }
                 ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Reset quadrant to unexplored: ${err?.message}`));
-                if (EXPLORATION_TESTING_MODE) {
-                    await Square.updateOne(
-                        { squareId: new RegExp(`^${escapeSquareIdForRegex(squareId)}$`, 'i'), "quadrants.quadrantId": quadRegex },
-                        { $set: { "quadrants.$[q].discoveries": [] } },
-                        { arrayFilters: [{ "q.quadrantId": quadRegex }] }
-                    ).catch((err) => logger.warn("EXPLORE", `[exploreModule.js]⚠️ Testing fail: clear discoveries: ${err?.message}`));
-                }
             }
         }
     }
@@ -374,10 +363,6 @@ async function applyExpeditionFailedState(party, options = {}) {
         c.currentHearts = 0;
         c.currentStamina = 0;
         c.items = [];
-    }
-    if (EXPLORATION_TESTING_MODE && party.progressLog?.length > 0) {
-        party.progressLog = [];
-        party.markModified('progressLog');
     }
     pushProgressLog(party, 'Party', 'expedition_failed', failMessage, undefined, undefined, new Date());
     await party.save();

@@ -28,7 +28,7 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Remove quantity of a material from character inventory. Skipped when EXPLORATION_TESTING_MODE=true. */
+/** Remove quantity of a material from character inventory. */
 async function deductMaterialFromInventory(
   collection: mongoose.mongo.Collection,
   charId: mongoose.Types.ObjectId,
@@ -305,37 +305,27 @@ export async function POST(
       });
     }
 
-    // Deduct brought items from inventory (skip in EXPLORATION_TESTING_MODE — loadout is reference-only)
-    const isTestingMode = process.env.EXPLORATION_TESTING_MODE === "true";
-    if (!isTestingMode) {
-      console.log(`[EXPLORE JOIN] Deducting loadout items from ${charId} (items: ${names.join(", ")})`);
-      const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
-      const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
-      if (eldinBundles > 0) {
-        await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
-      }
-      if (woodBundles > 0) {
-        await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
-      }
-      const distinctNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
-      for (const itemName of distinctNonBundle) {
-        const count = names.filter((n) => (n || "").trim() === itemName).length;
-        await deductMaterialFromInventory(collection, charId, itemName, count);
-      }
-    } else if (names.length > 0) {
-      console.log(`[EXPLORE JOIN] SKIPPED deduct (testing mode) — would have deducted: ${names.join(", ")}`);
+    console.log(`[EXPLORE JOIN] Deducting loadout items from ${charId} (items: ${names.join(", ")})`);
+    const eldinBundles = names.filter((n) => (n || "").trim() === "Eldin Ore Bundle").length;
+    const woodBundles = names.filter((n) => (n || "").trim() === "Wood Bundle").length;
+    if (eldinBundles > 0) {
+      await deductMaterialFromInventory(collection, charId, "Eldin Ore", eldinBundles * PAVING_BUNDLES["Eldin Ore Bundle"].requiredPerSlot);
+    }
+    if (woodBundles > 0) {
+      await deductMaterialFromInventory(collection, charId, "Wood", woodBundles * PAVING_BUNDLES["Wood Bundle"].requiredPerSlot);
+    }
+    const distinctNonBundle = [...new Set(names.filter((n) => !PAVING_BUNDLES[n || ""]))];
+    for (const itemName of distinctNonBundle) {
+      const count = names.filter((n) => (n || "").trim() === itemName).length;
+      await deductMaterialFromInventory(collection, charId, itemName, count);
     }
 
     const maxHearts = Number.isFinite(Number(character.maxHearts)) ? Number(character.maxHearts) : 0;
     const maxStamina = Number.isFinite(Number(character.maxStamina)) ? Number(character.maxStamina) : 0;
     const rawHearts = Number(character.currentHearts);
     const rawStamina = Number(character.currentStamina);
-    let currentHearts = Number.isFinite(rawHearts) ? rawHearts : maxHearts;
-    let currentStamina = Number.isFinite(rawStamina) ? rawStamina : maxStamina;
-    if (process.env.EXPLORATION_TESTING_MODE === "true") {
-      currentHearts = maxHearts;
-      currentStamina = maxStamina;
-    }
+    const currentHearts = Number.isFinite(rawHearts) ? rawHearts : maxHearts;
+    const currentStamina = Number.isFinite(rawStamina) ? rawStamina : maxStamina;
     const iconVal = character.icon;
     const icon = typeof iconVal === "string" && iconVal.trim() ? iconVal.trim() : "https://via.placeholder.com/100";
 

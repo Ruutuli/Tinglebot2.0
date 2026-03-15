@@ -1175,8 +1175,7 @@ async function processWaveTurn(character, waveId, interaction, waveData = null) 
 
     // Expedition (monster camp) waves: use party hearts only — never read or write individual character hearts.
     // We pass a temp character with currentHearts = party.totalHearts and skipPersist so no DB writes.
-    const { EXPLORATION_TESTING_MODE } = require('@/utils/explorationTestingConfig');
-    const skipPersist = !!(wave.expeditionId && EXPLORATION_TESTING_MODE);
+    const skipPersist = false;
     let characterHeartsBefore = character.currentHearts;
     let battleCharacter = character;
 

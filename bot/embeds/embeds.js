@@ -652,7 +652,7 @@ function partyHasSecureMaterials(party) {
     : false;
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null, hotSpringMessage = null, compactGrottoCommands = false }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null, hotSpringMessage = null, compactGrottoCommands = false, grottoPuzzleAnyoneCanSubmit = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
@@ -691,11 +691,11 @@ const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stam
       { name: "🆔 **__Expedition ID__**", value: expId || "Unknown", inline: true },
      ]),
  ];
- if (showNextAndCommands && nextCharacter?.userId != null && nextCharacter?.name) {
-  const nextName = nextCharacter.name;
+ if (showNextAndCommands && (grottoPuzzleAnyoneCanSubmit || (nextCharacter?.userId != null && nextCharacter?.name))) {
+  const nextName = nextCharacter?.name;
   const cmdId = getExploreCommandId();
   const cmdRoll = `</explore roll:${cmdId}>`;
-  let commandsValue = `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
+  let commandsValue = grottoPuzzleAnyoneCanSubmit ? "" : `**Next:** <@${nextCharacter.userId}> (${nextName})\n\n`;
   if (activeWaveId) {
    const waveCmdId = getWaveCommandId();
    const cmdItem = `</explore item:${cmdId}>`;
@@ -703,7 +703,13 @@ const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stam
   } else if (hasActiveGrotto) {
    const cmdItem = `</explore item:${cmdId}>`;
    const grottoCmd = activeGrottoCommand || `</explore grotto continue:${cmdId}>`;
-   if (compactGrottoCommands) {
+   if (grottoPuzzleAnyoneCanSubmit) {
+    if (compactGrottoCommands) {
+     commandsValue = `**Anyone** in the party can submit — no turn order.\n\n${grottoCmd} · ${cmdItem}\n\nid: \`${expId || "—"}\``;
+    } else {
+     commandsValue = `**Anyone** in the party can submit an offering — turn order doesn't matter.\n\n${grottoCmd}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\nid: \`${expId || "—"}\``;
+    }
+   } else if (compactGrottoCommands) {
     commandsValue = `**Next:** <@${nextCharacter.userId}> · **${nextName}**\n\n${grottoCmd} · ${cmdItem}`;
    } else {
     commandsValue += `**Take your turn:**\n${grottoCmd}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\n_Other explore actions are blocked until the trial ends._\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
