@@ -18,6 +18,7 @@ function escapeSquareIdForRegex(squareId) {
 }
 
 // Progress log outcomes that are "reportable" (can be pinned on dashboard). When leaving a square, unpinned ones are cleared.
+// Ruins: only "ruin_rest" (rest spot) is pinable; finding/skipping ruins does not require a pin.
 // Keep legacy outcomes for backward compatibility with older progress logs.
 const DISCOVERY_CLEANUP_OUTCOMES = [
     "monster_camp",
@@ -25,8 +26,6 @@ const DISCOVERY_CLEANUP_OUTCOMES = [
     "grotto",
     "grotto_found",
     "grotto_cleansed",
-    "ruins",
-    "ruins_found",
     "ruin_rest",
 ];
 // Location parsing used for discovery cleanup / reminders. Keep aligned with dashboard parsing (supports "in" and "at").
@@ -65,14 +64,6 @@ async function hasUnpinnedDiscoveriesInQuadrant(party) {
             // ignore pin lookup errors; fall back to reportedDiscoveryKeys only
         }
     }
-    // If party skipped ruins in this quadrant, don't count "ruins_found" as unpinned (nothing to pin).
-    const hasRuinsSkippedInQuadrant = party.progressLog.some((e) => {
-        if (e.outcome !== "ruins_skipped") return false;
-        const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
-        if (!m || !m[1] || !m[2]) return false;
-        return String(m[1]).trim().toUpperCase() === currentSquare && String(m[2]).trim().toUpperCase() === currentQuadrant;
-    });
-
     for (const e of party.progressLog) {
         if (!DISCOVERY_CLEANUP_OUTCOMES.includes(e.outcome)) continue;
         const m = LOC_IN_MESSAGE_RE.exec(e.message || "");
@@ -80,8 +71,6 @@ async function hasUnpinnedDiscoveriesInQuadrant(party) {
         const entrySquare = String(m[1]).trim().toUpperCase();
         const entryQuadrant = String(m[2]).trim().toUpperCase();
         if (entrySquare !== currentSquare || entryQuadrant !== currentQuadrant) continue;
-        // Ruins found but later skipped in this quadrant = no discovery to pin
-        if ((e.outcome === "ruins" || e.outcome === "ruins_found") && hasRuinsSkippedInQuadrant) continue;
         const atStr = e.at instanceof Date ? e.at.toISOString() : (typeof e.at === "string" ? e.at : "");
         const key = `${e.outcome}|${entrySquare}|${entryQuadrant}|${atStr}`;
         if (reportedSet.has(key)) continue;
