@@ -12,7 +12,7 @@ import fs from "fs/promises";
 
 export const dynamic = "force-dynamic";
 
-const DISCORD_EXPEDITION_CHANNEL_ID = "1473589990196908147";
+const DISCORD_EXPEDITION_CHANNEL_ID = "1229245060168810506";
 
 // Discord thread auto-archive (minutes). Discord allows: 60, 1440, 4320, 10080 — no 5h, using 24h
 const EXPLORATION_THREAD_AUTO_ARCHIVE_MINUTES = 1440;

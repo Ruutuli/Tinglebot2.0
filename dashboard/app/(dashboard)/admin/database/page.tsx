@@ -100,7 +100,7 @@ export default function AdminDatabasePage() {
         let labelVal: string;
         if (typeof v === "number" && key === "rarity") {
           labelVal = `Rarity ${v}`;
-        } else if (key === "craftable" || key === "stackable") {
+        } else if (key === "craftable" || key === "stackable" || key === "appraised" || key === "archived") {
           labelVal = String(v) === "true" ? "Yes" : "No";
         } else {
           labelVal = capitalize(String(v));
@@ -133,6 +133,9 @@ export default function AdminDatabasePage() {
         village: "Village",
         race: "Race",
         questType: "Quest Type",
+        appraised: "Appraised",
+        archived: "Archived",
+        discoveredBy: "Discovered By",
       };
       
       groups.push({
@@ -169,6 +172,12 @@ export default function AdminDatabasePage() {
           const usernameValue = item.username;
           const usernameMatch = usernameValue && String(usernameValue).toLowerCase().includes(query);
           return nameMatch || usernameMatch;
+        }
+        // For Relic, also search name
+        if (selectedModel === "Relic") {
+          const relicName = item.name;
+          const relicNameMatch = relicName && String(relicName).toLowerCase().includes(query);
+          return nameMatch || relicNameMatch;
         }
         return nameMatch;
       });
@@ -289,6 +298,17 @@ export default function AdminDatabasePage() {
           if (key === "characterId") {
             const id = item.characterId;
             return id != null && selectedValues.includes(String(id));
+          }
+        }
+        if (selectedModel === "Relic") {
+          if (key === "appraised" || key === "archived") {
+            const val = item[key];
+            const bool = val === true;
+            return selectedValues.some((v) => (v === "true" && bool) || (v === "false" && !bool));
+          }
+          if (key === "discoveredBy") {
+            const name = item.discoveredBy;
+            return name != null && selectedValues.includes(String(name));
           }
         }
         return true;

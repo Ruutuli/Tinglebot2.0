@@ -55,7 +55,7 @@ Revisiting: use `</explore discovery>`; same cleanse flow runs with another Godd
 | **Blessing** | Simple gift | 1 Spirit Orb each | ✅ Done |
 | **Target Practice** | Blimp shooting | 1 Spirit Orb each | ✅ Done |
 | **Puzzle** | Offering statue / odd structure | 1 Spirit Orb each | ⚠️ Partial |
-| **Test of Power** | Construct / Gloom Hands battle | 1 Spirit Orb each | ❌ Not implemented |
+| **Test of Power** | Construct / Gloom Hands battle (raid-style) | 1 Spirit Orb each | ✅ Done |
 | **Maze** | Labyrinth with Song of Scrying | 1 Spirit Orb each (+ chests) | ✅ Done |
 
 ---

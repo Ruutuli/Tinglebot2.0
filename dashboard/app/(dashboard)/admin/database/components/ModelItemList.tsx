@@ -140,6 +140,13 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
         { key: "tokens", label: "Tokens", type: "number" },
         { key: "leveling.level", label: "Level", type: "number" },
       ];
+    } else if (modelConfig.name === "Relic") {
+      return [
+        { key: "name", label: "Name", type: "string" },
+        { key: "discoveredBy", label: "Discovered By", type: "string" },
+        { key: "appraised", label: "Appraised", type: "boolean" },
+        { key: "archived", label: "Archived", type: "boolean" },
+      ];
     }
     return [];
   };
@@ -148,6 +155,7 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
 
   const formatValue = (value: unknown, type: string): string => {
     if (value === undefined || value === null) return "—";
+    if (type === "boolean") return value === true ? "Yes" : "No";
     if (type === "array" && Array.isArray(value)) {
       return value.slice(0, 2).join(", ") + (value.length > 2 ? ` +${value.length - 2}` : "");
     }
@@ -203,7 +211,11 @@ export function ModelItemList({ items, modelConfig, onEdit, onDelete }: ModelIte
                   onClick={() => handleSort(nameField)}
                 >
                   <div className="flex items-center">
-                    {modelConfig.name === "User" ? "Discord ID" : "Name"}
+                    {modelConfig.name === "User"
+                      ? "Discord ID"
+                      : modelConfig.name === "Relic"
+                        ? "Relic ID"
+                        : "Name"}
                     <SortIcon field={nameField} />
                   </div>
                 </th>

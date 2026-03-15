@@ -376,7 +376,7 @@ const PAVING_BUNDLES = {
  "Wood Bundle": { baseItemName: "Wood", quantityPerSlot: 5 },
 };
 
-const DISABLE_EXPLORATION_RAIDS = false; // TODO: remove when done testing
+const DISABLE_EXPLORATION_RAIDS = false; // Set true to disable tier 5+ exploration raid encounters
 
 // CAMP_ATTACK_CHANCE_* - Chance (0–1) that camping is interrupted by a monster attack. Explored/unexplored = 25%; secured = 5%.
 const CAMP_ATTACK_CHANCE_UNSECURED = 0.25;

@@ -36,6 +36,8 @@ export type FieldConfig = {
   // For dynamic label/helpText
   getLabel?: (data: Record<string, unknown>) => string;
   getHelpText?: (data: Record<string, unknown>) => string;
+  // For text fields: when set and > 1, render as textarea with this many rows
+  rows?: number;
   // For array fields
   readOnly?: boolean;
   autoPopulated?: boolean;

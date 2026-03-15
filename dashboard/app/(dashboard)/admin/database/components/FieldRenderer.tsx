@@ -63,6 +63,7 @@ export function FieldRenderer({
           error={error}
           required={field.required}
           placeholder={field.placeholder}
+          rows={field.rows}
         />
       );
 

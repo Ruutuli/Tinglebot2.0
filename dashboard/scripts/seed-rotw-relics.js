@@ -4,7 +4,7 @@
 // Purpose: Seed relics from ROTW_relic_turn_in_form_2024_responses CSV.
 //          These relics were found and appraised before the bot existed.
 //          - Matches characters by name (Character + ModCharacter collections)
-//          - Skips relics if finder character not found (LEFT)
+//          - If finder character not found, creates relic with discoveredBy: 'NPC'
 //          - Converts OLD location system to NEW:
 //            OLD: A1=top-left, A12=top-right, J1=bottom-left, J12=bottom-right
 //            NEW: A1=top-left, A12=bottom-left, J1=top-right, J12=bottom-right
@@ -256,7 +256,7 @@ async function main() {
   }
 
   const created = [];
-  const left = [];
+  const createdWithNpc = []; // finder character not in DB → relic still created with discoveredBy: 'NPC'
   const errors = [];
 
   for (const row of newRows) {
@@ -268,7 +268,7 @@ async function main() {
 
     const character = await findCharacterByName(charName);
     if (!character) {
-      left.push({ relic: row.relic, character: charName, member: row.memberName });
+      createdWithNpc.push({ relic: row.relic, character: charName, member: row.memberName });
     }
 
     const discoveredDate = parseTimestamp(row.timestamp);
@@ -311,8 +311,10 @@ async function main() {
   console.log('\n--- Summary ---');
   console.log(`✅ Created: ${created.length}`);
   created.forEach((c) => console.log(`   - ${c.relic} (${c.character})`));
-  console.log(`\n⚠️ LEFT (character not found): ${left.length}`);
-  left.forEach((l) => console.log(`   - ${l.relic} | Character: ${l.character} | Member: ${l.member}`));
+  if (createdWithNpc.length) {
+    console.log(`\n✅ Created with NPC (finder not in DB): ${createdWithNpc.length}`);
+    createdWithNpc.forEach((l) => console.log(`   - ${l.relic} | CSV character: ${l.character} | Member: ${l.member}`));
+  }
   if (errors.length) {
     console.log(`\n❌ Errors: ${errors.length}`);
     errors.forEach((e) => console.log(`   - ${e.row}: ${e.reason}`));

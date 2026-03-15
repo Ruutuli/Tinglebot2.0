@@ -242,6 +242,13 @@ export async function GET(req: NextRequest) {
         const QuestModel = await import("@/models/QuestModel.js");
         Model = (QuestModel.default ?? QuestModel) as unknown as Model<unknown>;
       }
+    } else if (modelName === "Relic") {
+      if (mongoose.models.Relic) {
+        Model = mongoose.models.Relic;
+      } else {
+        const { default: RelicModel } = await import("@/models/RelicModel.js");
+        Model = RelicModel as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${modelName}" is not supported` },
@@ -507,6 +514,19 @@ export async function GET(req: NextRequest) {
       });
       filterOptions.status = Array.from(statusSet).sort();
       filterOptions.questType = Array.from(questTypeSet).sort();
+    } else if (modelName === "Relic") {
+      const appraisedSet = new Set<string>();
+      const archivedSet = new Set<string>();
+      const discoveredBySet = new Set<string>();
+      convertedRecords.forEach((record) => {
+        const r = record as { appraised?: boolean; archived?: boolean; discoveredBy?: string };
+        appraisedSet.add(String(!!r.appraised));
+        archivedSet.add(String(!!r.archived));
+        if (r.discoveredBy) discoveredBySet.add(r.discoveredBy);
+      });
+      filterOptions.appraised = Array.from(appraisedSet).sort();
+      filterOptions.archived = Array.from(archivedSet).sort();
+      filterOptions.discoveredBy = Array.from(discoveredBySet).sort();
     }
 
     // ------------------- Return Response -------------------
@@ -752,6 +772,13 @@ export async function PUT(req: NextRequest) {
         const QuestModel = await import("@/models/QuestModel.js");
         Model = (QuestModel.default ?? QuestModel) as unknown as Model<unknown>;
       }
+    } else if (model === "Relic") {
+      if (mongoose.models.Relic) {
+        Model = mongoose.models.Relic;
+      } else {
+        const { default: RelicModel } = await import("@/models/RelicModel.js");
+        Model = RelicModel as unknown as Model<unknown>;
+      }
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },
@@ -863,6 +890,17 @@ export async function PUT(req: NextRequest) {
         "collabAllowed", "collabRule", "rules", "artWritingMode",
         "tableRollName", "tableRollConfig", "requiredRolls", "rollSuccessCriteria",
         "createdByUserId", "createdByUsername", "isMemberQuest", "runByUserId", "runByUsername",
+      ];
+    } else if (model === "Relic") {
+      allowedFields = [
+        "relicId", "name", "rollOutcome", "emoji", "unique", "duplicateOf",
+        "discoveredBy", "characterId", "discoveredDate", "locationFound", "region", "square", "quadrant",
+        "appraised", "appraisedBy", "appraisalDate", "appraisalDeadline", "artDeadline",
+        "appraisalDescription", "npcAppraisal", "appraisalRequestId",
+        "artSubmitted", "imageUrl",
+        "libraryPositionX", "libraryPositionY", "libraryDisplaySize",
+        "archived", "deteriorated", "firstCompletionRewardGiven", "duplicateRewardGiven",
+        "description", "functionality", "origins", "uses",
       ];
     } else {
       // For other models, allow all fields (can be refined per model later)
@@ -1052,6 +1090,28 @@ export async function PUT(req: NextRequest) {
         const n = typeof day === "number" ? day : Number(day);
         if (n < 1 || !Number.isFinite(n)) {
           (updateData as Record<string, unknown>)["birthday.day"] = null;
+        }
+      }
+    }
+
+    // ------------------- Relic model: ObjectId refs must be null when empty -------------------
+    if (model === "Relic") {
+      const ud = updateData as Record<string, unknown>;
+      if (ud.characterId === "" || (typeof ud.characterId === "string" && !mongoose.Types.ObjectId.isValid(ud.characterId))) {
+        ud.characterId = null;
+      } else if (typeof ud.characterId === "string" && mongoose.Types.ObjectId.isValid(ud.characterId)) {
+        ud.characterId = new mongoose.Types.ObjectId(ud.characterId as string);
+      }
+      if (ud.duplicateOf === "" || (typeof ud.duplicateOf === "string" && !mongoose.Types.ObjectId.isValid(ud.duplicateOf))) {
+        ud.duplicateOf = null;
+      } else if (typeof ud.duplicateOf === "string" && mongoose.Types.ObjectId.isValid(ud.duplicateOf)) {
+        ud.duplicateOf = new mongoose.Types.ObjectId(ud.duplicateOf as string);
+      }
+      const relicDateKeys = ["discoveredDate", "appraisalDate", "appraisalDeadline", "artDeadline"];
+      for (const k of relicDateKeys) {
+        if (ud[k] !== undefined && ud[k] !== null) {
+          const v = ud[k];
+          ud[k] = v instanceof Date ? v : new Date(v as string | number);
         }
       }
     }
@@ -1256,6 +1316,10 @@ export async function DELETE(req: NextRequest) {
       }
     } else if (model === "User") {
       Model = (mongoose.models.User ?? (await import("@/models/UserModel.js")).default) as unknown as Model<unknown>;
+    } else if (model === "Quest") {
+      Model = (mongoose.models.Quest ?? (await import("@/models/QuestModel.js")).default) as unknown as Model<unknown>;
+    } else if (model === "Relic") {
+      Model = (mongoose.models.Relic ?? (await import("@/models/RelicModel.js")).default) as unknown as Model<unknown>;
     } else {
       return NextResponse.json(
         { error: "Invalid model", message: `Model "${model}" is not supported` },
