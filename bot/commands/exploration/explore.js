@@ -6150,7 +6150,7 @@ module.exports = {
 
         if (outcomeType === "ruins" && !isYes) {
          const at = new Date();
-         pushProgressLog(party, character.name, "ruins_skipped", `Found ruins in ${location}; left for later (won't count toward discovery limit).`, undefined, undefined, at);
+         pushProgressLog(party, character.name, "ruins_skipped", `Found ruins in ${location}; didn't explore (won't count toward discovery limit).`, undefined, undefined, at);
          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
          await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
         }
@@ -6167,7 +6167,7 @@ module.exports = {
           "\n\n" +
           (isYes
            ? "✅ **You chose to explore the ruins!** (Cost 3 stamina.)"
-           : `✅ **${character.name} left the ruins for later.**`)
+           : `✅ **${character.name} didn't explore the ruins.**`)
          );
         } else {
          choiceEmbed.setDescription(
