@@ -417,11 +417,19 @@ function getGrottoMazeChestLoot(allItems) {
   if (pool.length === 0) return { itemName: "Spirit Orb", emoji: "💫" };
   const total = pool.reduce((s, x) => s + x.weight, 0);
   let r = Math.random() * total;
+  let chosen = null;
   for (const entry of pool) {
     r -= entry.weight;
-    if (r <= 0) return { itemName: entry.itemName, emoji: entry.emoji || "📦" };
+    if (r <= 0) {
+      chosen = entry;
+      break;
+    }
   }
-  return { itemName: pool[0].itemName, emoji: pool[0].emoji || "📦" };
+  if (!chosen) chosen = pool[0];
+  // Use emoji from database when available (e.g. custom Fairy emoji)
+  const fromDb = allItems && allItems.find((item) => (item.itemName || item.name || "").trim().toLowerCase() === (chosen.itemName || "").trim().toLowerCase());
+  const emoji = (fromDb && fromDb.emoji && String(fromDb.emoji).trim()) ? String(fromDb.emoji).trim() : (chosen.emoji || "📦");
+  return { itemName: chosen.itemName, emoji };
 }
 
 // ============================================================================

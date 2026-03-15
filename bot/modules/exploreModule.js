@@ -259,6 +259,10 @@ async function markGrottoCleared(grotto) {
     if (!grotto) return;
     grotto.status = "cleared";
     grotto.completedAt = new Date();
+    if (grotto.testOfPowerState && (grotto.testOfPowerState.raidStarted || grotto.testOfPowerState.raidId)) {
+      grotto.testOfPowerState = { raidStarted: false, raidId: null };
+      grotto.markModified?.("testOfPowerState");
+    }
     grotto.markModified?.("status");
     await grotto.save();
     if (!grotto.squareId || !grotto.quadrantId) return;

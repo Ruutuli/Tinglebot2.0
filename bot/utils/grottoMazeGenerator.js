@@ -317,22 +317,36 @@ function collectPathCells(matrix, entryNodes) {
   return cells;
 }
 
+/** Two path cells are adjacent (share an edge) in the maze grid. */
+function arePathCellsAdjacent(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
+}
+
 function assignGrottoCellTypes(pathCells, options = {}, matrix = null) {
   const pathOnly = pathCells.filter((c) => c.type === 'path');
   if (pathOnly.length === 0) return pathCells;
 
-  const numTraps = Math.min(options.numTraps ?? (2 + Math.floor(Math.random() * 3)), pathOnly.length);
+  const numTraps = Math.min(options.numTraps ?? (1 + Math.floor(Math.random() * 3)), pathOnly.length);
   const numChests = Math.min(options.numChests ?? (2 + Math.floor(Math.random() * 3)), pathOnly.length);
   const numRed = Math.min(options.numRed ?? 1, pathOnly.length);
 
   shuffleArray(pathOnly);
 
-  let idx = 0;
-  for (let i = 0; i < numTraps && idx < pathOnly.length; i++, idx++) {
-    pathOnly[idx].type = 'trap';
+  // Place traps with no two adjacent (side by side)
+  const trapCells = [];
+  for (let i = 0; i < pathOnly.length && trapCells.length < numTraps; i++) {
+    const cell = pathOnly[i];
+    const adjacentToTrap = trapCells.some((t) => arePathCellsAdjacent(t, cell));
+    if (!adjacentToTrap) {
+      cell.type = 'trap';
+      trapCells.push(cell);
+    }
   }
-  for (let i = 0; i < numChests && idx < pathOnly.length; i++, idx++) {
-    pathOnly[idx].type = 'chest';
+  const pathAfterTraps = pathOnly.filter((c) => c.type === 'path');
+  shuffleArray(pathAfterTraps);
+  let idx = 0;
+  for (let i = 0; i < numChests && idx < pathAfterTraps.length; i++, idx++) {
+    pathAfterTraps[idx].type = 'chest';
   }
 
   // Scrying walls (mazep/mazen): only place on path cells where clearing would open a new way.
@@ -358,7 +372,7 @@ function assignGrottoCellTypes(pathCells, options = {}, matrix = null) {
  * @param {string} [config.entryType='diagonal'] - 'diagonal' | 'horizontal' | 'vertical'
  * @param {string} [config.bias=''] - '' | 'horizontal' | 'vertical'
  * @param {number} [config.removeWalls=0] - extra walls to remove
- * @param {number} [config.numTraps] - 2–4 random if omitted
+ * @param {number} [config.numTraps] - 1–3 random if omitted (no two traps adjacent)
  * @param {number} [config.numChests] - 2–4 random if omitted
  * @param {number} [config.numRed=1] - one mazep or mazen if omitted
  * @returns {Object} { matrix, width, height, entryNodes, pathCells }

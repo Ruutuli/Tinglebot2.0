@@ -1236,26 +1236,16 @@ async function handleRaidVictory(interaction, raidData, monster) {
       victoryEmbed.addFields(splitIntoEmbedFields(blightValue, '<:blight_eye:805576955725611058> **Gloom Hands Blight Effect**'));
     }
 
-    // Grotto Test of Power: Spirit Orbs, grotto cleared, flavor text (clickable commands)
-    if (raidData.grottoId) {
-      const exploreCmdId = getExploreCommandId();
-      const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
-      const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
-      victoryEmbed.addFields({
-        name: '🗺️ **Grotto Trial**',
-        value: `${GROTTO_CLEARED_FLAVOR}\n\nUse ${cmdRoll} or ${cmdMove} with id \`${raidData.expeditionId}\` and your character to continue your expedition.`,
-        inline: false
-      });
-    }
-    
+    // Grotto Test of Power: do NOT add grotto text to raid victory embed; we send a separate grotto-success embed next.
+
     victoryEmbed
       .setThumbnail(monsterImage)
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/border.png')
       .setFooter({ text: `Raid ID: ${raidData.raidId}` })
       .setTimestamp();
 
-    // Expedition raid: add clear "raid over — use /explore roll or move" so party knows to continue (clickable commands)
-    if (raidData.expeditionId) {
+    // Expedition raid (non-grotto): add "raid over — continue" to victory embed. Grotto raids get that on the separate grotto embed.
+    if (raidData.expeditionId && !raidData.grottoId) {
       const exploreCmdId = getExploreCommandId();
       const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
       const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
@@ -1287,22 +1277,57 @@ async function handleRaidVictory(interaction, raidData, monster) {
     };
 
     // Send victory embed to the raid thread (if it exists)
+    let thread = null;
     if (raidData.threadId) {
       try {
-        const thread = await interaction.client.channels.fetch(raidData.threadId);
-        if (thread) {
-          await thread.send({ embeds: [victoryEmbed] });
-          console.log(`[raid.js]: ✅ Victory embed sent to raid thread`);
-          const nextTurnContent = await getExpeditionNextTurnContent();
-          if (nextTurnContent) await thread.send({ content: nextTurnContent });
-        }
-      } catch (error) {
-        console.error(`[raid.js]: ❌ Error sending victory embed to thread:`, error);
-        console.log(`[raid.js]: ⚠️ Thread may not exist or be accessible`);
+        thread = await interaction.client.channels.fetch(raidData.threadId);
+      } catch {
+        thread = null;
       }
+    }
+
+    if (thread) {
+      await thread.send({ embeds: [victoryEmbed] });
+      console.log(`[raid.js]: ✅ Victory embed sent to raid thread`);
+      // Grotto Test of Power: send a second embed for grotto trial success (flavor + continue CTA)
+      if (raidData.grottoId && raidData.expeditionId) {
+        const exploreCmdId = getExploreCommandId();
+        const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
+        const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
+        const grottoSuccessEmbed = new EmbedBuilder()
+          .setColor('#9B59B6')
+          .setTitle('✨ **Grotto trial complete**')
+          .setDescription(GROTTO_CLEARED_FLAVOR)
+          .addFields({
+            name: '🗺️ **Continue your expedition**',
+            value: `Use ${cmdRoll} or ${cmdMove} with id \`${raidData.expeditionId}\` and your character to continue.`,
+            inline: false
+          })
+          .setTimestamp();
+        await thread.send({ embeds: [grottoSuccessEmbed] });
+        console.log(`[raid.js]: ✅ Grotto trial success embed sent to raid thread`);
+      }
+      const nextTurnContent = await getExpeditionNextTurnContent();
+      if (nextTurnContent) await thread.send({ content: nextTurnContent });
     } else {
       console.log(`[raid.js]: ⚠️ No thread ID found for raid ${raidData.raidId} - victory embed will only be sent to the original interaction`);
       await interaction.followUp({ embeds: [victoryEmbed] });
+      if (raidData.grottoId && raidData.expeditionId) {
+        const exploreCmdId = getExploreCommandId();
+        const cmdRoll = exploreCmdId ? `</explore roll:${exploreCmdId}>` : '`/explore roll`';
+        const cmdMove = exploreCmdId ? `</explore move:${exploreCmdId}>` : '`/explore move`';
+        const grottoSuccessEmbed = new EmbedBuilder()
+          .setColor('#9B59B6')
+          .setTitle('✨ **Grotto trial complete**')
+          .setDescription(GROTTO_CLEARED_FLAVOR)
+          .addFields({
+            name: '🗺️ **Continue your expedition**',
+            value: `Use ${cmdRoll} or ${cmdMove} with id \`${raidData.expeditionId}\` and your character to continue.`,
+            inline: false
+          })
+          .setTimestamp();
+        await interaction.followUp({ embeds: [grottoSuccessEmbed] });
+      }
       const nextTurnContent = await getExpeditionNextTurnContent();
       if (nextTurnContent) await interaction.followUp({ content: nextTurnContent });
     }

@@ -43,7 +43,7 @@ const { SlashCommandBuilder } = require("@discordjs/builders");
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require("discord.js");
 
 // ------------------- Database ------------------
-const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, getCharacterInventoryCollectionWithModSupport, fetchMonsterByName, fetchCharacterById } = require('@/database/db.js');
+const { fetchAllItems, fetchItemsByMonster, createRelic, getCharacterInventoryCollection, getCharacterInventoryCollectionWithModSupport, fetchMonsterByName, fetchCharacterById, getMonstersAboveTier } = require('@/database/db.js');
 
 // ------------------- Models ------------------
 const Raid = require("../../models/RaidModel.js");
@@ -91,7 +91,7 @@ const { getRandomGrottoName, getRandomGrottoNameUnused } = require('@/data/grott
 const { getFailOutcome, getMissOutcome, getSuccessOutcome, getCompleteOutcome } = require('@/data/grottoTargetPracticeOutcomes.js');
 const { getGrottoMazeOutcome, getGrottoMazeTrapOutcome, getGazepScryingOutcome, getGrottoMazeChestLoot, getGrottoMazeRandomMoveEvent } = require('@/data/grottoMazeOutcomes.js');
 const { getRandomMazeEntryFlavor } = require('@/data/grottoMazeEntryFlavors.js');
-const { rollTestOfPowerMonster } = require('@/data/grottoTestOfPowerMonsters.js');
+// Test of Power uses normal monsters from MonsterModel (tier 5+) and their images
 const { getRandomBlessingFlavor } = require('@/data/grottoBlessingOutcomes.js');
 const { getRandomOldMap, OLD_MAPS_LINK, OLD_MAP_ICON_URL, MAP_EMBED_BORDER_URL } = require("../../data/oldMaps.js");
 const { getRandomCampFlavor, getRandomSafeSpaceFlavor } = require("../../data/explorationMessages.js");
@@ -156,6 +156,8 @@ const GROTTO_BANNER_CLEANSED_URL = "https://storage.googleapis.com/tinglebot/Ban
 const TARGET_PRACTICE_THUMBNAIL_URL = "https://cdn.wikimg.net/en/zeldawiki/images/0/00/BotW_Balloon_Korok_Model.png";
 /** Target Practice success embed thumbnail (Spirit Orb). */
 const TARGET_PRACTICE_SUCCESS_THUMBNAIL_URL = "https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png";
+/** Thumbnail for any grotto trial completion (Spirit Orb reward). */
+const GROTTO_CLEARED_THUMBNAIL_URL = "https://storage.googleapis.com/tinglebot/Items/ROTWspiritorb.png";
 /** Grotto embed images when inside a grotto (randomly chosen). */
 const GROTTO_INSIDE_BANNERS = [
   "https://storage.googleapis.com/tinglebot/Banners/grottobanner1.png",
@@ -1725,8 +1727,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
     .setDescription("This grotto has already been **cleared** by your expedition (trial completed; it is sealed). No plume or stamina is used.\n\n" + GROTTO_CLEANSED_VS_CLEARED)
     .setImage(cleansedBanner.imageUrl);
    addExplorationStandardFields(alreadyClearedEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
-   await msg.edit({ embeds: [alreadyClearedEmbed], components: [disabledRow], ...(cleansedBanner.attachment ? { files: [cleansedBanner.attachment] } : {}) }).catch(() => {});
-   await i.followUp({ content: "This grotto has already been cleared by your expedition (trial complete; sealed).", ephemeral: true }).catch(() => {});
+   await i.followUp({ embeds: [alreadyClearedEmbed], ...(cleansedBanner.attachment ? { files: [cleansedBanner.attachment] } : {}) }).catch(() => {});
    return;
   }
  }
@@ -1744,8 +1745,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    .setDescription("This grotto is still **uncleansed**. Party has " + partyTotalStamina + " 🟩 and " + partyTotalHearts + " ❤ (need 1 to cleanse). **Camp** to recover, or use hearts to **Struggle**. Mark it on the dashboard for later.\n\n" + GROTTO_CLEANSED_VS_CLEARED)
    .setImage(GROTTO_BANNER_UNCLEANSED_URL);
   addExplorationStandardFields(noStaminaEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
-  await msg.edit({ embeds: [noStaminaEmbed], components: [disabledRow] }).catch(() => {});
-  await i.followUp({ embeds: [noStaminaEmbed], ephemeral: true }).catch(() => {});
+  await i.followUp({ embeds: [noStaminaEmbed] }).catch(() => {});
   return;
  }
  let plumeHolder = await findGoddessPlumeHolder(freshParty);
@@ -1765,8 +1765,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
    .setDescription("This grotto is **uncleansed** — no one has a Goddess Plume in their expedition loadout. Add one before departing, then mark the grotto on the dashboard for later or continue exploring.\n\n" + GROTTO_CLEANSED_VS_CLEARED)
    .setImage(GROTTO_BANNER_UNCLEANSED_URL);
   addExplorationStandardFields(noPlumeEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(freshParty) });
-  await msg.edit({ embeds: [noPlumeEmbed], components: [disabledRow] }).catch(() => {});
-  await i.followUp({ embeds: [noPlumeEmbed], ephemeral: true }).catch(() => {});
+  await i.followUp({ embeds: [noPlumeEmbed] }).catch(() => {});
   return;
  }
  const cleanseCharacter = plumeHolder.character;
@@ -1844,7 +1843,7 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
 
  // Generate maze layout at cleanse time for maze trials so the embed can show the maze image
  if (trialType === "maze") {
-  const generated = generateGrottoMaze({ width: 6, height: 6, entryType: "diagonal" });
+  const generated = generateGrottoMaze({ width: 5, height: 5, entryType: "diagonal" });
   if (generated.pathCells && generated.pathCells.length > 0) {
    const startCell = generated.pathCells.find((c) => c.type === "start");
    grottoDoc.mazeState = grottoDoc.mazeState || {};
@@ -1886,22 +1885,13 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   await freshParty.save(); // Always persist so dashboard shows current hearts/stamina/progress
   const blessingFlavor = getRandomBlessingFlavor();
   const cleansedBannerBlessing = await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
-  const blessingEmbed = new EmbedBuilder()
-   .setTitle("🗺️ **Expedition: Grotto cleansed — Blessing!**")
-   .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[freshParty.region] || "#00ff99"))
-   .setDescription(
-    `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to **cleanse** **${grottoName}** in **${location}**. The grotto held a blessing — it is now **cleared**.\n\n` +
-    blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nEach party member received a **Spirit Orb** 💫. Use the commands below to continue exploring.`
-   )
-   .setImage(cleansedBannerBlessing.imageUrl);
-  addExplorationStandardFields(blessingEmbed, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
   const explorePageUrlGrotto = getExplorePageUrl(expeditionId);
-  blessingEmbed.addFields({
-   name: "📍 **__Set pin on map__**",
-   value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlGrotto}) so they stay on the map when you leave.`,
-   inline: false,
-  });
-  await msg.edit({ embeds: [blessingEmbed], components: [disabledRow], ...(cleansedBannerBlessing.attachment ? { files: [cleansedBannerBlessing.attachment] } : {}) }).catch(() => {});
+  const blessingResultEmbed = new EmbedBuilder()
+   .setTitle("✅ **Grotto cleansed — Blessing!**")
+   .setColor(getExploreOutcomeColor("grotto_blessing", regionColors[freshParty.region] || "#00ff99"))
+   .setDescription(`**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to **cleanse** **${grottoName}** in **${location}**. The grotto held a blessing — it is now **cleared**.`)
+   .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
+  await i.followUp({ embeds: [blessingResultEmbed] }).catch(() => {});
   if (EXPLORATION_TESTING_MODE) {
    const endEmbed = await buildTestingEndAfterGrottoEmbed(freshParty, expeditionId, cleanseCharacter.name);
    await msg.channel.send({ embeds: [endEmbed] }).catch(() => {});
@@ -1914,7 +1904,8 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
     "The talismans fall away as **" + cleanseCharacter.name + "** holds the Goddess Plume to the roots. **" + grottoName + "** is **cleansed** — and within, a simple blessing awaits. The grotto is now **cleared**.\n\n" +
     blessingFlavor + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nUse the commands below to continue exploring.`
    )
-   .setImage(cleansedBannerBlessing.imageUrl);
+   .setImage(cleansedBannerBlessing.imageUrl)
+   .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
   addExplorationStandardFields(blessingAnnounce, { party: freshParty, expeditionId, location, nextCharacter, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(freshParty.square, freshParty.quadrant), hasUnpinnedDiscoveriesInQuadrant: false });
   blessingAnnounce.addFields({
    name: "📍 **__Set pin on map__**",
@@ -1947,32 +1938,23 @@ async function handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, 
   }
  }
  const cleansedBannerTrial = trialType === "maze" ? null : await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME);
- const continueEmbed = new EmbedBuilder()
-  .setTitle("🗺️ **Expedition: Grotto cleansed!**")
-  .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[freshParty.region] || "#00ff99"))
-  .setDescription(continueDesc + "\n\n" + GROTTO_CLEANSED_VS_CLEARED)
-  .setImage(trialType === "maze" ? trialMazeImg : (cleansedBannerTrial?.imageUrl ?? GROTTO_BANNER_CLEANSED_URL));
- addExplorationStandardFields(continueEmbed, {
-  party: freshParty,
-  expeditionId,
-  location,
-  nextCharacter,
-  showNextAndCommands: true,
-  showRestSecureMove: false,
-  ruinRestRecovered,
-  hasActiveGrotto: true,
-  activeGrottoCommand: grottoCmdHint,
-  hasUnpinnedDiscoveriesInQuadrant: false,
- });
+ const cleansedBannerForResult = trialType === "maze" ? await generateGrottoBannerOverlay(freshParty, GROTTO_BANNER_CLEANSED_URL, GROTTO_CLEANSED_BANNER_NAME) : cleansedBannerTrial;
  const explorePageUrlTrial = getExplorePageUrl(expeditionId);
- continueEmbed.addFields({
-  name: "📍 **__Set pin on map__**",
-  value: `You have discovery(ies) in this quadrant that aren't pinned yet. [Set a pin on the explore page](${explorePageUrlTrial}) so they stay on the map when you leave.`,
-  inline: false,
- });
- if (trialType === "maze" && trialMazeFiles.length) continueEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
- const continueFiles = trialType === "maze" ? trialMazeFiles : (cleansedBannerTrial?.attachment ? [cleansedBannerTrial.attachment] : []);
- await msg.edit({ embeds: [continueEmbed], components: [disabledRow], files: continueFiles.length ? continueFiles : undefined }).catch(() => {});
+ const cleansedResultEmbed = new EmbedBuilder()
+  .setTitle("✅ **Grotto cleansed!**")
+  .setColor(getExploreOutcomeColor("grotto_cleansed", regionColors[freshParty.region] || "#00ff99"))
+  .setDescription(
+   `**${cleanseCharacter.name}** used a Goddess Plume and 1 stamina to cleanse **${grottoName}**.\n\n` +
+   `**Trial: ${trialLabel}** — Complete it to receive a **Spirit Orb**. Use the command below when ready.`
+  )
+  .setImage(cleansedBannerForResult?.imageUrl ?? GROTTO_BANNER_CLEANSED_URL)
+  .setThumbnail(GROTTO_BANNER_CLEANSED_URL);
+ cleansedResultEmbed.addFields(
+  { name: "📍 **__Location__**", value: location, inline: true },
+  { name: "⚔️ **__Trial__**", value: trialLabel, inline: true },
+  { name: "📋 **__Command__**", value: grottoCmdHint || "—", inline: false }
+ );
+ await i.followUp({ embeds: [cleansedResultEmbed], ...(cleansedBannerForResult?.attachment ? { files: [cleansedBannerForResult.attachment] } : {}) }).catch(() => {});
  const cleanseAnnounce = new EmbedBuilder()
   .setTitle("✨ **A bright light spills from the stump!** ✨")
   .setColor(getExploreOutcomeColor("grotto_cleansed", "#fbbf24"))
@@ -2490,7 +2472,8 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Puzzle — Approved!**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(`**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto is now **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
-       .setImage(approvedBanner.imageUrl);
+       .setImage(approvedBanner.imageUrl)
+       .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
       addExplorationStandardFields(approvedEmbed, {
        party,
        expeditionId,
@@ -2516,7 +2499,8 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Puzzle — Complete**")
        .setColor(getExploreOutcomeColor("grotto_puzzle_success", regionColors[party.region] || "#00ff99"))
        .setDescription(`${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
-       .setImage(doneBanner.imageUrl);
+       .setImage(doneBanner.imageUrl)
+       .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
       addExplorationStandardFields(doneEmbed, {
        party,
        expeditionId,
@@ -2544,20 +2528,21 @@ module.exports = {
         .setColor(getExploreOutcomeColor("grotto_maze_raid", regionColors[party.region] || "#00ff99"))
         .setDescription(`The grotto is **cleansed** and the trial has already begun. Use ${raidCmd} with Raid ID \`${raidId}\` to fight. When the monster is defeated, the grotto will be **cleared** and each party member will receive a Spirit Orb.`)
         .setImage(inProgressBanner.imageUrl);
-       addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false });
+       addExplorationStandardFields(embedInProgress, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false, compactGrottoCommands: true });
        return interaction.editReply({ embeds: [embedInProgress], ...(inProgressBanner.attachment ? { files: [inProgressBanner.attachment] } : {}) });
       }
-      const poolEntry = rollTestOfPowerMonster();
-      let monster = await fetchMonsterByName(poolEntry.name);
+      // Use a random tier-5+ monster from MonsterModel (name, image, tier, hearts from DB)
+      let monster = await getMonstersAboveTier(5);
       if (!monster) {
-       monster = {
-        name: poolEntry.name,
-        hearts: poolEntry.hearts,
-        tier: poolEntry.tier,
-        nameMapping: (poolEntry.name || "").replace(/\s+/g, ""),
-        image: "",
-       };
+       return interaction.editReply("Test of Power could not load a monster from the bestiary. Try again.");
       }
+      monster = {
+        name: monster.name,
+        nameMapping: monster.nameMapping || (monster.name || "").replace(/\s+/g, ""),
+        image: monster.image || "",
+        tier: monster.tier ?? 5,
+        hearts: monster.hearts ?? 10,
+       };
       const village = REGION_TO_VILLAGE[party.region?.toLowerCase()] || "Inariko";
       const raidResult = await triggerRaid(monster, interaction, village, false, character, false, expeditionId, grotto._id);
       if (raidResult && raidResult.success) {
@@ -2577,7 +2562,7 @@ module.exports = {
         value: `**Test of Power** — Defeat the monster to clear the grotto and receive a Spirit Orb.`,
         inline: false,
        });
-       addExplorationStandardFields(embedStarted, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidResult.raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false });
+       addExplorationStandardFields(embedStarted, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `${raidCmd} — Raid ID: \`${raidResult.raidId}\``, hasUnpinnedDiscoveriesInQuadrant: false, compactGrottoCommands: true });
        return interaction.editReply({ embeds: [embedStarted], ...(grottoRaidBanner?.attachment ? { files: [grottoRaidBanner.attachment] } : {}) });
       }
       const errMsg = raidResult?.error || "Could not start the raid. Try again.";
@@ -3036,7 +3021,8 @@ module.exports = {
        .setDescription(
         `**${character.name}** submitted an offering: **${displayItems.join(", ")}**\n\n**Correct!** ${flavor}\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`
        )
-       .setImage(puzzleSuccessBanner.imageUrl);
+       .setImage(puzzleSuccessBanner.imageUrl)
+       .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
       addExplorationStandardFields(successEmbed, {
        party,
        expeditionId,
@@ -3083,7 +3069,7 @@ module.exports = {
      let hasLayout = layout && layout.pathCells && layout.pathCells.length > 0 && layout.matrix && layout.matrix.length > 0;
      let layoutJustCreated = false;
      if (!hasLayout) {
-      const generated = generateGrottoMaze({ width: 6, height: 6, entryType: 'diagonal' });
+      const generated = generateGrottoMaze({ width: 5, height: 5, entryType: 'diagonal' });
       if (!generated.pathCells || generated.pathCells.length === 0) {
        return interaction.editReply("Failed to generate the maze. Please try again.");
       }
@@ -3132,7 +3118,7 @@ module.exports = {
        .setColor(getMazeEmbedColor(null, regionColors[party.region]))
        .setDescription("Someone in your party has a **Lens of Truth** in their inventory. You may bypass the maze for immediate Spirit Orbs (forgoing chests), or enter the maze as normal.")
        .setImage(bypassMazeImg);
-      addExplorationStandardFields(bypassEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: false, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+      addExplorationStandardFields(bypassEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: false, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
       if (bypassMazeFiles.length) bypassEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
       const bypassMsg = await interaction.editReply({ embeds: [bypassEmbed], components: [bypassRow], files: bypassMazeFiles.length ? bypassMazeFiles : undefined });
       const bypassCollector = bypassMsg.createMessageComponentCollector({
@@ -3176,7 +3162,8 @@ module.exports = {
           .setTitle("🗺️ **Grotto: Maze — Bypassed**")
           .setColor(getMazeEmbedColor('bypassed', regionColors[freshParty.region]))
           .setDescription(`Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`)
-          .setImage(bypassClearedBanner.imageUrl);
+          .setImage(bypassClearedBanner.imageUrl)
+          .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
          const bypassClearedDesc = EXPLORATION_TESTING_MODE
           ? `Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫.\n\n⚠️ **Testing mode:** Expedition will end next.`
           : `Your party used the **Lens of Truth** to see through the maze.\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use </explore roll:${rollCmdId}> to leave and continue exploring.`;
@@ -3205,7 +3192,7 @@ module.exports = {
          logger.warn("EXPLORE", `[explore.js]⚠️ Maze render failed: ${err?.message || err}`);
          enterEmbed.setImage(getExploreMapImageUrl(party, { highlight: true }));
         }
-        addExplorationStandardFields(enterEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: mazeCmd, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+        addExplorationStandardFields(enterEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: mazeCmd, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
         await i.editReply({ embeds: [enterEmbed], components: [disabledRow], files: enterFiles }).catch(() => {});
         const firstUp = party.characters[party.currentTurn] ?? null;
         if (getExplorationNextTurnContent(firstUp)) await i.followUp({ content: getExplorationNextTurnContent(firstUp) }).catch(() => {});
@@ -3223,10 +3210,17 @@ module.exports = {
       });
       return;
      }
-     const action = (interaction.options.getString("action") || "").trim().toLowerCase();
+     let action = (interaction.options.getString("action") || "").trim().toLowerCase();
+     // Accept display format from dropdown (e.g. "→ east", "↑ north") by stripping arrow prefix
+     const arrowPrefix = /^[↑↓←→]\s*/;
+     if (arrowPrefix.test(action)) action = action.replace(arrowPrefix, "").trim();
      const validMazeActions = ["north", "south", "east", "west", "wall"];
      if (!validMazeActions.includes(action)) {
-      return interaction.editReply("Invalid maze action. Please use the command and choose **North**, **East**, **South**, **West**, or **Song of Scrying (at wall)** from the action dropdown.");
+      const invalidActionEmbed = new EmbedBuilder()
+       .setTitle("❌ **Invalid maze action**")
+       .setColor(0xe74c3c)
+       .setDescription("Please use the command and choose **North**, **East**, **South**, **West**, or **Song of Scrying (at wall)** from the action dropdown.");
+      return interaction.editReply({ embeds: [invalidActionEmbed] });
      }
      if (action && party.currentTurn !== characterIndex) {
       const nextChar = party.characters[party.currentTurn];
@@ -3235,7 +3229,7 @@ module.exports = {
        .setColor(NOT_YOUR_TURN_COLOR)
        .setDescription(`It's not your turn. **${nextChar?.name || "Next"}** is up. Use </explore grotto maze:${mazeCmdId}> when it's your turn.`)
        .setImage(NOT_YOUR_TURN_BORDER_URL);
-      addExplorationStandardFields(notYourTurnEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+      addExplorationStandardFields(notYourTurnEmbed, { party, expeditionId, location, nextCharacter: nextChar ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
       return interaction.editReply({ embeds: [notYourTurnEmbed] });
      }
      const matrix = grotto.mazeState.layout?.matrix || [];
@@ -3269,7 +3263,7 @@ module.exports = {
         .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
         .setDescription(`You must be **standing on a red cell** to use Song of Scrying. Move to a red cell first, then use the action.`)
         .setImage(mazeImg);
-       addExplorationStandardFields(notOnWallEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+       addExplorationStandardFields(notOnWallEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
        if (mazeFiles.length) notOnWallEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
        return interaction.editReply({ embeds: [notOnWallEmbed], files: mazeFiles });
       }
@@ -3279,7 +3273,7 @@ module.exports = {
         .setColor(getMazeEmbedColor('blocked', regionColors[party.region]))
         .setDescription(`You've already used the Song of Scrying at this wall. Move on or try another direction.`)
         .setImage(mazeImg);
-       addExplorationStandardFields(alreadyUsedEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+       addExplorationStandardFields(alreadyUsedEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
        if (mazeFiles.length) alreadyUsedEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
        return interaction.editReply({ embeds: [alreadyUsedEmbed], files: mazeFiles });
       }
@@ -3392,7 +3386,8 @@ module.exports = {
           .setTitle("🗺️ **Grotto: Maze — Exit!**")
           .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
           .setDescription(exitDesc + clearedSuffix)
-          .setImage(mazeImg);
+          .setImage(mazeImg)
+          .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
          addExplorationStandardFields(exitEmbed, {
           party,
           expeditionId,
@@ -3511,6 +3506,7 @@ module.exports = {
          hasActiveGrotto: true,
          activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
          hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+         compactGrottoCommands: true,
         });
         if (mazeFiles.length) mazeEmbedBattle.setFooter({ text: GROTTO_MAZE_LEGEND });
         await interaction.editReply({ embeds: [mazeEmbedBattle], files: mazeFiles });
@@ -3554,6 +3550,7 @@ module.exports = {
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
       });
       if (mazeFiles.length) mazeEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
       await interaction.editReply({ embeds: [mazeEmbed], files: mazeFiles });
@@ -3593,6 +3590,7 @@ module.exports = {
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
       });
       if (mazeFiles.length) blockedEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
       return interaction.editReply({ embeds: [blockedEmbed], files: mazeFiles });
@@ -3647,7 +3645,8 @@ module.exports = {
        .setTitle("🗺️ **Grotto: Maze — Exit!**")
        .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
        .setDescription(exitDesc + clearedSuffixMove)
-       .setImage(mazeImg);
+       .setImage(mazeImg)
+       .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
       addExplorationStandardFields(exitEmbed, {
        party,
        expeditionId,
@@ -3732,6 +3731,7 @@ module.exports = {
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
       });
       if (mazeFiles.length) trapEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
       await interaction.editReply({ embeds: [trapEmbed], files: mazeFiles });
@@ -3779,6 +3779,27 @@ module.exports = {
        party.markModified("gatheredItems");
        const memberNames = (party.characters || []).map((c) => c.name).filter(Boolean);
        pushProgressLog(party, character.name, "grotto_maze_chest", `Party opened a maze chest (moved ${displayDir}); each member received ${givenItemName}.`, { itemName: givenItemName, emoji: givenEmoji }, undefined, new Date());
+       // When chest gives a map, DM each party member's owner to take it to the library
+       if (/^Map #\d+$/.test(givenItemName) && interaction.client) {
+        const seenUserIds = new Set();
+        for (const slot of party.characters || []) {
+         const uid = slot.userId || (await Character.findById(slot._id).then((c) => c?.userId).catch(() => null)) || (await ModCharacter.findById(slot._id).then((c) => c?.userId).catch(() => null));
+         if (uid && !seenUserIds.has(uid)) {
+          seenUserIds.add(uid);
+          const mapDmEmbed = new EmbedBuilder()
+           .setTitle("🗺️ Map from grotto maze!")
+           .setDescription(`**${givenItemName}** was found in a grotto maze chest and saved to your party's haul.\n\nTake it to the **Inariko Library** to get it deciphered. Use \`/map list\` to see your map collection, then \`/map appraisal-request\` to submit it.`)
+           .setThumbnail(OLD_MAP_ICON_URL)
+           .setURL(OLD_MAPS_LINK)
+           .setColor(0x2ecc71)
+           .setFooter({ text: "Roots of the Wild • Old Maps" });
+          try {
+           const user = await interaction.client.users.fetch(uid).catch(() => null);
+           if (user) await user.send({ embeds: [mapDmEmbed] }).catch(() => {});
+          } catch (_) {}
+         }
+        }
+       }
        party.currentTurn = (party.currentTurn + 1) % party.characters.length;
        party.markModified("currentTurn");
        await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
@@ -3807,6 +3828,7 @@ module.exports = {
         hasActiveGrotto: true,
         activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+        compactGrottoCommands: true,
       });
        if (mazeFiles.length) chestEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
        await interaction.editReply({ embeds: [chestEmbed], files: mazeFiles });
@@ -3845,6 +3867,7 @@ module.exports = {
         hasActiveGrotto: true,
         activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
         hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+        compactGrottoCommands: true,
       });
        if (mazeFiles.length) redEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
        await interaction.editReply({ embeds: [redEmbed], files: mazeFiles });
@@ -3855,6 +3878,7 @@ module.exports = {
 
      // Random move events (flavor, small gather, or monster) — not tied to marked cells
      let randomEventPart = '';
+     let corridorGatherLoot = null; // when type === 'gather', pass to single move log
      const randomEvent = getGrottoMazeRandomMoveEvent();
      if (randomEvent.type === 'monster') {
       const regionMonsters = await getMonstersByRegion(party.region?.toLowerCase());
@@ -3875,7 +3899,7 @@ module.exports = {
          .setColor(getMazeEmbedColor('battle', regionColors[party.region]))
          .setDescription((mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + `**Party moved** **${getMazeDirectionArrow(dir)}${displayDir}**.\n\n${monsterFlavor}\n\n↳ ${raidCta}`)
          .setImage(mazeImg);
-        addExplorationStandardFields(raidEmbed, { party, expeditionId, location, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+        addExplorationStandardFields(raidEmbed, { party, expeditionId, location, nextCharacter: character, showNextAndCommands: true, showRestSecureMove: false, hasActiveGrotto: true, activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`, hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party), compactGrottoCommands: true });
         if (mazeFiles.length) raidEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
         await interaction.editReply({ embeds: [raidEmbed], files: mazeFiles });
         return;
@@ -3913,7 +3937,24 @@ module.exports = {
       if (!party.gatheredItems) party.gatheredItems = [];
       party.gatheredItems.push({ characterId: character._id?.toString?.() ?? String(character._id), characterName: character.name, itemName: givenItemName, quantity: 1, emoji: givenEmoji });
       party.markModified("gatheredItems");
-      pushProgressLog(party, character.name, "grotto_maze_chest", `${character.name} found something in the corridor (moved ${displayDir}): ${givenItemName}.`, { itemName: givenItemName, emoji: givenEmoji }, undefined, new Date());
+      corridorGatherLoot = { itemName: givenItemName, emoji: givenEmoji };
+      // Corridor find is logged once as grotto_maze_move below (message includes "Along the way, X finds ...")
+      if (/^Map #\d+$/.test(givenItemName) && interaction.client) {
+       const uid = character.userId || (await Character.findById(character._id).then((c) => c?.userId).catch(() => null)) || interaction.user?.id;
+       if (uid) {
+        const mapDmEmbed = new EmbedBuilder()
+         .setTitle("🗺️ Map from grotto maze!")
+         .setDescription(`**${character.name}** found **${givenItemName}** in the maze and it was added to their haul.\n\nTake it to the **Inariko Library** to get it deciphered. Use \`/map list\` to see your map collection, then \`/map appraisal-request\` to submit it.`)
+         .setThumbnail(OLD_MAP_ICON_URL)
+         .setURL(OLD_MAPS_LINK)
+         .setColor(0x2ecc71)
+         .setFooter({ text: "Roots of the Wild • Old Maps" });
+        try {
+         const user = await interaction.client.users.fetch(uid).catch(() => null);
+         if (user) await user.send({ embeds: [mapDmEmbed] }).catch(() => {});
+        } catch (_) {}
+       }
+      }
       randomEventPart = `Along the way, **${character.name}** finds ${givenEmoji} **${givenItemName}**!`;
      } else if (randomEvent.type === 'flavor') {
       randomEventPart = randomEvent.flavor;
@@ -3924,21 +3965,22 @@ module.exports = {
      const moveLogMessage = randomEventPart
       ? `Party moved ${dirArrow}${displayDir}. ${String(randomEventPart).replace(/\*\*/g, "").trim()}`
       : `Party moved ${dirArrow}${displayDir}.`;
-     pushProgressLog(party, character.name, "grotto_maze_move", moveLogMessage, undefined, undefined, new Date());
+     pushProgressLog(party, character.name, "grotto_maze_move", moveLogMessage, corridorGatherLoot || undefined, undefined, new Date());
      party.currentTurn = (party.currentTurn + 1) % party.characters.length;
      party.markModified("currentTurn");
      await party.save();
      const nextCharMove = party.characters[party.currentTurn] ?? null;
-     const moveDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
+     const moveLine = `**Party moved ${dirArrow}${displayDir}.**`;
      const flavorBlock = randomEventPart
       ? (randomEvent.type === "flavor"
         ? `\n\n*${String(randomEventPart).replace(/\*\*/g, "").trim()}*`
         : `\n\n${randomEventPart}`)
       : "";
+     const moveDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n${moveLine}` : moveLine;
      const moveEmbed = new EmbedBuilder()
       .setTitle(`🗺️ **Grotto: Maze — Moved ${displayDir}**`)
       .setColor(getMazeEmbedColor(null, regionColors[party.region]))
-      .setDescription(moveDesc + `**Party moved** **${dirArrow}${displayDir}**` + flavorBlock)
+      .setDescription(moveDesc + flavorBlock)
       .setImage(mazeImg);
     addExplorationStandardFields(moveEmbed, {
        party,
@@ -3950,6 +3992,7 @@ module.exports = {
        hasActiveGrotto: true,
        activeGrottoCommand: `</explore grotto maze:${mazeCmdId}>`,
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
+       compactGrottoCommands: true,
       });
      if (mazeFiles.length) moveEmbed.setFooter({ text: GROTTO_MAZE_LEGEND });
      await interaction.editReply({ embeds: [moveEmbed], files: mazeFiles });
@@ -4364,7 +4407,8 @@ module.exports = {
         `**${plumeHolder.character.name}** used a Goddess Plume and 1 stamina to **cleanse** **${grottoName}** in **${location}**. The grotto held a blessing — it is now **cleared**.\n\n` +
         blessingFlavorRevisit + `\n\n${GROTTO_CLEARED_FLAVOR}\n\nEach party member received a **Spirit Orb** 💫. Use the commands below to continue exploring.`
        )
-       .setImage(blessingRevisitBanner.imageUrl);
+       .setImage(blessingRevisitBanner.imageUrl)
+       .setThumbnail(GROTTO_CLEARED_THUMBNAIL_URL);
       addExplorationStandardFields(blessingEmbed, { party, expeditionId, location, nextCharacter: party.characters[party.currentTurn] ?? null, showNextAndCommands: true, showRestSecureMove: false, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
       const explorePageUrlRevisit = getExplorePageUrl(expeditionId);
       blessingEmbed.addFields({
@@ -5200,20 +5244,14 @@ module.exports = {
       }
 
       const mapOrBannerUrl = getExploreMapImageUrl(party, { highlight: true });
-      let grottoBannerAttachment = null;
-      if (outcomeType === "grotto") {
-       grottoBannerAttachment = await generateGrottoFoundBanner(party);
-      }
       const embed = new EmbedBuilder()
        .setTitle(title)
        .setDescription(description)
        .setColor(getExploreOutcomeColor("explored", regionColors[party.region] || "#00ff99"))
-       .setImage(
-        outcomeType === "grotto"
-         ? (grottoBannerAttachment ? `attachment://${GROTTO_FOUND_BANNER_NAME}` : GROTTO_BANNER_UNCLEANSED_URL)
-         : mapOrBannerUrl
-       );
-      if (outcomeType === "grotto" && !grottoBannerAttachment) embed.setThumbnail(mapOrBannerUrl);
+       .setImage(mapOrBannerUrl);
+      if (outcomeType === "grotto") {
+       embed.setThumbnail(GROTTO_BANNER_UNCLEANSED_URL);
+      }
       addExplorationStandardFields(embed, {
         party,
         expeditionId,
@@ -5269,7 +5307,6 @@ module.exports = {
       const msg = await interaction.editReply({
        embeds: [embed],
        components,
-       ...(grottoBannerAttachment ? { files: [grottoBannerAttachment] } : {}),
       });
       if (failedNotifyUserIds.length > 0 && failedNotifyEmbed) {
        await interaction.followUp({
@@ -5926,6 +5963,7 @@ module.exports = {
 
         if (outcomeType === "grotto") {
          const at = new Date();
+         await msg.edit({ components: [disabledRow] }).catch(() => {});
          if (isYes) {
           party.currentTurn = (party.currentTurn + 1) % party.characters.length;
           await party.save();
@@ -5933,35 +5971,26 @@ module.exports = {
           await handleGrottoCleanse(i, msg, party, expeditionId, characterIndex, location, disabledRow, nextAfterChoice, ruinRestRecovered);
           return;
          }
-         // No = mark on map for later
+         // No = mark on map for later — send new result embed only; original "Grotto found" message stays
          await pushDiscoveryToMap(party, "grotto", at, i.user?.id);
          pushProgressLog(party, character.name, "grotto", `Found a grotto in ${location}; marked on map for later.`, undefined, undefined, at);
          party.currentTurn = (party.currentTurn + 1) % party.characters.length;
-         await party.save(); // Always persist so dashboard shows current hearts/stamina/progress
+         await party.save();
          const nextAfterChoice = party.characters[party.currentTurn];
-         const grottoEmbed = new EmbedBuilder()
-          .setTitle("🗺️ **Expedition: Grotto found!**")
-          .setColor(getExploreOutcomeColor("grotto", regionColors[party.region] || "#00ff99"))
-          .setDescription(
-           description.split("\n\n")[0] + "\n\n" +
-           `✅ **You marked it on the map for later.** Continue with </explore roll:${getExploreCommandId()}>.`
-          )
-          .setImage(getExploreMapImageUrl(party, { highlight: true }));
-         addExplorationStandardFields(grottoEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
-         const explorePageUrlNo = getExplorePageUrl(expeditionId);
-         grottoEmbed.addFields({
-          name: "📍 **__Set pin on webpage__**",
-          value: `Set a pin for this grotto on the **explore/${expeditionId}** page: ${explorePageUrlNo}`,
-          inline: false,
-         });
-         await msg.edit({ embeds: [grottoEmbed], components: [disabledRow] }).catch(() => {});
-         const decisionEmbed = new EmbedBuilder()
-          .setTitle("✅ **Decision made**")
+         const resultEmbed = new EmbedBuilder()
+          .setTitle("✅ **Marked on map**")
           .setColor(getExploreOutcomeColor("grotto", regionColors[party.region] || "#00ff99"))
           .setDescription(`**${character.name}** marked the grotto on the map for later. Continue with </explore roll:${getExploreCommandId()}>.`);
-         await i.followUp({ embeds: [decisionEmbed] }).catch(() => {});
+         addExplorationStandardFields(resultEmbed, { party, expeditionId, location, nextCharacter: nextAfterChoice, showNextAndCommands: true, showRestSecureMove: false, ruinRestRecovered, hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant), hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party) });
+         const explorePageUrlNo = getExplorePageUrl(expeditionId);
+         resultEmbed.addFields({
+          name: "📍 **__Set pin on webpage__**",
+          value: `Set a pin for this grotto on the [explore page](${explorePageUrlNo}) so it stays on the map.`,
+          inline: false,
+         });
+         await i.followUp({ embeds: [resultEmbed] }).catch(() => {});
          if (nextAfterChoice?.userId) {
-          await i.followUp({ content: `**${character.name}** marked it on the map. ${getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.**`}` }).catch(() => {});
+          await i.followUp({ content: getExplorationNextTurnContent(nextAfterChoice) || `<@${nextAfterChoice.userId}> — **you're up next.**` }).catch(() => {});
          }
          return;
         }

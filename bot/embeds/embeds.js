@@ -647,7 +647,7 @@ function partyHasSecureMaterials(party) {
     : false;
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null, hotSpringMessage = null }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null, hotSpringMessage = null, compactGrottoCommands = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
@@ -664,12 +664,13 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
  const heartsDisplay = effectiveMaxHearts > 0 ? `${party?.totalHearts ?? 0}/${effectiveMaxHearts}` : String(party?.totalHearts ?? 0);
  const staminaDisplay = effectiveMaxStamina > 0 ? `${party?.totalStamina ?? 0}/${effectiveMaxStamina}` : String(party?.totalStamina ?? 0);
  const locationDisplay = location || (party ? `${party.square} ${party.quadrant}` : "Unknown Location");
- const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stamina** ${staminaDisplay}\n📍 **Quadrant** ${locationDisplay}\n🆔 **Expedition ID** \`${expId || "Unknown"}\`` + (ruinRestRecovered > 0 ? `\n🟩 **Ruin rest** — +${ruinRestRecovered} stamina recovered this roll.` : "");
+const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stamina** ${staminaDisplay}\n📍 **Quadrant** ${locationDisplay}\n🆔 **Expedition ID** \`${expId || "Unknown"}\`` + (ruinRestRecovered > 0 ? `\n🟩 **Ruin rest** — +${ruinRestRecovered} stamina recovered this roll.` : "");
+ const statusBlockCompact = `❤️ ${heartsDisplay} · 🟩 ${staminaDisplay} · 📍 ${locationDisplay} · 🆔 \`${expId || "Unknown"}\`` + (ruinRestRecovered > 0 ? ` · +${ruinRestRecovered} 🟩 ruin rest` : "");
  const fields = [
   ...(hazardMessage ? [{ name: "⚠️ **__Hazard__**", value: hazardMessage, inline: false }] : []),
   ...(hotSpringMessage ? [{ name: "🔥 **__Hot Springs__**", value: hotSpringMessage, inline: false }] : []),
   ...(hasActiveGrotto
-   ? [{ name: "📊 **__Status__**", value: statusBlock, inline: false }]
+   ? [{ name: "📊 **__Status__**", value: compactGrottoCommands ? statusBlockCompact : statusBlock, inline: false }]
    : [
       { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
       { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },
@@ -697,7 +698,11 @@ const addExplorationStandardFields = (embed, { party, expeditionId, location, ne
   } else if (hasActiveGrotto) {
    const cmdItem = `</explore item:${cmdId}>`;
    const grottoCmd = activeGrottoCommand || `</explore grotto continue:${cmdId}>`;
-   commandsValue += `**Take your turn:**\n${grottoCmd}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\n_Other explore actions are blocked until the trial ends._\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
+   if (compactGrottoCommands) {
+    commandsValue = `**Next:** <@${nextCharacter.userId}> · **${nextName}**\n\n${grottoCmd} · ${cmdItem}`;
+   } else {
+    commandsValue += `**Take your turn:**\n${grottoCmd}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\n_Other explore actions are blocked until the trial ends._\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
+   }
   } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
    const cmdMove = `</explore move:${cmdId}>`;
