@@ -5309,7 +5309,7 @@ module.exports = {
       const progressOutcome = outcomeType === "ruins" ? "ruins_found" : outcomeType === "camp" ? "safe_space" : outcomeType;
       // Ruins, monster camp: defer detailed progressLog until button choice (Yes = counts, No = skipped)
       // Grotto: log discovery immediately so dashboard shows it; choice (Yes/No) adds follow-up entries
-      // For one-find-per-expedition limit, log find when we show ruins or monster_camp so the find is consumed
+      // For one-find-per-expedition: monster_camp and ruins only log when user chooses Yes (ruins_found when they explore, monster_camp when they mark/fight)
       if (outcomeType !== "monster_camp" && outcomeType !== "ruins") {
        pushProgressLog(
         party,
@@ -5320,18 +5320,8 @@ module.exports = {
         chestRuinsCosts,
         at
        );
-      } else if (outcomeType === "ruins") {
-       pushProgressLog(
-        party,
-        character.name,
-        "ruins_found",
-        progressMessages[outcomeType] || `Found something in ${location}.`,
-        undefined,
-        chestRuinsCosts,
-        at
-       );
       }
-      // Note: monster_camp does NOT log here - it logs when the user chooses (mark/fight/leave)
+      // Note: monster_camp and ruins do NOT log here - they log when the user chooses (mark/fight/leave for camp; Yes for ruins)
       // Choice outcomes: don't advance until they choose; "Next" and ping = roller. Non-choice: advance now.
       let nextCharacter;
       if (outcomeType === "monster_camp" || outcomeType === "chest" || outcomeType === "ruins" || outcomeType === "grotto") {
@@ -5510,6 +5500,9 @@ module.exports = {
           await i.followUp({ embeds: [createExplorationErrorEmbed("❌ **Character not found**", "Character not found or you do not own this character.")], ephemeral: true }).catch(() => {});
           return;
          }
+         // Consume the one-find-per-expedition only when they choose to explore (not when they skip)
+         pushProgressLog(freshParty, ruinsCharacter.name, "ruins_found", `Found ruins in ${location}; exploring (cost 3 stamina).`, undefined, undefined, new Date());
+         await freshParty.save();
          const ruinsStaminaCost = 3;
          const ruinsPayResult = await payStaminaOrStruggle(freshParty, ruinsCharIndex, ruinsStaminaCost, { order: "currentFirst", action: "ruins" });
          if (!ruinsPayResult.ok) {
