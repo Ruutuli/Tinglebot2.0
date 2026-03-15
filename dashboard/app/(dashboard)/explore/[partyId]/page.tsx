@@ -184,7 +184,19 @@ function getReportableDiscoveries(progressLog: ProgressEntry[] | undefined): Rep
     // One grotto per location: grotto_found + grotto (marked on map) are the same discovery — show only one pin option
     if (GROTTO_OUTCOMES.has(e.outcome)) {
       const grottoLoc = `${square}|${quadrant}`;
-      if (grottoLocSeen.has(grottoLoc)) continue;
+      if (grottoLocSeen.has(grottoLoc)) {
+        // Already have an entry for this grotto; if this is grotto_cleansed with a name, upgrade the existing label
+        const nameMatch = baseLabel === "Grotto" ? GROTTO_NAME_RE.exec(e.message) : null;
+        const grottoName = nameMatch?.[1]?.trim();
+        if (e.outcome === "grotto_cleansed" && grottoName) {
+          const existing = out.find((x) => x.square === square && x.quadrant === quadrant && (x.label === "Grotto" || x.label.startsWith("Grotto #")));
+          if (existing) {
+            existing.label = grottoName;
+            existing.outcome = "grotto_cleansed";
+          }
+        }
+        continue;
+      }
       grottoLocSeen.add(grottoLoc);
     }
     const locKey = `${e.outcome}|${square}|${quadrant}`;

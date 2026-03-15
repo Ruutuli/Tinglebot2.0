@@ -1417,6 +1417,7 @@ async function buildTestingEndAfterGrottoEmbed(party, expeditionId, characterNam
   else if (o === "monster") highlightOutcomes.add("Defeated monster");
   else if (o === "retreat") highlightOutcomes.add("Escaped raid");
   else if (o === "relic") highlightOutcomes.add("Relic found");
+  else if (o === "old_map") highlightOutcomes.add("Old map found");
  }
  const highlightsList = [...highlightOutcomes];
  const highlightsValue = highlightsList.length > 0 ? highlightsList.map((h) => `• ${h}`).join("\n") : "";
@@ -3452,7 +3453,7 @@ module.exports = {
          } catch (e) {}
          const nextCharExit = party.characters[party.currentTurn] ?? null;
          const exitDesc = (mazeFirstEntryFlavor ? mazeFirstEntryFlavor + "\n\n" : "") + outcome.flavor + "\n\n**Exit!**\n\n";
-         const clearedSuffix = `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`;
+         const clearedSuffix = `${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use **roll** or **item** below to continue.`;
          const exitEmbed = new EmbedBuilder()
           .setTitle("🗺️ **Grotto: Maze — Exit!**")
           .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
@@ -3467,6 +3468,7 @@ module.exports = {
           showNextAndCommands: true,
           showRestSecureMove: false,
           hasActiveGrotto: false,
+          grottoExitCommands: true,
           hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
           hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
          });
@@ -3706,7 +3708,7 @@ module.exports = {
       } catch (e) {}
       const nextCharExitMove = party.characters[party.currentTurn] ?? null;
       const exitDesc = mazeFirstEntryFlavor ? `${mazeFirstEntryFlavor}\n\n` : "";
-      const clearedSuffixMove = `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. See **Commands** below to continue exploring.`;
+      const clearedSuffixMove = `Party reached the exit!\n\n${GROTTO_CLEARED_FLAVOR}\n\nGrotto **cleared**. Each party member received a **Spirit Orb** 💫. Use **roll** or **item** below to continue.`;
       const exitEmbed = new EmbedBuilder()
        .setTitle("🗺️ **Grotto: Maze — Exit!**")
        .setColor(getMazeEmbedColor('exit', regionColors[party.region]))
@@ -3721,6 +3723,7 @@ module.exports = {
        showNextAndCommands: true,
        showRestSecureMove: false,
        hasActiveGrotto: false,
+       grottoExitCommands: true,
        hasDiscoveriesInQuadrant: await hasDiscoveriesInQuadrant(party.square, party.quadrant),
        hasUnpinnedDiscoveriesInQuadrant: await hasUnpinnedDiscoveriesInQuadrant(party),
       });
@@ -5649,6 +5652,7 @@ module.exports = {
           progressMsg += `Found Map #${chosenMap.number}; saved to map collection. Take to Inariko Library to decipher.`;
           lootForLog = { itemName: `Map #${chosenMap.number}`, emoji: "" };
           pushProgressLog(freshParty, ruinsCharacter.name, "ruins_explored", progressMsg, lootForLog, ruinsCostsForLog);
+          pushProgressLog(freshParty, ruinsCharacter.name, "old_map", `Found Map #${chosenMap.number} in ruins in ${location}; take to Inariko Library to decipher.`, lootForLog, undefined, new Date());
           // DM only the party member who found the map, not the whole party
           const ruinsFinderUserId = freshParty.characters[ruinsCharIndex]?.userId || i.user?.id;
           const ruinsMapDmUserIds = ruinsFinderUserId ? [ruinsFinderUserId] : [];
@@ -7269,13 +7273,6 @@ module.exports = {
     const moveCombatBlock = await getCombatBlockReply(party, expeditionId, "move", `${party.square} ${party.quadrant}`);
     if (moveCombatBlock) return interaction.editReply(moveCombatBlock);
 
-    // Quadrant hazards (per-action trigger, party pool) — applied before paying move cost / leaving the quadrant
-    const hazardMoveResult = await maybeApplyQuadrantHazards(party, { trigger: "move" });
-    if (hazardMoveResult.ko) {
-     await handleExpeditionFailed(party, interaction);
-     return;
-    }
-
     // Sync quadrant state from map (exploringMap / Square model) — secured/explored on map means Move is allowed
     // DESIGN NOTE: Exploration state is SHARED across all expeditions via the map database.
     // - If a PREVIOUS expedition secured a quadrant, the current party can move through it freely (0 stamina).
@@ -7323,7 +7320,7 @@ module.exports = {
       nextCharacter: party.characters[party.currentTurn] ?? null,
       showNextAndCommands: false,
       showRestSecureMove: false,
-      hazardMessage: hazardMoveResult?.hazardMessage ?? null,
+      hazardMessage: null,
      });
      return interaction.editReply({ embeds: [moveBlockedEmbed] });
     }
@@ -7347,10 +7344,17 @@ module.exports = {
        nextCharacter: party.characters[party.currentTurn] ?? null,
        showNextAndCommands: false,
        showRestSecureMove: false,
-       hazardMessage: hazardMoveResult?.hazardMessage ?? null,
+       hazardMessage: null,
       });
       return interaction.editReply({ embeds: [moveBlockedEmbed] });
      }
+    }
+
+    // Quadrant hazards (per-action trigger) — applied after we've confirmed move is allowed, so hazard log doesn't overwrite "explored" as last outcome
+    const hazardMoveResult = await maybeApplyQuadrantHazards(party, { trigger: "move" });
+    if (hazardMoveResult.ko) {
+     await handleExpeditionFailed(party, interaction);
+     return;
     }
 
     const currentSquare = party.square;
@@ -8314,25 +8318,9 @@ module.exports = {
           "Expedition ended — returned from party"
          ).catch((err) => logger.error("EXPLORE", `[explore.js]❌ Return item to owner: ${err.message}`));
         }
-       }
-      }
-     // Revert every quadrant this expedition marked explored or secured back to unexplored (same as on KO / testing end)
-     const exploredThisRunProd = party.exploredQuadrantsThisRun || [];
-     if (exploredThisRunProd.length > 0) {
-      for (const { squareId, quadrantId } of exploredThisRunProd) {
-       if (squareId && quadrantId) {
-        const resolvedProd = await findExactMapSquareAndQuadrant(squareId, quadrantId);
-        if (resolvedProd) {
-         const { exactSquareId, exactQuadrantId } = resolvedProd;
-         await Square.updateOne(
-          { squareId: exactSquareId, "quadrants.quadrantId": exactQuadrantId },
-          { $set: { "quadrants.$[q].status": "unexplored", "quadrants.$[q].exploredBy": "", "quadrants.$[q].exploredAt": null } },
-          { arrayFilters: [{ "q.quadrantId": exactQuadrantId }] }
-         ).catch((err) => logger.warn("EXPLORE", `[explore.js]⚠️ End: reset quadrant to unexplored: ${err?.message}`));
-        }
-       }
       }
      }
+     // Do NOT reset quadrants on normal end — explored/secured state is persisted on the exploring map when they roll "explored" or use secure; keep it so the map stays updated.
     } else {
     // Testing mode: no character DB persist; revert all map state so the map is clean after the test
     if (memberCount > 0 && (remainingHearts > 0 || remainingStamina > 0)) {
@@ -8478,6 +8466,7 @@ module.exports = {
       else if (o === "monster") highlightOutcomes.add("Defeated monster");
       else if (o === "retreat") highlightOutcomes.add("Escaped raid");
       else if (o === "relic") highlightOutcomes.add("Relic found");
+      else if (o === "old_map") highlightOutcomes.add("Old map found");
     }
     const highlightsList = [...highlightOutcomes];
     const highlightsValue = highlightsList.length > 0 ? highlightsList.map((h) => `• ${h}`).join("\n") : "";

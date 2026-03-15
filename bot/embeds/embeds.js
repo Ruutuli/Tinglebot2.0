@@ -652,7 +652,7 @@ function partyHasSecureMaterials(party) {
     : false;
 }
 
-const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null, hotSpringMessage = null, compactGrottoCommands = false, grottoPuzzleAnyoneCanSubmit = false }) => {
+const addExplorationStandardFields = (embed, { party, expeditionId, location, nextCharacter, showNextAndCommands, showRestSecureMove = false, showMoveCommand = true, isAtStartQuadrant = false, commandsLast = false, extraFieldsBeforeIdQuadrant = [], ruinRestRecovered = 0, hasActiveGrotto = false, activeGrottoCommand = "", hasDiscoveriesInQuadrant = false, hasUnpinnedDiscoveriesInQuadrant = false, actionCost = null, maxHearts = 0, maxStamina = 0, hideCampCommand = false, activeWaveId = null, hazardMessage = null, hotSpringMessage = null, compactGrottoCommands = false, grottoPuzzleAnyoneCanSubmit = false, grottoExitCommands = false }) => {
  const expId = expeditionId || party?.partyId || "";
  if (expId) embed.setURL(`${EXPLORE_DASHBOARD_BASE}/${expId}`);
  const extraFields = hasActiveGrotto ? [] : (Array.isArray(extraFieldsBeforeIdQuadrant) ? extraFieldsBeforeIdQuadrant : []);
@@ -674,8 +674,8 @@ const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stam
  const fields = [
   ...(hazardMessage ? [{ name: "⚠️ **__Hazard__**", value: hazardMessage, inline: false }] : []),
   ...(hotSpringMessage ? [{ name: "🔥 **__Hot Springs__**", value: hotSpringMessage, inline: false }] : []),
-  ...(hasActiveGrotto
-   ? [{ name: "📊 **__Status__**", value: compactGrottoCommands ? statusBlockCompact : statusBlock, inline: false }]
+  ...(hasActiveGrotto || grottoExitCommands
+   ? [{ name: "📊 **__Status__**", value: (grottoExitCommands || compactGrottoCommands) ? statusBlockCompact : statusBlock, inline: false }]
    : [
       { name: "❤️ **__Party Hearts__**", value: heartsDisplay, inline: true },
       { name: "🟩 **__Party Stamina__**", value: staminaDisplay, inline: true },
@@ -714,6 +714,9 @@ const statusBlock = `❤️ **Party Hearts** ${heartsDisplay}\n🟩 **Party Stam
    } else {
     commandsValue += `**Take your turn:**\n${grottoCmd}\n${cmdItem} — Use items from party loadout (heal, etc.)\n\n_Other explore actions are blocked until the trial ends._\n\nid: \`${expId || "—"}\` char: **${nextName}**`;
    }
+  } else if (grottoExitCommands) {
+   const cmdItem = `</explore item:${cmdId}>`;
+   commandsValue += `${cmdRoll} · ${cmdItem}`;
   } else if (showRestSecureMove === true) {
    const cmdCamp = `</explore camp:${cmdId}>`;
    const cmdMove = `</explore move:${cmdId}>`;

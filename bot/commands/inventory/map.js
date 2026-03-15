@@ -114,9 +114,10 @@ module.exports = {
         const unappraisedLines = unappraised.length
           ? unappraised.map((m) => {
               const id = (m.mapId || m._id).toString();
+              const num = m.mapNumber != null ? m.mapNumber : '?';
               const where = m.locationFound || 'exploration';
               const date = m.foundAt ? new Date(m.foundAt).toLocaleDateString() : '—';
-              return `• \`${id}\` — Map #? (${where}, ${date})`;
+              return `• \`${id}\` — Map #${num} (${where}, ${date})`;
             }).join('\n')
           : '—';
         const embed = new EmbedBuilder()
